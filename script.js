@@ -4,26 +4,26 @@ const navigation = document.querySelector('.site-nav');
 const year = document.querySelector('[data-year]');
 
 const updateHeader = () => {
-  header.classList.toggle('scrolled', window.scrollY > 16);
+  header?.classList.toggle('scrolled', window.scrollY > 18);
 };
 
 updateHeader();
 window.addEventListener('scroll', updateHeader, { passive: true });
 
-menuButton.addEventListener('click', () => {
+menuButton?.addEventListener('click', () => {
   const isOpen = menuButton.getAttribute('aria-expanded') === 'true';
   menuButton.setAttribute('aria-expanded', String(!isOpen));
-  navigation.classList.toggle('open', !isOpen);
+  navigation?.classList.toggle('open', !isOpen);
 });
 
-navigation.querySelectorAll('a').forEach((link) => {
+navigation?.querySelectorAll('a').forEach((link) => {
   link.addEventListener('click', () => {
-    menuButton.setAttribute('aria-expanded', 'false');
+    menuButton?.setAttribute('aria-expanded', 'false');
     navigation.classList.remove('open');
   });
 });
 
-year.textContent = new Date().getFullYear();
+if (year) year.textContent = new Date().getFullYear();
 
 const reveals = document.querySelectorAll('.reveal');
 if ('IntersectionObserver' in window) {
@@ -36,7 +36,7 @@ if ('IntersectionObserver' in window) {
         }
       });
     },
-    { threshold: 0.12 }
+    { threshold: 0.1 }
   );
   reveals.forEach((element) => observer.observe(element));
 } else {
