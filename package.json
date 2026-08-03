@@ -1,5 +1,19 @@
 {
   "name": "clearwater-web-bot",
+  "version": "1.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "description": "Clearwater Roleplay website and Discord bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "check": "node scripts-check.js"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "discord.js": "^14.25.0",
+    "dotenv": "^17.4.2"
+  }
 }

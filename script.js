@@ -8,6 +8,8 @@ const discordAccount = document.querySelector('[data-discord-account]');
 const discordAvatar = document.querySelector('[data-discord-avatar]');
 const discordName = document.querySelector('[data-discord-name]');
 const discordLogout = document.querySelector('[data-discord-logout]');
+const discordCount = document.querySelector('[data-discord-count]');
+const botConnection = document.querySelector('[data-bot-connection]');
 
 const updateHeader = () => {
   header?.classList.toggle('scrolled', window.scrollY > 18);
@@ -62,6 +64,31 @@ discordLogout?.addEventListener('click', async () => {
 });
 
 loadDiscordSession();
+
+const loadBotStatus = async () => {
+  if (!discordCount || !botConnection) return;
+
+  try {
+    const response = await fetch('/api/bot/status');
+    if (!response.ok) throw new Error('Status unavailable');
+    const status = await response.json();
+
+    if (!status.online) {
+      botConnection.textContent = 'Discord bot offline';
+      return;
+    }
+
+    botConnection.textContent = Number.isFinite(status.latencyMs)
+      ? `Discord bot online · ${status.latencyMs}ms`
+      : 'Discord bot online';
+    if (Number.isInteger(status.memberCount)) discordCount.textContent = status.memberCount.toLocaleString();
+  } catch {
+    botConnection.textContent = 'Discord bot offline';
+  }
+};
+
+loadBotStatus();
+window.setInterval(loadBotStatus, 30000);
 
 const reveals = document.querySelectorAll('.reveal');
 if ('IntersectionObserver' in window) {
