@@ -180,8 +180,9 @@ em { color: var(--teal-dark); font-weight: inherit; }
 .footer-row > p { margin: 0; color: var(--muted); font-size: 11px; }
 .footer-row > p:last-child { text-align: right; }
 
-.reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1); }
-.reveal.visible { opacity: 1; transform: translateY(0); }
+.reveal { opacity: 1; transform: none; }
+.js .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1); }
+.js .reveal.visible { opacity: 1; transform: translateY(0); }
 .delay-one { transition-delay: .12s; }
 .delay-two { transition-delay: .24s; }
 
