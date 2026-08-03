@@ -1,0 +1,60 @@
+import {
+  SESSION_COOKIE,
+  STATE_COOKIE,
+  clearCookie,
+  createSessionToken,
+  getAuthConfig,
+  makeCookie,
+  parseCookies,
+  redirect,
+  safeEqual,
+  sendJson,
+} from '../../../lib/discord-auth.js';
+
+export default async function handler(request, response) {
+  if (request.method !== 'GET') return sendJson(response, 405, { error: 'Method not allowed' });
+
+  const siteRedirect = '/?login=error';
+
+  try {
+    const { clientId, clientSecret, redirectUri, sessionSecret } = getAuthConfig();
+    const requestUrl = new URL(request.url, `https://${request.headers.host || 'safdsfdsfds.shop'}`);
+    const code = requestUrl.searchParams.get('code');
+    const state = requestUrl.searchParams.get('state');
+    const cookies = parseCookies(request.headers.cookie);
+
+    if (!code || !state || !cookies[STATE_COOKIE] || !safeEqual(state, cookies[STATE_COOKIE])) {
+      return redirect(response, siteRedirect, [clearCookie(STATE_COOKIE)]);
+    }
+
+    const tokenResponse = await fetch('https://discord.com/api/v10/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    if (!tokenResponse.ok) return redirect(response, siteRedirect, [clearCookie(STATE_COOKIE)]);
+    const token = await tokenResponse.json();
+
+    const userResponse = await fetch('https://discord.com/api/v10/users/@me', {
+      headers: { Authorization: `Bearer ${token.access_token}` },
+    });
+
+    if (!userResponse.ok) return redirect(response, siteRedirect, [clearCookie(STATE_COOKIE)]);
+    const user = await userResponse.json();
+    const session = createSessionToken(user, sessionSecret);
+
+    return redirect(response, '/?login=success', [
+      clearCookie(STATE_COOKIE),
+      makeCookie(SESSION_COOKIE, session, 60 * 60 * 24 * 7),
+    ]);
+  } catch {
+    return redirect(response, siteRedirect, [clearCookie(STATE_COOKIE)]);
+  }
+}

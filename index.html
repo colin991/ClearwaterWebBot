@@ -45,7 +45,12 @@
           </div>
           <div class="nav-actions">
             <a class="nav-button nav-button-ghost" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord</a>
-            <a class="nav-button nav-button-primary" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Login with Discord</a>
+            <a class="nav-button nav-button-primary" href="/api/auth/discord" data-discord-login>Login with Discord</a>
+            <div class="discord-account" data-discord-account hidden>
+              <img class="discord-avatar" data-discord-avatar src="assets/clearwater-logo.png" alt="" />
+              <span class="discord-name" data-discord-name>Discord user</span>
+              <button class="discord-logout" type="button" data-discord-logout>Logout</button>
+            </div>
           </div>
         </nav>
       </div>
