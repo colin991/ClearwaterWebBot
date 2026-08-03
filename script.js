@@ -10,6 +10,9 @@ const discordName = document.querySelector('[data-discord-name]');
 const discordLogout = document.querySelector('[data-discord-logout]');
 const discordCount = document.querySelector('[data-discord-count]');
 const botConnection = document.querySelector('[data-bot-connection]');
+const botControls = document.querySelector('[data-bot-controls]');
+const botActionButton = document.querySelector('[data-bot-action]');
+const botActionResult = document.querySelector('[data-bot-action-result]');
 
 const updateHeader = () => {
   header?.classList.toggle('scrolled', window.scrollY > 18);
@@ -48,6 +51,7 @@ const loadDiscordSession = async () => {
     if (discordAvatar && session.user.avatarUrl) discordAvatar.src = session.user.avatarUrl;
     discordLogin.hidden = true;
     discordAccount.hidden = false;
+    if (botControls) botControls.hidden = false;
   } catch {
     // Keep the login button available if the session endpoint is unavailable.
   }
@@ -89,6 +93,29 @@ const loadBotStatus = async () => {
 
 loadBotStatus();
 window.setInterval(loadBotStatus, 30000);
+
+botActionButton?.addEventListener('click', async () => {
+  botActionButton.disabled = true;
+  if (botActionResult) botActionResult.textContent = 'Contacting bot…';
+
+  try {
+    const response = await fetch('/api/bot/action', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'ping' }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || 'Bot unavailable');
+
+    if (botActionResult) botActionResult.textContent = 'Bot responded successfully.';
+    await loadBotStatus();
+  } catch {
+    if (botActionResult) botActionResult.textContent = 'The bot did not respond.';
+  } finally {
+    botActionButton.disabled = false;
+  }
+});
 
 const reveals = document.querySelectorAll('.reveal');
 if ('IntersectionObserver' in window) {

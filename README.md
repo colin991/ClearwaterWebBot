@@ -23,3 +23,5 @@ Updates pushed to the production branch are deployed automatically by Vercel.
 5. In Vercel, set `BOT_API_URL` to the bot host's public HTTPS address and set `BOT_API_KEY` to the same private key.
 
 The bot needs only the standard **Guilds** gateway intent. Never commit or share `.env`.
+
+The website-to-bot bridge accepts only explicitly allowlisted actions. The included test button sends a protected `ping` action after Discord sign-in; add future actions on both sides of the bridge rather than accepting arbitrary commands.

@@ -17,6 +17,15 @@ const safeEqual = (left = '', right = '') => {
   return a.length === b.length && timingSafeEqual(a, b);
 };
 
+const readJson = async (request) => {
+  let raw = '';
+  for await (const chunk of request) {
+    raw += chunk;
+    if (raw.length > 4096) throw new Error('Request body too large');
+  }
+  return raw ? JSON.parse(raw) : {};
+};
+
 export function startStatusServer(client, config) {
   const server = createServer(async (request, response) => {
     const url = new URL(request.url || '/', 'http://localhost');
@@ -25,7 +34,7 @@ export function startStatusServer(client, config) {
       return json(response, 200, { ok: true, botOnline: client.isReady() });
     }
 
-    if (request.method !== 'GET' || url.pathname !== '/api/status') {
+    if (!['/api/status', '/api/actions'].includes(url.pathname)) {
       return json(response, 404, { error: 'Not found' });
     }
 
@@ -36,6 +45,27 @@ export function startStatusServer(client, config) {
     const authorization = request.headers.authorization || '';
     if (!authorization.startsWith('Bearer ') || !safeEqual(authorization.slice(7), config.apiKey)) {
       return json(response, 401, { error: 'Unauthorized' });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/actions') {
+      try {
+        const body = await readJson(request);
+        if (body.action !== 'ping') return json(response, 400, { error: 'Unsupported action' });
+
+        logger.info('Website action received: ping');
+        return json(response, 200, {
+          ok: true,
+          action: 'ping',
+          botOnline: client.isReady(),
+          acknowledgedAt: new Date().toISOString(),
+        });
+      } catch {
+        return json(response, 400, { error: 'Invalid request' });
+      }
+    }
+
+    if (request.method !== 'GET' || url.pathname !== '/api/status') {
+      return json(response, 405, { error: 'Method not allowed' });
     }
 
     try {

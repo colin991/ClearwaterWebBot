@@ -120,6 +120,12 @@ img { display: block; max-width: 100%; }
 .live-metrics strong { font-size: 31px; letter-spacing: -.04em; }
 .live-metrics span { margin-top: 7px; color: var(--muted); font-size: 12px; }
 .live-panel-inner > p { margin: 0; padding: 20px 0 0; color: var(--muted-dark); font-size: 11px; text-align: center; }
+.bot-controls { min-height: 38px; display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 14px; }
+.bot-controls[hidden] { display: none; }
+.bot-test-button { min-height: 36px; padding: 0 15px; border: 1px solid rgba(116,166,255,.22); border-radius: 999px; color: #dfe9fb; background: rgba(61,126,230,.12); font: inherit; font-size: 11px; font-weight: 720; cursor: pointer; transition: border-color .2s ease, background .2s ease, transform .2s ease; }
+.bot-test-button:hover { border-color: rgba(116,166,255,.4); background: rgba(61,126,230,.2); transform: translateY(-1px); }
+.bot-test-button:disabled { opacity: .55; cursor: wait; transform: none; }
+.bot-controls span { color: var(--muted); font-size: 11px; }
 
 .section { padding: 125px 0; }
 .marketplace { background: transparent; }
