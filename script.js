@@ -2,6 +2,7 @@ const header = document.querySelector('[data-header]');
 const menuButton = document.querySelector('.menu-button');
 const navigation = document.querySelector('.site-nav');
 const year = document.querySelector('[data-year]');
+const updatedTime = document.querySelector('[data-time]');
 
 const updateHeader = () => {
   header?.classList.toggle('scrolled', window.scrollY > 18);
@@ -24,6 +25,7 @@ navigation?.querySelectorAll('a').forEach((link) => {
 });
 
 if (year) year.textContent = new Date().getFullYear();
+if (updatedTime) updatedTime.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
 
 const reveals = document.querySelectorAll('.reveal');
 if ('IntersectionObserver' in window) {
