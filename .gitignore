@@ -1,0 +1,16 @@
+# Local upload package and extracted duplicate
+/Clearwater-Homepage/
+/Clearwater-Homepage.zip
+
+# Local tooling and dependencies
+/.vercel/
+/node_modules/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Operating system files
+.DS_Store
+Thumbs.db
