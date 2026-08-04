@@ -28,7 +28,7 @@ The bot needs the **Guilds**, **Server Members**, **Server Messages**, and **Mes
 
 - `-id @DiscordUser` looks up the member in Melonly, finds the Roblox ID stored with their application responses, and displays an Identity card.
 - The ER:LC sync checks the live player list and adds/removes the configured in-game Discord role.
-- `/owner.html` is restricted server-side to Discord user `1044686997194805280` by default. It configures the main/staff servers, roles, log channels, prefix, and sync interval.
+- `/owner.html` is restricted server-side to Discord user `1044686997194805280` or members with role `1514033074948800683` by default. It configures the main/staff servers, roles, log channels, prefix, and sync interval.
 - Add `MELONLY_API_KEY` and `ERLC_SERVER_KEY` to the bot host. Do not add either secret to browser code or GitHub.
 
 The website-to-bot bridge accepts only explicitly allowlisted actions. The included test button sends a protected `ping` action after Discord sign-in; add future actions on both sides of the bridge rather than accepting arbitrary commands.

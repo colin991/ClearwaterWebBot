@@ -1,6 +1,7 @@
 import { SESSION_COOKIE, avatarUrl, getAuthConfig, isOwner, parseCookies, readSessionToken, sendJson } from '../../lib/discord-auth.js';
+import { hasOwnerAccess } from '../../lib/owner-access.js';
 
-export default function handler(request, response) {
+export default async function handler(request, response) {
   if (request.method !== 'GET') return sendJson(response, 405, { error: 'Method not allowed' });
 
   try {
@@ -16,7 +17,7 @@ export default function handler(request, response) {
         username: user.username,
         displayName: user.displayName,
         avatarUrl: avatarUrl(user),
-        owner: isOwner(user),
+        owner: isOwner(user) || await hasOwnerAccess(user),
       },
     });
   } catch {

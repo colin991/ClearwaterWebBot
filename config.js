@@ -23,6 +23,8 @@ export const config = Object.freeze({
   erlcServerKey: process.env.ERLC_SERVER_KEY?.trim(),
   ownerDiscordIds: (process.env.OWNER_DISCORD_IDS || '1044686997194805280')
     .split(',').map((value) => value.trim()).filter(Boolean),
+  ownerRoleIds: (process.env.OWNER_ROLE_IDS || '1514033074948800683')
+    .split(',').map((value) => value.trim()).filter(Boolean),
   port: numberFromEnv(process.env.PORT, 3000),
 });
 

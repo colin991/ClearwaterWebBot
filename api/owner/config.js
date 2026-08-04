@@ -1,11 +1,11 @@
 import {
   SESSION_COOKIE,
   getAuthConfig,
-  isOwner,
   parseCookies,
   readSessionToken,
   sendJson,
 } from '../../lib/discord-auth.js';
+import { hasOwnerAccess } from '../../lib/owner-access.js';
 
 async function readBody(request) {
   if (request.body && typeof request.body === 'object') return request.body;
@@ -25,7 +25,7 @@ export default async function handler(request, response) {
     const { sessionSecret } = getAuthConfig();
     const session = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
     if (!session) return sendJson(response, 401, { error: 'Sign in with Discord first' });
-    if (!isOwner(session)) return sendJson(response, 403, { error: 'Owner access required' });
+    if (!await hasOwnerAccess(session)) return sendJson(response, 403, { error: 'Owner role required' });
 
     const apiUrl = process.env.BOT_API_URL?.replace(/\/$/, '');
     const apiKey = process.env.BOT_API_KEY;

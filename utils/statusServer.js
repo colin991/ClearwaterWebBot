@@ -35,7 +35,7 @@ export function startStatusServer(client, config) {
       return json(response, 200, { ok: true, botOnline: client.isReady() });
     }
 
-    if (!['/api/status', '/api/actions', '/api/config'].includes(url.pathname)) {
+    if (!['/api/status', '/api/actions', '/api/config', '/api/access'].includes(url.pathname)) {
       return json(response, 404, { error: 'Not found' });
     }
 
@@ -46,6 +46,20 @@ export function startStatusServer(client, config) {
     const authorization = request.headers.authorization || '';
     if (!authorization.startsWith('Bearer ') || !safeEqual(authorization.slice(7), config.apiKey)) {
       return json(response, 401, { error: 'Unauthorized' });
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/access') {
+      const discordId = url.searchParams.get('discordId') || '';
+      if (!/^\d{16,22}$/.test(discordId)) return json(response, 400, { error: 'Invalid Discord user' });
+      if (config.ownerDiscordIds.includes(discordId)) return json(response, 200, { allowed: true });
+
+      for (const guild of client.guilds.cache.values()) {
+        const member = await guild.members.fetch(discordId).catch(() => null);
+        if (member && config.ownerRoleIds.some((roleId) => member.roles.cache.has(roleId))) {
+          return json(response, 200, { allowed: true });
+        }
+      }
+      return json(response, 200, { allowed: false });
     }
 
     if (request.method === 'POST' && url.pathname === '/api/actions') {
