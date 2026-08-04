@@ -19,6 +19,10 @@ export const config = Object.freeze({
   guildId: process.env.DISCORD_GUILD_ID?.trim(),
   websiteUrl: cleanUrl(process.env.WEBSITE_URL, 'https://safdsfdsfds.shop'),
   apiKey: process.env.BOT_API_KEY?.trim(),
+  melonlyApiKey: process.env.MELONLY_API_KEY?.trim(),
+  erlcServerKey: process.env.ERLC_SERVER_KEY?.trim(),
+  ownerDiscordIds: (process.env.OWNER_DISCORD_IDS || '1044686997194805280')
+    .split(',').map((value) => value.trim()).filter(Boolean),
   port: numberFromEnv(process.env.PORT, 3000),
 });
 

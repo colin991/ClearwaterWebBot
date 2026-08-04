@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#03070d" />
+    <title>Owner Panel · Clearwater Roleplay</title>
+    <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="owner-page">
+    <main class="owner-shell">
+      <header class="owner-heading">
+        <a class="brand" href="/"><span class="brand-badge"><img src="assets/clearwater-logo.png" alt="" /></span><span>Clearwater</span></a>
+        <a class="owner-back" href="/">Back to website</a>
+      </header>
+
+      <section class="owner-hero">
+        <p class="kicker"><span></span> Private controls</p>
+        <h1>Owner panel</h1>
+        <p>Choose the two Discord servers, automatic roles, and channels used by the Clearwater bot.</p>
+      </section>
+
+      <div class="owner-notice" data-owner-notice role="status">Checking owner access…</div>
+
+      <form class="owner-form" data-owner-form hidden>
+        <section class="owner-card">
+          <div><p class="owner-step">01</p><h2>Discord servers</h2><p>Identify your community server and private staff server.</p></div>
+          <label>Main server<select name="mainGuildId" data-guild-select><option value="">Choose a server</option></select></label>
+          <label>Staff server<select name="staffGuildId" data-guild-select><option value="">Choose a server</option></select></label>
+        </section>
+
+        <section class="owner-card">
+          <div><p class="owner-step">02</p><h2>Verification</h2><p>The <code>-id @user</code> command uses Melonly and can grant a verified role.</p></div>
+          <label>Verified role server<select name="verifiedGuildId" data-guild-select><option value="">No automatic role</option></select></label>
+          <label>Verified role<select name="verifiedRoleId" data-role-select data-guild-field="verifiedGuildId"><option value="">No automatic role</option></select></label>
+          <label>Identity log channel<select name="identityLogChannelId" data-channel-select><option value="">No log channel</option></select></label>
+        </section>
+
+        <section class="owner-card">
+          <div><p class="owner-step">03</p><h2>In-game role</h2><p>Players receive this role while they are in ER:LC and lose it after leaving.</p></div>
+          <label>Role server<select name="inGameGuildId" data-guild-select><option value="">Choose a server</option></select></label>
+          <label>In-game role<select name="inGameRoleId" data-role-select data-guild-field="inGameGuildId"><option value="">Choose a role</option></select></label>
+          <label>Game activity channel<select name="gameLogChannelId" data-channel-select><option value="">No log channel</option></select></label>
+          <label>Check game every<input name="syncIntervalSeconds" type="number" min="15" max="300" step="5" value="30" /><span class="field-hint">seconds</span></label>
+        </section>
+
+        <section class="owner-card owner-card-small">
+          <div><p class="owner-step">04</p><h2>Commands</h2></div>
+          <label>Command prefix<input name="prefix" maxlength="3" value="-" /></label>
+        </section>
+
+        <div class="owner-savebar">
+          <p data-save-status>Changes are saved directly to the running bot.</p>
+          <button class="button button-primary" type="submit">Save configuration</button>
+        </div>
+      </form>
+    </main>
+    <script src="owner.js"></script>
+  </body>
+</html>

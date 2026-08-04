@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
+import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -34,7 +35,7 @@ export function startStatusServer(client, config) {
       return json(response, 200, { ok: true, botOnline: client.isReady() });
     }
 
-    if (!['/api/status', '/api/actions'].includes(url.pathname)) {
+    if (!['/api/status', '/api/actions', '/api/config'].includes(url.pathname)) {
       return json(response, 404, { error: 'Not found' });
     }
 
@@ -64,6 +65,24 @@ export function startStatusServer(client, config) {
       }
     }
 
+    if (url.pathname === '/api/config') {
+      try {
+        if (request.method === 'GET') {
+          const [settings, guilds] = await Promise.all([getOwnerConfig(), buildDiscordCatalog(client)]);
+          return json(response, 200, { settings, guilds });
+        }
+        if (request.method === 'PUT') {
+          const settings = await saveOwnerConfig(await readJson(request));
+          logger.info('Owner panel configuration updated.');
+          return json(response, 200, { ok: true, settings });
+        }
+        return json(response, 405, { error: 'Method not allowed' });
+      } catch (error) {
+        logger.error('Owner configuration request failed', error);
+        return json(response, 400, { error: 'Could not update configuration' });
+      }
+    }
+
     if (request.method !== 'GET' || url.pathname !== '/api/status') {
       return json(response, 405, { error: 'Method not allowed' });
     }
@@ -84,6 +103,7 @@ export function startStatusServer(client, config) {
           memberCount: guild.memberCount,
         },
         updatedAt: new Date().toISOString(),
+        erlc: client.erlcStatus || { online: false },
       });
     } catch (error) {
       logger.error('Could not build status response', error);

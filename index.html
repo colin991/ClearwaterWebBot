@@ -51,6 +51,7 @@
               <span class="discord-name" data-discord-name>Discord user</span>
               <button class="discord-logout" type="button" data-discord-logout>Logout</button>
             </div>
+            <a class="nav-button nav-button-owner" href="/owner.html" data-owner-link hidden>Owner panel</a>
           </div>
         </nav>
       </div>
@@ -72,11 +73,11 @@
               <a class="button button-primary" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a>
               <a class="button button-secondary" href="https://erlc.gg/join/cwrpvc" target="_blank" rel="noopener">Play on Roblox</a>
             </div>
-            <div class="server-status" aria-label="Server online with zero of fifty players">
+            <div class="server-status" data-erlc-status aria-label="ER:LC server status">
               <span class="status-dot" aria-hidden="true"></span>
               <span>Server online</span>
               <i aria-hidden="true"></i>
-              <strong>0 / 50 players</strong>
+              <strong><span data-erlc-current>0</span> / <span data-erlc-max>50</span> players</strong>
             </div>
           </div>
 
@@ -97,9 +98,9 @@
         <h2 class="live-title reveal">Live on ER:LC right now</h2>
         <div class="page-width live-panel-inner reveal">
           <div class="live-metrics">
-            <div><strong>0</strong><span>In-game</span></div>
-            <div><strong>50</strong><span>Max slots</span></div>
-            <div><strong>0</strong><span>Queue</span></div>
+            <div><strong data-erlc-current>0</strong><span>In-game</span></div>
+            <div><strong data-erlc-max>50</strong><span>Max slots</span></div>
+            <div><strong data-erlc-queue>0</strong><span>Queue</span></div>
             <div><strong data-discord-count>—</strong><span>Discord</span></div>
           </div>
           <p><span data-bot-connection>Discord bot connecting</span> <span aria-hidden="true">·</span> <span data-time>Updated now</span></p>

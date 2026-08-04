@@ -5,11 +5,17 @@ import { loadEvents } from './utils/loadEvents.js';
 import { registerCommands } from './utils/registerCommands.js';
 import { startStatusServer } from './utils/statusServer.js';
 import { logger } from './utils/logger.js';
+import { startErlcRoleSync } from './utils/erlcRoleSync.js';
 
 validateConfig();
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
   allowedMentions: { parse: [], repliedUser: false },
 });
 
@@ -21,10 +27,15 @@ await loadEvents(client);
 await registerCommands(commands, config);
 
 const statusServer = startStatusServer(client, config);
+let stopErlcSync = () => {};
+client.once('ready', () => {
+  stopErlcSync = startErlcRoleSync(client, config);
+});
 
 const shutDown = async (signal) => {
   logger.info(`${signal} received; shutting down.`);
   statusServer?.close();
+  stopErlcSync();
   client.destroy();
   process.exit(0);
 };

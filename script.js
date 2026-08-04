@@ -13,6 +13,11 @@ const botConnection = document.querySelector('[data-bot-connection]');
 const botControls = document.querySelector('[data-bot-controls]');
 const botActionButton = document.querySelector('[data-bot-action]');
 const botActionResult = document.querySelector('[data-bot-action-result]');
+const ownerLink = document.querySelector('[data-owner-link]');
+const erlcStatus = document.querySelector('[data-erlc-status]');
+const erlcCurrent = document.querySelectorAll('[data-erlc-current]');
+const erlcMax = document.querySelectorAll('[data-erlc-max]');
+const erlcQueue = document.querySelectorAll('[data-erlc-queue]');
 
 const updateHeader = () => {
   header?.classList.toggle('scrolled', window.scrollY > 18);
@@ -52,6 +57,7 @@ const loadDiscordSession = async () => {
     discordLogin.hidden = true;
     discordAccount.hidden = false;
     if (botControls) botControls.hidden = false;
+    if (ownerLink && session.user.owner) ownerLink.hidden = false;
   } catch {
     // Keep the login button available if the session endpoint is unavailable.
   }
@@ -86,6 +92,12 @@ const loadBotStatus = async () => {
       ? `Discord bot online · ${status.latencyMs}ms`
       : 'Discord bot online';
     if (Number.isInteger(status.memberCount)) discordCount.textContent = status.memberCount.toLocaleString();
+    if (status.erlc) {
+      erlcCurrent.forEach((element) => { element.textContent = status.erlc.currentPlayers; });
+      erlcMax.forEach((element) => { element.textContent = status.erlc.maxPlayers; });
+      erlcQueue.forEach((element) => { element.textContent = status.erlc.queue; });
+      if (erlcStatus) erlcStatus.classList.toggle('offline', !status.erlc.online);
+    }
   } catch {
     botConnection.textContent = 'Discord bot offline';
   }

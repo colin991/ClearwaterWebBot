@@ -1,4 +1,4 @@
-import { SESSION_COOKIE, avatarUrl, getAuthConfig, parseCookies, readSessionToken, sendJson } from '../../lib/discord-auth.js';
+import { SESSION_COOKIE, avatarUrl, getAuthConfig, isOwner, parseCookies, readSessionToken, sendJson } from '../../lib/discord-auth.js';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') return sendJson(response, 405, { error: 'Method not allowed' });
@@ -16,6 +16,7 @@ export default function handler(request, response) {
         username: user.username,
         displayName: user.displayName,
         avatarUrl: avatarUrl(user),
+        owner: isOwner(user),
       },
     });
   } catch {

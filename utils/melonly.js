@@ -1,0 +1,68 @@
+const baseUrl = 'https://api.melonly.xyz/api/v1';
+
+async function melonlyFetch(path, apiKey) {
+  if (!apiKey) throw new Error('MELONLY_API_KEY is not configured');
+  const response = await fetch(`${baseUrl}${path}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Melonly request failed (${response.status})`);
+  return response.json();
+}
+
+async function getRobloxUser(robloxId) {
+  const response = await fetch(`https://users.roblox.com/v1/users/${encodeURIComponent(robloxId)}`, {
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) return null;
+  return response.json();
+}
+
+export async function findRobloxIdentity(discordId, apiKey) {
+  const member = await melonlyFetch(`/server/members/discord/${encodeURIComponent(discordId)}`, apiKey);
+  if (!member?.id) return null;
+
+  let responses = await melonlyFetch(`/server/applications/user/${encodeURIComponent(member.id)}/responses?limit=100`, apiKey);
+  if (!responses?.data?.length && member.id !== discordId) {
+    responses = await melonlyFetch(`/server/applications/user/${encodeURIComponent(discordId)}/responses?limit=100`, apiKey);
+  }
+  const verified = [...(responses?.data || [])]
+    .filter((entry) => entry.robloxId)
+    .sort((a, b) => Number(b.finalizedAt || b.reviewedAt || b.createdAt || 0) - Number(a.finalizedAt || a.reviewedAt || a.createdAt || 0))[0];
+  if (!verified) return null;
+
+  const roblox = await getRobloxUser(verified.robloxId).catch(() => null);
+  return {
+    discordId: String(discordId),
+    robloxId: String(verified.robloxId),
+    robloxUsername: roblox?.name || null,
+    robloxDisplayName: roblox?.displayName || null,
+    applicationId: verified.applicationId || null,
+    status: verified.status,
+  };
+}
+
+export async function fetchApplicationIdentityIndex(apiKey) {
+  const applications = await melonlyFetch('/server/applications?limit=100', apiKey);
+  const identities = [];
+  const seenDiscordIds = new Set();
+  for (const application of applications?.data || []) {
+    let page = 1;
+    let totalPages = 1;
+    do {
+      const responses = await melonlyFetch(`/server/applications/${encodeURIComponent(application.id)}/responses?limit=100&page=${page}`, apiKey);
+      for (const entry of responses?.data || []) {
+        // Melonly responses that expose the linked Discord snowflake can be indexed
+        // automatically. Other identities are added when staff use -id.
+        if (/^\d{16,22}$/.test(String(entry.userId || '')) && entry.robloxId && !seenDiscordIds.has(String(entry.userId))) {
+          identities.push({ discordId: String(entry.userId), robloxId: String(entry.robloxId) });
+          seenDiscordIds.add(String(entry.userId));
+        }
+      }
+      totalPages = Math.max(1, Number(responses?.totalPages || 1));
+      page += 1;
+    } while (page <= totalPages);
+  }
+  return identities;
+}

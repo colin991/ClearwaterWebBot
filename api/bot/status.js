@@ -28,6 +28,12 @@ export default async function handler(request, response) {
       memberCount: Number.isInteger(status.guild?.memberCount) ? status.guild.memberCount : null,
       latencyMs: Number.isFinite(status.bot?.latencyMs) ? status.bot.latencyMs : null,
       updatedAt: status.updatedAt || null,
+      erlc: {
+        online: status.erlc?.online === true,
+        currentPlayers: Number.isInteger(status.erlc?.currentPlayers) ? status.erlc.currentPlayers : 0,
+        maxPlayers: Number.isInteger(status.erlc?.maxPlayers) ? status.erlc.maxPlayers : 50,
+        queue: Number.isInteger(status.erlc?.queue) ? status.erlc.queue : 0,
+      },
     }));
   } catch {
     return response.end(JSON.stringify({ online: false, configured: true }));
