@@ -57,7 +57,10 @@ const loadDiscordSession = async () => {
     discordLogin.hidden = true;
     discordAccount.hidden = false;
     if (botControls) botControls.hidden = false;
-    if (ownerLink && session.user.owner) ownerLink.hidden = false;
+    if (ownerLink && session.user.owner) {
+      ownerLink.hidden = false;
+      header?.classList.add('owner-access');
+    }
   } catch {
     // Keep the login button available if the session endpoint is unavailable.
   }
