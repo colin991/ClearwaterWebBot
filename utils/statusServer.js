@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
+import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -51,15 +52,14 @@ export function startStatusServer(client, config) {
     if (request.method === 'GET' && url.pathname === '/api/access') {
       const discordId = url.searchParams.get('discordId') || '';
       if (!/^\d{16,22}$/.test(discordId)) return json(response, 400, { error: 'Invalid Discord user' });
-      if (config.ownerDiscordIds.includes(discordId)) return json(response, 200, { allowed: true });
-
-      for (const guild of client.guilds.cache.values()) {
-        const member = await guild.members.fetch(discordId).catch(() => null);
-        if (member && config.ownerRoleIds.some((roleId) => member.roles.cache.has(roleId))) {
-          return json(response, 200, { allowed: true });
-        }
-      }
-      return json(response, 200, { allowed: false });
+      const guild = client.guilds.cache.get(CLEARWATER_GUILD_ID)
+        || await client.guilds.fetch(CLEARWATER_GUILD_ID).catch(() => null);
+      const member = guild ? await guild.members.fetch(discordId).catch(() => null) : null;
+      const staffRank = getHighestStaffRank(member);
+      const allowed = config.ownerDiscordIds.includes(discordId)
+        || staffRank?.owner === true
+        || Boolean(member && config.ownerRoleIds.some((roleId) => member.roles.cache.has(roleId)));
+      return json(response, 200, { allowed, staffRank: staffRank?.name || null });
     }
 
     if (request.method === 'POST' && url.pathname === '/api/actions') {
@@ -102,7 +102,8 @@ export function startStatusServer(client, config) {
     }
 
     try {
-      const guild = client.guilds.cache.get(config.guildId) || await client.guilds.fetch(config.guildId);
+      const guild = client.guilds.cache.get(CLEARWATER_GUILD_ID)
+        || await client.guilds.fetch(CLEARWATER_GUILD_ID);
       return json(response, 200, {
         online: client.isReady(),
         bot: {

@@ -1,5 +1,5 @@
 import { SESSION_COOKIE, avatarUrl, getAuthConfig, isOwner, parseCookies, readSessionToken, sendJson } from '../../lib/discord-auth.js';
-import { hasOwnerAccess } from '../../lib/owner-access.js';
+import { getStaffAccess } from '../../lib/owner-access.js';
 
 export default async function handler(request, response) {
   if (request.method !== 'GET') return sendJson(response, 405, { error: 'Method not allowed' });
@@ -10,6 +10,7 @@ export default async function handler(request, response) {
     const user = readSessionToken(cookies[SESSION_COOKIE], sessionSecret);
     if (!user) return sendJson(response, 200, { authenticated: false });
 
+    const staffAccess = await getStaffAccess(user);
     return sendJson(response, 200, {
       authenticated: true,
       user: {
@@ -17,7 +18,8 @@ export default async function handler(request, response) {
         username: user.username,
         displayName: user.displayName,
         avatarUrl: avatarUrl(user),
-        owner: isOwner(user) || await hasOwnerAccess(user),
+        owner: staffAccess.allowed,
+        staffRank: staffAccess.staffRank,
       },
     });
   } catch {

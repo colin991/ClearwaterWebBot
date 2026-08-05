@@ -44,15 +44,20 @@
             <a href="#join">Join</a>
           </div>
           <div class="nav-actions">
-            <a class="nav-button nav-button-owner" href="/owner.html" data-owner-link hidden>
+            <a class="nav-button nav-button-owner" href="/owner.html" data-legacy-owner hidden>
               <span aria-hidden="true">◆</span> Owner Panel
             </a>
             <a class="nav-button nav-button-ghost" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord</a>
             <a class="nav-button nav-button-primary" href="/api/auth/discord" data-discord-login>Login with Discord</a>
             <div class="discord-account" data-discord-account hidden>
-              <img class="discord-avatar" data-discord-avatar src="assets/clearwater-logo.png" alt="" />
-              <span class="discord-name" data-discord-name>Discord user</span>
+              <button class="discord-profile" type="button" data-discord-profile aria-expanded="false" aria-controls="discord-profile-menu">
+                <img class="discord-avatar" data-discord-avatar src="assets/clearwater-logo.png" alt="" />
+                <span class="discord-profile-copy"><span class="discord-name" data-discord-name>Discord user</span><span class="discord-rank" data-discord-rank hidden></span></span>
+              </button>
               <button class="discord-logout" type="button" data-discord-logout>Logout</button>
+              <div class="discord-profile-menu" id="discord-profile-menu" data-discord-profile-menu hidden>
+                <a href="/owner.html" data-owner-link hidden>Owner Panel</a>
+              </div>
             </div>
           </div>
         </nav>
@@ -105,11 +110,7 @@
             <div><strong data-erlc-queue>0</strong><span>Queue</span></div>
             <div><strong data-discord-count>—</strong><span>Discord</span></div>
           </div>
-          <p><span data-bot-connection>Discord bot connecting</span> <span aria-hidden="true">·</span> <span data-time>Updated now</span></p>
-          <div class="bot-controls" data-bot-controls hidden>
-            <button class="bot-test-button" type="button" data-bot-action>Test bot connection</button>
-            <span data-bot-action-result role="status" aria-live="polite"></span>
-          </div>
+          <p><span data-bot-connection>Loading live server data</span> <span aria-hidden="true">·</span> <span data-time>Updated now</span></p>
         </div>
       </section>
 

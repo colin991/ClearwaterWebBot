@@ -7,10 +7,12 @@ const discordLogin = document.querySelector('[data-discord-login]');
 const discordAccount = document.querySelector('[data-discord-account]');
 const discordAvatar = document.querySelector('[data-discord-avatar]');
 const discordName = document.querySelector('[data-discord-name]');
+const discordRank = document.querySelector('[data-discord-rank]');
+const discordProfile = document.querySelector('[data-discord-profile]');
+const discordProfileMenu = document.querySelector('[data-discord-profile-menu]');
 const discordLogout = document.querySelector('[data-discord-logout]');
 const discordCount = document.querySelector('[data-discord-count]');
 const botConnection = document.querySelector('[data-bot-connection]');
-const botControls = document.querySelector('[data-bot-controls]');
 const botActionButton = document.querySelector('[data-bot-action]');
 const botActionResult = document.querySelector('[data-bot-action-result]');
 const ownerLink = document.querySelector('[data-owner-link]');
@@ -73,12 +75,14 @@ const loadDiscordSession = async () => {
 
     if (discordName) discordName.textContent = session.user.displayName || session.user.username;
     if (discordAvatar && session.user.avatarUrl) discordAvatar.src = session.user.avatarUrl;
+    if (discordRank && session.user.staffRank) {
+      discordRank.textContent = session.user.staffRank;
+      discordRank.hidden = false;
+    }
     discordLogin.hidden = true;
     discordAccount.hidden = false;
-    if (botControls) botControls.hidden = false;
     if (ownerLink && session.user.owner) {
       ownerLink.hidden = false;
-      header?.classList.add('owner-access');
     }
   } catch {
     // Keep the login button available if the session endpoint is unavailable.
@@ -97,6 +101,20 @@ discordLogout?.addEventListener('click', async () => {
 
 loadDiscordSession();
 
+discordProfile?.addEventListener('click', () => {
+  if (!ownerLink || ownerLink.hidden) return;
+  const isOpen = discordProfile.getAttribute('aria-expanded') === 'true';
+  discordProfile.setAttribute('aria-expanded', String(!isOpen));
+  if (discordProfileMenu) discordProfileMenu.hidden = isOpen;
+});
+
+document.addEventListener('click', (event) => {
+  if (!discordAccount?.contains(event.target)) {
+    discordProfile?.setAttribute('aria-expanded', 'false');
+    if (discordProfileMenu) discordProfileMenu.hidden = true;
+  }
+});
+
 const loadBotStatus = async () => {
   if (!discordCount || !botConnection) return;
 
@@ -106,7 +124,7 @@ const loadBotStatus = async () => {
     const status = await response.json();
 
     if (!status.online) {
-      botConnection.textContent = 'Discord bot offline';
+      botConnection.textContent = 'Live data unavailable';
       return;
     }
 
@@ -123,7 +141,7 @@ const loadBotStatus = async () => {
       }
     }
   } catch {
-    botConnection.textContent = 'Discord bot offline';
+    botConnection.textContent = 'Live data unavailable';
     setErlcNumbers({ online: false });
     if (updatedTime) updatedTime.textContent = 'ER:LC status unavailable';
   }

@@ -52,7 +52,6 @@ img { display: block; max-width: 100%; }
   animation: navEnter .7s cubic-bezier(.2,.8,.2,1) both;
 }
 .site-header.scrolled .nav-shell { width: min(720px, calc(100% - 24px)); min-height: 52px; padding: 6px 8px 6px 12px; border-color: rgba(151, 170, 198, 0.25); background: rgba(5, 10, 18, 0.93); }
-.site-header.scrolled.owner-access .nav-shell { width: min(880px, calc(100% - 24px)); }
 .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 780; letter-spacing: -.02em; transition: gap .35s ease; }
 .brand > span:last-child { max-width: 100px; overflow: hidden; white-space: nowrap; opacity: 1; transform: translateX(0); transition: max-width .35s cubic-bezier(.16,.75,.22,1), opacity .25s ease, transform .35s cubic-bezier(.16,.75,.22,1); }
 .brand-badge { width: 31px; height: 31px; display: grid; place-items: center; flex: 0 0 31px; transition: width .35s ease, height .35s ease, flex-basis .35s ease; }
@@ -71,10 +70,17 @@ img { display: block; max-width: 100%; }
 [data-discord-login][hidden] { display: none; }
 .discord-account { min-height: 42px; display: inline-flex; align-items: center; gap: 9px; padding: 4px 6px 4px 5px; border: 1px solid var(--line); border-radius: 999px; background: rgba(12, 20, 32, .82); }
 .discord-account[hidden] { display: none; }
+.discord-profile { min-width: 0; display: inline-flex; align-items: center; gap: 9px; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; cursor: pointer; text-align: left; }
 .discord-avatar { width: 32px; height: 32px; flex: 0 0 32px; border-radius: 50%; object-fit: cover; background: #101a29; }
+.discord-profile-copy { min-width: 0; display: grid; gap: 1px; }
 .discord-name { max-width: 116px; overflow: hidden; color: #e9eef7; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.discord-rank { max-width: 116px; overflow: hidden; color: var(--blue-light); font-size: 9px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .discord-logout { min-height: 30px; padding: 0 10px; border: 0; border-radius: 999px; color: #aebbd0; background: rgba(255,255,255,.055); font: inherit; font-size: 10px; font-weight: 720; cursor: pointer; transition: color .2s ease, background .2s ease; }
 .discord-logout:hover { color: white; background: rgba(255,255,255,.1); }
+.discord-profile-menu { position: absolute; z-index: 3; top: calc(100% + 9px); right: 0; min-width: 150px; padding: 6px; border: 1px solid var(--line); border-radius: 13px; background: rgba(7,13,22,.98); box-shadow: 0 18px 42px rgba(0,0,0,.4); }
+.discord-profile-menu[hidden] { display: none; }
+.discord-profile-menu a { display: block; padding: 10px 12px; border-radius: 9px; color: #c8faec; font-size: 12px; font-weight: 750; }
+.discord-profile-menu a:hover { background: rgba(56,217,176,.1); }
 .site-header.scrolled .brand { gap: 0; }
 .site-header.scrolled .brand > span:last-child { max-width: 0; opacity: 0; transform: translateX(-8px); }
 .site-header.scrolled .brand-badge { width: 25px; height: 25px; flex-basis: 25px; }
@@ -299,7 +305,8 @@ img { display: block; max-width: 100%; }
   .nav-actions { margin-top: 8px; }
   .nav-button { width: 100%; }
   .discord-account { width: 100%; border-radius: 14px; padding: 7px; }
-  .discord-name { max-width: none; flex: 1; }
+  .discord-profile { flex: 1; }
+  .discord-name, .discord-rank { max-width: none; }
   .discord-logout { min-height: 34px; padding-inline: 13px; }
   .hero { padding: 125px 0 90px; }
   .hero h1 { font-size: clamp(52px, 16vw, 72px); }
