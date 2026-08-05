@@ -21,6 +21,7 @@
       </aside>
 
       <section class="internet-feed">
+        <label class="internet-search"><span>Search</span><input data-search type="search" placeholder="Search Clearwater Internet" /></label>
         <header class="internet-header"><div><p>Clearwater Internet</p><h1>Community feed</h1></div><a href="/api/auth/discord" data-login>Sign in with Discord</a><div class="internet-user" data-user hidden><img data-avatar src="assets/clearwater-logo.png" alt="" /><span><b data-name>Discord user</b><small data-rank></small></span></div></header>
         <section class="composer" data-composer hidden>
           <textarea data-post-content maxlength="500" placeholder="What's happening in Clearwater?"></textarea>
@@ -33,10 +34,10 @@
           <div><button data-verify-button type="button">Verify user</button><button data-unverify-button type="button">Remove verification</button><button class="danger" data-ban-button type="button">Ban user</button><button data-unban-button type="button">Unban user</button></div>
           <p data-admin-message role="status"></p>
         </section>
-        <section class="posts" aria-live="polite"><p class="feed-note" data-feed-note>Loading posts…</p><div data-post-list></div></section>
+        <section class="posts" id="feed" aria-live="polite"><p class="feed-note" data-feed-note>Loading posts…</p><div data-post-list></div></section>
       </section>
 
-      <aside class="internet-side"><div><h2>Clearwater Internet</h2><p>A place for the community to share updates, screenshots, and stories.</p></div><div><h2>Community rules</h2><p>Keep posts respectful. Ownership may remove access for rule-breaking.</p></div></aside>
+      <aside class="internet-side"><div><h2>Clearwater Internet</h2><p>A place for the community to share updates, screenshots, and stories.</p></div><div class="trending"><h2>Trending in Clearwater</h2><a href="#feed">#ClearwaterRP <span>Community</span></a><a href="#feed">#ERLC <span>Roleplay</span></a><a href="#feed">#FireRescue <span>Departments</span></a></div><div><h2>Community rules</h2><p>Keep posts respectful. Ownership may remove access for rule-breaking.</p></div></aside>
     </main>
     <script src="internet.js"></script>
   </body>

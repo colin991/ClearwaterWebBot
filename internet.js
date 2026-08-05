@@ -14,6 +14,8 @@ const note = document.querySelector('[data-feed-note]');
 const admin = document.querySelector('[data-admin]');
 const targetId = document.querySelector('[data-target-id]');
 const adminMessage = document.querySelector('[data-admin-message]');
+const search = document.querySelector('[data-search]');
+let allPosts = [];
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const timeAgo = (value) => new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(Math.round((new Date(value) - Date.now()) / 60000), 'minute');
@@ -24,12 +26,19 @@ function showPosts(posts) {
   list.innerHTML = posts.map((post) => `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(post.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><div><span class="post-name">${escapeHtml(post.displayName)}</span>${post.verified ? '<span class="verified" title="Verified">✓</span>' : ''}<div class="post-meta">@${escapeHtml(post.username)} · ${timeAgo(post.createdAt)}${post.staffRank ? ` · <span class="post-rank">${escapeHtml(post.staffRank)}</span>` : ''}</div></div></div><p class="post-content">${escapeHtml(post.content)}</p></article>`).join('');
 }
 
+function renderPosts() {
+  const query = String(search?.value || '').trim().toLowerCase();
+  const posts = query ? allPosts.filter((post) => `${post.displayName} ${post.username} ${post.content}`.toLowerCase().includes(query)) : allPosts;
+  showPosts(posts);
+}
+
 async function loadPosts() {
   try {
     const response = await fetch('/api/internet');
     const result = await response.json();
     if (!response.ok) throw new Error(result.error);
-    showPosts(result.posts || []);
+    allPosts = result.posts || [];
+    renderPosts();
   } catch {
     note.hidden = false;
     note.textContent = 'Clearwater Internet is connecting to the community service.';
@@ -51,6 +60,7 @@ async function loadSession() {
 }
 
 content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; });
+search?.addEventListener('input', renderPosts);
 postButton?.addEventListener('click', async () => {
   postButton.disabled = true;
   postMessage.textContent = 'Posting…';

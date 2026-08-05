@@ -17,11 +17,24 @@ const botActionButton = document.querySelector('[data-bot-action]');
 const botActionResult = document.querySelector('[data-bot-action-result]');
 const ownerLink = document.querySelector('[data-owner-link]');
 const erlcStatus = document.querySelector('[data-erlc-status]');
+const erlcLabel = document.querySelector('[data-erlc-label]');
 const erlcCurrent = document.querySelectorAll('[data-erlc-current]');
 const erlcMax = document.querySelectorAll('[data-erlc-max]');
 const erlcQueue = document.querySelectorAll('[data-erlc-queue]');
 
 const setErlcNumbers = (status) => {
+  if (!status?.online) {
+    erlcCurrent.forEach((element) => { element.textContent = '—'; });
+    erlcMax.forEach((element) => { element.textContent = '—'; });
+    erlcQueue.forEach((element) => { element.textContent = '—'; });
+    if (erlcStatus) {
+      erlcStatus.classList.add('offline');
+      erlcStatus.setAttribute('aria-label', 'ER:LC server status unavailable');
+    }
+    if (erlcLabel) erlcLabel.textContent = 'Server status unavailable';
+    return;
+  }
+
   const currentPlayers = Number.isInteger(status?.currentPlayers) ? status.currentPlayers : 0;
   const maxPlayers = Number.isInteger(status?.maxPlayers) ? status.maxPlayers : 50;
   const queue = Number.isInteger(status?.queue) ? status.queue : 0;
@@ -30,14 +43,13 @@ const setErlcNumbers = (status) => {
   erlcMax.forEach((element) => { element.textContent = maxPlayers.toLocaleString(); });
   erlcQueue.forEach((element) => { element.textContent = queue.toLocaleString(); });
   if (erlcStatus) {
-    erlcStatus.classList.toggle('offline', !status?.online);
+    erlcStatus.classList.remove('offline');
     erlcStatus.setAttribute(
       'aria-label',
-      status?.online
-        ? `ER:LC server online with ${currentPlayers} of ${maxPlayers} players`
-        : 'ER:LC server status unavailable'
+      `ER:LC server online with ${currentPlayers} of ${maxPlayers} players`
     );
   }
+  if (erlcLabel) erlcLabel.textContent = 'Server online';
 };
 
 const loadDirectErlcStatus = async () => {
