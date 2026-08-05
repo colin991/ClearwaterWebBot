@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#03070d" />
+    <title>Clearwater Internet</title>
+    <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
+    <link rel="stylesheet" href="internet.css" />
+  </head>
+  <body>
+    <main class="internet-shell">
+      <aside class="internet-rail">
+        <a class="internet-brand" href="/"><img src="assets/clearwater-logo.png" alt="" /> <span>Clearwater<br /><b>Internet</b></span></a>
+        <nav aria-label="Internet navigation">
+          <a class="selected" href="/internet.html">Home</a>
+          <a href="/">Clearwater Roleplay</a>
+          <a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a>
+        </nav>
+        <a class="back-button" href="/">Back to website</a>
+      </aside>
+
+      <section class="internet-feed">
+        <header class="internet-header"><div><p>Clearwater Internet</p><h1>Community feed</h1></div><a href="/api/auth/discord" data-login>Sign in with Discord</a><div class="internet-user" data-user hidden><img data-avatar src="assets/clearwater-logo.png" alt="" /><span><b data-name>Discord user</b><small data-rank></small></span></div></header>
+        <section class="composer" data-composer hidden>
+          <textarea data-post-content maxlength="500" placeholder="What's happening in Clearwater?"></textarea>
+          <div><span data-character-count>0 / 500</span><button type="button" data-post-button>Post</button></div>
+          <p data-post-message role="status"></p>
+        </section>
+        <section class="signed-out" data-signed-out><img src="assets/clearwater-logo.png" alt="" /><h2>Sign in to join the conversation.</h2><p>Clearwater Internet is for the Clearwater Roleplay community.</p><a href="/api/auth/discord">Sign in with Discord</a></section>
+        <section class="admin-panel" data-admin hidden>
+          <h2>Owner controls</h2><p>Enter a Discord user ID to verify or ban an account.</p><input data-target-id inputmode="numeric" placeholder="Discord user ID" />
+          <div><button data-verify-button type="button">Verify user</button><button data-unverify-button type="button">Remove verification</button><button class="danger" data-ban-button type="button">Ban user</button><button data-unban-button type="button">Unban user</button></div>
+          <p data-admin-message role="status"></p>
+        </section>
+        <section class="posts" aria-live="polite"><p class="feed-note" data-feed-note>Loading posts…</p><div data-post-list></div></section>
+      </section>
+
+      <aside class="internet-side"><div><h2>Clearwater Internet</h2><p>A place for the community to share updates, screenshots, and stories.</p></div><div><h2>Community rules</h2><p>Keep posts respectful. Ownership may remove access for rule-breaking.</p></div></aside>
+    </main>
+    <script src="internet.js"></script>
+  </body>
+</html>

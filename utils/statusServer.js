@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
+import { createInternetPost, publicPosts, readInternetStore, saveInternetStore, upsertInternetUser } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -36,7 +37,7 @@ export function startStatusServer(client, config) {
       return json(response, 200, { ok: true, botOnline: client.isReady() });
     }
 
-    if (!['/api/status', '/api/actions', '/api/config', '/api/access'].includes(url.pathname)) {
+    if (!['/api/status', '/api/actions', '/api/config', '/api/access', '/api/internet'].includes(url.pathname)) {
       return json(response, 404, { error: 'Not found' });
     }
 
@@ -76,6 +77,36 @@ export function startStatusServer(client, config) {
         });
       } catch {
         return json(response, 400, { error: 'Invalid request' });
+      }
+    }
+
+    if (url.pathname === '/api/internet') {
+      try {
+        const store = await readInternetStore();
+        if (request.method === 'GET') return json(response, 200, { posts: publicPosts(store) });
+        if (request.method !== 'POST') return json(response, 405, { error: 'Method not allowed' });
+
+        const body = await readJson(request);
+        if (body.action === 'post') {
+          const user = upsertInternetUser(store, body.actor);
+          const post = createInternetPost(store, user, body.content);
+          await saveInternetStore(store);
+          return json(response, 201, { post });
+        }
+
+        if (!body.owner || !['verify', 'ban'].includes(body.action)) {
+          return json(response, 403, { error: 'Owner access required' });
+        }
+
+        const targetId = String(body.targetId || '').trim();
+        if (!/^\d{16,22}$/.test(targetId)) return json(response, 400, { error: 'Enter a valid Discord user ID' });
+        const target = upsertInternetUser(store, { id: targetId });
+        if (body.action === 'verify') target.verified = body.enabled === true;
+        if (body.action === 'ban') target.banned = body.enabled === true;
+        await saveInternetStore(store);
+        return json(response, 200, { user: target });
+      } catch (error) {
+        return json(response, 400, { error: error.message || 'Could not update Clearwater Internet' });
       }
     }
 

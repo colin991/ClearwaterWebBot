@@ -40,6 +40,18 @@ const setErlcNumbers = (status) => {
   }
 };
 
+const loadDirectErlcStatus = async () => {
+  const response = await fetch('/api/erlc/status');
+  if (!response.ok) throw new Error('ER:LC status unavailable');
+  const status = await response.json();
+  if (!status.online) throw new Error('ER:LC server unavailable');
+  setErlcNumbers(status);
+  if (updatedTime) {
+    const timestamp = new Date(status.updatedAt || Date.now());
+    updatedTime.textContent = `Updated ${timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+  }
+};
+
 const updateHeader = () => {
   header?.classList.toggle('scrolled', window.scrollY > 18);
 };
@@ -125,6 +137,7 @@ const loadBotStatus = async () => {
 
     if (!status.online) {
       botConnection.textContent = 'Live data unavailable';
+      await loadDirectErlcStatus();
       return;
     }
 
@@ -141,9 +154,14 @@ const loadBotStatus = async () => {
       }
     }
   } catch {
-    botConnection.textContent = 'Live data unavailable';
-    setErlcNumbers({ online: false });
-    if (updatedTime) updatedTime.textContent = 'ER:LC status unavailable';
+    try {
+      await loadDirectErlcStatus();
+      botConnection.textContent = 'Live ER:LC data connected';
+    } catch {
+      botConnection.textContent = 'Live data unavailable';
+      setErlcNumbers({ online: false });
+      if (updatedTime) updatedTime.textContent = 'ER:LC status unavailable';
+    }
   }
 };
 
