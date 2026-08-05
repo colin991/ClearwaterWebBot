@@ -17,7 +17,7 @@ export const config = Object.freeze({
   token: process.env.DISCORD_TOKEN?.trim(),
   clientId: process.env.DISCORD_CLIENT_ID?.trim(),
   guildId: process.env.DISCORD_GUILD_ID?.trim(),
-  websiteUrl: cleanUrl(process.env.WEBSITE_URL, 'https://cwrpvc.xyz'),
+  websiteUrl: cleanUrl(process.env.WEBSITE_URL, 'https://cwrpvc.lol'),
   apiKey: process.env.BOT_API_KEY?.trim(),
   melonlyApiKey: process.env.MELONLY_API_KEY?.trim(),
   erlcServerKey: process.env.ERLC_SERVER_KEY?.trim(),
