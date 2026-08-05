@@ -19,6 +19,25 @@ const erlcCurrent = document.querySelectorAll('[data-erlc-current]');
 const erlcMax = document.querySelectorAll('[data-erlc-max]');
 const erlcQueue = document.querySelectorAll('[data-erlc-queue]');
 
+const setErlcNumbers = (status) => {
+  const currentPlayers = Number.isInteger(status?.currentPlayers) ? status.currentPlayers : 0;
+  const maxPlayers = Number.isInteger(status?.maxPlayers) ? status.maxPlayers : 50;
+  const queue = Number.isInteger(status?.queue) ? status.queue : 0;
+
+  erlcCurrent.forEach((element) => { element.textContent = currentPlayers.toLocaleString(); });
+  erlcMax.forEach((element) => { element.textContent = maxPlayers.toLocaleString(); });
+  erlcQueue.forEach((element) => { element.textContent = queue.toLocaleString(); });
+  if (erlcStatus) {
+    erlcStatus.classList.toggle('offline', !status?.online);
+    erlcStatus.setAttribute(
+      'aria-label',
+      status?.online
+        ? `ER:LC server online with ${currentPlayers} of ${maxPlayers} players`
+        : 'ER:LC server status unavailable'
+    );
+  }
+};
+
 const updateHeader = () => {
   header?.classList.toggle('scrolled', window.scrollY > 18);
 };
@@ -40,7 +59,7 @@ navigation?.querySelectorAll('a').forEach((link) => {
 });
 
 if (year) year.textContent = new Date().getFullYear();
-if (updatedTime) updatedTime.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+if (updatedTime) updatedTime.textContent = 'Checking ER:LC…';
 
 const loadDiscordSession = async () => {
   if (!discordLogin || !discordAccount) return;
@@ -96,18 +115,22 @@ const loadBotStatus = async () => {
       : 'Discord bot online';
     if (Number.isInteger(status.memberCount)) discordCount.textContent = status.memberCount.toLocaleString();
     if (status.erlc) {
-      erlcCurrent.forEach((element) => { element.textContent = status.erlc.currentPlayers; });
-      erlcMax.forEach((element) => { element.textContent = status.erlc.maxPlayers; });
-      erlcQueue.forEach((element) => { element.textContent = status.erlc.queue; });
-      if (erlcStatus) erlcStatus.classList.toggle('offline', !status.erlc.online);
+      setErlcNumbers(status.erlc);
+      if (updatedTime) {
+        const updatedAt = status.erlc.updatedAt || status.updatedAt;
+        const timestamp = updatedAt ? new Date(updatedAt) : new Date();
+        updatedTime.textContent = `Updated ${timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+      }
     }
   } catch {
     botConnection.textContent = 'Discord bot offline';
+    setErlcNumbers({ online: false });
+    if (updatedTime) updatedTime.textContent = 'ER:LC status unavailable';
   }
 };
 
 loadBotStatus();
-window.setInterval(loadBotStatus, 30000);
+window.setInterval(loadBotStatus, 60_000);
 
 botActionButton?.addEventListener('click', async () => {
   botActionButton.disabled = true;

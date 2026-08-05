@@ -13,9 +13,14 @@ async function sendGameLog(client, settings, description, color) {
 
 async function syncOnce(client, config, previousPlayers) {
   const settings = await getOwnerConfig();
-  if (!config.erlcServerKey || !settings.inGameGuildId || !settings.inGameRoleId) return previousPlayers;
+  if (!config.erlcServerKey) {
+    client.erlcStatus = { online: false, updatedAt: new Date().toISOString() };
+    return previousPlayers;
+  }
 
-  const [server, identityMap] = await Promise.all([fetchErlcServer(config.erlcServerKey), discordIdsByRobloxId()]);
+  // Keep the website's live player count working even when role syncing has
+  // not been configured in the owner panel yet.
+  const server = await fetchErlcServer(config.erlcServerKey);
   const players = (server.Players || []).map(parseErlcPlayer).filter((player) => player.robloxId);
   client.erlcStatus = {
     online: true,
@@ -26,6 +31,12 @@ async function syncOnce(client, config, previousPlayers) {
     players,
     updatedAt: new Date().toISOString(),
   };
+
+  if (!settings.inGameGuildId || !settings.inGameRoleId) {
+    return new Set(players.map((player) => player.robloxId));
+  }
+
+  const identityMap = await discordIdsByRobloxId();
   const activeDiscordIds = new Set(players.map((player) => identityMap.get(player.robloxId)).filter(Boolean));
   const guild = await client.guilds.fetch(settings.inGameGuildId);
   await guild.members.fetch();
