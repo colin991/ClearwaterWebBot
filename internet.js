@@ -31,7 +31,7 @@ let loadingPosts = false;
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const timeAgo = (value) => new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(Math.round((new Date(value) - Date.now()) / 60000), 'minute');
-const verifiedBadge = () => '<span class="verified" role="img" aria-label="Verified" data-tooltip="Verified">✓</span>';
+const verifiedBadge = () => '<span class="verified" role="img" aria-label="Verified" data-tooltip="Verified"><span class="verified-check" aria-hidden="true"></span></span>';
 const isVerified = (post) => post.verified === true || internetUsers.get(post.authorId)?.verified === true;
 
 function refreshProfileVerified() {

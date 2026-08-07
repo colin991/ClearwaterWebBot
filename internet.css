@@ -17,7 +17,10 @@ a { color: inherit; text-decoration: none; }
 
 /* Small, centered Clearwater verified mark. The white check is drawn with CSS,
    so it cannot shift with a font's baseline or glyph shape. */
-.verified,.profile-verified { top: -2px; width: 12px; height: 12px; margin-left: 4px; border-radius: 50%; background: #194bf7; clip-path: none; color: transparent; font-size: 0; vertical-align: 4px; }
-.verified::before,.profile-verified::before { position: absolute; top: 2px; left: 4px; display: block; width: 3px; height: 4px; border: solid #fff; border-width: 0 1.6px 1.6px 0; content: ""; transform: rotate(45deg); }
+.verified,.profile-verified { top: -1.5px; width: 12px; height: 12px; margin-left: 4px; border-radius: 50%; background: #194bf7; clip-path: none; color: transparent; font-size: 0; vertical-align: 4px; }
+.verified::before,.profile-verified::before { content: none; }
+.verified-check::before,.verified-check::after { position: absolute; display: block; height: 1.6px; border-radius: 2px; background: #fff; content: ""; transform-origin: left center; }
+.verified-check::before { top: 6px; left: 2px; width: 3px; transform: rotate(45deg); }
+.verified-check::after { top: 7px; left: 4px; width: 5px; transform: rotate(-45deg); }
 @media (max-width: 940px) { .internet-shell { grid-template-columns: 180px minmax(0, 1fr); max-width: 860px; }.internet-side { display: none; } }
 @media (max-width: 660px) { .internet-shell { width: min(100% - 24px, 620px); display: block; padding-top: 20px; }.internet-rail { position: static; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 18px; }.internet-brand { font-size: 14px; }.internet-brand img { width: 38px; height: 38px; }.internet-nav,.back-button { display: none; }.rail-primary { margin: 0; }.internet-header { align-items: flex-start; flex-direction: column; }.post-content { margin-left: 0; } }
