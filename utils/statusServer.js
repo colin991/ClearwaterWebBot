@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
-import { clearExpiredInternetBans, createInternetPost, getActiveBan, publicPosts, publicUsers, readInternetStore, saveInternetStore, setInternetBan, upsertInternetUser } from './internetStore.js';
+import { clearExpiredInternetBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, getActiveBan, moderationSnapshot, publicPosts, publicUsers, readInternetStore, saveInternetStore, setInternetBan, upsertInternetUser } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -112,6 +112,27 @@ export function startStatusServer(client, config) {
           const ban = getActiveBan(user);
           await saveInternetStore(store);
           return json(response, 200, { banned: Boolean(ban), ban });
+        }
+
+        if (body.action === 'edit' || body.action === 'delete') {
+          const result = body.action === 'edit'
+            ? editInternetPost(store, { postId: body.postId, actorId: body.actor?.id, content: body.content, owner: body.owner === true })
+            : deleteInternetPost(store, { postId: body.postId, actorId: body.actor?.id, owner: body.owner === true });
+          await saveInternetStore(store);
+          return json(response, 200, { post: result });
+        }
+
+        if (body.action === 'report') {
+          const report = createInternetReport(store, { postId: body.postId, actor: body.actor, reason: body.reason });
+          await saveInternetStore(store);
+          return json(response, 201, { report });
+        }
+
+        if (body.action === 'moderation') {
+          if (!body.owner) return json(response, 403, { error: 'Owner access required' });
+          const cleared = clearExpiredInternetBans(store);
+          if (cleared) await saveInternetStore(store);
+          return json(response, 200, moderationSnapshot(store));
         }
 
         if (!body.owner || !['verify', 'ban'].includes(body.action)) {

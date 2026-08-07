@@ -31,13 +31,16 @@ const profileRank = document.querySelector('[data-profile-rank]');
 const profileVerified = document.querySelector('[data-profile-verified]');
 const profilePostCount = document.querySelector('[data-profile-post-count]');
 const profileList = document.querySelector('[data-profile-list]');
-const INTERNET_VERSION = '20260807-ban-4';
+const staffLink = document.querySelector('[data-staff-link]');
+const staffContent = document.querySelector('[data-staff-content]');
+const INTERNET_VERSION = '20260807-moderation-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
 let loadingPosts = false;
 let accountBanned = false;
 let activeBan = null;
+let sessionIsOwner = false;
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const timeAgo = (value) => new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(Math.round((new Date(value) - Date.now()) / 60000), 'minute');
@@ -58,10 +61,23 @@ async function readApiJson(response, fallbackMessage) {
   }
 }
 
+function postMenu(post) {
+  if (!currentUserId) return '';
+  const ownPost = post.authorId === currentUserId;
+  const buttons = ownPost
+    ? '<button type="button" data-post-action="edit">Edit post</button><button type="button" data-post-action="delete">Delete post</button>'
+    : `<button type="button" data-post-action="report">Report post</button>${sessionIsOwner ? '<button type="button" class="danger" data-post-action="delete">Delete post</button>' : ''}`;
+  return `<details class="post-menu"><summary aria-label="Post actions">•••</summary><div data-post-id="${escapeHtml(post.id)}">${buttons}</div></details>`;
+}
+
+function postMarkup(post, profile = false) {
+  return `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(post.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><div><span class="post-name">${escapeHtml(post.displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<div class="post-meta">@${escapeHtml(post.username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${post.staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(post.staffRank)}</span>` : ''}</div></div>${postMenu(post)}</div><p class="post-content">${escapeHtml(post.content)}</p></article>`;
+}
+
 function showPosts(posts) {
   note.hidden = Boolean(posts.length);
   note.textContent = posts.length ? '' : 'No posts yet. Be the first to share an update.';
-  list.innerHTML = posts.map((post) => `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(post.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><div><span class="post-name">${escapeHtml(post.displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<div class="post-meta">@${escapeHtml(post.username)} &middot; ${timeAgo(post.createdAt)}${post.staffRank ? ` &middot; <span class="post-rank">${escapeHtml(post.staffRank)}</span>` : ''}</div></div></div><p class="post-content">${escapeHtml(post.content)}</p></article>`).join('');
+  list.innerHTML = posts.map((post) => postMarkup(post)).join('');
 }
 
 function renderPosts() {
@@ -81,7 +97,7 @@ function renderProfilePosts() {
   const posts = allPosts.filter((post) => post.authorId === currentUserId);
   if (profilePostCount) profilePostCount.textContent = posts.length.toLocaleString();
   profileList.innerHTML = posts.length
-    ? posts.map((post) => `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(post.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><div><span class="post-name">${escapeHtml(post.displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<div class="post-meta">@${escapeHtml(post.username)} &middot; ${timeAgo(post.createdAt)}</div></div></div><p class="post-content">${escapeHtml(post.content)}</p></article>`).join('')
+    ? posts.map((post) => postMarkup(post, true)).join('')
     : '<p>You have not posted yet.</p>';
 }
 
@@ -89,6 +105,7 @@ function showView(view) {
   document.querySelectorAll('[data-view]').forEach((section) => { section.hidden = section.dataset.view !== view; });
   document.querySelectorAll('[data-view-link]').forEach((link) => link.classList.toggle('selected', link.dataset.viewLink === view));
   if (view === 'home') renderPosts();
+  if (view === 'staff') void loadModeration();
 }
 
 function showBan(ban) {
@@ -128,6 +145,46 @@ async function loadBanStatus() {
   }
 }
 
+async function loadModeration() {
+  if (!sessionIsOwner || !staffContent) return;
+  staffContent.innerHTML = '<p>Loading moderation information...</p>';
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'moderation' }) });
+    const result = await readApiJson(response, 'Could not load the staff panel.');
+    if (!response.ok) throw new Error(result.error || 'Could not load the staff panel.');
+    const reports = result.reports || [];
+    const bans = result.bans || [];
+    staffContent.innerHTML = `<section><h2>Open reports <span>${reports.length}</span></h2>${reports.length ? reports.map((report) => `<article class="staff-item"><b>${escapeHtml(report.authorName)}’s post</b><p>${escapeHtml(report.content)}</p><small>Reported by ${escapeHtml(report.reporterName)} · ${escapeHtml(report.reason)}</small></article>`).join('') : '<p>No open reports.</p>'}</section><section><h2>Active bans <span>${bans.length}</span></h2>${bans.length ? bans.map((ban) => `<article class="staff-item"><b>${escapeHtml(ban.displayName)}</b><p>${escapeHtml(ban.reason)}</p><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></article>`).join('') : '<p>No active bans.</p>'}</section>`;
+  } catch (error) {
+    staffContent.innerHTML = `<p>${escapeHtml(error.message || 'Could not load the staff panel.')}</p>`;
+  }
+}
+
+async function runPostAction(action, postId) {
+  const post = allPosts.find((item) => item.id === postId);
+  if (!post) return;
+  let content = '';
+  let reason = '';
+  if (action === 'edit') {
+    content = window.prompt('Edit your post:', post.content) || '';
+    if (!content.trim()) return;
+  }
+  if (action === 'report') {
+    reason = window.prompt('Why are you reporting this post?') || '';
+    if (!reason.trim()) return;
+  }
+  if (action === 'delete' && !window.confirm('Delete this post? This cannot be undone.')) return;
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, postId, content, reason }) });
+    const result = await readApiJson(response, 'Could not update this post.');
+    if (!response.ok) throw new Error(result.error || 'Could not update this post.');
+    await loadPosts();
+    if (action === 'report') window.alert('Report sent to the staff panel.');
+  } catch (error) {
+    window.alert(error.message || 'Could not update this post.');
+  }
+}
+
 async function loadPosts() {
   if (loadingPosts) return;
   loadingPosts = true;
@@ -159,6 +216,7 @@ async function loadSession() {
   if (session.user.avatarUrl) { avatar.src = session.user.avatarUrl; composerAvatar.src = session.user.avatarUrl; }
   rank.textContent = session.user.staffRank || '';
   currentUserId = session.user.id;
+  sessionIsOwner = session.user.owner === true;
   if (profileTitle) profileTitle.textContent = session.user.displayName || session.user.username;
   if (profileCopy) profileCopy.textContent = session.user.bio || (session.user.staffRank ? `${session.user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
   if (profileAvatar && session.user.avatarUrl) profileAvatar.src = session.user.avatarUrl;
@@ -171,8 +229,9 @@ async function loadSession() {
   if (profileHandle) profileHandle.textContent = `@${session.user.username}`;
   if (profileRank) profileRank.textContent = session.user.staffRank || 'Clearwater community member';
   refreshProfileVerified();
-  if (session.user.owner) admin.hidden = false;
+  if (sessionIsOwner) { admin.hidden = false; staffLink.hidden = false; }
   renderProfilePosts();
+  renderPosts();
   await loadBanStatus();
 }
 
@@ -186,6 +245,12 @@ document.querySelectorAll('[data-profile-tab]').forEach((button) => button.addEv
   if (button.dataset.profileTab === 'posts') return renderProfilePosts();
   if (profileList) profileList.innerHTML = `<p>${button.textContent} will appear here when community interactions are enabled.</p>`;
 }));
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-post-action]');
+  if (!button) return;
+  const postId = button.parentElement?.dataset.postId;
+  if (postId) void runPostAction(button.dataset.postAction, postId);
+});
 
 postButton?.addEventListener('click', async () => {
   postButton.disabled = true;

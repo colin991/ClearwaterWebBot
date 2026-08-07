@@ -7,7 +7,7 @@
     <meta name="description" content="Clearwater Internet - the community social feed for Clearwater Roleplay." />
     <title>Clearwater Internet</title>
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
-    <link rel="stylesheet" href="internet.css?v=20260807-ban-4" />
+    <link rel="stylesheet" href="internet.css?v=20260807-moderation-1" />
   </head>
   <body>
     <main class="internet-shell">
@@ -21,6 +21,7 @@
           <a href="#bookmarks" data-view-link="bookmarks"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" /></svg>Bookmarks</a>
           <a href="#profile" data-view-link="profile"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>Profile</a>
           <a href="#settings" data-view-link="settings"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56v.09h-3v-.09A1.7 1.7 0 0 0 10.69 18.65a1.7 1.7 0 0 0-1.87.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7.04 15a1.7 1.7 0 0 0-1.56-1.03h-.09v-3h.09A1.7 1.7 0 0 0 7.04 9.94a1.7 1.7 0 0 0-.34-1.87l-.06-.06 2.12-2.12.06.06a1.7 1.7 0 0 0 1.87.34 1.7 1.7 0 0 0 1.03-1.56v-.09h3v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06 2.12 2.12-.06.06a1.7 1.7 0 0 0-.34 1.87 1.7 1.7 0 0 0 1.56 1.03h.09v3h-.09A1.7 1.7 0 0 0 19.4 15z" /></svg>Settings</a>
+          <a href="#staff" data-view-link="staff" data-staff-link hidden><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.4 8.2 8 9 4.6-.8 8-4 8-9V7z" /><path d="m9 12 2 2 4-4" /></svg>Staff panel</a>
         </nav>
         <a class="rail-primary" href="#home" data-compose-link>New post</a>
         <a class="back-button" href="/">Back to Clearwater Roleplay</a>
@@ -71,6 +72,7 @@
           <div class="profile-posts" data-profile-list><p>Sign in to see your posts.</p></div>
         </section>
         <section class="internet-view empty-view" data-view="settings" hidden><header class="page-heading"><p>Settings</p><h1>Account settings</h1></header><p>Your Clearwater Internet account is managed through Discord sign-in.</p></section>
+        <section class="internet-view staff-view" data-view="staff" hidden><header class="page-heading"><p>Ownership only</p><h1>Staff panel</h1></header><div class="staff-content" data-staff-content><p>Loading moderation information...</p></div></section>
       </section>
 
       <aside class="internet-side">
@@ -80,6 +82,6 @@
       </aside>
     </main>
     <section class="ban-screen" data-ban-screen hidden aria-live="assertive"><div class="ban-card"><span class="ban-emoji" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" /><path d="m6 6 12 12" /></svg></span><p>Clearwater Internet</p><h1>Banned</h1><strong>Account access has been suspended.</strong><dl><div><dt>Reason</dt><dd data-ban-reason-display>No reason was provided.</dd></div><div><dt>Duration</dt><dd data-ban-duration-display>Forever</dd></div></dl><p>Please contact support if there are any issues.</p><a href="https://discord.com/channels/1514026810348671026/1514122689566998559" target="_blank" rel="noopener">Contact support</a></div></section>
-    <script src="internet.js?v=20260807-ban-4"></script>
+    <script src="internet.js?v=20260807-moderation-1"></script>
   </body>
 </html>

@@ -76,6 +76,24 @@ export default async function handler(request, response) {
       };
     } else if (body.action === 'status') {
       payload = { action: 'status', actor: { id: user.id } };
+    } else if (['edit', 'delete'].includes(body.action)) {
+      payload = {
+        action: body.action,
+        postId: String(body.postId || ''),
+        content: String(body.content || '').slice(0, 500),
+        actor: { id: user.id },
+        owner: access.allowed,
+      };
+    } else if (body.action === 'report') {
+      payload = {
+        action: 'report',
+        postId: String(body.postId || ''),
+        reason: String(body.reason || '').slice(0, 300),
+        actor: { id: user.id, displayName: user.displayName },
+      };
+    } else if (body.action === 'moderation') {
+      if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
+      payload = { action: 'moderation', owner: true };
     } else if (['verify', 'ban'].includes(body.action)) {
       if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
       payload = {
