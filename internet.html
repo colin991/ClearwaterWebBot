@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#03070d" />
+    <meta name="theme-color" content="#050811" />
+    <meta name="description" content="Clearwater Internet - the community social feed for Clearwater Roleplay." />
     <title>Clearwater Internet</title>
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <link rel="stylesheet" href="internet.css" />
@@ -11,33 +12,59 @@
   <body>
     <main class="internet-shell">
       <aside class="internet-rail">
-        <a class="internet-brand" href="/"><img src="assets/clearwater-logo.png" alt="" /> <span>Clearwater<br /><b>Internet</b></span></a>
-        <nav aria-label="Internet navigation">
-          <a class="selected" href="/internet.html">Home</a>
-          <a href="/">Clearwater Roleplay</a>
-          <a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a>
+        <a class="internet-brand" href="/"><img src="assets/clearwater-logo.png" alt="" /><span>Clearwater<br /><b>Internet</b></span></a>
+        <nav class="internet-nav" aria-label="Clearwater Internet navigation">
+          <a class="selected" href="#home" data-view-link="home">Home</a>
+          <a href="#explore" data-view-link="explore">Explore</a>
+          <a href="#notifications" data-view-link="notifications">Notifications</a>
+          <a href="#messages" data-view-link="messages">Messages</a>
+          <a href="#bookmarks" data-view-link="bookmarks">Bookmarks</a>
+          <a href="#profile" data-view-link="profile">Profile</a>
+          <a href="#settings" data-view-link="settings">Settings</a>
         </nav>
-        <a class="back-button" href="/">Back to website</a>
+        <a class="rail-primary" href="#home" data-compose-link>New post</a>
+        <a class="back-button" href="/">Back to Clearwater Roleplay</a>
       </aside>
 
       <section class="internet-feed">
-        <label class="internet-search"><span>Search</span><input data-search type="search" placeholder="Search Clearwater Internet" /></label>
-        <header class="internet-header"><div><p>Clearwater Internet</p><h1>Community feed</h1></div><a href="/api/auth/discord" data-login>Sign in with Discord</a><div class="internet-user" data-user hidden><img data-avatar src="assets/clearwater-logo.png" alt="" /><span><b data-name>Discord user</b><small data-rank></small></span></div></header>
-        <section class="composer" data-composer hidden>
-          <textarea data-post-content maxlength="500" placeholder="What's happening in Clearwater?"></textarea>
-          <div><span data-character-count>0 / 500</span><button type="button" data-post-button>Post</button></div>
-          <p data-post-message role="status"></p>
+        <label class="internet-search"><span>Search Clearwater Internet</span><input data-search type="search" placeholder="Search Clearwater Internet" /></label>
+
+        <section class="internet-view" data-view="home">
+          <header class="internet-header">
+            <div><p>Clearwater Internet</p><h1>For you</h1></div>
+            <a href="/api/auth/discord" data-login>Sign in with Discord</a>
+            <div class="internet-user" data-user hidden><img data-avatar src="assets/clearwater-logo.png" alt="" /><span><b data-name>Discord user</b><small data-rank></small></span></div>
+          </header>
+
+          <section class="composer" data-composer hidden>
+            <img src="assets/clearwater-logo.png" alt="" data-composer-avatar />
+            <div class="composer-main"><textarea data-post-content maxlength="500" placeholder="Share an update with Clearwater..."></textarea><div><span data-character-count>0 / 500</span><button type="button" data-post-button>Post</button></div><p data-post-message role="status"></p></div>
+          </section>
+
+          <section class="signed-out" data-signed-out><img src="assets/clearwater-logo.png" alt="" /><h2>Sign in to join the conversation.</h2><p>Clearwater Internet is for the Clearwater Roleplay community.</p><a href="/api/auth/discord">Sign in with Discord</a></section>
+
+          <section class="admin-panel" data-admin hidden>
+            <h2>Owner controls</h2><p>Enter a Discord user ID to verify or ban an account.</p><input data-target-id inputmode="numeric" placeholder="Discord user ID" />
+            <div><button data-verify-button type="button">Verify user</button><button data-unverify-button type="button">Remove verification</button><button class="danger" data-ban-button type="button">Ban user</button><button data-unban-button type="button">Unban user</button></div>
+            <p data-admin-message role="status"></p>
+          </section>
+
+          <section class="posts" id="feed" aria-live="polite"><p class="feed-note" data-feed-note>Loading posts...</p><div data-post-list></div></section>
         </section>
-        <section class="signed-out" data-signed-out><img src="assets/clearwater-logo.png" alt="" /><h2>Sign in to join the conversation.</h2><p>Clearwater Internet is for the Clearwater Roleplay community.</p><a href="/api/auth/discord">Sign in with Discord</a></section>
-        <section class="admin-panel" data-admin hidden>
-          <h2>Owner controls</h2><p>Enter a Discord user ID to verify or ban an account.</p><input data-target-id inputmode="numeric" placeholder="Discord user ID" />
-          <div><button data-verify-button type="button">Verify user</button><button data-unverify-button type="button">Remove verification</button><button class="danger" data-ban-button type="button">Ban user</button><button data-unban-button type="button">Unban user</button></div>
-          <p data-admin-message role="status"></p>
-        </section>
-        <section class="posts" id="feed" aria-live="polite"><p class="feed-note" data-feed-note>Loading posts…</p><div data-post-list></div></section>
+
+        <section class="internet-view" data-view="explore" hidden><header class="page-heading"><p>Discover</p><h1>Explore Clearwater</h1></header><div class="topic-grid"><a href="#home" data-topic="#ClearwaterRP"><b>#ClearwaterRP</b><span>Community updates and screenshots</span></a><a href="#home" data-topic="#ERLC"><b>#ERLC</b><span>Roleplay, patrols, and events</span></a><a href="#home" data-topic="#FireRescue"><b>#FireRescue</b><span>Fire and EMS operations</span></a></div></section>
+        <section class="internet-view empty-view" data-view="notifications" hidden><header class="page-heading"><p>Notifications</p><h1>Nothing new yet</h1></header><p>When community features are active, your interactions will appear here.</p></section>
+        <section class="internet-view empty-view" data-view="messages" hidden><header class="page-heading"><p>Messages</p><h1>Your messages</h1></header><p>Direct messages are not enabled yet. Use the Clearwater Discord for staff support.</p><a class="inline-button" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Open Discord</a></section>
+        <section class="internet-view empty-view" data-view="bookmarks" hidden><header class="page-heading"><p>Bookmarks</p><h1>Saved posts</h1></header><p>Bookmarking will appear here when it is enabled.</p></section>
+        <section class="internet-view profile-view" data-view="profile" hidden><header class="page-heading"><p>Profile</p><h1 data-profile-title>Your Clearwater profile</h1></header><img class="profile-logo" src="assets/clearwater-logo.png" alt="" /><p data-profile-copy>Sign in with Discord to see your community profile and staff rank.</p></section>
+        <section class="internet-view empty-view" data-view="settings" hidden><header class="page-heading"><p>Settings</p><h1>Account settings</h1></header><p>Your Clearwater Internet account is managed through Discord sign-in.</p></section>
       </section>
 
-      <aside class="internet-side"><div><h2>Clearwater Internet</h2><p>A place for the community to share updates, screenshots, and stories.</p></div><div class="trending"><h2>Trending in Clearwater</h2><a href="#feed">#ClearwaterRP <span>Community</span></a><a href="#feed">#ERLC <span>Roleplay</span></a><a href="#feed">#FireRescue <span>Departments</span></a></div><div><h2>Community rules</h2><p>Keep posts respectful. Ownership may remove access for rule-breaking.</p></div></aside>
+      <aside class="internet-side">
+        <div class="community-card"><img src="assets/clearwater-logo.png" alt="" /><h2>Clearwater Roleplay</h2><p>Departments, training, events, and stories from the Gulf Coast.</p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a></div>
+        <div class="trending"><h2>Trending in Clearwater</h2><a href="#home" data-topic="#ClearwaterRP">#ClearwaterRP <span>Community</span></a><a href="#home" data-topic="#ERLC">#ERLC <span>Roleplay</span></a><a href="#home" data-topic="#FireRescue">#FireRescue <span>Departments</span></a></div>
+        <div><h2>Community rules</h2><p>Keep posts respectful. Ownership may remove access for rule-breaking.</p></div>
+      </aside>
     </main>
     <script src="internet.js"></script>
   </body>

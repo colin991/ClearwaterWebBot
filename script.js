@@ -177,8 +177,23 @@ const loadBotStatus = async () => {
   }
 };
 
+const loadDiscordMemberCount = async () => {
+  if (!discordCount) return;
+
+  try {
+    const response = await fetch('/api/discord/count');
+    if (!response.ok) throw new Error('Member count unavailable');
+    const result = await response.json();
+    if (Number.isInteger(result.memberCount)) discordCount.textContent = result.memberCount.toLocaleString();
+  } catch {
+    // The bot status endpoint remains the fallback when the public invite is unavailable.
+  }
+};
+
 loadBotStatus();
+loadDiscordMemberCount();
 window.setInterval(loadBotStatus, 60_000);
+window.setInterval(loadDiscordMemberCount, 60_000);
 
 botActionButton?.addEventListener('click', async () => {
   botActionButton.disabled = true;
