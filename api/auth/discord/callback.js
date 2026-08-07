@@ -66,6 +66,7 @@ export default async function handler(request, response) {
     const session = createSessionToken({
       ...user,
       guildBanner: guildMember?.banner || null,
+      guildRoles: guildMember?.roles || [],
     }, sessionSecret);
 
     return redirect(response, '/?login=success', [
