@@ -36,7 +36,13 @@ const staffContent = document.querySelector('[data-staff-content]');
 const warningNotice = document.querySelector('[data-warning-notice]');
 const warningReasons = document.querySelector('[data-warning-reasons]');
 const messagesList = document.querySelector('[data-messages-list]');
-const INTERNET_VERSION = '20260807-messages-1';
+const moderationModal = document.querySelector('[data-moderation-modal]');
+const moderationForm = document.querySelector('[data-moderation-form]');
+const moderationReason = document.querySelector('[data-moderation-reason]');
+const moderationDurationWrap = document.querySelector('[data-moderation-duration-wrap]');
+const moderationDuration = document.querySelector('[data-moderation-duration]');
+const moderationError = document.querySelector('[data-moderation-error]');
+const INTERNET_VERSION = '20260807-review-modal-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -44,6 +50,7 @@ let loadingPosts = false;
 let accountBanned = false;
 let activeBan = null;
 let sessionIsOwner = false;
+let pendingReportReview = null;
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const timeAgo = (value) => new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(Math.round((new Date(value) - Date.now()) / 60000), 'minute');
@@ -193,29 +200,34 @@ async function loadMessages() {
   }
 }
 
-async function reviewReport(button) {
-  const decision = button.dataset.reportReview;
-  const reportId = button.dataset.reportId;
-  const card = button.closest('.staff-item');
-  const moderationAction = card?.querySelector('[data-report-action]')?.value || 'warning';
-  let reason = '';
-  let durationDays = 'forever';
-  if (decision === 'accept') {
-    reason = window.prompt('Reason for this moderation action:') || '';
-    if (!reason.trim()) return;
-    if (moderationAction === 'ban') {
-      durationDays = window.prompt('Ban length: enter 1–30 days, or Forever', '7') || '';
-      durationDays = String(durationDays).toLowerCase() === 'forever' ? 'forever' : Number(durationDays);
-    }
-  }
+async function submitReportReview({ reportId, decision, moderationAction, reason = '', durationDays = 'forever' }) {
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'report-review', reportId, decision, moderationAction, reason, durationDays }) });
     const result = await readApiJson(response, 'Could not review this report.');
     if (!response.ok) throw new Error(result.error || 'Could not review this report.');
     await loadModeration();
+    return true;
   } catch (error) {
-    window.alert(error.message || 'Could not review this report.');
+    if (moderationError) moderationError.textContent = error.message || 'Could not review this report.';
+    return false;
   }
+}
+
+function reviewReport(button) {
+  const decision = button.dataset.reportReview;
+  const reportId = button.dataset.reportId;
+  const card = button.closest('.staff-item');
+  const moderationAction = card?.querySelector('[data-report-action]')?.value || 'warning';
+  if (decision === 'deny') {
+    void submitReportReview({ reportId, decision, moderationAction });
+    return;
+  }
+  pendingReportReview = { reportId, decision, moderationAction };
+  moderationReason.value = '';
+  moderationError.textContent = '';
+  moderationDurationWrap.hidden = moderationAction !== 'ban';
+  moderationModal.hidden = false;
+  moderationReason.focus();
 }
 
 async function runPostAction(action, postId) {
@@ -314,6 +326,18 @@ document.addEventListener('click', (event) => {
   if (postId) void runPostAction(button.dataset.postAction, postId);
 });
 document.querySelector('[data-close-warning]')?.addEventListener('click', () => { warningNotice.hidden = true; });
+document.querySelector('[data-close-moderation]')?.addEventListener('click', () => { moderationModal.hidden = true; pendingReportReview = null; });
+moderationForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!pendingReportReview) return;
+  moderationError.textContent = '';
+  const complete = await submitReportReview({
+    ...pendingReportReview,
+    reason: moderationReason.value,
+    durationDays: pendingReportReview.moderationAction === 'ban' ? moderationDuration.value : 'forever',
+  });
+  if (complete) { moderationModal.hidden = true; pendingReportReview = null; }
+});
 
 postButton?.addEventListener('click', async () => {
   postButton.disabled = true;

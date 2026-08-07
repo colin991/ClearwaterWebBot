@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260807-messages-1';
+const INTERNET_VERSION = '20260807-review-modal-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {
