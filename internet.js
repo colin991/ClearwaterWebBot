@@ -24,6 +24,7 @@ const profileRank = document.querySelector('[data-profile-rank]');
 const profileVerified = document.querySelector('[data-profile-verified]');
 const profilePostCount = document.querySelector('[data-profile-post-count]');
 const profileList = document.querySelector('[data-profile-list]');
+const INTERNET_VERSION = '20260807-verified-4';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -160,3 +161,15 @@ loadPosts();
 window.setInterval(() => {
   if (!document.hidden) loadPosts();
 }, 15_000);
+
+const checkForInternetUpdate = async () => {
+  try {
+    const response = await fetch('/api/internet-version', { cache: 'no-store' });
+    const update = await response.json();
+    if (update.version && update.version !== INTERNET_VERSION) window.location.reload();
+  } catch {
+    // Keep the current page usable if the update check is briefly unavailable.
+  }
+};
+
+window.setInterval(checkForInternetUpdate, 30_000);
