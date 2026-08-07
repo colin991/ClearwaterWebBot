@@ -26,7 +26,24 @@ async function callBot(request, payload) {
     body: payload ? JSON.stringify(payload) : undefined,
     signal: AbortSignal.timeout(8000),
   });
-  return { ok: upstream.ok, status: upstream.status, body: await upstream.json().catch(() => ({})) };
+  const contentType = upstream.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    return {
+      ok: false,
+      status: 502,
+      body: { error: 'Clearwater Internet could not reach the bot service. Restart the bot and check BOT_API_URL.' },
+    };
+  }
+
+  const body = await upstream.json().catch(() => null);
+  if (!body || typeof body !== 'object') {
+    return {
+      ok: false,
+      status: 502,
+      body: { error: 'Clearwater Internet received an invalid response from the bot service.' },
+    };
+  }
+  return { ok: upstream.ok, status: upstream.status, body };
 }
 
 export default async function handler(request, response) {

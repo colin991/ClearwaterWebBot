@@ -33,7 +33,11 @@ const timeAgo = (value) => new Intl.RelativeTimeFormat('en', { numeric: 'auto' }
 async function readApiJson(response, fallbackMessage) {
   const contentType = response.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) throw new Error(fallbackMessage);
-  return response.json();
+  try {
+    return await response.json();
+  } catch {
+    throw new Error(fallbackMessage);
+  }
 }
 
 function showPosts(posts) {
@@ -83,8 +87,8 @@ async function loadPosts() {
 }
 
 async function loadSession() {
-  const response = await fetch('/api/auth/me');
-  const session = await response.json();
+  const response = await fetch('/api/auth/me', { credentials: 'same-origin' });
+  const session = await readApiJson(response, 'Discord sign-in is temporarily unavailable.');
   if (!session.authenticated || !session.user) return;
   login.hidden = true;
   userBox.hidden = false;
