@@ -30,6 +30,12 @@ let currentUserId = null;
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const timeAgo = (value) => new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(Math.round((new Date(value) - Date.now()) / 60000), 'minute');
 
+async function readApiJson(response, fallbackMessage) {
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) throw new Error(fallbackMessage);
+  return response.json();
+}
+
 function showPosts(posts) {
   note.hidden = Boolean(posts.length);
   note.textContent = posts.length ? '' : 'No posts yet. Be the first to share an update.';
@@ -66,7 +72,7 @@ function showView(view) {
 async function loadPosts() {
   try {
     const response = await fetch('/api/internet');
-    const result = await response.json();
+    const result = await readApiJson(response, 'Clearwater Internet could not reach the website service.');
     if (!response.ok) throw new Error(result.error || 'Service unavailable');
     allPosts = result.posts || [];
     renderPosts();
@@ -114,7 +120,7 @@ postButton?.addEventListener('click', async () => {
   postMessage.textContent = 'Posting...';
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value }) });
-    const result = await response.json();
+    const result = await readApiJson(response, 'Posting is unavailable because the website service is not connected.');
     if (!response.ok) throw new Error(result.error);
     content.value = ''; count.textContent = '0 / 500'; postMessage.textContent = 'Posted.'; await loadPosts();
   } catch (error) { postMessage.textContent = error.message || 'Could not post.'; } finally { postButton.disabled = false; }
@@ -126,7 +132,7 @@ admin?.querySelectorAll('button').forEach((button) => button.addEventListener('c
   adminMessage.textContent = 'Saving...';
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, enabled, targetId: targetId.value }) });
-    const result = await response.json(); if (!response.ok) throw new Error(result.error); adminMessage.textContent = 'Saved.';
+    const result = await readApiJson(response, 'Owner controls are unavailable because the website service is not connected.'); if (!response.ok) throw new Error(result.error); adminMessage.textContent = 'Saved.';
   } catch (error) { adminMessage.textContent = error.message || 'Could not save.'; }
 }));
 
