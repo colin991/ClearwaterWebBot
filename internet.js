@@ -24,7 +24,7 @@ const profileRank = document.querySelector('[data-profile-rank]');
 const profileVerified = document.querySelector('[data-profile-verified]');
 const profilePostCount = document.querySelector('[data-profile-post-count]');
 const profileList = document.querySelector('[data-profile-list]');
-const INTERNET_VERSION = '20260807-verified-5';
+const INTERNET_VERSION = '20260807-verified-6';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -32,7 +32,7 @@ let loadingPosts = false;
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const timeAgo = (value) => new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(Math.round((new Date(value) - Date.now()) / 60000), 'minute');
-const verifiedBadge = () => '<span class="verified" role="img" aria-label="Verified" data-tooltip="Verified"><span class="verified-check" aria-hidden="true"></span></span>';
+const verifiedBadge = () => '<span class="verified" role="img" aria-label="Verified" data-tooltip="Verified"><img src="assets/verified-badge.png" alt="" /></span>';
 const isVerified = (post) => post.verified === true || internetUsers.get(post.authorId)?.verified === true;
 
 function refreshProfileVerified() {
