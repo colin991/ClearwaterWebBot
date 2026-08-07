@@ -27,6 +27,7 @@ const profileList = document.querySelector('[data-profile-list]');
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
+let loadingPosts = false;
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const timeAgo = (value) => new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(Math.round((new Date(value) - Date.now()) / 60000), 'minute');
@@ -81,6 +82,8 @@ function showView(view) {
 }
 
 async function loadPosts() {
+  if (loadingPosts) return;
+  loadingPosts = true;
   try {
     const response = await fetch('/api/internet');
     const result = await readApiJson(response, 'Clearwater Internet could not reach the website service.');
@@ -92,6 +95,8 @@ async function loadPosts() {
   } catch {
     note.hidden = false;
     note.textContent = 'Clearwater Internet is offline right now. Restart the Clearwater Discord bot host to restore posting.';
+  } finally {
+    loadingPosts = false;
   }
 }
 
@@ -152,3 +157,6 @@ admin?.querySelectorAll('button').forEach((button) => button.addEventListener('c
 showView(location.hash.slice(1) || 'home');
 loadSession().catch(() => {});
 loadPosts();
+window.setInterval(() => {
+  if (!document.hidden) loadPosts();
+}, 15_000);
