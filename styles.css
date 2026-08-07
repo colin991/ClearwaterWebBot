@@ -81,6 +81,7 @@ img { display: block; max-width: 100%; }
 .discord-profile-menu[hidden] { display: none; }
 .discord-profile-menu a { display: block; padding: 10px 12px; border-radius: 9px; color: #c8faec; font-size: 12px; font-weight: 750; }
 .discord-profile-menu a:hover { background: rgba(56,217,176,.1); }
+.discord-profile-menu-rank { display: block; padding: 4px 3px 10px; color: var(--muted); font-size: 10px; font-weight: 760; letter-spacing: .08em; text-transform: uppercase; }
 .site-header.scrolled .brand { gap: 0; }
 .site-header.scrolled .brand > span:last-child { max-width: 0; opacity: 0; transform: translateX(-8px); }
 .site-header.scrolled .brand-badge { width: 25px; height: 25px; flex-basis: 25px; }
