@@ -31,12 +31,13 @@ const profileRank = document.querySelector('[data-profile-rank]');
 const profileVerified = document.querySelector('[data-profile-verified]');
 const profilePostCount = document.querySelector('[data-profile-post-count]');
 const profileList = document.querySelector('[data-profile-list]');
-const INTERNET_VERSION = '20260807-ban-1';
+const INTERNET_VERSION = '20260807-ban-2';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
 let loadingPosts = false;
 let accountBanned = false;
+let activeBan = null;
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const timeAgo = (value) => new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(Math.round((new Date(value) - Date.now()) / 60000), 'minute');
@@ -91,17 +92,28 @@ function showView(view) {
 }
 
 function showBan(ban) {
+  activeBan = ban || null;
   accountBanned = Boolean(ban);
   document.body.classList.toggle('account-banned', accountBanned);
   if (!banScreen) return;
   banScreen.hidden = !accountBanned;
   if (!accountBanned) return;
   if (banReasonDisplay) banReasonDisplay.textContent = ban.reason || 'No reason was provided.';
-  if (banDurationDisplay) {
-    banDurationDisplay.textContent = ban.until
-      ? `Until ${new Intl.DateTimeFormat('en', { dateStyle: 'long' }).format(new Date(ban.until))}`
-      : 'Forever';
+  updateBanCountdown();
+}
+
+function updateBanCountdown() {
+  if (!accountBanned || !banDurationDisplay || !activeBan) return;
+  if (!activeBan.until) { banDurationDisplay.textContent = 'Forever'; return; }
+  const remaining = new Date(activeBan.until).getTime() - Date.now();
+  if (remaining <= 0) {
+    banDurationDisplay.textContent = 'Unbanning now…';
+    void loadBanStatus();
+    return;
   }
+  const days = Math.ceil(remaining / (24 * 60 * 60 * 1000));
+  const endDate = new Intl.DateTimeFormat('en', { dateStyle: 'long' }).format(new Date(activeBan.until));
+  banDurationDisplay.textContent = `${days} day${days === 1 ? '' : 's'} remaining · Ends ${endDate}`;
 }
 
 async function loadBanStatus() {
@@ -183,7 +195,11 @@ postButton?.addEventListener('click', async () => {
     const result = await readApiJson(response, 'Posting is unavailable because the website service is not connected.');
     if (!response.ok) throw new Error(result.error);
     content.value = ''; count.textContent = '0 / 500'; postMessage.textContent = 'Posted.'; await loadPosts();
-  } catch (error) { postMessage.textContent = error.message || 'Could not post.'; } finally { postButton.disabled = false; }
+  } catch (error) {
+    const message = error.message || 'Could not post.';
+    postMessage.textContent = message;
+    if (/banned/i.test(message)) showBan({ reason: 'This account is banned from Clearwater Internet.', until: null });
+  } finally { postButton.disabled = false; }
 });
 
 admin?.querySelectorAll('button').forEach((button) => button.addEventListener('click', async () => {
@@ -202,6 +218,7 @@ loadPosts();
 window.setInterval(() => {
   if (!document.hidden) { loadPosts(); loadBanStatus(); }
 }, 15_000);
+window.setInterval(updateBanCountdown, 60 * 1000);
 
 const checkForInternetUpdate = async () => {
   try {

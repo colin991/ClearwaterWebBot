@@ -66,6 +66,16 @@ export function setInternetBan(user, { enabled, reason, durationDays }) {
   return user;
 }
 
+export function clearExpiredInternetBans(store) {
+  let cleared = 0;
+  for (const user of Object.values(store.users)) {
+    const wasBanned = user.banned === true;
+    getActiveBan(user);
+    if (wasBanned && user.banned !== true) cleared += 1;
+  }
+  return cleared;
+}
+
 export function upsertInternetUser(store, user) {
   const id = text(user?.id, 24);
   if (!/^\d{16,22}$/.test(id)) throw new Error('Invalid user');

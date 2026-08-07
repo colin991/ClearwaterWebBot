@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
-import { createInternetPost, getActiveBan, publicPosts, publicUsers, readInternetStore, saveInternetStore, setInternetBan, upsertInternetUser } from './internetStore.js';
+import { clearExpiredInternetBans, createInternetPost, getActiveBan, publicPosts, publicUsers, readInternetStore, saveInternetStore, setInternetBan, upsertInternetUser } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -30,6 +30,19 @@ const readJson = async (request) => {
 };
 
 export function startStatusServer(client, config) {
+  const expireInternetBans = async () => {
+    try {
+      const store = await readInternetStore();
+      const cleared = clearExpiredInternetBans(store);
+      if (cleared) {
+        await saveInternetStore(store);
+        logger.info(`Automatically unbanned ${cleared} Clearwater Internet account(s).`);
+      }
+    } catch (error) {
+      logger.error('Could not clear expired Clearwater Internet bans', error);
+    }
+  };
+
   const server = createServer(async (request, response) => {
     const url = new URL(request.url || '/', 'http://localhost');
 
@@ -168,6 +181,12 @@ export function startStatusServer(client, config) {
     logger.info(`Website status connection listening on port ${config.port}.`);
     if (!config.apiKey) logger.warn('BOT_API_KEY is empty; protected website status is disabled.');
   });
+
+  // Timed bans expire even when the website is not currently open.
+  const banCleanup = setInterval(() => { void expireInternetBans(); }, 60 * 1000);
+  banCleanup.unref();
+  server.on('close', () => clearInterval(banCleanup));
+  void expireInternetBans();
 
   return server;
 }
