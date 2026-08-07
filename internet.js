@@ -33,7 +33,9 @@ const profilePostCount = document.querySelector('[data-profile-post-count]');
 const profileList = document.querySelector('[data-profile-list]');
 const staffLink = document.querySelector('[data-staff-link]');
 const staffContent = document.querySelector('[data-staff-content]');
-const INTERNET_VERSION = '20260807-moderation-1';
+const warningNotice = document.querySelector('[data-warning-notice]');
+const warningReasons = document.querySelector('[data-warning-reasons]');
+const INTERNET_VERSION = '20260807-reports-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -154,9 +156,48 @@ async function loadModeration() {
     if (!response.ok) throw new Error(result.error || 'Could not load the staff panel.');
     const reports = result.reports || [];
     const bans = result.bans || [];
-    staffContent.innerHTML = `<section><h2>Open reports <span>${reports.length}</span></h2>${reports.length ? reports.map((report) => `<article class="staff-item"><b>${escapeHtml(report.authorName)}’s post</b><p>${escapeHtml(report.content)}</p><small>Reported by ${escapeHtml(report.reporterName)} · ${escapeHtml(report.reason)}</small></article>`).join('') : '<p>No open reports.</p>'}</section><section><h2>Active bans <span>${bans.length}</span></h2>${bans.length ? bans.map((ban) => `<article class="staff-item"><b>${escapeHtml(ban.displayName)}</b><p>${escapeHtml(ban.reason)}</p><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></article>`).join('') : '<p>No active bans.</p>'}</section>`;
+    const logs = result.logs || [];
+    staffContent.innerHTML = `<section><h2>Open reports <span>${reports.length}</span></h2>${reports.length ? reports.map((report) => `<article class="staff-item"><b>${escapeHtml(report.authorName)}’s post</b><p>${escapeHtml(report.content)}</p><small>Reported by ${escapeHtml(report.reporterName)} · ${escapeHtml(report.reason)}</small><div class="report-actions"><select data-report-action><option value="warning">Give warning</option><option value="delete">Delete message</option><option value="ban">Ban account</option></select><button type="button" data-report-review="accept" data-report-id="${escapeHtml(report.id)}">Accept</button><button type="button" class="danger" data-report-review="deny" data-report-id="${escapeHtml(report.id)}">Deny</button></div></article>`).join('') : '<p>No open reports.</p>'}</section><section><h2>Active bans <span>${bans.length}</span></h2>${bans.length ? bans.map((ban) => `<article class="staff-item"><b>${escapeHtml(ban.displayName)}</b><p>${escapeHtml(ban.reason)}</p><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></article>`).join('') : '<p>No active bans.</p>'}</section><section><h2>Staff log <span>${logs.length}</span></h2>${logs.length ? logs.map((log) => `<article class="staff-item"><p>${escapeHtml(log.message)}</p><small>${new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(log.createdAt))}</small></article>`).join('') : '<p>No staff actions yet.</p>'}</section>`;
   } catch (error) {
     staffContent.innerHTML = `<p>${escapeHtml(error.message || 'Could not load the staff panel.')}</p>`;
+  }
+}
+
+async function loadWarnings() {
+  if (!currentUserId || !warningNotice || !warningReasons) return;
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'warnings' }) });
+    const result = await readApiJson(response, 'Could not check warnings.');
+    if (!response.ok || !result.warnings?.length) return;
+    warningReasons.innerHTML = result.warnings.map((warning) => `<p>${escapeHtml(warning.reason)}</p>`).join('');
+    warningNotice.hidden = false;
+  } catch {
+    // The normal site remains available if warning status cannot be read.
+  }
+}
+
+async function reviewReport(button) {
+  const decision = button.dataset.reportReview;
+  const reportId = button.dataset.reportId;
+  const card = button.closest('.staff-item');
+  const moderationAction = card?.querySelector('[data-report-action]')?.value || 'warning';
+  let reason = '';
+  let durationDays = 'forever';
+  if (decision === 'accept') {
+    reason = window.prompt('Reason for this moderation action:') || '';
+    if (!reason.trim()) return;
+    if (moderationAction === 'ban') {
+      durationDays = window.prompt('Ban length: enter 1–30 days, or Forever', '7') || '';
+      durationDays = String(durationDays).toLowerCase() === 'forever' ? 'forever' : Number(durationDays);
+    }
+  }
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'report-review', reportId, decision, moderationAction, reason, durationDays }) });
+    const result = await readApiJson(response, 'Could not review this report.');
+    if (!response.ok) throw new Error(result.error || 'Could not review this report.');
+    await loadModeration();
+  } catch (error) {
+    window.alert(error.message || 'Could not review this report.');
   }
 }
 
@@ -233,6 +274,7 @@ async function loadSession() {
   renderProfilePosts();
   renderPosts();
   await loadBanStatus();
+  await loadWarnings();
 }
 
 content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; });
@@ -246,11 +288,14 @@ document.querySelectorAll('[data-profile-tab]').forEach((button) => button.addEv
   if (profileList) profileList.innerHTML = `<p>${button.textContent} will appear here when community interactions are enabled.</p>`;
 }));
 document.addEventListener('click', (event) => {
+  const reviewButton = event.target.closest('[data-report-review]');
+  if (reviewButton) { void reviewReport(reviewButton); return; }
   const button = event.target.closest('[data-post-action]');
   if (!button) return;
   const postId = button.parentElement?.dataset.postId;
   if (postId) void runPostAction(button.dataset.postAction, postId);
 });
+document.querySelector('[data-close-warning]')?.addEventListener('click', () => { warningNotice.hidden = true; });
 
 postButton?.addEventListener('click', async () => {
   postButton.disabled = true;

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
 const storePath = join(process.cwd(), 'data', 'clearwater-internet.json');
-const emptyStore = Object.freeze({ users: {}, posts: [], reports: [] });
+const emptyStore = Object.freeze({ users: {}, posts: [], reports: [], logs: [] });
 
 const text = (value, length) => String(value || '').trim().slice(0, length);
 
@@ -13,6 +13,7 @@ export async function readInternetStore() {
     users: data?.users && typeof data.users === 'object' ? data.users : {},
     posts: Array.isArray(data?.posts) ? data.posts : [],
     reports: Array.isArray(data?.reports) ? data.reports : [],
+    logs: Array.isArray(data?.logs) ? data.logs : [],
   };
 }
 
@@ -164,18 +165,68 @@ export function createInternetReport(store, { postId, actor, reason }) {
     content: post.content,
     reason: reportReason,
     createdAt: new Date().toISOString(),
+    status: 'open',
   };
   store.reports.unshift(report);
   store.reports = store.reports.slice(0, 200);
   return report;
 }
 
+function addInternetLog(store, message) {
+  store.logs.unshift({ id: randomUUID(), message: text(message, 400), createdAt: new Date().toISOString() });
+  store.logs = store.logs.slice(0, 300);
+}
+
+export function reviewInternetReport(store, { reportId, decision, action, reason, durationDays }) {
+  const report = store.reports.find((item) => item.id === String(reportId || ''));
+  if (!report || report.status !== 'open') throw new Error('Open report not found');
+  if (!['accept', 'deny'].includes(decision)) throw new Error('Choose Accept or Deny');
+
+  report.status = decision === 'accept' ? 'accepted' : 'denied';
+  report.reviewedAt = new Date().toISOString();
+  if (decision === 'deny') {
+    addInternetLog(store, `Denied report against ${report.authorName}.`);
+    return report;
+  }
+
+  if (!['delete', 'ban', 'warning'].includes(action)) throw new Error('Choose a moderation action');
+  const note = text(reason, 300) || report.reason;
+  report.action = action;
+  report.actionReason = note;
+  if (action === 'delete') {
+    const index = store.posts.findIndex((post) => post.id === report.postId);
+    if (index >= 0) store.posts.splice(index, 1);
+    addInternetLog(store, `Deleted ${report.authorName}'s reported post. Reason: ${note}`);
+  }
+  if (action === 'ban') {
+    const user = upsertInternetUser(store, { id: report.authorId, displayName: report.authorName });
+    setInternetBan(user, { enabled: true, reason: note, durationDays });
+    addInternetLog(store, `Banned ${report.authorName}. Reason: ${note}`);
+  }
+  if (action === 'warning') {
+    const user = upsertInternetUser(store, { id: report.authorId, displayName: report.authorName });
+    user.warnings = Array.isArray(user.warnings) ? user.warnings : [];
+    user.warnings.unshift({ id: randomUUID(), reason: note, createdAt: new Date().toISOString(), readAt: null });
+    user.warnings = user.warnings.slice(0, 30);
+    addInternetLog(store, `Warned ${report.authorName}. Reason: ${note}`);
+  }
+  return report;
+}
+
+export function takeUnreadInternetWarnings(store, actor) {
+  const user = upsertInternetUser(store, actor);
+  const warnings = (Array.isArray(user.warnings) ? user.warnings : []).filter((warning) => !warning.readAt);
+  if (warnings.length) warnings.forEach((warning) => { warning.readAt = new Date().toISOString(); });
+  return warnings;
+}
+
 export function moderationSnapshot(store) {
   return {
-    reports: store.reports.slice(0, 100),
+    reports: store.reports.filter((report) => report.status === 'open').slice(0, 100),
     bans: Object.values(store.users).flatMap((user) => {
       const ban = getActiveBan(user);
       return ban ? [{ id: user.id, displayName: user.displayName || user.username || 'Discord user', ...ban }] : [];
     }),
+    logs: store.logs.slice(0, 100),
   };
 }

@@ -91,6 +91,19 @@ export default async function handler(request, response) {
         reason: String(body.reason || '').slice(0, 300),
         actor: { id: user.id, displayName: user.displayName },
       };
+    } else if (body.action === 'warnings') {
+      payload = { action: 'warnings', actor: { id: user.id, displayName: user.displayName } };
+    } else if (body.action === 'report-review') {
+      if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
+      payload = {
+        action: 'report-review',
+        reportId: String(body.reportId || ''),
+        decision: body.decision === 'deny' ? 'deny' : 'accept',
+        action: String(body.moderationAction || ''),
+        reason: String(body.reason || '').slice(0, 300),
+        durationDays: body.durationDays === 'forever' ? 'forever' : Number(body.durationDays),
+        owner: true,
+      };
     } else if (body.action === 'moderation') {
       if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
       payload = { action: 'moderation', owner: true };
