@@ -26,9 +26,16 @@ const profilePostCount = document.querySelector('[data-profile-post-count]');
 const profileList = document.querySelector('[data-profile-list]');
 let allPosts = [];
 let currentUserId = null;
+let internetUsers = new Map();
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const timeAgo = (value) => new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(Math.round((new Date(value) - Date.now()) / 60000), 'minute');
+const verifiedBadge = () => '<span class="verified" role="img" aria-label="Verified account" data-tooltip="Verified account">✓</span>';
+const isVerified = (post) => post.verified === true || internetUsers.get(post.authorId)?.verified === true;
+
+function refreshProfileVerified() {
+  if (profileVerified) profileVerified.hidden = !internetUsers.get(currentUserId)?.verified;
+}
 
 async function readApiJson(response, fallbackMessage) {
   const contentType = response.headers.get('content-type') || '';
@@ -43,7 +50,7 @@ async function readApiJson(response, fallbackMessage) {
 function showPosts(posts) {
   note.hidden = Boolean(posts.length);
   note.textContent = posts.length ? '' : 'No posts yet. Be the first to share an update.';
-  list.innerHTML = posts.map((post) => `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(post.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><div><span class="post-name">${escapeHtml(post.displayName)}</span>${post.verified ? '<span class="verified" title="Verified account">&#10003;</span>' : ''}<div class="post-meta">@${escapeHtml(post.username)} &middot; ${timeAgo(post.createdAt)}${post.staffRank ? ` &middot; <span class="post-rank">${escapeHtml(post.staffRank)}</span>` : ''}</div></div></div><p class="post-content">${escapeHtml(post.content)}</p></article>`).join('');
+  list.innerHTML = posts.map((post) => `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(post.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><div><span class="post-name">${escapeHtml(post.displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<div class="post-meta">@${escapeHtml(post.username)} &middot; ${timeAgo(post.createdAt)}${post.staffRank ? ` &middot; <span class="post-rank">${escapeHtml(post.staffRank)}</span>` : ''}</div></div></div><p class="post-content">${escapeHtml(post.content)}</p></article>`).join('');
 }
 
 function renderPosts() {
@@ -63,7 +70,7 @@ function renderProfilePosts() {
   const posts = allPosts.filter((post) => post.authorId === currentUserId);
   if (profilePostCount) profilePostCount.textContent = posts.length.toLocaleString();
   profileList.innerHTML = posts.length
-    ? posts.map((post) => `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(post.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><div><span class="post-name">${escapeHtml(post.displayName)}</span>${post.verified ? '<span class="verified" title="Verified account">&#10003;</span>' : ''}<div class="post-meta">@${escapeHtml(post.username)} &middot; ${timeAgo(post.createdAt)}</div></div></div><p class="post-content">${escapeHtml(post.content)}</p></article>`).join('')
+    ? posts.map((post) => `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(post.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><div><span class="post-name">${escapeHtml(post.displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<div class="post-meta">@${escapeHtml(post.username)} &middot; ${timeAgo(post.createdAt)}</div></div></div><p class="post-content">${escapeHtml(post.content)}</p></article>`).join('')
     : '<p>You have not posted yet.</p>';
 }
 
@@ -79,6 +86,8 @@ async function loadPosts() {
     const result = await readApiJson(response, 'Clearwater Internet could not reach the website service.');
     if (!response.ok) throw new Error(result.error || 'Service unavailable');
     allPosts = result.posts || [];
+    internetUsers = new Map((result.users || []).map((user) => [user.id, user]));
+    refreshProfileVerified();
     renderPosts();
   } catch {
     note.hidden = false;
@@ -103,7 +112,7 @@ async function loadSession() {
   if (profileAvatar && session.user.avatarUrl) profileAvatar.src = session.user.avatarUrl;
   if (profileHandle) profileHandle.textContent = `@${session.user.username}`;
   if (profileRank) profileRank.textContent = session.user.staffRank || 'Clearwater community member';
-  if (profileVerified && session.user.owner) profileVerified.hidden = false;
+  refreshProfileVerified();
   if (session.user.owner) admin.hidden = false;
   renderProfilePosts();
 }

@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
-import { createInternetPost, publicPosts, readInternetStore, saveInternetStore, upsertInternetUser } from './internetStore.js';
+import { createInternetPost, publicPosts, publicUsers, readInternetStore, saveInternetStore, upsertInternetUser } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -83,7 +83,7 @@ export function startStatusServer(client, config) {
     if (url.pathname === '/api/internet') {
       try {
         const store = await readInternetStore();
-        if (request.method === 'GET') return json(response, 200, { posts: publicPosts(store) });
+        if (request.method === 'GET') return json(response, 200, { posts: publicPosts(store), users: publicUsers(store) });
         if (request.method !== 'POST') return json(response, 405, { error: 'Method not allowed' });
 
         const body = await readJson(request);

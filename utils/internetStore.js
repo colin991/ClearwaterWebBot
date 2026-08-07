@@ -23,6 +23,14 @@ export function publicPosts(store) {
   return store.posts.slice(0, 100);
 }
 
+export function publicUsers(store) {
+  return Object.values(store.users).map((user) => ({
+    id: user.id,
+    verified: user.verified === true,
+    banned: user.banned === true,
+  }));
+}
+
 export function upsertInternetUser(store, user) {
   const id = text(user?.id, 24);
   if (!/^\d{16,22}$/.test(id)) throw new Error('Invalid user');
