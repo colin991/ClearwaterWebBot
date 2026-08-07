@@ -18,7 +18,14 @@ const adminMessage = document.querySelector('[data-admin-message]');
 const search = document.querySelector('[data-search]');
 const profileTitle = document.querySelector('[data-profile-title]');
 const profileCopy = document.querySelector('[data-profile-copy]');
+const profileAvatar = document.querySelector('[data-profile-avatar]');
+const profileHandle = document.querySelector('[data-profile-handle]');
+const profileRank = document.querySelector('[data-profile-rank]');
+const profileVerified = document.querySelector('[data-profile-verified]');
+const profilePostCount = document.querySelector('[data-profile-post-count]');
+const profileList = document.querySelector('[data-profile-list]');
 let allPosts = [];
+let currentUserId = null;
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const timeAgo = (value) => new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(Math.round((new Date(value) - Date.now()) / 60000), 'minute');
@@ -33,6 +40,21 @@ function renderPosts() {
   const query = String(search?.value || '').trim().toLowerCase();
   const posts = query ? allPosts.filter((post) => `${post.displayName} ${post.username} ${post.content}`.toLowerCase().includes(query)) : allPosts;
   showPosts(posts);
+  renderProfilePosts();
+}
+
+function renderProfilePosts() {
+  if (!profileList) return;
+  if (!currentUserId) {
+    profileList.innerHTML = '<p>Sign in to see your posts.</p>';
+    return;
+  }
+
+  const posts = allPosts.filter((post) => post.authorId === currentUserId);
+  if (profilePostCount) profilePostCount.textContent = posts.length.toLocaleString();
+  profileList.innerHTML = posts.length
+    ? posts.map((post) => `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(post.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><div><span class="post-name">${escapeHtml(post.displayName)}</span>${post.verified ? '<span class="verified" title="Verified account">&#10003;</span>' : ''}<div class="post-meta">@${escapeHtml(post.username)} &middot; ${timeAgo(post.createdAt)}</div></div></div><p class="post-content">${escapeHtml(post.content)}</p></article>`).join('')
+    : '<p>You have not posted yet.</p>';
 }
 
 function showView(view) {
@@ -65,9 +87,15 @@ async function loadSession() {
   name.textContent = session.user.displayName || session.user.username;
   if (session.user.avatarUrl) { avatar.src = session.user.avatarUrl; composerAvatar.src = session.user.avatarUrl; }
   rank.textContent = session.user.staffRank || '';
+  currentUserId = session.user.id;
   if (profileTitle) profileTitle.textContent = session.user.displayName || session.user.username;
   if (profileCopy) profileCopy.textContent = session.user.staffRank ? `${session.user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.';
+  if (profileAvatar && session.user.avatarUrl) profileAvatar.src = session.user.avatarUrl;
+  if (profileHandle) profileHandle.textContent = `@${session.user.username}`;
+  if (profileRank) profileRank.textContent = session.user.staffRank || 'Clearwater community member';
+  if (profileVerified && session.user.owner) profileVerified.hidden = false;
   if (session.user.owner) admin.hidden = false;
+  renderProfilePosts();
 }
 
 content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; });
@@ -75,6 +103,11 @@ search?.addEventListener('input', () => { showView('home'); renderPosts(); });
 document.querySelectorAll('[data-view-link]').forEach((link) => link.addEventListener('click', () => showView(link.dataset.viewLink)));
 document.querySelectorAll('[data-topic]').forEach((link) => link.addEventListener('click', () => { showView('home'); search.value = link.dataset.topic; renderPosts(); }));
 document.querySelector('[data-compose-link]')?.addEventListener('click', () => { showView('home'); content?.focus(); });
+document.querySelectorAll('[data-profile-tab]').forEach((button) => button.addEventListener('click', () => {
+  document.querySelectorAll('[data-profile-tab]').forEach((tab) => tab.classList.toggle('selected', tab === button));
+  if (button.dataset.profileTab === 'posts') return renderProfilePosts();
+  if (profileList) profileList.innerHTML = `<p>${button.textContent} will appear here when community interactions are enabled.</p>`;
+}));
 
 postButton?.addEventListener('click', async () => {
   postButton.disabled = true;

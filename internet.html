@@ -56,7 +56,20 @@
         <section class="internet-view empty-view" data-view="notifications" hidden><header class="page-heading"><p>Notifications</p><h1>Nothing new yet</h1></header><p>When community features are active, your interactions will appear here.</p></section>
         <section class="internet-view empty-view" data-view="messages" hidden><header class="page-heading"><p>Messages</p><h1>Your messages</h1></header><p>Direct messages are not enabled yet. Use the Clearwater Discord for staff support.</p><a class="inline-button" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Open Discord</a></section>
         <section class="internet-view empty-view" data-view="bookmarks" hidden><header class="page-heading"><p>Bookmarks</p><h1>Saved posts</h1></header><p>Bookmarking will appear here when it is enabled.</p></section>
-        <section class="internet-view profile-view" data-view="profile" hidden><header class="page-heading"><p>Profile</p><h1 data-profile-title>Your Clearwater profile</h1></header><img class="profile-logo" src="assets/clearwater-logo.png" alt="" /><p data-profile-copy>Sign in with Discord to see your community profile and staff rank.</p></section>
+        <section class="internet-view profile-view" data-view="profile" hidden>
+          <div class="profile-banner"></div>
+          <div class="profile-content">
+            <img class="profile-avatar" data-profile-avatar src="assets/clearwater-logo.png" alt="" />
+            <div class="profile-actions"><a class="profile-discord" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord</a></div>
+            <h1 data-profile-title>Your Clearwater profile <span class="profile-verified" data-profile-verified hidden title="Verified account">&#10003;</span></h1>
+            <p class="profile-handle" data-profile-handle>@clearwater</p>
+            <p class="profile-rank" data-profile-rank>Sign in with Discord to show your staff rank.</p>
+            <p class="profile-copy" data-profile-copy>Sign in with Discord to see your community profile and posts.</p>
+            <div class="profile-stats"><span><b data-profile-post-count>0</b> Posts</span><span><b>Clearwater</b> Community</span></div>
+          </div>
+          <div class="profile-tabs"><button class="selected" type="button" data-profile-tab="posts">Posts</button><button type="button" data-profile-tab="replies">Replies</button><button type="button" data-profile-tab="mentions">Mentions</button></div>
+          <div class="profile-posts" data-profile-list><p>Sign in to see your posts.</p></div>
+        </section>
         <section class="internet-view empty-view" data-view="settings" hidden><header class="page-heading"><p>Settings</p><h1>Account settings</h1></header><p>Your Clearwater Internet account is managed through Discord sign-in.</p></section>
       </section>
 
