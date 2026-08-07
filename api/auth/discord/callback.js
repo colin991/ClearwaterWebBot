@@ -48,7 +48,25 @@ export default async function handler(request, response) {
 
     if (!userResponse.ok) return redirect(response, siteRedirect, [clearCookie(STATE_COOKIE)]);
     const user = await userResponse.json();
-    const session = createSessionToken(user, sessionSecret);
+
+    // A Discord server profile can use a different banner from the person's
+    // global account. Read Clearwater's member profile when Discord grants it;
+    // a missing profile or permission simply falls back to the global banner.
+    let guildMember = null;
+    try {
+      const memberResponse = await fetch(
+        'https://discord.com/api/v10/users/@me/guilds/1514026810348671026/member',
+        { headers: { Authorization: `Bearer ${token.access_token}` } },
+      );
+      if (memberResponse.ok) guildMember = await memberResponse.json();
+    } catch {
+      // The normal Discord account profile remains available below.
+    }
+
+    const session = createSessionToken({
+      ...user,
+      guildBanner: guildMember?.banner || null,
+    }, sessionSecret);
 
     return redirect(response, '/?login=success', [
       clearCookie(STATE_COOKIE),

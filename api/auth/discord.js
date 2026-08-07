@@ -11,7 +11,9 @@ export default function handler(request, response) {
       client_id: clientId,
       response_type: 'code',
       redirect_uri: redirectUri,
-      scope: 'identify',
+      // This lets the site read the signed-in person's Clearwater server
+      // profile, including its server-specific banner when they have one.
+      scope: 'identify guilds.members.read',
       state,
     }).toString();
 
