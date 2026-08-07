@@ -19,7 +19,7 @@ Updates pushed to the production branch are deployed automatically by Vercel.
 1. Copy `.env.example` to `.env` on the bot host.
 2. Add the Discord bot token, application ID, and Clearwater server ID.
 3. Create a long random `BOT_API_KEY` and keep it private.
-4. Run `npm install`, then `npm start`.
+4. On Sparked Host, leave `PORT` unset so the bot uses the server's assigned `SERVER_PORT`, then run `npm install` and `npm start`.
 5. In Vercel, set `BOT_API_URL` to the bot host's public HTTPS address and set `BOT_API_KEY` to the same private key.
 
 The bot needs the **Guilds**, **Server Members**, **Server Messages**, and **Message Content** gateway intents. Enable Server Members and Message Content in the Discord Developer Portal. Never commit or share `.env`.

@@ -25,7 +25,9 @@ export const config = Object.freeze({
     .split(',').map((value) => value.trim()).filter(Boolean),
   ownerRoleIds: (process.env.OWNER_ROLE_IDS || '1514033074948800683')
     .split(',').map((value) => value.trim()).filter(Boolean),
-  port: numberFromEnv(process.env.PORT, 3000),
+  // Sparked Host provides the allocated public port as SERVER_PORT. Prefer it
+  // so the website bridge is reachable after a host restart or reinstall.
+  port: numberFromEnv(process.env.SERVER_PORT || process.env.PORT, 3000),
 });
 
 export function validateConfig() {
