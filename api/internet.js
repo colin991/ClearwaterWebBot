@@ -104,6 +104,7 @@ export default async function handler(request, response) {
         action: String(body.moderationAction || ''),
         reason: String(body.reason || '').slice(0, 300),
         durationDays: body.durationDays === 'forever' ? 'forever' : Number(body.durationDays),
+        actor: { id: user.id },
         owner: true,
       };
     } else if (body.action === 'moderation') {

@@ -141,7 +141,15 @@ export function startStatusServer(client, config) {
         }
 
         if (body.action === 'report-review') {
-          if (!body.owner) return json(response, 403, { error: 'Owner access required' });
+          const reviewerId = String(body.actor?.id || '');
+          const guild = client.guilds.cache.get(CLEARWATER_GUILD_ID)
+            || await client.guilds.fetch(CLEARWATER_GUILD_ID).catch(() => null);
+          const reviewer = guild ? await guild.members.fetch(reviewerId).catch(() => null) : null;
+          const reviewerRank = getHighestStaffRank(reviewer);
+          const reviewerAllowed = config.ownerDiscordIds.includes(reviewerId)
+            || reviewerRank?.owner === true
+            || Boolean(reviewer && config.ownerRoleIds.some((roleId) => reviewer.roles.cache.has(roleId)));
+          if (!reviewerAllowed) return json(response, 403, { error: 'Owner access required' });
           const report = reviewInternetReport(store, body);
           await saveInternetStore(store);
           return json(response, 200, { report });
