@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
-import { createInternetPost, publicPosts, publicUsers, readInternetStore, saveInternetStore, upsertInternetUser } from './internetStore.js';
+import { createInternetPost, getActiveBan, publicPosts, publicUsers, readInternetStore, saveInternetStore, setInternetBan, upsertInternetUser } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -94,6 +94,13 @@ export function startStatusServer(client, config) {
           return json(response, 201, { post });
         }
 
+        if (body.action === 'status') {
+          const user = upsertInternetUser(store, body.actor);
+          const ban = getActiveBan(user);
+          await saveInternetStore(store);
+          return json(response, 200, { banned: Boolean(ban), ban });
+        }
+
         if (!body.owner || !['verify', 'ban'].includes(body.action)) {
           return json(response, 403, { error: 'Owner access required' });
         }
@@ -102,7 +109,7 @@ export function startStatusServer(client, config) {
         if (!/^\d{16,22}$/.test(targetId)) return json(response, 400, { error: 'Enter a valid Discord user ID' });
         const target = upsertInternetUser(store, { id: targetId });
         if (body.action === 'verify') target.verified = body.enabled === true;
-        if (body.action === 'ban') target.banned = body.enabled === true;
+        if (body.action === 'ban') setInternetBan(target, body);
         await saveInternetStore(store);
         return json(response, 200, { user: target });
       } catch (error) {

@@ -14,7 +14,12 @@ const list = document.querySelector('[data-post-list]');
 const note = document.querySelector('[data-feed-note]');
 const admin = document.querySelector('[data-admin]');
 const targetId = document.querySelector('[data-target-id]');
+const banReason = document.querySelector('[data-ban-reason]');
+const banDuration = document.querySelector('[data-ban-duration]');
 const adminMessage = document.querySelector('[data-admin-message]');
+const banScreen = document.querySelector('[data-ban-screen]');
+const banReasonDisplay = document.querySelector('[data-ban-reason-display]');
+const banDurationDisplay = document.querySelector('[data-ban-duration-display]');
 const search = document.querySelector('[data-search]');
 const profileTitle = document.querySelector('[data-profile-title]');
 const profileCopy = document.querySelector('[data-profile-copy]');
@@ -26,11 +31,12 @@ const profileRank = document.querySelector('[data-profile-rank]');
 const profileVerified = document.querySelector('[data-profile-verified]');
 const profilePostCount = document.querySelector('[data-profile-post-count]');
 const profileList = document.querySelector('[data-profile-list]');
-const INTERNET_VERSION = '20260807-verified-8';
+const INTERNET_VERSION = '20260807-ban-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
 let loadingPosts = false;
+let accountBanned = false;
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const timeAgo = (value) => new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(Math.round((new Date(value) - Date.now()) / 60000), 'minute');
@@ -84,6 +90,32 @@ function showView(view) {
   if (view === 'home') renderPosts();
 }
 
+function showBan(ban) {
+  accountBanned = Boolean(ban);
+  document.body.classList.toggle('account-banned', accountBanned);
+  if (!banScreen) return;
+  banScreen.hidden = !accountBanned;
+  if (!accountBanned) return;
+  if (banReasonDisplay) banReasonDisplay.textContent = ban.reason || 'No reason was provided.';
+  if (banDurationDisplay) {
+    banDurationDisplay.textContent = ban.until
+      ? `Until ${new Intl.DateTimeFormat('en', { dateStyle: 'long' }).format(new Date(ban.until))}`
+      : 'Forever';
+  }
+}
+
+async function loadBanStatus() {
+  if (!currentUserId) return;
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'status' }) });
+    const result = await readApiJson(response, 'Could not check account access.');
+    if (!response.ok) return;
+    showBan(result.banned ? result.ban : null);
+  } catch {
+    // Do not hide the normal site if the bot connection is briefly unavailable.
+  }
+}
+
 async function loadPosts() {
   if (loadingPosts) return;
   loadingPosts = true;
@@ -129,6 +161,7 @@ async function loadSession() {
   refreshProfileVerified();
   if (session.user.owner) admin.hidden = false;
   renderProfilePosts();
+  await loadBanStatus();
 }
 
 content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; });
@@ -158,7 +191,7 @@ admin?.querySelectorAll('button').forEach((button) => button.addEventListener('c
   const enabled = button.dataset.unverifyButton === undefined && button.dataset.unbanButton === undefined;
   adminMessage.textContent = 'Saving...';
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, enabled, targetId: targetId.value }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, enabled, targetId: targetId.value, reason: action === 'ban' && enabled ? banReason?.value : '', durationDays: action === 'ban' && enabled ? banDuration?.value : 'forever' }) });
     const result = await readApiJson(response, 'Owner controls are unavailable because the website service is not connected.'); if (!response.ok) throw new Error(result.error); adminMessage.textContent = 'Saved.';
   } catch (error) { adminMessage.textContent = error.message || 'Could not save.'; }
 }));
@@ -167,7 +200,7 @@ showView(location.hash.slice(1) || 'home');
 loadSession().catch(() => {});
 loadPosts();
 window.setInterval(() => {
-  if (!document.hidden) loadPosts();
+  if (!document.hidden) { loadPosts(); loadBanStatus(); }
 }, 15_000);
 
 const checkForInternetUpdate = async () => {

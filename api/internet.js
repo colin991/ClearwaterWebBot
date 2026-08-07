@@ -74,12 +74,16 @@ export default async function handler(request, response) {
           staffRank: access.staffRank,
         },
       };
+    } else if (body.action === 'status') {
+      payload = { action: 'status', actor: { id: user.id } };
     } else if (['verify', 'ban'].includes(body.action)) {
       if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
       payload = {
         action: body.action,
         targetId: String(body.targetId || ''),
         enabled: body.enabled === true,
+        reason: String(body.reason || '').slice(0, 300),
+        durationDays: body.durationDays === 'forever' ? 'forever' : Number(body.durationDays),
         owner: true,
       };
     } else {

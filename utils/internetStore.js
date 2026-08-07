@@ -27,8 +27,43 @@ export function publicUsers(store) {
   return Object.values(store.users).map((user) => ({
     id: user.id,
     verified: user.verified === true,
-    banned: user.banned === true,
+    banned: Boolean(getActiveBan(user)),
   }));
+}
+
+export function getActiveBan(user) {
+  if (!user?.banned) return null;
+  if (user.bannedUntil && new Date(user.bannedUntil).getTime() <= Date.now()) {
+    user.banned = false;
+    user.banReason = null;
+    user.bannedUntil = null;
+    return null;
+  }
+  return {
+    reason: text(user.banReason, 300) || 'No reason was provided.',
+    until: user.bannedUntil || null,
+  };
+}
+
+export function setInternetBan(user, { enabled, reason, durationDays }) {
+  if (!enabled) {
+    user.banned = false;
+    user.banReason = null;
+    user.bannedUntil = null;
+    return user;
+  }
+
+  const days = Number(durationDays);
+  if (durationDays !== 'forever' && (!Number.isInteger(days) || days < 1 || days > 30)) {
+    throw new Error('Choose a ban duration from 1 to 30 days, or Forever');
+  }
+
+  user.banned = true;
+  user.banReason = text(reason, 300) || 'No reason was provided.';
+  user.bannedUntil = durationDays === 'forever'
+    ? null
+    : new Date(Date.now() + (days * 24 * 60 * 60 * 1000)).toISOString();
+  return user;
 }
 
 export function upsertInternetUser(store, user) {
@@ -49,7 +84,7 @@ export function upsertInternetUser(store, user) {
 export function createInternetPost(store, user, content) {
   const body = text(content, 500);
   if (!body) throw new Error('Write something before posting');
-  if (user.banned) throw new Error('This account is banned from Clearwater Internet');
+  if (getActiveBan(user)) throw new Error('This account is banned from Clearwater Internet');
   const post = {
     id: randomUUID(),
     authorId: user.id,
