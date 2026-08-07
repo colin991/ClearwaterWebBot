@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260807-reports-1';
+const INTERNET_VERSION = '20260807-messages-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {

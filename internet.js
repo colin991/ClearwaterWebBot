@@ -35,7 +35,8 @@ const staffLink = document.querySelector('[data-staff-link]');
 const staffContent = document.querySelector('[data-staff-content]');
 const warningNotice = document.querySelector('[data-warning-notice]');
 const warningReasons = document.querySelector('[data-warning-reasons]');
-const INTERNET_VERSION = '20260807-reports-1';
+const messagesList = document.querySelector('[data-messages-list]');
+const INTERNET_VERSION = '20260807-messages-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -108,6 +109,7 @@ function showView(view) {
   document.querySelectorAll('[data-view-link]').forEach((link) => link.classList.toggle('selected', link.dataset.viewLink === view));
   if (view === 'home') renderPosts();
   if (view === 'staff') void loadModeration();
+  if (view === 'messages') void loadMessages();
 }
 
 function showBan(ban) {
@@ -173,6 +175,21 @@ async function loadWarnings() {
     warningNotice.hidden = false;
   } catch {
     // The normal site remains available if warning status cannot be read.
+  }
+}
+
+async function loadMessages() {
+  if (!messagesList || !currentUserId) return;
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'messages' }) });
+    const result = await readApiJson(response, 'Could not load messages.');
+    if (!response.ok) throw new Error(result.error || 'Could not load messages.');
+    const messages = result.messages || [];
+    messagesList.innerHTML = messages.length
+      ? messages.map((message) => `<article class="internet-message"><p>${escapeHtml(message.content)}</p><small>${new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(message.createdAt))}</small></article>`).join('')
+      : '<p>No messages yet.</p>';
+  } catch (error) {
+    messagesList.innerHTML = `<p>${escapeHtml(error.message || 'Could not load messages.')}</p>`;
   }
 }
 
@@ -275,6 +292,7 @@ async function loadSession() {
   renderPosts();
   await loadBanStatus();
   await loadWarnings();
+  await loadMessages();
 }
 
 content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; });

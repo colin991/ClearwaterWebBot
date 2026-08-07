@@ -177,6 +177,13 @@ function addInternetLog(store, message) {
   store.logs = store.logs.slice(0, 300);
 }
 
+function addInternetMessage(store, userId, message) {
+  const user = upsertInternetUser(store, { id: userId });
+  user.messages = Array.isArray(user.messages) ? user.messages : [];
+  user.messages.unshift({ id: randomUUID(), content: text(message, 500), createdAt: new Date().toISOString(), readAt: null });
+  user.messages = user.messages.slice(0, 50);
+}
+
 export function reviewInternetReport(store, { reportId, decision, action, reason, durationDays }) {
   const report = store.reports.find((item) => item.id === String(reportId || ''));
   if (!report || report.status !== 'open') throw new Error('Open report not found');
@@ -186,6 +193,7 @@ export function reviewInternetReport(store, { reportId, decision, action, reason
   report.reviewedAt = new Date().toISOString();
   if (decision === 'deny') {
     addInternetLog(store, `Denied report against ${report.authorName}.`);
+    addInternetMessage(store, report.reporterId, `Your report about ${report.authorName}'s post was reviewed. No action was taken.`);
     return report;
   }
 
@@ -209,7 +217,9 @@ export function reviewInternetReport(store, { reportId, decision, action, reason
     user.warnings.unshift({ id: randomUUID(), reason: note, createdAt: new Date().toISOString(), readAt: null });
     user.warnings = user.warnings.slice(0, 30);
     addInternetLog(store, `Warned ${report.authorName}. Reason: ${note}`);
+    addInternetMessage(store, report.authorId, `You received a warning from Clearwater Internet. Reason: ${note}`);
   }
+  addInternetMessage(store, report.reporterId, `Your report about ${report.authorName}'s post was reviewed. Action taken: ${action === 'delete' ? 'message deleted' : action === 'ban' ? 'account banned' : 'warning given'}.`);
   return report;
 }
 
@@ -218,6 +228,13 @@ export function takeUnreadInternetWarnings(store, actor) {
   const warnings = (Array.isArray(user.warnings) ? user.warnings : []).filter((warning) => !warning.readAt);
   if (warnings.length) warnings.forEach((warning) => { warning.readAt = new Date().toISOString(); });
   return warnings;
+}
+
+export function takeInternetMessages(store, actor) {
+  const user = upsertInternetUser(store, actor);
+  const messages = Array.isArray(user.messages) ? user.messages : [];
+  messages.forEach((message) => { if (!message.readAt) message.readAt = new Date().toISOString(); });
+  return messages.slice(0, 50);
 }
 
 export function moderationSnapshot(store) {

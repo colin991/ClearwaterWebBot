@@ -93,6 +93,8 @@ export default async function handler(request, response) {
       };
     } else if (body.action === 'warnings') {
       payload = { action: 'warnings', actor: { id: user.id, displayName: user.displayName } };
+    } else if (body.action === 'messages') {
+      payload = { action: 'messages', actor: { id: user.id, displayName: user.displayName } };
     } else if (body.action === 'report-review') {
       if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
       payload = {
