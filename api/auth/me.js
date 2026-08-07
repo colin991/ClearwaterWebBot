@@ -1,4 +1,4 @@
-import { SESSION_COOKIE, avatarUrl, getAuthConfig, isOwner, parseCookies, readSessionToken, sendJson } from '../../lib/discord-auth.js';
+import { SESSION_COOKIE, avatarUrl, bannerUrl, getAuthConfig, isOwner, parseCookies, readSessionToken, sendJson } from '../../lib/discord-auth.js';
 import { getStaffAccess } from '../../lib/owner-access.js';
 
 export default async function handler(request, response) {
@@ -18,6 +18,9 @@ export default async function handler(request, response) {
         username: user.username,
         displayName: user.displayName,
         avatarUrl: avatarUrl(user),
+        bannerUrl: bannerUrl(user),
+        bannerColor: user.bannerColor || null,
+        bio: user.bio || '',
         owner: staffAccess.allowed,
         staffRank: staffAccess.staffRank,
       },

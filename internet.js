@@ -18,13 +18,15 @@ const adminMessage = document.querySelector('[data-admin-message]');
 const search = document.querySelector('[data-search]');
 const profileTitle = document.querySelector('[data-profile-title]');
 const profileCopy = document.querySelector('[data-profile-copy]');
+const profileBanner = document.querySelector('[data-profile-banner]');
+const profileDiscord = document.querySelector('[data-profile-discord]');
 const profileAvatar = document.querySelector('[data-profile-avatar]');
 const profileHandle = document.querySelector('[data-profile-handle]');
 const profileRank = document.querySelector('[data-profile-rank]');
 const profileVerified = document.querySelector('[data-profile-verified]');
 const profilePostCount = document.querySelector('[data-profile-post-count]');
 const profileList = document.querySelector('[data-profile-list]');
-const INTERNET_VERSION = '20260807-verified-7';
+const INTERNET_VERSION = '20260807-verified-8';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -114,8 +116,14 @@ async function loadSession() {
   rank.textContent = session.user.staffRank || '';
   currentUserId = session.user.id;
   if (profileTitle) profileTitle.textContent = session.user.displayName || session.user.username;
-  if (profileCopy) profileCopy.textContent = session.user.staffRank ? `${session.user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.';
+  if (profileCopy) profileCopy.textContent = session.user.bio || (session.user.staffRank ? `${session.user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
   if (profileAvatar && session.user.avatarUrl) profileAvatar.src = session.user.avatarUrl;
+  if (profileBanner && session.user.bannerUrl) {
+    profileBanner.style.backgroundImage = `linear-gradient(110deg, rgba(3, 10, 22, .36), rgba(3, 10, 22, .16)), url("${session.user.bannerUrl}")`;
+  } else if (profileBanner && session.user.bannerColor) {
+    profileBanner.style.backgroundImage = `linear-gradient(110deg, ${session.user.bannerColor}, #061221)`;
+  }
+  if (profileDiscord) profileDiscord.href = `https://discord.com/users/${encodeURIComponent(session.user.id)}`;
   if (profileHandle) profileHandle.textContent = `@${session.user.username}`;
   if (profileRank) profileRank.textContent = session.user.staffRank || 'Clearwater community member';
   refreshProfileVerified();
