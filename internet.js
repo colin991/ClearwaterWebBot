@@ -64,10 +64,11 @@ const bookmarkList = document.querySelector('[data-bookmark-list]');
 const profileModal = document.querySelector('[data-profile-modal]');
 const messageModal = document.querySelector('[data-message-modal]');
 const messageForm = document.querySelector('[data-message-form]');
+const postDetail = document.querySelector('[data-post-detail]');
 const postModal = document.querySelector('[data-post-modal]');
 const postModalForm = document.querySelector('[data-post-modal-form]');
 const shareModal = document.querySelector('[data-share-modal]');
-const INTERNET_VERSION = '20260808-post-hover-1';
+const INTERNET_VERSION = '20260808-post-detail-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -80,6 +81,7 @@ let selectedGif = null;
 let socialState = { following: [], blocked: [], muted: [], bookmarks: [] };
 let viewedMember = null;
 let pendingPostAction = null;
+let openPostId = null;
 const emojiChoices = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😍','😘','🥰','😎','🤩','🥳','🤔','😢','😭','😡','🤯','😴','👀','💀','❤️','💙','💚','🔥','✨','🎉','🚓','🚒','🚑','👍','👎','✅','❌','⚠️','📌','📷','🎮'];
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
@@ -213,6 +215,16 @@ function showView(view) {
   if (view === 'staff') void loadModeration();
   if (view === 'messages') void loadMessages();
   if (view === 'bookmarks') renderBookmarks();
+}
+
+function showPostDetail(postId, updateHash = true) {
+  const post = allPosts.find((item) => item.id === postId);
+  if (!post || !postDetail) return showView('home');
+  openPostId = postId;
+  if (updateHash) history.pushState({}, '', `#post-${postId}`);
+  showView('post');
+  const replies = allPosts.filter((item) => item.parentId === postId);
+  postDetail.innerHTML = `${postMarkup(post)}<section class="detail-replies"><button type="button" class="detail-reply-button" data-engage="reply" data-post-id="${escapeHtml(post.id)}">Reply to this post</button>${replies.length ? replies.map((reply) => postMarkup(reply)).join('') : '<p>There are no replies yet.</p>'}</section>`;
 }
 
 function showBan(ban) {
@@ -400,6 +412,8 @@ async function loadPosts() {
     internetUsers = new Map((result.users || []).map((user) => [user.id, user]));
     refreshProfileVerified();
     renderPosts();
+    const linkedPostId = location.hash.startsWith('#post-') ? location.hash.slice(6) : null;
+    if (linkedPostId) showPostDetail(linkedPostId, false);
   } catch {
     note.hidden = false;
     note.textContent = 'Clearwater Internet is offline right now. Restart the Clearwater Discord bot host to restore posting.';
@@ -452,6 +466,8 @@ document.querySelectorAll('[data-profile-tab]').forEach((button) => button.addEv
   if (profileList) profileList.innerHTML = `<p>${button.textContent} will appear here when community interactions are enabled.</p>`;
 }));
 document.addEventListener('click', (event) => {
+  const card = event.target.closest('[data-post-card]');
+  if (card && !event.target.closest('button,a,details,input,textarea')) { showPostDetail(card.dataset.postCard); return; }
   const emojiChoice = event.target.closest('[data-emoji-choice]');
   if (emojiChoice) { insertAtCursor(emojiChoice.dataset.emojiChoice); emojiModal.hidden = true; return; }
   const engage = event.target.closest('[data-engage]');
@@ -474,6 +490,11 @@ document.addEventListener('click', (event) => {
   if (!button) return;
   const postId = button.parentElement?.dataset.postId;
   if (postId) void runPostAction(button.dataset.postAction, postId);
+});
+document.querySelector('[data-back-home]')?.addEventListener('click', () => { history.pushState({}, '', '#home'); openPostId = null; showView('home'); });
+window.addEventListener('popstate', () => {
+  const linkedPostId = location.hash.startsWith('#post-') ? location.hash.slice(6) : null;
+  if (linkedPostId) showPostDetail(linkedPostId, false); else showView('home');
 });
 
 async function handlePostEngagement(type, postId) {
