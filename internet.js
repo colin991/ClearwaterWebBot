@@ -80,7 +80,7 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-discord-membership-1';
+const INTERNET_VERSION = '20260808-poll-voter-list-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -95,6 +95,7 @@ let socialState = { following: [], followers: [], blocked: [], muted: [], bookma
 let viewedMember = null;
 let pendingPostAction = null;
 let openPostId = null;
+const expandedPollVoters = new Set();
 const emojiChoices = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😍','😘','🥰','😎','🤩','🥳','🤔','😢','😭','😡','🤯','😴','👀','💀','❤️','💙','💚','🔥','✨','🎉','🚓','🚒','🚑','👍','👎','✅','❌','⚠️','📌','📷','🎮'];
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
@@ -173,11 +174,14 @@ function postMarkup(post, profile = false) {
     if (hours <= 0) return 'Poll ended';
     return hours >= 48 ? `${Math.ceil(hours / 24)} days left` : `${hours}h left`;
   })();
+  const showPollVoters = expandedPollVoters.has(post.id);
   const poll = post.poll?.question && Array.isArray(post.poll.options) ? `<section class="post-poll"><b>${escapeHtml(post.poll.question)}</b>${post.poll.options.map((option, index) => {
-    const optionVotes = Object.values(pollVotes).filter((vote) => Number(vote) === index).length;
+    const voterIds = Object.entries(pollVotes).filter(([, vote]) => Number(vote) === index).map(([id]) => id);
+    const optionVotes = voterIds.length;
     const percentage = totalPollVotes ? Math.round((optionVotes / totalPollVotes) * 100) : 0;
-    return `<button type="button" class="${selectedPollOption === index ? 'selected' : ''}" data-poll-vote="${index}" data-post-id="${escapeHtml(post.id)}" ${pollRemaining === 'Poll ended' ? 'disabled' : ''}><span>${escapeHtml(option)}</span><span>${optionVotes} &middot; ${percentage}%</span></button>`;
-  }).join('')}<div class="post-poll-footer"><span>${totalPollVotes} ${totalPollVotes === 1 ? 'vote' : 'votes'} &middot; ${pollRemaining}</span><button type="button" class="post-poll-link" data-poll-voters="${escapeHtml(post.id)}">See who voted</button>${selectedPollOption >= 0 ? `<button type="button" class="post-poll-link" data-poll-remove="${escapeHtml(post.id)}">Remove my vote</button>` : ''}</div></section>` : '';
+    const voters = showPollVoters && voterIds.length ? `<div class="poll-voter-list">${voterIds.map((id) => { const voter = internetUsers.get(id) || {}; return `<span class="poll-voter"><img src="${escapeHtml(voter.avatarUrl || 'assets/clearwater-logo.png')}" alt="" />${escapeHtml(voter.displayName || 'Clearwater member')}</span>`; }).join('')}</div>` : '';
+    return `<div class="poll-option ${selectedPollOption === index ? 'selected' : ''}"><button type="button" data-poll-vote="${index}" data-post-id="${escapeHtml(post.id)}" ${pollRemaining === 'Poll ended' ? 'disabled' : ''}><span>${escapeHtml(option)}</span><span>${optionVotes} &middot; ${percentage}%</span></button>${voters}</div>`;
+  }).join('')}<div class="post-poll-footer"><span>${totalPollVotes} ${totalPollVotes === 1 ? 'vote' : 'votes'} &middot; ${pollRemaining}</span><button type="button" class="post-poll-link" data-poll-voters="${escapeHtml(post.id)}">${showPollVoters ? 'Hide votes' : 'See who voted'}</button>${selectedPollOption >= 0 ? `<button type="button" class="post-poll-link" data-poll-remove="${escapeHtml(post.id)}">Remove my vote</button>` : ''}</div></section>` : '';
   const replies = allPosts.filter((item) => item.parentId === post.id).length;
   const likes = Array.isArray(post.likes) ? post.likes : [];
   const quote = post.quoteId ? allPosts.find((item) => item.id === post.quoteId) : null;
@@ -738,9 +742,11 @@ async function voteOnPoll(postId, optionIndex, remove = false) {
 }
 
 function showPollVoters(postId) {
-  const post = allPosts.find((item) => item.id === postId);
-  const voters = Object.keys(post?.poll?.votes || {}).map((id) => internetUsers.get(id)?.displayName || 'Clearwater member');
-  window.alert(voters.length ? `Voted by: ${voters.join(', ')}` : 'No votes yet.');
+  if (expandedPollVoters.has(postId)) expandedPollVoters.delete(postId);
+  else expandedPollVoters.add(postId);
+  renderPosts();
+  renderBookmarks();
+  if (openPostId === postId) showPostDetail(postId, false);
 }
 function insertAtCursor(value) {
   if (!content) return;
