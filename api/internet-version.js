@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-composer-spacing-1';
+const INTERNET_VERSION = '20260808-poll-host-update-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {

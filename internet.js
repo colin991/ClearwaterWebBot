@@ -80,7 +80,7 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-composer-spacing-1';
+const INTERNET_VERSION = '20260808-poll-host-update-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -736,7 +736,12 @@ async function voteOnPoll(postId, optionIndex, remove = false) {
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'poll-vote', postId, optionIndex, remove }) });
     const result = await readApiJson(response, 'Could not update this poll.');
-    if (!response.ok) throw new Error(result.error || 'Could not update this poll.');
+    if (!response.ok) {
+      if (/owner access required/i.test(result.error || '')) {
+        throw new Error('Poll voting is ready, but the bot host is still using an older version. Pull the latest GitHub files on the bot host, then restart it.');
+      }
+      throw new Error(result.error || 'Could not update this poll.');
+    }
     await loadPosts();
   } catch (error) { window.alert(error.message || 'Could not update this poll.'); }
 }
