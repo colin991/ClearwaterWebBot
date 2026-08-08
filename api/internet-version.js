@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-conversation-layout-1';
+const INTERNET_VERSION = '20260808-mutual-friends-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {

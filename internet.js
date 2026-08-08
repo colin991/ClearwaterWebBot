@@ -80,7 +80,7 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-conversation-layout-1';
+const INTERNET_VERSION = '20260808-mutual-friends-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -468,6 +468,12 @@ function openMemberProfile(memberId, updateHash = true) {
       const label = memberFollowers.includes(id) ? 'Follows them' : 'They follow';
       return `<button type="button" data-open-member="${escapeHtml(id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(member.displayName || 'Clearwater member')}</b><small>${label}</small></span></button>`;
     }).join('');
+  }
+  const mutuals = document.querySelector('[data-member-page-mutuals]');
+  if (mutuals) {
+    const mutualIds = socialState.following.filter((id) => memberFollowing.includes(id) && internetUsers.has(id));
+    mutuals.hidden = mutualIds.length === 0;
+    mutuals.innerHTML = mutualIds.length ? `<span>${mutualIds.slice(0, 3).map((id) => `<img src="${escapeHtml(internetUsers.get(id).avatarUrl || 'assets/clearwater-logo.png')}" alt="" />`).join('')}</span><button type="button" data-open-member="${escapeHtml(mutualIds[0])}">${mutualIds.length === 1 ? `${escapeHtml(internetUsers.get(mutualIds[0]).displayName || 'One member')} is a mutual friend` : `${mutualIds.length} mutual friends`}</button>` : '';
   }
   document.querySelector('[data-member-page-posts]').innerHTML = posts.length ? posts.map((post) => postMarkup(post, true)).join('') : '<p>No posts yet.</p>';
   const following = socialState.following.includes(user.id);
