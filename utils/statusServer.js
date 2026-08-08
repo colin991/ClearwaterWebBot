@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
-import { clearExpiredInternetBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, interactInternetPost, internetPreferences, moderationSnapshot, publicPosts, publicUsers, readInternetStore, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll } from './internetStore.js';
+import { clearExpiredInternetBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, interactInternetPost, internetPreferences, moderationSnapshot, OFFICIAL_INTERNET_ACCOUNT_ID, publicPosts, publicUsers, readInternetStore, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -139,8 +139,9 @@ export function startStatusServer(client, config) {
       try {
         const store = await readInternetStore();
         if (request.method === 'GET') {
+          const createdOfficialAccount = !store.users[OFFICIAL_INTERNET_ACCOUNT_ID];
           ensureOfficialInternetAccount(store);
-          if (await syncInternetRoles(store)) await saveInternetStore(store);
+          if (createdOfficialAccount || await syncInternetRoles(store)) await saveInternetStore(store);
           return json(response, 200, { posts: publicPosts(store), users: publicUsers(store) });
         }
         if (request.method !== 'POST') return json(response, 405, { error: 'Method not allowed' });
