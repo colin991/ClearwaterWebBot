@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-message-bubbles-1';
+const INTERNET_VERSION = '20260808-danger-zone-border-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {
