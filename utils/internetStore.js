@@ -124,7 +124,7 @@ export function createInternetPost(store, user, content, media = {}) {
   const body = text(content, 500);
   const gifUrl = text(media?.gif?.url, 500);
   const gifTitle = text(media?.gif?.title, 120);
-  const isGif = /^https:\/\/(?:media|i)\.giphy\.com\//.test(gifUrl);
+  const isGif = /^https:\/\/(?:media\d*|i)\.giphy\.com\//.test(gifUrl);
   const imageUrl = text(media?.image?.dataUrl, 2_100_000);
   const isImage = /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(imageUrl);
   const question = text(media?.poll?.question, 180);

@@ -80,7 +80,7 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-mutual-friends-1';
+const INTERNET_VERSION = '20260808-giphy-hosts-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -192,7 +192,7 @@ function postMarkup(post, profile = false) {
 }
 
 function safeGifUrl(value) {
-  try { return /^https:\/\/(?:media|i)\.giphy\.com\//.test(new URL(String(value)).href); } catch { return false; }
+  try { return /^https:\/\/(?:media\d*|i)\.giphy\.com\//.test(new URL(String(value)).href); } catch { return false; }
 }
 
 function safeImageUrl(value) {
