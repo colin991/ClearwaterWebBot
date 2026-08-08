@@ -56,6 +56,9 @@ const gifMessage = document.querySelector('[data-gif-message]');
 const mentionModal = document.querySelector('[data-mention-modal]');
 const mentionQuery = document.querySelector('[data-mention-query]');
 const mentionResults = document.querySelector('[data-mention-results]');
+const emojiModal = document.querySelector('[data-emoji-modal]');
+const emojiQuery = document.querySelector('[data-emoji-query]');
+const emojiGrid = document.querySelector('[data-emoji-grid]');
 const trendingList = document.querySelector('[data-trending-list]');
 const bookmarkList = document.querySelector('[data-bookmark-list]');
 const profileModal = document.querySelector('[data-profile-modal]');
@@ -64,7 +67,7 @@ const messageForm = document.querySelector('[data-message-form]');
 const postModal = document.querySelector('[data-post-modal]');
 const postModalForm = document.querySelector('[data-post-modal-form]');
 const shareModal = document.querySelector('[data-share-modal]');
-const INTERNET_VERSION = '20260808-post-header-1';
+const INTERNET_VERSION = '20260808-emoji-picker-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -77,6 +80,7 @@ let selectedGif = null;
 let socialState = { following: [], blocked: [], muted: [], bookmarks: [] };
 let viewedMember = null;
 let pendingPostAction = null;
+const emojiChoices = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😍','😘','🥰','😎','🤩','🥳','🤔','😢','😭','😡','🤯','😴','👀','💀','❤️','💙','💚','🔥','✨','🎉','🚓','🚒','🚑','👍','👎','✅','❌','⚠️','📌','📷','🎮'];
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const timeAgo = (value) => {
@@ -136,7 +140,7 @@ function postMarkup(post, profile = false) {
   const repost = post.repostOf ? allPosts.find((item) => item.id === post.repostOf) : null;
   const shared = quote || repost;
   const sharedMarkup = shared ? `<div class="post-embed"><b>${escapeHtml(shared.displayName || 'Member')}</b> <span>@${escapeHtml(shared.username || '')}</span><p>${escapeHtml(shared.content || '')}</p></div>` : '';
-  return `<article class="post" data-post-card="${escapeHtml(post.id)}">${repost ? '<small class="reposted-label">↻ Reposted</small>' : ''}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(post.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${sharedMarkup}${gif}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(post.id)}">♡ <span>${replies || ''}</span></button><button type="button" data-engage="repost" data-post-id="${escapeHtml(post.id)}">↻</button><button type="button" data-engage="like" data-post-id="${escapeHtml(post.id)}" class="${likes.includes(currentUserId) ? 'liked' : ''}">♥ <span>${likes.length || ''}</span></button><button type="button" data-bookmark-post="${escapeHtml(post.id)}">⌑</button><button type="button" data-engage="share" data-post-id="${escapeHtml(post.id)}">⇧</button></div></article>`;
+  return `<article class="post" data-post-card="${escapeHtml(post.id)}">${repost ? '<small class="reposted-label">↻ Reposted</small>' : ''}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(post.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${sharedMarkup}${gif}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(post.id)}">◌ <span>${replies || ''}</span></button><button type="button" data-engage="repost" data-post-id="${escapeHtml(post.id)}">↻</button><button type="button" data-engage="like" data-post-id="${escapeHtml(post.id)}" class="${likes.includes(currentUserId) ? 'liked' : ''}">${likes.includes(currentUserId) ? '♥' : '♡'} <span>${likes.length || ''}</span></button><button type="button" data-bookmark-post="${escapeHtml(post.id)}">⌑</button><button type="button" data-engage="share" data-post-id="${escapeHtml(post.id)}">⇧</button></div></article>`;
 }
 
 function safeGifUrl(value) {
@@ -437,6 +441,8 @@ document.querySelectorAll('[data-profile-tab]').forEach((button) => button.addEv
   if (profileList) profileList.innerHTML = `<p>${button.textContent} will appear here when community interactions are enabled.</p>`;
 }));
 document.addEventListener('click', (event) => {
+  const emojiChoice = event.target.closest('[data-emoji-choice]');
+  if (emojiChoice) { insertAtCursor(emojiChoice.dataset.emojiChoice); emojiModal.hidden = true; return; }
   const engage = event.target.closest('[data-engage]');
   if (engage) { void handlePostEngagement(engage.dataset.engage, engage.dataset.postId); return; }
   const authorButton = event.target.closest('[data-open-member]');
@@ -498,6 +504,13 @@ function renderMentionResults() {
   mentionResults.innerHTML = users.length ? users.map((user) => `<button type="button" data-mention-user="${escapeHtml(user.username)}"><img src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(user.displayName)}</b><small>@${escapeHtml(user.username)}</small></span></button>`).join('') : '<p>No members found.</p>';
 }
 
+function renderEmojiGrid() {
+  if (!emojiGrid) return;
+  const query = String(emojiQuery?.value || '').trim();
+  const items = query ? emojiChoices.filter((emoji) => emoji.includes(query)) : emojiChoices;
+  emojiGrid.innerHTML = items.map((emoji) => `<button type="button" data-emoji-choice="${emoji}" aria-label="${emoji}">${emoji}</button>`).join('');
+}
+
 gifButton?.addEventListener('click', () => { gifModal.hidden = false; gifQuery?.focus(); });
 document.querySelector('[data-close-gif]')?.addEventListener('click', () => { gifModal.hidden = true; });
 gifSearch?.addEventListener('submit', async (event) => {
@@ -515,7 +528,9 @@ gifSearch?.addEventListener('submit', async (event) => {
 mentionButton?.addEventListener('click', () => { mentionModal.hidden = false; renderMentionResults(); mentionQuery?.focus(); });
 document.querySelector('[data-close-mention]')?.addEventListener('click', () => { mentionModal.hidden = true; });
 mentionQuery?.addEventListener('input', renderMentionResults);
-emojiButton?.addEventListener('click', () => insertAtCursor('🙂'));
+emojiButton?.addEventListener('click', () => { emojiModal.hidden = false; renderEmojiGrid(); emojiQuery?.focus(); });
+document.querySelector('[data-close-emoji]')?.addEventListener('click', () => { emojiModal.hidden = true; });
+emojiQuery?.addEventListener('input', renderEmojiGrid);
 pollButton?.addEventListener('click', () => { pollBuilder.hidden = !pollBuilder.hidden; });
 document.querySelector('[data-add-poll-option]')?.addEventListener('click', () => {
   const options = pollBuilder?.querySelectorAll('[data-poll-option]') || [];
