@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260807-staff-1';
+const INTERNET_VERSION = '20260807-staff-2';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {

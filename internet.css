@@ -29,6 +29,8 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 1050px) { .staff-content { grid-template-columns: 200px minmax(340px, 1fr); }.staff-dossier { display: none; }.staff-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .internet-shell.staff-mode { display: block; width: min(100% - 24px, 620px); }.staff-mode .internet-rail { margin-bottom: 18px; }.staff-content { grid-template-columns: 1fr; }.staff-sidebar { display: none; }.staff-overview { border-right: 0; }.staff-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
+.staff-owner-controls { margin: 0; border-width: 1px 0 0; border-radius: 0; background: #07090b; }.staff-owner-controls h2 { font-size: 14px; }.staff-owner-controls input,.staff-owner-controls select { max-width: 620px; }.staff-owner-controls > div { max-width: 620px; }
+
 /* Small, centered Clearwater verified mark. The white check is drawn with CSS,
    so it cannot shift with a font's baseline or glyph shape. */
 .verified,.profile-verified { top: 0; width: 12px; height: 12px; margin-left: 4px; border-radius: 50%; background: #194bf7; clip-path: none; color: transparent; font-size: 0; vertical-align: 0; }
