@@ -61,7 +61,7 @@ const bookmarkList = document.querySelector('[data-bookmark-list]');
 const profileModal = document.querySelector('[data-profile-modal]');
 const messageModal = document.querySelector('[data-message-modal]');
 const messageForm = document.querySelector('[data-message-form]');
-const INTERNET_VERSION = '20260808-social-1';
+const INTERNET_VERSION = '20260808-mentions-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -121,7 +121,9 @@ function postMarkup(post, profile = false) {
   const username = author?.username || post.username;
   const avatarUrl = author?.avatarUrl || post.avatarUrl || 'assets/clearwater-logo.png';
   const staffRank = author?.staffRank || null;
-  const body = escapeHtml(post.content).replace(/(^|\s)(#[a-z0-9_]{1,60})/gi, '$1<a href="#home" class="post-hashtag" data-topic="$2">$2</a>');
+  const body = escapeHtml(post.content)
+    .replace(/(^|\s)(#[a-z0-9_]{1,60})/gi, '$1<a href="#home" class="post-hashtag" data-topic="$2">$2</a>')
+    .replace(/(^|\s)(@[a-z0-9_]{1,80})/gi, '$1<span class="post-mention">$2</span>');
   const gif = safeGifUrl(post.gifUrl) ? `<img class="post-gif" src="${escapeHtml(post.gifUrl)}" alt="${escapeHtml(post.gifTitle || 'GIF')}" />` : '';
   const poll = post.poll?.question && Array.isArray(post.poll.options) ? `<section class="post-poll"><b>${escapeHtml(post.poll.question)}</b>${post.poll.options.map((option) => `<button type="button">${escapeHtml(option)} <span>0%</span></button>`).join('')}</section>` : '';
   return `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(post.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${gif}${poll}<div class="post-actions"><button type="button" data-bookmark-post="${escapeHtml(post.id)}">${socialState.bookmarks.includes(post.id) ? 'Saved' : 'Bookmark'}</button></div></article>`;
