@@ -73,7 +73,7 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-repost-menu-1';
+const INTERNET_VERSION = '20260808-repost-dropdown-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -158,7 +158,7 @@ function postMarkup(post, profile = false) {
   const repost = post.repostOf ? allPosts.find((item) => item.id === post.repostOf) : null;
   const shared = quote || repost;
   const sharedMarkup = shared ? `<div class="post-embed"><b>${escapeHtml(shared.displayName || 'Member')}</b> <span>@${escapeHtml(shared.username || '')}</span><p>${escapeHtml(shared.content || '')}</p></div>` : '';
-  return `<article class="post" data-post-card="${escapeHtml(post.id)}">${repost ? '<small class="reposted-label">↻ Reposted</small>' : ''}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(post.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${sharedMarkup}${gif}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(post.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><button type="button" data-engage="repost" data-post-id="${escapeHtml(post.id)}">${postActionIcon('repost')}</button><button type="button" data-engage="like" data-post-id="${escapeHtml(post.id)}" class="${likes.includes(currentUserId) ? 'liked' : ''}">${postActionIcon('like', likes.includes(currentUserId))}<span>${likes.length || ''}</span></button><button type="button" data-bookmark-post="${escapeHtml(post.id)}">${postActionIcon('bookmark')}</button><button type="button" data-engage="share" data-post-id="${escapeHtml(post.id)}">${postActionIcon('share')}</button></div></article>`;
+  return `<article class="post" data-post-card="${escapeHtml(post.id)}">${repost ? '<small class="reposted-label">↻ Reposted</small>' : ''}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(post.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${sharedMarkup}${gif}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(post.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(post.id)}">Repost</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(post.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(post.id)}" class="${likes.includes(currentUserId) ? 'liked' : ''}">${postActionIcon('like', likes.includes(currentUserId))}<span>${likes.length || ''}</span></button><button type="button" data-bookmark-post="${escapeHtml(post.id)}">${postActionIcon('bookmark')}</button><button type="button" data-engage="share" data-post-id="${escapeHtml(post.id)}">${postActionIcon('share')}</button></div></article>`;
 }
 
 function safeGifUrl(value) {
@@ -560,6 +560,16 @@ window.addEventListener('hashchange', showViewFromAddress);
 async function handlePostEngagement(type, postId, control = null) {
   const post = allPosts.find((item) => item.id === postId); if (!post) return;
   if (type === 'share') { pendingPostAction = { postId, type }; shareModal.hidden = false; return; }
+  if (type === 'repost-now') { try { await postInteraction({ postId, type: 'repost' }); } catch (error) { window.alert(error.message || 'Could not repost.'); } return; }
+  if (type === 'quote') {
+    pendingPostAction = { postId, type: 'repost', quote: true };
+    document.querySelector('[data-post-modal-title]').textContent = 'Quote post';
+    document.querySelector('[data-post-modal-content]').placeholder = 'What is happening?';
+    document.querySelector('[data-quoted-post]').hidden = false;
+    document.querySelector('[data-quote-post]').hidden = true;
+    postModal.hidden = false;
+    return;
+  }
   if (type === 'repost') {
     pendingPostAction = { postId, type, quote: false };
     const box = control?.getBoundingClientRect();

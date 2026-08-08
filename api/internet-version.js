@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-repost-menu-1';
+const INTERNET_VERSION = '20260808-repost-dropdown-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {
