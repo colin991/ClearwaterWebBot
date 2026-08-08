@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-composer-1';
+const INTERNET_VERSION = '20260808-social-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {

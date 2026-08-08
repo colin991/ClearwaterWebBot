@@ -57,7 +57,11 @@ const mentionModal = document.querySelector('[data-mention-modal]');
 const mentionQuery = document.querySelector('[data-mention-query]');
 const mentionResults = document.querySelector('[data-mention-results]');
 const trendingList = document.querySelector('[data-trending-list]');
-const INTERNET_VERSION = '20260808-composer-1';
+const bookmarkList = document.querySelector('[data-bookmark-list]');
+const profileModal = document.querySelector('[data-profile-modal]');
+const messageModal = document.querySelector('[data-message-modal]');
+const messageForm = document.querySelector('[data-message-form]');
+const INTERNET_VERSION = '20260808-social-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -67,6 +71,8 @@ let activeBan = null;
 let sessionIsOwner = false;
 let pendingReportReview = null;
 let selectedGif = null;
+let socialState = { following: [], blocked: [], muted: [], bookmarks: [] };
+let viewedMember = null;
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const timeAgo = (value) => {
@@ -118,7 +124,7 @@ function postMarkup(post, profile = false) {
   const body = escapeHtml(post.content).replace(/(^|\s)(#[a-z0-9_]{1,60})/gi, '$1<a href="#home" class="post-hashtag" data-topic="$2">$2</a>');
   const gif = safeGifUrl(post.gifUrl) ? `<img class="post-gif" src="${escapeHtml(post.gifUrl)}" alt="${escapeHtml(post.gifTitle || 'GIF')}" />` : '';
   const poll = post.poll?.question && Array.isArray(post.poll.options) ? `<section class="post-poll"><b>${escapeHtml(post.poll.question)}</b>${post.poll.options.map((option) => `<button type="button">${escapeHtml(option)} <span>0%</span></button>`).join('')}</section>` : '';
-  return `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<div class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</div></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${gif}${poll}</article>`;
+  return `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(post.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${gif}${poll}<div class="post-actions"><button type="button" data-bookmark-post="${escapeHtml(post.id)}">${socialState.bookmarks.includes(post.id) ? 'Saved' : 'Bookmark'}</button></div></article>`;
 }
 
 function safeGifUrl(value) {
@@ -144,10 +150,12 @@ function showPosts(posts) {
 
 function renderPosts() {
   const query = String(search?.value || '').trim().toLowerCase();
-  const posts = query ? allPosts.filter((post) => `${post.displayName} ${post.username} ${post.content}`.toLowerCase().includes(query)) : allPosts;
+  const visible = allPosts.filter((post) => !socialState.blocked.includes(post.authorId));
+  const posts = query ? visible.filter((post) => `${post.displayName} ${post.username} ${post.content}`.toLowerCase().includes(query)) : visible;
   showPosts(posts);
   renderProfilePosts();
   renderTrending();
+  renderBookmarks();
 }
 
 function renderProfilePosts() {
@@ -164,6 +172,12 @@ function renderProfilePosts() {
     : '<p>You have not posted yet.</p>';
 }
 
+function renderBookmarks() {
+  if (!bookmarkList) return;
+  const posts = allPosts.filter((post) => socialState.bookmarks.includes(post.id));
+  bookmarkList.innerHTML = posts.length ? posts.map((post) => postMarkup(post)).join('') : '<p class="feed-note">Your saved posts will appear here.</p>';
+}
+
 function showView(view) {
   document.querySelector('.internet-shell')?.classList.toggle('staff-mode', view === 'staff');
   document.querySelectorAll('[data-view]').forEach((section) => { section.hidden = section.dataset.view !== view; });
@@ -171,6 +185,7 @@ function showView(view) {
   if (view === 'home') renderPosts();
   if (view === 'staff') void loadModeration();
   if (view === 'messages') void loadMessages();
+  if (view === 'bookmarks') renderBookmarks();
 }
 
 function showBan(ban) {
@@ -262,6 +277,34 @@ async function loadMessages() {
   } catch (error) {
     messagesList.innerHTML = `<p>${escapeHtml(error.message || 'Could not load messages.')}</p>`;
   }
+}
+
+async function loadSocial() {
+  if (!currentUserId) return;
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'social-status' }) });
+    const result = await readApiJson(response, 'Could not load your social settings.');
+    if (response.ok && result.social) { socialState = { ...socialState, ...result.social }; renderPosts(); }
+  } catch { /* Feed stays usable during a temporary connection issue. */ }
+}
+
+async function socialAction(type, { targetId = '', postId = '', enabled = true } = {}) {
+  const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'social', type, targetId, postId, enabled }) });
+  const result = await readApiJson(response, 'Could not save this change.');
+  if (!response.ok) throw new Error(result.error || 'Could not save this change.');
+  socialState = { ...socialState, ...result.social }; renderPosts();
+}
+
+function openMemberProfile(memberId) {
+  const user = internetUsers.get(memberId); if (!user || !profileModal) return;
+  viewedMember = user;
+  document.querySelector('[data-member-title]').textContent = user.displayName;
+  document.querySelector('[data-member-avatar]').src = user.avatarUrl || 'assets/clearwater-logo.png';
+  document.querySelector('[data-member-handle]').textContent = `@${user.username}`;
+  document.querySelector('[data-member-rank]').textContent = user.staffRank || 'Clearwater community member';
+  const following = socialState.following.includes(user.id);
+  document.querySelector('[data-follow-member]').textContent = following ? 'Following' : 'Follow';
+  profileModal.hidden = false;
 }
 
 async function submitReportReview({ reportId, decision, moderationAction, reason = '', durationDays = 'forever' }) {
@@ -369,6 +412,7 @@ async function loadSession() {
   await loadBanStatus();
   await loadWarnings();
   await loadMessages();
+  await loadSocial();
 }
 
 content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; });
@@ -381,6 +425,10 @@ document.querySelectorAll('[data-profile-tab]').forEach((button) => button.addEv
   if (profileList) profileList.innerHTML = `<p>${button.textContent} will appear here when community interactions are enabled.</p>`;
 }));
 document.addEventListener('click', (event) => {
+  const authorButton = event.target.closest('[data-open-member]');
+  if (authorButton) { openMemberProfile(authorButton.dataset.openMember); return; }
+  const bookmark = event.target.closest('[data-bookmark-post]');
+  if (bookmark) { void socialAction('bookmark', { postId: bookmark.dataset.bookmarkPost, enabled: !socialState.bookmarks.includes(bookmark.dataset.bookmarkPost) }).catch((error) => window.alert(error.message)); return; }
   const topic = event.target.closest('[data-topic]');
   if (topic) { event.preventDefault(); showView('home'); search.value = topic.dataset.topic; renderPosts(); return; }
   const gifChoice = event.target.closest('[data-gif-url]');
@@ -438,6 +486,24 @@ document.querySelector('[data-add-poll-option]')?.addEventListener('click', () =
   document.querySelector('[data-add-poll-option]')?.before(input);
 });
 document.querySelector('[data-close-warning]')?.addEventListener('click', () => { warningNotice.hidden = true; });
+document.querySelector('[data-close-profile]')?.addEventListener('click', () => { profileModal.hidden = true; });
+document.querySelector('[data-follow-member]')?.addEventListener('click', async () => {
+  if (!viewedMember) return;
+  try { await socialAction('follow', { targetId: viewedMember.id, enabled: !socialState.following.includes(viewedMember.id) }); openMemberProfile(viewedMember.id); } catch (error) { window.alert(error.message); }
+});
+document.querySelector('[data-member-menu]')?.addEventListener('click', () => { const menu = document.querySelector('[data-member-menu-list]'); menu.hidden = !menu.hidden; });
+document.querySelector('[data-mute-member]')?.addEventListener('click', async () => { if (!viewedMember) return; try { await socialAction('mute', { targetId: viewedMember.id, enabled: !socialState.muted.includes(viewedMember.id) }); profileModal.hidden = true; } catch (error) { window.alert(error.message); } });
+document.querySelector('[data-block-member]')?.addEventListener('click', async () => { if (!viewedMember) return; try { await socialAction('block', { targetId: viewedMember.id, enabled: !socialState.blocked.includes(viewedMember.id) }); profileModal.hidden = true; } catch (error) { window.alert(error.message); } });
+document.querySelector('[data-report-member]')?.addEventListener('click', () => { profileModal.hidden = true; window.alert('To report a member, open one of their posts and choose Report post.'); });
+document.querySelector('[data-new-message]')?.addEventListener('click', () => { messageModal.hidden = false; });
+document.querySelector('[data-message-member]')?.addEventListener('click', () => { if (!viewedMember) return; document.querySelector('[data-message-to]').value = viewedMember.username; profileModal.hidden = true; messageModal.hidden = false; });
+document.querySelector('[data-close-message]')?.addEventListener('click', () => { messageModal.hidden = true; });
+messageForm?.addEventListener('submit', async (event) => {
+  event.preventDefault(); const destination = [...internetUsers.values()].find((user) => user.username.toLowerCase() === document.querySelector('[data-message-to]').value.trim().replace(/^@/, '').toLowerCase());
+  const error = document.querySelector('[data-message-error]'); error.textContent = '';
+  if (!destination) { error.textContent = 'Choose a Clearwater Internet member.'; return; }
+  try { const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'message-send', to: destination.id, content: document.querySelector('[data-message-content]').value }) }); const result = await readApiJson(response, 'Could not send your message.'); if (!response.ok) throw new Error(result.error); messageModal.hidden = true; messageForm.reset(); window.alert('Message sent.'); } catch (exception) { error.textContent = exception.message || 'Could not send your message.'; }
+});
 document.querySelector('[data-close-moderation]')?.addEventListener('click', () => { moderationModal.hidden = true; pendingReportReview = null; });
 moderationForm?.addEventListener('submit', async (event) => {
   event.preventDefault();

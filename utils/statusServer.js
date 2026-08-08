@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
-import { clearExpiredInternetBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, getActiveBan, moderationSnapshot, publicPosts, publicUsers, readInternetStore, reviewInternetReport, saveInternetStore, setInternetBan, takeInternetMessages, takeUnreadInternetWarnings, upsertInternetUser } from './internetStore.js';
+import { clearExpiredInternetBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, getActiveBan, moderationSnapshot, publicPosts, publicUsers, readInternetStore, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetMessages, takeUnreadInternetWarnings, updateInternetSocial, upsertInternetUser } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -167,6 +167,24 @@ export function startStatusServer(client, config) {
           const messages = takeInternetMessages(store, body.actor);
           await saveInternetStore(store);
           return json(response, 200, { messages });
+        }
+
+        if (body.action === 'social') {
+          const social = updateInternetSocial(store, body);
+          await saveInternetStore(store);
+          return json(response, 200, { social });
+        }
+
+        if (body.action === 'social-status') {
+          const social = socialSnapshot(store, body.actor);
+          await saveInternetStore(store);
+          return json(response, 200, { social });
+        }
+
+        if (body.action === 'message-send') {
+          const result = sendInternetMessage(store, body);
+          await saveInternetStore(store);
+          return json(response, 201, result);
         }
 
         if (body.action === 'report-review') {

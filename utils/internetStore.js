@@ -254,6 +254,48 @@ export function takeInternetMessages(store, actor) {
   return messages.slice(0, 50);
 }
 
+export function socialSnapshot(store, actor) {
+  const user = upsertInternetUser(store, actor);
+  return {
+    following: Array.isArray(user.following) ? user.following : [],
+    blocked: Array.isArray(user.blocked) ? user.blocked : [],
+    muted: Array.isArray(user.muted) ? user.muted : [],
+    bookmarks: Array.isArray(user.bookmarks) ? user.bookmarks : [],
+  };
+}
+
+export function updateInternetSocial(store, { actor, targetId, type, enabled, postId }) {
+  const user = upsertInternetUser(store, actor);
+  if (type === 'bookmark') {
+    if (!store.posts.some((post) => post.id === String(postId))) throw new Error('Post not found');
+    user.bookmarks = Array.isArray(user.bookmarks) ? user.bookmarks : [];
+    user.bookmarks = enabled ? [...new Set([...user.bookmarks, String(postId)])].slice(-200) : user.bookmarks.filter((id) => id !== String(postId));
+    return socialSnapshot(store, user);
+  }
+  if (!['follow', 'block', 'mute'].includes(type)) throw new Error('Unsupported social action');
+  const target = String(targetId || '');
+  if (!/^\d{16,22}$/.test(target) || target === user.id) throw new Error('Choose another member');
+  const key = `${type === 'follow' ? 'following' : `${type}ed`}`;
+  user[key] = Array.isArray(user[key]) ? user[key] : [];
+  user[key] = enabled ? [...new Set([...user[key], target])].slice(-500) : user[key].filter((id) => id !== target);
+  if (type === 'block' && enabled) user.following = (user.following || []).filter((id) => id !== target);
+  return socialSnapshot(store, user);
+}
+
+export function sendInternetMessage(store, { actor, to, content }) {
+  const sender = upsertInternetUser(store, actor);
+  const recipient = store.users[String(to || '')];
+  if (!recipient) throw new Error('That member has not joined Clearwater Internet yet');
+  const senderFollowing = Array.isArray(sender.following) && sender.following.includes(recipient.id);
+  const recipientFollowing = Array.isArray(recipient.following) && recipient.following.includes(sender.id);
+  if (!senderFollowing || !recipientFollowing) throw new Error('You can message friends only');
+  const body = text(content, 1000);
+  if (!body) throw new Error('Write a message first');
+  if ((recipient.blocked || []).includes(sender.id) || (sender.blocked || []).includes(recipient.id)) throw new Error('This conversation is unavailable');
+  addInternetMessage(store, recipient.id, `${sender.displayName}: ${body}`);
+  return { sent: true };
+}
+
 export function moderationSnapshot(store) {
   return {
     reports: store.reports.filter((report) => report.status === 'open').slice(0, 100),
