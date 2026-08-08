@@ -69,7 +69,10 @@ const postDetail = document.querySelector('[data-post-detail]');
 const postModal = document.querySelector('[data-post-modal]');
 const postModalForm = document.querySelector('[data-post-modal-form]');
 const shareModal = document.querySelector('[data-share-modal]');
-const INTERNET_VERSION = '20260808-member-profile-1';
+const conversationForm = document.querySelector('[data-conversation-form]');
+const conversationInput = document.querySelector('[data-conversation-input]');
+const conversationMessages = document.querySelector('[data-conversation-messages]');
+const INTERNET_VERSION = '20260808-conversations-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -209,7 +212,7 @@ function renderBookmarks() {
 }
 
 function showView(view) {
-  const availableViews = new Set(['home', 'notifications', 'messages', 'bookmarks', 'profile', 'member', 'settings', 'staff', 'post']);
+  const availableViews = new Set(['home', 'notifications', 'messages', 'bookmarks', 'profile', 'member', 'conversation', 'settings', 'staff', 'post']);
   let activeView = availableViews.has(view) ? view : 'home';
   if (activeView === 'staff' && !sessionIsOwner) activeView = 'home';
   document.querySelector('.internet-shell')?.classList.toggle('staff-mode', activeView === 'staff');
@@ -371,6 +374,17 @@ function openMemberProfile(memberId, updateHash = true) {
   document.querySelector('[data-member-page-menu-list]').hidden = true;
   if (updateHash) history.pushState({}, '', `#member-${user.id}`);
   showView('member');
+}
+
+function openConversation(member) {
+  if (!member) return;
+  viewedMember = member;
+  document.querySelector('[data-conversation-avatar]').src = member.avatarUrl || 'assets/clearwater-logo.png';
+  document.querySelector('[data-conversation-name]').textContent = member.displayName;
+  document.querySelector('[data-conversation-handle]').textContent = `@${member.username}`;
+  conversationMessages.innerHTML = '<p>Start a conversation.</p>';
+  showView('conversation');
+  conversationInput?.focus();
 }
 
 async function submitReportReview({ reportId, decision, moderationAction, reason = '', durationDays = 'forever' }) {
@@ -628,8 +642,22 @@ document.querySelector('[data-mute-member]')?.addEventListener('click', async ()
 document.querySelector('[data-block-member]')?.addEventListener('click', async () => { if (!viewedMember) return; try { await socialAction('block', { targetId: viewedMember.id, enabled: !socialState.blocked.includes(viewedMember.id) }); showView('home'); } catch (error) { window.alert(error.message); } });
 document.querySelector('[data-report-member]')?.addEventListener('click', () => { window.alert('To report a member, open one of their posts and choose Report post.'); });
 document.querySelector('[data-new-message]')?.addEventListener('click', () => { messageModal.hidden = false; });
-document.querySelector('[data-member-page-message]')?.addEventListener('click', () => { if (!viewedMember) return; document.querySelector('[data-message-to]').value = viewedMember.username; messageModal.hidden = false; });
+document.querySelector('[data-member-page-message]')?.addEventListener('click', () => { openConversation(viewedMember); });
 document.querySelector('[data-close-message]')?.addEventListener('click', () => { messageModal.hidden = true; });
+document.querySelector('[data-close-conversation]')?.addEventListener('click', () => { if (viewedMember) openMemberProfile(viewedMember.id, false); else showView('messages'); });
+conversationForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const text = conversationInput?.value.trim();
+  if (!viewedMember || !text) return;
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'message-send', to: viewedMember.id, content: text }) });
+    const result = await readApiJson(response, 'Could not send your message.');
+    if (!response.ok) throw new Error(result.error || 'Could not send your message.');
+    const empty = conversationMessages.querySelector('p'); if (empty) empty.remove();
+    conversationMessages.insertAdjacentHTML('beforeend', `<p class="conversation-bubble own">${escapeHtml(text)}</p>`);
+    conversationInput.value = '';
+  } catch (error) { window.alert(error.message || 'Could not send your message.'); }
+});
 document.querySelector('[data-close-post-modal]')?.addEventListener('click', () => { postModal.hidden = true; pendingPostAction = null; });
 document.querySelector('[data-quote-post]')?.addEventListener('click', () => {
   if (!pendingPostAction) return;
