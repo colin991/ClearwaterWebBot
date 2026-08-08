@@ -105,6 +105,7 @@ export function createInternetPost(store, user, content, media = {}) {
   const isGif = /^https:\/\/(?:media|i)\.giphy\.com\//.test(gifUrl);
   const question = text(media?.poll?.question, 180);
   const options = Array.isArray(media?.poll?.options) ? media.poll.options.map((option) => text(option, 80)).filter(Boolean).slice(0, 4) : [];
+  const pollDays = Math.min(30, Math.max(1, Number(media?.poll?.durationDays) || 1));
   if (!body && !isGif && !question) throw new Error('Write something, add a GIF, or create a poll before posting');
   if (gifUrl && !isGif) throw new Error('Only GIFs selected from Clearwater Internet can be posted');
   if ((question && options.length < 2) || (!question && options.length)) throw new Error('A poll needs a question and at least two options');
@@ -133,12 +134,30 @@ export function createInternetPost(store, user, content, media = {}) {
     parentId: text(media?.parentId, 80) || null,
     quoteId: text(media?.quoteId, 80) || null,
     ...(isGif ? { gifUrl, gifTitle } : {}),
-    ...(question ? { poll: { question, options } } : {}),
+    ...(question ? { poll: { question, options, votes: {}, endsAt: new Date(Date.now() + (pollDays * 24 * 60 * 60 * 1000)).toISOString() } } : {}),
     createdAt: new Date().toISOString(),
   };
   store.posts.unshift(post);
   store.posts = store.posts.slice(0, 500);
   user.lastPostAt = post.createdAt;
+  return post;
+}
+
+export function voteInternetPoll(store, { actor, postId, optionIndex, remove = false }) {
+  const user = upsertInternetUser(store, actor);
+  if (getActiveBan(user)) throw new Error('This account is banned from Clearwater Internet');
+  const post = store.posts.find((item) => item.id === String(postId || ''));
+  if (!post?.poll?.question || !Array.isArray(post.poll.options)) throw new Error('Poll not found');
+  if (post.poll.endsAt && new Date(post.poll.endsAt).getTime() <= Date.now()) throw new Error('This poll has ended');
+  const votes = post.poll.votes && typeof post.poll.votes === 'object' ? post.poll.votes : {};
+  if (remove) {
+    delete votes[user.id];
+  } else {
+    const choice = Number(optionIndex);
+    if (!Number.isInteger(choice) || choice < 0 || choice >= post.poll.options.length) throw new Error('Choose a valid poll option');
+    votes[user.id] = choice;
+  }
+  post.poll.votes = votes;
   return post;
 }
 

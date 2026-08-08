@@ -75,7 +75,7 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-expanded-gif-preview-1';
+const INTERNET_VERSION = '20260808-poll-voting-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -156,7 +156,21 @@ function postMarkup(post, profile = false) {
       return mentioned ? `${leading}<button type="button" class="post-mention" data-open-member="${escapeHtml(mentioned.id)}">${handle}</button>` : `${leading}<span class="post-mention">${handle}</span>`;
     });
   const gif = safeGifUrl(post.gifUrl) ? `<img class="post-gif" src="${escapeHtml(post.gifUrl)}" alt="${escapeHtml(post.gifTitle || 'GIF')}" />` : '';
-  const poll = post.poll?.question && Array.isArray(post.poll.options) ? `<section class="post-poll"><b>${escapeHtml(post.poll.question)}</b>${post.poll.options.map((option) => `<button type="button">${escapeHtml(option)} <span>0%</span></button>`).join('')}</section>` : '';
+  const pollVotes = post.poll?.votes && typeof post.poll.votes === 'object' ? post.poll.votes : {};
+  const selectedPollOption = Number.isInteger(Number(pollVotes[currentUserId])) ? Number(pollVotes[currentUserId]) : -1;
+  const totalPollVotes = Object.keys(pollVotes).length;
+  const pollRemaining = (() => {
+    const endsAt = new Date(post.poll?.endsAt || 0).getTime();
+    if (!endsAt) return '1 day left';
+    const hours = Math.ceil((endsAt - Date.now()) / 3_600_000);
+    if (hours <= 0) return 'Poll ended';
+    return hours >= 48 ? `${Math.ceil(hours / 24)} days left` : `${hours}h left`;
+  })();
+  const poll = post.poll?.question && Array.isArray(post.poll.options) ? `<section class="post-poll"><b>${escapeHtml(post.poll.question)}</b>${post.poll.options.map((option, index) => {
+    const optionVotes = Object.values(pollVotes).filter((vote) => Number(vote) === index).length;
+    const percentage = totalPollVotes ? Math.round((optionVotes / totalPollVotes) * 100) : 0;
+    return `<button type="button" class="${selectedPollOption === index ? 'selected' : ''}" data-poll-vote="${index}" data-post-id="${escapeHtml(post.id)}" ${pollRemaining === 'Poll ended' ? 'disabled' : ''}><span>${escapeHtml(option)}</span><span>${optionVotes} &middot; ${percentage}%</span></button>`;
+  }).join('')}<div class="post-poll-footer"><span>${totalPollVotes} ${totalPollVotes === 1 ? 'vote' : 'votes'} &middot; ${pollRemaining}</span><button type="button" class="post-poll-link" data-poll-voters="${escapeHtml(post.id)}">See who voted</button>${selectedPollOption >= 0 ? `<button type="button" class="post-poll-link" data-poll-remove="${escapeHtml(post.id)}">Remove my vote</button>` : ''}</div></section>` : '';
   const replies = allPosts.filter((item) => item.parentId === post.id).length;
   const likes = Array.isArray(post.likes) ? post.likes : [];
   const quote = post.quoteId ? allPosts.find((item) => item.id === post.quoteId) : null;
@@ -573,6 +587,12 @@ document.addEventListener('click', (event) => {
   if (emojiChoice) { insertAtCursor(emojiChoice.dataset.emojiChoice); emojiModal.hidden = true; return; }
   const engage = event.target.closest('[data-engage]');
   if (engage) { void handlePostEngagement(engage.dataset.engage, engage.dataset.postId, engage); return; }
+  const pollVote = event.target.closest('[data-poll-vote]');
+  if (pollVote) { void voteOnPoll(pollVote.dataset.postId, Number(pollVote.dataset.pollVote)); return; }
+  const removePollVote = event.target.closest('[data-poll-remove]');
+  if (removePollVote) { void voteOnPoll(removePollVote.dataset.pollRemove, null, true); return; }
+  const pollVoters = event.target.closest('[data-poll-voters]');
+  if (pollVoters) { showPollVoters(pollVoters.dataset.pollVoters); return; }
   const authorButton = event.target.closest('[data-open-member]');
   if (authorButton) { openMemberProfile(authorButton.dataset.openMember); return; }
   const messageUser = event.target.closest('[data-message-user]');
@@ -653,6 +673,21 @@ async function postInteraction({ postId, type, content = '', quote = false }) {
     throw new Error(result.error || 'Could not update this post.');
   }
   await loadPosts();
+}
+
+async function voteOnPoll(postId, optionIndex, remove = false) {
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'poll-vote', postId, optionIndex, remove }) });
+    const result = await readApiJson(response, 'Could not update this poll.');
+    if (!response.ok) throw new Error(result.error || 'Could not update this poll.');
+    await loadPosts();
+  } catch (error) { window.alert(error.message || 'Could not update this poll.'); }
+}
+
+function showPollVoters(postId) {
+  const post = allPosts.find((item) => item.id === postId);
+  const voters = Object.keys(post?.poll?.votes || {}).map((id) => internetUsers.get(id)?.displayName || 'Clearwater member');
+  window.alert(voters.length ? `Voted by: ${voters.join(', ')}` : 'No votes yet.');
 }
 function insertAtCursor(value) {
   if (!content) return;
@@ -792,7 +827,8 @@ moderationForm?.addEventListener('submit', async (event) => {
 postButton?.addEventListener('click', async () => {
   const pollOptions = [...document.querySelectorAll('[data-poll-option]')].map((input) => input.value.trim()).filter(Boolean);
   const pollQuestion = document.querySelector('[data-poll-question]')?.value.trim() || '';
-  const poll = pollQuestion || pollOptions.length ? { question: pollQuestion, options: pollOptions } : null;
+  const pollDuration = document.querySelector('[data-poll-duration]')?.value || '1';
+  const poll = pollQuestion || pollOptions.length ? { question: pollQuestion, options: pollOptions, durationDays: pollDuration } : null;
   postButton.disabled = true;
   postMessage.textContent = 'Posting...';
   try {
