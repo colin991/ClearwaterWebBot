@@ -69,10 +69,11 @@ const postDetail = document.querySelector('[data-post-detail]');
 const postModal = document.querySelector('[data-post-modal]');
 const postModalForm = document.querySelector('[data-post-modal-form]');
 const shareModal = document.querySelector('[data-share-modal]');
+const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-repost-icon-1';
+const INTERNET_VERSION = '20260808-repost-menu-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -519,7 +520,7 @@ document.addEventListener('click', (event) => {
   const emojiChoice = event.target.closest('[data-emoji-choice]');
   if (emojiChoice) { insertAtCursor(emojiChoice.dataset.emojiChoice); emojiModal.hidden = true; return; }
   const engage = event.target.closest('[data-engage]');
-  if (engage) { void handlePostEngagement(engage.dataset.engage, engage.dataset.postId); return; }
+  if (engage) { void handlePostEngagement(engage.dataset.engage, engage.dataset.postId, engage); return; }
   const authorButton = event.target.closest('[data-open-member]');
   if (authorButton) { openMemberProfile(authorButton.dataset.openMember); return; }
   const bookmark = event.target.closest('[data-bookmark-post]');
@@ -534,6 +535,19 @@ document.addEventListener('click', (event) => {
   if (event.target.closest('[data-refresh-staff]')) { void loadModeration(); return; }
   const reviewButton = event.target.closest('[data-report-review]');
   if (reviewButton) { void reviewReport(reviewButton); return; }
+  const repostChoice = event.target.closest('[data-repost-choice]');
+  if (repostChoice && pendingPostAction?.type === 'repost') {
+    repostPopup.hidden = true;
+    if (repostChoice.dataset.repostChoice === 'repost') { void postInteraction({ postId: pendingPostAction.postId, type: 'repost' }).catch((error) => window.alert(error.message || 'Could not repost.')); pendingPostAction = null; return; }
+    document.querySelector('[data-post-modal-title]').textContent = 'Quote post';
+    document.querySelector('[data-post-modal-content]').placeholder = 'What is happening?';
+    document.querySelector('[data-quoted-post]').hidden = false;
+    document.querySelector('[data-quote-post]').hidden = true;
+    pendingPostAction.quote = true;
+    postModal.hidden = false;
+    return;
+  }
+  if (repostPopup && !event.target.closest('[data-repost-popup]')) repostPopup.hidden = true;
   const button = event.target.closest('[data-post-action]');
   if (!button) return;
   const postId = button.parentElement?.dataset.postId;
@@ -543,10 +557,20 @@ document.querySelector('[data-back-home]')?.addEventListener('click', () => { hi
 window.addEventListener('popstate', showViewFromAddress);
 window.addEventListener('hashchange', showViewFromAddress);
 
-async function handlePostEngagement(type, postId) {
+async function handlePostEngagement(type, postId, control = null) {
   const post = allPosts.find((item) => item.id === postId); if (!post) return;
   if (type === 'share') { pendingPostAction = { postId, type }; shareModal.hidden = false; return; }
-  if (type === 'reply' || type === 'repost') {
+  if (type === 'repost') {
+    pendingPostAction = { postId, type, quote: false };
+    const box = control?.getBoundingClientRect();
+    if (box && repostPopup) {
+      repostPopup.style.left = `${Math.max(12, box.left - 2)}px`;
+      repostPopup.style.top = `${box.bottom + 8}px`;
+      repostPopup.hidden = false;
+    }
+    return;
+  }
+  if (type === 'reply') {
     pendingPostAction = { postId, type, quote: false };
     document.querySelector('[data-post-modal-title]').textContent = type === 'reply' ? 'Reply' : 'Repost';
     document.querySelector('[data-post-modal-content]').placeholder = type === 'reply' ? 'Post your reply' : 'Add a comment, or repost now';

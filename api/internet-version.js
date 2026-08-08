@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-repost-icon-1';
+const INTERNET_VERSION = '20260808-repost-menu-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {
