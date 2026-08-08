@@ -68,7 +68,7 @@ const postDetail = document.querySelector('[data-post-detail]');
 const postModal = document.querySelector('[data-post-modal]');
 const postModalForm = document.querySelector('[data-post-modal-form]');
 const shareModal = document.querySelector('[data-share-modal]');
-const INTERNET_VERSION = '20260808-post-detail-1';
+const INTERNET_VERSION = '20260808-fixed-compact-composer-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -563,7 +563,7 @@ mentionQuery?.addEventListener('input', renderMentionResults);
 emojiButton?.addEventListener('click', () => { emojiModal.hidden = false; renderEmojiGrid(); emojiQuery?.focus(); });
 document.querySelector('[data-close-emoji]')?.addEventListener('click', () => { emojiModal.hidden = true; });
 emojiQuery?.addEventListener('input', renderEmojiGrid);
-pollButton?.addEventListener('click', () => { pollBuilder.hidden = !pollBuilder.hidden; });
+pollButton?.addEventListener('click', () => { pollBuilder.hidden = !pollBuilder.hidden; composer?.classList.toggle('composer-expanded', !pollBuilder.hidden); });
 document.querySelector('[data-add-poll-option]')?.addEventListener('click', () => {
   const options = pollBuilder?.querySelectorAll('[data-poll-option]') || [];
   if (options.length >= 4) return;
@@ -632,7 +632,7 @@ postButton?.addEventListener('click', async () => {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, poll }) });
     const result = await readApiJson(response, 'Posting is unavailable because the website service is not connected.');
     if (!response.ok) throw new Error(result.error);
-    content.value = ''; count.textContent = '0 / 500'; selectedGif = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder) { pollBuilder.hidden = true; pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
+    content.value = ''; count.textContent = '0 / 500'; selectedGif = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
   } catch (error) {
     const message = error.message || 'Could not post.';
     postMessage.textContent = message;
