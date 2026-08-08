@@ -1,6 +1,8 @@
 import { SESSION_COOKIE, avatarUrl, getAuthConfig, parseCookies, readSessionToken, sendJson } from '../lib/discord-auth.js';
 import { getStaffAccess } from '../lib/owner-access.js';
 
+const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
+
 async function readBody(request) {
   if (request.body && typeof request.body === 'object') return request.body;
   if (typeof request.body === 'string') return JSON.parse(request.body);
@@ -184,6 +186,12 @@ export default async function handler(request, response) {
     }
 
     const result = await callBot(request, payload);
+    // Older bot hosts do not understand asOfficial and would silently create a
+    // normal-account post. Remove that post and give a useful update message.
+    if (body.action === 'post' && asOfficial && result.ok && result.body?.post?.authorId !== OFFICIAL_INTERNET_ACCOUNT_ID) {
+      await callBot(request, { action: 'delete', postId: result.body.post?.id, actor: { id: user.id }, owner: true });
+      return sendJson(response, 409, { error: 'The bot host needs the latest GitHub files and a restart before the Clearwater Roleplay account can post.' });
+    }
     return sendJson(response, result.ok ? (result.status === 201 ? 201 : 200) : result.status, result.body);
   } catch {
     return sendJson(response, 502, { error: 'Clearwater Internet is temporarily unavailable' });
