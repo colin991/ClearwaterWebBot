@@ -44,6 +44,8 @@ const moderationDurationWrap = document.querySelector('[data-moderation-duration
 const moderationDuration = document.querySelector('[data-moderation-duration]');
 const moderationError = document.querySelector('[data-moderation-error]');
 const gifButton = document.querySelector('[data-gif-button]');
+const imageButton = document.querySelector('[data-image-button]');
+const imageUpload = document.querySelector('[data-image-upload]');
 const emojiButton = document.querySelector('[data-emoji-button]');
 const mentionButton = document.querySelector('[data-mention-button]');
 const pollButton = document.querySelector('[data-poll-button]');
@@ -75,7 +77,7 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-poll-voting-1';
+const INTERNET_VERSION = '20260808-image-upload-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -85,6 +87,7 @@ let activeBan = null;
 let sessionIsOwner = false;
 let pendingReportReview = null;
 let selectedGif = null;
+let selectedImage = null;
 let socialState = { following: [], blocked: [], muted: [], bookmarks: [] };
 let viewedMember = null;
 let pendingPostAction = null;
@@ -156,6 +159,7 @@ function postMarkup(post, profile = false) {
       return mentioned ? `${leading}<button type="button" class="post-mention" data-open-member="${escapeHtml(mentioned.id)}">${handle}</button>` : `${leading}<span class="post-mention">${handle}</span>`;
     });
   const gif = safeGifUrl(post.gifUrl) ? `<img class="post-gif" src="${escapeHtml(post.gifUrl)}" alt="${escapeHtml(post.gifTitle || 'GIF')}" />` : '';
+  const image = safeImageUrl(post.imageUrl) ? `<img class="post-image" src="${escapeHtml(post.imageUrl)}" alt="Image shared by ${escapeHtml(displayName || 'a Clearwater member')}" />` : '';
   const pollVotes = post.poll?.votes && typeof post.poll.votes === 'object' ? post.poll.votes : {};
   const selectedPollOption = Number.isInteger(Number(pollVotes[currentUserId])) ? Number(pollVotes[currentUserId]) : -1;
   const totalPollVotes = Object.keys(pollVotes).length;
@@ -177,11 +181,15 @@ function postMarkup(post, profile = false) {
   const repost = post.repostOf ? allPosts.find((item) => item.id === post.repostOf) : null;
   const shared = quote || repost;
   const sharedMarkup = shared ? `<div class="post-embed"><b>${escapeHtml(shared.displayName || 'Member')}</b> <span>@${escapeHtml(shared.username || '')}</span><p>${escapeHtml(shared.content || '')}</p></div>` : '';
-  return `<article class="post" data-post-card="${escapeHtml(post.id)}">${repost ? '<small class="reposted-label">↻ Reposted</small>' : ''}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(post.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${sharedMarkup}${gif}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(post.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(post.id)}">Repost</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(post.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(post.id)}" class="${likes.includes(currentUserId) ? 'liked' : ''}">${postActionIcon('like', likes.includes(currentUserId))}<span>${likes.length || ''}</span></button><button type="button" data-bookmark-post="${escapeHtml(post.id)}">${postActionIcon('bookmark')}</button><button type="button" data-engage="share" data-post-id="${escapeHtml(post.id)}">${postActionIcon('share')}</button></div></article>`;
+  return `<article class="post" data-post-card="${escapeHtml(post.id)}">${repost ? '<small class="reposted-label">↻ Reposted</small>' : ''}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(post.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${sharedMarkup}${gif}${image}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(post.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(post.id)}">Repost</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(post.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(post.id)}" class="${likes.includes(currentUserId) ? 'liked' : ''}">${postActionIcon('like', likes.includes(currentUserId))}<span>${likes.length || ''}</span></button><button type="button" data-bookmark-post="${escapeHtml(post.id)}">${postActionIcon('bookmark')}</button><button type="button" data-engage="share" data-post-id="${escapeHtml(post.id)}">${postActionIcon('share')}</button></div></article>`;
 }
 
 function safeGifUrl(value) {
   try { return /^https:\/\/(?:media|i)\.giphy\.com\//.test(new URL(String(value)).href); } catch { return false; }
+}
+
+function safeImageUrl(value) {
+  return /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(String(value || ''));
 }
 
 function renderTrending() {
@@ -547,7 +555,7 @@ async function loadSession() {
   await loadPreferences();
 }
 
-content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; postButton.disabled = !content.value.trim(); updateComposerHighlight(); });
+content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; postButton.disabled = !content.value.trim() && !selectedGif && !selectedImage; updateComposerHighlight(); });
 search?.addEventListener('input', () => { showView('home'); renderPosts(); });
 document.querySelectorAll('[data-preference]').forEach((input) => input.addEventListener('change', async () => {
   const original = !input.checked;
@@ -602,8 +610,8 @@ document.addEventListener('click', (event) => {
   const topic = event.target.closest('[data-topic]');
   if (topic) { event.preventDefault(); showView('home'); search.value = topic.dataset.topic; renderPosts(); return; }
   const gifChoice = event.target.closest('[data-gif-url]');
-  if (gifChoice) { selectedGif = { url: gifChoice.dataset.gifUrl, title: gifChoice.dataset.gifTitle || 'GIF' }; gifPreview.hidden = false; gifPreview.innerHTML = `<img src="${escapeHtml(selectedGif.url)}" alt="${escapeHtml(selectedGif.title)}" /><button type="button" data-remove-gif>Remove</button>`; composer?.classList.add('composer-expanded'); gifModal.hidden = true; return; }
-  if (event.target.closest('[data-remove-gif]')) { selectedGif = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder?.hidden) composer?.classList.remove('composer-expanded'); return; }
+  if (gifChoice) { selectedGif = { url: gifChoice.dataset.gifUrl, title: gifChoice.dataset.gifTitle || 'GIF' }; selectedImage = null; gifPreview.hidden = false; gifPreview.innerHTML = `<img src="${escapeHtml(selectedGif.url)}" alt="${escapeHtml(selectedGif.title)}" /><button type="button" data-remove-media>Remove</button>`; composer?.classList.add('composer-expanded'); gifModal.hidden = true; postButton.disabled = false; return; }
+  if (event.target.closest('[data-remove-media]')) { selectedGif = null; selectedImage = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder?.hidden) composer?.classList.remove('composer-expanded'); postButton.disabled = !content?.value.trim(); return; }
   const mention = event.target.closest('[data-mention-user]');
   if (mention) { insertAtCursor(`@${mention.dataset.mentionUser} `); mentionModal.hidden = true; return; }
   if (event.target.closest('[data-refresh-staff]')) { void loadModeration(); return; }
@@ -696,7 +704,7 @@ function insertAtCursor(value) {
   content.value = `${content.value.slice(0, start)}${value}${content.value.slice(end)}`.slice(0, 500);
   content.focus(); content.selectionStart = content.selectionEnd = Math.min(start + value.length, 500);
   count.textContent = `${content.value.length} / 500`;
-  postButton.disabled = !content.value.trim();
+  postButton.disabled = !content.value.trim() && !selectedGif && !selectedImage;
   updateComposerHighlight();
 }
 
@@ -735,6 +743,28 @@ async function loadGifs(query = '') {
 }
 
 gifButton?.addEventListener('click', () => { gifModal.hidden = false; gifQuery?.focus(); void loadGifs(); });
+imageButton?.addEventListener('click', () => imageUpload?.click());
+imageUpload?.addEventListener('change', () => {
+  const file = imageUpload.files?.[0];
+  if (!file) return;
+  if (!/^image\/(?:png|jpeg|webp|gif)$/.test(file.type) || file.size > 1_500_000) {
+    postMessage.textContent = 'Choose a PNG, JPG, WebP, or GIF image smaller than 1.5 MB.';
+    imageUpload.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    selectedImage = { dataUrl: String(reader.result || '') };
+    selectedGif = null;
+    gifPreview.hidden = false;
+    gifPreview.innerHTML = `<img src="${escapeHtml(selectedImage.dataUrl)}" alt="Selected image" /><button type="button" data-remove-media>Remove</button>`;
+    composer?.classList.add('composer-expanded');
+    postButton.disabled = false;
+    postMessage.textContent = '';
+  };
+  reader.readAsDataURL(file);
+  imageUpload.value = '';
+});
 document.querySelector('[data-close-gif]')?.addEventListener('click', () => { gifModal.hidden = true; });
 gifSearch?.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -832,15 +862,15 @@ postButton?.addEventListener('click', async () => {
   postButton.disabled = true;
   postMessage.textContent = 'Posting...';
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, poll }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, image: selectedImage, poll }) });
     const result = await readApiJson(response, 'Posting is unavailable because the website service is not connected.');
     if (!response.ok) throw new Error(result.error);
-    content.value = ''; count.textContent = '0 / 500'; postButton.disabled = true; updateComposerHighlight(); selectedGif = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
+    content.value = ''; count.textContent = '0 / 500'; postButton.disabled = true; updateComposerHighlight(); selectedGif = null; selectedImage = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
   } catch (error) {
     const message = error.message || 'Could not post.';
     postMessage.textContent = message;
     if (/banned/i.test(message)) showBan({ reason: 'This account is banned from Clearwater Internet.', until: null });
-  } finally { postButton.disabled = !content.value.trim(); }
+  } finally { postButton.disabled = !content.value.trim() && !selectedGif && !selectedImage; }
 });
 
 admin?.querySelectorAll('button').forEach((button) => button.addEventListener('click', async () => {

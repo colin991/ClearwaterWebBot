@@ -24,7 +24,7 @@ const readJson = async (request) => {
   let raw = '';
   for await (const chunk of request) {
     raw += chunk;
-    if (raw.length > 4096) throw new Error('Request body too large');
+    if (raw.length > 2_100_000) throw new Error('Request body too large');
   }
   return raw ? JSON.parse(raw) : {};
 };
@@ -131,7 +131,7 @@ export function startStatusServer(client, config) {
         const body = await readJson(request);
         if (body.action === 'post') {
           const user = upsertInternetUser(store, body.actor);
-          const post = createInternetPost(store, user, body.content, { gif: body.gif, poll: body.poll });
+          const post = createInternetPost(store, user, body.content, { gif: body.gif, image: body.image, poll: body.poll });
           await saveInternetStore(store);
           return json(response, 201, { post });
         }

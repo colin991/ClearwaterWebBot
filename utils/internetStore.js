@@ -103,11 +103,14 @@ export function createInternetPost(store, user, content, media = {}) {
   const gifUrl = text(media?.gif?.url, 500);
   const gifTitle = text(media?.gif?.title, 120);
   const isGif = /^https:\/\/(?:media|i)\.giphy\.com\//.test(gifUrl);
+  const imageUrl = text(media?.image?.dataUrl, 2_100_000);
+  const isImage = /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(imageUrl);
   const question = text(media?.poll?.question, 180);
   const options = Array.isArray(media?.poll?.options) ? media.poll.options.map((option) => text(option, 80)).filter(Boolean).slice(0, 4) : [];
   const pollDays = Math.min(30, Math.max(1, Number(media?.poll?.durationDays) || 1));
-  if (!body && !isGif && !question) throw new Error('Write something, add a GIF, or create a poll before posting');
+  if (!body && !isGif && !isImage && !question) throw new Error('Write something, add an image or GIF, or create a poll before posting');
   if (gifUrl && !isGif) throw new Error('Only GIFs selected from Clearwater Internet can be posted');
+  if (imageUrl && !isImage) throw new Error('Choose a supported image before posting');
   if ((question && options.length < 2) || (!question && options.length)) throw new Error('A poll needs a question and at least two options');
   if (getActiveBan(user)) throw new Error('This account is banned from Clearwater Internet');
   const cooldownRemaining = 60_000 - (Date.now() - new Date(user.lastPostAt || 0).getTime());
@@ -134,6 +137,7 @@ export function createInternetPost(store, user, content, media = {}) {
     parentId: text(media?.parentId, 80) || null,
     quoteId: text(media?.quoteId, 80) || null,
     ...(isGif ? { gifUrl, gifTitle } : {}),
+    ...(isImage ? { imageUrl } : {}),
     ...(question ? { poll: { question, options, votes: {}, endsAt: new Date(Date.now() + (pollDays * 24 * 60 * 60 * 1000)).toISOString() } } : {}),
     createdAt: new Date().toISOString(),
   };

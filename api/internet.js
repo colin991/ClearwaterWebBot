@@ -7,7 +7,7 @@ async function readBody(request) {
   let raw = '';
   for await (const chunk of request) {
     raw += chunk;
-    if (raw.length > 4096) throw new Error('Request body too large');
+    if (raw.length > 2_100_000) throw new Error('Request body too large');
   }
   return raw ? JSON.parse(raw) : {};
 }
@@ -67,7 +67,8 @@ export default async function handler(request, response) {
         action: 'post',
         content: String(body.content || '').slice(0, 500),
         gif: body.gif && typeof body.gif === 'object' ? { url: String(body.gif.url || '').slice(0, 500), title: String(body.gif.title || '').slice(0, 120) } : null,
-        poll: body.poll && typeof body.poll === 'object' ? { question: String(body.poll.question || '').slice(0, 180), options: Array.isArray(body.poll.options) ? body.poll.options.map((option) => String(option).slice(0, 80)).slice(0, 4) : [] } : null,
+        image: body.image && typeof body.image === 'object' ? { dataUrl: String(body.image.dataUrl || '').slice(0, 2_100_000) } : null,
+        poll: body.poll && typeof body.poll === 'object' ? { question: String(body.poll.question || '').slice(0, 180), options: Array.isArray(body.poll.options) ? body.poll.options.map((option) => String(option).slice(0, 80)).slice(0, 4) : [], durationDays: Math.min(30, Math.max(1, Number(body.poll.durationDays) || 1)) } : null,
         actor: {
           id: user.id,
           username: user.username,
