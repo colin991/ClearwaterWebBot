@@ -69,7 +69,7 @@ const postDetail = document.querySelector('[data-post-detail]');
 const postModal = document.querySelector('[data-post-modal]');
 const postModalForm = document.querySelector('[data-post-modal-form]');
 const shareModal = document.querySelector('[data-share-modal]');
-const INTERNET_VERSION = '20260808-trending-gifs-1';
+const INTERNET_VERSION = '20260808-staff-link-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -210,7 +210,8 @@ function renderBookmarks() {
 
 function showView(view) {
   const availableViews = new Set(['home', 'notifications', 'messages', 'bookmarks', 'profile', 'settings', 'staff', 'post']);
-  const activeView = availableViews.has(view) ? view : 'home';
+  let activeView = availableViews.has(view) ? view : 'home';
+  if (activeView === 'staff' && !sessionIsOwner) activeView = 'home';
   document.querySelector('.internet-shell')?.classList.toggle('staff-mode', activeView === 'staff');
   document.querySelectorAll('[data-view]').forEach((section) => { section.hidden = section.dataset.view !== activeView; });
   document.querySelectorAll('[data-view-link]').forEach((link) => link.classList.toggle('selected', link.dataset.viewLink === activeView));
