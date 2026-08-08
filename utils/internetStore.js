@@ -98,15 +98,22 @@ export function upsertInternetUser(store, user) {
   return store.users[id];
 }
 
-export function createInternetPost(store, user, content) {
+export function createInternetPost(store, user, content, media = {}) {
   const body = text(content, 500);
-  if (!body) throw new Error('Write something before posting');
+  const gifUrl = text(media?.gif?.url, 500);
+  const gifTitle = text(media?.gif?.title, 120);
+  const isGif = /^https:\/\/(?:media|i)\.giphy\.com\//.test(gifUrl);
+  const question = text(media?.poll?.question, 180);
+  const options = Array.isArray(media?.poll?.options) ? media.poll.options.map((option) => text(option, 80)).filter(Boolean).slice(0, 4) : [];
+  if (!body && !isGif && !question) throw new Error('Write something, add a GIF, or create a poll before posting');
+  if (gifUrl && !isGif) throw new Error('Only GIFs selected from Clearwater Internet can be posted');
+  if ((question && options.length < 2) || (!question && options.length)) throw new Error('A poll needs a question and at least two options');
   if (getActiveBan(user)) throw new Error('This account is banned from Clearwater Internet');
   const cooldownRemaining = 60_000 - (Date.now() - new Date(user.lastPostAt || 0).getTime());
   if (cooldownRemaining > 0) throw new Error(`Please wait ${Math.ceil(cooldownRemaining / 1000)} seconds before posting again`);
   const normalized = body.toLowerCase().replace(/\s+/g, ' ').trim();
   const duplicateCooldown = 5 * 60 * 1000;
-  if (store.posts.some((post) => post.authorId === user.id
+  if (body && store.posts.some((post) => post.authorId === user.id
     && post.content.toLowerCase().replace(/\s+/g, ' ').trim() === normalized
     && Date.now() - new Date(post.createdAt).getTime() < duplicateCooldown)) {
     throw new Error('You can post the same message again after 5 minutes');
@@ -123,6 +130,8 @@ export function createInternetPost(store, user, content) {
     staffRank: user.staffRank,
     verified: user.verified === true,
     content: body,
+    ...(isGif ? { gifUrl, gifTitle } : {}),
+    ...(question ? { poll: { question, options } } : {}),
     createdAt: new Date().toISOString(),
   };
   store.posts.unshift(post);

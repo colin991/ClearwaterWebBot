@@ -66,6 +66,8 @@ export default async function handler(request, response) {
       payload = {
         action: 'post',
         content: String(body.content || '').slice(0, 500),
+        gif: body.gif && typeof body.gif === 'object' ? { url: String(body.gif.url || '').slice(0, 500), title: String(body.gif.title || '').slice(0, 120) } : null,
+        poll: body.poll && typeof body.poll === 'object' ? { question: String(body.poll.question || '').slice(0, 180), options: Array.isArray(body.poll.options) ? body.poll.options.map((option) => String(option).slice(0, 80)).slice(0, 4) : [] } : null,
         actor: {
           id: user.id,
           username: user.username,

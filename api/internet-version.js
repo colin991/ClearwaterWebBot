@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260807-live-profiles-1';
+const INTERNET_VERSION = '20260808-composer-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {

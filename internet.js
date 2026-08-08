@@ -42,7 +42,22 @@ const moderationReason = document.querySelector('[data-moderation-reason]');
 const moderationDurationWrap = document.querySelector('[data-moderation-duration-wrap]');
 const moderationDuration = document.querySelector('[data-moderation-duration]');
 const moderationError = document.querySelector('[data-moderation-error]');
-const INTERNET_VERSION = '20260807-live-profiles-1';
+const gifButton = document.querySelector('[data-gif-button]');
+const emojiButton = document.querySelector('[data-emoji-button]');
+const mentionButton = document.querySelector('[data-mention-button]');
+const pollButton = document.querySelector('[data-poll-button]');
+const pollBuilder = document.querySelector('[data-poll-builder]');
+const gifPreview = document.querySelector('[data-gif-preview]');
+const gifModal = document.querySelector('[data-gif-modal]');
+const gifSearch = document.querySelector('[data-gif-search]');
+const gifQuery = document.querySelector('[data-gif-query]');
+const gifResults = document.querySelector('[data-gif-results]');
+const gifMessage = document.querySelector('[data-gif-message]');
+const mentionModal = document.querySelector('[data-mention-modal]');
+const mentionQuery = document.querySelector('[data-mention-query]');
+const mentionResults = document.querySelector('[data-mention-results]');
+const trendingList = document.querySelector('[data-trending-list]');
+const INTERNET_VERSION = '20260808-composer-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -51,6 +66,7 @@ let accountBanned = false;
 let activeBan = null;
 let sessionIsOwner = false;
 let pendingReportReview = null;
+let selectedGif = null;
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const timeAgo = (value) => {
@@ -99,7 +115,25 @@ function postMarkup(post, profile = false) {
   const username = author?.username || post.username;
   const avatarUrl = author?.avatarUrl || post.avatarUrl || 'assets/clearwater-logo.png';
   const staffRank = author?.staffRank || null;
-  return `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<div class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</div></div>${postMenu(post)}</div><p class="post-content">${escapeHtml(post.content)}</p></article>`;
+  const body = escapeHtml(post.content).replace(/(^|\s)(#[a-z0-9_]{1,60})/gi, '$1<a href="#home" class="post-hashtag" data-topic="$2">$2</a>');
+  const gif = safeGifUrl(post.gifUrl) ? `<img class="post-gif" src="${escapeHtml(post.gifUrl)}" alt="${escapeHtml(post.gifTitle || 'GIF')}" />` : '';
+  const poll = post.poll?.question && Array.isArray(post.poll.options) ? `<section class="post-poll"><b>${escapeHtml(post.poll.question)}</b>${post.poll.options.map((option) => `<button type="button">${escapeHtml(option)} <span>0%</span></button>`).join('')}</section>` : '';
+  return `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<div class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</div></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${gif}${poll}</article>`;
+}
+
+function safeGifUrl(value) {
+  try { return /^https:\/\/(?:media|i)\.giphy\.com\//.test(new URL(String(value)).href); } catch { return false; }
+}
+
+function renderTrending() {
+  if (!trendingList) return;
+  const counts = new Map();
+  allPosts.forEach((post) => String(post.content || '').match(/#[a-z0-9_]{1,60}/gi)?.forEach((tag) => {
+    const key = tag.toLowerCase(); counts.set(key, (counts.get(key) || 0) + 1);
+  }));
+  const tags = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  if (!tags.length) return;
+  trendingList.innerHTML = tags.map(([tag, amount]) => `<a href="#home" data-topic="${escapeHtml(tag)}">${escapeHtml(tag)} <span>${amount} post${amount === 1 ? '' : 's'}</span></a>`).join('');
 }
 
 function showPosts(posts) {
@@ -113,6 +147,7 @@ function renderPosts() {
   const posts = query ? allPosts.filter((post) => `${post.displayName} ${post.username} ${post.content}`.toLowerCase().includes(query)) : allPosts;
   showPosts(posts);
   renderProfilePosts();
+  renderTrending();
 }
 
 function renderProfilePosts() {
@@ -339,7 +374,6 @@ async function loadSession() {
 content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; });
 search?.addEventListener('input', () => { showView('home'); renderPosts(); });
 document.querySelectorAll('[data-view-link]').forEach((link) => link.addEventListener('click', () => showView(link.dataset.viewLink)));
-document.querySelectorAll('[data-topic]').forEach((link) => link.addEventListener('click', () => { showView('home'); search.value = link.dataset.topic; renderPosts(); }));
 document.querySelector('[data-compose-link]')?.addEventListener('click', () => { showView('home'); content?.focus(); });
 document.querySelectorAll('[data-profile-tab]').forEach((button) => button.addEventListener('click', () => {
   document.querySelectorAll('[data-profile-tab]').forEach((tab) => tab.classList.toggle('selected', tab === button));
@@ -347,6 +381,13 @@ document.querySelectorAll('[data-profile-tab]').forEach((button) => button.addEv
   if (profileList) profileList.innerHTML = `<p>${button.textContent} will appear here when community interactions are enabled.</p>`;
 }));
 document.addEventListener('click', (event) => {
+  const topic = event.target.closest('[data-topic]');
+  if (topic) { event.preventDefault(); showView('home'); search.value = topic.dataset.topic; renderPosts(); return; }
+  const gifChoice = event.target.closest('[data-gif-url]');
+  if (gifChoice) { selectedGif = { url: gifChoice.dataset.gifUrl, title: gifChoice.dataset.gifTitle || 'GIF' }; gifPreview.hidden = false; gifPreview.innerHTML = `<img src="${escapeHtml(selectedGif.url)}" alt="${escapeHtml(selectedGif.title)}" /><button type="button" data-remove-gif aria-label="Remove GIF">×</button>`; gifModal.hidden = true; return; }
+  if (event.target.closest('[data-remove-gif]')) { selectedGif = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; return; }
+  const mention = event.target.closest('[data-mention-user]');
+  if (mention) { insertAtCursor(`@${mention.dataset.mentionUser} `); mentionModal.hidden = true; return; }
   if (event.target.closest('[data-refresh-staff]')) { void loadModeration(); return; }
   const reviewButton = event.target.closest('[data-report-review]');
   if (reviewButton) { void reviewReport(reviewButton); return; }
@@ -354,6 +395,47 @@ document.addEventListener('click', (event) => {
   if (!button) return;
   const postId = button.parentElement?.dataset.postId;
   if (postId) void runPostAction(button.dataset.postAction, postId);
+});
+function insertAtCursor(value) {
+  if (!content) return;
+  const start = content.selectionStart || content.value.length;
+  const end = content.selectionEnd || start;
+  content.value = `${content.value.slice(0, start)}${value}${content.value.slice(end)}`.slice(0, 500);
+  content.focus(); content.selectionStart = content.selectionEnd = Math.min(start + value.length, 500);
+  count.textContent = `${content.value.length} / 500`;
+}
+
+function renderMentionResults() {
+  if (!mentionResults) return;
+  const query = String(mentionQuery?.value || '').trim().toLowerCase();
+  const users = [...internetUsers.values()].filter((user) => `${user.displayName} ${user.username}`.toLowerCase().includes(query)).slice(0, 8);
+  mentionResults.innerHTML = users.length ? users.map((user) => `<button type="button" data-mention-user="${escapeHtml(user.username)}"><img src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(user.displayName)}</b><small>@${escapeHtml(user.username)}</small></span></button>`).join('') : '<p>No members found.</p>';
+}
+
+gifButton?.addEventListener('click', () => { gifModal.hidden = false; gifQuery?.focus(); });
+document.querySelector('[data-close-gif]')?.addEventListener('click', () => { gifModal.hidden = true; });
+gifSearch?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const query = gifQuery?.value.trim(); if (!query) return;
+  gifMessage.textContent = 'Searching GIFs...'; gifResults.innerHTML = '';
+  try {
+    const response = await fetch(`/api/giphy?q=${encodeURIComponent(query)}`);
+    const result = await readApiJson(response, 'GIF search is unavailable.');
+    if (!response.ok) throw new Error(result.error || 'GIF search is unavailable.');
+    gifMessage.textContent = result.gifs?.length ? 'Choose a GIF.' : 'No GIFs found.';
+    gifResults.innerHTML = (result.gifs || []).map((gif) => `<button type="button" data-gif-url="${escapeHtml(gif.url)}" data-gif-title="${escapeHtml(gif.title)}"><img src="${escapeHtml(gif.previewUrl)}" alt="${escapeHtml(gif.title)}" /></button>`).join('');
+  } catch (error) { gifMessage.textContent = error.message || 'GIF search is unavailable.'; }
+});
+mentionButton?.addEventListener('click', () => { mentionModal.hidden = false; renderMentionResults(); mentionQuery?.focus(); });
+document.querySelector('[data-close-mention]')?.addEventListener('click', () => { mentionModal.hidden = true; });
+mentionQuery?.addEventListener('input', renderMentionResults);
+emojiButton?.addEventListener('click', () => insertAtCursor('🙂'));
+pollButton?.addEventListener('click', () => { pollBuilder.hidden = !pollBuilder.hidden; });
+document.querySelector('[data-add-poll-option]')?.addEventListener('click', () => {
+  const options = pollBuilder?.querySelectorAll('[data-poll-option]') || [];
+  if (options.length >= 4) return;
+  const input = document.createElement('input'); input.dataset.pollOption = ''; input.maxLength = 80; input.placeholder = `Option ${options.length + 1}`;
+  document.querySelector('[data-add-poll-option]')?.before(input);
 });
 document.querySelector('[data-close-warning]')?.addEventListener('click', () => { warningNotice.hidden = true; });
 document.querySelector('[data-close-moderation]')?.addEventListener('click', () => { moderationModal.hidden = true; pendingReportReview = null; });
@@ -370,13 +452,16 @@ moderationForm?.addEventListener('submit', async (event) => {
 });
 
 postButton?.addEventListener('click', async () => {
+  const pollOptions = [...document.querySelectorAll('[data-poll-option]')].map((input) => input.value.trim()).filter(Boolean);
+  const pollQuestion = document.querySelector('[data-poll-question]')?.value.trim() || '';
+  const poll = pollQuestion || pollOptions.length ? { question: pollQuestion, options: pollOptions } : null;
   postButton.disabled = true;
   postMessage.textContent = 'Posting...';
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, poll }) });
     const result = await readApiJson(response, 'Posting is unavailable because the website service is not connected.');
     if (!response.ok) throw new Error(result.error);
-    content.value = ''; count.textContent = '0 / 500'; postMessage.textContent = 'Posted.'; await loadPosts();
+    content.value = ''; count.textContent = '0 / 500'; selectedGif = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder) { pollBuilder.hidden = true; pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
   } catch (error) {
     const message = error.message || 'Could not post.';
     postMessage.textContent = message;

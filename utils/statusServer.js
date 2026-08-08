@@ -131,7 +131,7 @@ export function startStatusServer(client, config) {
         const body = await readJson(request);
         if (body.action === 'post') {
           const user = upsertInternetUser(store, body.actor);
-          const post = createInternetPost(store, user, body.content);
+          const post = createInternetPost(store, user, body.content, { gif: body.gif, poll: body.poll });
           await saveInternetStore(store);
           return json(response, 201, { post });
         }
