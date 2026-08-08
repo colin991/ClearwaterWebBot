@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-aligned-tools-1';
+const INTERNET_VERSION = '20260808-tight-composer-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {
