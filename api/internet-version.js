@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-post-actions-1';
+const INTERNET_VERSION = '20260808-open-feed-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {
