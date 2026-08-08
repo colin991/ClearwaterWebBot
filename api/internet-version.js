@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-selected-account-identity-1';
+const INTERNET_VERSION = '20260808-mobile-layout-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {
