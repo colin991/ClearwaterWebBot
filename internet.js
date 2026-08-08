@@ -61,7 +61,10 @@ const bookmarkList = document.querySelector('[data-bookmark-list]');
 const profileModal = document.querySelector('[data-profile-modal]');
 const messageModal = document.querySelector('[data-message-modal]');
 const messageForm = document.querySelector('[data-message-form]');
-const INTERNET_VERSION = '20260808-mentions-1';
+const postModal = document.querySelector('[data-post-modal]');
+const postModalForm = document.querySelector('[data-post-modal-form]');
+const shareModal = document.querySelector('[data-share-modal]');
+const INTERNET_VERSION = '20260808-post-actions-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -73,6 +76,7 @@ let pendingReportReview = null;
 let selectedGif = null;
 let socialState = { following: [], blocked: [], muted: [], bookmarks: [] };
 let viewedMember = null;
+let pendingPostAction = null;
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const timeAgo = (value) => {
@@ -126,7 +130,13 @@ function postMarkup(post, profile = false) {
     .replace(/(^|\s)(@[a-z0-9_]{1,80})/gi, '$1<span class="post-mention">$2</span>');
   const gif = safeGifUrl(post.gifUrl) ? `<img class="post-gif" src="${escapeHtml(post.gifUrl)}" alt="${escapeHtml(post.gifTitle || 'GIF')}" />` : '';
   const poll = post.poll?.question && Array.isArray(post.poll.options) ? `<section class="post-poll"><b>${escapeHtml(post.poll.question)}</b>${post.poll.options.map((option) => `<button type="button">${escapeHtml(option)} <span>0%</span></button>`).join('')}</section>` : '';
-  return `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(post.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${gif}${poll}<div class="post-actions"><button type="button" data-bookmark-post="${escapeHtml(post.id)}">${socialState.bookmarks.includes(post.id) ? 'Saved' : 'Bookmark'}</button></div></article>`;
+  const replies = allPosts.filter((item) => item.parentId === post.id).length;
+  const likes = Array.isArray(post.likes) ? post.likes : [];
+  const quote = post.quoteId ? allPosts.find((item) => item.id === post.quoteId) : null;
+  const repost = post.repostOf ? allPosts.find((item) => item.id === post.repostOf) : null;
+  const shared = quote || repost;
+  const sharedMarkup = shared ? `<div class="post-embed"><b>${escapeHtml(shared.displayName || 'Member')}</b> <span>@${escapeHtml(shared.username || '')}</span><p>${escapeHtml(shared.content || '')}</p></div>` : '';
+  return `<article class="post" data-post-card="${escapeHtml(post.id)}">${repost ? '<small class="reposted-label">↻ Reposted</small>' : ''}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(post.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${sharedMarkup}${gif}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(post.id)}">♡ <span>${replies || ''}</span></button><button type="button" data-engage="repost" data-post-id="${escapeHtml(post.id)}">↻</button><button type="button" data-engage="like" data-post-id="${escapeHtml(post.id)}" class="${likes.includes(currentUserId) ? 'liked' : ''}">♥ <span>${likes.length || ''}</span></button><button type="button" data-bookmark-post="${escapeHtml(post.id)}">⌑</button><button type="button" data-engage="share" data-post-id="${escapeHtml(post.id)}">⇧</button></div></article>`;
 }
 
 function safeGifUrl(value) {
@@ -152,7 +162,7 @@ function showPosts(posts) {
 
 function renderPosts() {
   const query = String(search?.value || '').trim().toLowerCase();
-  const visible = allPosts.filter((post) => !socialState.blocked.includes(post.authorId));
+  const visible = allPosts.filter((post) => !post.parentId && !socialState.blocked.includes(post.authorId));
   const posts = query ? visible.filter((post) => `${post.displayName} ${post.username} ${post.content}`.toLowerCase().includes(query)) : visible;
   showPosts(posts);
   renderProfilePosts();
@@ -427,6 +437,8 @@ document.querySelectorAll('[data-profile-tab]').forEach((button) => button.addEv
   if (profileList) profileList.innerHTML = `<p>${button.textContent} will appear here when community interactions are enabled.</p>`;
 }));
 document.addEventListener('click', (event) => {
+  const engage = event.target.closest('[data-engage]');
+  if (engage) { void handlePostEngagement(engage.dataset.engage, engage.dataset.postId); return; }
   const authorButton = event.target.closest('[data-open-member]');
   if (authorButton) { openMemberProfile(authorButton.dataset.openMember); return; }
   const bookmark = event.target.closest('[data-bookmark-post]');
@@ -446,6 +458,27 @@ document.addEventListener('click', (event) => {
   const postId = button.parentElement?.dataset.postId;
   if (postId) void runPostAction(button.dataset.postAction, postId);
 });
+
+async function handlePostEngagement(type, postId) {
+  const post = allPosts.find((item) => item.id === postId); if (!post) return;
+  if (type === 'share') { pendingPostAction = { postId, type }; shareModal.hidden = false; return; }
+  if (type === 'reply' || type === 'repost') {
+    pendingPostAction = { postId, type, quote: false };
+    document.querySelector('[data-post-modal-title]').textContent = type === 'reply' ? 'Reply' : 'Repost';
+    document.querySelector('[data-post-modal-content]').placeholder = type === 'reply' ? 'Post your reply' : 'Add a comment, or repost now';
+    document.querySelector('[data-quoted-post]').hidden = true;
+    document.querySelector('[data-quote-post]').hidden = type !== 'repost';
+    postModal.hidden = false; return;
+  }
+  try { await postInteraction({ postId, type }); } catch (error) { window.alert(error.message); }
+}
+
+async function postInteraction({ postId, type, content = '', quote = false }) {
+  const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post-interaction', postId, type, content, quote }) });
+  const result = await readApiJson(response, 'Could not update this post.');
+  if (!response.ok) throw new Error(result.error || 'Could not update this post.');
+  await loadPosts();
+}
 function insertAtCursor(value) {
   if (!content) return;
   const start = content.selectionStart || content.value.length;
@@ -500,6 +533,26 @@ document.querySelector('[data-report-member]')?.addEventListener('click', () => 
 document.querySelector('[data-new-message]')?.addEventListener('click', () => { messageModal.hidden = false; });
 document.querySelector('[data-message-member]')?.addEventListener('click', () => { if (!viewedMember) return; document.querySelector('[data-message-to]').value = viewedMember.username; profileModal.hidden = true; messageModal.hidden = false; });
 document.querySelector('[data-close-message]')?.addEventListener('click', () => { messageModal.hidden = true; });
+document.querySelector('[data-close-post-modal]')?.addEventListener('click', () => { postModal.hidden = true; pendingPostAction = null; });
+document.querySelector('[data-quote-post]')?.addEventListener('click', () => {
+  if (!pendingPostAction) return;
+  pendingPostAction.quote = true;
+  document.querySelector('[data-post-modal-title]').textContent = 'Quote post';
+  document.querySelector('[data-quote-post]').hidden = true;
+  document.querySelector('[data-post-modal-content]').placeholder = 'What is happening?';
+});
+postModalForm?.addEventListener('submit', async (event) => {
+  event.preventDefault(); if (!pendingPostAction) return;
+  const error = document.querySelector('[data-post-modal-error]'); error.textContent = '';
+  const text = document.querySelector('[data-post-modal-content]').value;
+  try { await postInteraction({ ...pendingPostAction, content: text }); postModal.hidden = true; postModalForm.reset(); pendingPostAction = null; } catch (exception) { error.textContent = exception.message || 'Could not post.'; }
+});
+document.querySelector('[data-close-share]')?.addEventListener('click', () => { shareModal.hidden = true; pendingPostAction = null; });
+document.querySelector('[data-copy-post-link]')?.addEventListener('click', async () => {
+  if (!pendingPostAction) return;
+  try { await navigator.clipboard.writeText(`${location.origin}/internet.html#post-${pendingPostAction.postId}`); shareModal.hidden = true; window.alert('Post link copied.'); } catch { window.alert('Could not copy the link.'); }
+});
+document.querySelector('[data-share-to-friend]')?.addEventListener('click', () => { shareModal.hidden = true; showView('messages'); window.alert('Choose a friend and paste the post link into your message.'); });
 messageForm?.addEventListener('submit', async (event) => {
   event.preventDefault(); const destination = [...internetUsers.values()].find((user) => user.username.toLowerCase() === document.querySelector('[data-message-to]').value.trim().replace(/^@/, '').toLowerCase());
   const error = document.querySelector('[data-message-error]'); error.textContent = '';

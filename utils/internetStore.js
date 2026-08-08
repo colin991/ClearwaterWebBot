@@ -130,6 +130,8 @@ export function createInternetPost(store, user, content, media = {}) {
     staffRank: user.staffRank,
     verified: user.verified === true,
     content: body,
+    parentId: text(media?.parentId, 80) || null,
+    quoteId: text(media?.quoteId, 80) || null,
     ...(isGif ? { gifUrl, gifTitle } : {}),
     ...(question ? { poll: { question, options } } : {}),
     createdAt: new Date().toISOString(),
@@ -138,6 +140,34 @@ export function createInternetPost(store, user, content, media = {}) {
   store.posts = store.posts.slice(0, 500);
   user.lastPostAt = post.createdAt;
   return post;
+}
+
+export function interactInternetPost(store, { actor, postId, type, content = '', quote = false }) {
+  const user = upsertInternetUser(store, actor);
+  const post = store.posts.find((item) => item.id === String(postId || ''));
+  if (!post) throw new Error('Post not found');
+  if (type === 'like') {
+    post.likes = Array.isArray(post.likes) ? post.likes : [];
+    const liked = post.likes.includes(user.id);
+    post.likes = liked ? post.likes.filter((id) => id !== user.id) : [...post.likes, user.id];
+    return { post, liked: !liked };
+  }
+  if (type === 'reply') {
+    const reply = createInternetPost(store, user, content, { parentId: post.id });
+    return { post: reply };
+  }
+  if (type === 'repost') {
+    if (store.posts.some((item) => item.authorId === user.id && item.repostOf === post.id)) throw new Error('You already reposted this post');
+    if (!String(content || '').trim() && !quote) {
+      const repost = { id: randomUUID(), authorId: user.id, displayName: user.displayName, username: user.username, avatarUrl: user.avatarUrl, staffRank: user.staffRank, verified: user.verified === true, content: '', repostOf: post.id, parentId: null, createdAt: new Date().toISOString() };
+      store.posts.unshift(repost); store.posts = store.posts.slice(0, 500); user.lastPostAt = repost.createdAt;
+      return { post: repost };
+    }
+    const repost = createInternetPost(store, user, content, quote ? { quoteId: post.id } : {});
+    repost.repostOf = quote ? null : post.id;
+    return { post: repost };
+  }
+  throw new Error('Unsupported post action');
 }
 
 export function editInternetPost(store, { postId, actorId, content, owner = false }) {
