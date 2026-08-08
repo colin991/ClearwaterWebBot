@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-expanded-composer-1';
+const INTERNET_VERSION = '20260808-clean-composer-icons-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {
