@@ -73,7 +73,7 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-composer-hit-areas-1';
+const INTERNET_VERSION = '20260808-dismiss-composer-panels-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -694,6 +694,9 @@ mentionQuery?.addEventListener('input', renderMentionResults);
 emojiButton?.addEventListener('click', () => { emojiModal.hidden = false; renderEmojiGrid(); emojiQuery?.focus(); });
 document.querySelector('[data-close-emoji]')?.addEventListener('click', () => { emojiModal.hidden = true; });
 emojiQuery?.addEventListener('input', renderEmojiGrid);
+[gifModal, emojiModal, mentionModal].forEach((modal) => modal?.addEventListener('click', (event) => {
+  if (event.target === modal) modal.hidden = true;
+}));
 pollButton?.addEventListener('click', () => { pollBuilder.hidden = !pollBuilder.hidden; composer?.classList.toggle('composer-expanded', !pollBuilder.hidden); });
 document.querySelector('[data-close-poll]')?.addEventListener('click', () => { if (!pollBuilder) return; pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); });
 document.querySelector('[data-add-poll-option]')?.addEventListener('click', () => {
