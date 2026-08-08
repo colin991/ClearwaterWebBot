@@ -69,7 +69,7 @@ const postDetail = document.querySelector('[data-post-detail]');
 const postModal = document.querySelector('[data-post-modal]');
 const postModalForm = document.querySelector('[data-post-modal-form]');
 const shareModal = document.querySelector('[data-share-modal]');
-const INTERNET_VERSION = '20260808-tight-composer-1';
+const INTERNET_VERSION = '20260808-nav-and-compact-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -209,13 +209,24 @@ function renderBookmarks() {
 }
 
 function showView(view) {
-  document.querySelector('.internet-shell')?.classList.toggle('staff-mode', view === 'staff');
-  document.querySelectorAll('[data-view]').forEach((section) => { section.hidden = section.dataset.view !== view; });
-  document.querySelectorAll('[data-view-link]').forEach((link) => link.classList.toggle('selected', link.dataset.viewLink === view));
-  if (view === 'home') renderPosts();
-  if (view === 'staff') void loadModeration();
-  if (view === 'messages') void loadMessages();
-  if (view === 'bookmarks') renderBookmarks();
+  const availableViews = new Set(['home', 'notifications', 'messages', 'bookmarks', 'profile', 'settings', 'staff', 'post']);
+  const activeView = availableViews.has(view) ? view : 'home';
+  document.querySelector('.internet-shell')?.classList.toggle('staff-mode', activeView === 'staff');
+  document.querySelectorAll('[data-view]').forEach((section) => { section.hidden = section.dataset.view !== activeView; });
+  document.querySelectorAll('[data-view-link]').forEach((link) => link.classList.toggle('selected', link.dataset.viewLink === activeView));
+  if (activeView === 'home') renderPosts();
+  if (activeView === 'staff') void loadModeration();
+  if (activeView === 'messages') void loadMessages();
+  if (activeView === 'bookmarks') renderBookmarks();
+}
+
+function showViewFromAddress() {
+  const linkedPostId = location.hash.startsWith('#post-') ? location.hash.slice(6) : null;
+  if (linkedPostId) {
+    showPostDetail(linkedPostId, false);
+    return;
+  }
+  showView(location.hash.slice(1) || 'home');
 }
 
 function showPostDetail(postId, updateHash = true) {
@@ -459,7 +470,12 @@ async function loadSession() {
 
 content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; postButton.disabled = !content.value.trim(); updateComposerHighlight(); });
 search?.addEventListener('input', () => { showView('home'); renderPosts(); });
-document.querySelectorAll('[data-view-link]').forEach((link) => link.addEventListener('click', () => showView(link.dataset.viewLink)));
+document.querySelectorAll('[data-view-link]').forEach((link) => link.addEventListener('click', (event) => {
+  event.preventDefault();
+  const view = link.dataset.viewLink || 'home';
+  if (location.hash === `#${view}`) showView(view);
+  else location.hash = view;
+}));
 document.querySelector('[data-compose-link]')?.addEventListener('click', () => { showView('home'); content?.focus(); });
 document.querySelectorAll('[data-profile-tab]').forEach((button) => button.addEventListener('click', () => {
   document.querySelectorAll('[data-profile-tab]').forEach((tab) => tab.classList.toggle('selected', tab === button));
@@ -493,10 +509,8 @@ document.addEventListener('click', (event) => {
   if (postId) void runPostAction(button.dataset.postAction, postId);
 });
 document.querySelector('[data-back-home]')?.addEventListener('click', () => { history.pushState({}, '', '#home'); openPostId = null; showView('home'); });
-window.addEventListener('popstate', () => {
-  const linkedPostId = location.hash.startsWith('#post-') ? location.hash.slice(6) : null;
-  if (linkedPostId) showPostDetail(linkedPostId, false); else showView('home');
-});
+window.addEventListener('popstate', showViewFromAddress);
+window.addEventListener('hashchange', showViewFromAddress);
 
 async function handlePostEngagement(type, postId) {
   const post = allPosts.find((item) => item.id === postId); if (!post) return;
@@ -660,7 +674,7 @@ admin?.querySelectorAll('button').forEach((button) => button.addEventListener('c
   } catch (error) { adminMessage.textContent = error.message || 'Could not save.'; }
 }));
 
-showView(location.hash.slice(1) || 'home');
+showViewFromAddress();
 loadSession().catch(() => {});
 loadPosts();
 window.setInterval(() => {
