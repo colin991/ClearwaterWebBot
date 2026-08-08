@@ -7,7 +7,7 @@
     <meta name="description" content="Clearwater Internet - the community social feed for Clearwater Roleplay." />
     <title>Clearwater Internet</title>
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
-    <link rel="stylesheet" href="internet.css?v=20260808-emoji-picker-1" />
+    <link rel="stylesheet" href="internet.css?v=20260808-ownership-nav-1" />
   </head>
   <body>
     <main class="internet-shell">
@@ -15,7 +15,6 @@
         <a class="internet-brand" href="/"><img src="assets/clearwater-logo.png" alt="" /><span>Clearwater<br /><b>Internet</b></span></a>
         <nav class="internet-nav" aria-label="Clearwater Internet navigation">
           <a class="selected" href="#home" data-view-link="home"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>Home</a>
-          <a href="#explore" data-view-link="explore"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>Explore</a>
           <a href="#notifications" data-view-link="notifications"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 22h4" /></svg>Notifications</a>
           <a href="#messages" data-view-link="messages"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>Messages</a>
           <a href="#bookmarks" data-view-link="bookmarks"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" /></svg>Bookmarks</a>
@@ -47,7 +46,6 @@
           <section class="posts" id="feed" aria-live="polite"><p class="feed-note" data-feed-note>Loading posts...</p><div data-post-list></div></section>
         </section>
 
-        <section class="internet-view" data-view="explore" hidden><header class="page-heading"><p>Discover</p><h1>Explore Clearwater</h1></header><div class="topic-grid"><a href="#home" data-topic="#ClearwaterRP"><b>#ClearwaterRP</b><span>Community updates and screenshots</span></a><a href="#home" data-topic="#ERLC"><b>#ERLC</b><span>Roleplay, patrols, and events</span></a><a href="#home" data-topic="#FireRescue"><b>#FireRescue</b><span>Fire and EMS operations</span></a></div></section>
         <section class="internet-view empty-view" data-view="notifications" hidden><header class="page-heading"><p>Notifications</p><h1>Nothing new yet</h1></header><p>When community features are active, your interactions will appear here.</p></section>
         <section class="internet-view empty-view" data-view="messages" hidden><header class="page-heading"><p>Messages</p><h1>Your messages</h1></header><button class="inline-button" type="button" data-new-message>New message</button><div class="message-list" data-messages-list><p>Sign in to see your messages.</p></div></section>
         <section class="internet-view empty-view" data-view="bookmarks" hidden><header class="page-heading"><p>Bookmarks</p><h1>Saved posts</h1></header><div class="posts" data-bookmark-list><p class="feed-note">Your saved posts will appear here.</p></div></section>
@@ -85,6 +83,6 @@
     <section class="composer-modal" data-message-modal hidden role="dialog" aria-modal="true" aria-label="New message"><div><header><h2>New message</h2><button type="button" data-close-message aria-label="Close">×</button></header><form data-message-form><input data-message-to placeholder="Friend's username" maxlength="80" required /><textarea data-message-content placeholder="Write a message" maxlength="1000" required></textarea><button>Send message</button><p data-message-error></p></form></div></section>
     <section class="composer-modal" data-post-modal hidden role="dialog" aria-modal="true"><div><header><h2 data-post-modal-title>Reply</h2><button type="button" data-close-post-modal aria-label="Close">×</button></header><form data-post-modal-form><textarea data-post-modal-content maxlength="500" placeholder="Post your reply"></textarea><div class="quoted-post" data-quoted-post hidden></div><div class="post-modal-buttons"><button type="button" data-quote-post hidden>Quote post</button><button>Post</button></div><p data-post-modal-error></p></form></div></section>
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
-    <script src="internet.js?v=20260808-emoji-picker-1"></script>
+    <script src="internet.js?v=20260808-ownership-nav-1"></script>
   </body>
 </html>

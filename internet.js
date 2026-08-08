@@ -67,7 +67,7 @@ const messageForm = document.querySelector('[data-message-form]');
 const postModal = document.querySelector('[data-post-modal]');
 const postModalForm = document.querySelector('[data-post-modal-form]');
 const shareModal = document.querySelector('[data-share-modal]');
-const INTERNET_VERSION = '20260808-emoji-picker-1';
+const INTERNET_VERSION = '20260808-ownership-nav-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -409,7 +409,7 @@ async function loadSession() {
   if (session.user.avatarUrl) { avatar.src = session.user.avatarUrl; composerAvatar.src = session.user.avatarUrl; }
   rank.textContent = session.user.staffRank || '';
   currentUserId = session.user.id;
-  sessionIsOwner = session.user.owner === true;
+  sessionIsOwner = session.user.owner === true && session.user.staffRank === 'Ownership';
   if (profileTitle) profileTitle.textContent = session.user.displayName || session.user.username;
   if (profileCopy) profileCopy.textContent = session.user.bio || (session.user.staffRank ? `${session.user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
   if (profileAvatar && session.user.avatarUrl) profileAvatar.src = session.user.avatarUrl;
@@ -422,7 +422,7 @@ async function loadSession() {
   if (profileHandle) profileHandle.textContent = `@${session.user.username}`;
   if (profileRank) profileRank.textContent = session.user.staffRank || 'Clearwater community member';
   refreshProfileVerified();
-  if (sessionIsOwner) { admin.hidden = false; staffLink.hidden = false; }
+  if (sessionIsOwner) { admin.hidden = false; staffLink.hidden = false; } else { admin.hidden = true; staffLink.hidden = true; }
   renderProfilePosts();
   renderPosts();
   await loadBanStatus();
