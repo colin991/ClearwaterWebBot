@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-saved-settings-1';
+const INTERNET_VERSION = '20260808-larger-toggles-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {
