@@ -65,6 +65,8 @@ const bookmarkList = document.querySelector('[data-bookmark-list]');
 const profileModal = document.querySelector('[data-profile-modal]');
 const messageModal = document.querySelector('[data-message-modal]');
 const messageForm = document.querySelector('[data-message-form]');
+const messageUserSearch = document.querySelector('[data-message-user-search]');
+const messageUserResults = document.querySelector('[data-message-user-results]');
 const postDetail = document.querySelector('[data-post-detail]');
 const postModal = document.querySelector('[data-post-modal]');
 const postModalForm = document.querySelector('[data-post-modal-form]');
@@ -73,7 +75,7 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-dismiss-composer-panels-1';
+const INTERNET_VERSION = '20260808-message-picker-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -400,9 +402,22 @@ function openConversation(member) {
   document.querySelector('[data-conversation-avatar]').src = member.avatarUrl || 'assets/clearwater-logo.png';
   document.querySelector('[data-conversation-name]').textContent = member.displayName;
   document.querySelector('[data-conversation-handle]').textContent = `@${member.username}`;
+  document.querySelector('[data-conversation-card-avatar]').src = member.avatarUrl || 'assets/clearwater-logo.png';
+  document.querySelector('[data-conversation-card-name]').textContent = member.displayName;
+  document.querySelector('[data-conversation-card-handle]').textContent = `@${member.username}`;
+  document.querySelector('[data-conversation-card-rank]').textContent = member.staffRank || 'Clearwater community member';
   conversationMessages.innerHTML = '<p>Start a conversation.</p>';
   showView('conversation');
   conversationInput?.focus();
+}
+
+function renderMessageUserResults() {
+  if (!messageUserResults) return;
+  const query = String(messageUserSearch?.value || '').trim().toLowerCase();
+  const users = [...internetUsers.values()].filter((user) => `${user.displayName} ${user.username}`.toLowerCase().includes(query)).slice(0, 8);
+  messageUserResults.innerHTML = users.length
+    ? users.map((user) => `<button type="button" data-message-user="${escapeHtml(user.id)}"><img src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(user.displayName)}</b><small>@${escapeHtml(user.username)}</small></span></button>`).join('')
+    : '<p>No members found.</p>';
 }
 
 async function submitReportReview({ reportId, decision, moderationAction, reason = '', durationDays = 'forever' }) {
@@ -560,6 +575,8 @@ document.addEventListener('click', (event) => {
   if (engage) { void handlePostEngagement(engage.dataset.engage, engage.dataset.postId, engage); return; }
   const authorButton = event.target.closest('[data-open-member]');
   if (authorButton) { openMemberProfile(authorButton.dataset.openMember); return; }
+  const messageUser = event.target.closest('[data-message-user]');
+  if (messageUser) { messageModal.hidden = true; openConversation(internetUsers.get(messageUser.dataset.messageUser)); return; }
   const bookmark = event.target.closest('[data-bookmark-post]');
   if (bookmark) { void socialAction('bookmark', { postId: bookmark.dataset.bookmarkPost, enabled: !socialState.bookmarks.includes(bookmark.dataset.bookmarkPost) }).catch((error) => window.alert(error.message)); return; }
   const topic = event.target.closest('[data-topic]');
@@ -715,9 +732,10 @@ document.querySelector('[data-member-page-menu]')?.addEventListener('click', () 
 document.querySelector('[data-mute-member]')?.addEventListener('click', async () => { if (!viewedMember) return; try { await socialAction('mute', { targetId: viewedMember.id, enabled: !socialState.muted.includes(viewedMember.id) }); showView('home'); } catch (error) { window.alert(error.message); } });
 document.querySelector('[data-block-member]')?.addEventListener('click', async () => { if (!viewedMember) return; try { await socialAction('block', { targetId: viewedMember.id, enabled: !socialState.blocked.includes(viewedMember.id) }); showView('home'); } catch (error) { window.alert(error.message); } });
 document.querySelector('[data-report-member]')?.addEventListener('click', () => { window.alert('To report a member, open one of their posts and choose Report post.'); });
-document.querySelector('[data-new-message]')?.addEventListener('click', () => { messageModal.hidden = false; });
+document.querySelector('[data-new-message]')?.addEventListener('click', () => { messageModal.hidden = false; renderMessageUserResults(); messageUserSearch?.focus(); });
 document.querySelector('[data-member-page-message]')?.addEventListener('click', () => { openConversation(viewedMember); });
 document.querySelector('[data-close-message]')?.addEventListener('click', () => { messageModal.hidden = true; });
+messageUserSearch?.addEventListener('input', renderMessageUserResults);
 document.querySelector('[data-close-conversation]')?.addEventListener('click', () => { if (viewedMember) openMemberProfile(viewedMember.id, false); else showView('messages'); });
 conversationForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
