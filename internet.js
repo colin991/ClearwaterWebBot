@@ -89,8 +89,18 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260808-official-account-actions-1';
+const INTERNET_VERSION = '20260808-selected-account-identity-1';
 const OFFICIAL_ACCOUNT_ID = '1514026810348671026';
+const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
+  id: OFFICIAL_ACCOUNT_ID,
+  displayName: 'Clearwater Roleplay',
+  username: 'clearwaterroleplay',
+  avatarUrl: 'assets/clearwater-logo.png',
+  bannerUrl: 'assets/clearwater-police-night.png',
+  bio: 'Official Clearwater Roleplay updates and announcements.',
+  staffRank: 'Official account',
+  verified: true,
+});
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -135,7 +145,7 @@ function refreshProfileVerified() {
 }
 
 function activeAuthor() {
-  return activeAccount === 'official' ? internetUsers.get(OFFICIAL_ACCOUNT_ID) : null;
+  return activeAccount === 'official' ? (internetUsers.get(OFFICIAL_ACCOUNT_ID) || OFFICIAL_ACCOUNT_FALLBACK) : null;
 }
 
 function activeUserId() {
@@ -156,11 +166,15 @@ function updateAccountSwitcher() {
   document.querySelector('[data-personal-account-selected]')?.toggleAttribute('hidden', activeAccount !== 'personal');
   document.querySelector('[data-official-account-selected]')?.toggleAttribute('hidden', activeAccount !== 'official');
   if (composerAvatar) composerAvatar.src = selected.avatarUrl || 'assets/clearwater-logo.png';
+  if (avatar) avatar.src = selected.avatarUrl || 'assets/clearwater-logo.png';
+  if (name) name.textContent = selected.displayName || selected.username || 'Clearwater account';
+  if (rank) rank.textContent = activeAccount === 'official' ? 'Official' : (sessionUser.staffRank || '');
 }
 
 function selectPostingAccount(account) {
   if (account === 'official' && !sessionIsOwner) return;
   activeAccount = account === 'official' ? 'official' : 'personal';
+  if (activeAccount === 'official' && !internetUsers.has(OFFICIAL_ACCOUNT_ID)) internetUsers.set(OFFICIAL_ACCOUNT_ID, OFFICIAL_ACCOUNT_FALLBACK);
   localStorage.setItem(`clearwater-posting-account-${currentUserId}`, activeAccount);
   updateAccountSwitcher();
   accountSwitchMenu.hidden = true;
@@ -725,6 +739,7 @@ document.querySelectorAll('[data-preference]').forEach((input) => input.addEvent
 document.querySelectorAll('[data-view-link]').forEach((link) => link.addEventListener('click', (event) => {
   event.preventDefault();
   const view = link.dataset.viewLink || 'home';
+  if (view === 'profile' && activeAccount === 'official') { openMemberProfile(OFFICIAL_ACCOUNT_ID); return; }
   if (location.hash === `#${view}`) showView(view);
   else location.hash = view;
 }));
