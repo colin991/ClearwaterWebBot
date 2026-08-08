@@ -69,7 +69,7 @@ const postDetail = document.querySelector('[data-post-detail]');
 const postModal = document.querySelector('[data-post-modal]');
 const postModalForm = document.querySelector('[data-post-modal-form]');
 const shareModal = document.querySelector('[data-share-modal]');
-const INTERNET_VERSION = '20260808-nav-and-compact-1';
+const INTERNET_VERSION = '20260808-poll-layout-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -588,6 +588,7 @@ emojiButton?.addEventListener('click', () => { emojiModal.hidden = false; render
 document.querySelector('[data-close-emoji]')?.addEventListener('click', () => { emojiModal.hidden = true; });
 emojiQuery?.addEventListener('input', renderEmojiGrid);
 pollButton?.addEventListener('click', () => { pollBuilder.hidden = !pollBuilder.hidden; composer?.classList.toggle('composer-expanded', !pollBuilder.hidden); });
+document.querySelector('[data-close-poll]')?.addEventListener('click', () => { if (!pollBuilder) return; pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); });
 document.querySelector('[data-add-poll-option]')?.addEventListener('click', () => {
   const options = pollBuilder?.querySelectorAll('[data-poll-option]') || [];
   if (options.length >= 4) return;
