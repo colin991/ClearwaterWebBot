@@ -75,7 +75,7 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-message-picker-1';
+const INTERNET_VERSION = '20260808-expanded-gif-preview-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -582,8 +582,8 @@ document.addEventListener('click', (event) => {
   const topic = event.target.closest('[data-topic]');
   if (topic) { event.preventDefault(); showView('home'); search.value = topic.dataset.topic; renderPosts(); return; }
   const gifChoice = event.target.closest('[data-gif-url]');
-  if (gifChoice) { selectedGif = { url: gifChoice.dataset.gifUrl, title: gifChoice.dataset.gifTitle || 'GIF' }; gifPreview.hidden = false; gifPreview.innerHTML = `<img src="${escapeHtml(selectedGif.url)}" alt="${escapeHtml(selectedGif.title)}" /><button type="button" data-remove-gif aria-label="Remove GIF">×</button>`; gifModal.hidden = true; return; }
-  if (event.target.closest('[data-remove-gif]')) { selectedGif = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; return; }
+  if (gifChoice) { selectedGif = { url: gifChoice.dataset.gifUrl, title: gifChoice.dataset.gifTitle || 'GIF' }; gifPreview.hidden = false; gifPreview.innerHTML = `<img src="${escapeHtml(selectedGif.url)}" alt="${escapeHtml(selectedGif.title)}" /><button type="button" data-remove-gif>Remove</button>`; composer?.classList.add('composer-expanded'); gifModal.hidden = true; return; }
+  if (event.target.closest('[data-remove-gif]')) { selectedGif = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder?.hidden) composer?.classList.remove('composer-expanded'); return; }
   const mention = event.target.closest('[data-mention-user]');
   if (mention) { insertAtCursor(`@${mention.dataset.mentionUser} `); mentionModal.hidden = true; return; }
   if (event.target.closest('[data-refresh-staff]')) { void loadModeration(); return; }
