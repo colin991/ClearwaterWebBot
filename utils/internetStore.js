@@ -316,9 +316,6 @@ export function sendInternetMessage(store, { actor, to, content }) {
   const sender = upsertInternetUser(store, actor);
   const recipient = store.users[String(to || '')];
   if (!recipient) throw new Error('That member has not joined Clearwater Internet yet');
-  const senderFollowing = Array.isArray(sender.following) && sender.following.includes(recipient.id);
-  const recipientFollowing = Array.isArray(recipient.following) && recipient.following.includes(sender.id);
-  if (!senderFollowing || !recipientFollowing) throw new Error('You can message friends only');
   const body = text(content, 1000);
   if (!body) throw new Error('Write a message first');
   if ((recipient.blocked || []).includes(sender.id) || (sender.blocked || []).includes(recipient.id)) throw new Error('This conversation is unavailable');

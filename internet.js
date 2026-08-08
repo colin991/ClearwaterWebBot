@@ -69,7 +69,7 @@ const postDetail = document.querySelector('[data-post-detail]');
 const postModal = document.querySelector('[data-post-modal]');
 const postModalForm = document.querySelector('[data-post-modal-form]');
 const shareModal = document.querySelector('[data-share-modal]');
-const INTERNET_VERSION = '20260808-staff-link-1';
+const INTERNET_VERSION = '20260808-member-profile-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -209,7 +209,7 @@ function renderBookmarks() {
 }
 
 function showView(view) {
-  const availableViews = new Set(['home', 'notifications', 'messages', 'bookmarks', 'profile', 'settings', 'staff', 'post']);
+  const availableViews = new Set(['home', 'notifications', 'messages', 'bookmarks', 'profile', 'member', 'settings', 'staff', 'post']);
   let activeView = availableViews.has(view) ? view : 'home';
   if (activeView === 'staff' && !sessionIsOwner) activeView = 'home';
   document.querySelector('.internet-shell')?.classList.toggle('staff-mode', activeView === 'staff');
@@ -225,6 +225,11 @@ function showViewFromAddress() {
   const linkedPostId = location.hash.startsWith('#post-') ? location.hash.slice(6) : null;
   if (linkedPostId) {
     showPostDetail(linkedPostId, false);
+    return;
+  }
+  const linkedMemberId = location.hash.startsWith('#member-') ? location.hash.slice(8) : null;
+  if (linkedMemberId) {
+    openMemberProfile(linkedMemberId, false);
     return;
   }
   showView(location.hash.slice(1) || 'home');
@@ -347,16 +352,25 @@ async function socialAction(type, { targetId = '', postId = '', enabled = true }
   socialState = { ...socialState, ...result.social }; renderPosts();
 }
 
-function openMemberProfile(memberId) {
-  const user = internetUsers.get(memberId); if (!user || !profileModal) return;
+function openMemberProfile(memberId, updateHash = true) {
+  const user = internetUsers.get(memberId); if (!user) return;
   viewedMember = user;
-  document.querySelector('[data-member-title]').textContent = user.displayName;
-  document.querySelector('[data-member-avatar]').src = user.avatarUrl || 'assets/clearwater-logo.png';
-  document.querySelector('[data-member-handle]').textContent = `@${user.username}`;
-  document.querySelector('[data-member-rank]').textContent = user.staffRank || 'Clearwater community member';
+  const posts = allPosts.filter((post) => post.authorId === user.id && !post.parentId);
+  const banner = document.querySelector('[data-member-page-banner]');
+  if (banner) banner.style.backgroundImage = `linear-gradient(110deg, rgba(3, 10, 22, .48), rgba(18, 87, 163, .25)), url("${user.avatarUrl || 'assets/clearwater-police-night.png'}")`;
+  document.querySelector('[data-member-page-avatar]').src = user.avatarUrl || 'assets/clearwater-logo.png';
+  document.querySelector('[data-member-page-name]').textContent = user.displayName;
+  document.querySelector('[data-member-page-handle]').textContent = `@${user.username}`;
+  document.querySelector('[data-member-page-rank]').textContent = user.staffRank || 'Clearwater community member';
+  document.querySelector('[data-member-page-copy]').textContent = user.staffRank ? `${user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.';
+  document.querySelector('[data-member-page-verified]').hidden = user.verified !== true;
+  document.querySelector('[data-member-page-post-count]').textContent = posts.length.toLocaleString();
+  document.querySelector('[data-member-page-posts]').innerHTML = posts.length ? posts.map((post) => postMarkup(post, true)).join('') : '<p>No posts yet.</p>';
   const following = socialState.following.includes(user.id);
-  document.querySelector('[data-follow-member]').textContent = following ? 'Following' : 'Follow';
-  profileModal.hidden = false;
+  document.querySelector('[data-member-page-follow]').textContent = following ? 'Following' : 'Follow';
+  document.querySelector('[data-member-page-menu-list]').hidden = true;
+  if (updateHash) history.pushState({}, '', `#member-${user.id}`);
+  showView('member');
 }
 
 async function submitReportReview({ reportId, decision, moderationAction, reason = '', durationDays = 'forever' }) {
@@ -427,6 +441,8 @@ async function loadPosts() {
     renderPosts();
     const linkedPostId = location.hash.startsWith('#post-') ? location.hash.slice(6) : null;
     if (linkedPostId) showPostDetail(linkedPostId, false);
+    const linkedMemberId = location.hash.startsWith('#member-') ? location.hash.slice(8) : null;
+    if (linkedMemberId) openMemberProfile(linkedMemberId, false);
   } catch {
     note.hidden = false;
     note.textContent = 'Clearwater Internet is offline right now. Restart the Clearwater Discord bot host to restore posting.';
@@ -603,16 +619,16 @@ document.querySelector('[data-add-poll-option]')?.addEventListener('click', () =
 });
 document.querySelector('[data-close-warning]')?.addEventListener('click', () => { warningNotice.hidden = true; });
 document.querySelector('[data-close-profile]')?.addEventListener('click', () => { profileModal.hidden = true; });
-document.querySelector('[data-follow-member]')?.addEventListener('click', async () => {
+document.querySelector('[data-member-page-follow]')?.addEventListener('click', async () => {
   if (!viewedMember) return;
   try { await socialAction('follow', { targetId: viewedMember.id, enabled: !socialState.following.includes(viewedMember.id) }); openMemberProfile(viewedMember.id); } catch (error) { window.alert(error.message); }
 });
-document.querySelector('[data-member-menu]')?.addEventListener('click', () => { const menu = document.querySelector('[data-member-menu-list]'); menu.hidden = !menu.hidden; });
-document.querySelector('[data-mute-member]')?.addEventListener('click', async () => { if (!viewedMember) return; try { await socialAction('mute', { targetId: viewedMember.id, enabled: !socialState.muted.includes(viewedMember.id) }); profileModal.hidden = true; } catch (error) { window.alert(error.message); } });
-document.querySelector('[data-block-member]')?.addEventListener('click', async () => { if (!viewedMember) return; try { await socialAction('block', { targetId: viewedMember.id, enabled: !socialState.blocked.includes(viewedMember.id) }); profileModal.hidden = true; } catch (error) { window.alert(error.message); } });
-document.querySelector('[data-report-member]')?.addEventListener('click', () => { profileModal.hidden = true; window.alert('To report a member, open one of their posts and choose Report post.'); });
+document.querySelector('[data-member-page-menu]')?.addEventListener('click', () => { const menu = document.querySelector('[data-member-page-menu-list]'); menu.hidden = !menu.hidden; });
+document.querySelector('[data-mute-member]')?.addEventListener('click', async () => { if (!viewedMember) return; try { await socialAction('mute', { targetId: viewedMember.id, enabled: !socialState.muted.includes(viewedMember.id) }); showView('home'); } catch (error) { window.alert(error.message); } });
+document.querySelector('[data-block-member]')?.addEventListener('click', async () => { if (!viewedMember) return; try { await socialAction('block', { targetId: viewedMember.id, enabled: !socialState.blocked.includes(viewedMember.id) }); showView('home'); } catch (error) { window.alert(error.message); } });
+document.querySelector('[data-report-member]')?.addEventListener('click', () => { window.alert('To report a member, open one of their posts and choose Report post.'); });
 document.querySelector('[data-new-message]')?.addEventListener('click', () => { messageModal.hidden = false; });
-document.querySelector('[data-message-member]')?.addEventListener('click', () => { if (!viewedMember) return; document.querySelector('[data-message-to]').value = viewedMember.username; profileModal.hidden = true; messageModal.hidden = false; });
+document.querySelector('[data-member-page-message]')?.addEventListener('click', () => { if (!viewedMember) return; document.querySelector('[data-message-to]').value = viewedMember.username; messageModal.hidden = false; });
 document.querySelector('[data-close-message]')?.addEventListener('click', () => { messageModal.hidden = true; });
 document.querySelector('[data-close-post-modal]')?.addEventListener('click', () => { postModal.hidden = true; pendingPostAction = null; });
 document.querySelector('[data-quote-post]')?.addEventListener('click', () => {
