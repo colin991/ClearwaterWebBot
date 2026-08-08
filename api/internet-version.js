@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-fixed-compact-composer-1';
+const INTERNET_VERSION = '20260808-live-mention-colors-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {

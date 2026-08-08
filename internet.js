@@ -10,6 +10,7 @@ const content = document.querySelector('[data-post-content]');
 const count = document.querySelector('[data-character-count]');
 const postButton = document.querySelector('[data-post-button]');
 const postMessage = document.querySelector('[data-post-message]');
+const composerHighlight = document.querySelector('[data-composer-highlight]');
 const list = document.querySelector('[data-post-list]');
 const note = document.querySelector('[data-feed-note]');
 const admin = document.querySelector('[data-admin]');
@@ -68,7 +69,7 @@ const postDetail = document.querySelector('[data-post-detail]');
 const postModal = document.querySelector('[data-post-modal]');
 const postModalForm = document.querySelector('[data-post-modal-form]');
 const shareModal = document.querySelector('[data-share-modal]');
-const INTERNET_VERSION = '20260808-fixed-compact-composer-1';
+const INTERNET_VERSION = '20260808-live-mention-colors-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -456,7 +457,7 @@ async function loadSession() {
   await loadSocial();
 }
 
-content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; });
+content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; updateComposerHighlight(); });
 search?.addEventListener('input', () => { showView('home'); renderPosts(); });
 document.querySelectorAll('[data-view-link]').forEach((link) => link.addEventListener('click', () => showView(link.dataset.viewLink)));
 document.querySelector('[data-compose-link]')?.addEventListener('click', () => { showView('home'); content?.focus(); });
@@ -527,6 +528,14 @@ function insertAtCursor(value) {
   content.value = `${content.value.slice(0, start)}${value}${content.value.slice(end)}`.slice(0, 500);
   content.focus(); content.selectionStart = content.selectionEnd = Math.min(start + value.length, 500);
   count.textContent = `${content.value.length} / 500`;
+  updateComposerHighlight();
+}
+
+function updateComposerHighlight() {
+  if (!composerHighlight || !content) return;
+  composerHighlight.innerHTML = escapeHtml(content.value)
+    .replace(/(^|\s)(#[a-z0-9_]{1,60})/gi, '$1<span class="composer-tag">$2</span>')
+    .replace(/(^|\s)(@[a-z0-9_]{1,80})/gi, '$1<span class="composer-tag">$2</span>');
 }
 
 function renderMentionResults() {
@@ -632,7 +641,7 @@ postButton?.addEventListener('click', async () => {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, poll }) });
     const result = await readApiJson(response, 'Posting is unavailable because the website service is not connected.');
     if (!response.ok) throw new Error(result.error);
-    content.value = ''; count.textContent = '0 / 500'; selectedGif = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
+    content.value = ''; count.textContent = '0 / 500'; updateComposerHighlight(); selectedGif = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
   } catch (error) {
     const message = error.message || 'Could not post.';
     postMessage.textContent = message;
