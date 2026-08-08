@@ -63,6 +63,8 @@ export default async function handler(request, response) {
       // The normal Discord account profile remains available below.
     }
 
+    if (!guildMember) return redirect(response, '/?login=server-required', [clearCookie(STATE_COOKIE)]);
+
     const session = createSessionToken({
       ...user,
       guildBanner: guildMember?.banner || null,

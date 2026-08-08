@@ -80,7 +80,7 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-feed-spacing-1';
+const INTERNET_VERSION = '20260808-discord-membership-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -310,7 +310,10 @@ async function loadBanStatus() {
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'status' }) });
     const result = await readApiJson(response, 'Could not check account access.');
-    if (!response.ok) return;
+    if (!response.ok) {
+      if (/member of the Clearwater Roleplay Discord server/i.test(result.error || '')) showBan({ reason: result.error, until: null });
+      return;
+    }
     showBan(result.banned ? result.ban : null);
   } catch {
     // Do not hide the normal site if the bot connection is briefly unavailable.

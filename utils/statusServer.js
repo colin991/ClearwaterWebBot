@@ -32,6 +32,22 @@ const readJson = async (request) => {
 export function startStatusServer(client, config) {
   let lastInternetRoleSync = 0;
 
+  const enforceInternetMembership = async (store, actor) => {
+    const discordId = String(actor?.id || '');
+    if (!/^\d{16,22}$/.test(discordId)) return true;
+    const guild = client.guilds.cache.get(CLEARWATER_GUILD_ID)
+      || await client.guilds.fetch(CLEARWATER_GUILD_ID).catch(() => null);
+    if (!guild) return null;
+    const member = await guild.members.fetch(discordId).catch(() => null);
+    if (member) return true;
+    const user = upsertInternetUser(store, actor);
+    if (!getActiveBan(user)) {
+      setInternetBan(user, { enabled: true, reason: 'This account is no longer a member of Clearwater Roleplay on Discord.', durationDays: 'forever' });
+      await saveInternetStore(store);
+    }
+    return false;
+  };
+
   const syncInternetRoles = async (store) => {
     // Keep older posts accurate even when a Discord role change happened
     // before the bot was restarted. Limit this to once a minute.
@@ -99,7 +115,7 @@ export function startStatusServer(client, config) {
       const allowed = config.ownerDiscordIds.includes(discordId)
         || staffRank?.owner === true
         || Boolean(member && config.ownerRoleIds.some((roleId) => member.roles.cache.has(roleId)));
-      return json(response, 200, { allowed, staffRank: staffRank?.name || null });
+      return json(response, 200, { allowed, member: Boolean(member), staffRank: staffRank?.name || null });
     }
 
     if (request.method === 'POST' && url.pathname === '/api/actions') {
@@ -129,6 +145,9 @@ export function startStatusServer(client, config) {
         if (request.method !== 'POST') return json(response, 405, { error: 'Method not allowed' });
 
         const body = await readJson(request);
+        const membership = await enforceInternetMembership(store, body.actor);
+        if (membership === false) return json(response, 403, { error: 'You must be a member of the Clearwater Roleplay Discord server to use Clearwater Internet.' });
+        if (membership === null) return json(response, 503, { error: 'Clearwater Internet could not verify Discord membership right now. Please try again shortly.' });
         if (body.action === 'post') {
           const user = upsertInternetUser(store, body.actor);
           const post = createInternetPost(store, user, body.content, { gif: body.gif, image: body.image, poll: body.poll });
