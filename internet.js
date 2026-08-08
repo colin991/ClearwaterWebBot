@@ -69,7 +69,7 @@ const postDetail = document.querySelector('[data-post-detail]');
 const postModal = document.querySelector('[data-post-modal]');
 const postModalForm = document.querySelector('[data-post-modal-form]');
 const shareModal = document.querySelector('[data-share-modal]');
-const INTERNET_VERSION = '20260808-live-mention-colors-1';
+const INTERNET_VERSION = '20260808-composer-button-state-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -457,7 +457,7 @@ async function loadSession() {
   await loadSocial();
 }
 
-content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; updateComposerHighlight(); });
+content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; postButton.disabled = !content.value.trim(); updateComposerHighlight(); });
 search?.addEventListener('input', () => { showView('home'); renderPosts(); });
 document.querySelectorAll('[data-view-link]').forEach((link) => link.addEventListener('click', () => showView(link.dataset.viewLink)));
 document.querySelector('[data-compose-link]')?.addEventListener('click', () => { showView('home'); content?.focus(); });
@@ -528,6 +528,7 @@ function insertAtCursor(value) {
   content.value = `${content.value.slice(0, start)}${value}${content.value.slice(end)}`.slice(0, 500);
   content.focus(); content.selectionStart = content.selectionEnd = Math.min(start + value.length, 500);
   count.textContent = `${content.value.length} / 500`;
+  postButton.disabled = !content.value.trim();
   updateComposerHighlight();
 }
 
@@ -641,12 +642,12 @@ postButton?.addEventListener('click', async () => {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, poll }) });
     const result = await readApiJson(response, 'Posting is unavailable because the website service is not connected.');
     if (!response.ok) throw new Error(result.error);
-    content.value = ''; count.textContent = '0 / 500'; updateComposerHighlight(); selectedGif = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
+    content.value = ''; count.textContent = '0 / 500'; postButton.disabled = true; updateComposerHighlight(); selectedGif = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
   } catch (error) {
     const message = error.message || 'Could not post.';
     postMessage.textContent = message;
     if (/banned/i.test(message)) showBan({ reason: 'This account is banned from Clearwater Internet.', until: null });
-  } finally { postButton.disabled = false; }
+  } finally { postButton.disabled = !content.value.trim(); }
 });
 
 admin?.querySelectorAll('button').forEach((button) => button.addEventListener('click', async () => {
