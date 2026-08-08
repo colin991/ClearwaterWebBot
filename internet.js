@@ -42,7 +42,7 @@ const moderationReason = document.querySelector('[data-moderation-reason]');
 const moderationDurationWrap = document.querySelector('[data-moderation-duration-wrap]');
 const moderationDuration = document.querySelector('[data-moderation-duration]');
 const moderationError = document.querySelector('[data-moderation-error]');
-const INTERNET_VERSION = '20260807-time-1';
+const INTERNET_VERSION = '20260807-live-profiles-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -67,7 +67,8 @@ const timeAgo = (value) => {
   return `${days} day${days === 1 ? '' : 's'} ago`;
 };
 const verifiedBadge = () => '<span class="verified" role="img" aria-label="Verified" data-tooltip="Verified"><img src="assets/verified-badge.png" alt="" /></span>';
-const isVerified = (post) => post.verified === true || internetUsers.get(post.authorId)?.verified === true;
+const currentAuthor = (post) => internetUsers.get(post.authorId) || null;
+const isVerified = (post) => currentAuthor(post)?.verified === true;
 
 function refreshProfileVerified() {
   if (profileVerified) profileVerified.hidden = !internetUsers.get(currentUserId)?.verified;
@@ -93,7 +94,12 @@ function postMenu(post) {
 }
 
 function postMarkup(post, profile = false) {
-  return `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(post.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><div><span class="post-name">${escapeHtml(post.displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<div class="post-meta">@${escapeHtml(post.username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${post.staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(post.staffRank)}</span>` : ''}</div></div>${postMenu(post)}</div><p class="post-content">${escapeHtml(post.content)}</p></article>`;
+  const author = currentAuthor(post);
+  const displayName = author?.displayName || post.displayName;
+  const username = author?.username || post.username;
+  const avatarUrl = author?.avatarUrl || post.avatarUrl || 'assets/clearwater-logo.png';
+  const staffRank = author?.staffRank || null;
+  return `<article class="post"><div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<div class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</div></div>${postMenu(post)}</div><p class="post-content">${escapeHtml(post.content)}</p></article>`;
 }
 
 function showPosts(posts) {

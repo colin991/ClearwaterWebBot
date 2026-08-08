@@ -28,6 +28,10 @@ export function publicPosts(store) {
 export function publicUsers(store) {
   return Object.values(store.users).map((user) => ({
     id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    avatarUrl: user.avatarUrl,
+    staffRank: user.staffRank || null,
     verified: user.verified === true,
     banned: Boolean(getActiveBan(user)),
   }));
@@ -82,13 +86,14 @@ export function upsertInternetUser(store, user) {
   const id = text(user?.id, 24);
   if (!/^\d{16,22}$/.test(id)) throw new Error('Invalid user');
   const existing = store.users[id] || { verified: false, banned: false };
+  const has = (key) => Object.prototype.hasOwnProperty.call(user || {}, key);
   store.users[id] = {
     ...existing,
     id,
-    username: text(user?.username, 80) || existing.username || 'Discord user',
-    displayName: text(user?.displayName, 80) || existing.displayName || 'Discord user',
-    avatarUrl: text(user?.avatarUrl, 300) || existing.avatarUrl || null,
-    staffRank: text(user?.staffRank, 80) || existing.staffRank || null,
+    username: has('username') ? text(user?.username, 80) || existing.username || 'Discord user' : existing.username || 'Discord user',
+    displayName: has('displayName') ? text(user?.displayName, 80) || existing.displayName || 'Discord user' : existing.displayName || 'Discord user',
+    avatarUrl: has('avatarUrl') ? text(user?.avatarUrl, 300) || null : existing.avatarUrl || null,
+    staffRank: has('staffRank') ? text(user?.staffRank, 80) || null : existing.staffRank || null,
   };
   return store.users[id];
 }

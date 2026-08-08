@@ -75,7 +75,16 @@ export default async function handler(request, response) {
         },
       };
     } else if (body.action === 'status') {
-      payload = { action: 'status', actor: { id: user.id } };
+      payload = {
+        action: 'status',
+        actor: {
+          id: user.id,
+          username: user.username,
+          displayName: user.displayName,
+          avatarUrl: avatarUrl(user),
+          staffRank: access.staffRank,
+        },
+      };
     } else if (['edit', 'delete'].includes(body.action)) {
       payload = {
         action: body.action,
