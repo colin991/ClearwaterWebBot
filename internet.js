@@ -80,7 +80,8 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-giphy-hosts-1';
+const conversationGifPreview = document.querySelector('[data-conversation-gif-preview]');
+const INTERNET_VERSION = '20260808-message-media-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -91,6 +92,8 @@ let sessionIsOwner = false;
 let pendingReportReview = null;
 let selectedGif = null;
 let selectedImage = null;
+let messageGif = null;
+let pickerTarget = 'post';
 let socialState = { following: [], followers: [], blocked: [], muted: [], bookmarks: [], unreadNotifications: 0 };
 let viewedMember = null;
 let pendingPostAction = null;
@@ -487,6 +490,8 @@ function openMemberProfile(memberId, updateHash = true) {
 function openConversation(member) {
   if (!member) return;
   viewedMember = member;
+  messageGif = null;
+  if (conversationGifPreview) { conversationGifPreview.hidden = true; conversationGifPreview.innerHTML = ''; }
   document.querySelector('[data-conversation-avatar]').src = member.avatarUrl || 'assets/clearwater-logo.png';
   document.querySelector('[data-conversation-name]').textContent = member.displayName;
   document.querySelector('[data-conversation-handle]').textContent = `@${member.username}`;
@@ -507,7 +512,7 @@ async function loadConversation(member) {
     const result = await readApiJson(response, 'Could not load this conversation.');
     if (!response.ok) throw new Error(result.error || 'Could not load this conversation.');
     const messages = result.messages || [];
-    conversationMessages.innerHTML = messages.length ? messages.map((message) => `<p class="conversation-bubble ${message.fromId === currentUserId ? 'own' : 'theirs'}">${escapeHtml(message.content)}</p>`).join('') : '<p>Start a conversation.</p>';
+    conversationMessages.innerHTML = messages.length ? messages.map((message) => `<p class="conversation-bubble ${message.fromId === currentUserId ? 'own' : 'theirs'}">${message.content ? escapeHtml(message.content) : ''}${safeGifUrl(message.gifUrl) ? `<img src="${escapeHtml(message.gifUrl)}" alt="${escapeHtml(message.gifTitle || 'GIF')}" />` : ''}</p>`).join('') : '<p>Start a conversation.</p>';
   } catch (error) { conversationMessages.innerHTML = `<p>${escapeHtml(error.message || 'Could not load this conversation.')}</p>`; }
 }
 
@@ -674,7 +679,7 @@ document.addEventListener('click', (event) => {
   const card = event.target.closest('[data-post-card]');
   if (card && !event.target.closest('button,a,details,input,textarea')) { showPostDetail(card.dataset.postCard); return; }
   const emojiChoice = event.target.closest('[data-emoji-choice]');
-  if (emojiChoice) { insertAtCursor(emojiChoice.dataset.emojiChoice); emojiModal.hidden = true; return; }
+  if (emojiChoice) { if (pickerTarget === 'message' && conversationInput) { conversationInput.value += emojiChoice.dataset.emojiChoice; conversationInput.focus(); } else insertAtCursor(emojiChoice.dataset.emojiChoice); emojiModal.hidden = true; return; }
   const engage = event.target.closest('[data-engage]');
   if (engage) { void handlePostEngagement(engage.dataset.engage, engage.dataset.postId, engage); return; }
   const pollVote = event.target.closest('[data-poll-vote]');
@@ -694,7 +699,8 @@ document.addEventListener('click', (event) => {
   const topic = event.target.closest('[data-topic]');
   if (topic) { event.preventDefault(); showView('home'); search.value = topic.dataset.topic; renderPosts(); return; }
   const gifChoice = event.target.closest('[data-gif-url]');
-  if (gifChoice) { selectedGif = { url: gifChoice.dataset.gifUrl, title: gifChoice.dataset.gifTitle || 'GIF' }; selectedImage = null; gifPreview.hidden = false; gifPreview.innerHTML = `<img src="${escapeHtml(selectedGif.url)}" alt="${escapeHtml(selectedGif.title)}" /><button type="button" data-remove-media>Remove</button>`; composer?.classList.add('composer-expanded'); gifModal.hidden = true; postButton.disabled = false; return; }
+  if (gifChoice) { const chosen = { url: gifChoice.dataset.gifUrl, title: gifChoice.dataset.gifTitle || 'GIF' }; if (pickerTarget === 'message') { messageGif = chosen; if (conversationGifPreview) { conversationGifPreview.hidden = false; conversationGifPreview.innerHTML = `<img src="${escapeHtml(chosen.url)}" alt="${escapeHtml(chosen.title)}" /><button type="button" data-remove-conversation-gif>Remove</button>`; } } else { selectedGif = chosen; selectedImage = null; gifPreview.hidden = false; gifPreview.innerHTML = `<img src="${escapeHtml(selectedGif.url)}" alt="${escapeHtml(selectedGif.title)}" /><button type="button" data-remove-media>Remove</button>`; composer?.classList.add('composer-expanded'); postButton.disabled = false; } gifModal.hidden = true; return; }
+  if (event.target.closest('[data-remove-conversation-gif]')) { messageGif = null; if (conversationGifPreview) { conversationGifPreview.hidden = true; conversationGifPreview.innerHTML = ''; } return; }
   if (event.target.closest('[data-remove-media]')) { selectedGif = null; selectedImage = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder?.hidden) composer?.classList.remove('composer-expanded'); postButton.disabled = !content?.value.trim(); return; }
   const mention = event.target.closest('[data-mention-user]');
   if (mention) { insertAtCursor(`@${mention.dataset.mentionUser} `); mentionModal.hidden = true; return; }
@@ -833,7 +839,7 @@ async function loadGifs(query = '') {
   } catch (error) { gifMessage.textContent = error.message || 'GIF search is unavailable.'; }
 }
 
-gifButton?.addEventListener('click', () => { gifModal.hidden = false; gifQuery?.focus(); void loadGifs(); });
+gifButton?.addEventListener('click', () => { pickerTarget = 'post'; gifModal.hidden = false; gifQuery?.focus(); void loadGifs(); });
 imageButton?.addEventListener('click', () => imageUpload?.click());
 imageUpload?.addEventListener('change', () => {
   const file = imageUpload.files?.[0];
@@ -864,7 +870,7 @@ gifSearch?.addEventListener('submit', async (event) => {
 mentionButton?.addEventListener('click', () => { mentionModal.hidden = false; renderMentionResults(); mentionQuery?.focus(); });
 document.querySelector('[data-close-mention]')?.addEventListener('click', () => { mentionModal.hidden = true; });
 mentionQuery?.addEventListener('input', renderMentionResults);
-emojiButton?.addEventListener('click', () => { emojiModal.hidden = false; renderEmojiGrid(); emojiQuery?.focus(); });
+emojiButton?.addEventListener('click', () => { pickerTarget = 'post'; emojiModal.hidden = false; renderEmojiGrid(); emojiQuery?.focus(); });
 document.querySelector('[data-close-emoji]')?.addEventListener('click', () => { emojiModal.hidden = true; });
 emojiQuery?.addEventListener('input', renderEmojiGrid);
 [gifModal, emojiModal, mentionModal].forEach((modal) => modal?.addEventListener('click', (event) => {
@@ -892,18 +898,20 @@ document.querySelector('[data-new-message]')?.addEventListener('click', () => { 
 document.querySelector('[data-member-page-message]')?.addEventListener('click', () => { openConversation(viewedMember); });
 document.querySelector('[data-close-message]')?.addEventListener('click', () => { messageModal.hidden = true; });
 messageUserSearch?.addEventListener('input', renderMessageUserResults);
+document.querySelector('[data-conversation-gif]')?.addEventListener('click', () => { pickerTarget = 'message'; gifModal.hidden = false; gifQuery?.focus(); void loadGifs(); });
+document.querySelector('[data-conversation-emoji]')?.addEventListener('click', () => { pickerTarget = 'message'; emojiModal.hidden = false; renderEmojiGrid(); emojiQuery?.focus(); });
 document.querySelector('[data-close-conversation]')?.addEventListener('click', () => { if (viewedMember) openMemberProfile(viewedMember.id, false); else showView('messages'); });
 conversationForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const text = conversationInput?.value.trim();
-  if (!viewedMember || !text) return;
+  if (!viewedMember || (!text && !messageGif)) return;
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'message-send', to: viewedMember.id, content: text }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'message-send', to: viewedMember.id, content: text, gif: messageGif }) });
     const result = await readApiJson(response, 'Could not send your message.');
     if (!response.ok) throw new Error(result.error || 'Could not send your message.');
     const empty = conversationMessages.querySelector('p'); if (empty) empty.remove();
-    conversationMessages.insertAdjacentHTML('beforeend', `<p class="conversation-bubble own">${escapeHtml(text)}</p>`);
-    conversationInput.value = '';
+    conversationMessages.insertAdjacentHTML('beforeend', `<p class="conversation-bubble own">${escapeHtml(text)}${messageGif ? `<img src="${escapeHtml(messageGif.url)}" alt="${escapeHtml(messageGif.title)}" />` : ''}</p>`);
+    conversationInput.value = ''; messageGif = null; if (conversationGifPreview) { conversationGifPreview.hidden = true; conversationGifPreview.innerHTML = ''; }
   } catch (error) { window.alert(error.message || 'Could not send your message.'); }
 });
 document.querySelector('[data-close-post-modal]')?.addEventListener('click', () => { postModal.hidden = true; pendingPostAction = null; });

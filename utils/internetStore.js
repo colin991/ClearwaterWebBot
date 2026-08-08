@@ -401,15 +401,19 @@ export function updateInternetSocial(store, { actor, targetId, type, enabled, po
   return socialSnapshot(store, user);
 }
 
-export function sendInternetMessage(store, { actor, to, content }) {
+export function sendInternetMessage(store, { actor, to, content, gif }) {
   const sender = upsertInternetUser(store, actor);
   const recipient = store.users[String(to || '')];
   if (!recipient) throw new Error('That member has not joined Clearwater Internet yet');
   const body = text(content, 1000);
-  if (!body) throw new Error('Write a message first');
+  const gifUrl = text(gif?.url, 500);
+  const gifTitle = text(gif?.title, 120);
+  const isGif = /^https:\/\/(?:media\d*|i)\.giphy\.com\//.test(gifUrl);
+  if (!body && !isGif) throw new Error('Write a message or add a GIF first');
+  if (gifUrl && !isGif) throw new Error('Choose a GIF from Clearwater Internet');
   if ((recipient.blocked || []).includes(sender.id) || (sender.blocked || []).includes(recipient.id)) throw new Error('This conversation is unavailable');
   const sentAt = new Date().toISOString();
-  const message = { id: randomUUID(), kind: 'direct', fromId: sender.id, toId: recipient.id, content: body, createdAt: sentAt };
+  const message = { id: randomUUID(), kind: 'direct', fromId: sender.id, toId: recipient.id, content: body, ...(isGif ? { gifUrl, gifTitle } : {}), createdAt: sentAt };
   sender.messages = Array.isArray(sender.messages) ? sender.messages : [];
   recipient.messages = Array.isArray(recipient.messages) ? recipient.messages : [];
   sender.messages.unshift({ ...message, readAt: sentAt });

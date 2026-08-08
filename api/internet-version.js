@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-giphy-hosts-1';
+const INTERNET_VERSION = '20260808-message-media-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {

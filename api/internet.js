@@ -136,7 +136,7 @@ export default async function handler(request, response) {
     } else if (body.action === 'poll-vote') {
       payload = { action: 'poll-vote', postId: String(body.postId || ''), optionIndex: Number(body.optionIndex), remove: body.remove === true, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'message-send') {
-      payload = { action: 'message-send', to: String(body.to || ''), content: String(body.content || '').slice(0, 1000), actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
+      payload = { action: 'message-send', to: String(body.to || ''), content: String(body.content || '').slice(0, 1000), gif: body.gif && typeof body.gif === 'object' ? { url: compatibleGiphyUrl(body.gif.url), title: String(body.gif.title || '').slice(0, 120) } : null, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'report-review') {
       if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
       payload = {
