@@ -80,7 +80,7 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-poll-host-update-1';
+const INTERNET_VERSION = '20260808-conversation-layout-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -369,9 +369,20 @@ async function loadMessages() {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'messages' }) });
     const result = await readApiJson(response, 'Could not load messages.');
     if (!response.ok) throw new Error(result.error || 'Could not load messages.');
-    const messages = result.messages || [];
-    messagesList.innerHTML = messages.length
-      ? messages.map((message) => `<article class="internet-message"><p>${escapeHtml(message.content)}</p><small>${new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(message.createdAt))}</small></article>`).join('')
+    const conversations = new Map();
+    (result.messages || []).forEach((message) => {
+      if (message.kind !== 'direct') return;
+      const otherId = message.fromId === currentUserId ? message.toId : message.fromId;
+      const previous = conversations.get(otherId);
+      if (!previous || new Date(message.createdAt).getTime() > new Date(previous.createdAt).getTime()) conversations.set(otherId, message);
+    });
+    const items = [...conversations.entries()].sort(([, left], [, right]) => new Date(right.createdAt) - new Date(left.createdAt));
+    messagesList.innerHTML = items.length
+      ? items.map(([otherId, message]) => {
+        const member = internetUsers.get(otherId) || {};
+        const name = member.displayName || 'Clearwater member';
+        return `<button type="button" class="internet-message" data-open-conversation="${escapeHtml(otherId)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(name)}</b><p>${escapeHtml(message.content)}</p><small>${timeAgo(message.createdAt)}</small></span></button>`;
+      }).join('')
       : '<p>No messages yet.</p>';
   } catch (error) {
     messagesList.innerHTML = `<p>${escapeHtml(error.message || 'Could not load messages.')}</p>`;
@@ -442,6 +453,22 @@ function openMemberProfile(memberId, updateHash = true) {
   document.querySelector('[data-member-page-copy]').textContent = user.staffRank ? `${user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.';
   document.querySelector('[data-member-page-verified]').hidden = user.verified !== true;
   document.querySelector('[data-member-page-post-count]').textContent = posts.length.toLocaleString();
+  const memberFollowing = Array.isArray(user.following) ? user.following : [];
+  const memberFollowers = Array.isArray(user.followers) ? user.followers : [];
+  const followingButton = document.querySelector('[data-member-page-following]');
+  const followersButton = document.querySelector('[data-member-page-followers]');
+  const connections = document.querySelector('[data-member-page-connections]');
+  if (followingButton) followingButton.innerHTML = `<b>${Number(user.followingCount ?? memberFollowing.length).toLocaleString()}</b> Following`;
+  if (followersButton) followersButton.innerHTML = `<b>${memberFollowers.length.toLocaleString()}</b> Followers`;
+  if (connections) {
+    const memberIds = [...new Set([...memberFollowing, ...memberFollowers])].filter((id) => internetUsers.has(id));
+    connections.hidden = memberIds.length === 0;
+    connections.innerHTML = memberIds.map((id) => {
+      const member = internetUsers.get(id);
+      const label = memberFollowers.includes(id) ? 'Follows them' : 'They follow';
+      return `<button type="button" data-open-member="${escapeHtml(id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(member.displayName || 'Clearwater member')}</b><small>${label}</small></span></button>`;
+    }).join('');
+  }
   document.querySelector('[data-member-page-posts]').innerHTML = posts.length ? posts.map((post) => postMarkup(post, true)).join('') : '<p>No posts yet.</p>';
   const following = socialState.following.includes(user.id);
   const followsYou = socialState.followers.includes(user.id);
@@ -650,6 +677,8 @@ document.addEventListener('click', (event) => {
   if (removePollVote) { void voteOnPoll(removePollVote.dataset.pollRemove, null, true); return; }
   const pollVoters = event.target.closest('[data-poll-voters]');
   if (pollVoters) { showPollVoters(pollVoters.dataset.pollVoters); return; }
+  const conversation = event.target.closest('[data-open-conversation]');
+  if (conversation) { const member = internetUsers.get(conversation.dataset.openConversation); if (member) openConversation(member); return; }
   const authorButton = event.target.closest('[data-open-member]');
   if (authorButton) { openMemberProfile(authorButton.dataset.openMember); return; }
   const messageUser = event.target.closest('[data-message-user]');

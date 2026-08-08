@@ -44,7 +44,8 @@ export function publicPosts(store) {
 }
 
 export function publicUsers(store) {
-  return Object.values(store.users).map((user) => ({
+  const users = Object.values(store.users);
+  return users.map((user) => ({
     id: user.id,
     username: user.username,
     displayName: user.displayName,
@@ -52,6 +53,9 @@ export function publicUsers(store) {
     staffRank: user.staffRank || null,
     verified: user.verified === true,
     banned: Boolean(getActiveBan(user)),
+    following: user.preferences?.hideFollowing === true ? [] : (Array.isArray(user.following) ? user.following : []),
+    followingCount: Array.isArray(user.following) ? user.following.length : 0,
+    followers: users.filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).map((member) => member.id),
   }));
 }
 
