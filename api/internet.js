@@ -12,6 +12,18 @@ async function readBody(request) {
   return raw ? JSON.parse(raw) : {};
 }
 
+function compatibleGiphyUrl(value) {
+  try {
+    const url = new URL(String(value || ''));
+    if (url.protocol !== 'https:' || !/^(?:media\d*|i)\.giphy\.com$/i.test(url.hostname)) return '';
+    // Older bot hosts only allow media.giphy.com, while GIPHY now returns media0/media1/etc.
+    if (/^media\d+\.giphy\.com$/i.test(url.hostname)) url.hostname = 'media.giphy.com';
+    return url.href;
+  } catch {
+    return '';
+  }
+}
+
 async function callBot(request, payload) {
   const apiUrl = process.env.BOT_API_URL?.replace(/\/$/, '');
   const apiKey = process.env.BOT_API_KEY;
@@ -66,7 +78,7 @@ export default async function handler(request, response) {
       payload = {
         action: 'post',
         content: String(body.content || '').slice(0, 500),
-        gif: body.gif && typeof body.gif === 'object' ? { url: String(body.gif.url || '').slice(0, 500), title: String(body.gif.title || '').slice(0, 120) } : null,
+        gif: body.gif && typeof body.gif === 'object' ? { url: compatibleGiphyUrl(body.gif.url), title: String(body.gif.title || '').slice(0, 120) } : null,
         image: body.image && typeof body.image === 'object' ? { dataUrl: String(body.image.dataUrl || '').slice(0, 2_100_000) } : null,
         poll: body.poll && typeof body.poll === 'object' ? { question: String(body.poll.question || '').slice(0, 180), options: Array.isArray(body.poll.options) ? body.poll.options.map((option) => String(option).slice(0, 80)).slice(0, 4) : [], durationDays: Math.min(30, Math.max(1, Number(body.poll.durationDays) || 1)) } : null,
         actor: {
