@@ -42,7 +42,7 @@ const moderationReason = document.querySelector('[data-moderation-reason]');
 const moderationDurationWrap = document.querySelector('[data-moderation-duration-wrap]');
 const moderationDuration = document.querySelector('[data-moderation-duration]');
 const moderationError = document.querySelector('[data-moderation-error]');
-const INTERNET_VERSION = '20260807-staff-2';
+const INTERNET_VERSION = '20260807-time-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -53,7 +53,19 @@ let sessionIsOwner = false;
 let pendingReportReview = null;
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
-const timeAgo = (value) => new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(Math.round((new Date(value) - Date.now()) / 60000), 'minute');
+const timeAgo = (value) => {
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (!Number.isFinite(elapsedSeconds) || elapsedSeconds < 60) return 'just now';
+  const minutes = Math.floor(elapsedSeconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    const remainingMinutes = minutes % 60;
+    return `${hours} hour${hours === 1 ? '' : 's'}${remainingMinutes ? ` and ${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}` : ''} ago`;
+  }
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+};
 const verifiedBadge = () => '<span class="verified" role="img" aria-label="Verified" data-tooltip="Verified"><img src="assets/verified-badge.png" alt="" /></span>';
 const isVerified = (post) => post.verified === true || internetUsers.get(post.authorId)?.verified === true;
 
