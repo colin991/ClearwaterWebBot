@@ -105,8 +105,11 @@ export function createInternetPost(store, user, content) {
   const cooldownRemaining = 60_000 - (Date.now() - new Date(user.lastPostAt || 0).getTime());
   if (cooldownRemaining > 0) throw new Error(`Please wait ${Math.ceil(cooldownRemaining / 1000)} seconds before posting again`);
   const normalized = body.toLowerCase().replace(/\s+/g, ' ').trim();
-  if (store.posts.some((post) => post.authorId === user.id && post.content.toLowerCase().replace(/\s+/g, ' ').trim() === normalized)) {
-    throw new Error('You cannot post the same message more than once');
+  const duplicateCooldown = 5 * 60 * 1000;
+  if (store.posts.some((post) => post.authorId === user.id
+    && post.content.toLowerCase().replace(/\s+/g, ' ').trim() === normalized
+    && Date.now() - new Date(post.createdAt).getTime() < duplicateCooldown)) {
+    throw new Error('You can post the same message again after 5 minutes');
   }
   if (/(.)\1{11,}/.test(body) || (body.match(/https?:\/\//gi) || []).length > 2) {
     throw new Error('That post looks like spam. Please shorten it and try again');
