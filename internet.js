@@ -37,6 +37,9 @@ const staffContent = document.querySelector('[data-staff-content]');
 const warningNotice = document.querySelector('[data-warning-notice]');
 const warningReasons = document.querySelector('[data-warning-reasons]');
 const messagesList = document.querySelector('[data-messages-list]');
+const notificationList = document.querySelector('[data-notification-list]');
+const notificationCount = document.querySelector('[data-notification-count]');
+const notificationDot = document.querySelector('[data-notification-dot]');
 const moderationModal = document.querySelector('[data-moderation-modal]');
 const moderationForm = document.querySelector('[data-moderation-form]');
 const moderationReason = document.querySelector('[data-moderation-reason]');
@@ -77,7 +80,7 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-follow-back-1';
+const INTERNET_VERSION = '20260808-notifications-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -88,7 +91,7 @@ let sessionIsOwner = false;
 let pendingReportReview = null;
 let selectedGif = null;
 let selectedImage = null;
-let socialState = { following: [], followers: [], blocked: [], muted: [], bookmarks: [] };
+let socialState = { following: [], followers: [], blocked: [], muted: [], bookmarks: [], unreadNotifications: 0 };
 let viewedMember = null;
 let pendingPostAction = null;
 let openPostId = null;
@@ -249,6 +252,7 @@ function showView(view) {
   if (activeView === 'home') renderPosts();
   if (activeView === 'staff') void loadModeration();
   if (activeView === 'messages') void loadMessages();
+  if (activeView === 'notifications') void loadNotifications();
   if (activeView === 'bookmarks') renderBookmarks();
 }
 
@@ -367,12 +371,33 @@ async function loadMessages() {
   }
 }
 
+function updateNotificationIndicators() {
+  const unread = Number(socialState.unreadNotifications || 0);
+  if (notificationDot) notificationDot.hidden = unread < 1;
+}
+
+async function loadNotifications() {
+  if (!notificationList || !currentUserId) return;
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'notifications' }) });
+    const result = await readApiJson(response, 'Could not load notifications.');
+    if (!response.ok) throw new Error(result.error || 'Could not load notifications.');
+    const notifications = result.notifications || [];
+    const names = { follow: 'started following you', like: 'liked your post', reply: 'replied to your post', mention: 'mentioned you in a post', repost: 'reposted your post', quote: 'quoted your post' };
+    notificationList.innerHTML = notifications.length ? notifications.map((notification) => `<button type="button" class="notification-item" ${notification.postId ? `data-notification-post="${escapeHtml(notification.postId)}"` : `data-notification-member="${escapeHtml(notification.actorId)}"`}><img src="${escapeHtml(notification.actorAvatarUrl || internetUsers.get(notification.actorId)?.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(notification.actorName || internetUsers.get(notification.actorId)?.displayName || 'Clearwater member')}</b> ${escapeHtml(names[notification.type] || 'interacted with you')}<small>${escapeHtml(notification.postContent || (notification.postId ? 'View post' : 'View profile'))} &middot; ${timeAgo(notification.createdAt)}</small></span></button>`).join('') : '<p class="feed-note">Nothing new yet.</p>';
+    const unread = Number(result.unreadCount || 0);
+    if (notificationCount) { notificationCount.hidden = unread < 1; notificationCount.textContent = `${unread} unread`; }
+    socialState.unreadNotifications = 0;
+    updateNotificationIndicators();
+  } catch (error) { notificationList.innerHTML = `<p>${escapeHtml(error.message || 'Could not load notifications.')}</p>`; }
+}
+
 async function loadSocial() {
   if (!currentUserId) return;
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'social-status' }) });
     const result = await readApiJson(response, 'Could not load your social settings.');
-    if (response.ok && result.social) { socialState = { ...socialState, ...result.social }; renderPosts(); }
+    if (response.ok && result.social) { socialState = { ...socialState, ...result.social }; updateNotificationIndicators(); renderPosts(); }
   } catch { /* Feed stays usable during a temporary connection issue. */ }
 }
 
@@ -590,6 +615,10 @@ document.querySelectorAll('[data-profile-tab]').forEach((button) => button.addEv
   if (profileList) profileList.innerHTML = `<p>${button.textContent} will appear here when community interactions are enabled.</p>`;
 }));
 document.addEventListener('click', (event) => {
+  const notificationPost = event.target.closest('[data-notification-post]');
+  if (notificationPost) { showPostDetail(notificationPost.dataset.notificationPost); return; }
+  const notificationMember = event.target.closest('[data-notification-member]');
+  if (notificationMember) { openMemberProfile(notificationMember.dataset.notificationMember); return; }
   const card = event.target.closest('[data-post-card]');
   if (card && !event.target.closest('button,a,details,input,textarea')) { showPostDetail(card.dataset.postCard); return; }
   const emojiChoice = event.target.closest('[data-emoji-choice]');
@@ -888,7 +917,7 @@ showViewFromAddress();
 loadSession().catch(() => {});
 loadPosts();
 window.setInterval(() => {
-  if (!document.hidden) { loadPosts(); loadBanStatus(); }
+  if (!document.hidden) { loadPosts(); loadBanStatus(); loadSocial(); }
 }, 15_000);
 window.setInterval(updateBanCountdown, 60 * 1000);
 

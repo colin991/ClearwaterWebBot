@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
-import { clearExpiredInternetBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, getActiveBan, interactInternetPost, internetPreferences, moderationSnapshot, publicPosts, publicUsers, readInternetStore, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetMessages, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, upsertInternetUser, voteInternetPoll } from './internetStore.js';
+import { clearExpiredInternetBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, getActiveBan, interactInternetPost, internetPreferences, moderationSnapshot, publicPosts, publicUsers, readInternetStore, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, upsertInternetUser, voteInternetPoll } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -167,6 +167,12 @@ export function startStatusServer(client, config) {
           const messages = takeInternetMessages(store, body.actor);
           await saveInternetStore(store);
           return json(response, 200, { messages });
+        }
+
+        if (body.action === 'notifications') {
+          const result = takeInternetNotifications(store, body.actor);
+          await saveInternetStore(store);
+          return json(response, 200, result);
         }
 
         if (body.action === 'social') {

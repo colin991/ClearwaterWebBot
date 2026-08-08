@@ -7,6 +7,24 @@ const emptyStore = Object.freeze({ users: {}, posts: [], reports: [], logs: [] }
 
 const text = (value, length) => String(value || '').trim().slice(0, length);
 
+function addInternetNotification(store, { recipientId, actor, type, post = null }) {
+  const recipient = store.users[String(recipientId || '')];
+  if (!recipient || recipient.id === actor?.id) return;
+  recipient.notifications = Array.isArray(recipient.notifications) ? recipient.notifications : [];
+  recipient.notifications.unshift({
+    id: randomUUID(),
+    type,
+    actorId: String(actor?.id || ''),
+    actorName: text(actor?.displayName, 80) || 'A Clearwater member',
+    actorAvatarUrl: text(actor?.avatarUrl, 300) || null,
+    postId: post?.id || null,
+    postContent: text(post?.content, 180),
+    createdAt: new Date().toISOString(),
+    readAt: null,
+  });
+  recipient.notifications = recipient.notifications.slice(0, 100);
+}
+
 export async function readInternetStore() {
   const data = await readJsonFile(storePath, emptyStore);
   return {
@@ -143,6 +161,11 @@ export function createInternetPost(store, user, content, media = {}) {
   };
   store.posts.unshift(post);
   store.posts = store.posts.slice(0, 500);
+  const mentionedHandles = [...new Set((body.match(/(?:^|\s)@([a-z0-9_]{1,80})/gi) || []).map((mention) => mention.trim().slice(1).toLowerCase()))];
+  mentionedHandles.forEach((handle) => {
+    const recipient = Object.values(store.users).find((member) => String(member.username || '').toLowerCase() === handle);
+    if (recipient) addInternetNotification(store, { recipientId: recipient.id, actor: user, type: 'mention', post });
+  });
   user.lastPostAt = post.createdAt;
   return post;
 }
@@ -173,10 +196,12 @@ export function interactInternetPost(store, { actor, postId, type, content = '',
     post.likes = Array.isArray(post.likes) ? post.likes : [];
     const liked = post.likes.includes(user.id);
     post.likes = liked ? post.likes.filter((id) => id !== user.id) : [...post.likes, user.id];
+    if (!liked) addInternetNotification(store, { recipientId: post.authorId, actor: user, type: 'like', post });
     return { post, liked: !liked };
   }
   if (type === 'reply') {
     const reply = createInternetPost(store, user, content, { parentId: post.id });
+    addInternetNotification(store, { recipientId: post.authorId, actor: user, type: 'reply', post: reply });
     return { post: reply };
   }
   if (type === 'repost') {
@@ -184,10 +209,12 @@ export function interactInternetPost(store, { actor, postId, type, content = '',
     if (!String(content || '').trim() && !quote) {
       const repost = { id: randomUUID(), authorId: user.id, displayName: user.displayName, username: user.username, avatarUrl: user.avatarUrl, staffRank: user.staffRank, verified: user.verified === true, content: '', repostOf: post.id, parentId: null, createdAt: new Date().toISOString() };
       store.posts.unshift(repost); store.posts = store.posts.slice(0, 500); user.lastPostAt = repost.createdAt;
+      addInternetNotification(store, { recipientId: post.authorId, actor: user, type: 'repost', post: repost });
       return { post: repost };
     }
     const repost = createInternetPost(store, user, content, quote ? { quoteId: post.id } : {});
     repost.repostOf = quote ? null : post.id;
+    addInternetNotification(store, { recipientId: post.authorId, actor: user, type: quote ? 'quote' : 'repost', post: repost });
     return { post: repost };
   }
   throw new Error('Unsupported post action');
@@ -307,11 +334,20 @@ export function takeInternetMessages(store, actor) {
   return messages.slice(0, 50);
 }
 
+export function takeInternetNotifications(store, actor) {
+  const user = upsertInternetUser(store, actor);
+  const notifications = Array.isArray(user.notifications) ? user.notifications : [];
+  const unreadCount = notifications.filter((notification) => !notification.readAt).length;
+  notifications.forEach((notification) => { if (!notification.readAt) notification.readAt = new Date().toISOString(); });
+  return { notifications: notifications.slice(0, 100), unreadCount };
+}
+
 export function socialSnapshot(store, actor) {
   const user = upsertInternetUser(store, actor);
   return {
     following: Array.isArray(user.following) ? user.following : [],
     followers: Object.values(store.users).filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).map((member) => member.id),
+    unreadNotifications: (Array.isArray(user.notifications) ? user.notifications : []).filter((notification) => !notification.readAt).length,
     blocked: Array.isArray(user.blocked) ? user.blocked : [],
     muted: Array.isArray(user.muted) ? user.muted : [],
     bookmarks: Array.isArray(user.bookmarks) ? user.bookmarks : [],
@@ -348,6 +384,7 @@ export function updateInternetSocial(store, { actor, targetId, type, enabled, po
   user[key] = Array.isArray(user[key]) ? user[key] : [];
   user[key] = enabled ? [...new Set([...user[key], target])].slice(-500) : user[key].filter((id) => id !== target);
   if (type === 'block' && enabled) user.following = (user.following || []).filter((id) => id !== target);
+  if (type === 'follow' && enabled) addInternetNotification(store, { recipientId: target, actor: user, type: 'follow' });
   return socialSnapshot(store, user);
 }
 

@@ -107,6 +107,8 @@ export default async function handler(request, response) {
       payload = { action: 'warnings', actor: { id: user.id, displayName: user.displayName } };
     } else if (body.action === 'messages') {
       payload = { action: 'messages', actor: { id: user.id, displayName: user.displayName } };
+    } else if (body.action === 'notifications') {
+      payload = { action: 'notifications', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'social-status') {
       payload = { action: 'social-status', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'preferences') {
