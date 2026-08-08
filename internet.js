@@ -64,7 +64,7 @@ const messageForm = document.querySelector('[data-message-form]');
 const postModal = document.querySelector('[data-post-modal]');
 const postModalForm = document.querySelector('[data-post-modal-form]');
 const shareModal = document.querySelector('[data-share-modal]');
-const INTERNET_VERSION = '20260808-open-feed-1';
+const INTERNET_VERSION = '20260808-post-header-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -476,7 +476,10 @@ async function handlePostEngagement(type, postId) {
 async function postInteraction({ postId, type, content = '', quote = false }) {
   const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post-interaction', postId, type, content, quote }) });
   const result = await readApiJson(response, 'Could not update this post.');
-  if (!response.ok) throw new Error(result.error || 'Could not update this post.');
+  if (!response.ok) {
+    if (result.error === 'Owner access required') throw new Error('Your bot host needs the newest GitHub files and a restart before post actions can work.');
+    throw new Error(result.error || 'Could not update this post.');
+  }
   await loadPosts();
 }
 function insertAtCursor(value) {
