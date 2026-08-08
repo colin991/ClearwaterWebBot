@@ -73,7 +73,7 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-repost-dropdown-1';
+const INTERNET_VERSION = '20260808-clickable-mentions-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -149,7 +149,10 @@ function postMarkup(post, profile = false) {
   const staffRank = author?.staffRank || null;
   const body = escapeHtml(post.content)
     .replace(/(^|\s)(#[a-z0-9_]{1,60})/gi, '$1<a href="#home" class="post-hashtag" data-topic="$2">$2</a>')
-    .replace(/(^|\s)(@[a-z0-9_]{1,80})/gi, '$1<span class="post-mention">$2</span>');
+    .replace(/(^|\s)(@[a-z0-9_]{1,80})/gi, (full, leading, handle) => {
+      const mentioned = [...internetUsers.values()].find((user) => String(user.username || '').toLowerCase() === handle.slice(1).toLowerCase());
+      return mentioned ? `${leading}<button type="button" class="post-mention" data-open-member="${escapeHtml(mentioned.id)}">${handle}</button>` : `${leading}<span class="post-mention">${handle}</span>`;
+    });
   const gif = safeGifUrl(post.gifUrl) ? `<img class="post-gif" src="${escapeHtml(post.gifUrl)}" alt="${escapeHtml(post.gifTitle || 'GIF')}" />` : '';
   const poll = post.poll?.question && Array.isArray(post.poll.options) ? `<section class="post-poll"><b>${escapeHtml(post.poll.question)}</b>${post.poll.options.map((option) => `<button type="button">${escapeHtml(option)} <span>0%</span></button>`).join('')}</section>` : '';
   const replies = allPosts.filter((item) => item.parentId === post.id).length;
