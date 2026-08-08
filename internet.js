@@ -42,7 +42,7 @@ const moderationReason = document.querySelector('[data-moderation-reason]');
 const moderationDurationWrap = document.querySelector('[data-moderation-duration-wrap]');
 const moderationDuration = document.querySelector('[data-moderation-duration]');
 const moderationError = document.querySelector('[data-moderation-error]');
-const INTERNET_VERSION = '20260807-review-modal-1';
+const INTERNET_VERSION = '20260807-staff-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -112,6 +112,7 @@ function renderProfilePosts() {
 }
 
 function showView(view) {
+  document.querySelector('.internet-shell')?.classList.toggle('staff-mode', view === 'staff');
   document.querySelectorAll('[data-view]').forEach((section) => { section.hidden = section.dataset.view !== view; });
   document.querySelectorAll('[data-view-link]').forEach((link) => link.classList.toggle('selected', link.dataset.viewLink === view));
   if (view === 'home') renderPosts();
@@ -166,7 +167,17 @@ async function loadModeration() {
     const reports = result.reports || [];
     const bans = result.bans || [];
     const logs = result.logs || [];
-    staffContent.innerHTML = `<section><h2>Open reports <span>${reports.length}</span></h2>${reports.length ? reports.map((report) => `<article class="staff-item"><b>${escapeHtml(report.authorName)}’s post</b><p>${escapeHtml(report.content)}</p><small>Reported by ${escapeHtml(report.reporterName)} · ${escapeHtml(report.reason)}</small><div class="report-actions"><select data-report-action><option value="warning">Give warning</option><option value="delete">Delete message</option><option value="ban">Ban account</option></select><button type="button" data-report-review="accept" data-report-id="${escapeHtml(report.id)}">Accept</button><button type="button" class="danger" data-report-review="deny" data-report-id="${escapeHtml(report.id)}">Deny</button></div></article>`).join('') : '<p>No open reports.</p>'}</section><section><h2>Active bans <span>${bans.length}</span></h2>${bans.length ? bans.map((ban) => `<article class="staff-item"><b>${escapeHtml(ban.displayName)}</b><p>${escapeHtml(ban.reason)}</p><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></article>`).join('') : '<p>No active bans.</p>'}</section><section><h2>Staff log <span>${logs.length}</span></h2>${logs.length ? logs.map((log) => `<article class="staff-item"><p>${escapeHtml(log.message)}</p><small>${new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(log.createdAt))}</small></article>`).join('') : '<p>No staff actions yet.</p>'}</section>`;
+    const selected = reports[0] || null;
+    const reportCards = reports.length
+      ? reports.map((report) => `<article class="staff-report-card"><div><b>${escapeHtml(report.authorName)}’s post</b><small>Reported by ${escapeHtml(report.reporterName)} · ${escapeHtml(report.reason)}</small></div><p>${escapeHtml(report.content)}</p><div class="report-actions"><select data-report-action><option value="warning">Give warning</option><option value="delete">Delete message</option><option value="ban">Ban account</option></select><button type="button" data-report-review="accept" data-report-id="${escapeHtml(report.id)}">Accept</button><button type="button" class="danger" data-report-review="deny" data-report-id="${escapeHtml(report.id)}">Deny</button></div></article>`).join('')
+      : '<div class="staff-empty">Nothing pending. The queue is clear.</div>';
+    const banCards = bans.length
+      ? bans.map((ban) => `<article class="staff-compact"><b>${escapeHtml(ban.displayName)}</b><span>${escapeHtml(ban.reason)}</span><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></article>`).join('')
+      : '<div class="staff-empty">No active bans.</div>';
+    const logCards = logs.length
+      ? logs.slice(0, 5).map((log) => `<article class="staff-compact"><span>${escapeHtml(log.message)}</span><small>${new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(log.createdAt))}</small></article>`).join('')
+      : '<div class="staff-empty">No staff actions yet.</div>';
+    staffContent.innerHTML = `<aside class="staff-sidebar"><div class="staff-logo"><span>✦</span><b>Clearwater</b><small>Staff workspace</small></div><div class="staff-side-heading">Panels <span>4</span></div><nav><a class="active" href="#staff">Overview <small>open</small></a><a href="#staff">Live reports <small>${reports.length}</small></a><a href="#staff">Report workspace</a><a href="#staff">Moderation history</a></nav><section><h2>Live reports <span>${reports.length}</span></h2>${reports.length ? reports.map((report) => `<button type="button" class="staff-live-report"><b>${escapeHtml(report.authorName)}</b><small>${escapeHtml(report.reason)}</small></button>`).join('') : '<p>Nothing in this queue.</p>'}</section></aside><section class="staff-overview"><header class="staff-topbar"><div><span>Overview</span><b>Clearwater Staff</b></div><button type="button" data-refresh-staff>Refresh</button></header><div class="staff-tabs"><span class="active">Overview</span><span>Live Reports</span><span>Moderation History</span></div><section class="staff-summary"><h1>Overview</h1><div class="staff-stat-grid"><article><b>${reports.length}</b><span>Pending reports</span></article><article><b>${bans.length}</b><span>Active bans</span></article><article><b>${logs.length}</b><span>Actions logged</span></article><article><b>${reports.length + bans.length}</b><span>Open moderation</span></article></div></section><section class="staff-queue"><header><h2>Oldest pending reports</h2><span>${reports.length} loaded</span></header>${reportCards}</section></section><aside class="staff-dossier"><header><span>User dossier</span><b>${selected ? `@${escapeHtml(selected.authorName)}` : 'No report selected'}</b></header>${selected ? `<section class="dossier-profile"><div class="dossier-avatar">${escapeHtml(selected.authorName).slice(0, 1)}</div><div><b>${escapeHtml(selected.authorName)}</b><small>Discord user</small></div></section><section class="dossier-section"><h2>Reported post</h2><p>${escapeHtml(selected.content)}</p><small>Reason: ${escapeHtml(selected.reason)}</small></section>` : '<div class="staff-empty">Select a report to review account details.</div>'}<section class="dossier-section"><h2>Active bans</h2>${banCards}</section><section class="dossier-section"><h2>Recent staff history</h2>${logCards}</section></aside>`;
   } catch (error) {
     staffContent.innerHTML = `<p>${escapeHtml(error.message || 'Could not load the staff panel.')}</p>`;
   }
@@ -318,6 +329,7 @@ document.querySelectorAll('[data-profile-tab]').forEach((button) => button.addEv
   if (profileList) profileList.innerHTML = `<p>${button.textContent} will appear here when community interactions are enabled.</p>`;
 }));
 document.addEventListener('click', (event) => {
+  if (event.target.closest('[data-refresh-staff]')) { void loadModeration(); return; }
   const reviewButton = event.target.closest('[data-report-review]');
   if (reviewButton) { void reviewReport(reviewButton); return; }
   const button = event.target.closest('[data-post-action]');
