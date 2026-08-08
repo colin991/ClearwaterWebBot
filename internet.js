@@ -81,7 +81,7 @@ const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
 const conversationGifPreview = document.querySelector('[data-conversation-gif-preview]');
-const INTERNET_VERSION = '20260808-message-media-1';
+const INTERNET_VERSION = '20260808-owner-panel-drop-upload-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -253,11 +253,10 @@ function showView(view) {
   const availableViews = new Set(['home', 'notifications', 'messages', 'bookmarks', 'profile', 'member', 'conversation', 'settings', 'staff', 'post']);
   let activeView = availableViews.has(view) ? view : 'home';
   if (activeView === 'staff' && !sessionIsOwner) activeView = 'home';
-  document.querySelector('.internet-shell')?.classList.toggle('staff-mode', activeView === 'staff');
+  document.querySelector('.internet-shell')?.classList.remove('staff-mode');
   document.querySelectorAll('[data-view]').forEach((section) => { section.hidden = section.dataset.view !== activeView; });
   document.querySelectorAll('[data-view-link]').forEach((link) => link.classList.toggle('selected', link.dataset.viewLink === activeView));
   if (activeView === 'home') renderPosts();
-  if (activeView === 'staff') void loadModeration();
   if (activeView === 'messages') void loadMessages();
   if (activeView === 'notifications') void loadNotifications();
   if (activeView === 'bookmarks') renderBookmarks();
@@ -841,12 +840,10 @@ async function loadGifs(query = '') {
 
 gifButton?.addEventListener('click', () => { pickerTarget = 'post'; gifModal.hidden = false; gifQuery?.focus(); void loadGifs(); });
 imageButton?.addEventListener('click', () => imageUpload?.click());
-imageUpload?.addEventListener('change', () => {
-  const file = imageUpload.files?.[0];
+function addImageToPost(file) {
   if (!file) return;
   if (!/^image\/(?:png|jpeg|webp|gif)$/.test(file.type) || file.size > 1_500_000) {
     postMessage.textContent = 'Choose a PNG, JPG, WebP, or GIF image smaller than 1.5 MB.';
-    imageUpload.value = '';
     return;
   }
   const reader = new FileReader();
@@ -860,8 +857,14 @@ imageUpload?.addEventListener('change', () => {
     postMessage.textContent = '';
   };
   reader.readAsDataURL(file);
+}
+imageUpload?.addEventListener('change', () => {
+  addImageToPost(imageUpload.files?.[0]);
   imageUpload.value = '';
 });
+composer?.addEventListener('dragover', (event) => { if (event.dataTransfer?.types.includes('Files')) { event.preventDefault(); composer.classList.add('dragging-image'); } });
+composer?.addEventListener('dragleave', (event) => { if (!composer.contains(event.relatedTarget)) composer.classList.remove('dragging-image'); });
+composer?.addEventListener('drop', (event) => { event.preventDefault(); composer.classList.remove('dragging-image'); addImageToPost(event.dataTransfer?.files?.[0]); });
 document.querySelector('[data-close-gif]')?.addEventListener('click', () => { gifModal.hidden = true; });
 gifSearch?.addEventListener('submit', async (event) => {
   event.preventDefault();
