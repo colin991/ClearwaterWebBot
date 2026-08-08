@@ -80,7 +80,7 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-notifications-1';
+const INTERNET_VERSION = '20260808-message-bubbles-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -456,7 +456,19 @@ function openConversation(member) {
   document.querySelector('[data-conversation-card-rank]').textContent = member.staffRank || 'Clearwater community member';
   conversationMessages.innerHTML = '<p>Start a conversation.</p>';
   showView('conversation');
+  void loadConversation(member);
   conversationInput?.focus();
+}
+
+async function loadConversation(member) {
+  if (!member || !conversationMessages) return;
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'conversation', withUserId: member.id }) });
+    const result = await readApiJson(response, 'Could not load this conversation.');
+    if (!response.ok) throw new Error(result.error || 'Could not load this conversation.');
+    const messages = result.messages || [];
+    conversationMessages.innerHTML = messages.length ? messages.map((message) => `<p class="conversation-bubble ${message.fromId === currentUserId ? 'own' : 'theirs'}">${escapeHtml(message.content)}</p>`).join('') : '<p>Start a conversation.</p>';
+  } catch (error) { conversationMessages.innerHTML = `<p>${escapeHtml(error.message || 'Could not load this conversation.')}</p>`; }
 }
 
 function renderMessageUserResults() {

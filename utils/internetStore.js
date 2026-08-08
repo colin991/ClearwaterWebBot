@@ -334,6 +334,15 @@ export function takeInternetMessages(store, actor) {
   return messages.slice(0, 50);
 }
 
+export function takeInternetConversation(store, { actor, withUserId }) {
+  const user = upsertInternetUser(store, actor);
+  const otherId = String(withUserId || '');
+  if (!store.users[otherId]) throw new Error('That member has not joined Clearwater Internet yet');
+  const messages = (Array.isArray(user.messages) ? user.messages : []).filter((message) => message.kind === 'direct' && (message.fromId === otherId || message.toId === otherId));
+  messages.forEach((message) => { if (message.toId === user.id && !message.readAt) message.readAt = new Date().toISOString(); });
+  return messages.sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt)).slice(-100);
+}
+
 export function takeInternetNotifications(store, actor) {
   const user = upsertInternetUser(store, actor);
   const notifications = Array.isArray(user.notifications) ? user.notifications : [];
@@ -395,7 +404,14 @@ export function sendInternetMessage(store, { actor, to, content }) {
   const body = text(content, 1000);
   if (!body) throw new Error('Write a message first');
   if ((recipient.blocked || []).includes(sender.id) || (sender.blocked || []).includes(recipient.id)) throw new Error('This conversation is unavailable');
-  addInternetMessage(store, recipient.id, `${sender.displayName}: ${body}`);
+  const sentAt = new Date().toISOString();
+  const message = { id: randomUUID(), kind: 'direct', fromId: sender.id, toId: recipient.id, content: body, createdAt: sentAt };
+  sender.messages = Array.isArray(sender.messages) ? sender.messages : [];
+  recipient.messages = Array.isArray(recipient.messages) ? recipient.messages : [];
+  sender.messages.unshift({ ...message, readAt: sentAt });
+  recipient.messages.unshift({ ...message, readAt: null });
+  sender.messages = sender.messages.slice(0, 100);
+  recipient.messages = recipient.messages.slice(0, 100);
   return { sent: true };
 }
 
