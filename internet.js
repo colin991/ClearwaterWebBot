@@ -69,7 +69,7 @@ const postDetail = document.querySelector('[data-post-detail]');
 const postModal = document.querySelector('[data-post-modal]');
 const postModalForm = document.querySelector('[data-post-modal-form]');
 const shareModal = document.querySelector('[data-share-modal]');
-const INTERNET_VERSION = '20260808-poll-layout-1';
+const INTERNET_VERSION = '20260808-trending-gifs-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -567,19 +567,24 @@ function renderEmojiGrid() {
   emojiGrid.innerHTML = items.map((emoji) => `<button type="button" data-emoji-choice="${emoji}" aria-label="${emoji}">${emoji}</button>`).join('');
 }
 
-gifButton?.addEventListener('click', () => { gifModal.hidden = false; gifQuery?.focus(); });
+async function loadGifs(query = '') {
+  if (!gifMessage || !gifResults) return;
+  gifMessage.textContent = query ? 'Searching GIFs...' : 'Loading trending GIFs...';
+  gifResults.innerHTML = '';
+  try {
+    const response = await fetch(`/api/giphy${query ? `?q=${encodeURIComponent(query)}` : ''}`);
+    const result = await readApiJson(response, 'GIF search is unavailable.');
+    if (!response.ok) throw new Error(result.error || 'GIF search is unavailable.');
+    gifMessage.textContent = result.gifs?.length ? (query ? 'Choose a GIF.' : 'Trending GIFs') : 'No GIFs found.';
+    gifResults.innerHTML = (result.gifs || []).map((gif) => `<button type="button" data-gif-url="${escapeHtml(gif.url)}" data-gif-title="${escapeHtml(gif.title)}"><img src="${escapeHtml(gif.previewUrl)}" alt="${escapeHtml(gif.title)}" /></button>`).join('');
+  } catch (error) { gifMessage.textContent = error.message || 'GIF search is unavailable.'; }
+}
+
+gifButton?.addEventListener('click', () => { gifModal.hidden = false; gifQuery?.focus(); void loadGifs(); });
 document.querySelector('[data-close-gif]')?.addEventListener('click', () => { gifModal.hidden = true; });
 gifSearch?.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const query = gifQuery?.value.trim(); if (!query) return;
-  gifMessage.textContent = 'Searching GIFs...'; gifResults.innerHTML = '';
-  try {
-    const response = await fetch(`/api/giphy?q=${encodeURIComponent(query)}`);
-    const result = await readApiJson(response, 'GIF search is unavailable.');
-    if (!response.ok) throw new Error(result.error || 'GIF search is unavailable.');
-    gifMessage.textContent = result.gifs?.length ? 'Choose a GIF.' : 'No GIFs found.';
-    gifResults.innerHTML = (result.gifs || []).map((gif) => `<button type="button" data-gif-url="${escapeHtml(gif.url)}" data-gif-title="${escapeHtml(gif.title)}"><img src="${escapeHtml(gif.previewUrl)}" alt="${escapeHtml(gif.title)}" /></button>`).join('');
-  } catch (error) { gifMessage.textContent = error.message || 'GIF search is unavailable.'; }
+  void loadGifs(gifQuery?.value.trim() || '');
 });
 mentionButton?.addEventListener('click', () => { mentionModal.hidden = false; renderMentionResults(); mentionQuery?.focus(); });
 document.querySelector('[data-close-mention]')?.addEventListener('click', () => { mentionModal.hidden = true; });

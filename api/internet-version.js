@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-poll-layout-1';
+const INTERNET_VERSION = '20260808-trending-gifs-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {
