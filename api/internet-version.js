@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-clickable-mentions-1';
+const INTERNET_VERSION = '20260808-hidden-conversation-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {
