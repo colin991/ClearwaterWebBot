@@ -108,6 +108,10 @@ export default async function handler(request, response) {
       payload = { action: 'messages', actor: { id: user.id, displayName: user.displayName } };
     } else if (body.action === 'social-status') {
       payload = { action: 'social-status', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
+    } else if (body.action === 'preferences') {
+      payload = { action: 'preferences', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
+    } else if (body.action === 'preference-save') {
+      payload = { action: 'preference-save', key: String(body.key || ''), enabled: body.enabled === true, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'social') {
       payload = { action: 'social', type: String(body.type || ''), enabled: body.enabled === true, targetId: String(body.targetId || ''), postId: String(body.postId || ''), actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'post-interaction') {

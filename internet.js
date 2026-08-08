@@ -73,7 +73,7 @@ const repostPopup = document.querySelector('[data-repost-popup]');
 const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
-const INTERNET_VERSION = '20260808-settings-layout-1';
+const INTERNET_VERSION = '20260808-saved-settings-1';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -352,6 +352,16 @@ async function loadSocial() {
   } catch { /* Feed stays usable during a temporary connection issue. */ }
 }
 
+async function loadPreferences() {
+  if (!currentUserId) return;
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'preferences' }) });
+    const result = await readApiJson(response, 'Could not load settings.');
+    if (!response.ok) throw new Error(result.error || 'Could not load settings.');
+    document.querySelectorAll('[data-preference]').forEach((input) => { input.checked = result.preferences?.[input.dataset.preference] === true; });
+  } catch { /* Settings remain usable if the bot host is briefly unavailable. */ }
+}
+
 async function socialAction(type, { targetId = '', postId = '', enabled = true } = {}) {
   const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'social', type, targetId, postId, enabled }) });
   const result = await readApiJson(response, 'Could not save this change.');
@@ -501,10 +511,20 @@ async function loadSession() {
   await loadWarnings();
   await loadMessages();
   await loadSocial();
+  await loadPreferences();
 }
 
 content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; postButton.disabled = !content.value.trim(); updateComposerHighlight(); });
 search?.addEventListener('input', () => { showView('home'); renderPosts(); });
+document.querySelectorAll('[data-preference]').forEach((input) => input.addEventListener('change', async () => {
+  const original = !input.checked;
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'preference-save', key: input.dataset.preference, enabled: input.checked }) });
+    const result = await readApiJson(response, 'Could not save this setting.');
+    if (!response.ok) throw new Error(result.error || 'Could not save this setting.');
+    input.checked = result.preferences?.[input.dataset.preference] === true;
+  } catch (error) { input.checked = original; window.alert(error.message || 'Could not save this setting.'); }
+}));
 document.querySelectorAll('[data-view-link]').forEach((link) => link.addEventListener('click', (event) => {
   event.preventDefault();
   const view = link.dataset.viewLink || 'home';

@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
-import { clearExpiredInternetBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, getActiveBan, interactInternetPost, moderationSnapshot, publicPosts, publicUsers, readInternetStore, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetMessages, takeUnreadInternetWarnings, updateInternetSocial, upsertInternetUser } from './internetStore.js';
+import { clearExpiredInternetBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, getActiveBan, interactInternetPost, internetPreferences, moderationSnapshot, publicPosts, publicUsers, readInternetStore, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetMessages, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, upsertInternetUser } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -185,6 +185,18 @@ export function startStatusServer(client, config) {
           const social = socialSnapshot(store, body.actor);
           await saveInternetStore(store);
           return json(response, 200, { social });
+        }
+
+        if (body.action === 'preferences') {
+          const preferences = internetPreferences(store, body.actor);
+          await saveInternetStore(store);
+          return json(response, 200, { preferences });
+        }
+
+        if (body.action === 'preference-save') {
+          const preferences = updateInternetPreference(store, body);
+          await saveInternetStore(store);
+          return json(response, 200, { preferences });
         }
 
         if (body.action === 'message-send') {

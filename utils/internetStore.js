@@ -294,6 +294,21 @@ export function socialSnapshot(store, actor) {
   };
 }
 
+const preferenceKeys = new Set(['followersOnly', 'hideFollowing', 'hideProfile', 'friendsMessages']);
+
+export function internetPreferences(store, actor) {
+  const user = upsertInternetUser(store, actor);
+  const saved = user.preferences && typeof user.preferences === 'object' ? user.preferences : {};
+  return Object.fromEntries([...preferenceKeys].map((key) => [key, saved[key] === true]));
+}
+
+export function updateInternetPreference(store, { actor, key, enabled }) {
+  if (!preferenceKeys.has(String(key || ''))) throw new Error('Unknown setting');
+  const user = upsertInternetUser(store, actor);
+  user.preferences = { ...(user.preferences && typeof user.preferences === 'object' ? user.preferences : {}), [key]: enabled === true };
+  return internetPreferences(store, user);
+}
+
 export function updateInternetSocial(store, { actor, targetId, type, enabled, postId }) {
   const user = upsertInternetUser(store, actor);
   if (type === 'bookmark') {
