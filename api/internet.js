@@ -73,6 +73,7 @@ export default async function handler(request, response) {
 
     const body = await readBody(request);
     const access = await getStaffAccess(user);
+    const asOfficial = access.allowed && body.asOfficial === true;
     let payload;
     if (body.action === 'post') {
       payload = {
@@ -81,7 +82,7 @@ export default async function handler(request, response) {
         gif: body.gif && typeof body.gif === 'object' ? { url: compatibleGiphyUrl(body.gif.url), title: String(body.gif.title || '').slice(0, 120) } : null,
         image: body.image && typeof body.image === 'object' ? { dataUrl: String(body.image.dataUrl || '').slice(0, 2_100_000) } : null,
         poll: body.poll && typeof body.poll === 'object' ? { question: String(body.poll.question || '').slice(0, 180), options: Array.isArray(body.poll.options) ? body.poll.options.map((option) => String(option).slice(0, 80)).slice(0, 4) : [], durationDays: Math.min(30, Math.max(1, Number(body.poll.durationDays) || 1)) } : null,
-        asOfficial: access.allowed && body.asOfficial === true,
+        asOfficial,
         owner: access.allowed,
         actor: {
           id: user.id,
@@ -134,25 +135,25 @@ export default async function handler(request, response) {
     } else if (body.action === 'warnings') {
       payload = { action: 'warnings', actor: { id: user.id, displayName: user.displayName } };
     } else if (body.action === 'messages') {
-      payload = { action: 'messages', actor: { id: user.id, displayName: user.displayName } };
+      payload = { action: 'messages', asOfficial, owner: access.allowed, actor: { id: user.id, displayName: user.displayName } };
     } else if (body.action === 'conversation') {
-      payload = { action: 'conversation', withUserId: String(body.withUserId || ''), actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
+      payload = { action: 'conversation', withUserId: String(body.withUserId || ''), asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'notifications') {
-      payload = { action: 'notifications', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
+      payload = { action: 'notifications', asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'social-status') {
-      payload = { action: 'social-status', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
+      payload = { action: 'social-status', asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'preferences') {
       payload = { action: 'preferences', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'preference-save') {
       payload = { action: 'preference-save', key: String(body.key || ''), enabled: body.enabled === true, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'social') {
-      payload = { action: 'social', type: String(body.type || ''), enabled: body.enabled === true, targetId: String(body.targetId || ''), postId: String(body.postId || ''), actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
+      payload = { action: 'social', type: String(body.type || ''), enabled: body.enabled === true, targetId: String(body.targetId || ''), postId: String(body.postId || ''), asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'post-interaction') {
-      payload = { action: 'post-interaction', type: String(body.type || ''), postId: String(body.postId || ''), content: String(body.content || '').slice(0, 500), quote: body.quote === true, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
+      payload = { action: 'post-interaction', type: String(body.type || ''), postId: String(body.postId || ''), content: String(body.content || '').slice(0, 500), quote: body.quote === true, asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'poll-vote') {
-      payload = { action: 'poll-vote', postId: String(body.postId || ''), optionIndex: Number(body.optionIndex), remove: body.remove === true, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
+      payload = { action: 'poll-vote', postId: String(body.postId || ''), optionIndex: Number(body.optionIndex), remove: body.remove === true, asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'message-send') {
-      payload = { action: 'message-send', to: String(body.to || ''), content: String(body.content || '').slice(0, 1000), gif: body.gif && typeof body.gif === 'object' ? { url: compatibleGiphyUrl(body.gif.url), title: String(body.gif.title || '').slice(0, 120) } : null, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
+      payload = { action: 'message-send', to: String(body.to || ''), content: String(body.content || '').slice(0, 1000), gif: body.gif && typeof body.gif === 'object' ? { url: compatibleGiphyUrl(body.gif.url), title: String(body.gif.title || '').slice(0, 120) } : null, asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'report-review') {
       if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
       payload = {

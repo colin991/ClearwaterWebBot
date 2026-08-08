@@ -150,6 +150,9 @@ export function startStatusServer(client, config) {
         const membership = await enforceInternetMembership(store, body.actor);
         if (membership === false) return json(response, 403, { error: 'You must be a member of the Clearwater Roleplay Discord server to use Clearwater Internet.' });
         if (membership === null) return json(response, 503, { error: 'Clearwater Internet could not verify Discord membership right now. Please try again shortly.' });
+        // The website has already verified Ownership before sending this flag.
+        // Keep Discord membership tied to the real person, then perform the action as the official account.
+        if (body.asOfficial === true && body.owner === true) body.actor = ensureOfficialInternetAccount(store);
         if (body.action === 'post') {
           const user = body.asOfficial === true && body.owner === true
             ? ensureOfficialInternetAccount(store)

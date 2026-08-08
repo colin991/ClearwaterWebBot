@@ -89,7 +89,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260808-account-switcher-position-1';
+const INTERNET_VERSION = '20260808-official-account-actions-1';
 const OFFICIAL_ACCOUNT_ID = '1514026810348671026';
 let allPosts = [];
 let currentUserId = null;
@@ -138,6 +138,14 @@ function activeAuthor() {
   return activeAccount === 'official' ? internetUsers.get(OFFICIAL_ACCOUNT_ID) : null;
 }
 
+function activeUserId() {
+  return activeAccount === 'official' ? OFFICIAL_ACCOUNT_ID : currentUserId;
+}
+
+function activeAccountRequest() {
+  return activeAccount === 'official' ? { asOfficial: true } : {};
+}
+
 function updateAccountSwitcher() {
   if (!sessionUser || !accountSwitch) return;
   const official = activeAuthor();
@@ -157,6 +165,9 @@ function selectPostingAccount(account) {
   updateAccountSwitcher();
   accountSwitchMenu.hidden = true;
   accountSwitchButton?.setAttribute('aria-expanded', 'false');
+  void loadSocial();
+  void loadMessages();
+  void loadNotifications();
   if (activeAccount === 'official') openMemberProfile(OFFICIAL_ACCOUNT_ID);
 }
 
@@ -172,7 +183,7 @@ async function readApiJson(response, fallbackMessage) {
 
 function postMenu(post) {
   if (!currentUserId) return '';
-  const ownPost = post.authorId === currentUserId;
+  const ownPost = post.authorId === activeUserId();
   const buttons = ownPost
     ? '<button type="button" data-post-action="edit">Edit post</button><button type="button" data-post-action="delete">Delete post</button>'
     : `<button type="button" data-post-action="report">Report post</button>${sessionIsOwner ? '<button type="button" class="danger" data-post-action="delete">Delete post</button>' : ''}`;
@@ -205,7 +216,7 @@ function postMarkup(post, profile = false) {
   const gif = safeGifUrl(post.gifUrl) ? `<img class="post-gif" src="${escapeHtml(post.gifUrl)}" alt="${escapeHtml(post.gifTitle || 'GIF')}" />` : '';
   const image = safeImageUrl(post.imageUrl) ? `<img class="post-image" src="${escapeHtml(post.imageUrl)}" alt="Image shared by ${escapeHtml(displayName || 'a Clearwater member')}" />` : '';
   const pollVotes = post.poll?.votes && typeof post.poll.votes === 'object' ? post.poll.votes : {};
-  const selectedPollOption = Number.isInteger(Number(pollVotes[currentUserId])) ? Number(pollVotes[currentUserId]) : -1;
+  const selectedPollOption = Number.isInteger(Number(pollVotes[activeUserId()])) ? Number(pollVotes[activeUserId()]) : -1;
   const totalPollVotes = Object.keys(pollVotes).length;
   const pollRemaining = (() => {
     const endsAt = new Date(post.poll?.endsAt || 0).getTime();
@@ -228,7 +239,7 @@ function postMarkup(post, profile = false) {
   const repost = post.repostOf ? allPosts.find((item) => item.id === post.repostOf) : null;
   const shared = quote || repost;
   const sharedMarkup = shared ? `<div class="post-embed"><b>${escapeHtml(shared.displayName || 'Member')}</b> <span>@${escapeHtml(shared.username || '')}</span><p>${escapeHtml(shared.content || '')}</p></div>` : '';
-  return `<article class="post" data-post-card="${escapeHtml(post.id)}">${repost ? '<small class="reposted-label">↻ Reposted</small>' : ''}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(post.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${sharedMarkup}${gif}${image}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(post.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(post.id)}">Repost</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(post.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(post.id)}" class="${likes.includes(currentUserId) ? 'liked' : ''}">${postActionIcon('like', likes.includes(currentUserId))}<span>${likes.length || ''}</span></button><button type="button" data-bookmark-post="${escapeHtml(post.id)}">${postActionIcon('bookmark')}</button><button type="button" data-engage="share" data-post-id="${escapeHtml(post.id)}">${postActionIcon('share')}</button></div></article>`;
+  return `<article class="post" data-post-card="${escapeHtml(post.id)}">${repost ? '<small class="reposted-label">↻ Reposted</small>' : ''}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(post.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${sharedMarkup}${gif}${image}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(post.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(post.id)}">Repost</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(post.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(post.id)}" class="${likes.includes(activeUserId()) ? 'liked' : ''}">${postActionIcon('like', likes.includes(activeUserId()))}<span>${likes.length || ''}</span></button><button type="button" data-bookmark-post="${escapeHtml(post.id)}">${postActionIcon('bookmark')}</button><button type="button" data-engage="share" data-post-id="${escapeHtml(post.id)}">${postActionIcon('share')}</button></div></article>`;
 }
 
 function safeGifUrl(value) {
@@ -405,13 +416,13 @@ async function loadWarnings() {
 async function loadMessages() {
   if (!messagesList || !currentUserId) return;
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'messages' }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'messages', ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Could not load messages.');
     if (!response.ok) throw new Error(result.error || 'Could not load messages.');
     const conversations = new Map();
     (result.messages || []).forEach((message) => {
       if (message.kind !== 'direct') return;
-      const otherId = message.fromId === currentUserId ? message.toId : message.fromId;
+      const otherId = message.fromId === activeUserId() ? message.toId : message.fromId;
       const previous = conversations.get(otherId);
       if (!previous || new Date(message.createdAt).getTime() > new Date(previous.createdAt).getTime()) conversations.set(otherId, message);
     });
@@ -436,7 +447,7 @@ function updateNotificationIndicators() {
 async function loadNotifications() {
   if (!notificationList || !currentUserId) return;
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'notifications' }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'notifications', ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Could not load notifications.');
     if (!response.ok) throw new Error(result.error || 'Could not load notifications.');
     const notifications = result.notifications || [];
@@ -452,7 +463,7 @@ async function loadNotifications() {
 async function loadSocial() {
   if (!currentUserId) return;
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'social-status' }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'social-status', ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Could not load your social settings.');
     if (response.ok && result.social) { socialState = { ...socialState, ...result.social }; updateNotificationIndicators(); renderPosts(); }
   } catch { /* Feed stays usable during a temporary connection issue. */ }
@@ -473,7 +484,7 @@ async function loadPreferences() {
 }
 
 async function socialAction(type, { targetId = '', postId = '', enabled = true } = {}) {
-  const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'social', type, targetId, postId, enabled }) });
+  const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'social', type, targetId, postId, enabled, ...activeAccountRequest() }) });
   const result = await readApiJson(response, 'Could not save this change.');
   if (!response.ok) throw new Error(result.error || 'Could not save this change.');
   socialState = { ...socialState, ...result.social }; renderPosts();
@@ -544,11 +555,11 @@ function openConversation(member) {
 async function loadConversation(member) {
   if (!member || !conversationMessages) return;
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'conversation', withUserId: member.id }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'conversation', withUserId: member.id, ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Could not load this conversation.');
     if (!response.ok) throw new Error(result.error || 'Could not load this conversation.');
     const messages = result.messages || [];
-    conversationMessages.innerHTML = messages.length ? messages.map((message) => `<p class="conversation-bubble ${message.fromId === currentUserId ? 'own' : 'theirs'}">${message.content ? escapeHtml(message.content) : ''}${safeGifUrl(message.gifUrl) ? `<img src="${escapeHtml(message.gifUrl)}" alt="${escapeHtml(message.gifTitle || 'GIF')}" />` : ''}</p>`).join('') : '<p>Start a conversation.</p>';
+    conversationMessages.innerHTML = messages.length ? messages.map((message) => `<p class="conversation-bubble ${message.fromId === activeUserId() ? 'own' : 'theirs'}">${message.content ? escapeHtml(message.content) : ''}${safeGifUrl(message.gifUrl) ? `<img src="${escapeHtml(message.gifUrl)}" alt="${escapeHtml(message.gifTitle || 'GIF')}" />` : ''}</p>`).join('') : '<p>Start a conversation.</p>';
   } catch (error) { conversationMessages.innerHTML = `<p>${escapeHtml(error.message || 'Could not load this conversation.')}</p>`; }
 }
 
@@ -816,7 +827,7 @@ async function handlePostEngagement(type, postId, control = null) {
 }
 
 async function postInteraction({ postId, type, content = '', quote = false }) {
-  const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post-interaction', postId, type, content, quote }) });
+  const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post-interaction', postId, type, content, quote, ...activeAccountRequest() }) });
   const result = await readApiJson(response, 'Could not update this post.');
   if (!response.ok) {
     if (result.error === 'Owner access required') throw new Error('Your bot host needs the newest GitHub files and a restart before post actions can work.');
@@ -827,7 +838,7 @@ async function postInteraction({ postId, type, content = '', quote = false }) {
 
 async function voteOnPoll(postId, optionIndex, remove = false) {
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'poll-vote', postId, optionIndex, remove }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'poll-vote', postId, optionIndex, remove, ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Could not update this poll.');
     if (!response.ok) {
       if (/owner access required/i.test(result.error || '')) {
@@ -962,7 +973,7 @@ conversationForm?.addEventListener('submit', async (event) => {
   const text = conversationInput?.value.trim();
   if (!viewedMember || (!text && !messageGif)) return;
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'message-send', to: viewedMember.id, content: text, gif: messageGif }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'message-send', to: viewedMember.id, content: text, gif: messageGif, ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Could not send your message.');
     if (!response.ok) throw new Error(result.error || 'Could not send your message.');
     const empty = conversationMessages.querySelector('p'); if (empty) empty.remove();
@@ -994,7 +1005,7 @@ messageForm?.addEventListener('submit', async (event) => {
   event.preventDefault(); const destination = [...internetUsers.values()].find((user) => user.username.toLowerCase() === document.querySelector('[data-message-to]').value.trim().replace(/^@/, '').toLowerCase());
   const error = document.querySelector('[data-message-error]'); error.textContent = '';
   if (!destination) { error.textContent = 'Choose a Clearwater Internet member.'; return; }
-  try { const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'message-send', to: destination.id, content: document.querySelector('[data-message-content]').value }) }); const result = await readApiJson(response, 'Could not send your message.'); if (!response.ok) throw new Error(result.error); messageModal.hidden = true; messageForm.reset(); window.alert('Message sent.'); } catch (exception) { error.textContent = exception.message || 'Could not send your message.'; }
+  try { const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'message-send', to: destination.id, content: document.querySelector('[data-message-content]').value, ...activeAccountRequest() }) }); const result = await readApiJson(response, 'Could not send your message.'); if (!response.ok) throw new Error(result.error); messageModal.hidden = true; messageForm.reset(); window.alert('Message sent.'); } catch (exception) { error.textContent = exception.message || 'Could not send your message.'; }
 });
 document.querySelector('[data-close-moderation]')?.addEventListener('click', () => { moderationModal.hidden = true; pendingReportReview = null; });
 moderationForm?.addEventListener('submit', async (event) => {
