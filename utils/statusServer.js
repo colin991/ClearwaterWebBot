@@ -30,6 +30,32 @@ const readJson = async (request) => {
 };
 
 export function startStatusServer(client, config) {
+  let lastInternetRoleSync = 0;
+
+  const syncInternetRoles = async (store) => {
+    // Keep older posts accurate even when a Discord role change happened
+    // before the bot was restarted. Limit this to once a minute.
+    if (Date.now() - lastInternetRoleSync < 60 * 1000) return false;
+    lastInternetRoleSync = Date.now();
+    const guild = client.guilds.cache.get(CLEARWATER_GUILD_ID)
+      || await client.guilds.fetch(CLEARWATER_GUILD_ID).catch(() => null);
+    if (!guild) return false;
+
+    let changed = false;
+    const activeAuthorIds = new Set(store.posts.slice(0, 100).map((post) => post.authorId));
+    for (const user of Object.values(store.users)) {
+      if (!activeAuthorIds.has(user.id) || !user.staffRank) continue;
+      const member = await guild.members.fetch(user.id).catch(() => null);
+      if (!member) continue;
+      const staffRank = getHighestStaffRank(member)?.name || null;
+      if (user.staffRank !== staffRank) {
+        upsertInternetUser(store, { id: user.id, staffRank });
+        changed = true;
+      }
+    }
+    return changed;
+  };
+
   const expireInternetBans = async () => {
     try {
       const store = await readInternetStore();
@@ -96,7 +122,10 @@ export function startStatusServer(client, config) {
     if (url.pathname === '/api/internet') {
       try {
         const store = await readInternetStore();
-        if (request.method === 'GET') return json(response, 200, { posts: publicPosts(store), users: publicUsers(store) });
+        if (request.method === 'GET') {
+          if (await syncInternetRoles(store)) await saveInternetStore(store);
+          return json(response, 200, { posts: publicPosts(store), users: publicUsers(store) });
+        }
         if (request.method !== 'POST') return json(response, 405, { error: 'Method not allowed' });
 
         const body = await readJson(request);
