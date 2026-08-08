@@ -3,7 +3,15 @@ import { join } from 'node:path';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
 const storePath = join(process.cwd(), 'data', 'clearwater-internet.json');
-const emptyStore = Object.freeze({ users: {}, posts: [], reports: [], logs: [] });
+const emptyStore = Object.freeze({ users: {}, posts: [], reports: [], logs: [], officialProfile: {} });
+export const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
+const officialDefaults = Object.freeze({
+  displayName: 'Clearwater Roleplay',
+  username: 'clearwaterroleplay',
+  bio: 'Official Clearwater Roleplay updates and announcements.',
+  avatarUrl: 'assets/clearwater-logo.png',
+  bannerUrl: 'assets/clearwater-police-night.png',
+});
 
 const text = (value, length) => String(value || '').trim().slice(0, length);
 
@@ -32,6 +40,7 @@ export async function readInternetStore() {
     posts: Array.isArray(data?.posts) ? data.posts : [],
     reports: Array.isArray(data?.reports) ? data.reports : [],
     logs: Array.isArray(data?.logs) ? data.logs : [],
+    officialProfile: data?.officialProfile && typeof data.officialProfile === 'object' ? data.officialProfile : {},
   };
 }
 
@@ -50,6 +59,8 @@ export function publicUsers(store) {
     username: user.username,
     displayName: user.displayName,
     avatarUrl: user.avatarUrl,
+    bannerUrl: user.bannerUrl || null,
+    bio: user.bio || '',
     staffRank: user.staffRank || null,
     verified: user.verified === true,
     banned: Boolean(getActiveBan(user)),
@@ -118,6 +129,40 @@ export function upsertInternetUser(store, user) {
     staffRank: has('staffRank') ? text(user?.staffRank, 80) || null : existing.staffRank || null,
   };
   return store.users[id];
+}
+
+function safeProfileUrl(value, fallback) {
+  const candidate = text(value, 500);
+  if (!candidate) return fallback;
+  if (/^https:\/\//i.test(candidate) || /^assets\/[a-z0-9._-]+$/i.test(candidate)) return candidate;
+  throw new Error('Use a secure image URL that starts with https://');
+}
+
+export function ensureOfficialInternetAccount(store) {
+  const profile = { ...officialDefaults, ...(store.officialProfile || {}) };
+  const account = upsertInternetUser(store, {
+    id: OFFICIAL_INTERNET_ACCOUNT_ID,
+    displayName: profile.displayName,
+    username: profile.username,
+    avatarUrl: profile.avatarUrl,
+    staffRank: 'Official account',
+  });
+  account.verified = true;
+  account.official = true;
+  account.bio = profile.bio;
+  account.bannerUrl = profile.bannerUrl;
+  return account;
+}
+
+export function updateOfficialInternetProfile(store, profile = {}) {
+  store.officialProfile = {
+    displayName: text(profile.displayName, 80) || officialDefaults.displayName,
+    username: text(profile.username, 40).replace(/[^a-z0-9_]/gi, '').toLowerCase() || officialDefaults.username,
+    bio: text(profile.bio, 300),
+    avatarUrl: safeProfileUrl(profile.avatarUrl, officialDefaults.avatarUrl),
+    bannerUrl: safeProfileUrl(profile.bannerUrl, officialDefaults.bannerUrl),
+  };
+  return ensureOfficialInternetAccount(store);
 }
 
 export function createInternetPost(store, user, content, media = {}) {

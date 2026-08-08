@@ -81,6 +81,8 @@ export default async function handler(request, response) {
         gif: body.gif && typeof body.gif === 'object' ? { url: compatibleGiphyUrl(body.gif.url), title: String(body.gif.title || '').slice(0, 120) } : null,
         image: body.image && typeof body.image === 'object' ? { dataUrl: String(body.image.dataUrl || '').slice(0, 2_100_000) } : null,
         poll: body.poll && typeof body.poll === 'object' ? { question: String(body.poll.question || '').slice(0, 180), options: Array.isArray(body.poll.options) ? body.poll.options.map((option) => String(option).slice(0, 80)).slice(0, 4) : [], durationDays: Math.min(30, Math.max(1, Number(body.poll.durationDays) || 1)) } : null,
+        asOfficial: access.allowed && body.asOfficial === true,
+        owner: access.allowed,
         actor: {
           id: user.id,
           username: user.username,
@@ -88,6 +90,20 @@ export default async function handler(request, response) {
           avatarUrl: avatarUrl(user),
           staffRank: access.staffRank,
         },
+      };
+    } else if (body.action === 'official-profile-save') {
+      if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
+      payload = {
+        action: 'official-profile-save',
+        owner: true,
+        profile: {
+          displayName: String(body.profile?.displayName || '').slice(0, 80),
+          username: String(body.profile?.username || '').slice(0, 40),
+          bio: String(body.profile?.bio || '').slice(0, 300),
+          avatarUrl: String(body.profile?.avatarUrl || '').slice(0, 500),
+          bannerUrl: String(body.profile?.bannerUrl || '').slice(0, 500),
+        },
+        actor: { id: user.id },
       };
     } else if (body.action === 'status') {
       payload = {

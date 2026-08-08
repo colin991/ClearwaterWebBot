@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-post-header-spacing-1';
+const INTERNET_VERSION = '20260808-official-account-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {

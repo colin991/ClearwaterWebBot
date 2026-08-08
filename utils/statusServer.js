@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
-import { clearExpiredInternetBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, getActiveBan, interactInternetPost, internetPreferences, moderationSnapshot, publicPosts, publicUsers, readInternetStore, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, upsertInternetUser, voteInternetPoll } from './internetStore.js';
+import { clearExpiredInternetBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, interactInternetPost, internetPreferences, moderationSnapshot, publicPosts, publicUsers, readInternetStore, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -139,6 +139,7 @@ export function startStatusServer(client, config) {
       try {
         const store = await readInternetStore();
         if (request.method === 'GET') {
+          ensureOfficialInternetAccount(store);
           if (await syncInternetRoles(store)) await saveInternetStore(store);
           return json(response, 200, { posts: publicPosts(store), users: publicUsers(store) });
         }
@@ -149,10 +150,19 @@ export function startStatusServer(client, config) {
         if (membership === false) return json(response, 403, { error: 'You must be a member of the Clearwater Roleplay Discord server to use Clearwater Internet.' });
         if (membership === null) return json(response, 503, { error: 'Clearwater Internet could not verify Discord membership right now. Please try again shortly.' });
         if (body.action === 'post') {
-          const user = upsertInternetUser(store, body.actor);
+          const user = body.asOfficial === true && body.owner === true
+            ? ensureOfficialInternetAccount(store)
+            : upsertInternetUser(store, body.actor);
           const post = createInternetPost(store, user, body.content, { gif: body.gif, image: body.image, poll: body.poll });
           await saveInternetStore(store);
           return json(response, 201, { post });
+        }
+
+        if (body.action === 'official-profile-save') {
+          if (body.owner !== true) return json(response, 403, { error: 'Ownership access required' });
+          const official = updateOfficialInternetProfile(store, body.profile);
+          await saveInternetStore(store);
+          return json(response, 200, { official });
         }
 
         if (body.action === 'status') {

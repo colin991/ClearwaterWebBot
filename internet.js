@@ -81,7 +81,16 @@ const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
 const conversationGifPreview = document.querySelector('[data-conversation-gif-preview]');
-const INTERNET_VERSION = '20260808-post-header-spacing-1';
+const accountSwitch = document.querySelector('[data-account-switch]');
+const accountSwitchButton = document.querySelector('[data-account-switch-button]');
+const accountSwitchMenu = document.querySelector('[data-account-switch-menu]');
+const accountSwitchAvatar = document.querySelector('[data-account-switch-avatar]');
+const accountSwitchName = document.querySelector('[data-account-switch-name]');
+const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
+const officialAccountOption = document.querySelector('[data-official-account-option]');
+const officialProfileControls = document.querySelector('[data-official-profile-controls]');
+const INTERNET_VERSION = '20260808-official-account-1';
+const OFFICIAL_ACCOUNT_ID = '1514026810348671026';
 let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
@@ -89,6 +98,8 @@ let loadingPosts = false;
 let accountBanned = false;
 let activeBan = null;
 let sessionIsOwner = false;
+let activeAccount = 'personal';
+let sessionUser = null;
 let pendingReportReview = null;
 let selectedGif = null;
 let selectedImage = null;
@@ -121,6 +132,32 @@ const isVerified = (post) => currentAuthor(post)?.verified === true;
 
 function refreshProfileVerified() {
   if (profileVerified) profileVerified.hidden = !internetUsers.get(currentUserId)?.verified;
+}
+
+function activeAuthor() {
+  return activeAccount === 'official' ? internetUsers.get(OFFICIAL_ACCOUNT_ID) : null;
+}
+
+function updateAccountSwitcher() {
+  if (!sessionUser || !accountSwitch) return;
+  const official = activeAuthor();
+  const selected = official || sessionUser;
+  accountSwitchAvatar.src = selected.avatarUrl || 'assets/clearwater-logo.png';
+  accountSwitchName.textContent = selected.displayName || selected.username || 'Clearwater account';
+  accountSwitchHandle.textContent = `@${selected.username || 'clearwater'}`;
+  document.querySelector('[data-personal-account-selected]')?.toggleAttribute('hidden', activeAccount !== 'personal');
+  document.querySelector('[data-official-account-selected]')?.toggleAttribute('hidden', activeAccount !== 'official');
+  if (composerAvatar) composerAvatar.src = selected.avatarUrl || 'assets/clearwater-logo.png';
+}
+
+function selectPostingAccount(account) {
+  if (account === 'official' && !sessionIsOwner) return;
+  activeAccount = account === 'official' ? 'official' : 'personal';
+  localStorage.setItem(`clearwater-posting-account-${currentUserId}`, activeAccount);
+  updateAccountSwitcher();
+  accountSwitchMenu.hidden = true;
+  accountSwitchButton?.setAttribute('aria-expanded', 'false');
+  if (activeAccount === 'official') openMemberProfile(OFFICIAL_ACCOUNT_ID);
 }
 
 async function readApiJson(response, fallbackMessage) {
@@ -447,12 +484,12 @@ function openMemberProfile(memberId, updateHash = true) {
   viewedMember = user;
   const posts = allPosts.filter((post) => post.authorId === user.id && !post.parentId);
   const banner = document.querySelector('[data-member-page-banner]');
-  if (banner) banner.style.backgroundImage = `linear-gradient(110deg, rgba(3, 10, 22, .48), rgba(18, 87, 163, .25)), url("${user.avatarUrl || 'assets/clearwater-police-night.png'}")`;
+  if (banner) banner.style.backgroundImage = `linear-gradient(110deg, rgba(3, 10, 22, .48), rgba(18, 87, 163, .25)), url("${user.bannerUrl || user.avatarUrl || 'assets/clearwater-police-night.png'}")`;
   document.querySelector('[data-member-page-avatar]').src = user.avatarUrl || 'assets/clearwater-logo.png';
   document.querySelector('[data-member-page-name]').textContent = user.displayName;
   document.querySelector('[data-member-page-handle]').textContent = `@${user.username}`;
   document.querySelector('[data-member-page-rank]').textContent = user.staffRank || 'Clearwater community member';
-  document.querySelector('[data-member-page-copy]').textContent = user.staffRank ? `${user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.';
+  document.querySelector('[data-member-page-copy]').textContent = user.bio || (user.staffRank ? `${user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
   document.querySelector('[data-member-page-verified]').hidden = user.verified !== true;
   document.querySelector('[data-member-page-post-count]').textContent = posts.length.toLocaleString();
   const memberFollowing = Array.isArray(user.following) ? user.following : [];
@@ -588,6 +625,16 @@ async function loadPosts() {
     if (!response.ok) throw new Error(result.error || 'Service unavailable');
     allPosts = result.posts || [];
     internetUsers = new Map((result.users || []).map((user) => [user.id, user]));
+    updateAccountSwitcher();
+    const official = internetUsers.get(OFFICIAL_ACCOUNT_ID);
+    if (sessionIsOwner && official) {
+      const setValue = (selector, value) => { const field = document.querySelector(selector); if (field && document.activeElement !== field) field.value = value || ''; };
+      setValue('[data-official-name]', official.displayName);
+      setValue('[data-official-username]', official.username);
+      setValue('[data-official-bio]', official.bio);
+      setValue('[data-official-avatar-url]', official.avatarUrl);
+      setValue('[data-official-banner-url]', official.bannerUrl);
+    }
     refreshProfileVerified();
     renderPosts();
     const linkedPostId = location.hash.startsWith('#post-') ? location.hash.slice(6) : null;
@@ -614,6 +661,7 @@ async function loadSession() {
   if (session.user.avatarUrl) { avatar.src = session.user.avatarUrl; composerAvatar.src = session.user.avatarUrl; }
   rank.textContent = session.user.staffRank || '';
   currentUserId = session.user.id;
+  sessionUser = session.user;
   sessionIsOwner = session.user.owner === true && session.user.staffRank === 'Ownership';
   if (profileTitle) profileTitle.textContent = session.user.displayName || session.user.username;
   if (profileCopy) profileCopy.textContent = session.user.bio || (session.user.staffRank ? `${session.user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
@@ -627,7 +675,12 @@ async function loadSession() {
   if (profileHandle) profileHandle.textContent = `@${session.user.username}`;
   if (profileRank) profileRank.textContent = session.user.staffRank || 'Clearwater community member';
   refreshProfileVerified();
-  if (sessionIsOwner) { admin.hidden = false; staffLink.hidden = false; } else { admin.hidden = true; staffLink.hidden = true; }
+  if (sessionIsOwner) { admin.hidden = false; staffLink.hidden = false; officialAccountOption.hidden = false; officialProfileControls.hidden = false; } else { admin.hidden = true; staffLink.hidden = true; officialAccountOption.hidden = true; officialProfileControls.hidden = true; }
+  accountSwitch.hidden = false;
+  activeAccount = sessionIsOwner && localStorage.getItem(`clearwater-posting-account-${currentUserId}`) === 'official' ? 'official' : 'personal';
+  document.querySelector('[data-personal-account-avatar]').src = session.user.avatarUrl || 'assets/clearwater-logo.png';
+  document.querySelector('[data-personal-account-name]').textContent = session.user.displayName || session.user.username;
+  updateAccountSwitcher();
   renderProfilePosts();
   renderPosts();
   await loadBanStatus();
@@ -964,7 +1017,7 @@ postButton?.addEventListener('click', async () => {
   postButton.disabled = true;
   postMessage.textContent = 'Posting...';
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, image: selectedImage, poll }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, image: selectedImage, poll, asOfficial: activeAccount === 'official' }) });
     const result = await readApiJson(response, 'Posting is unavailable because the website service is not connected.');
     if (!response.ok) throw new Error(result.error);
     content.value = ''; count.textContent = '0 / 500'; postButton.disabled = true; updateComposerHighlight(); selectedGif = null; selectedImage = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
@@ -984,6 +1037,38 @@ admin?.querySelectorAll('button').forEach((button) => button.addEventListener('c
     const result = await readApiJson(response, 'Owner controls are unavailable because the website service is not connected.'); if (!response.ok) throw new Error(result.error); adminMessage.textContent = 'Saved.';
   } catch (error) { adminMessage.textContent = error.message || 'Could not save.'; }
 }));
+
+accountSwitchButton?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  const opening = accountSwitchMenu.hidden;
+  accountSwitchMenu.hidden = !opening;
+  accountSwitchButton.setAttribute('aria-expanded', String(opening));
+});
+document.querySelectorAll('[data-select-account]').forEach((button) => button.addEventListener('click', () => selectPostingAccount(button.dataset.selectAccount)));
+document.addEventListener('click', (event) => {
+  if (accountSwitch && !accountSwitch.contains(event.target)) {
+    accountSwitchMenu.hidden = true;
+    accountSwitchButton?.setAttribute('aria-expanded', 'false');
+  }
+});
+document.querySelector('[data-save-official-profile]')?.addEventListener('click', async () => {
+  const message = document.querySelector('[data-official-profile-message]');
+  message.textContent = 'Saving...';
+  try {
+    const profile = {
+      displayName: document.querySelector('[data-official-name]').value,
+      username: document.querySelector('[data-official-username]').value,
+      bio: document.querySelector('[data-official-bio]').value,
+      avatarUrl: document.querySelector('[data-official-avatar-url]').value,
+      bannerUrl: document.querySelector('[data-official-banner-url]').value,
+    };
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'official-profile-save', profile }) });
+    const result = await readApiJson(response, 'Could not save the official account.');
+    if (!response.ok) throw new Error(result.error || 'Could not save the official account.');
+    message.textContent = 'Official account saved.';
+    await loadPosts();
+  } catch (error) { message.textContent = error.message || 'Could not save the official account.'; }
+});
 
 showViewFromAddress();
 loadSession().catch(() => {});
