@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260808-image-upload-1';
+const INTERNET_VERSION = '20260808-follow-back-1';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {

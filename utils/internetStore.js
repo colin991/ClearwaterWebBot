@@ -311,6 +311,7 @@ export function socialSnapshot(store, actor) {
   const user = upsertInternetUser(store, actor);
   return {
     following: Array.isArray(user.following) ? user.following : [],
+    followers: Object.values(store.users).filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).map((member) => member.id),
     blocked: Array.isArray(user.blocked) ? user.blocked : [],
     muted: Array.isArray(user.muted) ? user.muted : [],
     bookmarks: Array.isArray(user.bookmarks) ? user.bookmarks : [],
