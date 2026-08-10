@@ -3,6 +3,7 @@ import { logger } from './logger.js';
 import { EmbedBuilder } from 'discord.js';
 
 const ROBLOX_CLOUD = 'https://apis.roblox.com/cloud/v2';
+let lastEmptyRequestDiagnostic = 0;
 
 async function groupFetch(path, apiKey, options = {}) {
   const response = await fetch(`${ROBLOX_CLOUD}${path}`, {
@@ -37,11 +38,13 @@ function joinRequestRobloxId(request) {
 
 async function pendingJoinRequests(groupId, apiKey) {
   const requests = [];
+  let firstResponse = null;
   let pageToken = '';
   do {
     const query = new URLSearchParams({ maxPageSize: '100' });
     if (pageToken) query.set('pageToken', pageToken);
     const page = await groupFetch(`/groups/${encodeURIComponent(groupId)}/join-requests?${query}`, apiKey);
+    firstResponse ||= page;
     const pageRequests = page?.groupJoinRequests || page?.joinRequests || page?.requests || page?.data || [];
     if (!Array.isArray(pageRequests)) {
       logger.warn(`Roblox join-request response used an unexpected format: ${Object.keys(page || {}).join(', ') || 'no fields'}`);
@@ -50,6 +53,11 @@ async function pendingJoinRequests(groupId, apiKey) {
     }
     pageToken = page?.nextPageToken || '';
   } while (pageToken);
+  if (!requests.length && Date.now() - lastEmptyRequestDiagnostic > 10 * 60 * 1000) {
+    lastEmptyRequestDiagnostic = Date.now();
+    const safePayload = JSON.stringify(firstResponse || {}).slice(0, 900);
+    logger.info(`Roblox join-request API returned no requests for group ${groupId}. Response: ${safePayload || '{}'}`);
+  }
   return requests;
 }
 
