@@ -42,7 +42,12 @@ async function pendingJoinRequests(groupId, apiKey) {
     const query = new URLSearchParams({ maxPageSize: '100' });
     if (pageToken) query.set('pageToken', pageToken);
     const page = await groupFetch(`/groups/${encodeURIComponent(groupId)}/join-requests?${query}`, apiKey);
-    requests.push(...(page?.groupJoinRequests || page?.joinRequests || []));
+    const pageRequests = page?.groupJoinRequests || page?.joinRequests || page?.requests || page?.data || [];
+    if (!Array.isArray(pageRequests)) {
+      logger.warn(`Roblox join-request response used an unexpected format: ${Object.keys(page || {}).join(', ') || 'no fields'}`);
+    } else {
+      requests.push(...pageRequests);
+    }
     pageToken = page?.nextPageToken || '';
   } while (pageToken);
   return requests;
