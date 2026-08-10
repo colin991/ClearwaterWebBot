@@ -1,5 +1,5 @@
 import { EmbedBuilder, Events } from 'discord.js';
-import { findRobloxIdentity } from '../utils/melonly.js';
+import { findRobloxIdentity, safeMelonlyError } from '../utils/melonly.js';
 import { rememberIdentity } from '../utils/identityStore.js';
 import { getOwnerConfig } from '../utils/ownerConfig.js';
 import { logger } from '../utils/logger.js';
@@ -55,7 +55,7 @@ export default {
       }
     } catch (error) {
       logger.error('Identity lookup failed', error);
-      await waiting.edit('The identity lookup failed. Check the Melonly API key and try again.');
+      await waiting.edit(safeMelonlyError(error));
     }
   },
 };

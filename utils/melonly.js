@@ -7,8 +7,21 @@ async function melonlyFetch(path, apiKey) {
     signal: AbortSignal.timeout(8000),
   });
   if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`Melonly request failed (${response.status})`);
+  if (!response.ok) {
+    const reason = response.status === 401 || response.status === 403
+      ? 'The Melonly API key was rejected. Replace MELONLY_API_KEY on the bot host and restart the bot.'
+      : `Melonly request failed (${response.status}).`;
+    throw new Error(reason);
+  }
   return response.json();
+}
+
+export function safeMelonlyError(error) {
+  const message = String(error?.message || '');
+  if (message.includes('MELONLY_API_KEY is not configured')) return 'Melonly is not configured on the bot host. Add MELONLY_API_KEY, save it, and restart the bot.';
+  if (message.includes('API key was rejected')) return 'Melonly rejected the API key. Replace MELONLY_API_KEY on the bot host, then restart the bot.';
+  if (message.includes('timed out') || message.includes('fetch failed')) return 'Melonly could not be reached right now. Try again in a minute.';
+  return 'Melonly could not complete the identity lookup. Check the bot host console for the exact status.';
 }
 
 async function getRobloxUser(robloxId) {
