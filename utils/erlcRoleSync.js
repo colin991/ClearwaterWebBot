@@ -1,9 +1,8 @@
 import { EmbedBuilder } from 'discord.js';
 import { fetchErlcServer, parseErlcPlayer } from './erlc.js';
-import { discordIdsByRobloxId, rememberIdentities } from './identityStore.js';
+import { discordIdsByRobloxId } from './identityStore.js';
 import { getOwnerConfig } from './ownerConfig.js';
 import { logger } from './logger.js';
-import { fetchApplicationIdentityIndex } from './melonly.js';
 
 async function sendGameLog(client, settings, description, color) {
   if (!settings.gameLogChannelId) return;
@@ -67,20 +66,9 @@ export function startErlcRoleSync(client, config) {
   let stopped = false;
   let timer;
   let previousPlayers = new Set();
-  let lastIdentityRefresh = 0;
 
   const run = async () => {
     try {
-      if (config.melonlyApiKey && Date.now() - lastIdentityRefresh > 72 * 60 * 60 * 1000) {
-        lastIdentityRefresh = Date.now();
-        try {
-          const identities = await fetchApplicationIdentityIndex(config.melonlyApiKey);
-          await rememberIdentities(identities);
-          logger.info(`Refreshed ${identities.length} Melonly application identities.`);
-        } catch (error) {
-          logger.error('Melonly identity refresh failed', error);
-        }
-      }
       previousPlayers = await syncOnce(client, config, previousPlayers);
     } catch (error) {
       logger.error('ER:LC role sync failed', error);

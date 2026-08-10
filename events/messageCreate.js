@@ -26,7 +26,7 @@ export default {
     try {
       const identity = await findRobloxIdentity(targetId, client.config.melonlyApiKey);
       if (!identity) {
-        await waiting.edit({ content: '', embeds: [new EmbedBuilder().setTitle('Identity').setDescription(`${target ? `<@${target.id}>` : `\`${targetId}\``} does not have a Roblox identity recorded in Melonly applications.`).setColor(0xf0a84b)] });
+        await waiting.edit({ content: '', embeds: [new EmbedBuilder().setTitle('Identity').setDescription(`${target ? `<@${target.id}>` : `\`${targetId}\``} does not have a Roblox identity verified through Melonly Verify.`).setColor(0xf0a84b)] });
         return;
       }
 

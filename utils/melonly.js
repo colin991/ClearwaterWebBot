@@ -33,17 +33,9 @@ async function getRobloxUser(robloxId) {
 }
 
 export async function findRobloxIdentity(discordId, apiKey) {
-  const member = await melonlyFetch(`/server/members/discord/${encodeURIComponent(discordId)}`, apiKey);
-  if (!member?.id) return null;
-
-  let responses = await melonlyFetch(`/server/applications/user/${encodeURIComponent(member.id)}/responses?limit=100`, apiKey);
-  if (!responses?.data?.length && member.id !== discordId) {
-    responses = await melonlyFetch(`/server/applications/user/${encodeURIComponent(discordId)}/responses?limit=100`, apiKey);
-  }
-  const verified = [...(responses?.data || [])]
-    .filter((entry) => entry.robloxId)
-    .sort((a, b) => Number(b.finalizedAt || b.reviewedAt || b.createdAt || 0) - Number(a.finalizedAt || a.reviewedAt || a.createdAt || 0))[0];
-  if (!verified) return null;
+  // Use Melonly Verify directly. This is distinct from application records.
+  const verified = await melonlyFetch(`/verification/discord/${encodeURIComponent(discordId)}/roblox`, apiKey);
+  if (!verified?.robloxId) return null;
 
   const roblox = await getRobloxUser(verified.robloxId).catch(() => null);
   return {
@@ -51,8 +43,8 @@ export async function findRobloxIdentity(discordId, apiKey) {
     robloxId: String(verified.robloxId),
     robloxUsername: roblox?.name || null,
     robloxDisplayName: roblox?.displayName || null,
-    applicationId: verified.applicationId || null,
-    status: verified.status,
+    applicationId: null,
+    status: 'verified',
   };
 }
 
