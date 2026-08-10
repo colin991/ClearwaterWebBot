@@ -25,6 +25,7 @@ export const config = Object.freeze({
   robloxGroupApiKey: process.env.ROBLOX_GROUP_API_KEY?.trim(),
   robloxGroupAllowedRoleIds: (process.env.ROBLOX_GROUP_ALLOWED_ROLE_IDS || '1514033664306974752,1514744040778760252')
     .split(',').map((value) => value.trim()).filter(Boolean),
+  robloxGroupLogChannelId: process.env.ROBLOX_GROUP_LOG_CHANNEL_ID?.trim() || '1536517651055120514',
   ownerDiscordIds: (process.env.OWNER_DISCORD_IDS || '1044686997194805280')
     .split(',').map((value) => value.trim()).filter(Boolean),
   ownerRoleIds: (process.env.OWNER_ROLE_IDS || '1514033074948800683')

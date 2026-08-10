@@ -1,5 +1,6 @@
 import { getIdentityCache } from './identityStore.js';
 import { logger } from './logger.js';
+import { EmbedBuilder } from 'discord.js';
 
 const ROBLOX_CLOUD = 'https://apis.roblox.com/cloud/v2';
 
@@ -14,6 +15,15 @@ async function groupFetch(path, apiKey, options = {}) {
     throw new Error(`Roblox Groups API failed (${response.status})${message ? `: ${message.slice(0, 160)}` : ''}`);
   }
   return response.status === 204 ? null : response.json();
+}
+
+async function sendGroupLog(client, config, title, description, color) {
+  if (!config.robloxGroupLogChannelId) return;
+  const channel = await client.channels.fetch(config.robloxGroupLogChannelId).catch(() => null);
+  if (!channel?.isTextBased()) return;
+  await channel.send({
+    embeds: [new EmbedBuilder().setTitle(title).setDescription(description).setColor(color).setTimestamp()],
+  }).catch(() => null);
 }
 
 function joinRequestRobloxId(request) {
@@ -41,7 +51,7 @@ async function pendingJoinRequests(groupId, apiKey) {
 async function eligibleRobloxIds(guild, allowedRoleIds) {
   await guild.members.fetch();
   const cache = await getIdentityCache();
-  const allowed = new Set();
+  const allowed = new Map();
 
   for (const member of guild.members.cache.values()) {
     if (member.user.bot || !allowedRoleIds.some((roleId) => member.roles.cache.has(roleId))) continue;
@@ -50,7 +60,7 @@ async function eligibleRobloxIds(guild, allowedRoleIds) {
     // the low-frequency application index refresh. Do not make one Melonly
     // call per member every minute: that triggers Melonly's rate limit.
     if (remembered?.robloxId) {
-      allowed.add(String(remembered.robloxId));
+      allowed.set(String(remembered.robloxId), member.id);
     }
   }
   return allowed;
@@ -78,6 +88,8 @@ async function syncGroupJoinRequests(client, config) {
     if (robloxId && allowedIds.has(robloxId)) {
       await groupFetch(`/${requestName}:accept`, config.robloxGroupApiKey, { method: 'POST' });
       accepted += 1;
+      const discordId = allowedIds.get(robloxId);
+      await sendGroupLog(client, config, 'Roblox group request accepted', `<@${discordId}> was accepted into the Roblox group.\nRoblox user ID: \`${robloxId}\``, 0x38d9b0);
     }
   }
   if (accepted) logger.info(`Accepted ${accepted} eligible Roblox group join request(s).`);
@@ -86,11 +98,18 @@ async function syncGroupJoinRequests(client, config) {
 export function startRobloxGroupSync(client, config) {
   let stopped = false;
   let timer;
+  let lastError = '';
   const run = async () => {
     try {
       await syncGroupJoinRequests(client, config);
+      lastError = '';
     } catch (error) {
       logger.error('Roblox group join-request sync failed', error);
+      const message = String(error?.message || 'Unknown error');
+      if (message !== lastError) {
+        lastError = message;
+        await sendGroupLog(client, config, 'Roblox group sync error', `The group sync could not run.\n\`${message.slice(0, 850)}\``, 0xed4245);
+      }
     } finally {
       if (!stopped) timer = setTimeout(run, 60_000);
     }
