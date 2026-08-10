@@ -41,6 +41,6 @@ ROBLOX_GROUP_API_KEY=your-roblox-open-cloud-key
 ROBLOX_GROUP_ALLOWED_ROLE_IDS=1514033664306974752,1514744040778760252
 ```
 
-The bot reads a server nickname in the format `CALL-SIGN | RobloxUsername`; when no valid nickname is set, it uses the existing verified Roblox identity instead. The Open Cloud key needs only Group permissions to list and accept join requests. Keep the key private and never put it in Vercel or browser code.
+The bot reads a server nickname in the format `CALL-SIGN | RobloxUsername`; when no valid nickname is set, it uses the existing verified Roblox identity instead. The Open Cloud key needs only Group permissions to **list, accept, and decline join requests**. Any pending request that does not match a member with one of the allowed roles is declined. Keep the key private and never put it in Vercel or browser code.
 
 The website-to-bot bridge accepts only explicitly allowlisted actions. The included test button sends a protected `ping` action after Discord sign-in; add future actions on both sides of the bridge rather than accepting arbitrary commands.

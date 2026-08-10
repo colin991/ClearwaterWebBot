@@ -88,13 +88,25 @@ async function syncGroupJoinRequests(client, config) {
   const allowedIds = await eligibleRobloxIds(guild, config.robloxGroupAllowedRoleIds);
   const requests = await pendingJoinRequests(config.robloxGroupId, config.robloxGroupApiKey);
   let accepted = 0;
+  let declined = 0;
   for (const request of requests) {
     const robloxId = joinRequestRobloxId(request);
-    if (!robloxId || !allowedIds.has(robloxId) || !request?.name) continue;
-    await groupFetch(`/${request.name}:accept`, config.robloxGroupApiKey, { method: 'POST' });
-    accepted += 1;
+    if (!request?.name) {
+      logger.warn('Skipped a Roblox group join request because it did not include a request name.');
+      continue;
+    }
+    if (robloxId && allowedIds.has(robloxId)) {
+      await groupFetch(`/${request.name}:accept`, config.robloxGroupApiKey, { method: 'POST' });
+      accepted += 1;
+    } else {
+      // A request is declined unless the same Roblox account belongs to a Discord
+      // member holding at least one of the configured allowed roles.
+      await groupFetch(`/${request.name}:decline`, config.robloxGroupApiKey, { method: 'POST' });
+      declined += 1;
+    }
   }
   if (accepted) logger.info(`Accepted ${accepted} eligible Roblox group join request(s).`);
+  if (declined) logger.info(`Declined ${declined} Roblox group join request(s) without an allowed Discord role.`);
 }
 
 export function startRobloxGroupSync(client, config) {
