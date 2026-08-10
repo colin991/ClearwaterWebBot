@@ -1,53 +1,8 @@
-import { getIdentityCache } from './identityStore.js';
+import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { logger } from './logger.js';
+import { findRobloxIdentity } from './melonly.js';
 
 const ROBLOX_CLOUD = 'https://apis.roblox.com/cloud/v2';
-const usernameIdCache = new Map();
-const USERNAME_CACHE_MS = 10 * 60 * 1000;
-
-function nicknameRobloxUsernames(member) {
-  // Supports both "CALL-SIGN | RobloxUsername" and a nickname that is simply
-  // the Roblox username. Splitting also finds it when staff add other text.
-  const nickname = String(member.nickname || '');
-  const candidates = new Set();
-  const afterSeparator = nickname.split('|').at(-1)?.trim();
-  if (/^[A-Za-z0-9_]{3,20}$/.test(afterSeparator || '')) candidates.add(afterSeparator);
-  for (const value of nickname.split(/[^A-Za-z0-9_]+/)) {
-    if (/^[A-Za-z0-9_]{3,20}$/.test(value)) candidates.add(value);
-  }
-  return [...candidates];
-}
-
-async function robloxIdsFromUsernames(usernames) {
-  const now = Date.now();
-  const resolved = new Map();
-  const missing = [];
-  for (const username of usernames) {
-    const cached = usernameIdCache.get(username.toLowerCase());
-    if (cached && now - cached.checkedAt < USERNAME_CACHE_MS) {
-      if (cached.id) resolved.set(username.toLowerCase(), cached.id);
-    } else {
-      missing.push(username);
-    }
-  }
-  if (!missing.length) return resolved;
-
-  const response = await fetch('https://users.roblox.com/v1/usernames/users', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ usernames: missing.slice(0, 50), excludeBannedUsers: false }),
-    signal: AbortSignal.timeout(8_000),
-  });
-  if (!response.ok) throw new Error(`Roblox username lookup failed (${response.status})`);
-  const data = await response.json();
-  const found = new Map((data?.data || []).map((user) => [String(user.requestedUsername || user.name || '').toLowerCase(), String(user.id)]));
-  for (const username of missing.slice(0, 50)) {
-    const id = found.get(username.toLowerCase()) || null;
-    usernameIdCache.set(username.toLowerCase(), { id, checkedAt: now });
-    if (id) resolved.set(username.toLowerCase(), id);
-  }
-  return resolved;
-}
 
 async function groupFetch(path, apiKey, options = {}) {
   const response = await fetch(`${ROBLOX_CLOUD}${path}`, {
@@ -84,29 +39,26 @@ async function pendingJoinRequests(groupId, apiKey) {
   return requests;
 }
 
-async function eligibleRobloxIds(guild, allowedRoleIds) {
+async function eligibleRobloxIds(guild, allowedRoleIds, melonlyApiKey) {
   await guild.members.fetch();
   const cache = await getIdentityCache();
   const allowed = new Set();
-  const usernames = new Set();
+  const staleAfter = Date.now() - (6 * 60 * 60 * 1000);
 
   for (const member of guild.members.cache.values()) {
     if (member.user.bot || !allowedRoleIds.some((roleId) => member.roles.cache.has(roleId))) continue;
-    const nicknameUsernames = nicknameRobloxUsernames(member);
-    if (nicknameUsernames.length) {
-      nicknameUsernames.forEach((username) => usernames.add(username));
+    const remembered = cache.byDiscord?.[member.id];
+    if (remembered?.robloxId && Date.parse(remembered.checkedAt || '') >= staleAfter) {
+      allowed.add(String(remembered.robloxId));
       continue;
     }
-    const remembered = cache.byDiscord?.[member.id]?.robloxId;
-    if (remembered) allowed.add(String(remembered));
-  }
-  const usernameList = [...usernames];
-  for (let index = 0; index < usernameList.length; index += 50) {
     try {
-      const resolved = await robloxIdsFromUsernames(usernameList.slice(index, index + 50));
-      for (const id of resolved.values()) allowed.add(id);
+      const identity = await findRobloxIdentity(member.id, melonlyApiKey);
+      if (!identity?.robloxId) continue;
+      allowed.add(String(identity.robloxId));
+      await rememberIdentity(identity);
     } catch (error) {
-      logger.warn(`Could not resolve Roblox usernames in Discord nicknames: ${error.message}`);
+      logger.warn(`Could not find a Melonly-verified Roblox account for ${member.user.tag}: ${error.message}`);
     }
   }
   return allowed;
@@ -114,10 +66,11 @@ async function eligibleRobloxIds(guild, allowedRoleIds) {
 
 async function syncGroupJoinRequests(client, config) {
   if (!config.robloxGroupId || !config.robloxGroupApiKey) return;
+  if (!config.melonlyApiKey) throw new Error('MELONLY_API_KEY is required for Roblox group sync');
   const guild = await client.guilds.fetch(config.guildId).catch(() => null);
   if (!guild) throw new Error('DISCORD_GUILD_ID could not be fetched for Roblox group sync');
 
-  const allowedIds = await eligibleRobloxIds(guild, config.robloxGroupAllowedRoleIds);
+  const allowedIds = await eligibleRobloxIds(guild, config.robloxGroupAllowedRoleIds, config.melonlyApiKey);
   const requests = await pendingJoinRequests(config.robloxGroupId, config.robloxGroupApiKey);
   logger.info(`Roblox group sync found ${requests.length} pending join request(s) and ${allowedIds.size} eligible Discord-linked Roblox account(s).`);
   let accepted = 0;
