@@ -28,7 +28,7 @@ async function sendGroupLog(client, config, title, description, color) {
 }
 
 function joinRequestRobloxId(request) {
-  const possible = [request?.user, request?.userId, request?.user?.id, request?.user?.userId, request?.user?.name, request?.user?.path];
+  const possible = [request?.user, request?.userId, request?.user?.id, request?.user?.userId, request?.user?.name, request?.user?.path, request?.requester, request?.requester?.id, request?.requester?.userId];
   for (const value of possible) {
     const match = String(value || '').match(/(?:users\/)?(\d+)$/);
     if (match) return match[1];
@@ -90,12 +90,16 @@ async function syncGroupJoinRequests(client, config) {
   let accepted = 0;
   for (const request of requests) {
     const robloxId = joinRequestRobloxId(request);
-    const requestId = request?.id || String(request?.name || '').split('/').at(-1);
+    const requestId = request?.id
+      || request?.requestId
+      || request?.groupJoinRequestId
+      || request?.groupJoinRequest?.id
+      || String(request?.name || '').split('/').at(-1);
     const requestName = requestId
       ? `groups/${config.robloxGroupId}/join-requests/${requestId}`
       : String(request?.name || '');
     if (!requestName) {
-      logger.warn('Skipped a Roblox group join request because it did not include a request name.');
+      logger.warn(`Skipped a Roblox group join request because it did not include an ID. Fields: ${Object.keys(request || {}).join(', ') || 'none'}. Payload: ${JSON.stringify(request || {}).slice(0, 800)}`);
       continue;
     }
     if (robloxId && allowedIds.has(robloxId)) {
