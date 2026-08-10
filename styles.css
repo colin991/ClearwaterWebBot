@@ -346,3 +346,118 @@ img { display: block; max-width: 100%; }
   .js .reveal { opacity: 1; transform: none; }
   .js .hero .hero-copy > *, .js .hero .hero-media { opacity: 1; transform: none; filter: none; }
 }
+
+/* Clearwater Roleplay command deck — a distinct public-site identity. */
+:root {
+  --bg: #041b20;
+  --bg-soft: #072a2d;
+  --panel: #09282b;
+  --panel-light: #0d3537;
+  --text: #f4fbf8;
+  --muted: #a7c5c0;
+  --muted-dark: #70928d;
+  --line: rgba(179, 228, 216, .18);
+  --blue: #5ed6c3;
+  --blue-light: #a3f6df;
+  --cyan: #f5c66a;
+  --radius: 14px;
+}
+
+html { background: #031417; }
+body {
+  background:
+    linear-gradient(90deg, rgba(114, 220, 196, .035) 1px, transparent 1px) 0 0 / 56px 56px,
+    linear-gradient(rgba(114, 220, 196, .025) 1px, transparent 1px) 0 0 / 56px 56px,
+    radial-gradient(circle at 80% 0%, rgba(36, 123, 119, .3), transparent 30%),
+    linear-gradient(145deg, #031417, #052328 56%, #04191d);
+}
+.site-header { top: 0; border-bottom: 1px solid var(--line); background: rgba(3, 20, 23, .88); backdrop-filter: blur(20px); }
+.nav-shell, .site-header.scrolled .nav-shell {
+  width: min(1240px, calc(100% - 48px)); min-height: 68px; padding: 0;
+  border: 0; border-radius: 0; background: transparent; box-shadow: none;
+}
+.brand { gap: 11px; text-transform: uppercase; letter-spacing: .06em; font-size: 12px; }
+.brand > span:last-child { max-width: 190px; }
+.brand-badge { width: 37px; height: 37px; flex-basis: 37px; }
+.site-header.scrolled .brand { gap: 11px; }
+.site-header.scrolled .brand > span:last-child { max-width: 190px; opacity: 1; transform: none; }
+.site-header.scrolled .brand-badge { width: 37px; height: 37px; flex-basis: 37px; }
+.site-nav, .site-header.scrolled .site-nav { margin-left: 58px; }
+.nav-links, .site-header.scrolled .nav-links { gap: 24px; }
+.nav-links a { padding: 9px 0; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; }
+.nav-links a.active::after { right: auto; bottom: 0; width: 100%; height: 2px; border-radius: 0; background: var(--cyan); }
+.nav-button, .site-header.scrolled .nav-button { min-height: 37px; padding-inline: 14px; border-radius: 5px; font-size: 11px; letter-spacing: .04em; }
+.nav-button-primary { color: #082326; background: var(--cyan); box-shadow: none; }
+.nav-button-primary:hover { background: #ffe19b; }
+
+.hero { min-height: 760px; padding: 155px 0 80px; }
+.hero::before { inset: 0; background: linear-gradient(90deg, rgba(3,20,23,.96) 5%, rgba(3,20,23,.42) 57%, rgba(3,20,23,.8)); animation: none; }
+.hero::after { content: "CLEARWATER • EST. 2024"; position: absolute; right: max(24px, calc((100% - 1240px) / 2)); bottom: 28px; color: rgba(180,235,220,.44); font-size: 9px; font-weight: 800; letter-spacing: .2em; }
+.ambient { display: none; }
+.hero-grid { grid-template-columns: minmax(0, 560px) minmax(350px, 1fr); gap: 60px; }
+.hero-copy { position: relative; padding-left: 31px; }
+.hero-copy::before { content: "ACTIVE COMMUNITY"; position: absolute; top: 4px; left: 0; height: 112px; writing-mode: vertical-rl; color: var(--cyan); font-size: 9px; font-weight: 800; letter-spacing: .18em; }
+.hero h1 { max-width: 520px; font-size: clamp(58px, 6vw, 86px); letter-spacing: -.07em; line-height: .86; }
+.hero h1::first-line { color: var(--cyan); }
+.hero-lead { max-width: 430px; margin-top: 27px; color: #d7eeea; font-size: 18px; }
+.hero-detail { max-width: 450px; color: var(--muted); }
+.hero-actions { margin-top: 31px; }
+.button { min-height: 48px; border-radius: 5px; padding-inline: 21px; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; }
+.button-primary { color: #062326; background: var(--cyan); box-shadow: 6px 6px 0 rgba(163,246,223,.18); }
+.button-primary:hover { box-shadow: 8px 8px 0 rgba(163,246,223,.25); background: #ffe19b; }
+.button-secondary { border-color: rgba(202,247,233,.38); background: rgba(2,18,20,.54); }
+.server-status { margin-top: 31px; padding: 10px 12px; border-radius: 5px; color: #c3ded8; background: rgba(2, 19, 21, .68); }
+.status-dot { background: var(--cyan); box-shadow: 0 0 0 4px rgba(245,198,106,.12); }
+.hero-media { align-self: stretch; border: 1px solid rgba(202,247,233,.28); border-radius: 8px; box-shadow: 17px 17px 0 rgba(2,12,14,.62); aspect-ratio: auto; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 38px), calc(100% - 38px) 100%, 0 100%); }
+.hero-media::before { content: "UNIT • GULF COAST"; position: absolute; z-index: 2; bottom: 18px; left: 18px; padding: 6px 8px; color: #062326; background: var(--cyan); font-size: 9px; font-weight: 850; letter-spacing: .12em; }
+.hero-media img, .hero-media .home-patrol-image { filter: saturate(.77) contrast(1.1) brightness(.86); }
+
+.live-panel { position: relative; padding: 70px 0; border-block: 1px solid var(--line); background: rgba(3, 24, 27, .78); }
+.live-panel::before { content: "LIVE INCIDENT BOARD"; position: absolute; top: 25px; left: max(24px, calc((100% - 1240px) / 2)); color: var(--cyan); font-size: 9px; font-weight: 800; letter-spacing: .16em; }
+.live-title { display: none; }
+.live-metrics { grid-template-columns: repeat(4, 1fr); gap: 1px; border: 1px solid var(--line); background: var(--line); }
+.live-metrics div { min-height: 122px; padding: 25px; border: 0; border-radius: 0; background: #08272a; }
+.live-metrics strong { color: var(--cyan); font-size: 38px; }
+.live-panel-inner > p { margin-top: 14px; color: var(--muted-dark); font-size: 11px; }
+
+.section { padding: 125px 0; }
+.gallery, .departments { background: transparent; }
+.gallery-grid, .department-grid { gap: 74px; }
+.gallery-image, .department-image { border: 1px solid var(--line); border-radius: 7px; box-shadow: 12px 12px 0 rgba(7, 50, 52, .8); }
+.gallery-image { min-height: 440px; }
+.gallery-image img, .department-image img { min-height: 440px; filter: saturate(.7) contrast(1.05); }
+.kicker { color: var(--cyan); letter-spacing: .16em; }
+.kicker span { background: var(--cyan); }
+.gallery-copy h2, .department-copy h2 { font-size: clamp(43px, 4vw, 64px); letter-spacing: -.06em; }
+.stats { gap: 0; border: 1px solid var(--line); background: var(--line); }
+.stats div { padding: 18px; border: 0; background: #09282b; }
+.stats dt { color: var(--cyan); }
+.departments { background: rgba(7, 42, 45, .46); border-block: 1px solid var(--line); }
+.department-copy li::before { background: var(--cyan); box-shadow: 0 0 12px rgba(245,198,106,.48); }
+
+.join-section { padding: 100px 0 62px; }
+.join-card { min-height: 300px; border: 1px solid rgba(245,198,106,.45); border-radius: 7px; background: linear-gradient(115deg, #0b3637, #082427 67%); box-shadow: 16px 16px 0 rgba(2, 12, 14, .5); }
+.join-card h2 { font-size: clamp(38px, 4.3vw, 58px); }
+.join-logo { filter: sepia(.45) saturate(.8) brightness(1.35); }
+.site-footer { border-top: 1px solid var(--line); }
+.footer-row { min-height: 108px; border: 0; }
+
+@media (max-width: 760px) {
+  .site-header { top: 0; }
+  .nav-shell, .site-header.scrolled .nav-shell { width: min(100% - 26px, 1240px); }
+  .site-nav { top: 62px; left: 0; right: 0; border-radius: 0 0 8px 8px; background: #061e21; }
+  .hero { min-height: auto; padding: 127px 0 70px; }
+  .hero::after { display: none; }
+  .hero-grid { gap: 44px; }
+  .hero-copy { padding-left: 22px; }
+  .hero-copy::before { height: 90px; font-size: 8px; }
+  .hero h1 { font-size: clamp(54px, 16vw, 76px); }
+  .hero-media { min-height: 285px; }
+  .live-panel { padding: 61px 0 35px; }
+  .live-metrics { grid-template-columns: 1fr 1fr; }
+  .live-metrics div { min-height: 94px; padding: 16px; }
+  .live-metrics strong { font-size: 30px; }
+  .section { padding: 78px 0; }
+  .gallery-image, .department-image, .gallery-image img, .department-image img { min-height: 325px; }
+  .join-section { padding: 72px 0 35px; }
+}
