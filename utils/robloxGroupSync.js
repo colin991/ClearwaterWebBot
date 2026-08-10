@@ -2,25 +2,51 @@ import { getIdentityCache } from './identityStore.js';
 import { logger } from './logger.js';
 
 const ROBLOX_CLOUD = 'https://apis.roblox.com/cloud/v2';
+const usernameIdCache = new Map();
+const USERNAME_CACHE_MS = 10 * 60 * 1000;
 
-function nicknameRobloxUsername(member) {
-  // The server nickname format is: "CALL-SIGN | RobloxUsername".
-  // Take only the final segment so a callsign can contain a separator too.
+function nicknameRobloxUsernames(member) {
+  // Supports both "CALL-SIGN | RobloxUsername" and a nickname that is simply
+  // the Roblox username. Splitting also finds it when staff add other text.
   const nickname = String(member.nickname || '');
-  const username = nickname.split('|').at(-1)?.trim() || '';
-  return /^[A-Za-z0-9_]{3,20}$/.test(username) ? username : null;
+  const candidates = new Set();
+  const afterSeparator = nickname.split('|').at(-1)?.trim();
+  if (/^[A-Za-z0-9_]{3,20}$/.test(afterSeparator || '')) candidates.add(afterSeparator);
+  for (const value of nickname.split(/[^A-Za-z0-9_]+/)) {
+    if (/^[A-Za-z0-9_]{3,20}$/.test(value)) candidates.add(value);
+  }
+  return [...candidates];
 }
 
-async function robloxIdFromUsername(username) {
+async function robloxIdsFromUsernames(usernames) {
+  const now = Date.now();
+  const resolved = new Map();
+  const missing = [];
+  for (const username of usernames) {
+    const cached = usernameIdCache.get(username.toLowerCase());
+    if (cached && now - cached.checkedAt < USERNAME_CACHE_MS) {
+      if (cached.id) resolved.set(username.toLowerCase(), cached.id);
+    } else {
+      missing.push(username);
+    }
+  }
+  if (!missing.length) return resolved;
+
   const response = await fetch('https://users.roblox.com/v1/usernames/users', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ usernames: [username], excludeBannedUsers: false }),
+    body: JSON.stringify({ usernames: missing.slice(0, 50), excludeBannedUsers: false }),
     signal: AbortSignal.timeout(8_000),
   });
   if (!response.ok) throw new Error(`Roblox username lookup failed (${response.status})`);
   const data = await response.json();
-  return data?.data?.[0]?.id ? String(data.data[0].id) : null;
+  const found = new Map((data?.data || []).map((user) => [String(user.requestedUsername || user.name || '').toLowerCase(), String(user.id)]));
+  for (const username of missing.slice(0, 50)) {
+    const id = found.get(username.toLowerCase()) || null;
+    usernameIdCache.set(username.toLowerCase(), { id, checkedAt: now });
+    if (id) resolved.set(username.toLowerCase(), id);
+  }
+  return resolved;
 }
 
 async function groupFetch(path, apiKey, options = {}) {
@@ -37,7 +63,7 @@ async function groupFetch(path, apiKey, options = {}) {
 }
 
 function joinRequestRobloxId(request) {
-  const possible = [request?.user, request?.userId, request?.user?.name, request?.user?.path];
+  const possible = [request?.user, request?.userId, request?.user?.id, request?.user?.userId, request?.user?.name, request?.user?.path];
   for (const value of possible) {
     const match = String(value || '').match(/(?:users\/)?(\d+)$/);
     if (match) return match[1];
@@ -62,21 +88,27 @@ async function eligibleRobloxIds(guild, allowedRoleIds) {
   await guild.members.fetch();
   const cache = await getIdentityCache();
   const allowed = new Set();
-  const lookups = [];
+  const usernames = new Set();
 
   for (const member of guild.members.cache.values()) {
     if (member.user.bot || !allowedRoleIds.some((roleId) => member.roles.cache.has(roleId))) continue;
-    const nicknameUsername = nicknameRobloxUsername(member);
-    if (nicknameUsername) {
-      lookups.push(robloxIdFromUsername(nicknameUsername).then((id) => id && allowed.add(id)).catch((error) => {
-        logger.warn(`Could not resolve Roblox username in ${member.user.tag}'s nickname: ${error.message}`);
-      }));
+    const nicknameUsernames = nicknameRobloxUsernames(member);
+    if (nicknameUsernames.length) {
+      nicknameUsernames.forEach((username) => usernames.add(username));
       continue;
     }
     const remembered = cache.byDiscord?.[member.id]?.robloxId;
     if (remembered) allowed.add(String(remembered));
   }
-  await Promise.all(lookups);
+  const usernameList = [...usernames];
+  for (let index = 0; index < usernameList.length; index += 50) {
+    try {
+      const resolved = await robloxIdsFromUsernames(usernameList.slice(index, index + 50));
+      for (const id of resolved.values()) allowed.add(id);
+    } catch (error) {
+      logger.warn(`Could not resolve Roblox usernames in Discord nicknames: ${error.message}`);
+    }
+  }
   return allowed;
 }
 
@@ -91,17 +123,18 @@ async function syncGroupJoinRequests(client, config) {
   let declined = 0;
   for (const request of requests) {
     const robloxId = joinRequestRobloxId(request);
-    if (!request?.name) {
+    const requestName = request?.name || (request?.id ? `groups/${config.robloxGroupId}/join-requests/${request.id}` : '');
+    if (!requestName) {
       logger.warn('Skipped a Roblox group join request because it did not include a request name.');
       continue;
     }
     if (robloxId && allowedIds.has(robloxId)) {
-      await groupFetch(`/${request.name}:accept`, config.robloxGroupApiKey, { method: 'POST' });
+      await groupFetch(`/${requestName}:accept`, config.robloxGroupApiKey, { method: 'POST' });
       accepted += 1;
     } else {
       // A request is declined unless the same Roblox account belongs to a Discord
       // member holding at least one of the configured allowed roles.
-      await groupFetch(`/${request.name}:decline`, config.robloxGroupApiKey, { method: 'POST' });
+      await groupFetch(`/${requestName}:decline`, config.robloxGroupApiKey, { method: 'POST' });
       declined += 1;
     }
   }
