@@ -89,7 +89,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260808-mobile-layout-1';
+const INTERNET_VERSION = '20260809-clearwater-design-1';
 const OFFICIAL_ACCOUNT_ID = '1514026810348671026';
 const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
   id: OFFICIAL_ACCOUNT_ID,
