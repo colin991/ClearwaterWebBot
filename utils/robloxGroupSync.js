@@ -94,6 +94,7 @@ async function syncGroupJoinRequests(client, config) {
       || request?.requestId
       || request?.groupJoinRequestId
       || request?.groupJoinRequest?.id
+      || String(request?.path || '').split('/').at(-1)
       || String(request?.name || '').split('/').at(-1);
     const requestName = requestId
       ? `groups/${config.robloxGroupId}/join-requests/${requestId}`
