@@ -1,6 +1,5 @@
-import { getIdentityCache, rememberIdentity } from './identityStore.js';
+import { getIdentityCache } from './identityStore.js';
 import { logger } from './logger.js';
-import { findRobloxIdentity } from './melonly.js';
 
 const ROBLOX_CLOUD = 'https://apis.roblox.com/cloud/v2';
 
@@ -39,26 +38,19 @@ async function pendingJoinRequests(groupId, apiKey) {
   return requests;
 }
 
-async function eligibleRobloxIds(guild, allowedRoleIds, melonlyApiKey) {
+async function eligibleRobloxIds(guild, allowedRoleIds) {
   await guild.members.fetch();
   const cache = await getIdentityCache();
   const allowed = new Set();
-  const staleAfter = Date.now() - (6 * 60 * 60 * 1000);
 
   for (const member of guild.members.cache.values()) {
     if (member.user.bot || !allowedRoleIds.some((roleId) => member.roles.cache.has(roleId))) continue;
     const remembered = cache.byDiscord?.[member.id];
-    if (remembered?.robloxId && Date.parse(remembered.checkedAt || '') >= staleAfter) {
+    // The cache is populated only from Melonly verification through -id and
+    // the low-frequency application index refresh. Do not make one Melonly
+    // call per member every minute: that triggers Melonly's rate limit.
+    if (remembered?.robloxId) {
       allowed.add(String(remembered.robloxId));
-      continue;
-    }
-    try {
-      const identity = await findRobloxIdentity(member.id, melonlyApiKey);
-      if (!identity?.robloxId) continue;
-      allowed.add(String(identity.robloxId));
-      await rememberIdentity(identity);
-    } catch (error) {
-      logger.warn(`Could not find a Melonly-verified Roblox account for ${member.user.tag}: ${error.message}`);
     }
   }
   return allowed;
@@ -66,11 +58,10 @@ async function eligibleRobloxIds(guild, allowedRoleIds, melonlyApiKey) {
 
 async function syncGroupJoinRequests(client, config) {
   if (!config.robloxGroupId || !config.robloxGroupApiKey) return;
-  if (!config.melonlyApiKey) throw new Error('MELONLY_API_KEY is required for Roblox group sync');
   const guild = await client.guilds.fetch(config.guildId).catch(() => null);
   if (!guild) throw new Error('DISCORD_GUILD_ID could not be fetched for Roblox group sync');
 
-  const allowedIds = await eligibleRobloxIds(guild, config.robloxGroupAllowedRoleIds, config.melonlyApiKey);
+  const allowedIds = await eligibleRobloxIds(guild, config.robloxGroupAllowedRoleIds);
   const requests = await pendingJoinRequests(config.robloxGroupId, config.robloxGroupApiKey);
   logger.info(`Roblox group sync found ${requests.length} pending join request(s) and ${allowedIds.size} eligible Discord-linked Roblox account(s).`);
   let accepted = 0;
