@@ -104,7 +104,11 @@ async function syncGroupJoinRequests(client, config) {
       continue;
     }
     if (robloxId && allowedIds.has(robloxId)) {
-      await groupFetch(`/${requestName}:accept`, config.robloxGroupApiKey, { method: 'POST' });
+      await groupFetch(`/${requestName}:accept`, config.robloxGroupApiKey, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
       accepted += 1;
       const discordId = allowedIds.get(robloxId);
       await sendGroupLog(client, config, 'Roblox group request accepted', `<@${discordId}> was accepted into the Roblox group.\nRoblox user ID: \`${robloxId}\``, 0x38d9b0);
