@@ -21,6 +21,10 @@ export const config = Object.freeze({
   apiKey: process.env.BOT_API_KEY?.trim(),
   melonlyApiKey: process.env.MELONLY_API_KEY?.trim(),
   erlcServerKey: process.env.ERLC_SERVER_KEY?.trim(),
+  robloxGroupId: process.env.ROBLOX_GROUP_ID?.trim(),
+  robloxGroupApiKey: process.env.ROBLOX_GROUP_API_KEY?.trim(),
+  robloxGroupAllowedRoleIds: (process.env.ROBLOX_GROUP_ALLOWED_ROLE_IDS || '1514033664306974752,1514744040778760252')
+    .split(',').map((value) => value.trim()).filter(Boolean),
   ownerDiscordIds: (process.env.OWNER_DISCORD_IDS || '1044686997194805280')
     .split(',').map((value) => value.trim()).filter(Boolean),
   ownerRoleIds: (process.env.OWNER_ROLE_IDS || '1514033074948800683')

@@ -31,4 +31,16 @@ The bot needs the **Guilds**, **Server Members**, **Server Messages**, and **Mes
 - `/owner.html` is restricted server-side to Discord user `1044686997194805280` or members with role `1514033074948800683` by default. It configures the main/staff servers, roles, log channels, prefix, and sync interval.
 - Add `MELONLY_API_KEY` and `ERLC_SERVER_KEY` to the bot host. Do not add either secret to browser code or GitHub.
 
+## Roblox group join requests
+
+To automatically accept join requests for approved Discord members, add these only to the bot host's `.env` file:
+
+```env
+ROBLOX_GROUP_ID=your-group-id
+ROBLOX_GROUP_API_KEY=your-roblox-open-cloud-key
+ROBLOX_GROUP_ALLOWED_ROLE_IDS=1514033664306974752,1514744040778760252
+```
+
+The bot reads a server nickname in the format `CALL-SIGN | RobloxUsername`; when no valid nickname is set, it uses the existing verified Roblox identity instead. The Open Cloud key needs only Group permissions to list and accept join requests. Keep the key private and never put it in Vercel or browser code.
+
 The website-to-bot bridge accepts only explicitly allowlisted actions. The included test button sends a protected `ping` action after Discord sign-in; add future actions on both sides of the bridge rather than accepting arbitrary commands.
