@@ -75,7 +75,7 @@ async function pendingJoinRequests(groupId, apiKey) {
   const requests = [];
   let pageToken = '';
   do {
-    const query = new URLSearchParams({ pageSize: '100' });
+    const query = new URLSearchParams({ maxPageSize: '100' });
     if (pageToken) query.set('pageToken', pageToken);
     const page = await groupFetch(`/groups/${encodeURIComponent(groupId)}/join-requests?${query}`, apiKey);
     requests.push(...(page?.groupJoinRequests || page?.joinRequests || []));
@@ -119,11 +119,15 @@ async function syncGroupJoinRequests(client, config) {
 
   const allowedIds = await eligibleRobloxIds(guild, config.robloxGroupAllowedRoleIds);
   const requests = await pendingJoinRequests(config.robloxGroupId, config.robloxGroupApiKey);
+  logger.info(`Roblox group sync found ${requests.length} pending join request(s) and ${allowedIds.size} eligible Discord-linked Roblox account(s).`);
   let accepted = 0;
   let declined = 0;
   for (const request of requests) {
     const robloxId = joinRequestRobloxId(request);
-    const requestName = request?.name || (request?.id ? `groups/${config.robloxGroupId}/join-requests/${request.id}` : '');
+    const requestId = request?.id || String(request?.name || '').split('/').at(-1);
+    const requestName = requestId
+      ? `groups/${config.robloxGroupId}/join-requests/${requestId}`
+      : String(request?.name || '');
     if (!requestName) {
       logger.warn('Skipped a Roblox group join request because it did not include a request name.');
       continue;
