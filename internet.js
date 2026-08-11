@@ -19,6 +19,7 @@ const banReason = document.querySelector('[data-ban-reason]');
 const banDuration = document.querySelector('[data-ban-duration]');
 const adminMessage = document.querySelector('[data-admin-message]');
 const banScreen = document.querySelector('[data-ban-screen]');
+const joinRequiredScreen = document.querySelector('[data-join-required-screen]');
 const banReasonDisplay = document.querySelector('[data-ban-reason-display]');
 const banDurationDisplay = document.querySelector('[data-ban-duration-display]');
 const search = document.querySelector('[data-search]');
@@ -351,11 +352,22 @@ function showBan(ban) {
   activeBan = ban || null;
   accountBanned = Boolean(ban);
   document.body.classList.toggle('account-banned', accountBanned);
+  document.body.classList.remove('account-membership-required');
+  if (joinRequiredScreen) joinRequiredScreen.hidden = true;
   if (!banScreen) return;
   banScreen.hidden = !accountBanned;
   if (!accountBanned) return;
   if (banReasonDisplay) banReasonDisplay.textContent = ban.reason || 'No reason was provided.';
   updateBanCountdown();
+}
+
+function showJoinRequired() {
+  activeBan = null;
+  accountBanned = false;
+  document.body.classList.remove('account-banned');
+  document.body.classList.add('account-membership-required');
+  if (banScreen) banScreen.hidden = true;
+  if (joinRequiredScreen) joinRequiredScreen.hidden = false;
 }
 
 function updateBanCountdown() {
@@ -378,7 +390,7 @@ async function loadBanStatus() {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'status' }) });
     const result = await readApiJson(response, 'Could not check account access.');
     if (!response.ok) {
-      if (/member of the Clearwater Roleplay Discord server/i.test(result.error || '')) showBan({ reason: result.error, until: null });
+      if (/member of the Clearwater Roleplay Discord server/i.test(result.error || '')) showJoinRequired();
       return;
     }
     showBan(result.banned ? result.ban : null);
@@ -1049,7 +1061,8 @@ postButton?.addEventListener('click', async () => {
   } catch (error) {
     const message = error.message || 'Could not post.';
     postMessage.textContent = message;
-    if (/banned/i.test(message)) showBan({ reason: 'This account is banned from Clearwater Internet.', until: null });
+    if (/member of the Clearwater Roleplay Discord server/i.test(message)) showJoinRequired();
+    else if (/banned/i.test(message)) showBan({ reason: 'This account is banned from Clearwater Internet.', until: null });
   } finally { postButton.disabled = !content.value.trim() && !selectedGif && !selectedImage; }
 });
 
