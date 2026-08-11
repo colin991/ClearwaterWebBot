@@ -1099,8 +1099,13 @@ showViewFromAddress();
 loadSession().catch(() => {});
 loadPosts();
 window.setInterval(() => {
-  if (!document.hidden) { loadPosts(); loadBanStatus(); loadSocial(); }
+  if (!document.hidden) { loadPosts(); loadSocial(); }
 }, 15_000);
+// A ban needs to take effect quickly for somebody who already has the page
+// open, without reloading the entire feed every few seconds.
+window.setInterval(() => {
+  if (!document.hidden) void loadBanStatus();
+}, 5_000);
 window.setInterval(updateBanCountdown, 60 * 1000);
 
 const checkForInternetUpdate = async () => {

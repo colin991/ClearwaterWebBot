@@ -74,7 +74,12 @@ export default async function handler(request, response) {
     if (!user) return sendJson(response, 401, { error: 'Sign in with Discord to post' });
 
     const body = await readBody(request);
-    const access = await getStaffAccess(user);
+    // Access checks call the bot service. A normal ban-status check does not
+    // need ownership data, so skip that extra round trip and show a ban screen
+    // as quickly as possible.
+    const access = body.action === 'status'
+      ? { allowed: false, staffRank: null }
+      : await getStaffAccess(user);
     const asOfficial = access.allowed && body.asOfficial === true;
     let payload;
     if (body.action === 'post') {
