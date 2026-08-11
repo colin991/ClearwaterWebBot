@@ -116,7 +116,7 @@ async function syncGroupJoinRequests(client, config) {
       ? `groups/${config.robloxGroupId}/join-requests/${requestId}`
       : String(request?.name || '');
     if (!requestName) {
-      logger.warn(`Skipped a Roblox group join request because it did not include an ID. Fields: ${Object.keys(request || {}).join(', ') || 'none'}. Payload: ${JSON.stringify(request || {}).slice(0, 800)}`);
+      logger.warn(`Skipped a Roblox group join request because it did not include an ID. Fields: ${Object.keys(request || {}).join(', ') || 'none'}.`);
       continue;
     }
     let discordId = robloxId ? eligible.allowed.get(robloxId) : null;

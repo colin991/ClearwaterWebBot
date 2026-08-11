@@ -45,7 +45,7 @@ export function startStatusServer(client, config) {
       // Discord uses 10007 only when the user is confirmed not to be in this guild.
       // Network, permissions, and temporary API failures must never create a ban.
       if (Number(error?.code) !== 10007) {
-        logger.warn(`Could not verify Clearwater Internet membership for ${discordId}; leaving access unchanged.`);
+        logger.warn('Could not verify Clearwater Internet membership; leaving access unchanged.');
         return null;
       }
     }
@@ -61,7 +61,7 @@ export function startStatusServer(client, config) {
       if (user && getActiveBan(user) && isMembershipBan) {
         setInternetBan(user, { enabled: false });
         await saveInternetStore(store);
-        logger.info(`Unbanned ${member.user.username} from Clearwater Internet after confirming Discord membership.`);
+        logger.info('Unbanned a Clearwater Internet account after confirming Discord membership.');
       }
       return true;
     }
@@ -186,7 +186,7 @@ export function startStatusServer(client, config) {
         if (request.method !== 'POST') return json(response, 405, { error: 'Method not allowed' });
 
         const body = await readJson(request);
-        const ipBan = getActiveInternetIpBan(store, body.ipHash);
+        const ipBan = getActiveInternetIpBan(store, [body.ipHash, body.ipHashLegacy]);
         if (ipBan) {
           return json(response, 403, { error: 'This network is banned from Clearwater Internet.', ban: ipBan });
         }
