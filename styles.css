@@ -734,10 +734,11 @@ body {
 /* Black lined canvas for the content below the image-led home section. */
 body {
   background:
-    linear-gradient(rgba(111, 151, 212, .065) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(111, 151, 212, .065) 1px, transparent 1px),
-    radial-gradient(circle at 76% 13%, rgba(33, 91, 183, .12), transparent 28%),
-    #02050a;
+    linear-gradient(rgba(111, 151, 212, .022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(111, 151, 212, .022) 1px, transparent 1px),
+    radial-gradient(circle at 74% 10%, rgba(25, 77, 151, .14), transparent 30%),
+    radial-gradient(circle at 14% 48%, rgba(4, 88, 112, .09), transparent 34%),
+    linear-gradient(115deg, #02050a 0%, #03070d 52%, #06101d 100%);
   background-size: 72px 72px, 72px 72px, auto, auto;
   background-attachment: fixed;
 }
