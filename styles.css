@@ -603,3 +603,79 @@ body {
   .home-board-header,
   .live-board .live-panel-inner { padding-inline: 16px; }
 }
+
+/* Full-screen roleplay landing: a focused image-led entrance with Clearwater's own scene. */
+.hero {
+  min-height: 100svh;
+  display: block;
+  padding: 0;
+  isolation: isolate;
+  background: #02050a;
+}
+.hero::before {
+  z-index: -1;
+  inset: 0;
+  opacity: 1;
+  background: linear-gradient(90deg, rgba(2, 5, 10, .96) 0%, rgba(2, 5, 10, .74) 38%, rgba(2, 5, 10, .18) 70%, rgba(2, 5, 10, .48) 100%);
+  animation: none;
+}
+.hero::after {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  background: url('assets/sheriff-station.png') center / cover no-repeat;
+  content: '';
+}
+.hero .ambient { display: none; }
+.hero-grid.home-board {
+  width: 100%;
+  min-height: 100svh;
+  display: block;
+  margin: 0;
+  padding: clamp(180px, 27vh, 270px) max(9vw, calc((100vw - 1180px) / 2)) 86px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.hero-copy { max-width: 610px; padding: 0; }
+.hero-media { display: none; }
+.hero-kicker {
+  width: fit-content;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 26px;
+  padding: 9px 13px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 999px;
+  color: rgba(242,246,252,.8);
+  background: rgba(5, 8, 13, .72);
+  box-shadow: 0 12px 30px rgba(0,0,0,.18);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .17em;
+  text-transform: uppercase;
+}
+.hero-kicker strong { color: #fff; font-size: inherit; }
+.hero-kicker i { width: 1px; height: 12px; margin: 0 2px; background: rgba(255,255,255,.24); }
+.hero-status-dot { width: 8px; height: 8px; border-radius: 50%; background: #38d9b0; box-shadow: 0 0 13px rgba(56,217,176,.75); }
+.hero h1 { max-width: 640px; color: #fff; font-size: clamp(66px, 7.1vw, 112px); font-weight: 780; letter-spacing: -.075em; line-height: .84; text-shadow: 0 10px 35px rgba(0,0,0,.36); }
+.hero-lead { max-width: 520px; margin-top: 30px; color: rgba(239,244,251,.86); font-size: clamp(18px, 1.65vw, 23px); font-weight: 600; line-height: 1.43; }
+.hero-detail { max-width: 545px; margin-top: 18px; color: rgba(210,221,237,.76); font-size: 15px; line-height: 1.75; }
+.hero-actions { margin-top: 30px; }
+.hero-actions .button-primary { color: #08101b; background: #fff; box-shadow: 0 12px 28px rgba(0,0,0,.24); }
+.hero-actions .button-primary:hover { background: #e7effb; }
+.hero-actions .button-secondary { border-color: rgba(255,255,255,.25); background: rgba(5,8,13,.58); backdrop-filter: blur(10px); }
+.hero .server-status { margin-top: 26px; border-color: rgba(255,255,255,.13); background: rgba(4,8,14,.64); backdrop-filter: blur(10px); }
+
+@media (max-width: 760px) {
+  .hero::before { background: linear-gradient(180deg, rgba(2, 5, 10, .55) 0%, rgba(2, 5, 10, .8) 38%, rgba(2, 5, 10, .98) 100%); }
+  .hero::after { background-position: 63% center; }
+  .hero-grid.home-board { min-height: 100svh; padding: 155px 24px 58px; display: flex; align-items: flex-end; }
+  .hero h1 { font-size: clamp(58px, 17vw, 82px); }
+  .hero-lead { margin-top: 24px; font-size: 18px; }
+  .hero-detail { font-size: 14px; }
+  .hero-actions .button { flex: 1; min-width: 0; padding-inline: 13px; }
+  .hero-kicker { margin-bottom: 20px; font-size: 9px; letter-spacing: .12em; }
+}
