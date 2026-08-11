@@ -1,4 +1,8 @@
 {
+  "rewrites": [
+    { "source": "/api/media", "destination": "/api/internet" },
+    { "source": "/api/internet-version", "destination": "/api/internet?meta=version" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
