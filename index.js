@@ -54,3 +54,4 @@ process.on('uncaughtException', (error) => {
 });
 
 await client.login(config.token);
+//teststdasd
