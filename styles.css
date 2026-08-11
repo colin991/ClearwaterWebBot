@@ -591,6 +591,24 @@ body {
   border-color: rgba(113, 158, 224, .14);
 }
 
+.js .hero-grid.visible .hero-copy > * {
+  animation: heroLineIn .78s cubic-bezier(.16,.75,.22,1) forwards;
+}
+.js .hero-grid.visible .hero-copy > :nth-child(1) { animation-delay: .14s; }
+.js .hero-grid.visible .hero-copy > :nth-child(2) { animation-delay: .27s; }
+.js .hero-grid.visible .hero-copy > :nth-child(3) { animation-delay: .39s; }
+.js .hero-grid.visible .hero-copy > :nth-child(4) { animation-delay: .51s; }
+.js .hero-grid.visible .hero-copy > :nth-child(5) { animation-delay: .63s; }
+.js .hero-grid.visible .hero-media {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: none;
+}
+.hero-media .home-patrol-image {
+  object-fit: cover;
+  object-position: center;
+}
+
 @media (max-width: 760px) {
   :root { --page: min(100% - 24px, 1180px); }
   .nav-shell,
@@ -623,7 +641,7 @@ body {
   position: absolute;
   z-index: -2;
   inset: 0;
-  background: url('assets/sheriff-station.png') center / cover no-repeat;
+  background: url('assets/clearwater-home.png') center / cover no-repeat;
   content: '';
 }
 .hero .ambient { display: none; }
