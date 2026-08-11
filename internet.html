@@ -7,7 +7,7 @@
     <meta name="description" content="Clearwater Internet - the community social feed for Clearwater Roleplay." />
     <title>Clearwater Internet</title>
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
-    <link rel="stylesheet" href="internet.css?v=20260810-feed-layout" />
+    <link rel="stylesheet" href="internet.css?v=20260810-home-photo" />
   </head>
   <body>
     <main class="internet-shell">
@@ -36,9 +36,11 @@
       </aside>
 
       <section class="internet-feed">
-        <label class="internet-search"><span>Search Clearwater Internet</span><input data-search type="search" placeholder="Search Clearwater Internet" /></label>
-
         <section class="internet-view" data-view="home">
+          <div class="feed-cover">
+            <img src="assets/clearwater-home.png" alt="Clearwater Roleplay" />
+          </div>
+          <label class="internet-search"><span>Search Clearwater Internet</span><input data-search type="search" placeholder="Search Clearwater Internet" /></label>
           <header class="internet-header">
             <div><p>Clearwater Internet</p><h1>For you</h1></div>
             <a href="/api/auth/discord" data-login>Sign in with Discord</a>
@@ -132,7 +134,7 @@
       </section>
 
       <aside class="internet-side">
-        <div class="community-card"><img src="assets/clearwater-logo.png" alt="" /><h2>Clearwater Roleplay</h2><p>Departments, training, events, and stories from the Gulf Coast.</p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a></div>
+        <div class="community-card"><img class="community-cover" src="assets/clearwater-patrol.png" alt="" /><img class="community-logo" src="assets/clearwater-logo.png" alt="" /><h2>Clearwater Roleplay</h2><p>Departments, training, events, and stories from the Gulf Coast.</p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a></div>
         <div class="trending"><h2>Trending in Clearwater</h2><div data-trending-list><a href="#home" data-topic="#ClearwaterRP">#ClearwaterRP <span>Community</span></a><a href="#home" data-topic="#ERLC">#ERLC <span>Roleplay</span></a><a href="#home" data-topic="#FireRescue">#FireRescue <span>Departments</span></a></div></div>
       </aside>
     </main>
@@ -148,6 +150,6 @@
     <section class="composer-modal" data-post-modal hidden role="dialog" aria-modal="true"><div><header><h2 data-post-modal-title>Reply</h2><button type="button" data-close-post-modal aria-label="Close">×</button></header><form data-post-modal-form><textarea data-post-modal-content maxlength="500" placeholder="Post your reply"></textarea><div class="quoted-post" data-quoted-post hidden></div><div class="post-modal-buttons"><button type="button" data-quote-post hidden>Quote post</button><button>Post</button></div><p data-post-modal-error></p></form></div></section>
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
-    <script src="internet.js?v=20260810-feed-layout-pii"></script>
+    <script src="internet.js?v=20260810-home-photo"></script>
   </body>
 </html>
