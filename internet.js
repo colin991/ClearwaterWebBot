@@ -141,7 +141,7 @@ const timeAgo = (value) => {
 };
 const verifiedBadge = () => '<span class="verified" role="img" aria-label="Verified" data-tooltip="Verified"><img src="assets/verified-badge.png" alt="" /></span>';
 const roleBadges = (user) => (Array.isArray(user?.badges) && user.badges.includes('clearwater-role')
-  ? '<img class="role-badge" src="assets/clearwater-role-badge.webp" alt="Clearwater role badge" title="Clearwater role" />'
+  ? '<span class="role-badge" role="img" aria-label="Premium" data-tooltip="Premium"><img src="assets/clearwater-role-badge.webp" alt="" /></span>'
   : '');
 const identityBadges = (user) => `${user?.verified === true ? verifiedBadge() : ''}${roleBadges(user)}`;
 const currentAuthor = (post) => internetUsers.get(post.authorId) || null;
