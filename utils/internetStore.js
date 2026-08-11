@@ -84,11 +84,12 @@ export function getActiveBan(user) {
   };
 }
 
-export function setInternetBan(user, { enabled, reason, durationDays }) {
+export function setInternetBan(user, { enabled, reason, durationDays, source = 'owner' }) {
   if (!enabled) {
     user.banned = false;
     user.banReason = null;
     user.bannedUntil = null;
+    user.banSource = null;
     return user;
   }
 
@@ -102,6 +103,7 @@ export function setInternetBan(user, { enabled, reason, durationDays }) {
   user.bannedUntil = durationDays === 'forever'
     ? null
     : new Date(Date.now() + (days * 24 * 60 * 60 * 1000)).toISOString();
+  user.banSource = source === 'membership' ? 'membership' : 'owner';
   return user;
 }
 

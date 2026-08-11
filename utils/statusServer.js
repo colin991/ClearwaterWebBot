@@ -52,7 +52,13 @@ export function startStatusServer(client, config) {
 
     if (member) {
       const user = store.users[discordId];
-      if (user && getActiveBan(user)) {
+      // Rejoining Discord only clears a membership-enforced ban. Owner bans
+      // are deliberate moderation actions and must remain in place.
+      const isMembershipBan = user?.banSource === 'membership'
+        // Bans saved before the source field existed were all automatic
+        // membership bans, so keep the promised rejoin-unban behavior.
+        || user?.banReason === 'This account is no longer a member of Clearwater Roleplay on Discord.';
+      if (user && getActiveBan(user) && isMembershipBan) {
         setInternetBan(user, { enabled: false });
         await saveInternetStore(store);
         logger.info(`Unbanned ${member.user.username} from Clearwater Internet after confirming Discord membership.`);
@@ -61,7 +67,12 @@ export function startStatusServer(client, config) {
     }
     const user = upsertInternetUser(store, actor);
     if (!getActiveBan(user)) {
-      setInternetBan(user, { enabled: true, reason: 'This account is no longer a member of Clearwater Roleplay on Discord.', durationDays: 'forever' });
+      setInternetBan(user, {
+        enabled: true,
+        reason: 'This account is no longer a member of Clearwater Roleplay on Discord.',
+        durationDays: 'forever',
+        source: 'membership',
+      });
       await saveInternetStore(store);
     }
     return false;
