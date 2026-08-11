@@ -641,13 +641,7 @@ body {
   position: absolute;
   z-index: -2;
   inset: 0;
-  background:
-    linear-gradient(rgba(105, 146, 205, .09) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(105, 146, 205, .09) 1px, transparent 1px),
-    radial-gradient(circle at 75% 22%, rgba(44, 105, 210, .15), transparent 30%),
-    radial-gradient(circle at 18% 80%, rgba(23, 78, 158, .1), transparent 32%),
-    #02050a;
-  background-size: 72px 72px, 72px 72px, auto, auto, auto;
+  background: url('assets/clearwater-sunset-beach.png') center / cover no-repeat;
   content: '';
 }
 .hero .ambient { display: none; }
@@ -736,3 +730,15 @@ body {
   .discord-rank { max-width: 72px; }
   .discord-logout { min-height: 27px; padding-inline: 8px; }
 }
+
+/* Black lined canvas for the content below the image-led home section. */
+body {
+  background:
+    linear-gradient(rgba(111, 151, 212, .065) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(111, 151, 212, .065) 1px, transparent 1px),
+    radial-gradient(circle at 76% 13%, rgba(33, 91, 183, .12), transparent 28%),
+    #02050a;
+  background-size: 72px 72px, 72px 72px, auto, auto;
+  background-attachment: fixed;
+}
+.hero { background: #02050a; }
