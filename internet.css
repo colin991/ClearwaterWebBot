@@ -516,3 +516,69 @@ body { min-width: 320px; min-height: 100dvh; overflow-x: clip; background: radia
 @media (max-width: 660px) {
   .feed-cover { height: 128px; border-radius: 16px; }
 }
+
+/* Clearwater aurora theme shared with the main site. The thin blue arcs are
+   generated here instead of using a copied image, keeping Internet distinct. */
+body {
+  position: relative;
+  background:
+    radial-gradient(72% 40% at 50% -8%, rgba(47, 107, 255, .2), transparent 72%),
+    radial-gradient(40% 30% at 5% 64%, rgba(15, 99, 210, .1), transparent 70%),
+    #02050c;
+}
+body::before {
+  position: fixed;
+  z-index: -1;
+  top: -31vh;
+  left: -15vw;
+  width: 130vw;
+  height: 72vh;
+  opacity: .42;
+  background:
+    radial-gradient(ellipse 54% 24% at 50% 58%, transparent 62%, rgba(62, 132, 255, .36) 63% 64%, transparent 66%),
+    radial-gradient(ellipse 42% 19% at 50% 59%, transparent 60%, rgba(80, 218, 255, .2) 61% 62%, transparent 65%);
+  filter: blur(18px);
+  content: '';
+  pointer-events: none;
+}
+@media (min-width: 941px) {
+  .internet-shell { width: min(1320px, calc(100% - 48px)); gap: 24px 28px; padding-top: 26px; }
+  .internet-rail {
+    min-height: 62px;
+    border-color: rgba(163, 193, 255, .19);
+    background: linear-gradient(100deg, rgba(5, 10, 20, .9), rgba(9, 23, 48, .76));
+    box-shadow: 0 18px 55px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.05);
+    backdrop-filter: blur(22px) saturate(130%);
+  }
+}
+.internet-search input {
+  border-color: rgba(150, 188, 255, .17);
+  background: rgba(6, 12, 23, .76);
+  box-shadow: 0 14px 34px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.03);
+  backdrop-filter: blur(12px);
+}
+.internet-view,
+.internet-side > div {
+  border-color: rgba(150, 188, 255, .16);
+  background: linear-gradient(145deg, rgba(10, 19, 36, .8), rgba(4, 9, 18, .84));
+  box-shadow: 0 20px 58px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.035);
+  backdrop-filter: blur(14px);
+}
+.internet-view[data-view="home"] .internet-header {
+  background: linear-gradient(105deg, rgba(44, 106, 226, .18), transparent 62%);
+}
+.internet-view[data-view="home"] .composer {
+  border-color: rgba(148, 187, 255, .2) !important;
+  background: linear-gradient(145deg, rgba(13, 25, 47, .82), rgba(5, 10, 20, .86)) !important;
+  box-shadow: 0 14px 38px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.04);
+}
+.internet-view[data-view="home"] .posts { background: transparent; }
+.internet-view[data-view="home"] .post:hover { background: linear-gradient(90deg, rgba(68, 132, 255, .1), transparent 78%) !important; }
+.community-card .community-cover { filter: brightness(.7) saturate(.8); }
+.community-card .community-logo { filter: drop-shadow(0 8px 16px rgba(0,0,0,.38)); }
+.trending a:hover { color: #8abaff; }
+@media (max-width: 660px) {
+  .internet-shell { width: min(100% - 20px, 620px); padding-top: 14px; }
+  .internet-rail { background: linear-gradient(100deg, rgba(5,10,20,.9), rgba(9,23,48,.76)); box-shadow: 0 14px 36px rgba(0,0,0,.28); }
+  .internet-view[data-view="home"] .internet-header { padding-top: 18px !important; }
+}
