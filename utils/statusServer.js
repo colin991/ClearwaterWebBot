@@ -310,7 +310,10 @@ export function startStatusServer(client, config) {
             || reviewerRank?.owner === true
             || Boolean(reviewer && config.ownerRoleIds.some((roleId) => reviewer.roles.cache.has(roleId)));
           if (!reviewerAllowed) return json(response, 403, { error: 'Owner access required' });
-          const report = reviewInternetReport(store, body);
+          const report = reviewInternetReport(store, {
+            ...body,
+            action: body.moderationAction || body.action,
+          });
           await saveInternetStore(store);
           return json(response, 200, { report });
         }

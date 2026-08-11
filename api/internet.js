@@ -1,4 +1,4 @@
-import { SESSION_COOKIE, avatarUrl, getAuthConfig, parseCookies, readSessionToken, sendJson } from '../lib/discord-auth.js';
+import { SESSION_COOKIE, avatarUrl, getAuthConfig, isSameSiteRequest, parseCookies, readSessionToken, sendJson } from '../lib/discord-auth.js';
 import { getStaffAccess } from '../lib/owner-access.js';
 import { createHmac } from 'node:crypto';
 
@@ -27,9 +27,28 @@ async function readBody(request) {
 function compatibleGiphyUrl(value) {
   try {
     const url = new URL(String(value || ''));
-    if (url.protocol !== 'https:' || !/^(?:media\d*|i)\.giphy\.com$/i.test(url.hostname)) return '';
+    if (url.protocol !== 'https:' || url.username || url.password) return '';
+    if (!/^(?:media\d*|i)\.giphy\.com$/i.test(url.hostname)) return '';
     // Older bot hosts only allow media.giphy.com, while GIPHY now returns media0/media1/etc.
     if (/^media\d+\.giphy\.com$/i.test(url.hostname)) url.hostname = 'media.giphy.com';
+    url.hash = '';
+    return url.href;
+  } catch {
+    return '';
+  }
+}
+
+function safeImageDataUrl(value) {
+  const dataUrl = String(value || '').replace(/\s+/g, '');
+  return /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/]+=*$/i.test(dataUrl) ? dataUrl : '';
+}
+
+function safeHttpsUrl(value) {
+  const candidate = String(value || '').trim().slice(0, 500);
+  if (/^assets\/[a-z0-9._-]+$/i.test(candidate)) return candidate;
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== 'https:' || url.username || url.password || /["'()\\\s]/.test(candidate)) return '';
     return url.href;
   } catch {
     return '';
@@ -72,6 +91,9 @@ async function callBot(request, payload) {
 
 export default async function handler(request, response) {
   if (!['GET', 'POST'].includes(request.method)) return sendJson(response, 405, { error: 'Method not allowed' });
+  if (request.method === 'POST' && !isSameSiteRequest(request)) {
+    return sendJson(response, 403, { error: 'Invalid request origin' });
+  }
 
   try {
     if (request.method === 'GET') {
@@ -95,7 +117,7 @@ export default async function handler(request, response) {
         action: 'post',
         content: String(body.content || '').slice(0, 500),
         gif: body.gif && typeof body.gif === 'object' ? { url: compatibleGiphyUrl(body.gif.url), title: String(body.gif.title || '').slice(0, 120) } : null,
-        image: body.image && typeof body.image === 'object' ? { dataUrl: String(body.image.dataUrl || '').slice(0, 2_100_000) } : null,
+        image: body.image && typeof body.image === 'object' ? { dataUrl: safeImageDataUrl(body.image.dataUrl).slice(0, 2_100_000) } : null,
         poll: body.poll && typeof body.poll === 'object' ? { question: String(body.poll.question || '').slice(0, 180), options: Array.isArray(body.poll.options) ? body.poll.options.map((option) => String(option).slice(0, 80)).slice(0, 4) : [], durationDays: Math.min(30, Math.max(1, Number(body.poll.durationDays) || 1)) } : null,
         asOfficial,
         owner: access.allowed,
@@ -117,8 +139,8 @@ export default async function handler(request, response) {
           displayName: String(body.profile?.displayName || '').slice(0, 80),
           username: String(body.profile?.username || '').slice(0, 40),
           bio: String(body.profile?.bio || '').slice(0, 300),
-          avatarUrl: String(body.profile?.avatarUrl || '').slice(0, 500),
-          bannerUrl: String(body.profile?.bannerUrl || '').slice(0, 500),
+          avatarUrl: safeHttpsUrl(body.profile?.avatarUrl),
+          bannerUrl: safeHttpsUrl(body.profile?.bannerUrl),
         },
         actor: { id: user.id },
       };
@@ -177,7 +199,7 @@ export default async function handler(request, response) {
         action: 'report-review',
         reportId: String(body.reportId || ''),
         decision: body.decision === 'deny' ? 'deny' : 'accept',
-        action: String(body.moderationAction || ''),
+        moderationAction: String(body.moderationAction || ''),
         reason: String(body.reason || '').slice(0, 300),
         durationDays: body.durationDays === 'forever' ? 'forever' : Number(body.durationDays),
         actor: { id: user.id },

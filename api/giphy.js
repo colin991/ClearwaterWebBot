@@ -17,12 +17,22 @@ export default async function handler(request, response) {
     const data = await result.json();
     if (!result.ok) return sendJson(response, 502, { error: 'GIF search is temporarily unavailable' });
 
+    const giphyUrl = (value) => {
+      try {
+        const url = new URL(String(value || ''));
+        if (url.protocol !== 'https:' || !/^(?:media\d*|i)\.giphy\.com$/i.test(url.hostname)) return '';
+        return url.href;
+      } catch {
+        return '';
+      }
+    };
+
     return sendJson(response, 200, {
       gifs: (data.data || []).map((gif) => ({
-        id: gif.id,
+        id: String(gif.id || '').slice(0, 80),
         title: String(gif.title || 'GIF').slice(0, 120),
-        url: gif.images?.original?.url || gif.images?.fixed_height?.url,
-        previewUrl: gif.images?.fixed_height_small?.url || gif.images?.fixed_height?.url,
+        url: giphyUrl(gif.images?.original?.url || gif.images?.fixed_height?.url),
+        previewUrl: giphyUrl(gif.images?.fixed_height_small?.url || gif.images?.fixed_height?.url),
       })).filter((gif) => gif.url && gif.previewUrl),
     });
   } catch {

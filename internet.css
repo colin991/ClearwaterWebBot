@@ -188,3 +188,36 @@ body { background: radial-gradient(circle at 76% -12%, rgba(35,88,196,.24), tran
    built-in hidden rule. Keep the official posting identity invisible unless
    the signed-in user has passed the Ownership check in internet.js. */
 .account-switch-menu [data-official-account-option][hidden] { display: none !important; }
+
+.internet-search input,
+.internet-view,
+.internet-view[data-view="home"] .composer,
+.internet-side > div,
+.owner-controls,
+.settings-card .privacy-settings label { border-radius: 20px; }
+.internet-header > a,
+.signed-out a,
+.rail-primary,
+.internet-view[data-view="home"] .composer-footer [data-post-button] { border-radius: 14px; }
+.post,
+.post-gif,
+.post-image,
+.gif-preview img { border-radius: 18px; }
+.conversation-bubble { border-radius: 18px 18px 18px 6px; }
+.conversation-bubble.own { border-radius: 18px 18px 6px 18px; }
+.account-switch-menu { border-radius: 18px; }
+.account-switch-menu .account-logout {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+@media (min-width: 941px) {
+  .internet-rail { border-radius: 999px; }
+}
+@media (max-width: 660px) {
+  .internet-rail,
+  .internet-view,
+  .internet-search input { border-radius: 18px; }
+}
