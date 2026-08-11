@@ -21,7 +21,7 @@ export default {
 
     if (existingUser?.banned === true) {
       setInternetBan(user, { enabled: false });
-      logger.info(`Unbanned ${member.user.username} from Clearwater Internet after they joined the Clearwater Discord server.`);
+      logger.info('Unbanned a Clearwater Internet account after they joined the Clearwater Discord server.');
     }
 
     await saveInternetStore(store);

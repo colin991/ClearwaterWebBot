@@ -91,10 +91,10 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260810-staff-surface';
-const OFFICIAL_ACCOUNT_ID = '1514026810348671026';
+const INTERNET_VERSION = '20260810-pii-hash';
+let officialAccountId = '';
 const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
-  id: OFFICIAL_ACCOUNT_ID,
+  id: '',
   displayName: 'Clearwater Roleplay',
   username: 'clearwaterroleplay',
   avatarUrl: 'assets/clearwater-logo.png',
@@ -180,11 +180,11 @@ function refreshProfileVerified() {
 }
 
 function activeAuthor() {
-  return activeAccount === 'official' ? (internetUsers.get(OFFICIAL_ACCOUNT_ID) || OFFICIAL_ACCOUNT_FALLBACK) : null;
+  return activeAccount === 'official' ? (internetUsers.get(officialAccountId) || OFFICIAL_ACCOUNT_FALLBACK) : null;
 }
 
 function activeUserId() {
-  return activeAccount === 'official' ? OFFICIAL_ACCOUNT_ID : currentUserId;
+  return activeAccount === 'official' ? officialAccountId : currentUserId;
 }
 
 function activeAccountRequest() {
@@ -209,7 +209,9 @@ function updateAccountSwitcher() {
 function selectPostingAccount(account) {
   if (account === 'official' && !sessionIsOwner) return;
   activeAccount = account === 'official' ? 'official' : 'personal';
-  if (activeAccount === 'official' && !internetUsers.has(OFFICIAL_ACCOUNT_ID)) internetUsers.set(OFFICIAL_ACCOUNT_ID, OFFICIAL_ACCOUNT_FALLBACK);
+  if (activeAccount === 'official' && officialAccountId && !internetUsers.has(officialAccountId)) {
+    internetUsers.set(officialAccountId, { ...OFFICIAL_ACCOUNT_FALLBACK, id: officialAccountId });
+  }
   localStorage.setItem(`clearwater-posting-account-${currentUserId}`, activeAccount);
   updateAccountSwitcher();
   accountSwitchMenu.hidden = true;
@@ -217,7 +219,7 @@ function selectPostingAccount(account) {
   void loadSocial();
   void loadMessages();
   void loadNotifications();
-  if (activeAccount === 'official') openMemberProfile(OFFICIAL_ACCOUNT_ID);
+  if (activeAccount === 'official') openMemberProfile(officialAccountId);
 }
 
 async function readApiJson(response, fallbackMessage) {
@@ -708,15 +710,17 @@ async function loadPosts() {
     if (!response.ok) throw new Error(result.error || 'Service unavailable');
     allPosts = result.posts || [];
     internetUsers = new Map((result.users || []).map((user) => [user.id, user]));
+    officialAccountId = result.officialUserId || [...internetUsers.values()].find((user) => user.official)?.id || officialAccountId;
     updateAccountSwitcher();
-    const official = internetUsers.get(OFFICIAL_ACCOUNT_ID);
+    const official = internetUsers.get(officialAccountId);
     if (sessionIsOwner && official) {
       const setValue = (selector, value) => { const field = document.querySelector(selector); if (field && document.activeElement !== field) field.value = value || ''; };
+      const editableUrl = (value) => (/^assets\//i.test(value || '') || (/^https:\/\//i.test(value || '') && !value.includes('/api/media'))) ? value : '';
       setValue('[data-official-name]', official.displayName);
       setValue('[data-official-username]', official.username);
       setValue('[data-official-bio]', official.bio);
-      setValue('[data-official-avatar-url]', official.avatarUrl);
-      setValue('[data-official-banner-url]', official.bannerUrl);
+      setValue('[data-official-avatar-url]', editableUrl(official.avatarUrl));
+      setValue('[data-official-banner-url]', editableUrl(official.bannerUrl));
     }
     refreshProfileVerified();
     renderPosts();
@@ -750,7 +754,7 @@ async function loadSession() {
   if (profileCopy) profileCopy.textContent = session.user.bio || (session.user.staffRank ? `${session.user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
   if (profileAvatar && session.user.avatarUrl) profileAvatar.src = session.user.avatarUrl;
   setBannerImage(profileBanner, session.user.bannerUrl, session.user.bannerColor);
-  if (profileDiscord) profileDiscord.href = `https://discord.com/users/${encodeURIComponent(session.user.id)}`;
+  if (profileDiscord) profileDiscord.href = 'https://discord.gg/839teFCwB';
   if (profileHandle) profileHandle.textContent = `@${session.user.username}`;
   if (profileRank) profileRank.textContent = session.user.staffRank || 'Clearwater community member';
   refreshProfileVerified();
@@ -793,7 +797,7 @@ document.querySelectorAll('[data-preference]').forEach((input) => input.addEvent
 document.querySelectorAll('[data-view-link]').forEach((link) => link.addEventListener('click', (event) => {
   event.preventDefault();
   const view = link.dataset.viewLink || 'home';
-  if (view === 'profile' && activeAccount === 'official') { openMemberProfile(OFFICIAL_ACCOUNT_ID); return; }
+  if (view === 'profile' && activeAccount === 'official') { openMemberProfile(officialAccountId); return; }
   if (location.hash === `#${view}`) showView(view);
   else location.hash = view;
 }));

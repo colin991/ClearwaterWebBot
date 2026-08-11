@@ -1,5 +1,6 @@
-import { SESSION_COOKIE, avatarUrl, bannerUrl, getAuthConfig, isOwner, parseCookies, readSessionToken, sendJson } from '../../lib/discord-auth.js';
+import { SESSION_COOKIE, avatarUrl, bannerUrl, getAuthConfig, parseCookies, readSessionToken, sendJson } from '../../lib/discord-auth.js';
 import { getStaffAccess } from '../../lib/owner-access.js';
+import { proxiedMediaUrl, publicUserId } from '../../lib/privacy.js';
 
 export default async function handler(request, response) {
   if (request.method !== 'GET') return sendJson(response, 405, { error: 'Method not allowed' });
@@ -14,11 +15,11 @@ export default async function handler(request, response) {
     return sendJson(response, 200, {
       authenticated: true,
       user: {
-        id: user.id,
+        id: publicUserId(user.id),
         username: user.username,
         displayName: user.displayName,
-        avatarUrl: avatarUrl(user),
-        bannerUrl: bannerUrl(user),
+        avatarUrl: proxiedMediaUrl(avatarUrl(user)),
+        bannerUrl: proxiedMediaUrl(bannerUrl(user)),
         bannerColor: user.bannerColor || null,
         bio: user.bio || '',
         owner: staffAccess.allowed,

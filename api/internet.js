@@ -1,17 +1,8 @@
 import { SESSION_COOKIE, avatarUrl, getAuthConfig, isSameSiteRequest, parseCookies, readSessionToken, sendJson } from '../lib/discord-auth.js';
 import { getStaffAccess } from '../lib/owner-access.js';
-import { createHmac } from 'node:crypto';
+import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-
-function hashClientIp(request) {
-  const secret = process.env.IP_HASH_SECRET;
-  const forwarded = request.headers['x-forwarded-for'];
-  const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-  const ip = String(raw || '').split(',')[0].trim();
-  if (!secret || !ip) return null;
-  return createHmac('sha256', secret).update(ip).digest('base64url');
-}
 
 async function readBody(request) {
   if (request.body && typeof request.body === 'object') return request.body;
@@ -98,7 +89,7 @@ export default async function handler(request, response) {
   try {
     if (request.method === 'GET') {
       const result = await callBot(request);
-      return sendJson(response, result.ok ? 200 : result.status, result.body);
+      return sendJson(response, result.ok ? 200 : result.status, redactPublicPayload(result.body));
     }
 
     const { sessionSecret } = getAuthConfig();
@@ -223,8 +214,13 @@ export default async function handler(request, response) {
       return sendJson(response, 400, { error: 'Unsupported action' });
     }
 
-    const ipHash = hashClientIp(request);
-    if (ipHash) payload.ipHash = ipHash;
+    if (['withUserId', 'targetId', 'to'].some((key) => isPublicUserId(payload[key]))) {
+      const lookup = await callBot(request);
+      payload = await resolvePublicIds(payload, lookup.body?.users || []);
+    }
+    const ipHashes = hashClientIp(request);
+    if (ipHashes.hash) payload.ipHash = ipHashes.hash;
+    if (ipHashes.legacy && ipHashes.legacy !== ipHashes.hash) payload.ipHashLegacy = ipHashes.legacy;
     const result = await callBot(request, payload);
     // Older bot hosts do not understand asOfficial and would silently create a
     // normal-account post. Remove that post and give a useful update message.
@@ -232,7 +228,7 @@ export default async function handler(request, response) {
       await callBot(request, { action: 'delete', postId: result.body.post?.id, actor: { id: user.id }, owner: true });
       return sendJson(response, 409, { error: 'The bot host needs the latest GitHub files and a restart before the Clearwater Roleplay account can post.' });
     }
-    return sendJson(response, result.ok ? (result.status === 201 ? 201 : 200) : result.status, result.body);
+    return sendJson(response, result.ok ? (result.status === 201 ? 201 : 200) : result.status, redactPublicPayload(result.body));
   } catch {
     return sendJson(response, 502, { error: 'Clearwater Internet is temporarily unavailable' });
   }

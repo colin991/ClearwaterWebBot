@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260810-staff-surface';
+const INTERNET_VERSION = '20260810-pii-hash';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {

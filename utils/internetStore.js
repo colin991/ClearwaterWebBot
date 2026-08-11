@@ -66,6 +66,7 @@ export function publicUsers(store) {
     verified: user.verified === true,
     badges: Array.isArray(user.badges) ? user.badges.filter((badge) => badge === 'clearwater-role') : [],
     banned: Boolean(getActiveBan(user)),
+    official: user.official === true,
     following: user.preferences?.hideFollowing === true ? [] : (Array.isArray(user.following) ? user.following : []),
     followingCount: Array.isArray(user.following) ? user.following.length : 0,
     followers: users.filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).map((member) => member.id),
@@ -137,10 +138,12 @@ export function clearExpiredInternetIpBans(store) {
 }
 
 export function getActiveInternetIpBan(store, ipHash) {
-  const hash = text(ipHash, 100);
-  if (!hash) return null;
+  const hashes = (Array.isArray(ipHash) ? ipHash : [ipHash])
+    .map((value) => text(value, 100))
+    .filter((hash) => /^[A-Za-z0-9_-]{32,100}$/.test(hash));
+  if (!hashes.length) return null;
   clearExpiredInternetIpBans(store);
-  const ban = store.ipBans.find((item) => item.hash === hash);
+  const ban = store.ipBans.find((item) => hashes.includes(item.hash));
   return ban ? { reason: text(ban.reason, 300) || 'No reason was provided.', until: ban.until || null } : null;
 }
 
@@ -241,12 +244,17 @@ export function ensureOfficialInternetAccount(store) {
 }
 
 export function updateOfficialInternetProfile(store, profile = {}) {
+  const previous = store.officialProfile || {};
   store.officialProfile = {
     displayName: text(profile.displayName, 80) || officialDefaults.displayName,
     username: text(profile.username, 40).replace(/[^a-z0-9_]/gi, '').toLowerCase() || officialDefaults.username,
     bio: text(profile.bio, 300),
-    avatarUrl: safeProfileUrl(profile.avatarUrl, officialDefaults.avatarUrl),
-    bannerUrl: safeProfileUrl(profile.bannerUrl, officialDefaults.bannerUrl),
+    avatarUrl: text(profile.avatarUrl, 500)
+      ? safeProfileUrl(profile.avatarUrl, previous.avatarUrl || officialDefaults.avatarUrl)
+      : (previous.avatarUrl || officialDefaults.avatarUrl),
+    bannerUrl: text(profile.bannerUrl, 500)
+      ? safeProfileUrl(profile.bannerUrl, previous.bannerUrl || officialDefaults.bannerUrl)
+      : (previous.bannerUrl || officialDefaults.bannerUrl),
   };
   return ensureOfficialInternetAccount(store);
 }
