@@ -379,3 +379,11 @@ img { display: block; max-width: 100%; }
   .gallery-image, .gallery-image img, .department-image, .department-image img { min-height: 325px; }
   .gallery-image, .gallery-copy { order: 0; }
 }
+
+/* Keep the live heading, stats, and update text in the same page column. */
+.live-title { width: var(--page); margin: 0 auto 20px; text-align: left; }
+.live-panel-inner { display: block; }
+.live-panel-inner > p { margin: 14px 0 0; }
+@media (max-width: 760px) {
+  .live-title { margin-bottom: 18px; text-align: center; }
+}
