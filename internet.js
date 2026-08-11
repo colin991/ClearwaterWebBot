@@ -102,6 +102,7 @@ const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
   bio: 'Official Clearwater Roleplay updates and announcements.',
   staffRank: 'Official account',
   verified: true,
+  badges: [],
 });
 let allPosts = [];
 let currentUserId = null;
@@ -139,6 +140,10 @@ const timeAgo = (value) => {
   return `${days} day${days === 1 ? '' : 's'} ago`;
 };
 const verifiedBadge = () => '<span class="verified" role="img" aria-label="Verified" data-tooltip="Verified"><img src="assets/verified-badge.png" alt="" /></span>';
+const roleBadges = (user) => (Array.isArray(user?.badges) && user.badges.includes('clearwater-role')
+  ? '<img class="role-badge" src="assets/clearwater-role-badge.webp" alt="Clearwater role badge" title="Clearwater role" />'
+  : '');
+const identityBadges = (user) => `${user?.verified === true ? verifiedBadge() : ''}${roleBadges(user)}`;
 const currentAuthor = (post) => internetUsers.get(post.authorId) || null;
 const isVerified = (post) => currentAuthor(post)?.verified === true;
 
@@ -255,7 +260,7 @@ function postMarkup(post, profile = false) {
   const repost = post.repostOf ? allPosts.find((item) => item.id === post.repostOf) : null;
   const shared = quote || repost;
   const sharedMarkup = shared ? `<div class="post-embed"><b>${escapeHtml(shared.displayName || 'Member')}</b> <span>@${escapeHtml(shared.username || '')}</span><p>${escapeHtml(shared.content || '')}</p></div>` : '';
-  return `<article class="post" data-post-card="${escapeHtml(post.id)}">${repost ? '<small class="reposted-label">↻ Reposted</small>' : ''}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(post.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${isVerified(post) ? verifiedBadge() : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${sharedMarkup}${gif}${image}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(post.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(post.id)}">Repost</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(post.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(post.id)}" class="${likes.includes(activeUserId()) ? 'liked' : ''}">${postActionIcon('like', likes.includes(activeUserId()))}<span>${likes.length || ''}</span></button><button type="button" data-engage="share" data-post-id="${escapeHtml(post.id)}">${postActionIcon('share')}</button></div></article>`;
+  return `<article class="post" data-post-card="${escapeHtml(post.id)}">${repost ? '<small class="reposted-label">↻ Reposted</small>' : ''}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(post.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || post)}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${sharedMarkup}${gif}${image}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(post.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(post.id)}">Repost</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(post.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(post.id)}" class="${likes.includes(activeUserId()) ? 'liked' : ''}">${postActionIcon('like', likes.includes(activeUserId()))}<span>${likes.length || ''}</span></button><button type="button" data-engage="share" data-post-id="${escapeHtml(post.id)}">${postActionIcon('share')}</button></div></article>`;
 }
 
 function safeGifUrl(value) {

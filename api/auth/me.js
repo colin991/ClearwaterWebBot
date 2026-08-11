@@ -23,6 +23,7 @@ export default async function handler(request, response) {
         bio: user.bio || '',
         owner: staffAccess.allowed,
         staffRank: staffAccess.staffRank,
+        badges: staffAccess.badges,
       },
     });
   } catch {

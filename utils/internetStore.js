@@ -64,6 +64,7 @@ export function publicUsers(store) {
     bio: user.bio || '',
     staffRank: user.staffRank || null,
     verified: user.verified === true,
+    badges: Array.isArray(user.badges) ? user.badges.filter((badge) => badge === 'clearwater-role') : [],
     banned: Boolean(getActiveBan(user)),
     following: user.preferences?.hideFollowing === true ? [] : (Array.isArray(user.following) ? user.following : []),
     followingCount: Array.isArray(user.following) ? user.following.length : 0,
@@ -200,6 +201,9 @@ export function upsertInternetUser(store, user) {
     displayName: has('displayName') ? text(user?.displayName, 80) || existing.displayName || 'Discord user' : existing.displayName || 'Discord user',
     avatarUrl: has('avatarUrl') ? text(user?.avatarUrl, 300) || null : existing.avatarUrl || null,
     staffRank: has('staffRank') ? text(user?.staffRank, 80) || null : existing.staffRank || null,
+    badges: has('badges') && Array.isArray(user?.badges)
+      ? user.badges.filter((badge) => badge === 'clearwater-role')
+      : (Array.isArray(existing.badges) ? existing.badges : []),
   };
   return store.users[id];
 }
@@ -273,6 +277,7 @@ export function createInternetPost(store, user, content, media = {}) {
     avatarUrl: user.avatarUrl,
     staffRank: user.staffRank,
     verified: user.verified === true,
+    badges: Array.isArray(user.badges) ? user.badges.filter((badge) => badge === 'clearwater-role') : [],
     content: body,
     parentId: text(media?.parentId, 80) || null,
     quoteId: text(media?.quoteId, 80) || null,
@@ -329,7 +334,7 @@ export function interactInternetPost(store, { actor, postId, type, content = '',
   if (type === 'repost') {
     if (store.posts.some((item) => item.authorId === user.id && item.repostOf === post.id)) throw new Error('You already reposted this post');
     if (!String(content || '').trim() && !quote) {
-      const repost = { id: randomUUID(), authorId: user.id, displayName: user.displayName, username: user.username, avatarUrl: user.avatarUrl, staffRank: user.staffRank, verified: user.verified === true, content: '', repostOf: post.id, parentId: null, createdAt: new Date().toISOString() };
+      const repost = { id: randomUUID(), authorId: user.id, displayName: user.displayName, username: user.username, avatarUrl: user.avatarUrl, staffRank: user.staffRank, verified: user.verified === true, badges: Array.isArray(user.badges) ? user.badges.filter((badge) => badge === 'clearwater-role') : [], content: '', repostOf: post.id, parentId: null, createdAt: new Date().toISOString() };
       store.posts.unshift(repost); store.posts = store.posts.slice(0, 500); user.lastPostAt = repost.createdAt;
       addInternetNotification(store, { recipientId: post.authorId, actor: user, type: 'repost', post: repost });
       return { post: repost };

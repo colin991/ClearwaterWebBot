@@ -149,7 +149,12 @@ export function startStatusServer(client, config) {
       const allowed = config.ownerDiscordIds.includes(discordId)
         || staffRank?.owner === true
         || Boolean(member && config.ownerRoleIds.some((roleId) => member.roles.cache.has(roleId)));
-      return json(response, 200, { allowed, member: Boolean(member), staffRank: staffRank?.name || null });
+      return json(response, 200, {
+        allowed,
+        member: Boolean(member),
+        staffRank: staffRank?.name || null,
+        badges: member?.roles?.cache?.has('1514033571160133733') ? ['clearwater-role'] : [],
+      });
     }
 
     if (request.method === 'POST' && url.pathname === '/api/actions') {
