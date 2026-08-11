@@ -4,6 +4,7 @@ import { EmbedBuilder } from 'discord.js';
 
 const ROBLOX_CLOUD = 'https://apis.roblox.com/cloud/v2';
 let lastEmptyRequestDiagnostic = 0;
+const robloxUsernameCache = new Map();
 
 async function groupFetch(path, apiKey, options = {}) {
   const response = await fetch(`${ROBLOX_CLOUD}${path}`, {
@@ -61,10 +62,24 @@ async function pendingJoinRequests(groupId, apiKey) {
   return requests;
 }
 
+async function robloxUsername(robloxId) {
+  const cached = robloxUsernameCache.get(robloxId);
+  if (cached) return cached;
+  const response = await fetch(`https://users.roblox.com/v1/users/${encodeURIComponent(robloxId)}`, {
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!response.ok) return null;
+  const user = await response.json();
+  const username = String(user?.name || '').trim() || null;
+  robloxUsernameCache.set(robloxId, username);
+  return username;
+}
+
 async function eligibleRobloxIds(guild, allowedRoleIds) {
   await guild.members.fetch();
   const cache = await getIdentityCache();
   const allowed = new Map();
+  const nicknameFallbacks = [];
 
   for (const member of guild.members.cache.values()) {
     if (member.user.bot || !allowedRoleIds.some((roleId) => member.roles.cache.has(roleId))) continue;
@@ -75,8 +90,9 @@ async function eligibleRobloxIds(guild, allowedRoleIds) {
     if (remembered?.robloxId) {
       allowed.set(String(remembered.robloxId), member.id);
     }
+    if (member.nickname) nicknameFallbacks.push({ discordId: member.id, nickname: member.nickname.toLowerCase() });
   }
-  return allowed;
+  return { allowed, nicknameFallbacks };
 }
 
 async function syncGroupJoinRequests(client, config) {
@@ -84,9 +100,9 @@ async function syncGroupJoinRequests(client, config) {
   const guild = await client.guilds.fetch(config.guildId).catch(() => null);
   if (!guild) throw new Error('DISCORD_GUILD_ID could not be fetched for Roblox group sync');
 
-  const allowedIds = await eligibleRobloxIds(guild, config.robloxGroupAllowedRoleIds);
+  const eligible = await eligibleRobloxIds(guild, config.robloxGroupAllowedRoleIds);
   const requests = await pendingJoinRequests(config.robloxGroupId, config.robloxGroupApiKey);
-  logger.info(`Roblox group sync found ${requests.length} pending join request(s) and ${allowedIds.size} eligible Discord-linked Roblox account(s).`);
+  logger.info(`Roblox group sync found ${requests.length} pending join request(s) and ${eligible.allowed.size} Melonly-linked Roblox account(s).`);
   let accepted = 0;
   for (const request of requests) {
     const robloxId = joinRequestRobloxId(request);
@@ -103,15 +119,24 @@ async function syncGroupJoinRequests(client, config) {
       logger.warn(`Skipped a Roblox group join request because it did not include an ID. Fields: ${Object.keys(request || {}).join(', ') || 'none'}. Payload: ${JSON.stringify(request || {}).slice(0, 800)}`);
       continue;
     }
-    if (robloxId && allowedIds.has(robloxId)) {
+    let discordId = robloxId ? eligible.allowed.get(robloxId) : null;
+    let matchSource = 'Melonly Verify';
+    if (!discordId && robloxId) {
+      const username = await robloxUsername(robloxId).catch(() => null);
+      const nicknameMatch = username && eligible.nicknameFallbacks.find((entry) => entry.nickname.includes(username.toLowerCase()));
+      if (nicknameMatch) {
+        discordId = nicknameMatch.discordId;
+        matchSource = 'Discord server nickname';
+      }
+    }
+    if (robloxId && discordId) {
       await groupFetch(`/${requestName}:accept`, config.robloxGroupApiKey, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: '{}',
       });
       accepted += 1;
-      const discordId = allowedIds.get(robloxId);
-      await sendGroupLog(client, config, 'Roblox group request accepted', `<@${discordId}> was accepted into the Roblox group.\nRoblox user ID: \`${robloxId}\``, 0x38d9b0);
+      await sendGroupLog(client, config, 'Roblox group request accepted', `<@${discordId}> was accepted into the Roblox group.\nRoblox user ID: \`${robloxId}\`\nMatched through: ${matchSource}`, 0x38d9b0);
     }
   }
   if (accepted) logger.info(`Accepted ${accepted} eligible Roblox group join request(s).`);
