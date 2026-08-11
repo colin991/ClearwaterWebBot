@@ -211,8 +211,17 @@ export function upsertInternetUser(store, user) {
 function safeProfileUrl(value, fallback) {
   const candidate = text(value, 500);
   if (!candidate) return fallback;
-  if (/^https:\/\//i.test(candidate) || /^assets\/[a-z0-9._-]+$/i.test(candidate)) return candidate;
-  throw new Error('Use a secure image URL that starts with https://');
+  if (/^assets\/[a-z0-9._-]+$/i.test(candidate)) return candidate;
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== 'https:' || url.username || url.password || /["'()\\\s]/.test(candidate)) {
+      throw new Error('Use a secure image URL that starts with https://');
+    }
+    return url.href;
+  } catch (error) {
+    if (error.message.startsWith('Use a secure')) throw error;
+    throw new Error('Use a secure image URL that starts with https://');
+  }
 }
 
 export function ensureOfficialInternetAccount(store) {

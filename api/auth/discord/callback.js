@@ -18,7 +18,7 @@ export default async function handler(request, response) {
 
   try {
     const { clientId, clientSecret, redirectUri, sessionSecret } = getAuthConfig();
-    const requestUrl = new URL(request.url, `https://${request.headers.host || 'safdsfdsfds.shop'}`);
+    const requestUrl = new URL(request.url, `https://${request.headers.host || 'cwrpvc.lol'}`);
     const code = requestUrl.searchParams.get('code');
     const state = requestUrl.searchParams.get('state');
     const cookies = parseCookies(request.headers.cookie);

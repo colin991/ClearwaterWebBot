@@ -91,7 +91,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260809-clearwater-design-1';
+const INTERNET_VERSION = '20260810-flow';
 const OFFICIAL_ACCOUNT_ID = '1514026810348671026';
 const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
   id: OFFICIAL_ACCOUNT_ID,
@@ -126,6 +126,32 @@ const expandedPollVoters = new Set();
 const emojiChoices = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😍','😘','🥰','😎','🤩','🥳','🤔','😢','😭','😡','🤯','😴','👀','💀','❤️','💙','💚','🔥','✨','🎉','🚓','🚒','🚑','👍','👎','✅','❌','⚠️','📌','📷','🎮'];
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
+const safeCssImageUrl = (value) => {
+  const candidate = String(value || '').trim();
+  if (/^assets\/[a-z0-9._-]+$/i.test(candidate)) return candidate;
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== 'https:' || url.username || url.password || /["'()\\\s]/.test(candidate)) return '';
+    return url.href;
+  } catch {
+    return '';
+  }
+};
+const safeBannerColor = (value) => /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(String(value || '').trim()) ? String(value).trim() : '';
+const setBannerImage = (element, url, color) => {
+  if (!element) return;
+  const image = safeCssImageUrl(url);
+  const tint = safeBannerColor(color);
+  if (image) {
+    element.style.backgroundImage = `linear-gradient(110deg, rgba(3, 10, 22, .48), rgba(18, 87, 163, .25)), url("${image}")`;
+    return;
+  }
+  if (tint) {
+    element.style.backgroundImage = `linear-gradient(110deg, ${tint}, #061221)`;
+    return;
+  }
+  element.style.backgroundImage = '';
+};
 const timeAgo = (value) => {
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
   if (!Number.isFinite(elapsedSeconds) || elapsedSeconds < 60) return 'just now';
@@ -527,7 +553,7 @@ function openMemberProfile(memberId, updateHash = true) {
   viewedMember = user;
   const posts = allPosts.filter((post) => post.authorId === user.id && !post.parentId);
   const banner = document.querySelector('[data-member-page-banner]');
-  if (banner) banner.style.backgroundImage = `linear-gradient(110deg, rgba(3, 10, 22, .48), rgba(18, 87, 163, .25)), url("${user.bannerUrl || user.avatarUrl || 'assets/clearwater-police-night.png'}")`;
+  setBannerImage(banner, user.bannerUrl || user.avatarUrl || 'assets/clearwater-police-night.png');
   document.querySelector('[data-member-page-avatar]').src = user.avatarUrl || 'assets/clearwater-logo.png';
   document.querySelector('[data-member-page-name]').textContent = user.displayName;
   document.querySelector('[data-member-page-handle]').textContent = `@${user.username}`;
@@ -709,11 +735,7 @@ async function loadSession() {
   if (profileTitle) profileTitle.textContent = session.user.displayName || session.user.username;
   if (profileCopy) profileCopy.textContent = session.user.bio || (session.user.staffRank ? `${session.user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
   if (profileAvatar && session.user.avatarUrl) profileAvatar.src = session.user.avatarUrl;
-  if (profileBanner && session.user.bannerUrl) {
-    profileBanner.style.backgroundImage = `linear-gradient(110deg, rgba(3, 10, 22, .36), rgba(3, 10, 22, .16)), url("${session.user.bannerUrl}")`;
-  } else if (profileBanner && session.user.bannerColor) {
-    profileBanner.style.backgroundImage = `linear-gradient(110deg, ${session.user.bannerColor}, #061221)`;
-  }
+  setBannerImage(profileBanner, session.user.bannerUrl, session.user.bannerColor);
   if (profileDiscord) profileDiscord.href = `https://discord.com/users/${encodeURIComponent(session.user.id)}`;
   if (profileHandle) profileHandle.textContent = `@${session.user.username}`;
   if (profileRank) profileRank.textContent = session.user.staffRank || 'Clearwater community member';
@@ -945,7 +967,12 @@ function addImageToPost(file) {
   }
   const reader = new FileReader();
   reader.onload = () => {
-    selectedImage = { dataUrl: String(reader.result || '') };
+    const dataUrl = String(reader.result || '');
+    if (!safeImageUrl(dataUrl)) {
+      postMessage.textContent = 'Choose a supported image before posting.';
+      return;
+    }
+    selectedImage = { dataUrl };
     selectedGif = null;
     gifPreview.hidden = false;
     gifPreview.innerHTML = `<img src="${escapeHtml(selectedImage.dataUrl)}" alt="Selected image" /><button type="button" data-remove-media>Remove</button>`;
@@ -1088,6 +1115,14 @@ accountSwitchButton?.addEventListener('click', (event) => {
   const opening = accountSwitchMenu.hidden;
   accountSwitchMenu.hidden = !opening;
   accountSwitchButton.setAttribute('aria-expanded', String(opening));
+});
+document.querySelector('[data-internet-logout]')?.addEventListener('click', async (event) => {
+  event.preventDefault();
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+  } finally {
+    window.location.href = '/internet.html';
+  }
 });
 document.querySelectorAll('[data-select-account]').forEach((button) => button.addEventListener('click', () => selectPostingAccount(button.dataset.selectAccount)));
 document.addEventListener('click', (event) => {

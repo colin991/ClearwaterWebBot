@@ -1,6 +1,7 @@
 import {
   SESSION_COOKIE,
   getAuthConfig,
+  isSameSiteRequest,
   parseCookies,
   readSessionToken,
   sendJson,
@@ -20,6 +21,9 @@ async function readBody(request) {
 
 export default async function handler(request, response) {
   if (!['GET', 'PUT'].includes(request.method)) return sendJson(response, 405, { error: 'Method not allowed' });
+  if (request.method !== 'GET' && !isSameSiteRequest(request)) {
+    return sendJson(response, 403, { error: 'Invalid request origin' });
+  }
 
   try {
     const { sessionSecret } = getAuthConfig();

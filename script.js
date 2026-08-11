@@ -128,6 +128,10 @@ discordLogout?.addEventListener('click', async () => {
 
 loadDiscordSession();
 
+if (window.history.replaceState && /[?&]login=/.test(window.location.search)) {
+  window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+}
+
 discordProfile?.addEventListener('click', () => {
   if (ownerLink?.hidden && discordProfileMenuRank?.hidden) return;
   const isOpen = discordProfile.getAttribute('aria-expanded') === 'true';

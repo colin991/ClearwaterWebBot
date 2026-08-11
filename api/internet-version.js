@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260809-clearwater-design-1';
+const INTERNET_VERSION = '20260810-flow';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {
