@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
-import { clearExpiredInternetBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, interactInternetPost, internetPreferences, moderationSnapshot, OFFICIAL_INTERNET_ACCOUNT_ID, publicPosts, publicUsers, readInternetStore, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll } from './internetStore.js';
+import { clearExpiredInternetBans, clearExpiredInternetPosts, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, interactInternetPost, internetPreferences, moderationSnapshot, OFFICIAL_INTERNET_ACCOUNT_ID, publicPosts, publicUsers, readInternetStore, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -91,16 +91,18 @@ export function startStatusServer(client, config) {
     return changed;
   };
 
-  const expireInternetBans = async () => {
+  const cleanUpInternetData = async () => {
     try {
       const store = await readInternetStore();
-      const cleared = clearExpiredInternetBans(store);
-      if (cleared) {
+      const clearedBans = clearExpiredInternetBans(store);
+      const removedPosts = clearExpiredInternetPosts(store);
+      if (clearedBans || removedPosts) {
         await saveInternetStore(store);
-        logger.info(`Automatically unbanned ${cleared} Clearwater Internet account(s).`);
+        if (clearedBans) logger.info(`Automatically unbanned ${clearedBans} Clearwater Internet account(s).`);
+        if (removedPosts) logger.info(`Automatically removed ${removedPosts} Clearwater Internet post(s) older than 48 hours.`);
       }
     } catch (error) {
-      logger.error('Could not clear expired Clearwater Internet bans', error);
+      logger.error('Could not clean up expired Clearwater Internet data', error);
     }
   };
 
@@ -365,11 +367,11 @@ export function startStatusServer(client, config) {
     if (!config.apiKey) logger.warn('BOT_API_KEY is empty; protected website status is disabled.');
   });
 
-  // Timed bans expire even when the website is not currently open.
-  const banCleanup = setInterval(() => { void expireInternetBans(); }, 60 * 1000);
-  banCleanup.unref();
-  server.on('close', () => clearInterval(banCleanup));
-  void expireInternetBans();
+  // Timed bans and old posts are cleaned up even when the website is not currently open.
+  const dataCleanup = setInterval(() => { void cleanUpInternetData(); }, 60 * 1000);
+  dataCleanup.unref();
+  server.on('close', () => clearInterval(dataCleanup));
+  void cleanUpInternetData();
 
   return server;
 }

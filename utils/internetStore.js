@@ -115,6 +115,25 @@ export function clearExpiredInternetBans(store) {
   return cleared;
 }
 
+export function clearExpiredInternetPosts(store, now = Date.now()) {
+  const oldestAllowed = now - (48 * 60 * 60 * 1000);
+  const openReportPostIds = new Set(
+    store.reports
+      .filter((report) => report.status === 'open')
+      .map((report) => report.postId)
+  );
+  const previousCount = store.posts.length;
+
+  store.posts = store.posts.filter((post) => {
+    const createdAt = Date.parse(post.createdAt || '');
+    if (!Number.isFinite(createdAt) || createdAt > oldestAllowed) return true;
+    // Evidence must stay available until an owner finishes the report review.
+    return openReportPostIds.has(post.id);
+  });
+
+  return previousCount - store.posts.length;
+}
+
 export function upsertInternetUser(store, user) {
   const id = text(user?.id, 24);
   if (!/^\d{16,22}$/.test(id)) throw new Error('Invalid user');
