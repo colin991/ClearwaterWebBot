@@ -1,4 +1,4 @@
-const INTERNET_VERSION = '20260810-flow';
+const INTERNET_VERSION = '20260810-staff-surface';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') {
