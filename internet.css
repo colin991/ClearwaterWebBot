@@ -182,3 +182,8 @@ body { background: radial-gradient(circle at 76% -12%, rgba(35,88,196,.24), tran
   .internet-rail { border: 1px solid rgba(113,158,224,.16); border-radius: 16px; background: rgba(7,14,26,.82); }
   .internet-search input { min-height: 43px; }.internet-header { padding: 18px; }.internet-view { border-radius: 16px; }.internet-side { display: none; }
 }
+
+/* The generic account-menu button rule is more specific than the browser's
+   built-in hidden rule. Keep the official posting identity invisible unless
+   the signed-in user has passed the Ownership check in internet.js. */
+.account-switch-menu [data-official-account-option][hidden] { display: none !important; }
