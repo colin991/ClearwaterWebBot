@@ -17,6 +17,7 @@ const admin = document.querySelector('[data-admin]');
 const targetId = document.querySelector('[data-target-id]');
 const banReason = document.querySelector('[data-ban-reason]');
 const banDuration = document.querySelector('[data-ban-duration]');
+const ipBanOption = document.querySelector('[data-ip-ban]');
 const adminMessage = document.querySelector('[data-admin-message]');
 const banScreen = document.querySelector('[data-ban-screen]');
 const joinRequiredScreen = document.querySelector('[data-join-required-screen]');
@@ -390,7 +391,8 @@ async function loadBanStatus() {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'status' }) });
     const result = await readApiJson(response, 'Could not check account access.');
     if (!response.ok) {
-      if (/member of the Clearwater Roleplay Discord server/i.test(result.error || '')) showJoinRequired();
+      if (/network is banned/i.test(result.error || '')) showBan(result.ban || { reason: result.error, until: null });
+      else if (/member of the Clearwater Roleplay Discord server/i.test(result.error || '')) showJoinRequired();
       return;
     }
     showBan(result.banned ? result.ban : null);
@@ -1071,7 +1073,7 @@ admin?.querySelectorAll('button').forEach((button) => button.addEventListener('c
   const enabled = button.dataset.unverifyButton === undefined && button.dataset.unbanButton === undefined;
   adminMessage.textContent = 'Saving...';
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, enabled, targetId: targetId.value, reason: action === 'ban' && enabled ? banReason?.value : '', durationDays: action === 'ban' && enabled ? banDuration?.value : 'forever' }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, enabled, targetId: targetId.value, reason: action === 'ban' && enabled ? banReason?.value : '', durationDays: action === 'ban' && enabled ? banDuration?.value : 'forever', ipBan: action === 'ban' && enabled && ipBanOption?.checked === true }) });
     const result = await readApiJson(response, 'Owner controls are unavailable because the website service is not connected.'); if (!response.ok) throw new Error(result.error); adminMessage.textContent = 'Saved.';
   } catch (error) { adminMessage.textContent = error.message || 'Could not save.'; }
 }));

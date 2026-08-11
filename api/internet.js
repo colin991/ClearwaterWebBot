@@ -1,7 +1,17 @@
 import { SESSION_COOKIE, avatarUrl, getAuthConfig, parseCookies, readSessionToken, sendJson } from '../lib/discord-auth.js';
 import { getStaffAccess } from '../lib/owner-access.js';
+import { createHmac } from 'node:crypto';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
+
+function hashClientIp(request) {
+  const secret = process.env.IP_HASH_SECRET;
+  const forwarded = request.headers['x-forwarded-for'];
+  const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  const ip = String(raw || '').split(',')[0].trim();
+  if (!secret || !ip) return null;
+  return createHmac('sha256', secret).update(ip).digest('base64url');
+}
 
 async function readBody(request) {
   if (request.body && typeof request.body === 'object') return request.body;
@@ -184,12 +194,15 @@ export default async function handler(request, response) {
         enabled: body.enabled === true,
         reason: String(body.reason || '').slice(0, 300),
         durationDays: body.durationDays === 'forever' ? 'forever' : Number(body.durationDays),
+        ipBan: body.ipBan === true,
         owner: true,
       };
     } else {
       return sendJson(response, 400, { error: 'Unsupported action' });
     }
 
+    const ipHash = hashClientIp(request);
+    if (ipHash) payload.ipHash = ipHash;
     const result = await callBot(request, payload);
     // Older bot hosts do not understand asOfficial and would silently create a
     // normal-account post. Remove that post and give a useful update message.

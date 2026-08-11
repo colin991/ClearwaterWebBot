@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
 const storePath = join(process.cwd(), 'data', 'clearwater-internet.json');
-const emptyStore = Object.freeze({ users: {}, posts: [], reports: [], logs: [], officialProfile: {} });
+const emptyStore = Object.freeze({ users: {}, posts: [], reports: [], logs: [], ipBans: [], officialProfile: {} });
 export const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
 const officialDefaults = Object.freeze({
   displayName: 'Clearwater Roleplay',
@@ -40,6 +40,7 @@ export async function readInternetStore() {
     posts: Array.isArray(data?.posts) ? data.posts : [],
     reports: Array.isArray(data?.reports) ? data.reports : [],
     logs: Array.isArray(data?.logs) ? data.logs : [],
+    ipBans: Array.isArray(data?.ipBans) ? data.ipBans : [],
     officialProfile: data?.officialProfile && typeof data.officialProfile === 'object' ? data.officialProfile : {},
   };
 }
@@ -115,6 +116,57 @@ export function clearExpiredInternetBans(store) {
     if (wasBanned && user.banned !== true) cleared += 1;
   }
   return cleared;
+}
+
+export function recordInternetIpHash(store, userId, ipHash) {
+  const hash = text(ipHash, 100);
+  const user = store.users[String(userId || '')];
+  if (!user || !/^[A-Za-z0-9_-]{32,100}$/.test(hash)) return false;
+  const previous = Array.isArray(user.ipHashes) ? user.ipHashes : [];
+  const next = [hash, ...previous.filter((value) => value !== hash)].slice(0, 4);
+  if (next.join(',') === previous.join(',')) return false;
+  user.ipHashes = next;
+  return true;
+}
+
+export function clearExpiredInternetIpBans(store) {
+  const previous = Array.isArray(store.ipBans) ? store.ipBans : [];
+  store.ipBans = previous.filter((ban) => !ban.until || new Date(ban.until).getTime() > Date.now());
+  return previous.length - store.ipBans.length;
+}
+
+export function getActiveInternetIpBan(store, ipHash) {
+  const hash = text(ipHash, 100);
+  if (!hash) return null;
+  clearExpiredInternetIpBans(store);
+  const ban = store.ipBans.find((item) => item.hash === hash);
+  return ban ? { reason: text(ban.reason, 300) || 'No reason was provided.', until: ban.until || null } : null;
+}
+
+export function banKnownInternetIps(store, user, { enabled, reason, durationDays }) {
+  const hashes = [...new Set(Array.isArray(user?.ipHashes) ? user.ipHashes : [])]
+    .filter((hash) => /^[A-Za-z0-9_-]{32,100}$/.test(hash));
+  if (!enabled || !hashes.length) return 0;
+  const days = Number(durationDays);
+  if (durationDays !== 'forever' && (!Number.isInteger(days) || days < 1 || days > 30)) {
+    throw new Error('Choose a ban duration from 1 to 30 days, or Forever');
+  }
+  const until = durationDays === 'forever' ? null : new Date(Date.now() + (days * 24 * 60 * 60 * 1000)).toISOString();
+  const note = text(reason, 300) || 'No reason was provided.';
+  store.ipBans = (Array.isArray(store.ipBans) ? store.ipBans : []).filter((ban) => !hashes.includes(ban.hash));
+  store.ipBans.push(...hashes.map((hash) => ({ id: randomUUID(), hash, reason: note, until, createdAt: new Date().toISOString() })));
+  return hashes.length;
+}
+
+export function clearKnownInternetIpBans(store, user) {
+  const hashes = new Set(
+    (Array.isArray(user?.ipHashes) ? user.ipHashes : [])
+      .filter((hash) => /^[A-Za-z0-9_-]{32,100}$/.test(hash))
+  );
+  if (!hashes.size) return 0;
+  const previous = Array.isArray(store.ipBans) ? store.ipBans : [];
+  store.ipBans = previous.filter((ban) => !hashes.has(ban.hash));
+  return previous.length - store.ipBans.length;
 }
 
 export function clearExpiredInternetPosts(store, now = Date.now()) {

@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
-import { clearExpiredInternetBans, clearExpiredInternetPosts, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, interactInternetPost, internetPreferences, moderationSnapshot, OFFICIAL_INTERNET_ACCOUNT_ID, publicPosts, publicUsers, readInternetStore, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll } from './internetStore.js';
+import { banKnownInternetIps, clearExpiredInternetBans, clearExpiredInternetIpBans, clearExpiredInternetPosts, clearKnownInternetIpBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, moderationSnapshot, OFFICIAL_INTERNET_ACCOUNT_ID, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -106,10 +106,12 @@ export function startStatusServer(client, config) {
     try {
       const store = await readInternetStore();
       const clearedBans = clearExpiredInternetBans(store);
+      const clearedIpBans = clearExpiredInternetIpBans(store);
       const removedPosts = clearExpiredInternetPosts(store);
-      if (clearedBans || removedPosts) {
+      if (clearedBans || clearedIpBans || removedPosts) {
         await saveInternetStore(store);
         if (clearedBans) logger.info(`Automatically unbanned ${clearedBans} Clearwater Internet account(s).`);
+        if (clearedIpBans) logger.info(`Removed ${clearedIpBans} expired Clearwater Internet network ban(s).`);
         if (removedPosts) logger.info(`Automatically removed ${removedPosts} Clearwater Internet post(s) older than 48 hours.`);
       }
     } catch (error) {
@@ -179,6 +181,10 @@ export function startStatusServer(client, config) {
         if (request.method !== 'POST') return json(response, 405, { error: 'Method not allowed' });
 
         const body = await readJson(request);
+        const ipBan = getActiveInternetIpBan(store, body.ipHash);
+        if (ipBan) {
+          return json(response, 403, { error: 'This network is banned from Clearwater Internet.', ban: ipBan });
+        }
         const membership = await enforceInternetMembership(store, body.actor);
         if (membership === false) return json(response, 403, { error: 'You must be a member of the Clearwater Roleplay Discord server to use Clearwater Internet.' });
         if (membership === null) return json(response, 503, { error: 'Clearwater Internet could not verify Discord membership right now. Please try again shortly.' });
@@ -203,6 +209,7 @@ export function startStatusServer(client, config) {
 
         if (body.action === 'status') {
           const user = upsertInternetUser(store, body.actor);
+          recordInternetIpHash(store, user.id, body.ipHash);
           const ban = getActiveBan(user);
           await saveInternetStore(store);
           return json(response, 200, { banned: Boolean(ban), ban });
@@ -318,7 +325,11 @@ export function startStatusServer(client, config) {
         if (!/^\d{16,22}$/.test(targetId)) return json(response, 400, { error: 'Enter a valid Discord user ID' });
         const target = upsertInternetUser(store, { id: targetId });
         if (body.action === 'verify') target.verified = body.enabled === true;
-        if (body.action === 'ban') setInternetBan(target, body);
+        if (body.action === 'ban') {
+          setInternetBan(target, body);
+          if (body.enabled === true && body.ipBan === true) banKnownInternetIps(store, target, body);
+          if (body.enabled !== true) clearKnownInternetIpBans(store, target);
+        }
         await saveInternetStore(store);
         return json(response, 200, { user: target });
       } catch (error) {
