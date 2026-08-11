@@ -641,7 +641,7 @@ body {
   position: absolute;
   z-index: -2;
   inset: 0;
-  background: url('assets/clearwater-home.png') center / cover no-repeat;
+  background: url('assets/clearwater-campfire.png') center / cover no-repeat;
   content: '';
 }
 .hero .ambient { display: none; }
