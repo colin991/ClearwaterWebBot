@@ -1,8 +1,9 @@
 import { SESSION_COOKIE, avatarUrl, getAuthConfig, isSameSiteRequest, parseCookies, readSessionToken, sendJson } from '../lib/discord-auth.js';
 import { getStaffAccess } from '../lib/owner-access.js';
-import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds } from '../lib/privacy.js';
+import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
+const INTERNET_VERSION = '20260810-pii-hash';
 
 async function readBody(request) {
   if (request.body && typeof request.body === 'object') return request.body;
@@ -88,6 +89,11 @@ export default async function handler(request, response) {
 
   try {
     if (request.method === 'GET') {
+      const url = new URL(request.url, `https://${request.headers.host || 'cwrpvc.lol'}`);
+      if (url.searchParams.get('t')) return serveProxiedMedia(request, response);
+      if (url.searchParams.get('meta') === 'version' || url.pathname.endsWith('/internet-version')) {
+        return sendJson(response, 200, { version: INTERNET_VERSION });
+      }
       const result = await callBot(request);
       return sendJson(response, result.ok ? 200 : result.status, redactPublicPayload(result.body));
     }
