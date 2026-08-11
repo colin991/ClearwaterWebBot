@@ -706,3 +706,27 @@ body {
   box-shadow: 0 16px 42px rgba(0, 0, 0, .2), inset 0 1px 0 rgba(255,255,255,.06);
   backdrop-filter: blur(16px) saturate(125%);
 }
+
+/* Compact desktop navigation without changing Clearwater's visual style. */
+@media (min-width: 761px) {
+  .nav-shell,
+  .site-header.scrolled .nav-shell {
+    width: min(720px, calc(100% - 32px));
+    min-height: 54px;
+    padding: 6px 8px 6px 12px;
+  }
+  .brand { gap: 8px; font-size: 14px; }
+  .brand-badge { width: 28px; height: 28px; flex-basis: 28px; }
+  .site-nav,
+  .site-header.scrolled .site-nav { margin-left: 12px; }
+  .nav-links,
+  .site-header.scrolled .nav-links { gap: 3px; }
+  .nav-links a { padding: 8px 10px; font-size: 12px; }
+  .nav-actions { gap: 5px; }
+  .nav-button { min-height: 36px; padding-inline: 12px; font-size: 12px; }
+  .discord-account { min-height: 36px; gap: 6px; padding: 3px 5px 3px 4px; }
+  .discord-avatar { width: 28px; height: 28px; flex-basis: 28px; }
+  .discord-name,
+  .discord-rank { max-width: 72px; }
+  .discord-logout { min-height: 27px; padding-inline: 8px; }
+}
