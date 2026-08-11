@@ -38,8 +38,27 @@ export function startStatusServer(client, config) {
     const guild = client.guilds.cache.get(CLEARWATER_GUILD_ID)
       || await client.guilds.fetch(CLEARWATER_GUILD_ID).catch(() => null);
     if (!guild) return null;
-    const member = await guild.members.fetch(discordId).catch(() => null);
-    if (member) return true;
+    let member;
+    try {
+      member = await guild.members.fetch(discordId);
+    } catch (error) {
+      // Discord uses 10007 only when the user is confirmed not to be in this guild.
+      // Network, permissions, and temporary API failures must never create a ban.
+      if (Number(error?.code) !== 10007) {
+        logger.warn(`Could not verify Clearwater Internet membership for ${discordId}; leaving access unchanged.`);
+        return null;
+      }
+    }
+
+    if (member) {
+      const user = store.users[discordId];
+      if (user && getActiveBan(user)) {
+        setInternetBan(user, { enabled: false });
+        await saveInternetStore(store);
+        logger.info(`Unbanned ${member.user.username} from Clearwater Internet after confirming Discord membership.`);
+      }
+      return true;
+    }
     const user = upsertInternetUser(store, actor);
     if (!getActiveBan(user)) {
       setInternetBan(user, { enabled: true, reason: 'This account is no longer a member of Clearwater Roleplay on Discord.', durationDays: 'forever' });
