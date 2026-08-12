@@ -2381,3 +2381,94 @@ body { margin: 0; }
   padding: 0 6px;
   font-size: 15px;
 }
+
+.internet-shell:has(.conversation-view:not([hidden])) {
+  height: 100dvh;
+  min-height: 100dvh;
+  padding-bottom: 12px !important;
+  overflow: hidden;
+}
+.internet-shell:has(.conversation-view:not([hidden])) .internet-feed {
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.internet-view.conversation-view:not([hidden]) {
+  display: flex !important;
+  flex: 1;
+  flex-direction: column !important;
+  width: 100%;
+  min-height: 0 !important;
+  height: 100% !important;
+  max-height: calc(100dvh - 24px) !important;
+  overflow: hidden !important;
+}
+.conversation-view .conversation-header {
+  flex: 0 0 auto;
+}
+.conversation-view .conversation-messages {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+.conversation-dock {
+  flex: 0 0 auto !important;
+  position: sticky;
+  bottom: 0;
+  z-index: 8;
+  padding: 10px 14px 12px !important;
+  background: linear-gradient(180deg, rgba(7, 14, 26, .72), rgba(7, 14, 26, .96) 28%);
+}
+.conversation-compose [data-conversation-gif],
+.conversation-compose [data-conversation-emoji] {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  place-items: center;
+  border-radius: 12px;
+  color: #d7e6ff;
+  background: rgba(36, 58, 92, .55);
+  font-size: 26px;
+  line-height: 1;
+}
+.conversation-compose [data-conversation-emoji]:hover,
+.conversation-compose [data-conversation-gif]:hover {
+  color: #fff;
+  background: rgba(69, 130, 240, .28);
+}
+.conversation-compose input {
+  min-height: 44px;
+}
+.emoji-grid {
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  max-height: min(52vh, 420px) !important;
+}
+.emoji-grid button {
+  height: 48px !important;
+  border-radius: 12px !important;
+  font-size: 28px !important;
+}
+.internet-view[data-view="home"] .composer .composer-tools [data-emoji-button] {
+  width: 34px !important;
+  height: 34px !important;
+}
+.internet-view[data-view="home"] .composer .composer-tools [data-emoji-button] svg {
+  width: 22px;
+  height: 22px;
+}
+@media (max-width: 940px) {
+  .internet-shell:has(.conversation-view:not([hidden])) {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+  .internet-view.conversation-view:not([hidden]) {
+    height: calc(100dvh - 168px) !important;
+    max-height: calc(100dvh - 168px) !important;
+  }
+}
