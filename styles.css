@@ -125,7 +125,11 @@ img { display: block; max-width: 100%; }
 .hero-media img { width: 100%; height: 100%; object-fit: cover; filter: brightness(.68) saturate(.82) contrast(1.08); }
 .hero-media .home-patrol-image { object-position: center; filter: brightness(1.04) saturate(1) contrast(1.02); }
 
-.live-panel { padding: 150px 0 135px; background: transparent; }
+.live-panel {
+  padding: 150px 0 135px;
+  border-top: 1px solid rgba(141, 178, 235, .16);
+  background: transparent;
+}
 .live-title { width: var(--page); margin: 0 auto 32px; text-align: center; font-size: clamp(30px, 2vw, 36px); font-weight: 760; letter-spacing: -.055em; line-height: 1; }
 .live-panel-inner { background: transparent; }
 .live-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
