@@ -13,8 +13,8 @@ export async function fetchErlcServer(serverKey) {
 export function parseErlcPlayer(player) {
   const raw = String(player?.Player || '');
   const separator = raw.lastIndexOf(':');
-  const x = Number(player?.Location?.LocationX);
-  const z = Number(player?.Location?.LocationZ);
+  const x = Number(player?.Location?.LocationX ?? player?.Location?.x ?? player?.x);
+  const z = Number(player?.Location?.LocationZ ?? player?.Location?.z ?? player?.z);
   return {
     username: separator >= 0 ? raw.slice(0, separator) : raw,
     robloxId: separator >= 0 ? raw.slice(separator + 1) : '',
@@ -30,22 +30,20 @@ export function parseErlcPlayer(player) {
   };
 }
 
-// Official Liberty County satellite map is north-up with a black frame.
-// These world bounds match live ER:LC X/Z samples onto that framed landmass.
+// Official satellite map is 1024² with a black frame around the landmass.
+// ER:LC X/Z are studs from the northwest corner of the 3120² in-game map;
+// +X is east and +Z is south, matching PRC/Sonoran live maps.
 const LIBERTY_BOUNDS = Object.freeze({
-  minX: -2500,
-  maxX: 2500,
-  minZ: -2500,
-  maxZ: 2550,
-  frameLeft: 0.047,
-  frameTop: 0.092,
-  frameWidth: 0.902,
-  frameHeight: 0.826,
+  world: 3120,
+  frameLeft: 0.0469,
+  frameTop: 0.0918,
+  frameWidth: 0.9023,
+  frameHeight: 0.8262,
 });
 
 export function libertyMapPoint(x, z) {
-  const nx = (Number(x) - LIBERTY_BOUNDS.minX) / (LIBERTY_BOUNDS.maxX - LIBERTY_BOUNDS.minX);
-  const ny = (LIBERTY_BOUNDS.maxZ - Number(z)) / (LIBERTY_BOUNDS.maxZ - LIBERTY_BOUNDS.minZ);
+  const nx = Number(x) / LIBERTY_BOUNDS.world;
+  const ny = Number(z) / LIBERTY_BOUNDS.world;
   return {
     left: Number((LIBERTY_BOUNDS.frameLeft + Math.min(1, Math.max(0, nx)) * LIBERTY_BOUNDS.frameWidth).toFixed(4)),
     top: Number((LIBERTY_BOUNDS.frameTop + Math.min(1, Math.max(0, ny)) * LIBERTY_BOUNDS.frameHeight).toFixed(4)),
