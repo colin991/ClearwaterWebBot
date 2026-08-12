@@ -248,7 +248,7 @@ export function startStatusServer(client, config) {
         }
 
         if (body.action === 'conversation') {
-          const messages = takeInternetConversation(store, { actor: body.actor, withUserId: body.withUserId });
+          const messages = takeInternetConversation(store, { actor: body.actor, withUserId: body.withUserId, username: body.username });
           await saveInternetStore(store);
           return json(response, 200, { messages });
         }

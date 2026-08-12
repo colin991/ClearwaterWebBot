@@ -561,10 +561,19 @@ export function takeInternetMessages(store, actor) {
   return messages.slice(0, 120);
 }
 
-export function takeInternetConversation(store, { actor, withUserId }) {
+function findInternetMember(store, { id, username } = {}) {
+  const key = String(id || '');
+  if (key && store.users[key]) return store.users[key];
+  const handle = String(username || '').replace(/^@/, '').toLowerCase();
+  if (!handle) return null;
+  return Object.values(store.users).find((user) => String(user.username || '').toLowerCase() === handle) || null;
+}
+
+export function takeInternetConversation(store, { actor, withUserId, username }) {
   const user = upsertInternetUser(store, actor);
-  const otherId = String(withUserId || '');
-  if (!store.users[otherId]) throw new Error('That member has not joined Clearwater Internet yet');
+  const other = findInternetMember(store, { id: withUserId, username });
+  if (!other) throw new Error('That member has not joined Clearwater Internet yet');
+  const otherId = other.id;
   const messages = (Array.isArray(user.messages) ? user.messages : []).filter((message) => message.kind === 'direct' && (message.fromId === otherId || message.toId === otherId));
   messages.forEach((message) => { if (message.toId === user.id && !message.readAt) message.readAt = new Date().toISOString(); });
   return messages.sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt)).slice(-100);
@@ -625,9 +634,9 @@ export function updateInternetSocial(store, { actor, targetId, type, enabled, po
   return socialSnapshot(store, user);
 }
 
-export function sendInternetMessage(store, { actor, to, content, gif }) {
+export function sendInternetMessage(store, { actor, to, content, gif, username }) {
   const sender = upsertInternetUser(store, actor);
-  const recipient = store.users[String(to || '')];
+  const recipient = findInternetMember(store, { id: to, username });
   if (!recipient) throw new Error('That member has not joined Clearwater Internet yet');
   if (getActiveBan(sender)) throw new Error('This account is banned from Clearwater Internet');
   if (sender.id === recipient.id) throw new Error('You cannot message yourself');

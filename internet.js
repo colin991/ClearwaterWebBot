@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-engage';
+const INTERNET_VERSION = '20260811-dm';
 let officialAccountId = '';
 const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
   id: '',
@@ -645,9 +645,9 @@ async function loadMessages() {
         const unread = Number(message.unread || 0) > 0;
         return `<button type="button" class="internet-message ${unread ? 'unread' : ''}" data-open-conversation="${escapeHtml(otherId)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(name)}</b><p>${escapeHtml(preview)}</p><small>${timeAgo(message.createdAt)}</small></span>${unread ? `<em>${message.unread > 9 ? '9+' : message.unread}</em>` : ''}</button>`;
       }).join('')
-      : '<p>No messages yet. Start a conversation with another Clearwater member.</p>';
+      : '<p class="message-empty">No messages yet.<span>Start a conversation with another Clearwater member.</span></p>';
   } catch (error) {
-    messagesList.innerHTML = `<p>${escapeHtml(error.message || 'Could not load messages.')}</p>`;
+    messagesList.innerHTML = `<p class="message-empty">${escapeHtml(error.message || 'Could not load messages.')}</p>`;
   }
 }
 
@@ -776,14 +776,21 @@ function conversationBubble(message) {
 async function loadConversation(member) {
   if (!member || !conversationMessages) return;
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'conversation', withUserId: member.id, ...activeAccountRequest() }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'conversation', withUserId: member.id, username: member.username, ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Could not load this conversation.');
     if (!response.ok) throw new Error(result.error || 'Could not load this conversation.');
+    if (conversationError) { conversationError.hidden = true; conversationError.textContent = ''; }
     const messages = result.messages || [];
-    conversationMessages.innerHTML = messages.length ? messages.map((message) => conversationBubble(message)).join('') : '<p>Start a conversation.</p>';
+    conversationMessages.innerHTML = messages.length ? messages.map((message) => conversationBubble(message)).join('') : '<p class="conversation-empty">Start a conversation with this member.</p>';
     conversationMessages.scrollTop = conversationMessages.scrollHeight;
     void loadMessages();
-  } catch (error) { conversationMessages.innerHTML = `<p>${escapeHtml(error.message || 'Could not load this conversation.')}</p>`; }
+  } catch (error) {
+    conversationMessages.innerHTML = '<p class="conversation-empty">No messages yet.</p>';
+    if (conversationError) {
+      conversationError.hidden = false;
+      conversationError.textContent = error.message || 'Could not load this conversation.';
+    }
+  }
 }
 
 function renderMessageUserResults() {
@@ -1294,7 +1301,7 @@ conversationForm?.addEventListener('submit', async (event) => {
   const submit = conversationForm.querySelector('button[type="submit"]');
   if (submit) submit.disabled = true;
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'message-send', to: viewedMember.id, content: text, gif: messageGif, ...activeAccountRequest() }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'message-send', to: viewedMember.id, username: viewedMember.username, content: text, gif: messageGif, ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Could not send your message.');
     if (!response.ok) throw new Error(result.error || 'Could not send your message.');
     conversationInput.value = '';

@@ -7,7 +7,7 @@
     <meta name="description" content="Clearwater Internet - the community social feed for Clearwater Roleplay." />
     <title>Clearwater Internet</title>
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
-    <link rel="stylesheet" href="internet.css?v=20260811-engage" />
+    <link rel="stylesheet" href="internet.css?v=20260811-dm" />
   </head>
   <body class="internet-booting">
     <div class="internet-boot" data-internet-boot aria-live="polite">
@@ -84,7 +84,7 @@
             <div><p>Messages</p><h1>Inbox</h1></div>
             <button class="inline-button" type="button" data-new-message>New message</button>
           </header>
-          <div class="message-list" data-messages-list><p>Sign in to see your messages.</p></div>
+          <div class="message-list" data-messages-list><p class="message-empty">Sign in to see your messages.</p></div>
         </section>
         <section class="internet-view profile-view" data-view="profile" hidden>
           <div class="profile-banner" data-profile-banner></div>
@@ -119,10 +119,13 @@
         </section>
         <section class="internet-view conversation-view" data-view="conversation" hidden>
           <header class="conversation-header"><button type="button" data-close-conversation aria-label="Back to messages">←</button><button type="button" class="conversation-open-profile" data-open-conversation-profile><img data-conversation-avatar src="assets/clearwater-logo.png" alt="" /><div><b data-conversation-name>Member</b><small data-conversation-handle>@member</small></div></button></header>
-          <section class="conversation-member-card"><img data-conversation-card-avatar src="assets/clearwater-logo.png" alt="" /><h1 data-conversation-card-name>Member</h1><p data-conversation-card-handle>@member</p><p data-conversation-card-rank>Clearwater community member</p></section>
-          <div class="conversation-messages" data-conversation-messages><p>Start a conversation.</p></div>
-          <p class="conversation-error" data-conversation-error role="alert" hidden></p>
-          <div class="conversation-gif-preview" data-conversation-gif-preview hidden></div><form class="conversation-compose" data-conversation-form><button type="button" data-conversation-gif aria-label="GIF">GIF</button><button type="button" data-conversation-emoji aria-label="Emoji">☺</button><input data-conversation-input maxlength="1000" placeholder="Write a message" autocomplete="off" /><button type="submit" aria-label="Send message">➤</button></form>
+          <section class="conversation-member-card" hidden><img data-conversation-card-avatar src="assets/clearwater-logo.png" alt="" /><h1 data-conversation-card-name>Member</h1><p data-conversation-card-handle>@member</p><p data-conversation-card-rank>Clearwater community member</p></section>
+          <div class="conversation-messages" data-conversation-messages><p class="conversation-empty">Start a conversation with this member.</p></div>
+          <footer class="conversation-dock">
+            <p class="conversation-error" data-conversation-error role="alert" hidden></p>
+            <div class="conversation-gif-preview" data-conversation-gif-preview hidden></div>
+            <form class="conversation-compose" data-conversation-form><button type="button" data-conversation-gif aria-label="GIF">GIF</button><button type="button" data-conversation-emoji aria-label="Emoji">☺</button><input data-conversation-input maxlength="1000" placeholder="Write a message" autocomplete="off" /><button type="submit" aria-label="Send message">➤</button></form>
+          </footer>
         </section>
         <section class="internet-view settings-view" data-view="settings" hidden>
           <header class="page-heading"><p>Settings</p><h1>Account settings</h1></header>
@@ -203,6 +206,6 @@
     <section class="composer-modal" data-post-modal hidden role="dialog" aria-modal="true"><div><header><h2 data-post-modal-title>Reply</h2><button type="button" data-close-post-modal aria-label="Close">×</button></header><form data-post-modal-form><textarea data-post-modal-content maxlength="500" placeholder="Post your reply"></textarea><div class="quoted-post" data-quoted-post hidden></div><div class="post-modal-buttons"><button type="button" data-quote-post hidden>Quote post</button><button>Post</button></div><p data-post-modal-error></p></form></div></section>
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
-    <script src="internet.js?v=20260811-engage"></script>
+    <script src="internet.js?v=20260811-dm"></script>
   </body>
 </html>

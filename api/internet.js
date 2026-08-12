@@ -3,7 +3,7 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260811-engage';
+const INTERNET_VERSION = '20260811-dm';
 
 async function readBody(request) {
   if (request.body && typeof request.body === 'object') return request.body;
@@ -173,7 +173,7 @@ export default async function handler(request, response) {
     } else if (body.action === 'messages') {
       payload = { action: 'messages', asOfficial, owner: access.allowed, actor: { id: user.id, displayName: user.displayName } };
     } else if (body.action === 'conversation') {
-      payload = { action: 'conversation', withUserId: String(body.withUserId || ''), asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
+      payload = { action: 'conversation', withUserId: String(body.withUserId || ''), username: String(body.username || '').slice(0, 80), asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'notifications') {
       payload = { action: 'notifications', asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'social-status') {
@@ -189,7 +189,7 @@ export default async function handler(request, response) {
     } else if (body.action === 'poll-vote') {
       payload = { action: 'poll-vote', postId: String(body.postId || ''), optionIndex: Number(body.optionIndex), remove: body.remove === true, asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'message-send') {
-      payload = { action: 'message-send', to: String(body.to || ''), content: String(body.content || '').slice(0, 1000), gif: body.gif && typeof body.gif === 'object' ? { url: compatibleGiphyUrl(body.gif.url), title: String(body.gif.title || '').slice(0, 120) } : null, asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
+      payload = { action: 'message-send', to: String(body.to || ''), username: String(body.username || '').slice(0, 80), content: String(body.content || '').slice(0, 1000), gif: body.gif && typeof body.gif === 'object' ? { url: compatibleGiphyUrl(body.gif.url), title: String(body.gif.title || '').slice(0, 120) } : null, asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank } };
     } else if (body.action === 'report-review') {
       if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
       payload = {
@@ -221,8 +221,11 @@ export default async function handler(request, response) {
     }
 
     if (['withUserId', 'targetId', 'to'].some((key) => isPublicUserId(payload[key]))) {
-      const lookup = await callBot(request);
+      const lookup = await callBot({ method: 'GET' });
       payload = await resolvePublicIds(payload, lookup.body?.users || []);
+      if (['withUserId', 'targetId', 'to'].some((key) => isPublicUserId(payload[key])) && !payload.username) {
+        return sendJson(response, 404, { error: 'That member has not joined Clearwater Internet yet' });
+      }
     }
     const ipHashes = hashClientIp(request);
     if (ipHashes.hash) payload.ipHash = ipHashes.hash;

@@ -1518,6 +1518,101 @@ body { margin: 0; }
   width: 100%;
   max-width: none;
 }
+
+.internet-view[data-view="messages"] {
+  display: flex !important;
+  min-height: calc(100vh - 48px);
+  flex-direction: column;
+  gap: 14px;
+}
+.messages-heading {
+  flex: 0 0 auto;
+  width: 100%;
+}
+.message-list {
+  display: flex !important;
+  flex: 1;
+  min-height: 420px;
+  flex-direction: column;
+  overflow: auto !important;
+  padding: 6px 0 !important;
+  border-radius: 16px !important;
+}
+.message-list > .message-empty,
+.message-list > p.message-empty {
+  display: grid;
+  flex: 1;
+  min-height: 320px;
+  place-content: center;
+  margin: 0;
+  padding: 48px 24px;
+  color: #8ea0b8;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 650;
+}
+.message-list > .message-empty span {
+  display: block;
+  margin-top: 6px;
+  color: #6f8198;
+  font-size: 13px;
+  font-weight: 500;
+}
+.message-list .internet-message {
+  width: 100%;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+.message-list .internet-message:hover {
+  background: rgba(69, 130, 240, .08) !important;
+}
+
+.internet-view.conversation-view {
+  display: flex !important;
+  min-height: calc(100vh - 48px);
+  flex-direction: column;
+  overflow: hidden !important;
+  border: 1px solid var(--cw-border) !important;
+  border-radius: 16px !important;
+  background: var(--cw-card) !important;
+}
+.conversation-view .conversation-header {
+  flex: 0 0 auto;
+  padding: 12px 14px;
+}
+.conversation-view .conversation-messages {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 10px;
+  min-height: 0;
+  max-height: none !important;
+  overflow-y: auto;
+  padding: 18px 16px;
+}
+.conversation-view .conversation-empty,
+.conversation-view .conversation-messages > p.conversation-empty {
+  margin: auto;
+  color: #8ea0b8;
+  text-align: center;
+}
+.conversation-dock {
+  flex: 0 0 auto;
+  padding: 0 14px 14px;
+  border-top: 1px solid rgba(148, 184, 255, .12);
+}
+.conversation-dock .conversation-error {
+  padding: 10px 4px 0;
+}
+.conversation-dock .conversation-compose {
+  padding: 12px 0 0;
+}
+.conversation-dock .conversation-compose input {
+  border-radius: 999px;
+  background: #101826;
+}
 .repost-inline summary.reposted { color: #19c37d; }
 .post-action-row button.liked svg.filled { fill: currentColor; }
 
