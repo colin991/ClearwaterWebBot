@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
-import { banKnownInternetIps, clearExpiredInternetBans, clearExpiredInternetIpBans, clearExpiredInternetPosts, clearKnownInternetIpBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, moderationSnapshot, OFFICIAL_INTERNET_ACCOUNT_ID, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll } from './internetStore.js';
+import { AutomodHoldError, banKnownInternetIps, clearExpiredInternetBans, clearExpiredInternetIpBans, clearExpiredInternetPosts, clearKnownInternetIpBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, moderationSnapshot, OFFICIAL_INTERNET_ACCOUNT_ID, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -175,8 +175,9 @@ export function startStatusServer(client, config) {
     }
 
     if (url.pathname === '/api/internet') {
+      let store = null;
       try {
-        const store = await readInternetStore();
+        store = await readInternetStore();
         if (request.method === 'GET') {
           const createdOfficialAccount = !store.users[OFFICIAL_INTERNET_ACCOUNT_ID];
           ensureOfficialInternetAccount(store);
@@ -341,6 +342,10 @@ export function startStatusServer(client, config) {
         await saveInternetStore(store);
         return json(response, 200, { user: target });
       } catch (error) {
+        if (error instanceof AutomodHoldError && store) {
+          await saveInternetStore(store);
+          return json(response, 451, { error: error.message, held: true, reason: error.reason });
+        }
         return json(response, 400, { error: error.message || 'Could not update Clearwater Internet' });
       }
     }

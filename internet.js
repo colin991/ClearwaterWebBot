@@ -42,6 +42,7 @@ const messagesList = document.querySelector('[data-messages-list]');
 const notificationList = document.querySelector('[data-notification-list]');
 const notificationCount = document.querySelector('[data-notification-count]');
 const notificationDot = document.querySelector('[data-notification-dot]');
+const messageDot = document.querySelector('[data-message-dot]');
 const moderationModal = document.querySelector('[data-moderation-modal]');
 const moderationForm = document.querySelector('[data-moderation-form]');
 const moderationReason = document.querySelector('[data-moderation-reason]');
@@ -83,6 +84,7 @@ const conversationForm = document.querySelector('[data-conversation-form]');
 const conversationInput = document.querySelector('[data-conversation-input]');
 const conversationMessages = document.querySelector('[data-conversation-messages]');
 const conversationGifPreview = document.querySelector('[data-conversation-gif-preview]');
+const conversationError = document.querySelector('[data-conversation-error]');
 const accountSwitch = document.querySelector('[data-account-switch]');
 const accountSwitchButton = document.querySelector('[data-account-switch-button]');
 const accountSwitchMenu = document.querySelector('[data-account-switch-menu]');
@@ -91,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-fullscreen';
+const INTERNET_VERSION = '20260811-messaging';
 let officialAccountId = '';
 const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
   id: '',
@@ -118,7 +120,7 @@ let selectedGif = null;
 let selectedImage = null;
 let messageGif = null;
 let pickerTarget = 'post';
-let socialState = { following: [], followers: [], blocked: [], muted: [], bookmarks: [], unreadNotifications: 0 };
+let socialState = { following: [], followers: [], blocked: [], muted: [], bookmarks: [], unreadNotifications: 0, unreadMessages: 0 };
 let viewedMember = null;
 let pendingPostAction = null;
 let openPostId = null;
@@ -354,7 +356,8 @@ function showView(view) {
   if (activeView === 'staff' && !sessionIsOwner) activeView = 'home';
   document.querySelector('.internet-shell')?.classList.toggle('staff-mode', activeView === 'staff');
   document.querySelectorAll('[data-view]').forEach((section) => { section.hidden = section.dataset.view !== activeView; });
-  document.querySelectorAll('[data-view-link]').forEach((link) => link.classList.toggle('selected', link.dataset.viewLink === activeView));
+  const navView = activeView === 'conversation' ? 'messages' : activeView;
+  document.querySelectorAll('[data-view-link]').forEach((link) => link.classList.toggle('selected', link.dataset.viewLink === navView));
   if (activeView === 'home') renderPosts();
   if (activeView === 'messages') void loadMessages();
   if (activeView === 'notifications') void loadNotifications();
@@ -437,15 +440,25 @@ async function loadBanStatus() {
   }
 }
 
+function reportSourceLabel(report) {
+  if (report?.source === 'automod') return 'Automod';
+  return report?.reporterName || 'Member report';
+}
+
+function reportKindLabel(report) {
+  return report?.kind === 'message' ? 'Direct message' : 'Post';
+}
+
 function renderStaffDashboard() {
   if (!staffContent || !moderationSnapshot) return;
   const reports = moderationSnapshot.reports || [];
   const bans = moderationSnapshot.bans || [];
   const logs = moderationSnapshot.logs || [];
+  const automodCount = reports.filter((report) => report.source === 'automod').length;
   if (!reports.some((report) => report.id === selectedReportId)) selectedReportId = reports[0]?.id || null;
   const selected = reports.find((report) => report.id === selectedReportId) || null;
   const reportCards = reports.length
-    ? reports.map((report) => `<button type="button" class="staff-report-card ${report.id === selectedReportId ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}"><div><b>${escapeHtml(report.authorName)}</b><small>Reported by ${escapeHtml(report.reporterName)}</small></div><p>${escapeHtml(report.content || 'No post text')}</p><span>${escapeHtml(report.reason || 'No reason given')}</span></button>`).join('')
+    ? reports.map((report) => `<button type="button" class="staff-report-card ${report.id === selectedReportId ? 'selected' : ''} ${report.source === 'automod' ? 'automod' : ''}" data-staff-select="${escapeHtml(report.id)}"><div><b>${escapeHtml(report.authorName)}</b><small>${escapeHtml(reportSourceLabel(report))} · ${escapeHtml(reportKindLabel(report))}</small></div><p>${escapeHtml(report.content || 'No text captured')}</p><span>${escapeHtml(report.reason || 'No reason given')}</span></button>`).join('')
     : '<div class="staff-empty">The report queue is clear.</div>';
   const banCards = bans.length
     ? bans.map((ban) => `<article class="staff-compact"><b>${escapeHtml(ban.displayName)}</b><span>${escapeHtml(ban.reason)}</span><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></article>`).join('')
@@ -453,11 +466,12 @@ function renderStaffDashboard() {
   const logCards = logs.length
     ? logs.slice(0, 8).map((log) => `<article class="staff-compact"><span>${escapeHtml(log.message)}</span><small>${new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(log.createdAt))}</small></article>`).join('')
     : '<div class="staff-empty">No staff actions yet.</div>';
+  const canDelete = selected && selected.source !== 'automod' && selected.kind !== 'message';
   const caseFile = selected
-    ? `<article class="staff-case" data-report-card><div class="staff-case-identity"><span>${escapeHtml((selected.authorName || '?').slice(0, 1))}</span><div><b>${escapeHtml(selected.authorName)}</b><small>Reported by ${escapeHtml(selected.reporterName)}</small></div></div><p class="staff-case-copy">${escapeHtml(selected.content || 'No post text')}</p><p class="staff-case-reason">${escapeHtml(selected.reason || 'No reason given')}</p><div class="report-actions"><select data-report-action><option value="warning">Give warning</option><option value="delete">Delete post</option><option value="ban">Ban account</option></select><button type="button" data-report-review="accept" data-report-id="${escapeHtml(selected.id)}">Take action</button><button type="button" class="danger" data-report-review="deny" data-report-id="${escapeHtml(selected.id)}">Dismiss</button></div></article>`
+    ? `<article class="staff-case" data-report-card><div class="staff-case-identity"><span>${escapeHtml((selected.authorName || '?').slice(0, 1))}</span><div><b>${escapeHtml(selected.authorName)}</b><small>${escapeHtml(reportSourceLabel(selected))} · ${escapeHtml(reportKindLabel(selected))}</small></div></div><p class="staff-case-copy">${escapeHtml(selected.content || 'No text captured')}</p><p class="staff-case-reason">${escapeHtml(selected.reason || 'No reason given')}</p>${Array.isArray(selected.categories) && selected.categories.length ? `<p class="staff-case-tags">${selected.categories.map((category) => `<span>${escapeHtml(category)}</span>`).join('')}</p>` : ''}<div class="report-actions"><select data-report-action><option value="warning">Give warning</option>${canDelete ? '<option value="delete">Delete post</option>' : '<option value="delete">Confirm removal</option>'}<option value="ban">Ban account</option></select><button type="button" data-report-review="accept" data-report-id="${escapeHtml(selected.id)}">Take action</button><button type="button" class="danger" data-report-review="deny" data-report-id="${escapeHtml(selected.id)}">Dismiss</button></div></article>`
     : '<div class="staff-empty">Select a report to open the case file.</div>';
 
-  staffContent.innerHTML = `<div class="staff-metrics"><article><b>${reports.length}</b><span>Pending reports</span></article><article><b>${bans.length}</b><span>Active bans</span></article><article><b>${logs.length}</b><span>Actions logged</span></article><article><b>${reports.length + bans.length}</b><span>Open cases</span></article></div><div class="staff-grid"><section class="staff-column"><header><h2>Report queue</h2><span>${reports.length}</span></header>${reportCards}</section><section class="staff-column staff-column-side"><header><h2>Case file</h2></header>${caseFile}<header><h2>Active bans</h2></header>${banCards}<header><h2>Recent actions</h2></header>${logCards}</section></div>`;
+  staffContent.innerHTML = `<div class="staff-metrics"><article><b>${reports.length}</b><span>Pending reports</span></article><article><b>${automodCount}</b><span>Automod holds</span></article><article><b>${bans.length}</b><span>Active bans</span></article><article><b>${logs.length}</b><span>Actions logged</span></article></div><div class="staff-grid"><section class="staff-column"><header><h2>Report queue</h2><span>${reports.length}</span></header>${reportCards}</section><section class="staff-column staff-column-side"><header><h2>Case file</h2></header>${caseFile}<header><h2>Active bans</h2></header>${banCards}<header><h2>Recent actions</h2></header>${logCards}</section></div>`;
 }
 
 async function loadModeration() {
@@ -497,17 +511,28 @@ async function loadMessages() {
     (result.messages || []).forEach((message) => {
       if (message.kind !== 'direct') return;
       const otherId = message.fromId === activeUserId() ? message.toId : message.fromId;
+      if (!otherId) return;
       const previous = conversations.get(otherId);
-      if (!previous || new Date(message.createdAt).getTime() > new Date(previous.createdAt).getTime()) conversations.set(otherId, message);
+      const unread = message.toId === activeUserId() && !message.readAt ? 1 : 0;
+      if (!previous || new Date(message.createdAt).getTime() > new Date(previous.createdAt).getTime()) {
+        conversations.set(otherId, { ...message, unread: (previous?.unread || 0) + unread });
+      } else {
+        previous.unread = (previous.unread || 0) + unread;
+      }
     });
     const items = [...conversations.entries()].sort(([, left], [, right]) => new Date(right.createdAt) - new Date(left.createdAt));
+    const unreadTotal = items.reduce((total, [, message]) => total + Number(message.unread || 0), 0);
+    socialState.unreadMessages = unreadTotal;
+    updateNotificationIndicators();
     messagesList.innerHTML = items.length
       ? items.map(([otherId, message]) => {
         const member = internetUsers.get(otherId) || {};
         const name = member.displayName || 'Clearwater member';
-        return `<button type="button" class="internet-message" data-open-conversation="${escapeHtml(otherId)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(name)}</b><p>${escapeHtml(message.content)}</p><small>${timeAgo(message.createdAt)}</small></span></button>`;
+        const preview = message.content || (message.gifUrl ? 'GIF' : 'New message');
+        const unread = Number(message.unread || 0) > 0;
+        return `<button type="button" class="internet-message ${unread ? 'unread' : ''}" data-open-conversation="${escapeHtml(otherId)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(name)}</b><p>${escapeHtml(preview)}</p><small>${timeAgo(message.createdAt)}</small></span>${unread ? `<em>${message.unread > 9 ? '9+' : message.unread}</em>` : ''}</button>`;
       }).join('')
-      : '<p>No messages yet.</p>';
+      : '<p>No messages yet. Start a conversation with another Clearwater member.</p>';
   } catch (error) {
     messagesList.innerHTML = `<p>${escapeHtml(error.message || 'Could not load messages.')}</p>`;
   }
@@ -516,6 +541,7 @@ async function loadMessages() {
 function updateNotificationIndicators() {
   const unread = Number(socialState.unreadNotifications || 0);
   if (notificationDot) notificationDot.hidden = unread < 1;
+  if (messageDot) messageDot.hidden = Number(socialState.unreadMessages || 0) < 1;
 }
 
 async function loadNotifications() {
@@ -525,8 +551,8 @@ async function loadNotifications() {
     const result = await readApiJson(response, 'Could not load notifications.');
     if (!response.ok) throw new Error(result.error || 'Could not load notifications.');
     const notifications = result.notifications || [];
-    const names = { follow: 'started following you', like: 'liked your post', reply: 'replied to your post', mention: 'mentioned you in a post', repost: 'reposted your post', quote: 'quoted your post' };
-    notificationList.innerHTML = notifications.length ? notifications.map((notification) => `<button type="button" class="notification-item" ${notification.postId ? `data-notification-post="${escapeHtml(notification.postId)}"` : `data-notification-member="${escapeHtml(notification.actorId)}"`}><img src="${escapeHtml(notification.actorAvatarUrl || internetUsers.get(notification.actorId)?.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(notification.actorName || internetUsers.get(notification.actorId)?.displayName || 'Clearwater member')}</b> ${escapeHtml(names[notification.type] || 'interacted with you')}<small>${escapeHtml(notification.postContent || (notification.postId ? 'View post' : 'View profile'))} &middot; ${timeAgo(notification.createdAt)}</small></span></button>`).join('') : '<p class="feed-note">Nothing new yet.</p>';
+    const names = { follow: 'started following you', like: 'liked your post', reply: 'replied to your post', mention: 'mentioned you in a post', repost: 'reposted your post', quote: 'quoted your post', message: 'sent you a message' };
+    notificationList.innerHTML = notifications.length ? notifications.map((notification) => `<button type="button" class="notification-item" ${notification.type === 'message' ? `data-notification-message="${escapeHtml(notification.actorId)}"` : notification.postId ? `data-notification-post="${escapeHtml(notification.postId)}"` : `data-notification-member="${escapeHtml(notification.actorId)}"`}><img src="${escapeHtml(notification.actorAvatarUrl || internetUsers.get(notification.actorId)?.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(notification.actorName || internetUsers.get(notification.actorId)?.displayName || 'Clearwater member')}</b> ${escapeHtml(names[notification.type] || 'interacted with you')}<small>${escapeHtml(notification.type === 'message' ? 'Open conversation' : notification.postContent || (notification.postId ? 'View post' : 'View profile'))} &middot; ${timeAgo(notification.createdAt)}</small></span></button>`).join('') : '<p class="feed-note">Nothing new yet.</p>';
     const unread = Number(result.unreadCount || 0);
     if (notificationCount) { notificationCount.hidden = unread < 1; notificationCount.textContent = `${unread} unread`; }
     socialState.unreadNotifications = 0;
@@ -612,6 +638,7 @@ function openConversation(member) {
   if (!member) return;
   viewedMember = member;
   messageGif = null;
+  if (conversationError) { conversationError.hidden = true; conversationError.textContent = ''; }
   if (conversationGifPreview) { conversationGifPreview.hidden = true; conversationGifPreview.innerHTML = ''; }
   document.querySelector('[data-conversation-avatar]').src = member.avatarUrl || 'assets/clearwater-logo.png';
   document.querySelector('[data-conversation-name]').textContent = member.displayName;
@@ -620,10 +647,17 @@ function openConversation(member) {
   document.querySelector('[data-conversation-card-name]').textContent = member.displayName;
   document.querySelector('[data-conversation-card-handle]').textContent = `@${member.username}`;
   document.querySelector('[data-conversation-card-rank]').textContent = member.staffRank || 'Clearwater community member';
-  conversationMessages.innerHTML = '<p>Start a conversation.</p>';
+  conversationMessages.innerHTML = '<p>Loading conversation...</p>';
+  history.pushState({}, '', `#messages`);
   showView('conversation');
   void loadConversation(member);
   conversationInput?.focus();
+}
+
+function conversationBubble(message) {
+  const own = message.fromId === activeUserId();
+  const gif = safeGifUrl(message.gifUrl) ? `<img src="${escapeHtml(message.gifUrl)}" alt="${escapeHtml(message.gifTitle || 'GIF')}" />` : '';
+  return `<p class="conversation-bubble ${own ? 'own' : 'theirs'}">${message.content ? escapeHtml(message.content) : ''}${gif}<small>${timeAgo(message.createdAt)}</small></p>`;
 }
 
 async function loadConversation(member) {
@@ -633,7 +667,9 @@ async function loadConversation(member) {
     const result = await readApiJson(response, 'Could not load this conversation.');
     if (!response.ok) throw new Error(result.error || 'Could not load this conversation.');
     const messages = result.messages || [];
-    conversationMessages.innerHTML = messages.length ? messages.map((message) => `<p class="conversation-bubble ${message.fromId === activeUserId() ? 'own' : 'theirs'}">${message.content ? escapeHtml(message.content) : ''}${safeGifUrl(message.gifUrl) ? `<img src="${escapeHtml(message.gifUrl)}" alt="${escapeHtml(message.gifTitle || 'GIF')}" />` : ''}</p>`).join('') : '<p>Start a conversation.</p>';
+    conversationMessages.innerHTML = messages.length ? messages.map((message) => conversationBubble(message)).join('') : '<p>Start a conversation.</p>';
+    conversationMessages.scrollTop = conversationMessages.scrollHeight;
+    void loadMessages();
   } catch (error) { conversationMessages.innerHTML = `<p>${escapeHtml(error.message || 'Could not load this conversation.')}</p>`; }
 }
 
@@ -810,6 +846,12 @@ document.querySelectorAll('[data-profile-tab]').forEach((button) => button.addEv
 document.addEventListener('click', (event) => {
   const notificationPost = event.target.closest('[data-notification-post]');
   if (notificationPost) { showPostDetail(notificationPost.dataset.notificationPost); return; }
+  const notificationMessage = event.target.closest('[data-notification-message]');
+  if (notificationMessage) {
+    const member = internetUsers.get(notificationMessage.dataset.notificationMessage);
+    if (member) openConversation(member);
+    return;
+  }
   const notificationMember = event.target.closest('[data-notification-member]');
   if (notificationMember) { openMemberProfile(notificationMember.dataset.notificationMember); return; }
   const card = event.target.closest('[data-post-card]');
@@ -1051,19 +1093,34 @@ document.querySelector('[data-close-message]')?.addEventListener('click', () => 
 messageUserSearch?.addEventListener('input', renderMessageUserResults);
 document.querySelector('[data-conversation-gif]')?.addEventListener('click', () => { pickerTarget = 'message'; gifModal.hidden = false; gifQuery?.focus(); void loadGifs(); });
 document.querySelector('[data-conversation-emoji]')?.addEventListener('click', () => { pickerTarget = 'message'; emojiModal.hidden = false; renderEmojiGrid(); emojiQuery?.focus(); });
-document.querySelector('[data-close-conversation]')?.addEventListener('click', () => { if (viewedMember) openMemberProfile(viewedMember.id, false); else showView('messages'); });
+document.querySelector('[data-close-conversation]')?.addEventListener('click', () => { showView('messages'); });
+document.querySelector('[data-open-conversation-profile]')?.addEventListener('click', () => { if (viewedMember) openMemberProfile(viewedMember.id); });
 conversationForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const text = conversationInput?.value.trim();
   if (!viewedMember || (!text && !messageGif)) return;
+  if (conversationError) { conversationError.hidden = true; conversationError.textContent = ''; }
+  const submit = conversationForm.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = true;
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'message-send', to: viewedMember.id, content: text, gif: messageGif, ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Could not send your message.');
     if (!response.ok) throw new Error(result.error || 'Could not send your message.');
-    const empty = conversationMessages.querySelector('p'); if (empty) empty.remove();
-    conversationMessages.insertAdjacentHTML('beforeend', `<p class="conversation-bubble own">${escapeHtml(text)}${messageGif ? `<img src="${escapeHtml(messageGif.url)}" alt="${escapeHtml(messageGif.title)}" />` : ''}</p>`);
-    conversationInput.value = ''; messageGif = null; if (conversationGifPreview) { conversationGifPreview.hidden = true; conversationGifPreview.innerHTML = ''; }
-  } catch (error) { window.alert(error.message || 'Could not send your message.'); }
+    conversationInput.value = '';
+    messageGif = null;
+    if (conversationGifPreview) { conversationGifPreview.hidden = true; conversationGifPreview.innerHTML = ''; }
+    await loadConversation(viewedMember);
+  } catch (error) {
+    if (conversationError) {
+      conversationError.hidden = false;
+      conversationError.textContent = error.message || 'Could not send your message.';
+    } else {
+      window.alert(error.message || 'Could not send your message.');
+    }
+  } finally {
+    if (submit) submit.disabled = false;
+    conversationInput?.focus();
+  }
 });
 document.querySelector('[data-close-post-modal]')?.addEventListener('click', () => { postModal.hidden = true; pendingPostAction = null; });
 document.querySelector('[data-quote-post]')?.addEventListener('click', () => {
@@ -1085,12 +1142,6 @@ document.querySelector('[data-copy-post-link]')?.addEventListener('click', async
   try { await navigator.clipboard.writeText(`${location.origin}/internet.html#post-${pendingPostAction.postId}`); shareModal.hidden = true; window.alert('Post link copied.'); } catch { window.alert('Could not copy the link.'); }
 });
 document.querySelector('[data-share-to-friend]')?.addEventListener('click', () => { shareModal.hidden = true; showView('messages'); window.alert('Choose a friend and paste the post link into your message.'); });
-messageForm?.addEventListener('submit', async (event) => {
-  event.preventDefault(); const destination = [...internetUsers.values()].find((user) => user.username.toLowerCase() === document.querySelector('[data-message-to]').value.trim().replace(/^@/, '').toLowerCase());
-  const error = document.querySelector('[data-message-error]'); error.textContent = '';
-  if (!destination) { error.textContent = 'Choose a Clearwater Internet member.'; return; }
-  try { const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'message-send', to: destination.id, content: document.querySelector('[data-message-content]').value, ...activeAccountRequest() }) }); const result = await readApiJson(response, 'Could not send your message.'); if (!response.ok) throw new Error(result.error); messageModal.hidden = true; messageForm.reset(); window.alert('Message sent.'); } catch (exception) { error.textContent = exception.message || 'Could not send your message.'; }
-});
 document.querySelector('[data-close-moderation]')?.addEventListener('click', () => { moderationModal.hidden = true; pendingReportReview = null; });
 moderationForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -1191,7 +1242,12 @@ async function bootInternet() {
 
 bootInternet();
 window.setInterval(() => {
-  if (!document.hidden) { loadPosts(); loadSocial(); }
+  if (document.hidden) return;
+  loadPosts();
+  loadSocial();
+  if (!document.querySelector('[data-view="messages"]')?.hidden) void loadMessages();
+  if (!document.querySelector('[data-view="conversation"]')?.hidden && viewedMember) void loadConversation(viewedMember);
+  if (!document.querySelector('[data-view="staff"]')?.hidden && sessionIsOwner) void loadModeration();
 }, 15_000);
 // A ban needs to take effect quickly for somebody who already has the page
 // open, without reloading the entire feed every few seconds.

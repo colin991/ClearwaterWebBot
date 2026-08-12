@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
+import { AutomodHoldError, scanInternetContent } from './internetAutomod.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
+
+export { AutomodHoldError };
 
 const storePath = join(process.cwd(), 'data', 'clearwater-internet.json');
 const emptyStore = Object.freeze({ users: {}, posts: [], reports: [], logs: [], ipBans: [], officialProfile: {} });
@@ -286,6 +289,11 @@ export function createInternetPost(store, user, content, media = {}) {
   if (/(.)\1{11,}/.test(body) || (body.match(/https?:\/\//gi) || []).length > 2) {
     throw new Error('That post looks like spam. Please shorten it and try again');
   }
+  enforceAutomod(store, {
+    actor: user,
+    kind: 'post',
+    content: [body, question, ...options].filter(Boolean).join('\n'),
+  });
   const post = {
     id: randomUUID(),
     authorId: user.id,
@@ -370,6 +378,7 @@ export function editInternetPost(store, { postId, actorId, content, owner = fals
   if (!owner && post.authorId !== String(actorId)) throw new Error('You can only edit your own posts');
   const body = text(content, 500);
   if (!body) throw new Error('Write something before saving');
+  enforceAutomod(store, { actor: store.users[String(actorId)] || { id: actorId }, kind: 'post', content: body, extra: { postId: post.id } });
   post.content = body;
   post.editedAt = new Date().toISOString();
   return post;
@@ -398,6 +407,8 @@ export function createInternetReport(store, { postId, actor, reason }) {
   }
   const report = {
     id: randomUUID(),
+    kind: 'post',
+    source: 'member',
     postId: post.id,
     reporterId: String(actor.id),
     reporterName: text(actor.displayName, 80) || 'Discord user',
@@ -418,6 +429,39 @@ function addInternetLog(store, message) {
   store.logs = store.logs.slice(0, 300);
 }
 
+function enforceAutomod(store, { actor, kind, content, extra = {} }) {
+  if (!actor?.id || actor.id === OFFICIAL_INTERNET_ACCOUNT_ID) return null;
+  const hit = scanInternetContent(content);
+  if (!hit) return null;
+  const snippet = text(content, 500);
+  const duplicate = store.reports.some((report) => report.status === 'open'
+    && report.source === 'automod'
+    && report.authorId === String(actor.id)
+    && report.content === snippet
+    && Date.now() - new Date(report.createdAt).getTime() < 60 * 60 * 1000);
+  if (!duplicate) {
+    store.reports.unshift({
+      id: randomUUID(),
+      kind: kind === 'message' ? 'message' : 'post',
+      source: 'automod',
+      postId: extra.postId || null,
+      targetId: extra.targetId || null,
+      reporterId: 'automod',
+      reporterName: 'Clearwater Automod',
+      authorId: String(actor.id),
+      authorName: text(actor.displayName, 80) || 'Discord user',
+      content: snippet,
+      reason: hit.reason,
+      categories: hit.categories,
+      createdAt: new Date().toISOString(),
+      status: 'open',
+    });
+    store.reports = store.reports.slice(0, 200);
+    addInternetLog(store, `Automod held ${text(actor.displayName, 80) || 'a member'}'s ${kind}. ${hit.reason}`);
+  }
+  throw new AutomodHoldError('That was held for staff review.', hit);
+}
+
 function addInternetMessage(store, userId, message) {
   const user = upsertInternetUser(store, { id: userId });
   user.messages = Array.isArray(user.messages) ? user.messages : [];
@@ -432,9 +476,13 @@ export function reviewInternetReport(store, { reportId, decision, action, reason
 
   report.status = decision === 'accept' ? 'accepted' : 'denied';
   report.reviewedAt = new Date().toISOString();
+  const notifyReporter = report.reporterId && report.reporterId !== 'automod';
+  const kindLabel = report.kind === 'message' ? 'message' : 'post';
   if (decision === 'deny') {
-    addInternetLog(store, `Denied report against ${report.authorName}.`);
-    addInternetMessage(store, report.reporterId, `Your report about ${report.authorName}'s post was reviewed. No action was taken.`);
+    addInternetLog(store, report.source === 'automod'
+      ? `Released automod hold on ${report.authorName}'s ${kindLabel}.`
+      : `Denied report against ${report.authorName}.`);
+    if (notifyReporter) addInternetMessage(store, report.reporterId, `Your report about ${report.authorName}'s ${kindLabel} was reviewed. No action was taken.`);
     return report;
   }
 
@@ -445,7 +493,9 @@ export function reviewInternetReport(store, { reportId, decision, action, reason
   if (action === 'delete') {
     const index = store.posts.findIndex((post) => post.id === report.postId);
     if (index >= 0) store.posts.splice(index, 1);
-    addInternetLog(store, `Deleted ${report.authorName}'s reported post. Reason: ${note}`);
+    addInternetLog(store, report.source === 'automod'
+      ? `Confirmed automod hold on ${report.authorName}'s ${kindLabel}. Reason: ${note}`
+      : `Deleted ${report.authorName}'s reported post. Reason: ${note}`);
   }
   if (action === 'ban') {
     const user = upsertInternetUser(store, { id: report.authorId, displayName: report.authorName });
@@ -460,7 +510,9 @@ export function reviewInternetReport(store, { reportId, decision, action, reason
     addInternetLog(store, `Warned ${report.authorName}. Reason: ${note}`);
     addInternetMessage(store, report.authorId, `You received a warning from Clearwater Internet. Reason: ${note}`);
   }
-  addInternetMessage(store, report.reporterId, `Your report about ${report.authorName}'s post was reviewed. Action taken: ${action === 'delete' ? 'message deleted' : action === 'ban' ? 'account banned' : 'warning given'}.`);
+  if (notifyReporter) {
+    addInternetMessage(store, report.reporterId, `Your report about ${report.authorName}'s ${kindLabel} was reviewed. Action taken: ${action === 'delete' ? 'content removed' : action === 'ban' ? 'account banned' : 'warning given'}.`);
+  }
   return report;
 }
 
@@ -473,9 +525,8 @@ export function takeUnreadInternetWarnings(store, actor) {
 
 export function takeInternetMessages(store, actor) {
   const user = upsertInternetUser(store, actor);
-  const messages = Array.isArray(user.messages) ? user.messages : [];
-  messages.forEach((message) => { if (!message.readAt) message.readAt = new Date().toISOString(); });
-  return messages.slice(0, 50);
+  const messages = (Array.isArray(user.messages) ? user.messages : []).filter((message) => message.kind === 'direct');
+  return messages.slice(0, 120);
 }
 
 export function takeInternetConversation(store, { actor, withUserId }) {
@@ -501,6 +552,7 @@ export function socialSnapshot(store, actor) {
     following: Array.isArray(user.following) ? user.following : [],
     followers: Object.values(store.users).filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).map((member) => member.id),
     unreadNotifications: (Array.isArray(user.notifications) ? user.notifications : []).filter((notification) => !notification.readAt).length,
+    unreadMessages: (Array.isArray(user.messages) ? user.messages : []).filter((message) => message.kind === 'direct' && message.toId === user.id && !message.readAt).length,
     blocked: Array.isArray(user.blocked) ? user.blocked : [],
     muted: Array.isArray(user.muted) ? user.muted : [],
     bookmarks: Array.isArray(user.bookmarks) ? user.bookmarks : [],
@@ -545,6 +597,8 @@ export function sendInternetMessage(store, { actor, to, content, gif }) {
   const sender = upsertInternetUser(store, actor);
   const recipient = store.users[String(to || '')];
   if (!recipient) throw new Error('That member has not joined Clearwater Internet yet');
+  if (getActiveBan(sender)) throw new Error('This account is banned from Clearwater Internet');
+  if (sender.id === recipient.id) throw new Error('You cannot message yourself');
   const body = text(content, 1000);
   const gifUrl = text(gif?.url, 500);
   const gifTitle = text(gif?.title, 120);
@@ -552,15 +606,24 @@ export function sendInternetMessage(store, { actor, to, content, gif }) {
   if (!body && !isGif) throw new Error('Write a message or add a GIF first');
   if (gifUrl && !isGif) throw new Error('Choose a GIF from Clearwater Internet');
   if ((recipient.blocked || []).includes(sender.id) || (sender.blocked || []).includes(recipient.id)) throw new Error('This conversation is unavailable');
+  const recipientPrefs = recipient.preferences && typeof recipient.preferences === 'object' ? recipient.preferences : {};
+  if (recipientPrefs.friendsMessages === true && !(Array.isArray(recipient.following) && recipient.following.includes(sender.id))) {
+    throw new Error('This member only accepts messages from people they follow');
+  }
+  const wait = 1_500 - (Date.now() - new Date(sender.lastMessageAt || 0).getTime());
+  if (wait > 0) throw new Error('Please wait a moment before sending another message');
+  enforceAutomod(store, { actor: sender, kind: 'message', content: body, extra: { targetId: recipient.id } });
   const sentAt = new Date().toISOString();
-  const message = { id: randomUUID(), kind: 'direct', fromId: sender.id, toId: recipient.id, content: body, ...(isGif ? { gifUrl, gifTitle } : {}), createdAt: sentAt };
+  const message = { id: randomUUID(), kind: 'direct', fromId: sender.id, toId: recipient.id, content: body, ...(isGif ? { gifUrl, gifTitle } : {}), createdAt: sentAt, readAt: null };
   sender.messages = Array.isArray(sender.messages) ? sender.messages : [];
   recipient.messages = Array.isArray(recipient.messages) ? recipient.messages : [];
   sender.messages.unshift({ ...message, readAt: sentAt });
   recipient.messages.unshift({ ...message, readAt: null });
-  sender.messages = sender.messages.slice(0, 100);
-  recipient.messages = recipient.messages.slice(0, 100);
-  return { sent: true };
+  sender.messages = sender.messages.slice(0, 120);
+  recipient.messages = recipient.messages.slice(0, 120);
+  sender.lastMessageAt = sentAt;
+  addInternetNotification(store, { recipientId: recipient.id, actor: sender, type: 'message' });
+  return { sent: true, message };
 }
 
 export function moderationSnapshot(store) {
