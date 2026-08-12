@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-auth';
+const INTERNET_VERSION = '20260811-desk';
 let officialAccountId = '';
 const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
   id: '',
@@ -130,7 +130,10 @@ let moderationSnapshot = null;
 let selectedReportId = null;
 let feedTab = ['foryou', 'following', 'official'].includes(localStorage.getItem('clearwater-feed-tab')) ? localStorage.getItem('clearwater-feed-tab') : 'foryou';
 let staffTab = 'overview';
+let staffQueueFilter = 'pending';
 let staffHistoryFilter = 'all';
+let staffHistoryQuery = '';
+let staffUserQuery = '';
 const expandedPollVoters = new Set();
 const emojiChoices = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😍','😘','🥰','😎','🤩','🥳','🤔','😢','😭','😡','🤯','😴','👀','💀','❤️','💙','💚','🔥','✨','🎉','🚓','🚒','🚑','👍','👎','✅','❌','⚠️','📌','📷','🎮'];
 
@@ -455,8 +458,15 @@ function showView(view) {
   const availableViews = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'post']);
   let activeView = availableViews.has(view) ? view : 'home';
   if (activeView === 'staff' && !sessionIsOwner) activeView = 'home';
-  document.querySelector('.internet-shell')?.classList.toggle('staff-mode', activeView === 'staff');
-  document.querySelectorAll('[data-view]').forEach((section) => { section.hidden = section.dataset.view !== activeView; });
+  const shell = document.querySelector('.internet-shell');
+  const feed = document.querySelector('.internet-feed');
+  shell?.classList.toggle('staff-mode', activeView === 'staff');
+  if (feed) feed.dataset.activeView = activeView;
+  document.querySelectorAll('[data-view]').forEach((section) => {
+    const on = section.dataset.view === activeView;
+    section.hidden = !on;
+    section.setAttribute('aria-hidden', on ? 'false' : 'true');
+  });
   const navView = activeView === 'conversation' ? 'messages' : activeView;
   document.querySelectorAll('[data-view-link]').forEach((link) => link.classList.toggle('selected', link.dataset.viewLink === navView));
   if (activeView === 'home') renderPosts();
@@ -551,9 +561,15 @@ function reportKindLabel(report) {
 }
 
 function staffCaseMarkup(selected) {
-  if (!selected) return '<div class="staff-empty">Nothing pending. The queue is clear.</div>';
+  if (!selected) return '<div class="staff-empty staff-empty-lg">Nothing in this queue.</div>';
+  const closed = selected.status && selected.status !== 'open';
   const canDelete = selected.source !== 'automod' && selected.kind !== 'message';
-  return `<article class="staff-case" data-report-card><div class="staff-case-identity"><span>${escapeHtml((selected.authorName || '?').slice(0, 1))}</span><div><b>${escapeHtml(selected.authorName)}</b><small>${escapeHtml(reportSourceLabel(selected))} · ${escapeHtml(reportKindLabel(selected))}</small></div></div><p class="staff-case-copy">${escapeHtml(selected.content || 'No text captured')}</p><p class="staff-case-reason">${escapeHtml(selected.reason || 'No reason given')}</p>${Array.isArray(selected.categories) && selected.categories.length ? `<p class="staff-case-tags">${selected.categories.map((category) => `<span>${escapeHtml(category)}</span>`).join('')}</p>` : ''}<div class="report-actions"><select data-report-action><option value="warning">Give warning</option>${canDelete ? '<option value="delete">Delete post</option>' : '<option value="delete">Confirm removal</option>'}<option value="ban">Ban account</option></select><button type="button" data-report-review="accept" data-report-id="${escapeHtml(selected.id)}">Take action</button><button type="button" class="danger" data-report-review="deny" data-report-id="${escapeHtml(selected.id)}">Dismiss</button></div></article>`;
+  return `<article class="staff-case" data-report-card><div class="staff-case-identity"><span>${escapeHtml((selected.authorName || '?').slice(0, 1))}</span><div><b>${escapeHtml(selected.authorName)}</b><small>${escapeHtml(reportSourceLabel(selected))} · ${escapeHtml(reportKindLabel(selected))}</small></div></div><p class="staff-case-copy">${escapeHtml(selected.content || 'No text captured')}</p><p class="staff-case-reason">${escapeHtml(selected.reason || 'No reason given')}</p>${Array.isArray(selected.categories) && selected.categories.length ? `<p class="staff-case-tags">${selected.categories.map((category) => `<span>${escapeHtml(category)}</span>`).join('')}</p>` : ''}${closed ? `<p class="staff-case-status">${escapeHtml(staffHistoryLabel(selected))} · ${timeAgo(selected.reviewedAt || selected.createdAt)}</p>` : `<div class="report-actions"><select data-report-action><option value="warning">Give warning</option>${canDelete ? '<option value="delete">Delete post</option>' : '<option value="delete">Confirm removal</option>'}<option value="ban">Ban account</option></select><button type="button" data-report-review="accept" data-report-id="${escapeHtml(selected.id)}">Take action</button><button type="button" class="danger" data-report-review="deny" data-report-id="${escapeHtml(selected.id)}">Dismiss</button></div>`}</article>`;
+}
+
+function staffHistoryLabel(report) {
+  if (report.status === 'denied') return 'Dismiss report';
+  return String(report.action || 'Take action').replace(/_/g, ' ');
 }
 
 function renderStaffDashboard() {
@@ -563,32 +579,62 @@ function renderStaffDashboard() {
   const bans = moderationSnapshot.bans || [];
   const logs = moderationSnapshot.logs || [];
   const stats = moderationSnapshot.stats || {};
+  const queueList = document.querySelector('[data-staff-queue-list]');
+  const historyList = document.querySelector('[data-staff-history-list]');
+  const reportCount = document.querySelector('[data-staff-report-count]');
+  const operator = document.querySelector('[data-staff-operator]');
   document.querySelectorAll('[data-staff-tab]').forEach((button) => button.classList.toggle('selected', button.dataset.staffTab === staffTab));
-  if (!reports.some((report) => report.id === selectedReportId)) selectedReportId = reports[0]?.id || null;
-  const selected = reports.find((report) => report.id === selectedReportId) || null;
-  const reportCards = reports.length
-    ? reports.map((report) => `<button type="button" class="staff-report-card ${report.id === selectedReportId ? 'selected' : ''} ${report.source === 'automod' ? 'automod' : ''}" data-staff-select="${escapeHtml(report.id)}"><div><b>${escapeHtml(report.authorName)}</b><small>${escapeHtml(reportSourceLabel(report))} · ${escapeHtml(reportKindLabel(report))}</small></div><p>${escapeHtml(report.content || 'No text captured')}</p><span>${escapeHtml(report.reason || 'No reason given')}</span></button>`).join('')
-    : '<div class="staff-empty">Nothing pending. The queue is clear.</div>';
+  document.querySelectorAll('[data-staff-queue]').forEach((button) => button.classList.toggle('selected', button.dataset.staffQueue === staffQueueFilter));
+  document.querySelectorAll('[data-history-filter]').forEach((button) => button.classList.toggle('selected', button.dataset.historyFilter === staffHistoryFilter));
+  if (operator) operator.textContent = sessionUser?.username ? `@${sessionUser.username}` : '';
+  if (!reports.some((report) => report.id === selectedReportId) && staffQueueFilter === 'pending') selectedReportId = reports[0]?.id || null;
+  const selected = reports.find((report) => report.id === selectedReportId) || history.find((report) => report.id === selectedReportId) || null;
+  const queueItems = staffQueueFilter === 'pending'
+    ? reports
+    : history.filter((report) => staffQueueFilter === 'actioned' ? report.status === 'accepted' : report.status === 'denied');
+  if (reportCount) reportCount.textContent = String(queueItems.length);
+  if (queueList) {
+    queueList.innerHTML = queueItems.length
+      ? queueItems.map((report) => `<button type="button" class="staff-live-report ${report.id === selectedReportId ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}"><b>${escapeHtml(report.authorName || 'Unknown')}</b><small>${escapeHtml(report.content || report.reason || 'No text captured')}</small></button>`).join('')
+      : '<p class="staff-empty">Nothing in this queue.</p>';
+  }
+  const historyQuery = staffHistoryQuery.trim().toLowerCase();
+  const historyCards = history.filter((report) => {
+    const haystack = `${report.authorName || ''} ${report.action || ''} ${report.content || ''} ${report.reviewerName || ''}`.toLowerCase();
+    if (historyQuery && !haystack.includes(historyQuery)) return false;
+    if (staffHistoryFilter === 'users') return /ban|warn|user|account/i.test(`${report.action || ''} ${report.reason || ''}`);
+    if (staffHistoryFilter === 'posts') return report.kind !== 'message';
+    return true;
+  });
+  const logCards = (!historyCards.length ? logs : []).filter((log) => {
+    const message = String(log.message || '').toLowerCase();
+    if (historyQuery && !message.includes(historyQuery)) return false;
+    if (staffHistoryFilter === 'users') return /banned|warned|unban/.test(message);
+    if (staffHistoryFilter === 'posts') return /post|automod|deleted|hold/.test(message);
+    return true;
+  });
+  if (historyList) {
+    historyList.innerHTML = historyCards.length
+      ? historyCards.map((report) => `<article class="staff-history-item ${report.status === 'accepted' ? 'actioned' : 'dismissed'}"><b>${escapeHtml(staffHistoryLabel(report))}</b><span>@${escapeHtml((report.authorName || 'member').replace(/\s+/g, '').toLowerCase())}</span><small>${timeAgo(report.reviewedAt || report.createdAt)}</small></article>`).join('')
+      : logCards.length
+        ? logCards.map((log) => `<article class="staff-history-item"><b>${escapeHtml(log.message)}</b><small>${timeAgo(log.createdAt)}</small></article>`).join('')
+        : '<p class="staff-empty">No staff actions yet.</p>';
+  }
+
+  if (staffTab === 'search') {
+    const query = staffUserQuery.trim().toLowerCase();
+    const members = [...internetUsers.values()].filter((member) => !query || `${member.displayName} ${member.username}`.toLowerCase().includes(query)).slice(0, 40);
+    staffContent.innerHTML = `<div class="staff-search-desk"><header><h2>User Search</h2><span>${members.length}</span></header>${members.length ? members.map((member) => `<button type="button" class="staff-user-row" data-open-member="${escapeHtml(member.id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(member.displayName)}</b><small>@${escapeHtml(member.username)}</small></span></button>`).join('') : '<p class="staff-empty">No members match that search.</p>'}</div>`;
+    return;
+  }
+
   const metrics = `<div class="staff-metrics"><article><b>${Number(stats.pending || reports.length)}</b><span>Pending</span></article><article><b>${Number(stats.automod || 0)}</b><span>Automod</span></article><article><b>${Number(stats.actioned || 0)}</b><span>Actioned</span></article><article><b>${Number(stats.dismissed || 0)}</b><span>Dismissed</span></article></div>`;
-
   if (staffTab === 'overview') {
-    staffContent.innerHTML = `${metrics}<div class="staff-overview-grid"><section class="staff-column"><header><h2>Oldest pending reports</h2><span>${reports.length}</span></header>${reportCards}</section><section class="staff-column"><header><h2>Active bans</h2></header>${bans.length ? bans.map((ban) => `<article class="staff-compact"><b>${escapeHtml(ban.displayName)}</b><span>${escapeHtml(ban.reason)}</span><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></article>`).join('') : '<div class="staff-empty">No active bans.</div>'}</section></div>`;
+    staffContent.innerHTML = `${metrics}<div class="staff-overview-grid"><section class="staff-column"><header><h2>Oldest pending reports</h2><span>${reports.length}</span></header>${reports.length ? reports.slice(0, 6).map((report) => `<button type="button" class="staff-report-card ${report.id === selectedReportId ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}"><div><b>${escapeHtml(report.authorName)}</b><small>${escapeHtml(reportSourceLabel(report))}</small></div><p>${escapeHtml(report.content || 'No text captured')}</p></button>`).join('') : '<div class="staff-empty">Nothing in this queue.</div>'}</section><section class="staff-column"><header><h2>Active bans</h2></header>${bans.length ? bans.map((ban) => `<article class="staff-compact"><b>${escapeHtml(ban.displayName)}</b><span>${escapeHtml(ban.reason)}</span><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></article>`).join('') : '<div class="staff-empty">No active bans.</div>'}</section></div>`;
     return;
   }
 
-  if (staffTab === 'history') {
-    const filtered = staffHistoryFilter === 'all' ? logs : logs.filter((log) => {
-      const message = String(log.message || '').toLowerCase();
-      if (staffHistoryFilter === 'users') return /banned|warned|unban/.test(message);
-      if (staffHistoryFilter === 'posts') return /post|automod|deleted|hold/.test(message);
-      return true;
-    });
-    const historyCards = (history.length ? history : []).map((report) => `<article class="staff-history-item ${report.status === 'accepted' ? 'actioned' : 'dismissed'}"><b>${report.status === 'accepted' ? (report.action || 'actioned') : 'dismissed'}</b><span>${escapeHtml(report.authorName)} · ${escapeHtml(reportSourceLabel(report))}</span><p>${escapeHtml(report.content || '')}</p><small>${timeAgo(report.reviewedAt || report.createdAt)}</small></article>`).join('');
-    staffContent.innerHTML = `<div class="staff-history-head"><header><h2>Moderation History</h2></header><div class="staff-filters"><button type="button" data-history-filter="all" class="${staffHistoryFilter === 'all' ? 'selected' : ''}">All</button><button type="button" data-history-filter="users" class="${staffHistoryFilter === 'users' ? 'selected' : ''}">Users</button><button type="button" data-history-filter="posts" class="${staffHistoryFilter === 'posts' ? 'selected' : ''}">Posts</button></div></div><div class="staff-history-list">${historyCards || filtered.map((log) => `<article class="staff-history-item"><span>${escapeHtml(log.message)}</span><small>${timeAgo(log.createdAt)}</small></article>`).join('') || '<div class="staff-empty">No staff actions yet.</div>'}</div>`;
-    return;
-  }
-
-  staffContent.innerHTML = `<div class="staff-workspace">${metrics}<div class="staff-grid"><section class="staff-column"><header><h2>Live Reports</h2><span>${reports.length}</span></header>${reportCards}</section><section class="staff-column staff-column-side"><header><h2>Report workspace</h2></header>${staffCaseMarkup(selected)}<header><h2>Recent actions</h2></header>${logs.length ? logs.slice(0, 8).map((log) => `<article class="staff-compact"><span>${escapeHtml(log.message)}</span><small>${timeAgo(log.createdAt)}</small></article>`).join('') : '<div class="staff-empty">No staff actions yet.</div>'}</section></div></div>`;
+  staffContent.innerHTML = `<div class="staff-workspace-head"><div class="staff-pills"><button type="button" class="${staffQueueFilter === 'pending' ? 'selected' : ''}" data-staff-queue="pending">Pending</button><button type="button" class="${staffQueueFilter === 'actioned' ? 'selected' : ''}" data-staff-queue="actioned">Actioned</button><button type="button" class="${staffQueueFilter === 'dismissed' ? 'selected' : ''}" data-staff-queue="dismissed">Dismissed</button></div><span>${queueItems.length} loaded</span></div>${selected ? staffCaseMarkup(selected) : '<div class="staff-empty staff-empty-lg">Nothing in this queue.</div>'}`;
 }
 
 async function loadModeration() {
@@ -957,6 +1003,15 @@ document.querySelectorAll('[data-staff-tab]').forEach((button) => button.addEven
   staffTab = button.dataset.staffTab || 'overview';
   renderStaffDashboard();
 }));
+document.querySelector('[data-staff-user-search]')?.addEventListener('input', (event) => {
+  staffUserQuery = event.target.value || '';
+  staffTab = 'search';
+  renderStaffDashboard();
+});
+document.querySelector('[data-history-search]')?.addEventListener('input', (event) => {
+  staffHistoryQuery = event.target.value || '';
+  renderStaffDashboard();
+});
 document.querySelectorAll('[data-preference]').forEach((input) => input.addEventListener('change', async () => {
   const original = !input.checked;
   const saveOnDevice = () => {
@@ -1042,6 +1097,13 @@ document.addEventListener('click', (event) => {
   const staffSelect = event.target.closest('[data-staff-select]');
   if (staffSelect) {
     selectedReportId = staffSelect.dataset.staffSelect;
+    staffTab = 'reports';
+    renderStaffDashboard();
+    return;
+  }
+  const staffQueue = event.target.closest('[data-staff-queue]');
+  if (staffQueue) {
+    staffQueueFilter = staffQueue.dataset.staffQueue || 'pending';
     staffTab = 'reports';
     renderStaffDashboard();
     return;

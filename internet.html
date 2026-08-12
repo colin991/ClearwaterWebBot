@@ -7,7 +7,7 @@
     <meta name="description" content="Clearwater Internet - the community social feed for Clearwater Roleplay." />
     <title>Clearwater Internet</title>
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
-    <link rel="stylesheet" href="internet.css?v=20260811-auth" />
+    <link rel="stylesheet" href="internet.css?v=20260811-desk" />
   </head>
   <body class="internet-booting">
     <div class="internet-boot" data-internet-boot aria-live="polite">
@@ -149,16 +149,58 @@
         </section>
         <section class="internet-view staff-panel-view" data-view="staff" hidden>
           <div class="staff-app">
-            <aside class="staff-rail">
-              <p>Staff</p>
-              <nav aria-label="Staff panels">
-                <button type="button" class="selected" data-staff-tab="overview">Overview</button>
-                <button type="button" data-staff-tab="reports">Live Reports</button>
-                <button type="button" data-staff-tab="history">Moderation History</button>
-              </nav>
-              <button class="staff-refresh" type="button" data-refresh-staff>Refresh</button>
-            </aside>
-            <div class="staff-desk" data-staff-content><p class="staff-loading">Loading the moderation desk...</p></div>
+            <header class="staff-chrome">
+              <div class="staff-brand">
+                <img src="assets/clearwater-logo.png" alt="" draggable="false" />
+                <div><b>Clearwater Staff</b><small>staff</small></div>
+                <span class="staff-online">online</span>
+              </div>
+              <label class="staff-find"><span class="sr-only">Find a user</span><input data-staff-user-search placeholder="Find a user..." maxlength="80" autocomplete="off" /></label>
+              <div class="staff-chrome-actions">
+                <button type="button" data-refresh-staff>Refresh</button>
+                <span data-staff-operator></span>
+              </div>
+            </header>
+            <div class="staff-body">
+              <aside class="staff-col staff-col-nav">
+                <section>
+                  <header class="staff-col-head"><h2>Panels</h2></header>
+                  <nav aria-label="Staff panels">
+                    <button type="button" class="selected" data-staff-tab="overview">Overview</button>
+                    <button type="button" data-staff-tab="search">User Search</button>
+                    <button type="button" data-staff-tab="reports">Live Reports</button>
+                  </nav>
+                </section>
+                <section class="staff-live-pane">
+                  <header class="staff-col-head"><h2>Live Reports</h2><span data-staff-report-count>0</span></header>
+                  <div class="staff-pills">
+                    <button type="button" class="selected" data-staff-queue="pending">Pending</button>
+                    <button type="button" data-staff-queue="actioned">Actioned</button>
+                    <button type="button" data-staff-queue="dismissed">Dismissed</button>
+                  </div>
+                  <div class="staff-queue-list" data-staff-queue-list></div>
+                </section>
+              </aside>
+              <section class="staff-col staff-col-main">
+                <div class="staff-workspace-tabs">
+                  <button type="button" class="selected" data-staff-tab="overview">Overview</button>
+                  <button type="button" data-staff-tab="reports">Live Reports</button>
+                </div>
+                <div class="staff-desk" data-staff-content><p class="staff-loading">Loading the moderation desk...</p></div>
+              </section>
+              <aside class="staff-col staff-col-history">
+                <header class="staff-history-toolbar">
+                  <h2>Moderation History</h2>
+                  <div class="staff-filters">
+                    <button type="button" class="selected" data-history-filter="all">All</button>
+                    <button type="button" data-history-filter="users">Users</button>
+                    <button type="button" data-history-filter="posts">Posts</button>
+                  </div>
+                  <input data-history-search placeholder="Filter by account." maxlength="80" autocomplete="off" />
+                </header>
+                <div class="staff-history-list" data-staff-history-list></div>
+              </aside>
+            </div>
           </div>
           <section class="admin-panel owner-controls" data-admin hidden>
             <h2>Account controls</h2>
@@ -206,6 +248,6 @@
     <section class="composer-modal" data-post-modal hidden role="dialog" aria-modal="true"><div><header><h2 data-post-modal-title>Reply</h2><button type="button" data-close-post-modal aria-label="Close">×</button></header><form data-post-modal-form><textarea data-post-modal-content maxlength="500" placeholder="Post your reply"></textarea><div class="quoted-post" data-quoted-post hidden></div><div class="post-modal-buttons"><button type="button" data-quote-post hidden>Quote post</button><button>Post</button></div><p data-post-modal-error></p></form></div></section>
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
-    <script src="internet.js?v=20260811-auth"></script>
+    <script src="internet.js?v=20260811-desk"></script>
   </body>
 </html>
