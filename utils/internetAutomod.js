@@ -8,31 +8,69 @@ export class AutomodHoldError extends Error {
   }
 }
 
-const compact = (value) => String(value || '')
-  .normalize('NFKD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .replace(/[а]/gi, 'a')
-  .replace(/[с]/gi, 'c')
-  .replace(/[е]/gi, 'e')
-  .replace(/[һ]/gi, 'h')
-  .replace(/[іı]/gi, 'i')
-  .replace(/[ј]/gi, 'j')
-  .replace(/[к]/gi, 'k')
-  .replace(/[оο]/gi, 'o')
-  .replace(/[р]/gi, 'p')
-  .replace(/[ѕ]/gi, 's')
-  .replace(/[т]/gi, 't')
-  .replace(/[х]/gi, 'x')
-  .toLowerCase()
-  .replace(/[@$0]/g, 'o')
-  .replace(/[1!|]/g, 'i')
-  .replace(/[3]/g, 'e')
-  .replace(/[4@]/g, 'a')
-  .replace(/[5$]/g, 's')
-  .replace(/[7]/g, 't')
-  .replace(/[^a-z0-9]+/g, ' ')
-  .replace(/\s+/g, ' ')
-  .trim();
+export const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
+
+function compact(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[а]/gi, 'a')
+    .replace(/[с]/gi, 'c')
+    .replace(/[е]/gi, 'e')
+    .replace(/[һ]/gi, 'h')
+    .replace(/[іı]/gi, 'i')
+    .replace(/[ј]/gi, 'j')
+    .replace(/[к]/gi, 'k')
+    .replace(/[оο]/gi, 'o')
+    .replace(/[р]/gi, 'p')
+    .replace(/[ѕ]/gi, 's')
+    .replace(/[т]/gi, 't')
+    .replace(/[х]/gi, 'x')
+    .toLowerCase()
+    .replace(/ph/g, 'f')
+    .replace(/[@$0]/g, 'o')
+    .replace(/[1!|]/g, 'i')
+    .replace(/[3]/g, 'e')
+    .replace(/[4]/g, 'a')
+    .replace(/[5$]/g, 's')
+    .replace(/[7]/g, 't')
+    .replace(/v/g, 'u');
+}
+
+function foldedText(value) {
+  return compact(value).replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function collapsedText(value) {
+  return compact(value).replace(/[^a-z0-9]+/g, '');
+}
+
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasWord(folded, term) {
+  return new RegExp(`\\b${escapeRegex(term)}\\b`, 'i').test(folded);
+}
+
+function hasFuzzy(collapsed, term) {
+  const letters = String(term || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (letters.length < 3) return false;
+  const pattern = letters.split('').map((letter) => `${escapeRegex(letter)}+`).join('[^a-z0-9]*');
+  return new RegExp(pattern).test(collapsed);
+}
+
+const fuzzyTerms = [
+  { category: 'hate', reason: 'Possible hate speech', terms: ['nigger', 'nigga', 'faggot', 'fagot', 'kike', 'tranny', 'trannie', 'retard', 'wetback', 'chink', 'gook', 'spic', 'beaner', 'raghead', 'towelhead'] },
+  { category: 'profanity', reason: 'Possible abusive or explicit language', terms: ['fuck', 'fuk', 'fck', 'fvck', 'phuck', 'fcuk', 'shit', 'bitch', 'pussy', 'whore', 'slut', 'dick', 'dildo', 'handjob', 'blowjob'] },
+  { category: 'sexual', reason: 'Possible sexual harassment', terms: ['nudes'] },
+];
+
+const wordTerms = [
+  { category: 'profanity', reason: 'Possible abusive or explicit language', terms: ['asshole', 'jackass', 'dumbass', 'dickhead', 'dipshit', 'bullshit', 'motherfucker', 'cunt', 'twat'] },
+  { category: 'harassment', reason: 'Possible harassment', terms: ['stfu'] },
+  { category: 'sexual', reason: 'Possible sexual harassment', terms: ['rape', 'rapist', 'incest'] },
+];
 
 const rules = [
   {
@@ -58,12 +96,7 @@ const rules = [
     tests: [
       /\b(?:nigg(?:a|er)s?|fag+ots?|kikes?|trann(?:y|ies)|retard(?:ed|s)?)\b/i,
     ],
-    extra: (_raw, folded) => {
-      // Catch spacing, punctuation, leetspeak, repeated letters, and common
-      // Unicode look-alikes used to bypass the n-word rule.
-      const collapsed = String(folded || '').replace(/\s+/g, '');
-      return /n+i+g{2,}(?:a|e+r?)s?/.test(collapsed);
-    },
+    extra: (_raw, folded, collapsed) => /n+i+g{2,}(?:a|e+r?)s?/.test(collapsed || String(folded || '').replace(/\s+/g, '')),
   },
   {
     category: 'scam',
@@ -97,22 +130,34 @@ const rules = [
 export function scanInternetContent(value) {
   const raw = String(value || '');
   if (!raw.trim()) return null;
-  const folded = compact(raw);
+  const folded = foldedText(raw);
+  const collapsed = collapsedText(raw);
   const categories = [];
   const reasons = [];
+  const add = (category, reason) => {
+    if (!categories.includes(category)) categories.push(category);
+    if (reason && !reasons.includes(reason)) reasons.push(reason);
+  };
+
+  for (const group of fuzzyTerms) {
+    if (group.terms.some((term) => hasFuzzy(collapsed, term) || hasWord(folded, term))) {
+      add(group.category, group.reason);
+    }
+  }
+  for (const group of wordTerms) {
+    if (group.terms.some((term) => hasWord(folded, term))) add(group.category, group.reason);
+  }
 
   for (const rule of rules) {
     const matched = rule.tests.some((pattern) => pattern.test(raw) || pattern.test(folded))
-      || (typeof rule.extra === 'function' && rule.extra(raw, folded));
+      || (typeof rule.extra === 'function' && rule.extra(raw, folded, collapsed));
     if (!matched) continue;
     if (rule.category === 'spam' && (raw.match(/https?:\/\//gi) || []).length < 2 && !/discord\.gg\//i.test(raw)) continue;
-    categories.push(rule.category);
-    reasons.push(rule.reason);
+    add(rule.category, rule.reason);
   }
 
   if (/(.)\1{14,}/.test(raw) || raw.replace(/[^A-Z]/g, '').length > 40 && raw.replace(/[^A-Z]/g, '').length / Math.max(raw.replace(/\s/g, '').length, 1) > 0.72) {
-    categories.push('spam');
-    reasons.push('Excessive spam formatting');
+    add('spam', 'Excessive spam formatting');
   }
 
   if (!categories.length) return null;

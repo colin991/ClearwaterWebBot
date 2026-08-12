@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { AutomodHoldError, scanInternetContent } from './internetAutomod.js';
+import { AUTOMOD_HOLD_MESSAGE, AutomodHoldError, scanInternetContent } from './internetAutomod.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
 export { AutomodHoldError };
@@ -415,6 +415,11 @@ export function createInternetPost(store, user, content, media = {}) {
   if (videoUrl && !isVideo) throw new Error('Choose a supported MP4 or WebM video before posting');
   if ((question && options.length < 2) || (!question && options.length)) throw new Error('A poll needs a question and at least two options');
   assertCanPost(store, user, { reel: isReel });
+  enforceAutomod(store, {
+    actor: user,
+    kind: 'post',
+    content: [body, question, gifTitle, ...options].filter(Boolean).join('\n'),
+  });
   if (!parentId) {
     const cooldownRemaining = 60_000 - (Date.now() - new Date(user.lastPostAt || 0).getTime());
     if (cooldownRemaining > 0) throw new Error(`Please wait ${Math.ceil(cooldownRemaining / 1000)} seconds before posting again`);
@@ -429,11 +434,6 @@ export function createInternetPost(store, user, content, media = {}) {
   if (/(.)\1{11,}/.test(body) || (body.match(/https?:\/\//gi) || []).length > 2) {
     throw new Error('That post looks like spam. Please shorten it and try again');
   }
-  enforceAutomod(store, {
-    actor: user,
-    kind: 'post',
-    content: [body, question, ...options].filter(Boolean).join('\n'),
-  });
   const post = {
     id: randomUUID(),
     kind: isReel ? 'reel' : 'post',
@@ -642,7 +642,7 @@ function enforceAutomod(store, { actor, kind, content, extra = {} }) {
     store.reports = store.reports.slice(0, 200);
     addInternetLog(store, `Automod held ${text(actor.displayName, 80) || 'a member'}'s ${kind}. ${hit.reason}`);
   }
-  throw new AutomodHoldError('That was held for staff review.', hit);
+  throw new AutomodHoldError(AUTOMOD_HOLD_MESSAGE, hit);
 }
 
 function addInternetMessage(store, userId, message) {
@@ -802,9 +802,9 @@ export function sendInternetMessage(store, { actor, to, content, gif, username }
   if (recipientPrefs.friendsMessages === true && !(Array.isArray(recipient.following) && recipient.following.includes(sender.id))) {
     throw new Error('This member only accepts messages from people they follow');
   }
+  enforceAutomod(store, { actor: sender, kind: 'message', content: [body, gifTitle].filter(Boolean).join('\n'), extra: { targetId: recipient.id } });
   const wait = 1_500 - (Date.now() - new Date(sender.lastMessageAt || 0).getTime());
   if (wait > 0) throw new Error('Please wait a moment before sending another message');
-  enforceAutomod(store, { actor: sender, kind: 'message', content: body, extra: { targetId: recipient.id } });
   const sentAt = new Date().toISOString();
   const message = { id: randomUUID(), kind: 'direct', fromId: sender.id, toId: recipient.id, content: body, ...(isGif ? { gifUrl, gifTitle } : {}), createdAt: sentAt, readAt: null };
   sender.messages = Array.isArray(sender.messages) ? sender.messages : [];

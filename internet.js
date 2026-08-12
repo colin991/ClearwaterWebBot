@@ -93,7 +93,8 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-staff-panel';
+const INTERNET_VERSION = '20260811-automod';
+const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const INTERNET_PATH = '/internet';
 const SIGNIN_INTERNET = '/signin?next=/internet';
@@ -194,6 +195,36 @@ const clearwaterEmojiChoices = [
   ['✅', 'Approved'], ['⚠️', 'Alert'], ['📢', 'Announcement'], ['💙', 'Clearwater blue'],
 ];
 const emojiChoices = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😍','😘','🥰','😎','🤩','🥳','🤔','😢','😭','😡','🤯','😴','👀','💀','❤️','💙','💚','🔥','✨','🎉','🚓','🚒','🚑','👍','👎','✅','❌','⚠️','📌','📷','🎮'];
+
+function scanClientContent(value) {
+  const raw = String(value || '');
+  if (!raw.trim()) return null;
+  const compact = raw.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[а]/gi, 'a').replace(/[с]/gi, 'c').replace(/[е]/gi, 'e').replace(/[һ]/gi, 'h').replace(/[іı]/gi, 'i').replace(/[ј]/gi, 'j').replace(/[к]/gi, 'k').replace(/[оο]/gi, 'o').replace(/[р]/gi, 'p').replace(/[ѕ]/gi, 's').replace(/[т]/gi, 't').replace(/[х]/gi, 'x').toLowerCase().replace(/ph/g, 'f').replace(/[@$0]/g, 'o').replace(/[1!|]/g, 'i').replace(/[3]/g, 'e').replace(/[4]/g, 'a').replace(/[5$]/g, 's').replace(/[7]/g, 't').replace(/v/g, 'u');
+  const folded = compact.replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const collapsed = compact.replace(/[^a-z0-9]+/g, '');
+  const fuzzy = ['nigger', 'nigga', 'faggot', 'fagot', 'kike', 'tranny', 'trannie', 'retard', 'wetback', 'chink', 'gook', 'spic', 'beaner', 'raghead', 'towelhead', 'fuck', 'fuk', 'fck', 'fvck', 'phuck', 'fcuk', 'shit', 'bitch', 'pussy', 'whore', 'slut', 'dick', 'dildo', 'handjob', 'blowjob', 'nudes'];
+  const words = ['asshole', 'jackass', 'dumbass', 'dickhead', 'dipshit', 'bullshit', 'motherfucker', 'cunt', 'twat', 'stfu', 'rape', 'rapist', 'incest'];
+  const hitFuzzy = fuzzy.some((term) => {
+    const letters = term.replace(/[^a-z0-9]/g, '');
+    return new RegExp(letters.split('').map((letter) => `${letter}+`).join('[^a-z0-9]*')).test(collapsed);
+  });
+  const hitWord = words.some((term) => new RegExp(`\\b${term}\\b`, 'i').test(folded));
+  const hitHate = /\b(?:nigg(?:a|er)s?|fag+ots?|kikes?|trann(?:y|ies)|retard(?:ed|s)?)\b/i.test(raw) || /n+i+g{2,}(?:a|e+r?)s?/.test(collapsed);
+  const hitThreat = /\b(?:kys|kill\s+your\s*self|unalive\s+yourself)\b/i.test(raw);
+  if (hitFuzzy || hitWord || hitHate || hitThreat) return { reason: AUTOMOD_HOLD_MESSAGE };
+  return null;
+}
+
+function automodHoldError(result, fallback) {
+  if (result?.held || /held for staff/i.test(result?.error || fallback || '')) return AUTOMOD_HOLD_MESSAGE;
+  return result?.error || fallback;
+}
+
+function setConversationHold(message = '') {
+  if (!conversationError) return;
+  conversationError.hidden = !message;
+  conversationError.textContent = message;
+}
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const safeCssImageUrl = (value) => {
@@ -1412,7 +1443,7 @@ function openConversation(member) {
   if (!member) return;
   viewedMember = member;
   messageGif = null;
-  if (conversationError) { conversationError.hidden = true; conversationError.textContent = ''; }
+  setConversationHold('');
   if (conversationGifPreview) { conversationGifPreview.hidden = true; conversationGifPreview.innerHTML = ''; }
   document.querySelector('[data-conversation-avatar]').src = member.avatarUrl || 'assets/clearwater-logo.png';
   document.querySelector('[data-conversation-name]').textContent = member.displayName;
@@ -1440,16 +1471,14 @@ async function loadConversation(member) {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'conversation', withUserId: member.id, username: member.username, ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Could not load this conversation.');
     if (!response.ok) throw new Error(result.error || 'Could not load this conversation.');
-    if (conversationError) { conversationError.hidden = true; conversationError.textContent = ''; }
     const messages = result.messages || [];
     conversationMessages.innerHTML = messages.length ? messages.map((message) => conversationBubble(message)).join('') : '<p class="conversation-empty">Start a conversation with this member.</p>';
     conversationMessages.scrollTop = conversationMessages.scrollHeight;
     void loadMessages();
   } catch (error) {
     conversationMessages.innerHTML = '<p class="conversation-empty">No messages yet.</p>';
-    if (conversationError) {
-      conversationError.hidden = false;
-      conversationError.textContent = error.message || 'Could not load this conversation.';
+    if (!conversationError?.textContent || conversationError.hidden) {
+      setConversationHold(error.message || 'Could not load this conversation.');
     }
   }
 }
@@ -1607,7 +1636,12 @@ async function loadSession() {
   return true;
 }
 
-content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; postButton.disabled = !canComposePost(); updateComposerHighlight(); });
+content?.addEventListener('input', () => {
+  count.textContent = `${content.value.length} / 500`;
+  postButton.disabled = !canComposePost();
+  updateComposerHighlight();
+  if (postMessage) postMessage.textContent = scanClientContent(content.value) ? AUTOMOD_HOLD_MESSAGE : '';
+});
 document.querySelector('[data-drop-location]')?.addEventListener('click', async () => {
   if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
   await refreshDropLocation();
@@ -1916,7 +1950,7 @@ async function postInteraction({ postId, type, content = '', quote = false }, { 
   const result = await readApiJson(response, 'Could not update this post.');
   if (!response.ok) {
     if (result.error === 'Owner access required') throw new Error('Your bot host needs the newest GitHub files and a restart before post actions can work.');
-    throw new Error(result.error || 'Could not update this post.');
+    throw new Error(automodHoldError(result, 'Could not update this post.'));
   }
   if (reload) await loadPosts();
 }
@@ -2067,28 +2101,27 @@ document.querySelector('[data-conversation-gif]')?.addEventListener('click', () 
 document.querySelector('[data-conversation-emoji]')?.addEventListener('click', () => { pickerTarget = 'message'; emojiModal.hidden = false; renderEmojiGrid(); emojiQuery?.focus(); });
 document.querySelector('[data-close-conversation]')?.addEventListener('click', () => { showView('messages'); });
 document.querySelector('[data-open-conversation-profile]')?.addEventListener('click', () => { if (viewedMember) openMemberProfile(viewedMember.id); });
+conversationInput?.addEventListener('input', () => {
+  const hit = scanClientContent(conversationInput.value);
+  setConversationHold(hit ? AUTOMOD_HOLD_MESSAGE : '');
+});
 conversationForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const text = conversationInput?.value.trim();
   if (!viewedMember || (!text && !messageGif)) return;
-  if (conversationError) { conversationError.hidden = true; conversationError.textContent = ''; }
   const submit = conversationForm.querySelector('button[type="submit"]');
   if (submit) submit.disabled = true;
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'message-send', to: viewedMember.id, username: viewedMember.username, content: text, gif: messageGif, ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Could not send your message.');
-    if (!response.ok) throw new Error(result.error || 'Could not send your message.');
+    if (!response.ok) throw new Error(automodHoldError(result, 'Could not send your message.'));
     conversationInput.value = '';
     messageGif = null;
+    setConversationHold('');
     if (conversationGifPreview) { conversationGifPreview.hidden = true; conversationGifPreview.innerHTML = ''; }
     await loadConversation(viewedMember);
   } catch (error) {
-    if (conversationError) {
-      conversationError.hidden = false;
-      conversationError.textContent = error.message || 'Could not send your message.';
-    } else {
-      window.alert(error.message || 'Could not send your message.');
-    }
+    setConversationHold(automodHoldError({ error: error.message }, error.message || 'Could not send your message.'));
   } finally {
     if (submit) submit.disabled = false;
     conversationInput?.focus();
@@ -2234,10 +2267,10 @@ postButton?.addEventListener('click', async () => {
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, image: selectedImage, poll, location: selectedLocation, quoteId: selectedQuoteId, asOfficial: activeAccount === 'official' }) });
     const result = await readApiJson(response, 'Posting is unavailable because the website service is not connected.');
-    if (!response.ok) throw new Error(result.error);
+    if (!response.ok) throw new Error(automodHoldError(result, result.error || 'Could not post.'));
     content.value = ''; count.textContent = '0 / 500'; postButton.disabled = true; updateComposerHighlight(); selectedGif = null; selectedImage = null; stopDropLocationRefresh(); selectedLocation = null; selectedQuoteId = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; renderDropPreview(); renderQuotePreview(); if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
   } catch (error) {
-    const message = error.message || 'Could not post.';
+    const message = automodHoldError({ error: error.message }, error.message || 'Could not post.');
     postMessage.textContent = message;
     if (/member of the Clearwater Roleplay Discord server/i.test(message)) showJoinRequired();
     else if (/banned/i.test(message)) showBan({ reason: 'This account is banned from Clearwater Internet.', until: null });
