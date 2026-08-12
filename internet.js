@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-reels-2gb';
+const INTERNET_VERSION = '20260811-staff-panel';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const INTERNET_PATH = '/internet';
 const SIGNIN_INTERNET = '/signin?next=/internet';
@@ -183,6 +183,10 @@ let staffQueueFilter = 'pending';
 let staffHistoryFilter = 'all';
 let staffHistoryQuery = '';
 let staffUserQuery = '';
+let staffUsersFilter = 'all';
+let selectedStaffUserId = null;
+let staffUserDetail = null;
+let staffUserBusy = false;
 const expandedPollVoters = new Set();
 const clearwaterEmojiChoices = [
   ['🚓', 'Police'], ['🚒', 'Fire rescue'], ['🚑', 'EMS'], ['🌴', 'Clearwater'],
@@ -900,7 +904,127 @@ function staffCaseMarkup(selected) {
   if (!selected) return '<div class="staff-empty staff-empty-lg">Nothing in this queue.</div>';
   const closed = selected.status && selected.status !== 'open';
   const canDelete = selected.source !== 'automod' && selected.kind !== 'message';
-  return `<article class="staff-case" data-report-card><div class="staff-case-identity"><span>${escapeHtml((selected.authorName || '?').slice(0, 1))}</span><div><b>${escapeHtml(selected.authorName)}</b><small>${escapeHtml(reportSourceLabel(selected))} · ${escapeHtml(reportKindLabel(selected))}</small></div></div><p class="staff-case-copy">${escapeHtml(selected.content || 'No text captured')}</p><p class="staff-case-reason">${escapeHtml(selected.reason || 'No reason given')}</p>${Array.isArray(selected.categories) && selected.categories.length ? `<p class="staff-case-tags">${selected.categories.map((category) => `<span>${escapeHtml(category)}</span>`).join('')}</p>` : ''}${closed ? `<p class="staff-case-status">${escapeHtml(staffHistoryLabel(selected))} · ${timeAgo(selected.reviewedAt || selected.createdAt)}</p>` : `<div class="report-actions"><select data-report-action><option value="warning">Give warning</option>${canDelete ? '<option value="delete">Delete post</option>' : '<option value="delete">Confirm removal</option>'}<option value="ban">Ban account</option></select><button type="button" data-report-review="accept" data-report-id="${escapeHtml(selected.id)}">Take action</button><button type="button" class="danger" data-report-review="deny" data-report-id="${escapeHtml(selected.id)}">Dismiss</button></div>`}</article>`;
+  const openUser = selected.authorId ? `<button type="button" data-staff-open-user="${escapeHtml(selected.authorId)}">Open user panel</button>` : '';
+  return `<article class="staff-case" data-report-card><div class="staff-case-identity"><span>${escapeHtml((selected.authorName || '?').slice(0, 1))}</span><div><b>${escapeHtml(selected.authorName)}</b><small>${escapeHtml(reportSourceLabel(selected))} · ${escapeHtml(reportKindLabel(selected))}</small></div></div><p class="staff-case-copy">${escapeHtml(selected.content || 'No text captured')}</p><p class="staff-case-reason">${escapeHtml(selected.reason || 'No reason given')}</p>${Array.isArray(selected.categories) && selected.categories.length ? `<p class="staff-case-tags">${selected.categories.map((category) => `<span>${escapeHtml(category)}</span>`).join('')}</p>` : ''}${closed ? `<p class="staff-case-status">${escapeHtml(staffHistoryLabel(selected))} · ${timeAgo(selected.reviewedAt || selected.createdAt)}</p>` : `<div class="report-actions"><select data-report-action><option value="warning">Give warning</option>${canDelete ? '<option value="delete">Delete post</option>' : '<option value="delete">Confirm removal</option>'}<option value="ban">Ban account</option></select><button type="button" data-report-review="accept" data-report-id="${escapeHtml(selected.id)}">Take action</button><button type="button" class="danger" data-report-review="deny" data-report-id="${escapeHtml(selected.id)}">Dismiss</button>${openUser}</div>`}</article>`;
+}
+
+function staffWhen(value) {
+  if (!value) return 'Unknown';
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return 'Unknown';
+  return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(time));
+}
+
+function staffUntil(until) {
+  return until ? `Until ${staffWhen(until)}` : 'Forever';
+}
+
+function staffDurationSelect(field = 'duration', selected = '7') {
+  const options = [['forever', 'Forever'], ['1', '1 day'], ['3', '3 days'], ['7', '7 days'], ['14', '14 days'], ['30', '30 days']];
+  return `<select data-staff-field="${escapeHtml(field)}">${options.map(([value, label]) => `<option value="${value}" ${value === selected ? 'selected' : ''}>${label}</option>`).join('')}</select>`;
+}
+
+function staffUserChips(user) {
+  const chips = [];
+  if (user.official) chips.push('<span class="staff-chip official">Official</span>');
+  if (user.verified) chips.push('<span class="staff-chip verified">Verified</span>');
+  if (user.banned) chips.push('<span class="staff-chip danger">Banned</span>');
+  if (user.muted) chips.push('<span class="staff-chip warn">Muted</span>');
+  if (user.watched) chips.push('<span class="staff-chip watch">Watched</span>');
+  if (user.shadowbanned) chips.push('<span class="staff-chip warn">Shadowbanned</span>');
+  if (user.lockPosts) chips.push('<span class="staff-chip">Post lock</span>');
+  if (user.lockMessages) chips.push('<span class="staff-chip">DM lock</span>');
+  if (user.lockReels) chips.push('<span class="staff-chip">Reel lock</span>');
+  if (user.staffRank) chips.push(`<span class="staff-chip">${escapeHtml(user.staffRank)}</span>`);
+  return chips.join('');
+}
+
+function staffUserPanelMarkup(detail) {
+  if (!detail?.user) return '<div class="staff-empty staff-empty-lg">Select a user to open their staff panel.</div>';
+  const user = detail.user;
+  const posts = Array.isArray(detail.posts) ? detail.posts : [];
+  const warnings = Array.isArray(detail.warnings) ? detail.warnings : [];
+  const reports = Array.isArray(detail.reports) ? detail.reports : [];
+  const toggle = (on, onAction, offAction, onLabel, offLabel, danger = false) => (
+    on
+      ? `<button type="button" data-staff-user-action="${offAction}">${offLabel}</button>`
+      : `<button type="button" class="${danger ? 'danger' : ''}" data-staff-user-action="${onAction}">${onLabel}</button>`
+  );
+  return `<article class="staff-user-dossier">
+    <header class="staff-user-hero">
+      <img src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" />
+      <div>
+        <b>${escapeHtml(user.displayName || 'Discord user')}</b>
+        <small>@${escapeHtml(user.username || 'member')}</small>
+        <p class="staff-user-id"><button type="button" data-staff-copy-id="${escapeHtml(user.id)}">${escapeHtml(user.id)}</button></p>
+        <div class="staff-chip-row">${staffUserChips(user)}</div>
+      </div>
+      <div class="staff-user-hero-actions">
+        <button type="button" data-open-member="${escapeHtml(user.id)}">Public profile</button>
+        <a href="https://discord.com/users/${encodeURIComponent(user.id)}" target="_blank" rel="noopener">Discord</a>
+      </div>
+    </header>
+    <dl class="staff-user-stats">
+      <div><dt>Posts</dt><dd>${Number(user.postCount || 0)}</dd></div>
+      <div><dt>Reels</dt><dd>${Number(user.reelCount || 0)}</dd></div>
+      <div><dt>Warnings</dt><dd>${Number(user.warningCount || 0)}</dd></div>
+      <div><dt>Reports</dt><dd>${Number(user.reportCount || 0)}</dd></div>
+      <div><dt>Followers</dt><dd>${Number(user.followerCount || 0)}</dd></div>
+      <div><dt>Following</dt><dd>${Number(user.followingCount || 0)}</dd></div>
+      <div><dt>DMs stored</dt><dd>${Number(user.messageCount || 0)}</dd></div>
+      <div><dt>Networks</dt><dd>${Number(user.ipHashCount || 0)}</dd></div>
+      <div><dt>Joined</dt><dd>${escapeHtml(staffWhen(user.createdAt))}</dd></div>
+      <div><dt>Last seen</dt><dd>${escapeHtml(staffWhen(user.lastSeenAt))}</dd></div>
+    </dl>
+    ${user.ban ? `<p class="staff-user-alert">Banned: ${escapeHtml(user.ban.reason)} · ${escapeHtml(staffUntil(user.ban.until))}</p>` : ''}
+    ${user.mute ? `<p class="staff-user-alert">Muted: ${escapeHtml(user.mute.reason)} · ${escapeHtml(staffUntil(user.mute.until))}</p>` : ''}
+    ${user.bio ? `<p class="staff-user-bio">${escapeHtml(user.bio)}</p>` : ''}
+    <section class="staff-user-block">
+      <h3>Staff note</h3>
+      <textarea data-staff-field="note" maxlength="500" placeholder="Private note for staff only">${escapeHtml(user.note || '')}</textarea>
+      <button type="button" data-staff-user-action="note">Save note</button>
+    </section>
+    <section class="staff-user-block">
+      <h3>Moderation</h3>
+      <label>Reason / notice<textarea data-staff-field="reason" maxlength="300" placeholder="Reason for warn, ban, mute, or staff notice"></textarea></label>
+      <label>Duration${staffDurationSelect('duration')}</label>
+      <label class="ip-ban-option"><input type="checkbox" data-staff-field="ipBan" /> Also block known network hashes</label>
+      <div class="staff-user-actions">
+        ${toggle(user.verified, 'verify', 'unverify', 'Verify', 'Remove verification')}
+        ${toggle(user.banned, 'ban', 'unban', 'Ban account', 'Unban', true)}
+        ${toggle(user.muted, 'mute', 'unmute', 'Mute', 'Unmute', true)}
+        <button type="button" data-staff-user-action="warn">Warn</button>
+        <button type="button" data-staff-user-action="send-notice">Send notice</button>
+        <button type="button" class="danger" data-staff-user-action="ip-ban">IP ban</button>
+        <button type="button" data-staff-user-action="clear-ip-ban">Clear IP ban</button>
+        ${toggle(user.lockPosts, 'lock-posts', 'unlock-posts', 'Lock posts', 'Unlock posts')}
+        ${toggle(user.lockMessages, 'lock-messages', 'unlock-messages', 'Lock messages', 'Unlock messages')}
+        ${toggle(user.lockReels, 'lock-reels', 'unlock-reels', 'Lock Reels', 'Unlock Reels')}
+        ${toggle(user.shadowbanned, 'shadowban', 'unshadowban', 'Shadowban', 'Remove shadowban', true)}
+        ${toggle(user.watched, 'watch', 'unwatch', 'Watch', 'Unwatch')}
+        <button type="button" data-staff-user-action="clear-warnings">Clear warnings</button>
+        <button type="button" data-staff-user-action="reset-profile">Reset bio</button>
+        <button type="button" data-staff-user-action="clear-ip-hashes">Clear network hashes</button>
+        <button type="button" class="danger" data-staff-user-action="wipe-posts">Delete all posts</button>
+        <button type="button" class="danger" data-staff-user-action="wipe-reels">Delete all Reels</button>
+        <button type="button" class="danger" data-staff-user-action="wipe-comments">Delete comments</button>
+        <button type="button" class="danger" data-staff-user-action="wipe-messages">Wipe DMs</button>
+      </div>
+      <p class="staff-user-status" data-staff-user-status role="status"></p>
+    </section>
+    <section class="staff-user-block">
+      <h3>Recent content</h3>
+      ${posts.length ? posts.map((post) => `<article class="staff-user-content"><b>${escapeHtml(post.kind)}</b><p>${escapeHtml(post.content || 'No text')}</p><small>${escapeHtml(timeAgo(post.createdAt))} · ${Number(post.likes || 0)} likes</small><button type="button" class="danger" data-staff-user-action="delete-post" data-staff-post-id="${escapeHtml(post.id)}">Delete</button></article>`).join('') : '<p class="staff-empty">No posts, Reels, or comments on file.</p>'}
+    </section>
+    <section class="staff-user-block">
+      <h3>Warnings</h3>
+      ${warnings.length ? warnings.map((warning) => `<article class="staff-compact"><b>${escapeHtml(warning.reason)}</b><small>${escapeHtml(timeAgo(warning.createdAt))}${warning.readAt ? ' · seen' : ' · unread'}</small></article>`).join('') : '<p class="staff-empty">No warnings.</p>'}
+    </section>
+    <section class="staff-user-block">
+      <h3>Reports</h3>
+      ${reports.length ? reports.map((report) => `<article class="staff-compact"><b>${escapeHtml(report.role)} · ${escapeHtml(report.status)}${report.action ? ` · ${escapeHtml(report.action)}` : ''}</b><span>${escapeHtml(report.reason || report.content || 'No details')}</span><small>${escapeHtml(timeAgo(report.createdAt))}</small></article>`).join('') : '<p class="staff-empty">No reports involving this account.</p>'}
+    </section>
+  </article>`;
 }
 
 function staffHistoryLabel(report) {
@@ -970,29 +1094,167 @@ function renderStaffDashboard() {
         : '<p class="staff-empty">No staff actions yet.</p>';
   }
   const query = staffUserQuery.trim().toLowerCase();
-  const members = [...internetUsers.values()].filter((member) => !query || `${member.displayName} ${member.username}`.toLowerCase().includes(query)).slice(0, 40);
+  const staffMembers = (Array.isArray(moderationSnapshot.users) && moderationSnapshot.users.length
+    ? moderationSnapshot.users
+    : [...internetUsers.values()].map((member) => ({
+      ...member,
+      flagged: Boolean(member.banned),
+      warningCount: 0,
+      postCount: 0,
+    }))).filter((member) => {
+    if (query && !`${member.displayName || ''} ${member.username || ''} ${member.id || ''}`.toLowerCase().includes(query)) return false;
+    if (staffUsersFilter === 'flagged') return member.flagged === true;
+    if (staffUsersFilter === 'banned') return member.banned === true;
+    if (staffUsersFilter === 'watched') return member.watched === true;
+    return true;
+  });
+  document.querySelectorAll('[data-staff-users-filter]').forEach((button) => button.classList.toggle('selected', button.dataset.staffUsersFilter === staffUsersFilter));
   if (usersPane) {
-    usersPane.innerHTML = members.length
-      ? members.map((member) => `<button type="button" class="staff-user-row" data-open-member="${escapeHtml(member.id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(member.displayName)}</b><small>@${escapeHtml(member.username)}</small></span></button>`).join('')
+    usersPane.innerHTML = staffMembers.length
+      ? staffMembers.slice(0, 80).map((member) => `<button type="button" class="staff-user-row ${member.id === selectedStaffUserId ? 'selected' : ''}" data-staff-open-user="${escapeHtml(member.id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" /><span><b>${escapeHtml(member.displayName || 'Discord user')}</b><small>@${escapeHtml(member.username || 'member')}</small><span class="staff-chip-row">${staffUserChips(member)}</span></span></button>`).join('')
       : '<p class="staff-empty">No members match that search.</p>';
   }
-  const metrics = `<div class="staff-metrics"><article><b>${Number(stats.pending || reports.length)}</b><span>Pending</span></article><article><b>${Number(stats.automod || 0)}</b><span>Automod</span></article><article><b>${Number(stats.actioned || 0)}</b><span>Actioned</span></article><article><b>${Number(stats.dismissed || 0)}</b><span>Dismissed</span></article></div>`;
+  const userPanel = document.querySelector('[data-staff-user-panel]');
+  const keepUserPanel = Boolean(userPanel && userPanel.contains(document.activeElement));
+  if (userPanel && !keepUserPanel) {
+    if (!selectedStaffUserId) userPanel.innerHTML = '<div class="staff-empty staff-empty-lg">Select a user to open their staff panel.</div>';
+    else if (staffUserDetail?.user?.id === selectedStaffUserId) userPanel.innerHTML = staffUserPanelMarkup(staffUserDetail);
+    else userPanel.innerHTML = '<p class="staff-loading">Loading this account...</p>';
+  }
+  const settings = moderationSnapshot.settings || {};
+  const siteTools = document.querySelector('[data-staff-site-tools]');
+  if (siteTools) {
+    siteTools.innerHTML = `<h2>Site controls</h2>
+      <p>Pause posting, Reels, or DMs for everyone except the official account.</p>
+      <div class="staff-user-actions">
+        <button type="button" data-staff-site-action="pause-posts" data-staff-enabled="${settings.pausePosts ? 'false' : 'true'}">${settings.pausePosts ? 'Resume posts' : 'Pause posts'}</button>
+        <button type="button" data-staff-site-action="pause-reels" data-staff-enabled="${settings.pauseReels ? 'false' : 'true'}">${settings.pauseReels ? 'Resume Reels' : 'Pause Reels'}</button>
+        <button type="button" data-staff-site-action="pause-messages" data-staff-enabled="${settings.pauseMessages ? 'false' : 'true'}">${settings.pauseMessages ? 'Resume messages' : 'Pause messages'}</button>
+        <button type="button" data-staff-site-action="clear-dismissed-reports">Clear dismissed reports</button>
+        <button type="button" class="danger" data-staff-site-action="clear-ip-bans">Clear all IP bans</button>
+      </div>
+      <div class="staff-site-lists">
+        <section><h3>Watched</h3>${(moderationSnapshot.watched || []).length ? moderationSnapshot.watched.map((member) => `<button type="button" data-staff-open-user="${escapeHtml(member.id)}">${escapeHtml(member.displayName)}</button>`).join('') : '<p class="staff-empty">Nobody is on the watchlist.</p>'}</section>
+        <section><h3>Muted</h3>${(moderationSnapshot.mutes || []).length ? moderationSnapshot.mutes.map((member) => `<button type="button" data-staff-open-user="${escapeHtml(member.id)}">${escapeHtml(member.displayName)}</button>`).join('') : '<p class="staff-empty">Nobody is muted.</p>'}</section>
+        <section><h3>Network bans</h3><p>${Number(stats.ipBans || 0)} active hashed network ban${Number(stats.ipBans || 0) === 1 ? '' : 's'}.</p></section>
+      </div>
+      <p data-staff-site-status role="status"></p>`;
+  }
+  const metrics = `<div class="staff-metrics"><article><b>${Number(stats.pending || reports.length)}</b><span>Pending</span></article><article><b>${Number(stats.automod || 0)}</b><span>Automod</span></article><article><b>${Number(stats.banned || bans.length)}</b><span>Bans</span></article><article><b>${Number(stats.watched || 0)}</b><span>Watched</span></article><article><b>${Number(stats.muted || 0)}</b><span>Muted</span></article><article><b>${Number(stats.users || internetUsers.size)}</b><span>Users</span></article></div>`;
   if (overview) {
-    overview.innerHTML = `${metrics}<div class="staff-overview-grid"><section class="staff-column"><header><h2>Oldest pending reports</h2><span>${reports.length}</span></header>${reports.length ? reports.slice(0, 8).map((report) => `<button type="button" class="staff-report-card ${report.id === selectedReportId ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}"><div><b>${escapeHtml(report.authorName)}</b><small>${escapeHtml(reportSourceLabel(report))}</small></div><p>${escapeHtml(report.content || 'No text captured')}</p></button>`).join('') : '<div class="staff-empty">Nothing in this queue.</div>'}</section><section class="staff-column"><header><h2>Active bans</h2></header>${bans.length ? bans.map((ban) => `<article class="staff-compact"><b>${escapeHtml(ban.displayName)}</b><span>${escapeHtml(ban.reason)}</span><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></article>`).join('') : '<div class="staff-empty">No active bans.</div>'}</section></div>`;
+    overview.innerHTML = `${metrics}<div class="staff-overview-grid"><section class="staff-column"><header><h2>Oldest pending reports</h2><span>${reports.length}</span></header>${reports.length ? reports.slice(0, 8).map((report) => `<button type="button" class="staff-report-card ${report.id === selectedReportId ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}"><div><b>${escapeHtml(report.authorName)}</b><small>${escapeHtml(reportSourceLabel(report))}</small></div><p>${escapeHtml(report.content || 'No text captured')}</p></button>`).join('') : '<div class="staff-empty">Nothing in this queue.</div>'}</section><section class="staff-column"><header><h2>Active bans</h2></header>${bans.length ? bans.map((ban) => `<button type="button" class="staff-compact" data-staff-open-user="${escapeHtml(ban.id)}"><b>${escapeHtml(ban.displayName)}</b><span>${escapeHtml(ban.reason)}</span><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></button>`).join('') : '<div class="staff-empty">No active bans.</div>'}</section></div>`;
   }
 }
 
 async function loadModeration() {
   if (!sessionIsOwner || !staffContent) return;
-  staffContent.innerHTML = '<p class="staff-loading">Loading the moderation desk...</p>';
+  const overview = document.querySelector('[data-staff-overview]');
+  if (overview && !moderationSnapshot) overview.innerHTML = '<p class="staff-loading">Loading the moderation desk...</p>';
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'moderation' }) });
     const result = await readApiJson(response, 'Could not load the staff panel.');
     if (!response.ok) throw new Error(result.error || 'Could not load the staff panel.');
     moderationSnapshot = result;
     renderStaffDashboard();
+    if (selectedStaffUserId && staffTab === 'users') void loadStaffUserDetail(selectedStaffUserId, true);
   } catch (error) {
-    staffContent.innerHTML = `<p class="staff-loading">${escapeHtml(error.message || 'Could not load the staff panel.')}</p>`;
+    if (overview && !moderationSnapshot) overview.innerHTML = `<p class="staff-loading">${escapeHtml(error.message || 'Could not load the staff panel.')}</p>`;
+  }
+}
+
+async function loadStaffUserDetail(userId, silent = false) {
+  if (!sessionIsOwner || !userId) return;
+  const panel = document.querySelector('[data-staff-user-panel]');
+  if (!silent && panel && !panel.contains(document.activeElement)) panel.innerHTML = '<p class="staff-loading">Loading this account...</p>';
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'staff-user-detail', targetId: userId }) });
+    const result = await readApiJson(response, 'Could not load this user.');
+    if (!response.ok) throw new Error(result.error || 'Could not load this user.');
+    if (selectedStaffUserId !== userId) return;
+    staffUserDetail = result;
+    if (panel && !panel.contains(document.activeElement)) panel.innerHTML = staffUserPanelMarkup(result);
+  } catch (error) {
+    if (panel && selectedStaffUserId === userId) panel.innerHTML = `<p class="staff-loading">${escapeHtml(error.message || 'Could not load this user.')}</p>`;
+  }
+}
+
+function staffPanelFields() {
+  const panel = document.querySelector('[data-staff-user-panel]');
+  return {
+    reason: panel?.querySelector('[data-staff-field="reason"]')?.value || '',
+    note: panel?.querySelector('[data-staff-field="note"]')?.value || '',
+    durationDays: panel?.querySelector('[data-staff-field="duration"]')?.value || 'forever',
+    ipBan: panel?.querySelector('[data-staff-field="ipBan"]')?.checked === true,
+  };
+}
+
+async function openStaffUser(userId) {
+  selectedStaffUserId = String(userId || '');
+  staffTab = 'users';
+  staffUserDetail = staffUserDetail?.user?.id === selectedStaffUserId ? staffUserDetail : null;
+  renderStaffDashboard();
+  await loadStaffUserDetail(selectedStaffUserId);
+}
+
+async function runStaffUserAction(staffAction, postId = '') {
+  if (!selectedStaffUserId || staffUserBusy) return;
+  const fields = staffPanelFields();
+  const destructive = new Set(['ban', 'ip-ban', 'wipe-posts', 'wipe-reels', 'wipe-comments', 'wipe-messages', 'delete-post', 'clear-ip-hashes', 'shadowban']);
+  if (destructive.has(staffAction) && !window.confirm(`Run "${staffAction.replace(/-/g, ' ')}" on this account?`)) return;
+  staffUserBusy = true;
+  const status = document.querySelector('[data-staff-user-status]');
+  if (status) status.textContent = 'Saving...';
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'staff-user',
+        staffAction,
+        targetId: selectedStaffUserId,
+        reason: fields.reason,
+        note: staffAction === 'note' ? fields.note : fields.reason,
+        durationDays: fields.durationDays,
+        ipBan: fields.ipBan,
+        postId,
+      }),
+    });
+    const result = await readApiJson(response, 'Could not update this user.');
+    if (!response.ok) throw new Error(result.error || 'Could not update this user.');
+    staffUserDetail = result;
+    if (result.snapshot) moderationSnapshot = result.snapshot;
+    renderStaffDashboard();
+    const nextStatus = document.querySelector('[data-staff-user-status]');
+    if (nextStatus) nextStatus.textContent = 'Saved.';
+  } catch (error) {
+    const nextStatus = document.querySelector('[data-staff-user-status]');
+    if (nextStatus) nextStatus.textContent = error.message || 'Could not update this user.';
+    else window.alert(error.message || 'Could not update this user.');
+  } finally {
+    staffUserBusy = false;
+  }
+}
+
+async function runStaffSiteAction(staffAction, enabled) {
+  if (staffAction === 'clear-ip-bans' && !window.confirm('Clear every hashed network ban?')) return;
+  const status = document.querySelector('[data-staff-site-status]');
+  if (status) status.textContent = 'Saving...';
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'staff-site', staffAction, enabled }),
+    });
+    const result = await readApiJson(response, 'Could not update site controls.');
+    if (!response.ok) throw new Error(result.error || 'Could not update site controls.');
+    if (result.snapshot) moderationSnapshot = result.snapshot;
+    renderStaffDashboard();
+    const nextStatus = document.querySelector('[data-staff-site-status]');
+    if (nextStatus) nextStatus.textContent = 'Saved.';
+  } catch (error) {
+    const nextStatus = document.querySelector('[data-staff-site-status]');
+    if (nextStatus) nextStatus.textContent = error.message || 'Could not update site controls.';
+    else window.alert(error.message || 'Could not update site controls.');
   }
 }
 
@@ -1449,6 +1711,30 @@ document.addEventListener('click', (event) => {
   if (pollVoters) { showPollVoters(pollVoters.dataset.pollVoters); return; }
   const conversation = event.target.closest('[data-open-conversation]');
   if (conversation) { const member = internetUsers.get(conversation.dataset.openConversation); if (member) openConversation(member); return; }
+  const staffOpenUser = event.target.closest('[data-staff-open-user]');
+  if (staffOpenUser) { void openStaffUser(staffOpenUser.dataset.staffOpenUser); return; }
+  const staffUserAction = event.target.closest('[data-staff-user-action]');
+  if (staffUserAction) { void runStaffUserAction(staffUserAction.dataset.staffUserAction, staffUserAction.dataset.staffPostId || ''); return; }
+  const staffUsersFilterButton = event.target.closest('[data-staff-users-filter]');
+  if (staffUsersFilterButton) {
+    staffUsersFilter = staffUsersFilterButton.dataset.staffUsersFilter || 'all';
+    staffTab = 'users';
+    renderStaffDashboard();
+    return;
+  }
+  const staffSiteAction = event.target.closest('[data-staff-site-action]');
+  if (staffSiteAction) {
+    void runStaffSiteAction(staffSiteAction.dataset.staffSiteAction, staffSiteAction.dataset.staffEnabled === 'true');
+    return;
+  }
+  const copyStaffId = event.target.closest('[data-staff-copy-id]');
+  if (copyStaffId) {
+    void navigator.clipboard?.writeText(copyStaffId.dataset.staffCopyId || '').then(() => {
+      copyStaffId.textContent = 'Copied ID';
+      window.setTimeout(() => { copyStaffId.textContent = copyStaffId.dataset.staffCopyId; }, 1200);
+    }).catch(() => {});
+    return;
+  }
   const authorButton = event.target.closest('[data-open-member]');
   if (authorButton) { openMemberProfile(authorButton.dataset.openMember); return; }
   const messageUser = event.target.closest('[data-message-user]');

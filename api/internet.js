@@ -4,7 +4,7 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260811-reels-2gb';
+const INTERNET_VERSION = '20260811-staff-panel';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
@@ -306,6 +306,32 @@ export default async function handler(request, response) {
     } else if (body.action === 'moderation') {
       if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
       payload = { action: 'moderation', owner: true };
+    } else if (body.action === 'staff-user-detail') {
+      if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
+      payload = { action: 'staff-user-detail', targetId: String(body.targetId || ''), owner: true };
+    } else if (body.action === 'staff-user') {
+      if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
+      payload = {
+        action: 'staff-user',
+        staffAction: String(body.staffAction || ''),
+        targetId: String(body.targetId || ''),
+        reason: String(body.reason || '').slice(0, 300),
+        note: String(body.note || '').slice(0, 500),
+        durationDays: body.durationDays === 'forever' ? 'forever' : Number(body.durationDays),
+        ipBan: body.ipBan === true,
+        postId: String(body.postId || ''),
+        actor: { id: user.id, displayName: user.displayName },
+        owner: true,
+      };
+    } else if (body.action === 'staff-site') {
+      if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
+      payload = {
+        action: 'staff-site',
+        staffAction: String(body.staffAction || ''),
+        enabled: body.enabled === true,
+        actor: { id: user.id, displayName: user.displayName },
+        owner: true,
+      };
     } else if (['verify', 'ban'].includes(body.action)) {
       if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
       payload = {

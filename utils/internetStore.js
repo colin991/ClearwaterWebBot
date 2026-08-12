@@ -6,7 +6,15 @@ import { readJsonFile, writeJsonFile } from './jsonStore.js';
 export { AutomodHoldError };
 
 const storePath = join(process.cwd(), 'data', 'clearwater-internet.json');
-const emptyStore = Object.freeze({ users: {}, posts: [], reports: [], logs: [], ipBans: [], officialProfile: {} });
+const emptyStore = Object.freeze({
+  users: {},
+  posts: [],
+  reports: [],
+  logs: [],
+  ipBans: [],
+  officialProfile: {},
+  settings: { pausePosts: false, pauseReels: false, pauseMessages: false },
+});
 export const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
 const officialDefaults = Object.freeze({
   displayName: 'Clearwater Roleplay',
@@ -45,6 +53,11 @@ export async function readInternetStore() {
     logs: Array.isArray(data?.logs) ? data.logs : [],
     ipBans: Array.isArray(data?.ipBans) ? data.ipBans : [],
     officialProfile: data?.officialProfile && typeof data.officialProfile === 'object' ? data.officialProfile : {},
+    settings: {
+      pausePosts: data?.settings?.pausePosts === true,
+      pauseReels: data?.settings?.pauseReels === true,
+      pauseMessages: data?.settings?.pauseMessages === true,
+    },
   };
 }
 
@@ -72,11 +85,23 @@ function publicPost(post) {
   return next;
 }
 
+export function publicInternetSettings(store) {
+  return {
+    pausePosts: store.settings?.pausePosts === true,
+    pauseReels: store.settings?.pauseReels === true,
+    pauseMessages: store.settings?.pauseMessages === true,
+  };
+}
+
 export function publicPosts(store) {
-  const feed = store.posts.filter((post) => post.kind !== 'reel');
-  const reels = store.posts.filter((post) => post.kind === 'reel' && !post.parentId);
+  const hiddenAuthors = new Set(
+    Object.values(store.users).filter((user) => user.shadowbanned === true).map((user) => user.id)
+  );
+  const visible = store.posts.filter((post) => !hiddenAuthors.has(post.authorId));
+  const feed = visible.filter((post) => post.kind !== 'reel');
+  const reels = visible.filter((post) => post.kind === 'reel' && !post.parentId);
   const reelIds = new Set(reels.map((reel) => reel.id));
-  const comments = store.posts.filter((post) => post.parentId && reelIds.has(post.parentId));
+  const comments = visible.filter((post) => post.parentId && reelIds.has(post.parentId));
   return [...reels, ...feed, ...comments].map(publicPost);
 }
 
@@ -135,6 +160,77 @@ export function setInternetBan(user, { enabled, reason, durationDays, source = '
     : new Date(Date.now() + (days * 24 * 60 * 60 * 1000)).toISOString();
   user.banSource = source === 'membership' ? 'membership' : 'owner';
   return user;
+}
+
+function durationUntil(durationDays) {
+  if (durationDays === 'forever' || durationDays == null || durationDays === '') return null;
+  const days = Number(durationDays);
+  if (!Number.isInteger(days) || days < 1 || days > 30) {
+    throw new Error('Choose a duration from 1 to 30 days, or Forever');
+  }
+  return new Date(Date.now() + (days * 24 * 60 * 60 * 1000)).toISOString();
+}
+
+function stillActive(until) {
+  if (!until) return true;
+  return new Date(until).getTime() > Date.now();
+}
+
+export function getActiveMute(user) {
+  if (!user?.muted) return null;
+  if (user.mutedUntil && !stillActive(user.mutedUntil)) {
+    user.muted = false;
+    user.mutedUntil = null;
+    user.muteReason = null;
+    return null;
+  }
+  return {
+    reason: text(user.muteReason, 300) || 'No reason was provided.',
+    until: user.mutedUntil || null,
+  };
+}
+
+function flagActive(user, boolKey, untilKey) {
+  if (user?.[boolKey] !== true) return false;
+  if (user[untilKey] && !stillActive(user[untilKey])) {
+    user[boolKey] = false;
+    user[untilKey] = null;
+    return false;
+  }
+  return true;
+}
+
+export function touchInternetUser(user) {
+  if (!user) return user;
+  user.lastSeenAt = new Date().toISOString();
+  if (!user.createdAt) user.createdAt = user.lastSeenAt;
+  return user;
+}
+
+function assertNotOfficial(user, action) {
+  if (user?.id === OFFICIAL_INTERNET_ACCOUNT_ID || user?.official === true) {
+    throw new Error(`The official Clearwater account cannot be ${action}`);
+  }
+}
+
+export function assertCanPost(store, user, { reel = false } = {}) {
+  if (user?.id === OFFICIAL_INTERNET_ACCOUNT_ID || user?.official === true) return;
+  if (getActiveBan(user)) throw new Error('This account is banned from Clearwater Internet');
+  const mute = getActiveMute(user);
+  if (mute) throw new Error(`This account is muted. ${mute.reason}`);
+  if (store.settings?.pausePosts === true) throw new Error('Posting is temporarily paused by staff');
+  if (reel && store.settings?.pauseReels === true) throw new Error('Reels are temporarily paused by staff');
+  if (reel && flagActive(user, 'lockReels', 'lockReelsUntil')) throw new Error('This account is locked from posting Reels');
+  if (flagActive(user, 'lockPosts', 'lockPostsUntil')) throw new Error('This account is locked from posting');
+}
+
+export function assertCanMessage(store, user) {
+  if (user?.id === OFFICIAL_INTERNET_ACCOUNT_ID || user?.official === true) return;
+  if (getActiveBan(user)) throw new Error('This account is banned from Clearwater Internet');
+  const mute = getActiveMute(user);
+  if (mute) throw new Error(`This account is muted. ${mute.reason}`);
+  if (store.settings?.pauseMessages === true) throw new Error('Direct messages are temporarily paused by staff');
+  if (flagActive(user, 'lockMessages', 'lockMessagesUntil')) throw new Error('This account is locked from sending messages');
 }
 
 export function clearExpiredInternetBans(store) {
@@ -209,6 +305,7 @@ export function upsertInternetUser(store, user) {
   if (!/^\d{16,22}$/.test(id)) throw new Error('Invalid user');
   const existing = store.users[id] || { verified: false, banned: false };
   const has = (key) => Object.prototype.hasOwnProperty.call(user || {}, key);
+  if (!existing.createdAt) existing.createdAt = new Date().toISOString();
   store.users[id] = {
     ...existing,
     id,
@@ -317,7 +414,7 @@ export function createInternetPost(store, user, content, media = {}) {
   if (imageUrl && !isImage) throw new Error('Choose a supported image before posting');
   if (videoUrl && !isVideo) throw new Error('Choose a supported MP4 or WebM video before posting');
   if ((question && options.length < 2) || (!question && options.length)) throw new Error('A poll needs a question and at least two options');
-  if (getActiveBan(user)) throw new Error('This account is banned from Clearwater Internet');
+  assertCanPost(store, user, { reel: isReel });
   if (!parentId) {
     const cooldownRemaining = 60_000 - (Date.now() - new Date(user.lastPostAt || 0).getTime());
     if (cooldownRemaining > 0) throw new Error(`Please wait ${Math.ceil(cooldownRemaining / 1000)} seconds before posting again`);
@@ -376,7 +473,7 @@ export function createInternetPost(store, user, content, media = {}) {
 
 export function voteInternetPoll(store, { actor, postId, optionIndex, remove = false }) {
   const user = upsertInternetUser(store, actor);
-  if (getActiveBan(user)) throw new Error('This account is banned from Clearwater Internet');
+  assertCanPost(store, user);
   const post = store.posts.find((item) => item.id === String(postId || ''));
   if (!post?.poll?.question || !Array.isArray(post.poll.options)) throw new Error('Poll not found');
   if (post.poll.endsAt && new Date(post.poll.endsAt).getTime() <= Date.now()) throw new Error('This poll has ended');
@@ -407,6 +504,8 @@ function nativeRepostByUser(store, userId, postId) {
 
 export function interactInternetPost(store, { actor, postId, type, content = '', quote = false }) {
   const user = upsertInternetUser(store, actor);
+  if (type === 'reply') assertCanPost(store, user);
+  else if (getActiveBan(user) || getActiveMute(user)) throw new Error(getActiveBan(user) ? 'This account is banned from Clearwater Internet' : 'This account is muted');
   const requested = store.posts.find((item) => item.id === String(postId || ''));
   if (!requested) throw new Error('Post not found');
   const post = sourceInternetPost(store, requested);
@@ -690,7 +789,7 @@ export function sendInternetMessage(store, { actor, to, content, gif, username }
   const sender = upsertInternetUser(store, actor);
   const recipient = findInternetMember(store, { id: to, username });
   if (!recipient) throw new Error('That member has not joined Clearwater Internet yet');
-  if (getActiveBan(sender)) throw new Error('This account is banned from Clearwater Internet');
+  assertCanMessage(store, sender);
   if (sender.id === recipient.id) throw new Error('You cannot message yourself');
   const body = text(content, 1000);
   const gifUrl = text(gif?.url, 500);
@@ -719,9 +818,274 @@ export function sendInternetMessage(store, { actor, to, content, gif, username }
   return { sent: true, message };
 }
 
+function staffUserFlags(user) {
+  const ban = getActiveBan(user);
+  const mute = getActiveMute(user);
+  return {
+    verified: user.verified === true,
+    official: user.official === true,
+    banned: Boolean(ban),
+    muted: Boolean(mute),
+    watched: user.watched === true,
+    shadowbanned: user.shadowbanned === true,
+    lockPosts: flagActive(user, 'lockPosts', 'lockPostsUntil'),
+    lockMessages: flagActive(user, 'lockMessages', 'lockMessagesUntil'),
+    lockReels: flagActive(user, 'lockReels', 'lockReelsUntil'),
+  };
+}
+
+function staffUserSummary(store, user) {
+  const flags = staffUserFlags(user);
+  const posts = store.posts.filter((post) => post.authorId === user.id);
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName || user.username || 'Discord user',
+    avatarUrl: user.avatarUrl || null,
+    staffRank: user.staffRank || null,
+    createdAt: user.createdAt || null,
+    lastSeenAt: user.lastSeenAt || null,
+    warningCount: Array.isArray(user.warnings) ? user.warnings.length : 0,
+    postCount: posts.filter((post) => post.kind !== 'reel' && !post.parentId).length,
+    reelCount: posts.filter((post) => post.kind === 'reel' && !post.parentId).length,
+    reportCount: store.reports.filter((report) => report.authorId === user.id).length,
+    flagged: flags.banned || flags.muted || flags.watched || flags.shadowbanned || flags.lockPosts || flags.lockMessages || flags.lockReels || (Array.isArray(user.warnings) && user.warnings.length > 0),
+    ...flags,
+  };
+}
+
+export function staffUserDetail(store, targetId) {
+  const id = String(targetId || '').trim();
+  if (!/^\d{16,22}$/.test(id)) throw new Error('Enter a valid Discord user ID');
+  const user = store.users[id] || upsertInternetUser(store, { id });
+  const flags = staffUserFlags(user);
+  const posts = store.posts.filter((post) => post.authorId === user.id);
+  const followers = Object.values(store.users).filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).length;
+  return {
+    user: {
+      ...staffUserSummary(store, user),
+      bio: text(user.bio, 300),
+      bannerUrl: user.bannerUrl || null,
+      note: text(user.staffNote, 500),
+      ipHashCount: Array.isArray(user.ipHashes) ? user.ipHashes.length : 0,
+      followingCount: Array.isArray(user.following) ? user.following.length : 0,
+      followerCount: followers,
+      messageCount: Array.isArray(user.messages) ? user.messages.filter((message) => message.kind === 'direct').length : 0,
+      ban: flags.banned ? getActiveBan(user) : null,
+      mute: flags.muted ? getActiveMute(user) : null,
+      muteReason: text(user.muteReason, 300),
+      banReason: text(user.banReason, 300),
+      banSource: user.banSource || null,
+    },
+    warnings: (Array.isArray(user.warnings) ? user.warnings : []).slice(0, 30).map((warning) => ({
+      id: warning.id,
+      reason: text(warning.reason, 300),
+      createdAt: warning.createdAt,
+      readAt: warning.readAt || null,
+    })),
+    posts: posts.slice(0, 40).map((post) => ({
+      id: post.id,
+      kind: post.kind === 'reel' ? 'reel' : (post.parentId ? 'comment' : 'post'),
+      content: text(post.content, 220),
+      createdAt: post.createdAt,
+      likes: Array.isArray(post.likes) ? post.likes.length : 0,
+    })),
+    reports: store.reports.filter((report) => report.authorId === user.id || report.reporterId === user.id).slice(0, 30).map((report) => ({
+      id: report.id,
+      status: report.status,
+      action: report.action || null,
+      reason: text(report.reason, 220),
+      content: text(report.content, 180),
+      createdAt: report.createdAt,
+      role: report.authorId === user.id ? 'subject' : 'reporter',
+    })),
+  };
+}
+
+function setTimedFlag(user, boolKey, untilKey, enabled, durationDays) {
+  user[boolKey] = enabled === true;
+  user[untilKey] = enabled === true ? durationUntil(durationDays) : null;
+}
+
+function wipeAuthorPosts(store, userId, predicate) {
+  const before = store.posts.length;
+  store.posts = store.posts.filter((post) => post.authorId !== userId || !predicate(post));
+  store.reports = store.reports.filter((report) => store.posts.some((post) => post.id === report.postId) || !report.postId);
+  return before - store.posts.length;
+}
+
+export function applyStaffUserAction(store, {
+  actor,
+  targetId,
+  staffAction,
+  reason = '',
+  durationDays = 'forever',
+  note = '',
+  ipBan = false,
+  postId = '',
+}) {
+  const id = String(targetId || '').trim();
+  if (!/^\d{16,22}$/.test(id)) throw new Error('Enter a valid Discord user ID');
+  const action = String(staffAction || '').trim();
+  const user = upsertInternetUser(store, { id });
+  const actorName = text(actor?.displayName, 80) || 'Staff';
+  const label = text(user.displayName, 80) || user.username || 'a member';
+  const noteText = text(reason, 300) || text(note, 300);
+  const destructive = new Set(['ban', 'ip-ban', 'mute', 'lock-posts', 'lock-messages', 'lock-reels', 'shadowban', 'wipe-posts', 'wipe-reels', 'wipe-comments', 'wipe-messages', 'reset-profile', 'delete-post', 'clear-ip-hashes']);
+  if (destructive.has(action)) assertNotOfficial(user, 'moderated that way');
+
+  if (action === 'verify') {
+    user.verified = true;
+    addInternetLog(store, `${actorName} verified ${label}.`);
+  } else if (action === 'unverify') {
+    user.verified = false;
+    addInternetLog(store, `${actorName} removed verification from ${label}.`);
+  } else if (action === 'ban') {
+    setInternetBan(user, { enabled: true, reason: noteText, durationDays });
+    if (ipBan === true) banKnownInternetIps(store, user, { enabled: true, reason: noteText, durationDays });
+    addInternetLog(store, `${actorName} banned ${label}. Reason: ${noteText || 'No reason was provided.'}`);
+    addInternetMessage(store, user.id, `Your Clearwater Internet account was banned. Reason: ${noteText || 'No reason was provided.'}`);
+  } else if (action === 'unban') {
+    setInternetBan(user, { enabled: false });
+    clearKnownInternetIpBans(store, user);
+    addInternetLog(store, `${actorName} unbanned ${label}.`);
+  } else if (action === 'ip-ban') {
+    const count = banKnownInternetIps(store, user, { enabled: true, reason: noteText, durationDays });
+    if (!count) throw new Error('This account has no known network hashes to block');
+    addInternetLog(store, `${actorName} blocked ${count} known network hash(es) for ${label}.`);
+  } else if (action === 'clear-ip-ban') {
+    const count = clearKnownInternetIpBans(store, user);
+    addInternetLog(store, `${actorName} cleared network blocks for ${label}${count ? ` (${count})` : ''}.`);
+  } else if (action === 'warn') {
+    if (!noteText) throw new Error('Enter a warning reason');
+    user.warnings = Array.isArray(user.warnings) ? user.warnings : [];
+    user.warnings.unshift({ id: randomUUID(), reason: noteText, createdAt: new Date().toISOString(), readAt: null });
+    user.warnings = user.warnings.slice(0, 30);
+    addInternetLog(store, `${actorName} warned ${label}. Reason: ${noteText}`);
+    addInternetMessage(store, user.id, `You received a warning from Clearwater Internet. Reason: ${noteText}`);
+  } else if (action === 'clear-warnings') {
+    const count = Array.isArray(user.warnings) ? user.warnings.length : 0;
+    user.warnings = [];
+    addInternetLog(store, `${actorName} cleared ${count} warning(s) for ${label}.`);
+  } else if (action === 'mute') {
+    user.muted = true;
+    user.muteReason = noteText || 'No reason was provided.';
+    user.mutedUntil = durationUntil(durationDays);
+    addInternetLog(store, `${actorName} muted ${label}. Reason: ${user.muteReason}`);
+    addInternetMessage(store, user.id, `You were muted on Clearwater Internet. Reason: ${user.muteReason}`);
+  } else if (action === 'unmute') {
+    user.muted = false;
+    user.muteReason = null;
+    user.mutedUntil = null;
+    addInternetLog(store, `${actorName} unmuted ${label}.`);
+  } else if (action === 'lock-posts') {
+    setTimedFlag(user, 'lockPosts', 'lockPostsUntil', true, durationDays);
+    addInternetLog(store, `${actorName} locked posting for ${label}.`);
+  } else if (action === 'unlock-posts') {
+    setTimedFlag(user, 'lockPosts', 'lockPostsUntil', false);
+    addInternetLog(store, `${actorName} unlocked posting for ${label}.`);
+  } else if (action === 'lock-messages') {
+    setTimedFlag(user, 'lockMessages', 'lockMessagesUntil', true, durationDays);
+    addInternetLog(store, `${actorName} locked messages for ${label}.`);
+  } else if (action === 'unlock-messages') {
+    setTimedFlag(user, 'lockMessages', 'lockMessagesUntil', false);
+    addInternetLog(store, `${actorName} unlocked messages for ${label}.`);
+  } else if (action === 'lock-reels') {
+    setTimedFlag(user, 'lockReels', 'lockReelsUntil', true, durationDays);
+    addInternetLog(store, `${actorName} locked Reels for ${label}.`);
+  } else if (action === 'unlock-reels') {
+    setTimedFlag(user, 'lockReels', 'lockReelsUntil', false);
+    addInternetLog(store, `${actorName} unlocked Reels for ${label}.`);
+  } else if (action === 'shadowban') {
+    user.shadowbanned = true;
+    addInternetLog(store, `${actorName} shadowbanned ${label}.`);
+  } else if (action === 'unshadowban') {
+    user.shadowbanned = false;
+    addInternetLog(store, `${actorName} removed the shadowban on ${label}.`);
+  } else if (action === 'watch') {
+    user.watched = true;
+    addInternetLog(store, `${actorName} added ${label} to the watchlist.`);
+  } else if (action === 'unwatch') {
+    user.watched = false;
+    addInternetLog(store, `${actorName} removed ${label} from the watchlist.`);
+  } else if (action === 'note') {
+    user.staffNote = text(note, 500);
+    addInternetLog(store, `${actorName} updated the staff note for ${label}.`);
+  } else if (action === 'wipe-posts') {
+    const count = wipeAuthorPosts(store, user.id, (post) => post.kind !== 'reel' && !post.parentId);
+    addInternetLog(store, `${actorName} deleted ${count} post(s) from ${label}.`);
+  } else if (action === 'wipe-reels') {
+    const reelIds = new Set(store.posts.filter((post) => post.authorId === user.id && post.kind === 'reel' && !post.parentId).map((post) => post.id));
+    const before = store.posts.length;
+    store.posts = store.posts.filter((post) => !reelIds.has(post.id) && !reelIds.has(post.parentId));
+    store.reports = store.reports.filter((report) => store.posts.some((post) => post.id === report.postId) || !report.postId);
+    addInternetLog(store, `${actorName} deleted ${before - store.posts.length} Reel(s) from ${label}.`);
+  } else if (action === 'wipe-comments') {
+    const count = wipeAuthorPosts(store, user.id, (post) => Boolean(post.parentId));
+    addInternetLog(store, `${actorName} deleted ${count} comment(s) from ${label}.`);
+  } else if (action === 'wipe-messages') {
+    const count = Array.isArray(user.messages) ? user.messages.length : 0;
+    user.messages = [];
+    addInternetLog(store, `${actorName} wiped ${count} stored message(s) for ${label}.`);
+  } else if (action === 'reset-profile') {
+    user.bio = '';
+    user.bannerUrl = null;
+    addInternetLog(store, `${actorName} reset ${label}'s public profile text.`);
+  } else if (action === 'delete-post') {
+    deleteInternetPost(store, { postId, actorId: actor?.id, owner: true });
+    addInternetLog(store, `${actorName} deleted a post from ${label}.`);
+  } else if (action === 'send-notice') {
+    if (!noteText) throw new Error('Write a staff notice first');
+    addInternetMessage(store, user.id, `Staff notice: ${noteText}`);
+    addInternetLog(store, `${actorName} sent a staff notice to ${label}.`);
+  } else if (action === 'clear-ip-hashes') {
+    user.ipHashes = [];
+    addInternetLog(store, `${actorName} cleared stored network hashes for ${label}.`);
+  } else {
+    throw new Error('Unsupported staff action');
+  }
+
+  return staffUserDetail(store, user.id);
+}
+
+export function applyStaffSiteAction(store, { actor, staffAction, enabled }) {
+  const action = String(staffAction || '').trim();
+  const actorName = text(actor?.displayName, 80) || 'Staff';
+  store.settings = store.settings && typeof store.settings === 'object'
+    ? store.settings
+    : { pausePosts: false, pauseReels: false, pauseMessages: false };
+  if (action === 'pause-posts') {
+    store.settings.pausePosts = enabled === true;
+    addInternetLog(store, `${actorName} ${enabled ? 'paused' : 'resumed'} community posts.`);
+  } else if (action === 'pause-reels') {
+    store.settings.pauseReels = enabled === true;
+    addInternetLog(store, `${actorName} ${enabled ? 'paused' : 'resumed'} Reels.`);
+  } else if (action === 'pause-messages') {
+    store.settings.pauseMessages = enabled === true;
+    addInternetLog(store, `${actorName} ${enabled ? 'paused' : 'resumed'} direct messages.`);
+  } else if (action === 'clear-dismissed-reports') {
+    const before = store.reports.length;
+    store.reports = store.reports.filter((report) => report.status === 'open' || report.status === 'accepted');
+    addInternetLog(store, `${actorName} cleared ${before - store.reports.length} dismissed report(s).`);
+  } else if (action === 'clear-ip-bans') {
+    const count = Array.isArray(store.ipBans) ? store.ipBans.length : 0;
+    store.ipBans = [];
+    addInternetLog(store, `${actorName} cleared ${count} network ban(s).`);
+  } else {
+    throw new Error('Unsupported site action');
+  }
+  return publicInternetSettings(store);
+}
+
 export function moderationSnapshot(store) {
   const open = store.reports.filter((report) => report.status === 'open');
   const reviewed = store.reports.filter((report) => report.status !== 'open');
+  const users = Object.values(store.users).map((user) => staffUserSummary(store, user));
+  const bans = users.filter((user) => user.banned).map((user) => {
+    const ban = getActiveBan(store.users[user.id]);
+    return { id: user.id, displayName: user.displayName, ...ban };
+  });
+  const ipBans = (Array.isArray(store.ipBans) ? store.ipBans : []).filter((ban) => !ban.until || stillActive(ban.until));
   return {
     reports: open.slice(0, 100),
     history: reviewed.slice(0, 100),
@@ -730,11 +1094,19 @@ export function moderationSnapshot(store) {
       automod: open.filter((report) => report.source === 'automod').length,
       actioned: reviewed.filter((report) => report.status === 'accepted').length,
       dismissed: reviewed.filter((report) => report.status === 'denied').length,
+      users: users.length,
+      banned: bans.length,
+      muted: users.filter((user) => user.muted).length,
+      watched: users.filter((user) => user.watched).length,
+      shadowbanned: users.filter((user) => user.shadowbanned).length,
+      ipBans: ipBans.length,
     },
-    bans: Object.values(store.users).flatMap((user) => {
-      const ban = getActiveBan(user);
-      return ban ? [{ id: user.id, displayName: user.displayName || user.username || 'Discord user', ...ban }] : [];
-    }),
+    bans,
+    mutes: users.filter((user) => user.muted),
+    watched: users.filter((user) => user.watched),
+    ipBans: ipBans.map((ban) => ({ id: ban.id, until: ban.until || null, reason: text(ban.reason, 300), createdAt: ban.createdAt })),
+    users: users.slice(0, 500),
+    settings: publicInternetSettings(store),
     logs: store.logs.slice(0, 100),
   };
 }

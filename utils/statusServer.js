@@ -6,7 +6,7 @@ import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
 import { dropLocationNameCandidates, findPlayerDropLocation } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
-import { AutomodHoldError, banKnownInternetIps, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, moderationSnapshot, OFFICIAL_INTERNET_ACCOUNT_ID, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll } from './internetStore.js';
+import { AutomodHoldError, applyStaffSiteAction, applyStaffUserAction, banKnownInternetIps, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, moderationSnapshot, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -232,7 +232,11 @@ export function startStatusServer(client, config) {
           const createdOfficialAccount = !store.users[OFFICIAL_INTERNET_ACCOUNT_ID];
           ensureOfficialInternetAccount(store);
           if (createdOfficialAccount || await syncInternetRoles(store)) await saveInternetStore(store);
-          return json(response, 200, { posts: publicPosts(store), users: publicUsers(store) });
+          return json(response, 200, {
+            posts: publicPosts(store),
+            users: publicUsers(store),
+            settings: publicInternetSettings(store),
+          });
         }
         if (request.method !== 'POST') return json(response, 405, { error: 'Method not allowed' });
 
@@ -291,6 +295,7 @@ export function startStatusServer(client, config) {
 
         if (body.action === 'status') {
           const user = upsertInternetUser(store, body.actor);
+          touchInternetUser(user);
           recordInternetIpHash(store, user.id, body.ipHash);
           const ban = getActiveBan(user);
           await saveInternetStore(store);
@@ -400,6 +405,25 @@ export function startStatusServer(client, config) {
           const cleared = clearExpiredInternetBans(store);
           if (cleared) await saveInternetStore(store);
           return json(response, 200, moderationSnapshot(store));
+        }
+
+        if (body.action === 'staff-user-detail') {
+          if (!body.owner) return json(response, 403, { error: 'Owner access required' });
+          return json(response, 200, staffUserDetail(store, body.targetId));
+        }
+
+        if (body.action === 'staff-user') {
+          if (!body.owner) return json(response, 403, { error: 'Owner access required' });
+          const detail = applyStaffUserAction(store, body);
+          await saveInternetStore(store);
+          return json(response, 200, { ...detail, snapshot: moderationSnapshot(store) });
+        }
+
+        if (body.action === 'staff-site') {
+          if (!body.owner) return json(response, 403, { error: 'Owner access required' });
+          const settings = applyStaffSiteAction(store, body);
+          await saveInternetStore(store);
+          return json(response, 200, { settings, snapshot: moderationSnapshot(store) });
         }
 
         if (!body.owner || !['verify', 'ban'].includes(body.action)) {
