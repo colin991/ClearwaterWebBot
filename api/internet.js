@@ -3,7 +3,7 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260811-dm';
+const INTERNET_VERSION = '20260811-auth';
 
 async function readBody(request) {
   if (request.body && typeof request.body === 'object') return request.body;
@@ -94,6 +94,9 @@ export default async function handler(request, response) {
       if (url.searchParams.get('meta') === 'version' || url.pathname.endsWith('/internet-version')) {
         return sendJson(response, 200, { version: INTERNET_VERSION });
       }
+      const { sessionSecret } = getAuthConfig();
+      const viewer = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
+      if (!viewer) return sendJson(response, 401, { error: 'Sign in with Discord to use Clearwater Internet' });
       const result = await callBot(request);
       return sendJson(response, result.ok ? 200 : result.status, redactPublicPayload(result.body));
     }

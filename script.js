@@ -20,6 +20,8 @@ const erlcLabel = document.querySelector('[data-erlc-label]');
 const erlcCurrent = document.querySelectorAll('[data-erlc-current]');
 const erlcMax = document.querySelectorAll('[data-erlc-max]');
 const erlcQueue = document.querySelectorAll('[data-erlc-queue]');
+let homepageInternetReady = false;
+let homepageSignedIn = false;
 
 const setErlcNumbers = (status) => {
   if (!status?.online) {
@@ -94,7 +96,11 @@ const loadDiscordSession = async () => {
     if (!response.ok) return;
 
     const session = await response.json();
-    if (!session.authenticated || !session.user) return;
+    if (!session.authenticated || !session.user) {
+      homepageSignedIn = false;
+      homepageInternetReady = true;
+      return;
+    }
 
     if (discordName) discordName.textContent = session.user.displayName || session.user.username;
     if (discordAvatar && session.user.avatarUrl) discordAvatar.src = session.user.avatarUrl;
@@ -108,6 +114,8 @@ const loadDiscordSession = async () => {
     }
     discordLogin.hidden = true;
     discordAccount.hidden = false;
+    homepageSignedIn = true;
+    homepageInternetReady = true;
     if (ownerLink && session.user.owner) {
       ownerLink.hidden = false;
     }
@@ -222,13 +230,31 @@ if ('IntersectionObserver' in window) {
   reveals.forEach((element) => element.classList.add('visible'));
 }
 
+const goToInternet = () => {
+  if (!homepageSignedIn) {
+    window.location.href = '/signin.html?next=/internet.html';
+    return;
+  }
+  document.documentElement.classList.add('leaving-for-internet');
+  window.setTimeout(() => {
+    window.location.href = '/internet.html';
+  }, 220);
+};
+
 document.querySelectorAll('a[href="/internet.html"]').forEach((link) => {
-  link.addEventListener('click', (event) => {
+  link.addEventListener('click', async (event) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target === '_blank') return;
     event.preventDefault();
-    document.documentElement.classList.add('leaving-for-internet');
-    window.setTimeout(() => {
-      window.location.href = '/internet.html';
-    }, 220);
+    if (!homepageInternetReady) {
+      try {
+        const response = await fetch('/api/auth/me', { credentials: 'same-origin' });
+        const session = await response.json();
+        homepageSignedIn = Boolean(session.authenticated && session.user);
+      } catch {
+        homepageSignedIn = false;
+      }
+      homepageInternetReady = true;
+    }
+    goToInternet();
   });
 });

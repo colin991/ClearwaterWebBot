@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-dm';
+const INTERNET_VERSION = '20260811-auth';
 let officialAccountId = '';
 const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
   id: '',
@@ -397,11 +397,15 @@ function scoreForYouPost(post, trending) {
 
 function rankedForYouPosts(posts) {
   const trending = trendingTagKeys();
-  return [...posts].sort((left, right) => {
+  const newestFirst = [...posts].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+  if (newestFirst.length <= 1) return newestFirst;
+  const [newest, ...rest] = newestFirst;
+  rest.sort((left, right) => {
     const scoreGap = scoreForYouPost(right, trending) - scoreForYouPost(left, trending);
     if (scoreGap) return scoreGap;
     return new Date(right.createdAt) - new Date(left.createdAt);
   });
+  return [newest, ...rest];
 }
 
 function renderPosts() {
@@ -902,11 +906,11 @@ async function loadPosts() {
 async function loadSession() {
   const response = await fetch('/api/auth/me', { credentials: 'same-origin' });
   const session = await readApiJson(response, 'Discord sign-in is temporarily unavailable.');
-  if (!session.authenticated || !session.user) return;
-  login.hidden = true;
+  if (!session.authenticated || !session.user) return false;
+  if (login) login.hidden = true;
   if (userBox) userBox.hidden = true;
-  composer.hidden = false;
-  signedOut.hidden = true;
+  if (composer) composer.hidden = false;
+  if (signedOut) signedOut.hidden = true;
   name.textContent = session.user.displayName || session.user.username;
   if (session.user.avatarUrl) { avatar.src = session.user.avatarUrl; composerAvatar.src = session.user.avatarUrl; }
   rank.textContent = session.user.staffRank || '';
@@ -929,11 +933,16 @@ async function loadSession() {
   updateAccountSwitcher();
   renderProfilePosts();
   renderPosts();
-  await loadBanStatus();
-  await loadWarnings();
-  await loadMessages();
-  await loadSocial();
-  await loadPreferences();
+  try {
+    await loadBanStatus();
+    await loadWarnings();
+    await loadMessages();
+    await loadSocial();
+    await loadPreferences();
+  } catch {
+    // Session is valid even if a secondary inbox or settings call fails.
+  }
+  return true;
 }
 
 content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; postButton.disabled = !content.value.trim() && !selectedGif && !selectedImage; updateComposerHighlight(); });
@@ -1432,14 +1441,18 @@ showViewFromAddress();
 
 async function bootInternet() {
   try {
-    await Promise.all([
-      loadSession().catch(() => {}),
-      loadPosts(),
-    ]);
+    const signedIn = await loadSession().catch(() => Boolean(currentUserId));
+    if (!signedIn) {
+      window.location.replace('/signin.html?next=/internet.html');
+      return;
+    }
+    await loadPosts();
   } finally {
-    document.body.classList.remove('internet-booting');
-    document.body.classList.add('internet-ready');
-    document.querySelector('[data-internet-boot]')?.setAttribute('hidden', '');
+    if (currentUserId) {
+      document.body.classList.remove('internet-booting');
+      document.body.classList.add('internet-ready');
+      document.querySelector('[data-internet-boot]')?.setAttribute('hidden', '');
+    }
   }
 }
 

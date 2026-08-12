@@ -1370,6 +1370,10 @@ body { margin: 0; }
   padding: 18px 20px;
   text-align: left;
 }
+.internet-view[data-view="home"] .signed-out[hidden],
+.internet-view[data-view="home"] .composer[hidden] {
+  display: none !important;
+}
 .internet-view[data-view="home"] .signed-out img { width: 42px; height: 42px; }
 .internet-view[data-view="home"] .signed-out h2 { margin: 0; font-size: 16px; }
 .internet-view[data-view="home"] .signed-out p { margin: 2px 0 0; }
