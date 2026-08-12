@@ -3,33 +3,183 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Privacy Policy for Clearwater Roleplay and Clearwater Internet at cwrpvc.lol." />
     <title>Privacy Policy · Clearwater Roleplay</title>
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
-    <link rel="stylesheet" href="legal.css?v=20260811-twitter" />
+    <link rel="stylesheet" href="legal.css?v=20260811-legal-docs" />
   </head>
   <body class="legal-body">
-    <main class="legal-shell">
-      <a class="legal-back" href="/signin">← Back to sign in</a>
-      <h1>Privacy Policy</h1>
-      <p class="legal-updated">Last updated August 11, 2026</p>
-      <p>This policy explains what Clearwater Roleplay collects when you use the website and Clearwater Internet.</p>
-      <h2>Information we use</h2>
-      <ul>
-        <li>Discord profile data needed to sign you in, such as your username, display name, avatar, and server membership.</li>
-        <li>Posts, messages, likes, follows, and other Internet activity you choose to create.</li>
-        <li>Hashed network identifiers used to enforce bans and reduce abuse. These are not stored as raw IP addresses in public pages.</li>
-        <li>Staff notes, reports, warnings, and automod holds related to moderation.</li>
-      </ul>
-      <h2>How it is used</h2>
-      <p>We use this information to run the community feed, keep Discord membership tied to Internet access, enforce rules, and operate the staff panel. Public pages show hashed user identifiers rather than raw Discord snowflakes wherever possible.</p>
-      <h2>Sharing</h2>
-      <p>We do not sell personal information. Content you post is visible to other Clearwater Internet users according to your privacy settings. Staff can review reported or automod-held content. Discord receives data only as part of the official sign-in process.</p>
-      <h2>Retention</h2>
-      <p>Account data stays while your account is active. Deleted accounts remove associated posts and messages from the Internet store. Moderation logs may be kept as needed to enforce bans and prevent evasion.</p>
-      <h2>Your choices</h2>
-      <p>You can hide profile media, restrict messages, deactivate, or delete your Clearwater Internet account from Settings. Signing out of Discord on this site ends the website session.</p>
-      <h2>Contact</h2>
-      <p>Privacy questions can be raised with Clearwater staff in Discord.</p>
-    </main>
+    <div class="legal-layout">
+      <aside class="legal-sidebar">
+        <a class="legal-brand" href="/">
+          <img src="assets/clearwater-logo.png" alt="" />
+          <span><small>Clearwater</small><b>Legal</b></span>
+        </a>
+        <nav class="legal-nav" aria-label="Legal pages">
+          <div class="legal-nav-group">
+            <p>Site</p>
+            <a href="/">Home</a>
+            <a href="/internet">Internet</a>
+            <a href="/signin">Sign in</a>
+          </div>
+          <div class="legal-nav-group">
+            <p>Legal</p>
+            <a href="/terms">Terms of Service</a>
+            <a class="active" href="/privacy" aria-current="page">Privacy Policy</a>
+          </div>
+        </nav>
+        <div class="legal-sidebar-foot"><a href="/">Go home</a></div>
+      </aside>
+      <main class="legal-main">
+        <article class="legal-doc">
+          <p class="legal-crumbs"><a href="/">Home</a> / Privacy Policy</p>
+          <h1>Privacy Policy</h1>
+          <p class="legal-updated">Last updated: August 11, 2026</p>
+
+          <section class="legal-summary" aria-label="Plain-English summary">
+            <h2>Important summary (plain English)</h2>
+            <ul>
+              <li>We collect Discord profile data to sign you in and to confirm you are in the Clearwater Roleplay Discord server.</li>
+              <li>We store the posts, messages, media, likes, follows, reports, and settings you create on Clearwater Internet.</li>
+              <li>We do not sell personal information. Public pages use hashed user identifiers instead of raw Discord IDs wherever we can.</li>
+              <li>IP addresses used for ban enforcement are hashed (and salted) rather than shown on public pages.</li>
+              <li>Optional Drop Location uses your Discord username/nickname in our server to find your ER:LC character and attach a map pin.</li>
+              <li>You can change privacy settings, deactivate, or delete your Internet account from Settings.</li>
+            </ul>
+          </section>
+
+          <h2 id="scope">1. Scope</h2>
+          <p>This Privacy Policy explains how Clearwater Roleplay (“Clearwater,” “we,” “us,” or “our”) collects, uses, shares, and retains information when you use cwrpvc.lol, Clearwater Internet, Discord sign-in, staff tools, and related community services (the “Service”).</p>
+          <p>It does not cover Discord, Roblox, ER:LC, Giphy, or other third-party platforms except to describe how we connect to them. Those services have their own privacy policies.</p>
+          <p>By using the Service, you acknowledge this Policy. If you do not agree, do not sign in or use Clearwater Internet. Our <a href="/terms">Terms of Service</a> also apply.</p>
+
+          <h2 id="who">2. Who we are</h2>
+          <p>Clearwater Roleplay is a private ER:LC roleplay community. The website is hosted on Vercel. Community bot and Internet storage run on our bot host. We are not Roblox, Discord, or the makers of ER:LC.</p>
+          <p>For privacy questions, contact Clearwater staff in Discord, including the <a href="https://discord.com/channels/1514026810348671026/1514122689566998559" target="_blank" rel="noopener">support channel</a>.</p>
+
+          <h2 id="collect">3. Information we collect</h2>
+          <h3>3.1 Discord account and membership</h3>
+          <p>When you sign in with Discord, we receive information Discord provides through OAuth and related API calls, which typically includes:</p>
+          <ul>
+            <li>Discord user ID;</li>
+            <li>username, display name / global name, and discriminator if still present;</li>
+            <li>avatar and banner images (or color);</li>
+            <li>whether you are in the Clearwater Roleplay Discord server;</li>
+            <li>server nickname and roles used for staff rank, ownership access, and Drop Location name matching.</li>
+          </ul>
+          <p>We use this to create your session, show your profile, restrict Internet to server members, and map staff permissions. If you are not in the Discord server, Internet access is denied and the linked account may be suspended until you rejoin.</p>
+
+          <h3>3.2 Clearwater Internet activity</h3>
+          <p>If you use Clearwater Internet, we store Content and activity you choose to create or that is generated by using the product, including:</p>
+          <ul>
+            <li>posts, replies, quotes, reels, polls, likes, bookmarks, follows, blocks, and mutes;</li>
+            <li>direct messages and GIF attachments;</li>
+            <li>images and short videos you upload (subject to size limits);</li>
+            <li>profile fields such as display name, bio, avatar, and banner as shown on Internet;</li>
+            <li>privacy preferences (followers-only posts, hide following list, hide profile media, restrict DMs);</li>
+            <li>notifications, warnings shown to you, and account deactivation state.</li>
+          </ul>
+
+          <h3>3.3 Drop Location / ER:LC</h3>
+          <p>If you click Drop Location, we look up your Discord member in server ID 1514026810348671026 and match your username, nickname, or display name to a player on the Clearwater ER:LC server. We may also use a linked Roblox identity when one is available. We then store the resulting coordinates, postal/street label, and map pin with your draft or published post.</p>
+          <p>We do not continuously track other players’ locations for the public feed. A published pin is the location captured when you posted. Draft pins may refresh about every 15 seconds until you remove them or post.</p>
+
+          <h3>3.4 Moderation records</h3>
+          <p>We store reports, automod holds (including matched categories and reasons), staff review decisions, warnings, bans, ban sources (for example membership vs owner action), and related notes so staff can enforce community rules and so you can see a ban or warning screen when applicable.</p>
+
+          <h3>3.5 Technical and security data</h3>
+          <p>Our hosts and security tools may process:</p>
+          <ul>
+            <li>hashed network identifiers derived from IP addresses, used to enforce bans and reduce evasion — raw IPs are not published on public pages;</li>
+            <li>standard request logs from hosting and CDN providers (Vercel, Cloudflare), which can include IP address, user agent, referrer, and timestamps;</li>
+            <li>Cloudflare Insights beacons if enabled on the site, which collect aggregated performance/usage data according to Cloudflare’s policies;</li>
+            <li>error and operational logs needed to keep the bot, APIs, and website running.</li>
+          </ul>
+
+          <h3>3.6 Information we do not try to collect</h3>
+          <p>We do not ask for your real legal name, home address, payment card, or government ID to use the public site. We do not sell advertising profiles. We do not use your Content to train public AI models.</p>
+
+          <h2 id="cookies">4. Cookies, sessions, and local storage</h2>
+          <p>We use first-party cookies that are HttpOnly, Secure, and SameSite=Lax, including:</p>
+          <ul>
+            <li><strong>__Host-clearwater_session</strong> — signed/encrypted website session after Discord login;</li>
+            <li><strong>__Host-clearwater_oauth_state</strong> — short-lived OAuth CSRF protection;</li>
+            <li><strong>__Host-clearwater_next</strong> — where to send you after sign-in (limited to safe paths such as /, /internet, and /owner).</li>
+          </ul>
+          <p>These cookies are required for sign-in to work. The site is not a cookie-consent advertising platform; session cookies are strictly necessary for authentication.</p>
+          <p>Your browser may also store local data such as the selected feed tab, whether you are posting as the official account (owners only), and a cache of privacy preferences. Clearing site data or signing out ends the website session. Signing out of Discord on Discord.com is separate from signing out of cwrpvc.lol.</p>
+
+          <h2 id="use">5. How we use information</h2>
+          <p>We use the information above to:</p>
+          <ul>
+            <li>authenticate you and keep you signed in;</li>
+            <li>operate Clearwater Internet feeds, profiles, messages, reels, and notifications;</li>
+            <li>confirm Discord membership and staff ranks;</li>
+            <li>place optional ER:LC location pins;</li>
+            <li>enforce rules through automod, reports, warnings, bans, and hashed network blocks;</li>
+            <li>prevent abuse, spam, impersonation, and ban evasion;</li>
+            <li>debug outages and secure the Service;</li>
+            <li>communicate warnings, ban reasons, and report outcomes inside the product;</li>
+            <li>comply with law and protect the community.</li>
+          </ul>
+          <p>Public API responses prefer hashed user identifiers (for example <code>u1_</code> prefixed values) instead of raw Discord snowflakes whenever the privacy layer can resolve them. Staff and server-side tools still need the real Discord ID to check membership and take moderation action.</p>
+
+          <h2 id="sharing">6. When we share information</h2>
+          <p>We do not sell personal information. We do not share it for cross-context advertising. We share information only as follows:</p>
+          <ul>
+            <li><strong>Other members.</strong> Content you post or send is visible to other signed-in users according to the feature and your privacy settings. Public posts, profiles, and reels are visible to the community. Direct messages are visible to the participants and to staff if reported or held.</li>
+            <li><strong>Staff and operators.</strong> Authorized staff can review reports, automod holds, accounts, and moderation history. Ownership can access owner-panel configuration.</li>
+            <li><strong>Processors.</strong> Discord (sign-in and avatars), Vercel (website hosting), Cloudflare (CDN, security, optional analytics), our bot host (Internet store and ER:LC lookups), Giphy (GIF search/display), and the ER:LC API (player location for Drop Location). Each processor receives only what is needed to provide that function.</li>
+            <li><strong>Roblox identity providers.</strong> If a Roblox link is used as a fallback for Drop Location, that lookup happens on the server using our keys, not in your browser.</li>
+            <li><strong>Legal and safety.</strong> We may disclose information if required by law, or if we believe in good faith it is necessary to protect members, investigate abuse, or enforce the Terms.</li>
+          </ul>
+          <p>If the community or website is transferred to new operators, information may move with it so the Service can continue. We will not dump member DMs onto a public website.</p>
+
+          <h2 id="privacy-settings">7. Your choices</h2>
+          <p>In Clearwater Internet Settings you can:</p>
+          <ul>
+            <li>limit posts to approved followers;</li>
+            <li>hide who you follow (counts may still show);</li>
+            <li>hide your profile picture and banner from others;</li>
+            <li>restrict direct messages to accounts you follow;</li>
+            <li>deactivate your account (hides profile and posts; signing in again reactivates);</li>
+            <li>delete your account (erases your Internet account, posts, and messages from the store; this cannot be undone).</li>
+          </ul>
+          <p>You can also stop using Drop Location, remove a draft pin, sign out, revoke the Clearwater Discord application in Discord’s authorized-apps settings, or leave the Discord server (which will remove Internet access).</p>
+          <p>Privacy settings do not hide Content from staff reviewing reports or automod holds. They also cannot un-send a post someone already saw, quoted, or screenshotted.</p>
+
+          <h2 id="retention">8. Retention</h2>
+          <p>We keep account and Content data while your account is active and the Service is operating. After you delete your Internet account, associated posts and messages are removed from the Internet store.</p>
+          <p>We may retain limited moderation records (for example ban state, membership-ban source, hashed network blocks, and staff logs) for as long as needed to enforce bans, prevent evasion, and protect the community. Session cookies expire according to their Max-Age. OAuth state cookies are short-lived. Hosting and CDN logs follow those providers’ retention practices.</p>
+          <p>Draft Drop Location data lives in your browser until you post or remove it. Published location pins remain with the post until the post or account is deleted, subject to moderation copies.</p>
+
+          <h2 id="security">9. Security</h2>
+          <p>We use HTTPS, <code>__Host-</code> prefixed cookies, HttpOnly/Secure/SameSite session cookies, hashed public user IDs, hashed IP identifiers for ban enforcement, and server-side secrets for Discord, sessions, and the ER:LC server key. The ER:LC key and similar credentials are not shipped to the browser or committed to the public repository.</p>
+          <p>No method of transmission or storage is 100% secure. You should protect your Discord account with a strong password and two-factor authentication. Do not share session access or screenshots of staff tools.</p>
+
+          <h2 id="children">10. Children</h2>
+          <p>The Service is not directed to children under 13. You must also meet Discord’s and Roblox’s age requirements. We do not knowingly collect personal information from children under 13. If you believe a child under 13 has signed in, contact staff in Discord so we can terminate that access.</p>
+
+          <h2 id="international">11. International users</h2>
+          <p>The community is operated from the United States. If you access the Service from another country, your information may be processed in the United States and on our processors’ infrastructure. Those locations may have different data-protection laws than your home country.</p>
+          <p>Where data-protection law gives you rights of access, correction, deletion, or objection, you can exercise them by using in-product settings (including account deletion) and by contacting staff in Discord. We will consider requests in line with the law that applies and with our need to keep security and ban-enforcement records.</p>
+
+          <h2 id="third-party-links">12. Third-party links and media</h2>
+          <p>The site may link to Discord, Roblox, ER:LC join pages, Giphy, or other websites. Embedded Discord images, Giphy GIFs, and similar media are served by those providers. We are not responsible for their privacy practices. Review their policies before using those features.</p>
+
+          <h2 id="changes">13. Changes to this Policy</h2>
+          <p>We may update this Privacy Policy to reflect product, hosting, or legal changes. The “Last updated” date will change when we do. Continued use of the Service after an update means you accept the revised Policy. Material changes may also be noted in Discord or on the sign-in page.</p>
+
+          <h2 id="contact">14. Contact</h2>
+          <p>Privacy questions can be raised with Clearwater staff in Discord:</p>
+          <ul>
+            <li>Support: <a href="https://discord.com/channels/1514026810348671026/1514122689566998559" target="_blank" rel="noopener">Clearwater support channel</a></li>
+            <li>Invite: <a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">discord.gg/839teFCwB</a></li>
+            <li>Website: <a href="https://www.cwrpvc.lol/">cwrpvc.lol</a></li>
+          </ul>
+          <p>Related documents: <a href="/terms">Terms of Service</a>.</p>
+        </article>
+      </main>
+    </div>
   </body>
 </html>
