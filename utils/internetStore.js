@@ -589,6 +589,16 @@ export function createInternetPost(store, user, content, media = {}) {
     actor: user,
     kind: 'post',
     content: [body, question, gifTitle, ...options].filter(Boolean).join('\n'),
+    extra: {
+      heldPayload: {
+        content: body,
+        location: dropLocation,
+        gifUrl: isGif ? gifUrl : '',
+        gifTitle: isGif ? gifTitle : '',
+        imageUrl: isImage ? imageUrl : '',
+        quoteId: text(media?.quoteId, 80) || '',
+      },
+    },
   });
   if (!parentId) {
     // Keep the Internet feed responsive while still preventing rapid spam.
@@ -812,6 +822,7 @@ function enforceAutomod(store, { actor, kind, content, extra = {} }) {
       content: snippet,
       reason: hit.reason,
       categories: hit.categories,
+      heldPayload: extra.heldPayload && typeof extra.heldPayload === 'object' ? extra.heldPayload : null,
       createdAt: new Date().toISOString(),
       status: 'open',
     });
@@ -819,6 +830,50 @@ function enforceAutomod(store, { actor, kind, content, extra = {} }) {
     addInternetLog(store, `Automod held ${text(actor.displayName, 80) || 'a member'}'s ${kind}. ${hit.reason}`);
   }
   throw new AutomodHoldError(AUTOMOD_HOLD_MESSAGE, hit);
+}
+
+function releaseHeldInternetPost(store, report) {
+  const payload = report?.heldPayload && typeof report.heldPayload === 'object' ? report.heldPayload : null;
+  if (!payload || report.postId) return null;
+  const author = upsertInternetUser(store, {
+    id: report.authorId,
+    displayName: report.authorName,
+    username: report.authorUsername,
+    avatarUrl: report.authorAvatarUrl,
+  });
+  const body = text(payload.content, 500);
+  const dropLocation = sanitizeDropLocation(payload.location);
+  const gifUrl = text(payload.gifUrl, 500);
+  const gifTitle = text(payload.gifTitle, 120);
+  const isGif = /^https:\/\/(?:media\d*|i)\.giphy\.com\//.test(gifUrl);
+  const imageUrl = hostedMediaUrl(payload.imageUrl) || text(payload.imageUrl, 4_200_000);
+  const isImage = Boolean(hostedMediaUrl(payload.imageUrl)) || /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(imageUrl);
+  if (!body && !isGif && !isImage && !dropLocation && !text(payload.quoteId, 80)) return null;
+  const post = {
+    id: randomUUID(),
+    kind: 'post',
+    authorId: author.id,
+    displayName: author.displayName,
+    username: author.username,
+    avatarUrl: author.avatarUrl,
+    staffRank: author.staffRank,
+    verified: author.verified === true,
+    badges: Array.isArray(author.badges) ? sanitizeInternetBadges(author.badges) : [],
+    content: body,
+    parentId: null,
+    quoteId: text(payload.quoteId, 80) || null,
+    ...(isGif ? { gifUrl, gifTitle } : {}),
+    ...(isImage ? { imageUrl } : {}),
+    ...(dropLocation ? { location: dropLocation } : {}),
+    createdAt: new Date().toISOString(),
+    releasedFromHold: true,
+  };
+  store.posts.unshift(post);
+  store.posts = store.posts.slice(0, 10_000);
+  author.lastPostAt = post.createdAt;
+  report.postId = post.id;
+  report.released = true;
+  return post;
 }
 
 function addInternetMessage(store, userId, message) {
@@ -838,10 +893,17 @@ export function reviewInternetReport(store, { reportId, decision, action, reason
   const notifyReporter = report.reporterId && report.reporterId !== 'automod';
   const kindLabel = report.kind === 'message' ? 'message' : 'post';
   if (decision === 'deny') {
+    let released = null;
+    if (report.source === 'automod' && report.kind === 'post' && !report.postId) {
+      released = releaseHeldInternetPost(store, report);
+    }
     addInternetLog(store, report.source === 'automod'
-      ? `Released automod hold on ${report.authorName}'s ${kindLabel}.`
+      ? (released
+        ? `Marked automod hold on ${report.authorName}'s ${kindLabel} as false and published it.`
+        : `Dismissed automod hold on ${report.authorName}'s ${kindLabel}.`)
       : `Denied report against ${report.authorName}.`);
     if (notifyReporter) addInternetMessage(store, report.reporterId, `Your report about ${report.authorName}'s ${kindLabel} was reviewed. No action was taken.`);
+    if (released) addInternetMessage(store, report.authorId, 'Staff reviewed your held post and published it.');
     return report;
   }
 
