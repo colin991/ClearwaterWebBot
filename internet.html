@@ -8,7 +8,7 @@
     <meta name="description" content="Clearwater Internet - the community social feed for Clearwater Roleplay." />
     <title>Clearwater Internet</title>
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
-    <link rel="stylesheet" href="internet.css?v=20260811-reels-2gb" />
+    <link rel="stylesheet" href="internet.css?v=20260811-staff-panel" />
   </head>
   <body class="internet-booting">
     <div class="internet-boot" data-internet-boot aria-live="polite">
@@ -207,10 +207,22 @@
                 <div class="staff-history-list" data-staff-history-list></div>
               </section>
               <section class="staff-pane" data-staff-pane="users" hidden>
-                <div class="staff-users" data-staff-users></div>
+                <div class="staff-split staff-users-split">
+                  <div class="staff-split-list">
+                    <div class="staff-pills">
+                      <button type="button" class="selected" data-staff-users-filter="all">All</button>
+                      <button type="button" data-staff-users-filter="flagged">Flagged</button>
+                      <button type="button" data-staff-users-filter="banned">Banned</button>
+                      <button type="button" data-staff-users-filter="watched">Watched</button>
+                    </div>
+                    <div class="staff-queue-list" data-staff-users></div>
+                  </div>
+                  <div class="staff-split-detail staff-user-panel" data-staff-user-panel></div>
+                </div>
               </section>
               <section class="staff-pane" data-staff-pane="controls" hidden>
                 <div class="staff-controls">
+                  <section class="admin-panel staff-site-tools" data-staff-site-tools></section>
                   <section class="admin-panel owner-controls" data-admin hidden>
                     <h2>Account controls</h2>
                     <p>Enter a Discord user ID to verify, remove verification, ban, or unban an account.</p>
@@ -264,6 +276,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260811-reels-2gb"></script>
+    <script src="internet.js?v=20260811-staff-panel"></script>
   </body>
 </html>
