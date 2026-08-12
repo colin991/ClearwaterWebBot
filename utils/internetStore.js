@@ -272,7 +272,7 @@ export function createInternetPost(store, user, content, media = {}) {
   const question = text(media?.poll?.question, 180);
   const options = Array.isArray(media?.poll?.options) ? media.poll.options.map((option) => text(option, 80)).filter(Boolean).slice(0, 4) : [];
   const pollDays = Math.min(30, Math.max(1, Number(media?.poll?.durationDays) || 1));
-  if (!body && !isGif && !isImage && !question) throw new Error('Write something, add an image or GIF, or create a poll before posting');
+  if (!body && !isGif && !isImage && !question && !text(media?.quoteId, 80)) throw new Error('Write something, add an image or GIF, or create a poll before posting');
   if (gifUrl && !isGif) throw new Error('Only GIFs selected from Clearwater Internet can be posted');
   if (imageUrl && !isImage) throw new Error('Choose a supported image before posting');
   if ((question && options.length < 2) || (!question && options.length)) throw new Error('A poll needs a question and at least two options');
@@ -340,10 +340,24 @@ export function voteInternetPoll(store, { actor, postId, optionIndex, remove = f
   return post;
 }
 
+function isNativeRepost(post) {
+  return Boolean(post?.repostOf) && !post.quoteId && !String(post.content || '').trim();
+}
+
+function sourceInternetPost(store, post) {
+  if (!isNativeRepost(post)) return post;
+  return store.posts.find((item) => item.id === post.repostOf) || post;
+}
+
+function nativeRepostByUser(store, userId, postId) {
+  return store.posts.find((item) => item.authorId === String(userId) && isNativeRepost(item) && item.repostOf === String(postId));
+}
+
 export function interactInternetPost(store, { actor, postId, type, content = '', quote = false }) {
   const user = upsertInternetUser(store, actor);
-  const post = store.posts.find((item) => item.id === String(postId || ''));
-  if (!post) throw new Error('Post not found');
+  const requested = store.posts.find((item) => item.id === String(postId || ''));
+  if (!requested) throw new Error('Post not found');
+  const post = sourceInternetPost(store, requested);
   if (type === 'like') {
     post.likes = Array.isArray(post.likes) ? post.likes : [];
     const liked = post.likes.includes(user.id);
@@ -357,17 +371,35 @@ export function interactInternetPost(store, { actor, postId, type, content = '',
     return { post: reply };
   }
   if (type === 'repost') {
-    if (store.posts.some((item) => item.authorId === user.id && item.repostOf === post.id)) throw new Error('You already reposted this post');
+    const existing = nativeRepostByUser(store, user.id, post.id);
     if (!String(content || '').trim() && !quote) {
-      const repost = { id: randomUUID(), authorId: user.id, displayName: user.displayName, username: user.username, avatarUrl: user.avatarUrl, staffRank: user.staffRank, verified: user.verified === true, badges: Array.isArray(user.badges) ? user.badges.filter((badge) => badge === 'clearwater-role') : [], content: '', repostOf: post.id, parentId: null, createdAt: new Date().toISOString() };
-      store.posts.unshift(repost); store.posts = store.posts.slice(0, 500); user.lastPostAt = repost.createdAt;
+      if (existing) {
+        store.posts = store.posts.filter((item) => item.id !== existing.id);
+        return { post, reposted: false };
+      }
+      const repost = {
+        id: randomUUID(),
+        authorId: user.id,
+        displayName: user.displayName,
+        username: user.username,
+        avatarUrl: user.avatarUrl,
+        staffRank: user.staffRank,
+        verified: user.verified === true,
+        badges: Array.isArray(user.badges) ? user.badges.filter((badge) => badge === 'clearwater-role') : [],
+        content: '',
+        repostOf: post.id,
+        parentId: null,
+        quoteId: null,
+        createdAt: new Date().toISOString(),
+      };
+      store.posts.unshift(repost);
+      store.posts = store.posts.slice(0, 500);
       addInternetNotification(store, { recipientId: post.authorId, actor: user, type: 'repost', post: repost });
-      return { post: repost };
+      return { post: repost, reposted: true };
     }
-    const repost = createInternetPost(store, user, content, quote ? { quoteId: post.id } : {});
-    repost.repostOf = quote ? null : post.id;
-    addInternetNotification(store, { recipientId: post.authorId, actor: user, type: quote ? 'quote' : 'repost', post: repost });
-    return { post: repost };
+    const quoted = createInternetPost(store, user, content, { quoteId: post.id });
+    addInternetNotification(store, { recipientId: post.authorId, actor: user, type: 'quote', post: quoted });
+    return { post: quoted };
   }
   throw new Error('Unsupported post action');
 }

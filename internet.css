@@ -1454,6 +1454,73 @@ body { margin: 0; }
   .staff-workspace .staff-grid { grid-template-columns: 1fr; }
 }
 
+.post-content {
+  margin: 8px 0 0 52px !important;
+}
+.post-gif,
+.post-image,
+.post-poll,
+.quote-card {
+  margin: 10px 0 0 52px;
+  max-width: calc(100% - 52px);
+}
+.quote-card {
+  display: grid;
+  gap: 8px;
+  width: calc(100% - 52px);
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 184, 255, .18);
+  border-radius: 16px;
+  color: inherit;
+  background: rgba(8, 16, 30, .55);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.quote-card:hover { border-color: rgba(148, 184, 255, .38); background: rgba(12, 24, 42, .8); }
+.quote-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.quote-card-head img {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.quote-card-head b { font-size: 13px; }
+.quote-card-head small { color: #8ea0b8; font-size: 12px; }
+.quote-card p {
+  margin: 0;
+  color: #d7e3f4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.quote-card .post-gif,
+.quote-card .post-image {
+  margin: 0;
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+.quote-card-missing { color: #8ea0b8; cursor: default; }
+.quoted-post {
+  margin-top: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.quoted-post .quote-card {
+  margin: 0;
+  width: 100%;
+  max-width: none;
+}
+.repost-inline summary.reposted { color: #19c37d; }
+.post-action-row button.liked svg.filled { fill: currentColor; }
+
 .messages-heading {
   align-items: flex-end;
 }

@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-twitter';
+const INTERNET_VERSION = '20260811-engage';
 let officialAccountId = '';
 const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
   id: '',
@@ -110,6 +110,8 @@ let allPosts = [];
 let currentUserId = null;
 let internetUsers = new Map();
 let loadingPosts = false;
+let loadPostsQueued = false;
+const inFlightLikes = new Set();
 let accountBanned = false;
 let activeBan = null;
 let sessionIsOwner = false;
@@ -257,45 +259,75 @@ function postActionIcon(type, filled = false) {
   return icons[type] || '';
 }
 
-function postMarkup(post, profile = false) {
-  const author = currentAuthor(post);
-  const displayName = author?.displayName || post.displayName;
-  const username = author?.username || post.username;
-  const avatarUrl = author?.avatarUrl || post.avatarUrl || 'assets/clearwater-logo.png';
-  const staffRank = author?.staffRank || null;
-  const body = escapeHtml(post.content)
+function isNativeRepost(post) {
+  return Boolean(post?.repostOf) && !post.quoteId && !String(post.content || '').trim();
+}
+
+function sourcePost(post) {
+  if (!isNativeRepost(post)) return post;
+  return allPosts.find((item) => item.id === post.repostOf) || post;
+}
+
+function formatPostBody(post) {
+  return escapeHtml(post.content)
     .replace(/(^|\s)(#[a-z0-9_]{1,60})/gi, '$1<a href="#home" class="post-hashtag" data-topic="$2">$2</a>')
     .replace(/(^|\s)(@[a-z0-9_]{1,80})/gi, (full, leading, handle) => {
       const mentioned = [...internetUsers.values()].find((user) => String(user.username || '').toLowerCase() === handle.slice(1).toLowerCase());
       return mentioned ? `${leading}<button type="button" class="post-mention" data-open-member="${escapeHtml(mentioned.id)}">${handle}</button>` : `${leading}<span class="post-mention">${handle}</span>`;
     });
+}
+
+function postMediaMarkup(post, displayName) {
   const gif = safeGifUrl(post.gifUrl) ? `<img class="post-gif" src="${escapeHtml(post.gifUrl)}" alt="${escapeHtml(post.gifTitle || 'GIF')}" />` : '';
   const image = safeImageUrl(post.imageUrl) ? `<img class="post-image" src="${escapeHtml(post.imageUrl)}" alt="Image shared by ${escapeHtml(displayName || 'a Clearwater member')}" />` : '';
-  const pollVotes = post.poll?.votes && typeof post.poll.votes === 'object' ? post.poll.votes : {};
+  return `${gif}${image}`;
+}
+
+function quoteCardMarkup(quoted) {
+  if (!quoted) return '<div class="quote-card quote-card-missing">This post is unavailable.</div>';
+  const author = currentAuthor(quoted) || quoted;
+  const displayName = author?.displayName || quoted.displayName || 'Clearwater member';
+  return `<button type="button" class="quote-card" data-open-post="${escapeHtml(quoted.id)}"><span class="quote-card-head"><img src="${escapeHtml(author?.avatarUrl || quoted.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><b>${escapeHtml(displayName)}</b>${identityBadges(author || quoted)}<small>@${escapeHtml(author?.username || quoted.username || 'member')} · ${timeAgo(quoted.createdAt)}</small></span>${quoted.content ? `<p>${escapeHtml(quoted.content)}</p>` : ''}${postMediaMarkup(quoted, displayName)}</button>`;
+}
+
+function postMarkup(post, profile = false) {
+  const wrapper = isNativeRepost(post) ? post : null;
+  const display = sourcePost(post);
+  const author = currentAuthor(display);
+  const displayName = author?.displayName || display.displayName;
+  const username = author?.username || display.username;
+  const avatarUrl = author?.avatarUrl || display.avatarUrl || 'assets/clearwater-logo.png';
+  const staffRank = author?.staffRank || null;
+  const body = formatPostBody(display);
+  const pollVotes = display.poll?.votes && typeof display.poll.votes === 'object' ? display.poll.votes : {};
   const selectedPollOption = Number.isInteger(Number(pollVotes[activeUserId()])) ? Number(pollVotes[activeUserId()]) : -1;
   const totalPollVotes = Object.keys(pollVotes).length;
   const pollRemaining = (() => {
-    const endsAt = new Date(post.poll?.endsAt || 0).getTime();
+    const endsAt = new Date(display.poll?.endsAt || 0).getTime();
     if (!endsAt) return '1 day left';
     const hours = Math.ceil((endsAt - Date.now()) / 3_600_000);
     if (hours <= 0) return 'Poll ended';
     return hours >= 48 ? `${Math.ceil(hours / 24)} days left` : `${hours}h left`;
   })();
-  const showPollVoters = expandedPollVoters.has(post.id);
-  const poll = post.poll?.question && Array.isArray(post.poll.options) ? `<section class="post-poll"><b>${escapeHtml(post.poll.question)}</b>${post.poll.options.map((option, index) => {
+  const showPollVoters = expandedPollVoters.has(display.id);
+  const poll = display.poll?.question && Array.isArray(display.poll.options) ? `<section class="post-poll"><b>${escapeHtml(display.poll.question)}</b>${display.poll.options.map((option, index) => {
     const voterIds = Object.entries(pollVotes).filter(([, vote]) => Number(vote) === index).map(([id]) => id);
     const optionVotes = voterIds.length;
     const percentage = totalPollVotes ? Math.round((optionVotes / totalPollVotes) * 100) : 0;
     const voters = showPollVoters && voterIds.length ? `<div class="poll-voter-list">${voterIds.map((id) => { const voter = internetUsers.get(id) || {}; return `<span class="poll-voter"><img src="${escapeHtml(voter.avatarUrl || 'assets/clearwater-logo.png')}" alt="" />${escapeHtml(voter.displayName || 'Clearwater member')}</span>`; }).join('')}</div>` : '';
-    return `<div class="poll-option ${selectedPollOption === index ? 'selected' : ''}"><button type="button" data-poll-vote="${index}" data-post-id="${escapeHtml(post.id)}" ${pollRemaining === 'Poll ended' ? 'disabled' : ''}><span>${escapeHtml(option)}</span><span>${optionVotes} &middot; ${percentage}%</span></button>${voters}</div>`;
-  }).join('')}<div class="post-poll-footer"><span>${totalPollVotes} ${totalPollVotes === 1 ? 'vote' : 'votes'} &middot; ${pollRemaining}</span><button type="button" class="post-poll-link" data-poll-voters="${escapeHtml(post.id)}">${showPollVoters ? 'Hide votes' : 'See who voted'}</button>${selectedPollOption >= 0 ? `<button type="button" class="post-poll-link" data-poll-remove="${escapeHtml(post.id)}">Remove my vote</button>` : ''}</div></section>` : '';
-  const replies = allPosts.filter((item) => item.parentId === post.id).length;
-  const likes = Array.isArray(post.likes) ? post.likes : [];
-  const quote = post.quoteId ? allPosts.find((item) => item.id === post.quoteId) : null;
-  const repost = post.repostOf ? allPosts.find((item) => item.id === post.repostOf) : null;
-  const shared = quote || repost;
-  const sharedMarkup = shared ? `<div class="post-embed"><b>${escapeHtml(shared.displayName || 'Member')}</b> <span>@${escapeHtml(shared.username || '')}</span><p>${escapeHtml(shared.content || '')}</p></div>` : '';
-  return `<article class="post" data-post-card="${escapeHtml(post.id)}">${repost ? '<small class="reposted-label">↻ Reposted</small>' : ''}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(post.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || post)}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(post.createdAt)}${post.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(post)}</div>${post.content ? `<p class="post-content">${body}</p>` : ''}${sharedMarkup}${gif}${image}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(post.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(post.id)}">Repost</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(post.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(post.id)}" class="${likes.includes(activeUserId()) ? 'liked' : ''}">${postActionIcon('like', likes.includes(activeUserId()))}<span>${likes.length || ''}</span></button><button type="button" data-engage="share" data-post-id="${escapeHtml(post.id)}">${postActionIcon('share')}</button></div></article>`;
+    return `<div class="poll-option ${selectedPollOption === index ? 'selected' : ''}"><button type="button" data-poll-vote="${index}" data-post-id="${escapeHtml(display.id)}" ${pollRemaining === 'Poll ended' ? 'disabled' : ''}><span>${escapeHtml(option)}</span><span>${optionVotes} &middot; ${percentage}%</span></button>${voters}</div>`;
+  }).join('')}<div class="post-poll-footer"><span>${totalPollVotes} ${totalPollVotes === 1 ? 'vote' : 'votes'} &middot; ${pollRemaining}</span><button type="button" class="post-poll-link" data-poll-voters="${escapeHtml(display.id)}">${showPollVoters ? 'Hide votes' : 'See who voted'}</button>${selectedPollOption >= 0 ? `<button type="button" class="post-poll-link" data-poll-remove="${escapeHtml(display.id)}">Remove my vote</button>` : ''}</div></section>` : '';
+  const replies = allPosts.filter((item) => item.parentId === display.id).length;
+  const likes = Array.isArray(display.likes) ? display.likes : [];
+  const liked = likes.includes(activeUserId());
+  const alreadyReposted = allPosts.some((item) => item.authorId === activeUserId() && isNativeRepost(item) && item.repostOf === display.id);
+  const quoted = display.quoteId ? allPosts.find((item) => item.id === display.quoteId) : null;
+  const quoteMarkup = display.quoteId ? quoteCardMarkup(quoted) : '';
+  const repostLabel = wrapper
+    ? `<small class="reposted-label">↻ ${escapeHtml(wrapper.displayName || 'A member')} reposted</small>`
+    : '';
+  const media = postMediaMarkup(display, displayName);
+  return `<article class="post" data-post-card="${escapeHtml(display.id)}">${repostLabel}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(display.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || display)}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(display.createdAt)}${display.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(display)}</div>${display.content ? `<p class="post-content">${body}</p>` : ''}${quoteMarkup}${media}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(display.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options" class="${alreadyReposted ? 'reposted' : ''}">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(display.id)}">${alreadyReposted ? 'Undo repost' : 'Repost'}</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(display.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(display.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-engage="share" data-post-id="${escapeHtml(display.id)}">${postActionIcon('share')}</button></div></article>`;
 }
 
 function safeGifUrl(value) {
@@ -317,10 +349,16 @@ function renderTrending() {
   trendingList.innerHTML = tags.map(([tag, amount]) => `<a href="#home" data-topic="${escapeHtml(tag)}">${escapeHtml(tag)} <span>${amount} post${amount === 1 ? '' : 's'}</span></a>`).join('');
 }
 
+function collapseReposts(posts) {
+  const ids = new Set(posts.map((post) => post.id));
+  return posts.filter((post) => !isNativeRepost(post) || !ids.has(post.repostOf));
+}
+
 function showPosts(posts, emptyMessage) {
-  note.hidden = Boolean(posts.length);
-  note.textContent = posts.length ? '' : (emptyMessage || 'No posts yet. Be the first to share an update.');
-  list.innerHTML = posts.map((post) => postMarkup(post)).join('');
+  const visible = collapseReposts(posts);
+  note.hidden = Boolean(visible.length);
+  note.textContent = visible.length ? '' : (emptyMessage || 'No posts yet. Be the first to share an update.');
+  list.innerHTML = visible.map((post) => postMarkup(post)).join('');
 }
 
 function trendingTagKeys() {
@@ -813,7 +851,10 @@ async function runPostAction(action, postId) {
 }
 
 async function loadPosts() {
-  if (loadingPosts) return;
+  if (loadingPosts) {
+    loadPostsQueued = true;
+    return;
+  }
   loadingPosts = true;
   try {
     const response = await fetch('/api/internet');
@@ -844,6 +885,10 @@ async function loadPosts() {
     note.textContent = 'Clearwater Internet is offline right now. Restart the Clearwater Discord bot host to restore posting.';
   } finally {
     loadingPosts = false;
+    if (loadPostsQueued) {
+      loadPostsQueued = false;
+      void loadPosts();
+    }
   }
 }
 
@@ -943,6 +988,12 @@ document.addEventListener('click', (event) => {
   }
   const notificationMember = event.target.closest('[data-notification-member]');
   if (notificationMember) { openMemberProfile(notificationMember.dataset.notificationMember); return; }
+  const quotedCard = event.target.closest('[data-open-post]');
+  if (quotedCard) {
+    if (postModal) postModal.hidden = true;
+    showPostDetail(quotedCard.dataset.openPost);
+    return;
+  }
   const card = event.target.closest('[data-post-card]');
   if (card && !event.target.closest('button,a,details,input,textarea')) { showPostDetail(card.dataset.postCard); return; }
   const emojiChoice = event.target.closest('[data-emoji-choice]');
@@ -991,11 +1042,11 @@ document.addEventListener('click', (event) => {
   if (repostChoice && pendingPostAction?.type === 'repost') {
     repostPopup.hidden = true;
     if (repostChoice.dataset.repostChoice === 'repost') { void postInteraction({ postId: pendingPostAction.postId, type: 'repost' }).catch((error) => window.alert(error.message || 'Could not repost.')); pendingPostAction = null; return; }
-    document.querySelector('[data-post-modal-title]').textContent = 'Quote post';
-    document.querySelector('[data-post-modal-content]').placeholder = 'What is happening?';
-    document.querySelector('[data-quoted-post]').hidden = false;
-    document.querySelector('[data-quote-post]').hidden = true;
     pendingPostAction.quote = true;
+    document.querySelector('[data-post-modal-title]').textContent = 'Quote post';
+    document.querySelector('[data-post-modal-content]').placeholder = 'Add a comment';
+    document.querySelector('[data-quote-post]').hidden = true;
+    fillQuotedPreview(pendingPostAction.postId);
     postModal.hidden = false;
     return;
   }
@@ -1009,21 +1060,63 @@ document.querySelector('[data-back-home]')?.addEventListener('click', () => { hi
 window.addEventListener('popstate', showViewFromAddress);
 window.addEventListener('hashchange', showViewFromAddress);
 
+function fillQuotedPreview(postId) {
+  const preview = document.querySelector('[data-quoted-post]');
+  if (!preview) return;
+  const post = sourcePost(allPosts.find((item) => item.id === postId));
+  preview.hidden = false;
+  preview.innerHTML = post ? quoteCardMarkup(post) : '<p>This post is unavailable.</p>';
+}
+
+function applyLocalLike(post) {
+  if (!post) return;
+  post.likes = Array.isArray(post.likes) ? post.likes : [];
+  const id = activeUserId();
+  post.likes = post.likes.includes(id) ? post.likes.filter((item) => item !== id) : [...post.likes, id];
+}
+
+function refreshVisiblePosts() {
+  renderPosts();
+  if (openPostId) showPostDetail(openPostId, false);
+}
+
 async function handlePostEngagement(type, postId, control = null) {
-  const post = allPosts.find((item) => item.id === postId); if (!post) return;
-  if (type === 'share') { pendingPostAction = { postId, type }; shareModal.hidden = false; return; }
-  if (type === 'repost-now') { try { await postInteraction({ postId, type: 'repost' }); } catch (error) { window.alert(error.message || 'Could not repost.'); } return; }
+  if (!currentUserId) { window.location.href = '/signin.html?next=/internet.html'; return; }
+  const requested = allPosts.find((item) => item.id === postId);
+  if (!requested) return;
+  const post = sourcePost(requested);
+  if (type === 'share') { pendingPostAction = { postId: post.id, type }; shareModal.hidden = false; return; }
+  if (type === 'like') {
+    if (inFlightLikes.has(post.id)) return;
+    inFlightLikes.add(post.id);
+    applyLocalLike(post);
+    refreshVisiblePosts();
+    try {
+      await postInteraction({ postId: post.id, type: 'like' }, { reload: false });
+    } catch (error) {
+      applyLocalLike(post);
+      refreshVisiblePosts();
+      window.alert(error.message || 'Could not like this post.');
+    } finally {
+      inFlightLikes.delete(post.id);
+    }
+    return;
+  }
+  if (type === 'repost-now') {
+    try { await postInteraction({ postId: post.id, type: 'repost' }); } catch (error) { window.alert(error.message || 'Could not repost.'); }
+    return;
+  }
   if (type === 'quote') {
-    pendingPostAction = { postId, type: 'repost', quote: true };
+    pendingPostAction = { postId: post.id, type: 'repost', quote: true };
     document.querySelector('[data-post-modal-title]').textContent = 'Quote post';
-    document.querySelector('[data-post-modal-content]').placeholder = 'What is happening?';
-    document.querySelector('[data-quoted-post]').hidden = false;
+    document.querySelector('[data-post-modal-content]').placeholder = 'Add a comment';
     document.querySelector('[data-quote-post]').hidden = true;
+    fillQuotedPreview(post.id);
     postModal.hidden = false;
     return;
   }
   if (type === 'repost') {
-    pendingPostAction = { postId, type, quote: false };
+    pendingPostAction = { postId: post.id, type, quote: false };
     const box = control?.getBoundingClientRect();
     if (box && repostPopup) {
       repostPopup.style.left = `${Math.max(12, box.left - 2)}px`;
@@ -1033,24 +1126,26 @@ async function handlePostEngagement(type, postId, control = null) {
     return;
   }
   if (type === 'reply') {
-    pendingPostAction = { postId, type, quote: false };
-    document.querySelector('[data-post-modal-title]').textContent = type === 'reply' ? 'Reply' : 'Repost';
-    document.querySelector('[data-post-modal-content]').placeholder = type === 'reply' ? 'Post your reply' : 'Add a comment, or repost now';
+    pendingPostAction = { postId: post.id, type, quote: false };
+    document.querySelector('[data-post-modal-title]').textContent = 'Reply';
+    document.querySelector('[data-post-modal-content]').placeholder = 'Post your reply';
     document.querySelector('[data-quoted-post]').hidden = true;
-    document.querySelector('[data-quote-post]').hidden = type !== 'repost';
-    postModal.hidden = false; return;
+    document.querySelector('[data-quoted-post]').innerHTML = '';
+    document.querySelector('[data-quote-post]').hidden = true;
+    postModal.hidden = false;
+    return;
   }
-  try { await postInteraction({ postId, type }); } catch (error) { window.alert(error.message); }
+  try { await postInteraction({ postId: post.id, type }); } catch (error) { window.alert(error.message); }
 }
 
-async function postInteraction({ postId, type, content = '', quote = false }) {
+async function postInteraction({ postId, type, content = '', quote = false }, { reload = true } = {}) {
   const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post-interaction', postId, type, content, quote, ...activeAccountRequest() }) });
   const result = await readApiJson(response, 'Could not update this post.');
   if (!response.ok) {
     if (result.error === 'Owner access required') throw new Error('Your bot host needs the newest GitHub files and a restart before post actions can work.');
     throw new Error(result.error || 'Could not update this post.');
   }
-  await loadPosts();
+  if (reload) await loadPosts();
 }
 
 async function voteOnPoll(postId, optionIndex, remove = false) {
@@ -1218,7 +1313,12 @@ conversationForm?.addEventListener('submit', async (event) => {
     conversationInput?.focus();
   }
 });
-document.querySelector('[data-close-post-modal]')?.addEventListener('click', () => { postModal.hidden = true; pendingPostAction = null; });
+document.querySelector('[data-close-post-modal]')?.addEventListener('click', () => {
+  postModal.hidden = true;
+  pendingPostAction = null;
+  const preview = document.querySelector('[data-quoted-post]');
+  if (preview) { preview.hidden = true; preview.innerHTML = ''; }
+});
 document.querySelector('[data-quote-post]')?.addEventListener('click', () => {
   if (!pendingPostAction) return;
   pendingPostAction.quote = true;
