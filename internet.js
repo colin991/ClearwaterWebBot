@@ -807,7 +807,16 @@ function showView(view) {
     section.setAttribute('aria-hidden', on ? 'false' : 'true');
   });
   const navView = activeView === 'conversation' ? 'messages' : activeView;
-  document.querySelectorAll('[data-view-link]').forEach((link) => link.classList.toggle('selected', link.dataset.viewLink === navView));
+  const reelsActive = activeView === 'home' && feedTab === 'reels';
+  document.querySelectorAll('[data-view-link]').forEach((link) => {
+    const selected = link.dataset.viewLink === navView && !(reelsActive && link.dataset.viewLink === 'home');
+    link.classList.toggle('selected', selected);
+    link.toggleAttribute('aria-current', selected);
+  });
+  document.querySelectorAll('[data-reels-link]').forEach((link) => {
+    link.classList.toggle('selected', reelsActive);
+    link.toggleAttribute('aria-current', reelsActive);
+  });
   if (activeView !== 'home') pauseReelVideos();
   if (activeView === 'home') renderPosts();
   if (activeView === 'messages') void loadMessages();
