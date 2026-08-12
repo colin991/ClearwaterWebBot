@@ -597,6 +597,8 @@ export function createInternetReport(store, { postId, actor, reason }) {
     reporterName: text(actor.displayName, 80) || 'Discord user',
     authorId: post.authorId,
     authorName: post.displayName,
+    authorUsername: text(post.username, 80),
+    authorAvatarUrl: text(post.avatarUrl, 300) || null,
     content: post.content,
     reason: reportReason,
     createdAt: new Date().toISOString(),
@@ -633,6 +635,8 @@ function enforceAutomod(store, { actor, kind, content, extra = {} }) {
       reporterName: 'Clearwater Automod',
       authorId: String(actor.id),
       authorName: text(actor.displayName, 80) || 'Discord user',
+      authorUsername: text(actor.username, 80),
+      authorAvatarUrl: text(actor.avatarUrl, 300) || null,
       content: snippet,
       reason: hit.reason,
       categories: hit.categories,
@@ -1077,9 +1081,25 @@ export function applyStaffSiteAction(store, { actor, staffAction, enabled }) {
   return publicInternetSettings(store);
 }
 
+function enrichInternetReport(store, report) {
+  const author = store.users[String(report.authorId || '')] || {};
+  const reporter = report.reporterId && report.reporterId !== 'automod' ? store.users[String(report.reporterId)] : null;
+  const target = report.targetId ? store.users[String(report.targetId)] : null;
+  return {
+    ...report,
+    authorName: report.authorName || author.displayName || 'Discord user',
+    authorUsername: report.authorUsername || author.username || '',
+    authorAvatarUrl: author.avatarUrl || report.authorAvatarUrl || null,
+    reporterAvatarUrl: reporter?.avatarUrl || report.reporterAvatarUrl || null,
+    targetName: target?.displayName || report.targetName || null,
+    targetUsername: target?.username || null,
+    targetAvatarUrl: target?.avatarUrl || null,
+  };
+}
+
 export function moderationSnapshot(store) {
-  const open = store.reports.filter((report) => report.status === 'open');
-  const reviewed = store.reports.filter((report) => report.status !== 'open');
+  const open = store.reports.filter((report) => report.status === 'open').map((report) => enrichInternetReport(store, report));
+  const reviewed = store.reports.filter((report) => report.status !== 'open').map((report) => enrichInternetReport(store, report));
   const users = Object.values(store.users).map((user) => staffUserSummary(store, user));
   const bans = users.filter((user) => user.banned).map((user) => {
     const ban = getActiveBan(store.users[user.id]);
