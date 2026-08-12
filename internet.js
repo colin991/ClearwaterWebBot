@@ -677,6 +677,14 @@ function isReelsTab() {
   return feedTab === 'reels' && !String(search?.value || '').trim();
 }
 
+function isHomeViewActive() {
+  return !document.querySelector('[data-view="home"]')?.hidden;
+}
+
+function isVisibleReelsTab() {
+  return isHomeViewActive() && isReelsTab();
+}
+
 function pauseReelVideos() {
   document.querySelectorAll('[data-reels-viewport] video').forEach((video) => {
     video.pause();
@@ -905,7 +913,10 @@ function canShowComposer() {
 }
 
 function syncHomeSurfaces() {
-  const reelsOn = isReelsTab();
+  // Reels must only control layout while Home is actually visible. Otherwise a
+  // previously opened Reel can lock Settings, Profile, or other pages to the
+  // fixed full-screen Reel height.
+  const reelsOn = isVisibleReelsTab();
   document.querySelector('[data-reels-stage]')?.toggleAttribute('hidden', !reelsOn);
   document.querySelector('.posts')?.toggleAttribute('hidden', reelsOn);
   document.querySelector('[data-feed-tabs]')?.classList.toggle('reels-tabs', reelsOn);
@@ -1042,10 +1053,10 @@ function renderPosts() {
     empty = 'Nothing trending yet. Post something with more than a hello.';
   }
   syncHomeSurfaces();
-  if (isReelsTab()) renderReels();
+  if (isVisibleReelsTab()) renderReels();
   else showPosts(posts, empty);
   document.querySelectorAll('[data-feed-tab]').forEach((button) => button.classList.toggle('selected', button.dataset.feedTab === feedTab));
-  document.querySelectorAll('[data-reels-link]').forEach((link) => link.classList.toggle('selected', isReelsTab()));
+  document.querySelectorAll('[data-reels-link]').forEach((link) => link.classList.toggle('selected', isVisibleReelsTab()));
   renderProfilePosts();
   renderTrending();
   renderBookmarks();
@@ -1147,7 +1158,13 @@ function showView(view) {
     link.classList.toggle('selected', reelsActive);
     link.toggleAttribute('aria-current', reelsActive);
   });
-  if (activeView !== 'home') pauseReelVideos();
+  if (activeView !== 'home') {
+    // Clear the full-screen Reel surface immediately. Waiting for a later
+    // refresh leaves non-Home pages stuck in the Reel layout with scrolling
+    // disabled.
+    document.querySelector('[data-reels-stage]')?.setAttribute('hidden', '');
+    pauseReelVideos();
+  }
   if (activeView === 'home') renderPosts();
   if (activeView === 'messages') void loadMessages();
   if (activeView === 'notifications') void loadNotifications();
