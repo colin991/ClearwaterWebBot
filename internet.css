@@ -4255,13 +4255,23 @@ body { margin: 0; }
   overflow: hidden;
   padding-bottom: 0 !important;
 }
-.internet-feed:has([data-reels-stage]:not([hidden])) > .feed-tabs {
+.internet-feed:has([data-reels-stage]:not([hidden])) > .internet-view[data-view="home"] {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+.internet-feed:has([data-reels-stage]:not([hidden])) .internet-view[data-view="home"] > .feed-tabs {
   flex: 0 0 auto;
 }
-.internet-feed:has([data-reels-stage]:not([hidden])) > .composer,
-.internet-feed:has([data-reels-stage]:not([hidden])) > .signed-out,
-.internet-feed:has([data-reels-stage]:not([hidden])) > .posts {
+.internet-feed:has([data-reels-stage]:not([hidden])) .internet-view[data-view="home"] > .composer,
+.internet-feed:has([data-reels-stage]:not([hidden])) .internet-view[data-view="home"] > .signed-out,
+.internet-feed:has([data-reels-stage]:not([hidden])) .internet-view[data-view="home"] > .posts {
   display: none !important;
+}
+.internet-feed:has([data-reels-stage]:not([hidden])) .internet-view[data-view="home"] > .reels-stage {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .reels-stage {
   position: relative;
