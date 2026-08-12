@@ -3,6 +3,7 @@
   "rewrites": [
     { "source": "/api/media", "destination": "/api/internet" },
     { "source": "/api/internet-version", "destination": "/api/internet?meta=version" },
+    { "source": "/internet/staff", "destination": "/internet.html" },
     { "source": "/internet/:path*", "destination": "/internet.html" }
   ],
   "headers": [
