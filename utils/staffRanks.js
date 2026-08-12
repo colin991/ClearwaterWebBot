@@ -19,3 +19,20 @@ export const STAFF_RANKS = Object.freeze([
 export function getHighestStaffRank(member) {
   return STAFF_RANKS.find((rank) => member?.roles?.cache?.has(rank.id)) || null;
 }
+
+export const CLEARWATER_PREMIUM_ROLE_ID = '1514033571160133733';
+export const CLEARWATER_STAFF_BADGE_ROLE_ID = '1514744040778760252';
+export const ALLOWED_INTERNET_BADGES = Object.freeze(['clearwater-role', 'staff']);
+
+const ROLE_BADGES = Object.freeze([
+  { id: CLEARWATER_PREMIUM_ROLE_ID, badge: 'clearwater-role' },
+  { id: CLEARWATER_STAFF_BADGE_ROLE_ID, badge: 'staff' },
+]);
+
+export function sanitizeInternetBadges(badges) {
+  return Array.isArray(badges) ? badges.filter((badge) => ALLOWED_INTERNET_BADGES.includes(badge)) : [];
+}
+
+export function getInternetBadges(member) {
+  return ROLE_BADGES.filter((item) => member?.roles?.cache?.has(item.id)).map((item) => item.badge);
+}

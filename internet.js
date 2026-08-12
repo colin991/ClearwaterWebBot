@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-report-panel';
+const INTERNET_VERSION = '20260811-staff-badge';
 const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const INTERNET_PATH = '/internet';
@@ -267,15 +267,25 @@ const timeAgo = (value) => {
   return `${days} day${days === 1 ? '' : 's'} ago`;
 };
 const verifiedBadge = () => '<span class="verified" role="img" aria-label="Verified" data-tooltip="Verified"><img src="assets/verified-badge.png" alt="" /></span>';
-const roleBadges = (user) => (Array.isArray(user?.badges) && user.badges.includes('clearwater-role')
-  ? '<span class="role-badge" role="img" aria-label="Premium" data-tooltip="Premium"><img src="assets/clearwater-role-badge.webp" alt="" /></span>'
-  : '');
+const roleBadges = (user) => {
+  const badges = Array.isArray(user?.badges) ? user.badges : [];
+  const premium = badges.includes('clearwater-role')
+    ? '<span class="role-badge" role="img" aria-label="Premium" data-tooltip="Premium"><img src="assets/clearwater-role-badge.webp" alt="" /></span>'
+    : '';
+  const staff = badges.includes('staff')
+    ? '<span class="role-badge staff-badge" role="img" aria-label="Staff" data-tooltip="Staff"><img src="assets/clearwater-staff-badge.png" alt="" /></span>'
+    : '';
+  return `${premium}${staff}`;
+};
 const identityBadges = (user) => `${user?.verified === true ? verifiedBadge() : ''}${roleBadges(user)}`;
 const currentAuthor = (post) => internetUsers.get(post.authorId) || null;
 const isVerified = (post) => currentAuthor(post)?.verified === true;
 
 function refreshProfileVerified() {
-  if (profileVerified) profileVerified.hidden = !internetUsers.get(currentUserId)?.verified;
+  const me = internetUsers.get(currentUserId);
+  if (profileVerified) profileVerified.hidden = me?.verified !== true;
+  const staffBadge = document.querySelector('[data-profile-staff-badge]');
+  if (staffBadge) staffBadge.hidden = !Array.isArray(me?.badges) || !me.badges.includes('staff');
 }
 
 function activeAuthor() {
@@ -1479,6 +1489,8 @@ function openMemberProfile(memberId, updateHash = true) {
   document.querySelector('[data-member-page-rank]').textContent = user.staffRank || 'Clearwater community member';
   document.querySelector('[data-member-page-copy]').textContent = user.bio || (user.staffRank ? `${user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
   document.querySelector('[data-member-page-verified]').hidden = user.verified !== true;
+  const memberStaffBadge = document.querySelector('[data-member-page-staff-badge]');
+  if (memberStaffBadge) memberStaffBadge.hidden = !Array.isArray(user.badges) || !user.badges.includes('staff');
   document.querySelector('[data-member-page-post-count]').textContent = posts.length.toLocaleString();
   const memberFollowing = Array.isArray(user.following) ? user.following : [];
   const memberFollowers = Array.isArray(user.followers) ? user.followers : [];

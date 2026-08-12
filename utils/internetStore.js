@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { AUTOMOD_HOLD_MESSAGE, AutomodHoldError, scanInternetContent } from './internetAutomod.js';
+import { sanitizeInternetBadges } from './staffRanks.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
 export { AutomodHoldError };
@@ -116,7 +117,7 @@ export function publicUsers(store) {
     bio: user.bio || '',
     staffRank: user.staffRank || null,
     verified: user.verified === true,
-    badges: Array.isArray(user.badges) ? user.badges.filter((badge) => badge === 'clearwater-role') : [],
+    badges: Array.isArray(user.badges) ? sanitizeInternetBadges(user.badges) : [],
     banned: Boolean(getActiveBan(user)),
     official: user.official === true,
     following: user.preferences?.hideFollowing === true ? [] : (Array.isArray(user.following) ? user.following : []),
@@ -314,8 +315,8 @@ export function upsertInternetUser(store, user) {
     avatarUrl: has('avatarUrl') ? text(user?.avatarUrl, 300) || null : existing.avatarUrl || null,
     staffRank: has('staffRank') ? text(user?.staffRank, 80) || null : existing.staffRank || null,
     badges: has('badges') && Array.isArray(user?.badges)
-      ? user.badges.filter((badge) => badge === 'clearwater-role')
-      : (Array.isArray(existing.badges) ? existing.badges : []),
+      ? sanitizeInternetBadges(user.badges)
+      : sanitizeInternetBadges(existing.badges),
   };
   return store.users[id];
 }
@@ -443,7 +444,7 @@ export function createInternetPost(store, user, content, media = {}) {
     avatarUrl: user.avatarUrl,
     staffRank: user.staffRank,
     verified: user.verified === true,
-    badges: Array.isArray(user.badges) ? user.badges.filter((badge) => badge === 'clearwater-role') : [],
+    badges: Array.isArray(user.badges) ? sanitizeInternetBadges(user.badges) : [],
     content: body,
     parentId,
     quoteId: text(media?.quoteId, 80) || null,
@@ -536,7 +537,7 @@ export function interactInternetPost(store, { actor, postId, type, content = '',
         avatarUrl: user.avatarUrl,
         staffRank: user.staffRank,
         verified: user.verified === true,
-        badges: Array.isArray(user.badges) ? user.badges.filter((badge) => badge === 'clearwater-role') : [],
+        badges: Array.isArray(user.badges) ? sanitizeInternetBadges(user.badges) : [],
         content: '',
         repostOf: post.id,
         parentId: null,
