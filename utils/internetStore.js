@@ -52,12 +52,32 @@ export async function saveInternetStore(store) {
   await writeJsonFile(storePath, store);
 }
 
+function hostedMediaUrl(value) {
+  const raw = String(value || '').trim();
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:' || url.username || url.password) return '';
+    if (!/(^|\.)blob\.vercel-storage\.com$/i.test(url.hostname)) return '';
+    if (/["'()\\\s]/.test(raw)) return '';
+    return url.href.slice(0, 500);
+  } catch {
+    return '';
+  }
+}
+
+function publicPost(post) {
+  const next = { ...post };
+  if (String(next.imageUrl || '').startsWith('data:')) next.imageUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=image`;
+  if (String(next.videoUrl || '').startsWith('data:')) next.videoUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=video`;
+  return next;
+}
+
 export function publicPosts(store) {
-  const feed = store.posts.filter((post) => post.kind !== 'reel').slice(0, 100);
-  const reels = store.posts.filter((post) => post.kind === 'reel' && !post.parentId).slice(0, 40);
+  const feed = store.posts.filter((post) => post.kind !== 'reel');
+  const reels = store.posts.filter((post) => post.kind === 'reel' && !post.parentId);
   const reelIds = new Set(reels.map((reel) => reel.id));
-  const comments = store.posts.filter((post) => post.parentId && reelIds.has(post.parentId)).slice(0, 200);
-  return [...reels, ...feed, ...comments];
+  const comments = store.posts.filter((post) => post.parentId && reelIds.has(post.parentId));
+  return [...reels, ...feed, ...comments].map(publicPost);
 }
 
 export function publicUsers(store) {
@@ -180,23 +200,8 @@ export function clearKnownInternetIpBans(store, user) {
   return previous.length - store.ipBans.length;
 }
 
-export function clearExpiredInternetPosts(store, now = Date.now()) {
-  const oldestAllowed = now - (48 * 60 * 60 * 1000);
-  const openReportPostIds = new Set(
-    store.reports
-      .filter((report) => report.status === 'open')
-      .map((report) => report.postId)
-  );
-  const previousCount = store.posts.length;
-
-  store.posts = store.posts.filter((post) => {
-    const createdAt = Date.parse(post.createdAt || '');
-    if (!Number.isFinite(createdAt) || createdAt > oldestAllowed) return true;
-    // Evidence must stay available until an owner finishes the report review.
-    return openReportPostIds.has(post.id);
-  });
-
-  return previousCount - store.posts.length;
+export function clearExpiredInternetPosts() {
+  return 0;
 }
 
 export function upsertInternetUser(store, user) {
@@ -291,10 +296,12 @@ export function createInternetPost(store, user, content, media = {}) {
   const gifUrl = text(media?.gif?.url, 500);
   const gifTitle = text(media?.gif?.title, 120);
   const isGif = /^https:\/\/(?:media\d*|i)\.giphy\.com\//.test(gifUrl);
-  const imageUrl = text(media?.image?.dataUrl, 4_200_000);
-  const isImage = /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(imageUrl);
-  const videoUrl = text(media?.video?.dataUrl, 4_200_000);
-  const isVideo = /^data:video\/(?:mp4|webm|quicktime);base64,[a-z0-9+/=]+$/i.test(videoUrl);
+  const hostedImage = hostedMediaUrl(media?.image?.url);
+  const hostedVideo = hostedMediaUrl(media?.video?.url);
+  const imageUrl = hostedImage || text(media?.image?.dataUrl, 4_200_000);
+  const isImage = Boolean(hostedImage) || /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(imageUrl);
+  const videoUrl = hostedVideo || text(media?.video?.dataUrl, 4_200_000);
+  const isVideo = Boolean(hostedVideo) || /^data:video\/(?:mp4|webm|quicktime);base64,[a-z0-9+/=]+$/i.test(videoUrl);
   const question = text(media?.poll?.question, 180);
   const options = Array.isArray(media?.poll?.options) ? media.poll.options.map((option) => text(option, 80)).filter(Boolean).slice(0, 4) : [];
   const pollDays = Math.min(30, Math.max(1, Number(media?.poll?.durationDays) || 1));
@@ -308,7 +315,7 @@ export function createInternetPost(store, user, content, media = {}) {
   }
   if (gifUrl && !isGif) throw new Error('Only GIFs selected from Clearwater Internet can be posted');
   if (imageUrl && !isImage) throw new Error('Choose a supported image before posting');
-  if (videoUrl && !isVideo) throw new Error('Choose a short MP4 or WebM video before posting');
+  if (videoUrl && !isVideo) throw new Error('Choose a supported MP4 or WebM video before posting');
   if ((question && options.length < 2) || (!question && options.length)) throw new Error('A poll needs a question and at least two options');
   if (getActiveBan(user)) throw new Error('This account is banned from Clearwater Internet');
   if (!parentId) {
@@ -351,14 +358,7 @@ export function createInternetPost(store, user, content, media = {}) {
     createdAt: new Date().toISOString(),
   };
   store.posts.unshift(post);
-  if (isReel) {
-    const extraReels = store.posts.filter((item) => item.kind === 'reel' && !item.parentId).slice(40);
-    if (extraReels.length) {
-      const drop = new Set(extraReels.flatMap((item) => [item.id]));
-      store.posts = store.posts.filter((item) => !drop.has(item.id) && !drop.has(item.parentId));
-    }
-  }
-  store.posts = store.posts.slice(0, 500);
+  store.posts = store.posts.slice(0, 10_000);
   const mentionedHandles = [...new Set((body.match(/(?:^|\s)@([a-z0-9_]{1,80})/gi) || []).map((mention) => mention.trim().slice(1).toLowerCase()))];
   mentionedHandles.forEach((handle) => {
     const recipient = Object.values(store.users).find((member) => String(member.username || '').toLowerCase() === handle);
@@ -445,7 +445,7 @@ export function interactInternetPost(store, { actor, postId, type, content = '',
         createdAt: new Date().toISOString(),
       };
       store.posts.unshift(repost);
-      store.posts = store.posts.slice(0, 500);
+      store.posts = store.posts.slice(0, 10_000);
       addInternetNotification(store, { recipientId: post.authorId, actor: user, type: 'repost', post: repost });
       return { post: repost, reposted: true };
     }
