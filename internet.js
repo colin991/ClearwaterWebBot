@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260812-polish';
+const INTERNET_VERSION = '20260812-profile-save';
 const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const INTERNET_PATH = '/internet';
@@ -2592,7 +2592,13 @@ document.querySelector('[data-profile-form]')?.addEventListener('submit', async 
       }),
     });
     const result = await readApiJson(response, 'Could not save your profile.');
-    if (!response.ok) throw new Error(result.error || 'Could not save your profile.');
+    if (!response.ok) {
+      const detail = String(result.error || '');
+      if (/owner access required|unsupported action/i.test(detail)) {
+        throw new Error('Profile saving is on the website, but the bot host still needs the latest GitHub files and a restart.');
+      }
+      throw new Error(detail || 'Could not save your profile.');
+    }
     profileDraft = { ...DEFAULT_PROFILE_DRAFT, ...(result.profile || {}) };
     fillProfileEditor();
     setProfileStatus('Profile saved.', 'ok');
