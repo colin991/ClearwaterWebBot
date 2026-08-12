@@ -3,7 +3,7 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260811-composer-tabs';
+const INTERNET_VERSION = '20260811-quote-inline';
 
 async function readBody(request) {
   if (request.body && typeof request.body === 'object') return request.body;
@@ -126,6 +126,7 @@ export default async function handler(request, response) {
         video: body.video && typeof body.video === 'object' ? { dataUrl: safeVideoDataUrl(body.video.dataUrl).slice(0, 2_100_000) } : null,
         reel: body.reel === true,
         location: body.location && typeof body.location === 'object' ? body.location : null,
+        quoteId: String(body.quoteId || '').slice(0, 80) || null,
         poll: body.poll && typeof body.poll === 'object' ? { question: String(body.poll.question || '').slice(0, 180), options: Array.isArray(body.poll.options) ? body.poll.options.map((option) => String(option).slice(0, 80)).slice(0, 4) : [], durationDays: Math.min(30, Math.max(1, Number(body.poll.durationDays) || 1)) } : null,
         asOfficial,
         owner: access.allowed,

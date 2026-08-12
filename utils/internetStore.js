@@ -364,6 +364,12 @@ export function createInternetPost(store, user, content, media = {}) {
     const recipient = Object.values(store.users).find((member) => String(member.username || '').toLowerCase() === handle);
     if (recipient) addInternetNotification(store, { recipientId: recipient.id, actor: user, type: 'mention', post });
   });
+  if (post.quoteId) {
+    const quoted = store.posts.find((item) => item.id === post.quoteId);
+    if (quoted?.authorId && quoted.authorId !== user.id) {
+      addInternetNotification(store, { recipientId: quoted.authorId, actor: user, type: 'quote', post });
+    }
+  }
   if (!parentId) user.lastPostAt = post.createdAt;
   return post;
 }

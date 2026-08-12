@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-composer-tabs';
+const INTERNET_VERSION = '20260811-quote-inline';
 let officialAccountId = '';
 const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
   id: '',
@@ -130,6 +130,7 @@ let moderationSnapshot = null;
 let selectedReportId = null;
 let feedTab = ['foryou', 'recent', 'following', 'official', 'reels'].includes(localStorage.getItem('clearwater-feed-tab')) ? localStorage.getItem('clearwater-feed-tab') : 'foryou';
 let selectedLocation = null;
+let selectedQuoteId = null;
 let activeReelId = null;
 let reelMedia = null;
 let reelObserver = null;
@@ -285,7 +286,7 @@ function formatPostBody(post) {
 }
 
 function canComposePost() {
-  return Boolean(String(content?.value || '').trim() || selectedGif || selectedImage || selectedLocation);
+  return Boolean(String(content?.value || '').trim() || selectedGif || selectedImage || selectedLocation || selectedQuoteId);
 }
 
 function renderDropPreview() {
@@ -317,11 +318,47 @@ function postMediaMarkup(post, displayName) {
   return `${gif}${image}${dropMapMarkup(post.location)}`;
 }
 
-function quoteCardMarkup(quoted) {
+function quoteCardMarkup(quoted, { interactive = true } = {}) {
   if (!quoted) return '<div class="quote-card quote-card-missing">This post is unavailable.</div>';
   const author = currentAuthor(quoted) || quoted;
   const displayName = author?.displayName || quoted.displayName || 'Clearwater member';
-  return `<button type="button" class="quote-card" data-open-post="${escapeHtml(quoted.id)}"><span class="quote-card-head"><img src="${escapeHtml(author?.avatarUrl || quoted.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><b>${escapeHtml(displayName)}</b>${identityBadges(author || quoted)}<small>@${escapeHtml(author?.username || quoted.username || 'member')} · ${timeAgo(quoted.createdAt)}</small></span>${quoted.content ? `<p>${escapeHtml(quoted.content)}</p>` : ''}${postMediaMarkup(quoted, displayName)}</button>`;
+  const open = interactive ? ` data-open-post="${escapeHtml(quoted.id)}"` : '';
+  const start = interactive ? `<button type="button" class="quote-card"${open}>` : '<div class="quote-card">';
+  const end = interactive ? '</button>' : '</div>';
+  return `${start}<span class="quote-card-head"><img src="${escapeHtml(author?.avatarUrl || quoted.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><b>${escapeHtml(displayName)}</b>${identityBadges(author || quoted)}<small>@${escapeHtml(author?.username || quoted.username || 'member')} · ${timeAgo(quoted.createdAt)}</small></span>${quoted.content ? `<p>${escapeHtml(quoted.content)}</p>` : ''}${postMediaMarkup(quoted, displayName)}${end}`;
+}
+
+function renderQuotePreview() {
+  const preview = document.querySelector('[data-quote-preview]');
+  if (!preview) return;
+  if (!selectedQuoteId) {
+    preview.hidden = true;
+    preview.innerHTML = '';
+    return;
+  }
+  const quoted = sourcePost(allPosts.find((item) => item.id === selectedQuoteId));
+  preview.hidden = false;
+  preview.innerHTML = `${quoteCardMarkup(quoted, { interactive: false })}<button type="button" data-remove-quote>Remove quote</button>`;
+  composer?.classList.add('composer-expanded');
+}
+
+function attachQuote(postId) {
+  if (!currentUserId) { window.location.href = '/signin.html?next=/internet.html'; return; }
+  const post = sourcePost(allPosts.find((item) => item.id === postId));
+  if (!post?.id) return;
+  selectedQuoteId = post.id;
+  document.querySelectorAll('.repost-inline[open]').forEach((item) => item.removeAttribute('open'));
+  if (repostPopup) repostPopup.hidden = true;
+  if (postModal) postModal.hidden = true;
+  if (feedTab !== 'foryou' && feedTab !== 'recent') {
+    feedTab = 'foryou';
+    localStorage.setItem('clearwater-feed-tab', 'foryou');
+  }
+  showView('home');
+  renderQuotePreview();
+  postButton.disabled = !canComposePost();
+  content?.focus();
+  composer?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 function postMarkup(post, profile = false) {
@@ -550,7 +587,8 @@ function rankedForYouPosts(posts) {
 function renderPosts() {
   const query = String(search?.value || '').trim().toLowerCase();
   const visible = allPosts.filter((post) => post.kind !== 'reel' && !post.parentId && !socialState.muted.includes(post.authorId) && !socialState.blocked.includes(post.authorId));
-  const searched = query ? visible.filter((post) => `${post.displayName} ${post.username} ${post.content}`.toLowerCase().includes(query)) : visible;
+  let searched = query ? visible.filter((post) => `${post.displayName} ${post.username} ${post.content}`.toLowerCase().includes(query)) : visible;
+  if (feedTab === 'foryou' || feedTab === 'recent') searched = searched.filter((post) => !isNativeRepost(post));
   let posts = searched;
   let empty = 'No posts yet. Be the first to share an update.';
   if (!query && feedTab === 'following') {
@@ -1287,11 +1325,18 @@ document.addEventListener('click', (event) => {
   const gifChoice = event.target.closest('[data-gif-url]');
   if (gifChoice) { const chosen = { url: gifChoice.dataset.gifUrl, title: gifChoice.dataset.gifTitle || 'GIF' }; if (pickerTarget === 'message') { messageGif = chosen; if (conversationGifPreview) { conversationGifPreview.hidden = false; conversationGifPreview.innerHTML = `<img src="${escapeHtml(chosen.url)}" alt="${escapeHtml(chosen.title)}" /><button type="button" data-remove-conversation-gif>Remove</button>`; } } else { selectedGif = chosen; selectedImage = null; gifPreview.hidden = false; gifPreview.innerHTML = `<img src="${escapeHtml(selectedGif.url)}" alt="${escapeHtml(selectedGif.title)}" /><button type="button" data-remove-media>Remove</button>`; composer?.classList.add('composer-expanded'); postButton.disabled = false; } gifModal.hidden = true; return; }
   if (event.target.closest('[data-remove-conversation-gif]')) { messageGif = null; if (conversationGifPreview) { conversationGifPreview.hidden = true; conversationGifPreview.innerHTML = ''; } return; }
-  if (event.target.closest('[data-remove-media]')) { selectedGif = null; selectedImage = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder?.hidden && !selectedLocation) composer?.classList.remove('composer-expanded'); postButton.disabled = !canComposePost(); return; }
+  if (event.target.closest('[data-remove-media]')) { selectedGif = null; selectedImage = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder?.hidden && !selectedLocation && !selectedQuoteId) composer?.classList.remove('composer-expanded'); postButton.disabled = !canComposePost(); return; }
   if (event.target.closest('[data-remove-location]')) {
     selectedLocation = null;
     renderDropPreview();
-    if (pollBuilder?.hidden && !selectedGif && !selectedImage) composer?.classList.remove('composer-expanded');
+    if (pollBuilder?.hidden && !selectedGif && !selectedImage && !selectedQuoteId) composer?.classList.remove('composer-expanded');
+    postButton.disabled = !canComposePost();
+    return;
+  }
+  if (event.target.closest('[data-remove-quote]')) {
+    selectedQuoteId = null;
+    renderQuotePreview();
+    if (pollBuilder?.hidden && !selectedGif && !selectedImage && !selectedLocation) composer?.classList.remove('composer-expanded');
     postButton.disabled = !canComposePost();
     return;
   }
@@ -1324,12 +1369,8 @@ document.addEventListener('click', (event) => {
   if (repostChoice && pendingPostAction?.type === 'repost') {
     repostPopup.hidden = true;
     if (repostChoice.dataset.repostChoice === 'repost') { void postInteraction({ postId: pendingPostAction.postId, type: 'repost' }).catch((error) => window.alert(error.message || 'Could not repost.')); pendingPostAction = null; return; }
-    pendingPostAction.quote = true;
-    document.querySelector('[data-post-modal-title]').textContent = 'Quote post';
-    document.querySelector('[data-post-modal-content]').placeholder = 'Add a comment';
-    document.querySelector('[data-quote-post]').hidden = true;
-    fillQuotedPreview(pendingPostAction.postId);
-    postModal.hidden = false;
+    attachQuote(pendingPostAction.postId);
+    pendingPostAction = null;
     return;
   }
   if (repostPopup && !event.target.closest('[data-repost-popup]')) repostPopup.hidden = true;
@@ -1341,14 +1382,6 @@ document.addEventListener('click', (event) => {
 document.querySelector('[data-back-home]')?.addEventListener('click', () => { history.pushState({}, '', '#home'); openPostId = null; showView('home'); });
 window.addEventListener('popstate', showViewFromAddress);
 window.addEventListener('hashchange', showViewFromAddress);
-
-function fillQuotedPreview(postId) {
-  const preview = document.querySelector('[data-quoted-post]');
-  if (!preview) return;
-  const post = sourcePost(allPosts.find((item) => item.id === postId));
-  preview.hidden = false;
-  preview.innerHTML = post ? quoteCardMarkup(post) : '<p>This post is unavailable.</p>';
-}
 
 function applyLocalLike(post) {
   if (!post) return;
@@ -1389,12 +1422,7 @@ async function handlePostEngagement(type, postId, control = null) {
     return;
   }
   if (type === 'quote') {
-    pendingPostAction = { postId: post.id, type: 'repost', quote: true };
-    document.querySelector('[data-post-modal-title]').textContent = 'Quote post';
-    document.querySelector('[data-post-modal-content]').placeholder = 'Add a comment';
-    document.querySelector('[data-quote-post]').hidden = true;
-    fillQuotedPreview(post.id);
-    postModal.hidden = false;
+    attachQuote(post.id);
     return;
   }
   if (type === 'repost') {
@@ -1411,9 +1439,6 @@ async function handlePostEngagement(type, postId, control = null) {
     pendingPostAction = { postId: post.id, type, quote: false };
     document.querySelector('[data-post-modal-title]').textContent = 'Reply';
     document.querySelector('[data-post-modal-content]').placeholder = 'Post your reply';
-    document.querySelector('[data-quoted-post]').hidden = true;
-    document.querySelector('[data-quoted-post]').innerHTML = '';
-    document.querySelector('[data-quote-post]').hidden = true;
     postModal.hidden = false;
     return;
   }
@@ -1542,8 +1567,15 @@ emojiQuery?.addEventListener('input', renderEmojiGrid);
 [gifModal, emojiModal, mentionModal].forEach((modal) => modal?.addEventListener('click', (event) => {
   if (event.target === modal) modal.hidden = true;
 }));
-pollButton?.addEventListener('click', () => { pollBuilder.hidden = !pollBuilder.hidden; composer?.classList.toggle('composer-expanded', !pollBuilder.hidden); });
-document.querySelector('[data-close-poll]')?.addEventListener('click', () => { if (!pollBuilder) return; pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); });
+pollButton?.addEventListener('click', () => {
+  pollBuilder.hidden = !pollBuilder.hidden;
+  composer?.classList.toggle('composer-expanded', !pollBuilder.hidden || Boolean(selectedGif || selectedImage || selectedLocation || selectedQuoteId));
+});
+document.querySelector('[data-close-poll]')?.addEventListener('click', () => {
+  if (!pollBuilder) return;
+  pollBuilder.hidden = true;
+  if (!selectedGif && !selectedImage && !selectedLocation && !selectedQuoteId) composer?.classList.remove('composer-expanded');
+});
 document.querySelector('[data-add-poll-option]')?.addEventListener('click', () => {
   const options = pollBuilder?.querySelectorAll('[data-poll-option]') || [];
   if (options.length >= 4) return;
@@ -1598,15 +1630,6 @@ conversationForm?.addEventListener('submit', async (event) => {
 document.querySelector('[data-close-post-modal]')?.addEventListener('click', () => {
   postModal.hidden = true;
   pendingPostAction = null;
-  const preview = document.querySelector('[data-quoted-post]');
-  if (preview) { preview.hidden = true; preview.innerHTML = ''; }
-});
-document.querySelector('[data-quote-post]')?.addEventListener('click', () => {
-  if (!pendingPostAction) return;
-  pendingPostAction.quote = true;
-  document.querySelector('[data-post-modal-title]').textContent = 'Quote post';
-  document.querySelector('[data-quote-post]').hidden = true;
-  document.querySelector('[data-post-modal-content]').placeholder = 'What is happening?';
 });
 postModalForm?.addEventListener('submit', async (event) => {
   event.preventDefault(); if (!pendingPostAction) return;
@@ -1726,10 +1749,10 @@ postButton?.addEventListener('click', async () => {
   postButton.disabled = true;
   postMessage.textContent = 'Posting...';
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, image: selectedImage, poll, location: selectedLocation, asOfficial: activeAccount === 'official' }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, image: selectedImage, poll, location: selectedLocation, quoteId: selectedQuoteId, asOfficial: activeAccount === 'official' }) });
     const result = await readApiJson(response, 'Posting is unavailable because the website service is not connected.');
     if (!response.ok) throw new Error(result.error);
-    content.value = ''; count.textContent = '0 / 500'; postButton.disabled = true; updateComposerHighlight(); selectedGif = null; selectedImage = null; selectedLocation = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; renderDropPreview(); if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
+    content.value = ''; count.textContent = '0 / 500'; postButton.disabled = true; updateComposerHighlight(); selectedGif = null; selectedImage = null; selectedLocation = null; selectedQuoteId = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; renderDropPreview(); renderQuotePreview(); if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
   } catch (error) {
     const message = error.message || 'Could not post.';
     postMessage.textContent = message;
