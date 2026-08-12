@@ -14,7 +14,7 @@
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <link rel="apple-touch-icon" href="assets/clearwater-logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260812-mobile-drop" />
+    <link rel="stylesheet" href="internet.css?v=20260813-profile-fix" />
   </head>
   <body class="internet-booting">
     <div class="internet-boot" data-internet-boot aria-live="polite">
@@ -106,15 +106,16 @@
           <div class="profile-content">
             <img class="profile-avatar" data-profile-avatar src="assets/clearwater-logo.png" alt="" />
             <div class="profile-actions"><a class="profile-discord" data-profile-discord href="https://discord.com" target="_blank" rel="noopener">Discord</a><button class="profile-edit" type="button" data-edit-profile>Edit profile</button></div>
-            <h1><span data-profile-title>Your Clearwater profile</span> <span class="profile-verified" data-profile-verified hidden role="img" aria-label="Verified" data-tooltip="Verified"><img src="assets/verified-badge.png" alt="" /></span> <span class="role-badge staff-badge" data-profile-staff-badge hidden role="img" aria-label="Staff" data-tooltip="Staff"><img src="assets/clearwater-staff-badge.png" alt="" /></span></h1>
+            <h1><span data-profile-title>Your Clearwater profile</span> <span class="profile-verified" data-profile-verified hidden role="img" aria-label="Verified" data-tooltip="Verified"><img src="assets/verified-badge.png" alt="" /></span> <span class="role-badge staff-badge" data-profile-staff-badge hidden role="img" aria-label="Staff" data-tooltip="Staff"><img src="assets/clearwater-staff-badge.png" alt="" /></span> <span class="role-badge business-badge" data-profile-business-badge hidden role="img" aria-label="Business" data-tooltip="Business account"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 16.7 4.8 12.3l1.7-1.7 2.7 2.7 8.3-8.3 1.7 1.7z"/></svg></span> <span class="role-badge warning-badge" data-profile-warning-badge hidden role="img" aria-label="Account warning" data-tooltip="Account warning"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.4 22 20.6H2L12 3.4Zm0 5.2c-.7 0-1.2.5-1.1 1.2l.4 5.2h1.4l.4-5.2c.1-.7-.4-1.2-1.1-1.2Zm0 9.3a1.15 1.15 0 1 0 0-2.3 1.15 1.15 0 0 0 0 2.3Z"/></svg></span></h1>
             <p class="profile-handle" data-profile-handle>@clearwater</p>
             <p class="profile-rank" data-profile-rank>Sign in with Discord to show your staff rank.</p>
             <p class="profile-copy" data-profile-copy>Sign in with Discord to see your community profile and posts.</p>
             <div class="profile-meta" data-profile-meta hidden></div>
             <div class="profile-stats"><span><b data-profile-post-count>0</b> Posts</span><button type="button" data-profile-following><b>0</b> Following</button><button type="button" data-profile-followers><b>0</b> Followers</button></div>
+            <div class="mutual-friends" data-profile-mutuals hidden></div>
             <div class="profile-connections" data-profile-connections hidden></div>
           </div>
-          <div class="profile-tabs"><button class="selected" type="button" data-profile-tab="posts">Posts</button><button type="button" data-profile-tab="replies">Replies</button><button type="button" data-profile-tab="media">Media</button><button type="button" data-profile-tab="likes">Likes</button></div>
+          <div class="profile-tabs"><button class="selected" type="button" data-profile-tab="posts">Posts</button><button type="button" data-profile-tab="replies">Replies</button><button type="button" data-profile-tab="mentions">Mentions</button><button type="button" data-profile-tab="media">Media</button><button type="button" data-profile-tab="likes">Likes</button></div>
           <div class="profile-posts" data-profile-list><p>Sign in to see your posts.</p></div>
         </section>
         <section class="internet-view profile-view member-page" data-view="member" data-member-root hidden>
@@ -122,17 +123,17 @@
           <div class="profile-content">
             <img class="profile-avatar" data-member-page-avatar src="assets/clearwater-logo.png" alt="" />
             <div class="profile-actions member-page-actions"><button type="button" data-member-page-menu aria-label="Member actions">•••</button><button type="button" data-member-page-message aria-label="Message member">✉</button><button type="button" data-member-page-follow>Follow</button></div>
-            <h1><span data-member-page-name>Member</span> <span class="profile-verified" data-member-page-verified hidden role="img" aria-label="Verified" data-tooltip="Verified"><img src="assets/verified-badge.png" alt="" /></span> <span class="role-badge staff-badge" data-member-page-staff-badge hidden role="img" aria-label="Staff" data-tooltip="Staff"><img src="assets/clearwater-staff-badge.png" alt="" /></span></h1>
+            <h1><span data-member-page-name>Member</span> <span class="profile-verified" data-member-page-verified hidden role="img" aria-label="Verified" data-tooltip="Verified"><img src="assets/verified-badge.png" alt="" /></span> <span class="role-badge staff-badge" data-member-page-staff-badge hidden role="img" aria-label="Staff" data-tooltip="Staff"><img src="assets/clearwater-staff-badge.png" alt="" /></span> <span class="role-badge business-badge" data-member-page-business-badge hidden role="img" aria-label="Business" data-tooltip="Business account"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 16.7 4.8 12.3l1.7-1.7 2.7 2.7 8.3-8.3 1.7 1.7z"/></svg></span> <span class="role-badge warning-badge" data-member-page-warning-badge hidden role="img" aria-label="Account warning" data-tooltip="Account warning"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.4 22 20.6H2L12 3.4Zm0 5.2c-.7 0-1.2.5-1.1 1.2l.4 5.2h1.4l.4-5.2c.1-.7-.4-1.2-1.1-1.2Zm0 9.3a1.15 1.15 0 1 0 0-2.3 1.15 1.15 0 0 0 0 2.3Z"/></svg></span></h1>
             <p class="profile-handle" data-member-page-handle>@member</p>
             <p class="profile-rank" data-member-page-rank>Clearwater community member</p>
             <p class="profile-copy" data-member-page-copy>Clearwater Roleplay community member.</p>
             <div class="profile-meta" data-member-page-meta hidden></div>
             <div class="member-page-menu" data-member-page-menu-list hidden><button type="button" data-mute-member>Mute</button><button type="button" data-block-member>Block</button><button type="button" data-report-member>Report</button></div>
             <div class="profile-stats"><span><b data-member-page-post-count>0</b> Posts</span><button type="button" data-member-page-following><b>0</b> Following</button><button type="button" data-member-page-followers><b>0</b> Followers</button></div>
-            <div class="profile-connections" data-member-page-connections hidden></div>
             <div class="mutual-friends" data-member-page-mutuals hidden></div>
+            <div class="profile-connections" data-member-page-connections hidden></div>
           </div>
-          <div class="profile-tabs"><button class="selected" type="button" data-member-tab="posts">Posts</button><button type="button" data-member-tab="replies">Replies</button><button type="button" data-member-tab="media">Media</button></div>
+          <div class="profile-tabs"><button class="selected" type="button" data-member-tab="posts">Posts</button><button type="button" data-member-tab="replies">Replies</button><button type="button" data-member-tab="mentions">Mentions</button><button type="button" data-member-tab="media">Media</button></div>
           <div class="profile-posts" data-member-page-posts><p>No posts yet.</p></div>
         </section>
         <section class="internet-view conversation-view" data-view="conversation" hidden>
@@ -377,6 +378,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260812-mobile-drop"></script>
+    <script src="internet.js?v=20260813-profile-fix"></script>
   </body>
 </html>

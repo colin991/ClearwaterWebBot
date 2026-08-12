@@ -50,8 +50,17 @@ a { color: inherit; text-decoration: none; }
 .post-author { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }.post-author .post-meta { display: inline; color: #7d8794; font-size: 13px; font-weight: 500; }.post-author .post-name { color: #fff; }.post-author .verified { margin-left: 1px; }.post-author .post-rank { display: none; }
 .role-badge { position: relative; display: inline-grid; width: 14px; height: 14px; flex: 0 0 14px; place-items: center; vertical-align: -2px; cursor: help; }.role-badge img { width: 100%; height: 100%; border-radius: 0; object-fit: contain; }.role-badge::after { position: absolute; z-index: 10; bottom: calc(100% + 9px); left: 50%; padding: 7px 9px; border: 1px solid rgba(255,255,255,.1); border-radius: 7px; color: #fff; background: #202327; box-shadow: 0 8px 22px rgba(0,0,0,.35); content: attr(data-tooltip); font-size: 11px; font-weight: 700; line-height: 1; white-space: nowrap; opacity: 0; pointer-events: none; transform: translate(-50%, 4px); transition: opacity .16s ease, transform .16s ease; }.role-badge:hover::after,.role-badge:focus-visible::after { opacity: 1; transform: translate(-50%, 0); }
 .role-badge.staff-badge img { mix-blend-mode: screen; }
+.role-badge.business-badge svg,
+.role-badge.warning-badge svg { width: 100%; height: 100%; display: block; }
+.role-badge.business-badge { color: #f4c430; }
+.role-badge.business-badge svg { fill: currentColor; }
+.role-badge.warning-badge { color: #f0b429; }
+.role-badge.warning-badge svg { fill: currentColor; }
 .role-badge[hidden] { display: none !important; }
-h1 .role-badge.staff-badge { margin-left: 4px; vertical-align: -2px; }
+h1 .role-badge.staff-badge,
+h1 .role-badge.business-badge,
+h1 .role-badge.warning-badge { margin-left: 4px; vertical-align: -2px; }
+.staff-chip.business { background: rgba(244, 196, 48, .18); color: #ffe28a; }
 .emoji-label { margin: 14px 0 8px !important; color: #9ba5b4 !important; font-size: 11px !important; font-weight: 800; text-transform: uppercase; }.emoji-grid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 5px; max-height: 310px; overflow-y: auto; padding: 8px 0; }.emoji-grid button { height: 34px; border: 0; border-radius: 7px; background: transparent; font-size: 21px; cursor: pointer; }.emoji-grid button:hover { background: rgba(78,145,249,.17); }.post-modal-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }.post-modal-buttons button { padding: 9px 13px; border: 0; border-radius: 999px; color: white; background: var(--blue); font: inherit; font-weight: 800; cursor: pointer; }.post-modal-buttons [data-quote-post] { color: #dceaff; background: #1b2a3f; }
 .poll-builder[hidden],.gif-preview[hidden] { display: none !important; }.internet-view[data-view="home"] .composer { min-height: 0; padding: 16px; }.internet-view[data-view="home"] .composer textarea { min-height: 40px; padding: 0; }.internet-view[data-view="home"] .composer-tools { justify-content: flex-start; gap: 12px; margin: 0; padding: 9px 6px; border-top: 1px solid var(--line); border-bottom: 0; }.internet-view[data-view="home"] .composer .composer-tools button { width: 24px; height: 24px; color: #1764ff; font-size: 12px; }.composer-tools svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }.internet-view[data-view="home"] .composer-footer { margin-top: 0; padding-top: 7px; border-top: 0; }
 .internet-view[data-view="home"] .composer:not(.composer-expanded) { height: 146px; overflow: hidden; }.internet-view[data-view="home"] .composer textarea { min-height: 40px !important; height: 40px; resize: none; }.internet-view[data-view="home"] .composer.composer-expanded { height: auto; }
@@ -100,7 +109,7 @@ h1 .role-badge.staff-badge { margin-left: 4px; vertical-align: -2px; }
 .repost-inline { position: relative; }.repost-inline summary { display: inline-flex; align-items: center; padding: 5px; border-radius: 50%; color: #8591a1; cursor: pointer; list-style: none; }.repost-inline summary::-webkit-details-marker { display: none; }.repost-inline summary:hover { color: #69aeff; background: rgba(78,145,249,.13); }.repost-inline summary svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }.repost-inline > div { position: absolute; z-index: 20; top: calc(100% + 7px); left: -10px; display: grid; min-width: 145px; padding: 6px; border: 1px solid rgba(255,255,255,.2); border-radius: 12px; background: #1a1a1a; box-shadow: 0 16px 36px rgba(0,0,0,.5); }.repost-inline > div button { padding: 10px 11px; border-radius: 8px; color: #e9edf4; background: transparent; text-align: left; font: inherit; font-size: 13px; cursor: pointer; }.repost-inline > div button:hover { background: rgba(255,255,255,.09); }
 .post-mention { padding: 0; border: 0; color: #1764ff; background: transparent; font: inherit; cursor: pointer; }.post-mention:hover { text-decoration: underline; }
 .conversation-member-card { display: none; }.conversation-messages { justify-content: flex-start; }.conversation-messages > p:first-child:last-child { margin: 22px 0; }.message-list .internet-message { display: flex; align-items: center; gap: 11px; width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; color: #edf4ff; background: var(--surface); text-align: left; font: inherit; cursor: pointer; }.message-list .internet-message:hover { border-color: #345b89; background: #0d1928; }.message-list .internet-message img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; }.message-list .internet-message span { display: grid; min-width: 0; gap: 2px; }.message-list .internet-message p { overflow: hidden; margin: 0; color: #bcc8d8; text-overflow: ellipsis; white-space: nowrap; }.message-list .internet-message small { margin: 0; color: var(--muted); font-size: 11px; }.profile-stats button { padding: 0; border: 0; color: var(--muted); background: transparent; font: inherit; cursor: pointer; }.profile-stats button:hover b { color: var(--blue); }.profile-connections { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }.profile-connections[hidden] { display: none; }.profile-connections button { display: inline-flex; align-items: center; gap: 6px; max-width: 180px; padding: 4px 8px 4px 4px; overflow: hidden; border: 1px solid #263d59; border-radius: 999px; color: #edf4ff; background: #0b1625; font: inherit; text-align: left; cursor: pointer; }.profile-connections img { width: 24px; height: 24px; flex: 0 0 24px; border-radius: 50%; object-fit: cover; }.profile-connections span { display: grid; min-width: 0; }.profile-connections b { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.profile-connections small { color: var(--muted); font-size: 9px; }
-.mutual-friends { display: flex; align-items: center; gap: 7px; margin-top: 11px; }.mutual-friends[hidden] { display: none; }.mutual-friends > span { display: flex; padding-left: 4px; }.mutual-friends img { width: 23px; height: 23px; margin-left: -4px; border: 2px solid #07111e; border-radius: 50%; object-fit: cover; }.mutual-friends button { padding: 0; border: 0; color: #9fb5d1; background: transparent; font: inherit; font-size: 11px; cursor: pointer; }.mutual-friends button:hover { color: var(--blue); text-decoration: underline; }
+.mutual-friends { display: flex; align-items: center; gap: 8px; margin-top: 12px; }.mutual-friends[hidden] { display: none !important; }.mutual-friends .mutual-faces,.mutual-friends > span { display: flex; align-items: center; padding-left: 6px; }.mutual-friends img { width: 22px; height: 22px; margin-left: -6px; border: 2px solid #060b13; border-radius: 50%; object-fit: cover; background: #0c1522; }.mutual-friends button { padding: 0; border: 0; color: #8b98a5; background: transparent; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }.mutual-friends button:hover { color: #e7e9ea; text-decoration: underline; }
 .conversation-gif-preview { padding: 10px 0 0; }.conversation-gif-preview[hidden] { display: none; }.conversation-gif-preview img { display: block; width: 120px; max-height: 120px; border-radius: 10px; object-fit: cover; }.conversation-gif-preview button { margin-top: 6px; padding: 4px 8px; border: 0; border-radius: 999px; color: #dceaff; background: #24364c; font: inherit; font-size: 10px; font-weight: 800; cursor: pointer; }.conversation-bubble:has(img) { display: grid; gap: 7px; }.conversation-bubble img { display: block; width: min(250px, 100%); max-height: 260px; border-radius: 10px; object-fit: cover; }
 .post-content { margin-top: -7px; }
 .composer.dragging-image { border-color: #4e91f9 !important; background: rgba(28,75,145,.24) !important; box-shadow: 0 0 0 3px rgba(78,145,249,.18); }.owner-panel-view { min-height: 420px; border: 0; border-radius: 0; background: transparent; }.owner-panel-view .page-heading { padding: 0 0 18px; border-bottom: 1px solid rgba(255,255,255,.14); }.owner-controls { margin: 22px 0 0; padding: 20px; border: 1px solid rgba(255,255,255,.18); border-radius: 15px; background: rgba(8,16,27,.78); }.owner-controls h2 { margin: 0; font-size: 17px; }.owner-controls p { color: var(--muted); }.owner-controls input,.owner-controls select { width: 100%; max-width: 560px; margin: 8px 0 0; padding: 11px; border: 1px solid #2a3d56; border-radius: 9px; color: #fff; background: #07101c; font: inherit; }.owner-controls > div { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 13px; }.owner-controls .ip-ban-option { display: flex; align-items: center; gap: 8px; width: fit-content; margin: 12px 0 0; color: var(--muted); font-size: 12px; cursor: pointer; }.owner-controls .ip-ban-option input { width: 16px; height: 16px; margin: 0; accent-color: var(--blue); }
@@ -3241,16 +3250,49 @@ body { margin: 0; }
   border-color: rgba(var(--profile-accent-rgb), .55);
   box-shadow: 0 10px 30px rgba(var(--profile-accent-rgb), .28);
 }
-/* The tab strip is shared by the own-profile view (4 tabs) and the member view
-   (3 tabs), so the columns are derived from the tab count. */
+/* The tab strip is shared by own-profile and member views; columns follow tab count. */
 .profile-tabs {
+  display: grid;
   grid-template-columns: none;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+.profile-tabs button {
+  position: relative;
+  padding: 15px 8px 13px;
+  border: 0;
+  border-bottom: 0;
+  color: #71767b;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.profile-tabs button:hover { background: rgba(255, 255, 255, .03); color: #e7e9ea; }
+.profile-tabs button.selected {
+  color: #e7e9ea;
+  box-shadow: none;
+}
+.profile-tabs button.selected::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: min(56px, 70%);
+  height: 4px;
+  border-radius: 999px;
+  background: #1d9bf0;
+  transform: translateX(-50%);
 }
 .profile-view.has-accent .profile-tabs button.selected {
   color: #fff;
-  box-shadow: inset 0 -3px 0 var(--profile-accent);
+  box-shadow: none;
+}
+.profile-view.has-accent .profile-tabs button.selected::after {
+  background: var(--profile-accent);
 }
 .profile-meta {
   display: flex;
@@ -3604,9 +3646,13 @@ body { margin: 0; }
 /* Appearance preferences */
 .pref-large-text .post p,
 .pref-large-text .conversation-messages,
-.pref-large-text .profile-copy { font-size: 17px; }
+.pref-large-text .profile-copy,
+.pref-large-text .internet-message p,
+.pref-large-text .composer textarea { font-size: 17px; }
 .pref-compact .post { padding-top: 12px !important; padding-bottom: 12px !important; }
+.pref-compact .post-top { gap: 8px; }
 .pref-compact .internet-feed > * + * { margin-top: 0; }
+.pref-compact .post-actions { margin-top: 8px; }
 .pref-reduce-motion *,
 .pref-reduce-motion *::before,
 .pref-reduce-motion *::after {
