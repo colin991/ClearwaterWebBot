@@ -591,7 +591,9 @@ export function createInternetPost(store, user, content, media = {}) {
     content: [body, question, gifTitle, ...options].filter(Boolean).join('\n'),
   });
   if (!parentId) {
-    const cooldownRemaining = 20_000 - (Date.now() - new Date(user.lastPostAt || 0).getTime());
+    // Keep the Internet feed responsive while still preventing rapid spam.
+    const postCooldownMs = 20_000;
+    const cooldownRemaining = postCooldownMs - (Date.now() - new Date(user.lastPostAt || 0).getTime());
     if (cooldownRemaining > 0) throw new Error(`Please wait ${Math.ceil(cooldownRemaining / 1000)} seconds before posting again`);
     const normalized = body.toLowerCase().replace(/\s+/g, ' ').trim();
     const duplicateCooldown = 5 * 60 * 1000;
