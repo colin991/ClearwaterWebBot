@@ -266,6 +266,25 @@ export function updateOfficialInternetProfile(store, profile = {}) {
   return ensureOfficialInternetAccount(store);
 }
 
+function sanitizeDropLocation(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const left = Number(raw.left);
+  const top = Number(raw.top);
+  if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
+  const x = Number(raw.x);
+  const z = Number(raw.z);
+  return {
+    ...(Number.isFinite(x) ? { x: Math.round(x * 10) / 10 } : {}),
+    ...(Number.isFinite(z) ? { z: Math.round(z * 10) / 10 } : {}),
+    postal: text(raw.postal, 12),
+    street: text(raw.street, 80),
+    building: text(raw.building, 20),
+    label: text(raw.label, 120) || 'Liberty County',
+    left: Math.min(0.97, Math.max(0.03, left)),
+    top: Math.min(0.97, Math.max(0.03, top)),
+  };
+}
+
 export function createInternetPost(store, user, content, media = {}) {
   const body = text(content, 500);
   const isReel = media?.reel === true;
@@ -280,10 +299,11 @@ export function createInternetPost(store, user, content, media = {}) {
   const options = Array.isArray(media?.poll?.options) ? media.poll.options.map((option) => text(option, 80)).filter(Boolean).slice(0, 4) : [];
   const pollDays = Math.min(30, Math.max(1, Number(media?.poll?.durationDays) || 1));
   const parentId = text(media?.parentId, 80) || null;
+  const dropLocation = sanitizeDropLocation(media?.location);
   if (isReel) {
     if (!isImage && !isVideo) throw new Error('Add a photo or a short video to post a Reel');
     if (isGif || question) throw new Error('Reels can only include a photo or video');
-  } else if (!body && !isGif && !isImage && !question && !text(media?.quoteId, 80)) {
+  } else if (!body && !isGif && !isImage && !question && !text(media?.quoteId, 80) && !dropLocation) {
     throw new Error('Write something, add an image or GIF, or create a poll before posting');
   }
   if (gifUrl && !isGif) throw new Error('Only GIFs selected from Clearwater Internet can be posted');
@@ -326,6 +346,7 @@ export function createInternetPost(store, user, content, media = {}) {
     ...(isGif ? { gifUrl, gifTitle } : {}),
     ...(isImage ? { imageUrl } : {}),
     ...(isVideo ? { videoUrl } : {}),
+    ...(dropLocation ? { location: dropLocation } : {}),
     ...(question ? { poll: { question, options, votes: {}, endsAt: new Date(Date.now() + (pollDays * 24 * 60 * 60 * 1000)).toISOString() } } : {}),
     createdAt: new Date().toISOString(),
   };

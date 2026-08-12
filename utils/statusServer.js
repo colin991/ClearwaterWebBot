@@ -3,6 +3,9 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
+import { findPlayerDropLocation } from './erlc.js';
+import { getIdentityCache, rememberIdentity } from './identityStore.js';
+import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
 import { AutomodHoldError, banKnownInternetIps, clearExpiredInternetBans, clearExpiredInternetIpBans, clearExpiredInternetPosts, clearKnownInternetIpBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, moderationSnapshot, OFFICIAL_INTERNET_ACCOUNT_ID, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
@@ -197,11 +200,39 @@ export function startStatusServer(client, config) {
         // The website has already verified Ownership before sending this flag.
         // Keep Discord membership tied to the real person, then perform the action as the official account.
         if (body.asOfficial === true && body.owner === true) body.actor = ensureOfficialInternetAccount(store);
+        if (body.action === 'erlc-location') {
+          if (!config.erlcServerKey) return json(response, 503, { error: 'ER:LC is not configured on the bot host yet.' });
+          const cache = await getIdentityCache();
+          let identity = cache.byDiscord?.[String(body.actor?.id || '')] || null;
+          if (!identity?.robloxId && config.melonlyApiKey) {
+            try {
+              identity = await findRobloxIdentity(body.actor.id, config.melonlyApiKey);
+              if (identity?.robloxId) await rememberIdentity(identity);
+            } catch (error) {
+              return json(response, 503, { error: safeMelonlyError(error) });
+            }
+          }
+          if (!identity?.robloxId) {
+            return json(response, 404, { error: 'Link your Roblox account in Melonly, then join the Clearwater ER:LC server.' });
+          }
+          try {
+            const location = await findPlayerDropLocation({
+              serverKey: config.erlcServerKey,
+              robloxId: identity.robloxId,
+              username: identity.robloxUsername,
+            });
+            if (!location) return json(response, 404, { error: 'Join the Clearwater ER:LC server first, then drop your location.' });
+            return json(response, 200, { location });
+          } catch (error) {
+            return json(response, 502, { error: error.message || 'Could not read your in-game location.' });
+          }
+        }
+
         if (body.action === 'post') {
           const user = body.asOfficial === true && body.owner === true
             ? ensureOfficialInternetAccount(store)
             : upsertInternetUser(store, body.actor);
-          const post = createInternetPost(store, user, body.content, { gif: body.gif, image: body.image, poll: body.poll, video: body.video, reel: body.reel === true });
+          const post = createInternetPost(store, user, body.content, { gif: body.gif, image: body.image, poll: body.poll, video: body.video, reel: body.reel === true, location: body.location });
           await saveInternetStore(store);
           return json(response, 201, { post });
         }

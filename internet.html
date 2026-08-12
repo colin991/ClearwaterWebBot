@@ -7,7 +7,7 @@
     <meta name="description" content="Clearwater Internet - the community social feed for Clearwater Roleplay." />
     <title>Clearwater Internet</title>
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
-    <link rel="stylesheet" href="internet.css?v=20260811-reels" />
+    <link rel="stylesheet" href="internet.css?v=20260811-drop" />
   </head>
   <body class="internet-booting">
     <div class="internet-boot" data-internet-boot aria-live="polite">
@@ -47,6 +47,7 @@
         <section class="internet-view" data-view="home">
           <nav class="feed-tabs" data-feed-tabs aria-label="Feed sort">
             <button type="button" class="selected" data-feed-tab="foryou">For you</button>
+            <button type="button" data-feed-tab="recent">Recent</button>
             <button type="button" data-feed-tab="following">Following</button>
             <button type="button" data-feed-tab="official">Official</button>
             <button type="button" data-feed-tab="reels">Reels</button>
@@ -60,8 +61,9 @@
             <div class="composer-main">
               <div class="poll-builder" data-poll-builder hidden><div class="poll-builder-heading"><span>Poll</span><button type="button" data-close-poll aria-label="Remove poll">×</button></div><input data-poll-question maxlength="180" placeholder="Poll question" /><input data-poll-option placeholder="Option 1" maxlength="80" /><input data-poll-option placeholder="Option 2" maxlength="80" /><div class="poll-builder-footer"><button type="button" data-add-poll-option>Add option</button><select data-poll-duration aria-label="Poll duration"><option value="1">1 day</option><option value="3">3 days</option><option value="7">7 days</option></select></div></div>
               <div class="gif-preview" data-gif-preview hidden></div>
+              <div class="drop-preview" data-drop-preview hidden></div>
               <div class="composer-dock">
-                <div class="composer-tools"><button type="button" data-gif-button aria-label="Add GIF">GIF</button><button type="button" data-image-button aria-label="Upload image"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="14" height="14" rx="2" /><circle cx="8" cy="10" r="1.4" /><path d="m5.5 17 4-4 2.5 2.5 2-2" /><path d="M19 5v6m-3-3h6" /></svg></button><input data-image-upload type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden /><button type="button" data-emoji-button aria-label="Add emoji"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><circle cx="9" cy="10" r=".8" fill="currentColor" /><circle cx="15" cy="10" r=".8" fill="currentColor" /><path d="M8.5 14c1 1.1 2.1 1.6 3.5 1.6S14.5 15.1 15.5 14" /></svg></button><button type="button" data-mention-button aria-label="Mention a member">@</button><button type="button" data-poll-button aria-label="Create a poll"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18V11M12 18v-9M18 18v-6" /></svg></button></div>
+                <div class="composer-tools"><button type="button" data-gif-button aria-label="Add GIF">GIF</button><button type="button" data-image-button aria-label="Upload image"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="14" height="14" rx="2" /><circle cx="8" cy="10" r="1.4" /><path d="m5.5 17 4-4 2.5 2.5 2-2" /><path d="M19 5v6m-3-3h6" /></svg></button><input data-image-upload type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden /><button type="button" data-emoji-button aria-label="Add emoji"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><circle cx="9" cy="10" r=".8" fill="currentColor" /><circle cx="15" cy="10" r=".8" fill="currentColor" /><path d="M8.5 14c1 1.1 2.1 1.6 3.5 1.6S14.5 15.1 15.5 14" /></svg></button><button type="button" data-mention-button aria-label="Mention a member">@</button><button type="button" data-poll-button aria-label="Create a poll"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18V11M12 18v-9M18 18v-6" /></svg></button><button type="button" data-drop-location aria-label="Drop in-game location">📍</button></div>
                 <div class="composer-footer"><span data-character-count>0 / 500</span><button type="button" data-post-button disabled>Post</button></div>
               </div>
               <p data-post-message role="status"></p>
@@ -255,6 +257,6 @@
     <section class="reel-comments" data-reel-comments hidden role="dialog" aria-modal="true" aria-label="Reel comments"><header><h2>Comments</h2><button type="button" data-close-reel-comments aria-label="Close">×</button></header><div data-reel-comment-list></div><form data-reel-comment-form><input data-reel-comment-input maxlength="280" placeholder="Add a comment..." autocomplete="off" /><button type="submit">Post</button></form></section>
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
-    <script src="internet.js?v=20260811-reels"></script>
+    <script src="internet.js?v=20260811-drop"></script>
   </body>
 </html>

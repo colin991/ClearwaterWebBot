@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-reels';
+const INTERNET_VERSION = '20260811-drop';
 let officialAccountId = '';
 const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
   id: '',
@@ -128,7 +128,8 @@ let pendingPostAction = null;
 let openPostId = null;
 let moderationSnapshot = null;
 let selectedReportId = null;
-let feedTab = ['foryou', 'following', 'official', 'reels'].includes(localStorage.getItem('clearwater-feed-tab')) ? localStorage.getItem('clearwater-feed-tab') : 'foryou';
+let feedTab = ['foryou', 'recent', 'following', 'official', 'reels'].includes(localStorage.getItem('clearwater-feed-tab')) ? localStorage.getItem('clearwater-feed-tab') : 'foryou';
+let selectedLocation = null;
 let activeReelId = null;
 let reelMedia = null;
 let reelObserver = null;
@@ -283,10 +284,37 @@ function formatPostBody(post) {
     });
 }
 
+function canComposePost() {
+  return Boolean(String(content?.value || '').trim() || selectedGif || selectedImage || selectedLocation);
+}
+
+function renderDropPreview() {
+  const preview = document.querySelector('[data-drop-preview]');
+  if (!preview) return;
+  if (!selectedLocation) {
+    preview.hidden = true;
+    preview.innerHTML = '';
+    return;
+  }
+  preview.hidden = false;
+  preview.innerHTML = `${dropMapMarkup(selectedLocation)}<button type="button" data-remove-location>Remove location</button>`;
+  composer?.classList.add('composer-expanded');
+}
+
+function dropMapMarkup(location) {
+  if (!location || !Number.isFinite(Number(location.left)) || !Number.isFinite(Number(location.top))) return '';
+  const left = Math.min(96, Math.max(4, Number(location.left) * 100));
+  const top = Math.min(96, Math.max(4, Number(location.top) * 100));
+  const caption = location.label && location.postal && !String(location.label).includes(String(location.postal))
+    ? `${location.label} · Postal ${location.postal}`
+    : (location.label || (location.postal ? `Postal ${location.postal}` : ''));
+  return `<figure class="drop-map"><img src="assets/liberty-county-map.png" alt="Liberty County map" draggable="false" /><i style="left:${left}%;top:${top}%"></i>${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}</figure>`;
+}
+
 function postMediaMarkup(post, displayName) {
   const gif = safeGifUrl(post.gifUrl) ? `<img class="post-gif" src="${escapeHtml(post.gifUrl)}" alt="${escapeHtml(post.gifTitle || 'GIF')}" />` : '';
   const image = safeImageUrl(post.imageUrl) ? `<img class="post-image" src="${escapeHtml(post.imageUrl)}" alt="Image shared by ${escapeHtml(displayName || 'a Clearwater member')}" />` : '';
-  return `${gif}${image}`;
+  return `${gif}${image}${dropMapMarkup(post.location)}`;
 }
 
 function quoteCardMarkup(quoted) {
@@ -456,41 +484,63 @@ function trendingTagKeys() {
 }
 
 function isLowEffortPost(post) {
-  if (post.gifUrl || post.imageUrl || post.poll) return false;
+  if (post.gifUrl || post.imageUrl || post.poll || post.location) return false;
   const text = String(post.content || '').trim();
   const words = text.split(/\s+/).filter(Boolean);
   return words.length <= 2 || text.length <= 8;
+}
+
+function stableJitter(id) {
+  let hash = 0;
+  for (const char of String(id || '')) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0;
+  return ((hash >>> 0) % 1000) / 1000;
 }
 
 function scoreForYouPost(post, trending) {
   const likes = Array.isArray(post.likes) ? post.likes.length : 0;
   const replies = allPosts.filter((item) => item.parentId === post.id).length;
   const ageHours = Math.max(0, (Date.now() - new Date(post.createdAt).getTime()) / 3_600_000);
-  const recency = Math.max(0, 72 - ageHours) / 72;
+  const recency = Math.exp(-ageHours / 20);
   const text = String(post.content || '').toLowerCase();
-  const hasMedia = Boolean(post.gifUrl || post.imageUrl || post.poll);
+  const hasMedia = Boolean(post.gifUrl || post.imageUrl || post.poll || post.location);
   const official = post.authorId === officialAccountId || post.verified === true;
   const trendingHit = trending.some((tag) => text.includes(tag));
-  let score = likes * 6 + replies * 8 + recency * 18;
-  if (hasMedia) score += 12;
-  if (official) score += 16;
-  if (trendingHit) score += 14;
-  if (isLowEffortPost(post)) score -= 40;
-  if (text.length > 80) score += 4;
+  let score = Math.log2(likes + 1) * 3.2 + Math.log2(replies + 1) * 4.4 + recency * 24;
+  if (hasMedia) score += 7;
+  if (official) score += 8;
+  if (trendingHit) score += 6;
+  if (isLowEffortPost(post)) score -= 26;
+  if (text.length > 80) score += 3;
+  if (likes <= 2 && recency > 0.35) score += 8;
+  score += (stableJitter(post.id) - 0.5) * 5;
   return score;
 }
 
 function rankedForYouPosts(posts) {
   const trending = trendingTagKeys();
-  const newestFirst = [...posts].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
-  if (newestFirst.length <= 1) return newestFirst;
-  const [newest, ...rest] = newestFirst;
-  rest.sort((left, right) => {
-    const scoreGap = scoreForYouPost(right, trending) - scoreForYouPost(left, trending);
-    if (scoreGap) return scoreGap;
-    return new Date(right.createdAt) - new Date(left.createdAt);
+  const scored = [...posts].map((post) => ({
+    post,
+    score: scoreForYouPost(post, trending),
+    likes: Array.isArray(post.likes) ? post.likes.length : 0,
+  }));
+  scored.sort((left, right) => right.score - left.score || new Date(right.post.createdAt) - new Date(left.post.createdAt));
+  const quieter = scored.filter((item) => item.likes <= 2);
+  const result = [];
+  const used = new Set();
+  let quietPtr = 0;
+  scored.forEach((item, index) => {
+    if (used.has(item.post.id)) return;
+    result.push(item.post);
+    used.add(item.post.id);
+    if ((index + 1) % 3 !== 0) return;
+    while (quietPtr < quieter.length && used.has(quieter[quietPtr].post.id)) quietPtr += 1;
+    if (quietPtr < quieter.length) {
+      result.push(quieter[quietPtr].post);
+      used.add(quieter[quietPtr].post.id);
+      quietPtr += 1;
+    }
   });
-  return [newest, ...rest];
+  return result;
 }
 
 function renderPosts() {
@@ -505,6 +555,9 @@ function renderPosts() {
   } else if (!query && feedTab === 'official') {
     posts = searched.filter((post) => post.authorId === officialAccountId);
     empty = 'Official Clearwater Roleplay posts will appear here.';
+  } else if (!query && feedTab === 'recent') {
+    posts = [...searched].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+    empty = 'No posts yet. Be the first to share an update.';
   } else if (!query && feedTab !== 'reels') {
     posts = rankedForYouPosts(searched);
     empty = 'Nothing trending yet. Post something with more than a hello.';
@@ -1076,7 +1129,32 @@ async function loadSession() {
   return true;
 }
 
-content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; postButton.disabled = !content.value.trim() && !selectedGif && !selectedImage; updateComposerHighlight(); });
+content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; postButton.disabled = !canComposePost(); updateComposerHighlight(); });
+document.querySelector('[data-drop-location]')?.addEventListener('click', async () => {
+  if (!currentUserId) { window.location.href = '/signin.html?next=/internet.html'; return; }
+  const button = document.querySelector('[data-drop-location]');
+  if (button) button.disabled = true;
+  postMessage.textContent = 'Checking your ER:LC location...';
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'erlc-location', ...activeAccountRequest() }) });
+    const result = await readApiJson(response, 'Could not read your in-game location.');
+    if (!response.ok) throw new Error(result.error || 'Could not read your in-game location.');
+    selectedLocation = result.location;
+    const line = `📍 ${selectedLocation.label}${selectedLocation.postal ? ` · Postal ${selectedLocation.postal}` : ''}`;
+    if (content && !content.value.includes(selectedLocation.label)) {
+      content.value = content.value.trim() ? `${content.value.trim()}\n${line}` : line;
+      count.textContent = `${content.value.length} / 500`;
+      updateComposerHighlight();
+    }
+    renderDropPreview();
+    postButton.disabled = !canComposePost();
+    postMessage.textContent = 'Location dropped from ER:LC.';
+  } catch (error) {
+    postMessage.textContent = error.message || 'Could not read your in-game location.';
+  } finally {
+    if (button) button.disabled = false;
+  }
+});
 search?.addEventListener('input', () => { showView('home'); renderPosts(); });
 document.querySelectorAll('[data-feed-tab]').forEach((button) => button.addEventListener('click', () => {
   feedTab = button.dataset.feedTab || 'foryou';
@@ -1205,7 +1283,14 @@ document.addEventListener('click', (event) => {
   const gifChoice = event.target.closest('[data-gif-url]');
   if (gifChoice) { const chosen = { url: gifChoice.dataset.gifUrl, title: gifChoice.dataset.gifTitle || 'GIF' }; if (pickerTarget === 'message') { messageGif = chosen; if (conversationGifPreview) { conversationGifPreview.hidden = false; conversationGifPreview.innerHTML = `<img src="${escapeHtml(chosen.url)}" alt="${escapeHtml(chosen.title)}" /><button type="button" data-remove-conversation-gif>Remove</button>`; } } else { selectedGif = chosen; selectedImage = null; gifPreview.hidden = false; gifPreview.innerHTML = `<img src="${escapeHtml(selectedGif.url)}" alt="${escapeHtml(selectedGif.title)}" /><button type="button" data-remove-media>Remove</button>`; composer?.classList.add('composer-expanded'); postButton.disabled = false; } gifModal.hidden = true; return; }
   if (event.target.closest('[data-remove-conversation-gif]')) { messageGif = null; if (conversationGifPreview) { conversationGifPreview.hidden = true; conversationGifPreview.innerHTML = ''; } return; }
-  if (event.target.closest('[data-remove-media]')) { selectedGif = null; selectedImage = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder?.hidden) composer?.classList.remove('composer-expanded'); postButton.disabled = !content?.value.trim(); return; }
+  if (event.target.closest('[data-remove-media]')) { selectedGif = null; selectedImage = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder?.hidden && !selectedLocation) composer?.classList.remove('composer-expanded'); postButton.disabled = !canComposePost(); return; }
+  if (event.target.closest('[data-remove-location]')) {
+    selectedLocation = null;
+    renderDropPreview();
+    if (pollBuilder?.hidden && !selectedGif && !selectedImage) composer?.classList.remove('composer-expanded');
+    postButton.disabled = !canComposePost();
+    return;
+  }
   const mention = event.target.closest('[data-mention-user]');
   if (mention) { insertAtCursor(`@${mention.dataset.mentionUser} `); mentionModal.hidden = true; return; }
   if (event.target.closest('[data-refresh-staff]')) { void loadModeration(); return; }
@@ -1369,7 +1454,7 @@ function insertAtCursor(value) {
   content.value = `${content.value.slice(0, start)}${value}${content.value.slice(end)}`.slice(0, 500);
   content.focus(); content.selectionStart = content.selectionEnd = Math.min(start + value.length, 500);
   count.textContent = `${content.value.length} / 500`;
-  postButton.disabled = !content.value.trim() && !selectedGif && !selectedImage;
+  postButton.disabled = !canComposePost();
   updateComposerHighlight();
 }
 
@@ -1637,16 +1722,16 @@ postButton?.addEventListener('click', async () => {
   postButton.disabled = true;
   postMessage.textContent = 'Posting...';
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, image: selectedImage, poll, asOfficial: activeAccount === 'official' }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, image: selectedImage, poll, location: selectedLocation, asOfficial: activeAccount === 'official' }) });
     const result = await readApiJson(response, 'Posting is unavailable because the website service is not connected.');
     if (!response.ok) throw new Error(result.error);
-    content.value = ''; count.textContent = '0 / 500'; postButton.disabled = true; updateComposerHighlight(); selectedGif = null; selectedImage = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
+    content.value = ''; count.textContent = '0 / 500'; postButton.disabled = true; updateComposerHighlight(); selectedGif = null; selectedImage = null; selectedLocation = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; renderDropPreview(); if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
   } catch (error) {
     const message = error.message || 'Could not post.';
     postMessage.textContent = message;
     if (/member of the Clearwater Roleplay Discord server/i.test(message)) showJoinRequired();
     else if (/banned/i.test(message)) showBan({ reason: 'This account is banned from Clearwater Internet.', until: null });
-  } finally { postButton.disabled = !content.value.trim() && !selectedGif && !selectedImage; }
+  } finally { postButton.disabled = !canComposePost(); }
 });
 
 admin?.querySelectorAll('button').forEach((button) => button.addEventListener('click', async () => {
