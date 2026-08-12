@@ -1,15 +1,13 @@
-import { NEXT_COOKIE, SAFE_NEXT_PATHS, STATE_COOKIE, createState, getAuthConfig, makeCookie, redirect, sendJson } from '../../lib/discord-auth.js';
+import { NEXT_COOKIE, STATE_COOKIE, createState, getAuthConfig, makeCookie, redirect, safeNextPath, sendJson } from '../../lib/discord-auth.js';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') return sendJson(response, 405, { error: 'Method not allowed' });
 
   try {
     const requestUrl = new URL(request.url, `https://${request.headers.host || 'cwrpvc.lol'}`);
-    const next = SAFE_NEXT_PATHS.includes(requestUrl.searchParams.get('next') || '')
-      ? requestUrl.searchParams.get('next')
-      : '/';
+    const next = safeNextPath(requestUrl.searchParams.get('next') || '');
     if (requestUrl.searchParams.get('agreed') !== '1') {
-      return redirect(response, `/signin.html?next=${encodeURIComponent(next)}`);
+      return redirect(response, `/signin?next=${encodeURIComponent(next)}`);
     }
 
     const { clientId, redirectUri } = getAuthConfig();

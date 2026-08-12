@@ -232,16 +232,16 @@ if ('IntersectionObserver' in window) {
 
 const goToInternet = () => {
   if (!homepageSignedIn) {
-    window.location.href = '/signin.html?next=/internet.html';
+    window.location.href = '/signin?next=/internet';
     return;
   }
   document.documentElement.classList.add('leaving-for-internet');
   window.setTimeout(() => {
-    window.location.href = '/internet.html';
+    window.location.href = '/internet';
   }, 220);
 };
 
-document.querySelectorAll('a[href="/internet.html"]').forEach((link) => {
+document.querySelectorAll('a[href="/internet"]').forEach((link) => {
   link.addEventListener('click', async (event) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target === '_blank') return;
     event.preventDefault();

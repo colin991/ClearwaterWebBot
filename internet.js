@@ -93,7 +93,47 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-quote-inline';
+const INTERNET_VERSION = '20260811-urls';
+const INTERNET_PATH = '/internet';
+const SIGNIN_INTERNET = '/signin?next=/internet';
+const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'post']);
+
+function internetUrl(view = 'home', id = '') {
+  if (view === 'home') return INTERNET_PATH;
+  if (view === 'post' && id) return `${INTERNET_PATH}/post/${encodeURIComponent(id)}`;
+  if (view === 'member' && id) return `${INTERNET_PATH}/member/${encodeURIComponent(id)}`;
+  if (view === 'conversation') return `${INTERNET_PATH}/messages`;
+  return `${INTERNET_PATH}/${view}`;
+}
+
+function currentInternetPath() {
+  return String(location.pathname || '/').replace(/\/+$/, '').replace(/\.html$/i, '') || '/';
+}
+
+function readInternetRoute() {
+  const hash = String(location.hash || '').replace(/^#/, '');
+  if (hash.startsWith('post-')) return { view: 'post', id: hash.slice(5) };
+  if (hash.startsWith('member-')) return { view: 'member', id: hash.slice(7) };
+  if (INTERNET_VIEWS.has(hash) && hash !== 'post' && hash !== 'member') {
+    return { view: hash === 'conversation' ? 'messages' : hash, id: '' };
+  }
+  const path = currentInternetPath();
+  const parts = path.startsWith(`${INTERNET_PATH}/`) ? path.slice(INTERNET_PATH.length + 1).split('/').filter(Boolean) : [];
+  if (!parts.length) return { view: 'home', id: '' };
+  if (parts[0] === 'post' && parts[1]) return { view: 'post', id: decodeURIComponent(parts[1]) };
+  if (parts[0] === 'member' && parts[1]) return { view: 'member', id: decodeURIComponent(parts[1]) };
+  if (INTERNET_VIEWS.has(parts[0]) && parts[0] !== 'post' && parts[0] !== 'member') {
+    return { view: parts[0], id: '' };
+  }
+  return { view: 'home', id: '' };
+}
+
+function setInternetRoute(view, id = '', replace = false) {
+  const url = internetUrl(view, id);
+  if (currentInternetPath() === url && !location.hash) return;
+  const write = replace || location.hash || /\.html$/i.test(location.pathname) ? history.replaceState : history.pushState;
+  write.call(history, {}, '', url);
+}
 let officialAccountId = '';
 const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
   id: '',
@@ -278,7 +318,7 @@ function sourcePost(post) {
 
 function formatPostBody(post) {
   return escapeHtml(post.content)
-    .replace(/(^|\s)(#[a-z0-9_]{1,60})/gi, '$1<a href="#home" class="post-hashtag" data-topic="$2">$2</a>')
+    .replace(/(^|\s)(#[a-z0-9_]{1,60})/gi, '$1<a href="/internet" class="post-hashtag" data-topic="$2">$2</a>')
     .replace(/(^|\s)(@[a-z0-9_]{1,80})/gi, (full, leading, handle) => {
       const mentioned = [...internetUsers.values()].find((user) => String(user.username || '').toLowerCase() === handle.slice(1).toLowerCase());
       return mentioned ? `${leading}<button type="button" class="post-mention" data-open-member="${escapeHtml(mentioned.id)}">${handle}</button>` : `${leading}<span class="post-mention">${handle}</span>`;
@@ -343,7 +383,7 @@ function renderQuotePreview() {
 }
 
 function attachQuote(postId) {
-  if (!currentUserId) { window.location.href = '/signin.html?next=/internet.html'; return; }
+  if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
   const post = sourcePost(allPosts.find((item) => item.id === postId));
   if (!post?.id) return;
   selectedQuoteId = post.id;
@@ -354,6 +394,7 @@ function attachQuote(postId) {
     feedTab = 'foryou';
     localStorage.setItem('clearwater-feed-tab', 'foryou');
   }
+  history.pushState({}, '', internetUrl('home'));
   showView('home');
   renderQuotePreview();
   postButton.disabled = !canComposePost();
@@ -500,7 +541,7 @@ function renderTrending() {
   }));
   const tags = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
   if (!tags.length) return;
-  trendingList.innerHTML = tags.map(([tag, amount]) => `<a href="#home" data-topic="${escapeHtml(tag)}">${escapeHtml(tag)} <span>${amount} post${amount === 1 ? '' : 's'}</span></a>`).join('');
+  trendingList.innerHTML = tags.map(([tag, amount]) => `<a href="/internet" data-topic="${escapeHtml(tag)}">${escapeHtml(tag)} <span>${amount} post${amount === 1 ? '' : 's'}</span></a>`).join('');
 }
 
 function collapseReposts(posts) {
@@ -656,24 +697,24 @@ function showView(view) {
 }
 
 function showViewFromAddress() {
-  const linkedPostId = location.hash.startsWith('#post-') ? location.hash.slice(6) : null;
-  if (linkedPostId) {
-    showPostDetail(linkedPostId, false);
+  const route = readInternetRoute();
+  setInternetRoute(route.view, route.id, true);
+  if (route.view === 'post' && route.id) {
+    showPostDetail(route.id, false);
     return;
   }
-  const linkedMemberId = location.hash.startsWith('#member-') ? location.hash.slice(8) : null;
-  if (linkedMemberId) {
-    openMemberProfile(linkedMemberId, false);
+  if (route.view === 'member' && route.id) {
+    openMemberProfile(route.id, false);
     return;
   }
-  showView(location.hash.slice(1) || 'home');
+  showView(route.view || 'home');
 }
 
 function showPostDetail(postId, updateHash = true) {
   const post = allPosts.find((item) => item.id === postId);
   if (!post || !postDetail) return showView('home');
   openPostId = postId;
-  if (updateHash) history.pushState({}, '', `#post-${postId}`);
+  if (updateHash) setInternetRoute('post', postId);
   showView('post');
   const replies = allPosts.filter((item) => item.parentId === postId);
   postDetail.innerHTML = `${postMarkup(post)}<section class="detail-replies"><button type="button" class="detail-reply-button" data-engage="reply" data-post-id="${escapeHtml(post.id)}">Reply to this post</button>${replies.length ? replies.map((reply) => postMarkup(reply)).join('') : '<p>There are no replies yet.</p>'}</section>`;
@@ -973,7 +1014,7 @@ function openMemberProfile(memberId, updateHash = true) {
   const followsYou = socialState.followers.includes(user.id);
   document.querySelector('[data-member-page-follow]').textContent = following && followsYou ? 'Friends' : following ? 'Following' : followsYou ? 'Follow back' : 'Follow';
   document.querySelector('[data-member-page-menu-list]').hidden = true;
-  if (updateHash) history.pushState({}, '', `#member-${user.id}`);
+  if (updateHash) setInternetRoute('member', user.id);
   showView('member');
 }
 
@@ -991,7 +1032,7 @@ function openConversation(member) {
   document.querySelector('[data-conversation-card-handle]').textContent = `@${member.username}`;
   document.querySelector('[data-conversation-card-rank]').textContent = member.staffRank || 'Clearwater community member';
   conversationMessages.innerHTML = '<p>Loading conversation...</p>';
-  history.pushState({}, '', `#messages`);
+  setInternetRoute('messages');
   showView('conversation');
   void loadConversation(member);
   conversationInput?.focus();
@@ -1113,10 +1154,9 @@ async function loadPosts() {
     }
     refreshProfileVerified();
     renderPosts();
-    const linkedPostId = location.hash.startsWith('#post-') ? location.hash.slice(6) : null;
-    if (linkedPostId) showPostDetail(linkedPostId, false);
-    const linkedMemberId = location.hash.startsWith('#member-') ? location.hash.slice(8) : null;
-    if (linkedMemberId) openMemberProfile(linkedMemberId, false);
+    const route = readInternetRoute();
+    if (route.view === 'post' && route.id) showPostDetail(route.id, false);
+    if (route.view === 'member' && route.id) openMemberProfile(route.id, false);
   } catch {
     note.hidden = false;
     note.textContent = 'Clearwater Internet is offline right now. Restart the Clearwater Discord bot host to restore posting.';
@@ -1173,7 +1213,7 @@ async function loadSession() {
 
 content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; postButton.disabled = !canComposePost(); updateComposerHighlight(); });
 document.querySelector('[data-drop-location]')?.addEventListener('click', async () => {
-  if (!currentUserId) { window.location.href = '/signin.html?next=/internet.html'; return; }
+  if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
   const button = document.querySelector('[data-drop-location]');
   if (button) button.disabled = true;
   postMessage.textContent = 'Checking your ER:LC location...';
@@ -1240,11 +1280,15 @@ document.querySelectorAll('[data-view-link]').forEach((link) => link.addEventLis
   event.preventDefault();
   const view = link.dataset.viewLink || 'home';
   if (view === 'profile' && activeAccount === 'official') { openMemberProfile(officialAccountId); return; }
-  if (location.hash === `#${view}`) showView(view);
-  else location.hash = view;
+  if (currentInternetPath() === internetUrl(view) && !location.hash) showView(view);
+  else {
+    history.pushState({}, '', internetUrl(view));
+    showView(view);
+  }
 }));
 document.querySelector('[data-compose-link]')?.addEventListener('click', () => {
-  if (!currentUserId) { window.location.href = '/signin.html?next=/internet.html'; return; }
+  if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
+  history.pushState({}, '', internetUrl('home'));
   showView('home');
   content?.focus();
 });
@@ -1293,7 +1337,7 @@ document.addEventListener('click', (event) => {
   const topic = event.target.closest('[data-topic]');
   if (topic) { event.preventDefault(); showView('home'); search.value = topic.dataset.topic; renderPosts(); return; }
   if (event.target.closest('[data-open-reel-composer]')) {
-    if (!currentUserId) { window.location.href = '/signin.html?next=/internet.html'; return; }
+    if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
     const modal = document.querySelector('[data-reel-composer]');
     if (modal) modal.hidden = false;
     return;
@@ -1379,7 +1423,7 @@ document.addEventListener('click', (event) => {
   const postId = button.parentElement?.dataset.postId;
   if (postId) void runPostAction(button.dataset.postAction, postId);
 });
-document.querySelector('[data-back-home]')?.addEventListener('click', () => { history.pushState({}, '', '#home'); openPostId = null; showView('home'); });
+document.querySelector('[data-back-home]')?.addEventListener('click', () => { history.pushState({}, '', internetUrl('home')); openPostId = null; showView('home'); });
 window.addEventListener('popstate', showViewFromAddress);
 window.addEventListener('hashchange', showViewFromAddress);
 
@@ -1396,7 +1440,7 @@ function refreshVisiblePosts() {
 }
 
 async function handlePostEngagement(type, postId, control = null) {
-  if (!currentUserId) { window.location.href = '/signin.html?next=/internet.html'; return; }
+  if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
   const requested = allPosts.find((item) => item.id === postId);
   if (!requested) return;
   const post = sourcePost(requested);
@@ -1640,7 +1684,7 @@ postModalForm?.addEventListener('submit', async (event) => {
 document.querySelector('[data-close-share]')?.addEventListener('click', () => { shareModal.hidden = true; pendingPostAction = null; });
 document.querySelector('[data-copy-post-link]')?.addEventListener('click', async () => {
   if (!pendingPostAction) return;
-  try { await navigator.clipboard.writeText(`${location.origin}/internet.html#post-${pendingPostAction.postId}`); shareModal.hidden = true; window.alert('Post link copied.'); } catch { window.alert('Could not copy the link.'); }
+  try { await navigator.clipboard.writeText(`${location.origin}${internetUrl('post', pendingPostAction.postId)}`); shareModal.hidden = true; window.alert('Post link copied.'); } catch { window.alert('Could not copy the link.'); }
 });
 document.querySelector('[data-share-to-friend]')?.addEventListener('click', () => { shareModal.hidden = true; showView('messages'); window.alert('Choose a friend and paste the post link into your message.'); });
 document.querySelector('[data-close-moderation]')?.addEventListener('click', () => { moderationModal.hidden = true; pendingReportReview = null; });
@@ -1782,7 +1826,7 @@ document.querySelector('[data-internet-logout]')?.addEventListener('click', asyn
   try {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
   } finally {
-    window.location.href = '/internet.html';
+    window.location.href = INTERNET_PATH;
   }
 });
 document.querySelectorAll('[data-select-account]').forEach((button) => button.addEventListener('click', () => selectPostingAccount(button.dataset.selectAccount)));
@@ -1817,7 +1861,7 @@ async function bootInternet() {
   try {
     const signedIn = await loadSession().catch(() => Boolean(currentUserId));
     if (!signedIn) {
-      window.location.replace('/signin.html?next=/internet.html');
+      window.location.replace(SIGNIN_INTERNET);
       return;
     }
     await loadPosts();

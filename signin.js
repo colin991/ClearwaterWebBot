@@ -2,8 +2,8 @@ const form = document.querySelector('[data-signin-form]');
 const agree = document.querySelector('[data-legal-agree]');
 const submit = document.querySelector('[data-signin-submit]');
 const next = new URLSearchParams(location.search).get('next') || '';
-const allowed = new Set(['/', '/internet.html', '/owner.html']);
-const destination = allowed.has(next) ? next : '';
+const allowed = new Set(['/', '/internet', '/internet.html', '/owner', '/owner.html']);
+const destination = allowed.has(next) ? (next === '/internet.html' ? '/internet' : next === '/owner.html' ? '/owner' : next) : '';
 
 function syncSubmitState() {
   submit.disabled = !agree.checked;

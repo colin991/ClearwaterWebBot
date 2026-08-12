@@ -1,6 +1,5 @@
 import {
   NEXT_COOKIE,
-  SAFE_NEXT_PATHS,
   SESSION_COOKIE,
   STATE_COOKIE,
   clearCookie,
@@ -10,6 +9,7 @@ import {
   parseCookies,
   redirect,
   safeEqual,
+  safeNextPath,
   sendJson,
 } from '../../../lib/discord-auth.js';
 
@@ -72,7 +72,7 @@ export default async function handler(request, response) {
       guildBanner: guildMember?.banner || null,
       guildRoles: guildMember?.roles || [],
     }, sessionSecret);
-    const next = SAFE_NEXT_PATHS.includes(cookies[NEXT_COOKIE] || '') ? cookies[NEXT_COOKIE] : '/';
+    const next = safeNextPath(cookies[NEXT_COOKIE] || '');
     const destination = next === '/' ? '/?login=success' : next;
 
     return redirect(response, destination, [
