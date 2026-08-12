@@ -1247,3 +1247,60 @@ body.internet-booting .internet-shell {
   .internet-view[data-view="home"] .composer-dock { flex-wrap: wrap; }
   .internet-view[data-view="home"] .composer-footer { width: 100%; justify-content: flex-end; }
 }
+
+/* Full-screen Internet: fill the viewport instead of a centered column. */
+html, body { min-height: 100%; }
+body { margin: 0; }
+.community-card a { display: none !important; }
+.community-card p { margin-bottom: 20px; }
+
+.internet-side > .trending {
+  overflow: visible;
+  padding: 20px 22px 18px !important;
+}
+.internet-side > .trending h2 {
+  margin: 0 0 12px;
+  padding: 0;
+  line-height: 1.3;
+  overflow: visible;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
+
+@media (min-width: 941px) {
+  .internet-shell {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 100vh;
+    box-sizing: border-box;
+    grid-template-columns: 232px minmax(0, 1fr) minmax(280px, 340px) !important;
+    gap: 18px 20px !important;
+    margin: 0 !important;
+    padding: 18px 20px 28px !important;
+    justify-content: stretch !important;
+  }
+  .internet-rail {
+    top: 18px !important;
+    height: calc(100vh - 36px) !important;
+  }
+  .internet-side {
+    top: 18px !important;
+    width: 100%;
+  }
+  .internet-shell.staff-mode {
+    width: 100% !important;
+    max-width: none !important;
+    grid-template-columns: 232px minmax(0, 1fr) !important;
+    padding: 18px 20px 28px !important;
+  }
+}
+
+@media (max-width: 940px) {
+  .internet-shell {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 12px 14px 24px !important;
+  }
+}
