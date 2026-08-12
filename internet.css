@@ -1531,13 +1531,18 @@ body { margin: 0; }
   overflow-wrap: anywhere;
 }
 .quote-card .post-gif,
-.quote-card .post-image,
-.quote-card .drop-map {
+.quote-card .post-image {
   margin: 0;
   max-width: 100%;
   max-height: 220px;
   border-radius: 12px;
   object-fit: cover;
+}
+.quote-card .drop-map {
+  margin: 8px 0 0;
+  max-width: 100%;
+  max-height: none;
+  border-radius: 12px;
 }
 .quote-card-missing { color: #8ea0b8; cursor: default; }
 .quote-preview {
@@ -2321,7 +2326,6 @@ body { margin: 0; }
 }
 
 .drop-map {
-  position: relative;
   overflow: hidden;
   margin: 10px 0 0 52px;
   max-width: min(420px, calc(100% - 52px));
@@ -2329,24 +2333,46 @@ body { margin: 0; }
   border-radius: 16px;
   background: #05070a;
 }
+.drop-map-view {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 1;
+  background: #000;
+}
+.drop-map-scene {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+}
 .drop-map img {
   display: block;
   width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
+  height: 100%;
+  object-fit: fill;
   background: #000;
+  pointer-events: none;
 }
-.drop-map i {
+.drop-map-pin {
   position: absolute;
+  width: 22px;
+  height: 30px;
+  transform: translate(-50%, -100%) scale(calc(1 / var(--map-zoom, 2.85)));
+  transform-origin: 50% 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+.drop-map-pin span {
+  position: absolute;
+  left: 2px;
+  bottom: 2px;
   width: 18px;
   height: 18px;
-  margin: -18px 0 0 -9px;
   border-radius: 50% 50% 50% 0;
   background: #ff4d4d;
   box-shadow: 0 0 0 3px rgba(255, 77, 77, .28), 0 6px 16px rgba(0, 0, 0, .45);
   transform: rotate(-45deg);
 }
-.drop-map i::after {
+.drop-map-pin span::after {
   position: absolute;
   inset: 5px;
   border-radius: 50%;

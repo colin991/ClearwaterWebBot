@@ -403,14 +403,37 @@ async function refreshDropLocation({ silent = false } = {}) {
   }
 }
 
+function libertyMapPoint(x, z) {
+  const world = 3120;
+  const nx = Number(x) / world;
+  const ny = Number(z) / world;
+  if (!Number.isFinite(nx) || !Number.isFinite(ny)) return null;
+  return {
+    left: 0.0469 + Math.min(1, Math.max(0, nx)) * 0.9023,
+    top: 0.0918 + Math.min(1, Math.max(0, ny)) * 0.8262,
+  };
+}
+
+function mapPinFromLocation(location) {
+  const fromWorld = libertyMapPoint(location?.x, location?.z);
+  if (fromWorld) return fromWorld;
+  const left = Number(location?.left);
+  const top = Number(location?.top);
+  if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
+  return { left, top };
+}
+
 function dropMapMarkup(location) {
-  if (!location || !Number.isFinite(Number(location.left)) || !Number.isFinite(Number(location.top))) return '';
-  const left = Math.min(96, Math.max(4, Number(location.left) * 100));
-  const top = Math.min(96, Math.max(4, Number(location.top) * 100));
+  const pin = mapPinFromLocation(location);
+  if (!pin) return '';
+  const zoom = 2.85;
+  const minTranslate = (1 - zoom) * 100;
+  const tx = Math.max(minTranslate, Math.min(0, 50 - pin.left * 100 * zoom));
+  const ty = Math.max(minTranslate, Math.min(0, 50 - pin.top * 100 * zoom));
   const caption = location.label && location.postal && !String(location.label).includes(String(location.postal))
     ? `${location.label} · Postal ${location.postal}`
     : (location.label || (location.postal ? `Postal ${location.postal}` : ''));
-  return `<figure class="drop-map"><img src="assets/liberty-county-map.png" alt="Liberty County map" draggable="false" /><i style="left:${left}%;top:${top}%"></i>${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}</figure>`;
+  return `<figure class="drop-map"><div class="drop-map-view"><div class="drop-map-scene" style="--map-zoom:${zoom};transform:translate(${tx.toFixed(2)}%,${ty.toFixed(2)}%) scale(${zoom})"><img src="assets/liberty-county-map.png" alt="Liberty County map" draggable="false" /><i class="drop-map-pin" style="left:${(pin.left * 100).toFixed(2)}%;top:${(pin.top * 100).toFixed(2)}%"><span></span></i></div></div>${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}</figure>`;
 }
 
 function postMediaMarkup(post, displayName) {
