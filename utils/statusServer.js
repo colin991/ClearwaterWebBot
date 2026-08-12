@@ -6,7 +6,7 @@ import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
 import { dropLocationNameCandidates, findPlayerDropLocation } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
-import { AutomodHoldError, banKnownInternetIps, clearExpiredInternetBans, clearExpiredInternetIpBans, clearExpiredInternetPosts, clearKnownInternetIpBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, moderationSnapshot, OFFICIAL_INTERNET_ACCOUNT_ID, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll } from './internetStore.js';
+import { AutomodHoldError, banKnownInternetIps, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, moderationSnapshot, OFFICIAL_INTERNET_ACCOUNT_ID, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -157,12 +157,10 @@ export function startStatusServer(client, config) {
       const store = await readInternetStore();
       const clearedBans = clearExpiredInternetBans(store);
       const clearedIpBans = clearExpiredInternetIpBans(store);
-      const removedPosts = clearExpiredInternetPosts(store);
-      if (clearedBans || clearedIpBans || removedPosts) {
+      if (clearedBans || clearedIpBans) {
         await saveInternetStore(store);
         if (clearedBans) logger.info(`Automatically unbanned ${clearedBans} Clearwater Internet account(s).`);
         if (clearedIpBans) logger.info(`Removed ${clearedIpBans} expired Clearwater Internet network ban(s).`);
-        if (removedPosts) logger.info(`Automatically removed ${removedPosts} Clearwater Internet post(s) older than 48 hours.`);
       }
     } catch (error) {
       logger.error('Could not clean up expired Clearwater Internet data', error);

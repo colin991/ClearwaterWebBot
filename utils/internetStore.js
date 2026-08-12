@@ -73,10 +73,10 @@ function publicPost(post) {
 }
 
 export function publicPosts(store) {
-  const feed = store.posts.filter((post) => post.kind !== 'reel').slice(0, 100);
-  const reels = store.posts.filter((post) => post.kind === 'reel' && !post.parentId).slice(0, 40);
+  const feed = store.posts.filter((post) => post.kind !== 'reel');
+  const reels = store.posts.filter((post) => post.kind === 'reel' && !post.parentId);
   const reelIds = new Set(reels.map((reel) => reel.id));
-  const comments = store.posts.filter((post) => post.parentId && reelIds.has(post.parentId)).slice(0, 200);
+  const comments = store.posts.filter((post) => post.parentId && reelIds.has(post.parentId));
   return [...reels, ...feed, ...comments].map(publicPost);
 }
 
@@ -200,23 +200,8 @@ export function clearKnownInternetIpBans(store, user) {
   return previous.length - store.ipBans.length;
 }
 
-export function clearExpiredInternetPosts(store, now = Date.now()) {
-  const oldestAllowed = now - (48 * 60 * 60 * 1000);
-  const openReportPostIds = new Set(
-    store.reports
-      .filter((report) => report.status === 'open')
-      .map((report) => report.postId)
-  );
-  const previousCount = store.posts.length;
-
-  store.posts = store.posts.filter((post) => {
-    const createdAt = Date.parse(post.createdAt || '');
-    if (!Number.isFinite(createdAt) || createdAt > oldestAllowed) return true;
-    // Evidence must stay available until an owner finishes the report review.
-    return openReportPostIds.has(post.id);
-  });
-
-  return previousCount - store.posts.length;
+export function clearExpiredInternetPosts() {
+  return 0;
 }
 
 export function upsertInternetUser(store, user) {
@@ -373,14 +358,7 @@ export function createInternetPost(store, user, content, media = {}) {
     createdAt: new Date().toISOString(),
   };
   store.posts.unshift(post);
-  if (isReel) {
-    const extraReels = store.posts.filter((item) => item.kind === 'reel' && !item.parentId).slice(40);
-    if (extraReels.length) {
-      const drop = new Set(extraReels.flatMap((item) => [item.id]));
-      store.posts = store.posts.filter((item) => !drop.has(item.id) && !drop.has(item.parentId));
-    }
-  }
-  store.posts = store.posts.slice(0, 500);
+  store.posts = store.posts.slice(0, 10_000);
   const mentionedHandles = [...new Set((body.match(/(?:^|\s)@([a-z0-9_]{1,80})/gi) || []).map((mention) => mention.trim().slice(1).toLowerCase()))];
   mentionedHandles.forEach((handle) => {
     const recipient = Object.values(store.users).find((member) => String(member.username || '').toLowerCase() === handle);
@@ -467,7 +445,7 @@ export function interactInternetPost(store, { actor, postId, type, content = '',
         createdAt: new Date().toISOString(),
       };
       store.posts.unshift(repost);
-      store.posts = store.posts.slice(0, 500);
+      store.posts = store.posts.slice(0, 10_000);
       addInternetNotification(store, { recipientId: post.authorId, actor: user, type: 'repost', post: repost });
       return { post: repost, reposted: true };
     }
