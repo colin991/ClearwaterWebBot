@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260812-profile-save';
+const INTERNET_VERSION = '20260812-mobile-drop';
 const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const INTERNET_PATH = '/internet';
@@ -468,7 +468,10 @@ function renderDropPreview() {
 
 function locationLine(location) {
   if (!location) return '';
-  return `📍 ${location.label}${location.postal ? ` · Postal ${location.postal}` : ''}`;
+  // Keep street addresses off the post body so automod does not treat drops as doxxing.
+  // The full label still shows on the map caption.
+  if (location.postal) return `📍 Postal ${location.postal}`;
+  return '📍 Location dropped from ER:LC';
 }
 
 function applyDroppedLocation(location) {
@@ -478,7 +481,7 @@ function applyDroppedLocation(location) {
   if (content && line) {
     if (previousLine && content.value.includes(previousLine) && previousLine !== line) {
       content.value = content.value.split(previousLine).join(line);
-    } else if (!content.value.includes(location.label)) {
+    } else if (!content.value.includes(line)) {
       content.value = content.value.trim() ? `${content.value.trim()}\n${line}` : line;
     }
     count.textContent = `${content.value.length} / 500`;
@@ -525,14 +528,23 @@ async function refreshDropLocation({ silent = false } = {}) {
   }
 }
 
+// Official PRC/Sonoran maps are 3120² studs with (0,0) at the northwest
+// corner of the framed landmass. +X is east, +Z is south (down on the image).
+const LIBERTY_MAP = Object.freeze({
+  world: 3120,
+  frameLeft: 0.0469,
+  frameTop: 0.0918,
+  frameWidth: 0.9023,
+  frameHeight: 0.8262,
+});
+
 function libertyMapPoint(x, z) {
-  const world = 3120;
-  const nx = Number(x) / world;
-  const ny = Number(z) / world;
+  const nx = Number(x) / LIBERTY_MAP.world;
+  const ny = Number(z) / LIBERTY_MAP.world;
   if (!Number.isFinite(nx) || !Number.isFinite(ny)) return null;
   return {
-    left: 0.0469 + Math.min(1, Math.max(0, nx)) * 0.9023,
-    top: 0.0918 + Math.min(1, Math.max(0, ny)) * 0.8262,
+    left: LIBERTY_MAP.frameLeft + Math.min(1, Math.max(0, nx)) * LIBERTY_MAP.frameWidth,
+    top: LIBERTY_MAP.frameTop + Math.min(1, Math.max(0, ny)) * LIBERTY_MAP.frameHeight,
   };
 }
 
@@ -548,14 +560,18 @@ function mapPinFromLocation(location) {
 function dropMapMarkup(location) {
   const pin = mapPinFromLocation(location);
   if (!pin) return '';
-  const zoom = 2.85;
+  const zoom = 2.7;
   const minTranslate = (1 - zoom) * 100;
   const tx = Math.max(minTranslate, Math.min(0, 50 - pin.left * 100 * zoom));
   const ty = Math.max(minTranslate, Math.min(0, 50 - pin.top * 100 * zoom));
+  // Keep the pin in view coordinates (outside the scaled scene) so the tip
+  // stays on the true map point and does not drift when zoomed.
+  const screenX = pin.left * 100 * zoom + tx;
+  const screenY = pin.top * 100 * zoom + ty;
   const caption = location.label && location.postal && !String(location.label).includes(String(location.postal))
     ? `${location.label} · Postal ${location.postal}`
     : (location.label || (location.postal ? `Postal ${location.postal}` : ''));
-  return `<figure class="drop-map"><div class="drop-map-view"><div class="drop-map-scene" style="--map-zoom:${zoom};transform:translate(${tx.toFixed(2)}%,${ty.toFixed(2)}%) scale(${zoom})"><img src="assets/liberty-county-map.png" alt="Liberty County map" draggable="false" /><i class="drop-map-pin" style="left:${(pin.left * 100).toFixed(2)}%;top:${(pin.top * 100).toFixed(2)}%"><span></span></i></div></div>${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}</figure>`;
+  return `<figure class="drop-map"><div class="drop-map-view"><div class="drop-map-scene" style="transform:translate(${tx.toFixed(2)}%,${ty.toFixed(2)}%) scale(${zoom})"><img src="assets/liberty-county-map.png" alt="Liberty County map" draggable="false" /></div><i class="drop-map-pin" style="left:${screenX.toFixed(2)}%;top:${screenY.toFixed(2)}%" aria-hidden="true"><span></span></i></div>${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}</figure>`;
 }
 
 function postMediaMarkup(post, displayName) {
@@ -1356,7 +1372,7 @@ function staffCaseMarkup(selected) {
     : `<div class="staff-case-actions">
         <button type="button" class="staff-action-btn primary" data-report-review="accept" data-report-action="warning" data-report-id="${escapeHtml(selected.id)}">Warn</button>
         <button type="button" class="staff-action-btn" data-report-review="accept" data-report-action="delete" data-report-id="${escapeHtml(selected.id)}">${canDelete ? 'Delete post' : 'Confirm hold'}</button>
-        <button type="button" class="staff-action-btn" data-report-review="deny" data-report-id="${escapeHtml(selected.id)}">Dismiss</button>
+        <button type="button" class="staff-action-btn" data-report-review="deny" data-report-id="${escapeHtml(selected.id)}">${selected.source === 'automod' && !selected.postId ? 'Mark false & release' : 'Dismiss'}</button>
         <button type="button" class="staff-action-btn danger" data-report-review="accept" data-report-action="ban" data-report-id="${escapeHtml(selected.id)}">Ban</button>
       </div>`;
   return `<article class="staff-case" data-report-card>
@@ -2234,18 +2250,23 @@ async function submitReportReview({ reportId, decision, moderationAction, reason
     await loadModeration();
     return true;
   } catch (error) {
-    if (moderationError) moderationError.textContent = error.message || 'Could not review this report.';
+    const message = error.message || 'Could not review this report.';
+    if (moderationError && moderationModal && !moderationModal.hidden) moderationError.textContent = message;
+    else window.alert(message);
     return false;
   }
 }
 
-function reviewReport(button) {
+async function reviewReport(button) {
   const decision = button.dataset.reportReview;
   const reportId = button.dataset.reportId;
   const card = button.closest('[data-report-card]');
   const moderationAction = button.dataset.reportAction || card?.querySelector('[data-report-action]')?.value || 'warning';
   if (decision === 'deny') {
-    void submitReportReview({ reportId, decision, moderationAction });
+    button.disabled = true;
+    const ok = await submitReportReview({ reportId, decision, moderationAction });
+    button.disabled = false;
+    if (ok) await loadPosts();
     return;
   }
   pendingReportReview = { reportId, decision, moderationAction };

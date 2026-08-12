@@ -2450,23 +2450,22 @@ body { margin: 0; }
 }
 .drop-map-pin {
   position: absolute;
-  width: 22px;
-  height: 30px;
-  transform: translate(-50%, -100%) scale(calc(1 / var(--map-zoom, 2.85)));
-  transform-origin: 50% 100%;
+  width: 0;
+  height: 0;
   pointer-events: none;
-  z-index: 2;
+  z-index: 3;
 }
 .drop-map-pin span {
   position: absolute;
-  left: 2px;
-  bottom: 2px;
+  left: -9px;
+  top: -22px;
   width: 18px;
   height: 18px;
   border-radius: 50% 50% 50% 0;
   background: #ff4d4d;
   box-shadow: 0 0 0 3px rgba(255, 77, 77, .28), 0 6px 16px rgba(0, 0, 0, .45);
   transform: rotate(-45deg);
+  transform-origin: 50% 50%;
 }
 .drop-map-pin span::after {
   position: absolute;
@@ -4679,4 +4678,148 @@ body { margin: 0; }
   .staff-app .staff-user-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   .staff-app .staff-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   .staff-app .staff-tabs button { font-size: 11px; padding: 0 4px; }
+}
+
+/* ==========================================================================
+   Mobile cleanup — wins over earlier desktop gutters / !important wars
+   ========================================================================== */
+@media (max-width: 660px) {
+  html, body {
+    overflow-x: clip;
+  }
+  .internet-shell {
+    width: min(100% - 16px, 620px) !important;
+    padding: 10px 0 28px !important;
+  }
+  .internet-rail {
+    gap: 8px !important;
+    margin-bottom: 10px !important;
+  }
+  .internet-nav {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 2px 0 4px !important;
+    gap: 2px !important;
+  }
+  .internet-nav a {
+    padding: 8px 9px !important;
+    font-size: 12px !important;
+  }
+  .internet-feed {
+    padding: 0 !important;
+  }
+  .feed-tabs button {
+    padding: 12px 4px !important;
+    font-size: 12px !important;
+  }
+  .post {
+    padding: 12px 12px 10px !important;
+  }
+  .post-content,
+  .post-actions,
+  .post-gif,
+  .post-image,
+  .post-poll,
+  .quote-card,
+  .drop-map {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .quote-card {
+    width: 100% !important;
+  }
+  .drop-map {
+    margin-top: 10px !important;
+    border-radius: 14px;
+  }
+  .drop-preview .drop-map {
+    max-width: 100% !important;
+  }
+  .composer,
+  .internet-view[data-view="home"] .composer {
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 0 10px !important;
+    padding: 12px !important;
+  }
+  .internet-view[data-view="home"] .composer-main > .composer-entry,
+  .internet-view[data-view="home"] .composer textarea,
+  .internet-view[data-view="home"] .composer-highlight {
+    position: relative !important;
+    inset: auto !important;
+    height: auto !important;
+    min-height: 44px !important;
+    max-height: none !important;
+  }
+  .composer-tools {
+    flex-wrap: wrap;
+    gap: 6px !important;
+  }
+  .composer-tools button {
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .composer-footer {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .profile-view .profile-content,
+  .member-page .profile-content {
+    padding: 0 14px 14px !important;
+  }
+  .profile-actions,
+  .member-page-actions {
+    float: none !important;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 8px 0 0 !important;
+  }
+  .profile-stats,
+  .profile-meta {
+    gap: 8px 12px !important;
+  }
+  .settings-shell {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    padding: 12px !important;
+  }
+  .settings-nav {
+    position: static !important;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .settings-nav::-webkit-scrollbar { display: none; }
+  .settings-stack label {
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px !important;
+  }
+  .settings-stack small {
+    max-width: none !important;
+  }
+  .conversation-view {
+    min-height: calc(100dvh - 120px);
+  }
+  .conversation-compose {
+    gap: 6px !important;
+    padding: 8px !important;
+  }
+  .message-list .internet-message,
+  .notification-list .notification-item {
+    padding: 12px !important;
+  }
+  .staff-mode .internet-shell {
+    width: 100% !important;
+    padding: 0 !important;
+  }
+  .staff-app .staff-tabs {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .staff-app .staff-action-btn {
+    flex: 1 1 calc(50% - 8px);
+  }
 }

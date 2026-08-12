@@ -127,8 +127,18 @@ const rules = [
   },
 ];
 
+// Drop-location captions often look like street addresses ("12 Main St").
+// Strip those lines before scanning so ER:LC pins are not held as doxxing.
+export function stripLocationCaption(value) {
+  return String(value || '')
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*📍\s*/u.test(line) && !/^\s*location dropped from er:lc\b/i.test(line))
+    .join('\n')
+    .trim();
+}
+
 export function scanInternetContent(value) {
-  const raw = String(value || '');
+  const raw = stripLocationCaption(value);
   if (!raw.trim()) return null;
   const folded = foldedText(raw);
   const collapsed = collapsedText(raw);
