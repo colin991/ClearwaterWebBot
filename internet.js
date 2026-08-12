@@ -1005,7 +1005,11 @@ function openMemberProfile(memberId, updateHash = true) {
   }
   const mutuals = document.querySelector('[data-member-page-mutuals]');
   if (mutuals) {
-    const mutualIds = socialState.following.filter((id) => memberFollowing.includes(id) && internetUsers.has(id));
+    // A mutual friend must be an actual two-way connection for both members.
+    // One-sided follows belong in the connection list above, not here.
+    const myFriendIds = socialState.following.filter((id) => socialState.followers.includes(id));
+    const memberFriendIds = memberFollowing.filter((id) => memberFollowers.includes(id));
+    const mutualIds = myFriendIds.filter((id) => id !== activeUserId() && memberFriendIds.includes(id) && internetUsers.has(id));
     mutuals.hidden = mutualIds.length === 0;
     mutuals.innerHTML = mutualIds.length ? `<span>${mutualIds.slice(0, 3).map((id) => `<img src="${escapeHtml(internetUsers.get(id).avatarUrl || 'assets/clearwater-logo.png')}" alt="" />`).join('')}</span><button type="button" data-open-member="${escapeHtml(mutualIds[0])}">${mutualIds.length === 1 ? `${escapeHtml(internetUsers.get(mutualIds[0]).displayName || 'One member')} is a mutual friend` : `${mutualIds.length} mutual friends`}</button>` : '';
   }

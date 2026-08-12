@@ -9,6 +9,20 @@ export class AutomodHoldError extends Error {
 }
 
 const compact = (value) => String(value || '')
+  .normalize('NFKD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[а]/gi, 'a')
+  .replace(/[с]/gi, 'c')
+  .replace(/[е]/gi, 'e')
+  .replace(/[һ]/gi, 'h')
+  .replace(/[іı]/gi, 'i')
+  .replace(/[ј]/gi, 'j')
+  .replace(/[к]/gi, 'k')
+  .replace(/[оο]/gi, 'o')
+  .replace(/[р]/gi, 'p')
+  .replace(/[ѕ]/gi, 's')
+  .replace(/[т]/gi, 't')
+  .replace(/[х]/gi, 'x')
   .toLowerCase()
   .replace(/[@$0]/g, 'o')
   .replace(/[1!|]/g, 'i')
@@ -44,6 +58,12 @@ const rules = [
     tests: [
       /\b(?:nigg(?:a|er)s?|fag+ots?|kikes?|trann(?:y|ies)|retard(?:ed|s)?)\b/i,
     ],
+    extra: (_raw, folded) => {
+      // Catch spacing, punctuation, leetspeak, repeated letters, and common
+      // Unicode look-alikes used to bypass the n-word rule.
+      const collapsed = String(folded || '').replace(/\s+/g, '');
+      return /n+i+g{2,}(?:a|e+r?)s?/.test(collapsed);
+    },
   },
   {
     category: 'scam',
