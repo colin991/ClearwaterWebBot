@@ -2119,7 +2119,23 @@ async function loadGifs(query = '') {
   } catch (error) { gifMessage.textContent = error.message || 'GIF search is unavailable. Add GIPHY_API_KEY in Vercel to enable it.'; }
 }
 
-gifButton?.addEventListener('click', () => { pickerTarget = 'post'; gifModal.hidden = false; gifQuery?.focus(); void loadGifs(); });
+function openGifPicker(target = 'post') {
+  pickerTarget = target;
+  if (!gifModal) return;
+  gifModal.hidden = false;
+  gifQuery?.focus();
+  void loadGifs();
+}
+
+function openEmojiPicker(target = 'post') {
+  pickerTarget = target;
+  if (!emojiModal) return;
+  emojiModal.hidden = false;
+  renderEmojiGrid();
+  emojiQuery?.focus();
+}
+
+gifButton?.addEventListener('click', () => openGifPicker('post'));
 imageButton?.addEventListener('click', () => imageUpload?.click());
 function addImageToPost(file) {
   if (!file) return;
@@ -2159,7 +2175,7 @@ gifSearch?.addEventListener('submit', async (event) => {
 mentionButton?.addEventListener('click', () => { mentionModal.hidden = false; renderMentionResults(); mentionQuery?.focus(); });
 document.querySelector('[data-close-mention]')?.addEventListener('click', () => { mentionModal.hidden = true; });
 mentionQuery?.addEventListener('input', renderMentionResults);
-emojiButton?.addEventListener('click', () => { pickerTarget = 'post'; emojiModal.hidden = false; renderEmojiGrid(); emojiQuery?.focus(); });
+emojiButton?.addEventListener('click', () => openEmojiPicker('post'));
 document.querySelector('[data-close-emoji]')?.addEventListener('click', () => { emojiModal.hidden = true; });
 emojiQuery?.addEventListener('input', renderEmojiGrid);
 [gifModal, emojiModal, mentionModal].forEach((modal) => modal?.addEventListener('click', (event) => {
@@ -2194,8 +2210,8 @@ document.querySelector('[data-new-message]')?.addEventListener('click', () => { 
 document.querySelector('[data-member-page-message]')?.addEventListener('click', () => { openConversation(viewedMember); });
 document.querySelector('[data-close-message]')?.addEventListener('click', () => { messageModal.hidden = true; });
 messageUserSearch?.addEventListener('input', renderMessageUserResults);
-document.querySelector('[data-conversation-gif]')?.addEventListener('click', () => { pickerTarget = 'message'; gifModal.hidden = false; gifQuery?.focus(); void loadGifs(); });
-document.querySelector('[data-conversation-emoji]')?.addEventListener('click', () => { pickerTarget = 'message'; emojiModal.hidden = false; renderEmojiGrid(); emojiQuery?.focus(); });
+document.querySelector('[data-conversation-gif]')?.addEventListener('click', () => openGifPicker('message'));
+document.querySelector('[data-conversation-emoji]')?.addEventListener('click', () => openEmojiPicker('message'));
 document.querySelector('[data-close-conversation]')?.addEventListener('click', () => { showView('messages'); });
 document.querySelector('[data-open-conversation-profile]')?.addEventListener('click', () => { if (viewedMember) openMemberProfile(viewedMember.id); });
 conversationInput?.addEventListener('input', () => {
