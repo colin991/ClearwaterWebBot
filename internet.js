@@ -184,6 +184,11 @@ let staffHistoryFilter = 'all';
 let staffHistoryQuery = '';
 let staffUserQuery = '';
 const expandedPollVoters = new Set();
+const clearwaterEmojiChoices = [
+  ['🚓', 'Police'], ['🚒', 'Fire rescue'], ['🚑', 'EMS'], ['🌴', 'Clearwater'],
+  ['🌊', 'Gulf Coast'], ['☀️', 'Florida'], ['🛟', 'Lifeguard'], ['📍', 'Location'],
+  ['✅', 'Approved'], ['⚠️', 'Alert'], ['📢', 'Announcement'], ['💙', 'Clearwater blue'],
+];
 const emojiChoices = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😍','😘','🥰','😎','🤩','🥳','🤔','😢','😭','😡','🤯','😴','👀','💀','❤️','💙','💚','🔥','✨','🎉','🚓','🚒','🚑','👍','👎','✅','❌','⚠️','📌','📷','🎮'];
 
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
@@ -1669,9 +1674,10 @@ function renderMentionResults() {
 
 function renderEmojiGrid() {
   if (!emojiGrid) return;
-  const query = String(emojiQuery?.value || '').trim();
-  const items = query ? emojiChoices.filter((emoji) => emoji.includes(query)) : emojiChoices;
-  emojiGrid.innerHTML = items.map((emoji) => `<button type="button" data-emoji-choice="${emoji}" aria-label="${emoji}">${emoji}</button>`).join('');
+  const query = String(emojiQuery?.value || '').trim().toLowerCase();
+  const custom = clearwaterEmojiChoices.filter(([emoji, label]) => !query || emoji.includes(query) || label.toLowerCase().includes(query));
+  const regular = emojiChoices.filter((emoji) => !query || emoji.includes(query));
+  emojiGrid.innerHTML = `${custom.length ? `<p class="emoji-section-title">Clearwater favorites</p>${custom.map(([emoji, label]) => `<button type="button" class="clearwater-emoji" data-emoji-choice="${emoji}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${emoji}</button>`).join('')}` : ''}${regular.length ? `<p class="emoji-section-title">Emoji</p>${regular.map((emoji) => `<button type="button" data-emoji-choice="${emoji}" aria-label="${emoji}">${emoji}</button>`).join('')}` : '<p class="emoji-no-results">No emojis found.</p>'}`;
 }
 
 async function loadGifs(query = '') {
@@ -1679,12 +1685,12 @@ async function loadGifs(query = '') {
   gifMessage.textContent = query ? 'Searching GIFs...' : 'Loading trending GIFs...';
   gifResults.innerHTML = '';
   try {
-    const response = await fetch(`/api/giphy${query ? `?q=${encodeURIComponent(query)}` : ''}`);
+    const response = await fetch(`/api/giphy${query ? `?q=${encodeURIComponent(query)}` : ''}`, { cache: 'no-store' });
     const result = await readApiJson(response, 'GIF search is unavailable.');
     if (!response.ok) throw new Error(result.error || 'GIF search is unavailable.');
     gifMessage.textContent = result.gifs?.length ? (query ? 'Choose a GIF.' : 'Trending GIFs') : 'No GIFs found.';
     gifResults.innerHTML = (result.gifs || []).map((gif) => `<button type="button" data-gif-url="${escapeHtml(gif.url)}" data-gif-title="${escapeHtml(gif.title)}"><img src="${escapeHtml(gif.previewUrl)}" alt="${escapeHtml(gif.title)}" /></button>`).join('');
-  } catch (error) { gifMessage.textContent = error.message || 'GIF search is unavailable.'; }
+  } catch (error) { gifMessage.textContent = error.message || 'GIF search is unavailable. Add GIPHY_API_KEY in Vercel to enable it.'; }
 }
 
 gifButton?.addEventListener('click', () => { pickerTarget = 'post'; gifModal.hidden = false; gifQuery?.focus(); void loadGifs(); });

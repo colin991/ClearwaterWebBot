@@ -2511,6 +2511,24 @@ body { margin: 0; }
   border-radius: 12px !important;
   font-size: 28px !important;
 }
+.emoji-grid .emoji-section-title,
+.emoji-grid .emoji-no-results {
+  grid-column: 1 / -1;
+  margin: 6px 2px 0;
+  color: #92a7c7;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.emoji-grid .emoji-section-title + .clearwater-emoji { margin-left: 0; }
+.emoji-grid .clearwater-emoji {
+  border: 1px solid rgba(82, 150, 255, .3);
+  color: #fff;
+  background: linear-gradient(145deg, rgba(36, 91, 166, .55), rgba(10, 34, 67, .72));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.emoji-grid .clearwater-emoji:hover { border-color: #6fa8ff; background: rgba(53, 117, 224, .7); }
 .internet-view[data-view="home"] .composer .composer-tools [data-emoji-button] {
   width: 34px !important;
   height: 34px !important;
