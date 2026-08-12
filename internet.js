@@ -1232,7 +1232,13 @@ async function loadPosts() {
   }
   loadingPosts = true;
   try {
-    const response = await fetch('/api/internet');
+    // A unique query value prevents an intermediary cache from returning an
+    // older feed to one member while other members see newer posts.
+    const response = await fetch(`/api/internet?feed=${Date.now()}`, {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: { 'Cache-Control': 'no-cache' },
+    });
     const result = await readApiJson(response, 'Clearwater Internet could not reach the website service.');
     if (!response.ok) throw new Error(result.error || 'Service unavailable');
     allPosts = result.posts || [];
