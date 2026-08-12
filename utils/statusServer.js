@@ -453,7 +453,10 @@ export function startStatusServer(client, config) {
           return json(response, 200, { settings, snapshot: moderationSnapshot(store) });
         }
 
-        if (!body.owner || !['verify', 'ban'].includes(body.action)) {
+        if (!['verify', 'ban'].includes(body.action)) {
+          return json(response, 400, { error: `Unsupported action: ${String(body.action || 'unknown')}` });
+        }
+        if (!body.owner) {
           return json(response, 403, { error: 'Owner access required' });
         }
 
