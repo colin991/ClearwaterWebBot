@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-staff-badge';
+const INTERNET_VERSION = '20260812-polish';
 const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const INTERNET_PATH = '/internet';
@@ -163,10 +163,15 @@ let pendingReportReview = null;
 let selectedGif = null;
 let selectedImage = null;
 let messageGif = null;
-let activeReelWithSound = null;
+let reelsSoundOn = false;
 let pickerTarget = 'post';
 let socialState = { following: [], followers: [], blocked: [], muted: [], bookmarks: [], unreadNotifications: 0, unreadMessages: 0 };
 let viewedMember = null;
+let profileTab = 'posts';
+let memberTab = 'posts';
+let preferenceState = {};
+let profileDraft = null;
+let profileBannerBusy = false;
 let pendingPostAction = null;
 let openPostId = null;
 let moderationSnapshot = null;
@@ -179,6 +184,12 @@ let selectedQuoteId = null;
 let activeReelId = null;
 let reelMedia = null;
 let reelObserver = null;
+let reelTapTimer = 0;
+let reelTapCard = null;
+let reelTapAt = 0;
+let reelTapX = 0;
+let reelTapY = 0;
+let reelPointer = null;
 let staffTab = 'overview';
 let staffQueueFilter = 'pending';
 let staffHistoryFilter = 'all';
@@ -239,19 +250,78 @@ const safeCssImageUrl = (value) => {
   }
 };
 const safeBannerColor = (value) => /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(String(value || '').trim()) ? String(value).trim() : '';
-const setBannerImage = (element, url, color) => {
+const accentRgb = (value) => {
+  const hex = safeBannerColor(value).slice(1, 7);
+  if (!hex) return '';
+  const full = hex.length === 3 ? hex.split('').map((part) => part + part).join('') : hex.padEnd(6, '0');
+  const channels = [0, 2, 4].map((offset) => parseInt(full.slice(offset, offset + 2), 16));
+  return channels.some((channel) => Number.isNaN(channel)) ? '' : channels.join(', ');
+};
+const setBannerImage = (element, url, color, accent = '') => {
   if (!element) return;
   const image = safeCssImageUrl(url);
   const tint = safeBannerColor(color);
+  const rgb = accentRgb(accent);
+  const wash = rgb
+    ? `linear-gradient(110deg, rgba(3, 10, 22, .55), rgba(${rgb}, .45))`
+    : 'linear-gradient(110deg, rgba(3, 10, 22, .48), rgba(18, 87, 163, .25))';
   if (image) {
-    element.style.backgroundImage = `linear-gradient(110deg, rgba(3, 10, 22, .48), rgba(18, 87, 163, .25)), url("${image}")`;
+    element.style.backgroundImage = `${wash}, url("${image}")`;
     return;
   }
   if (tint) {
     element.style.backgroundImage = `linear-gradient(110deg, ${tint}, #061221)`;
     return;
   }
+  if (rgb) {
+    element.style.backgroundImage = `linear-gradient(110deg, rgba(${rgb}, .9), #061221)`;
+    return;
+  }
   element.style.backgroundImage = '';
+};
+const setProfileAccent = (root, accent) => {
+  if (!root) return;
+  const rgb = accentRgb(accent);
+  if (rgb) {
+    root.style.setProperty('--profile-accent', safeBannerColor(accent));
+    root.style.setProperty('--profile-accent-rgb', rgb);
+    root.classList.add('has-accent');
+  } else {
+    root.style.removeProperty('--profile-accent');
+    root.style.removeProperty('--profile-accent-rgb');
+    root.classList.remove('has-accent');
+  }
+};
+const safeLinkUrl = (value) => {
+  try {
+    const url = new URL(String(value || '').trim());
+    return url.protocol === 'https:' && !url.username && !url.password ? url.href : '';
+  } catch {
+    return '';
+  }
+};
+const joinedLabel = (value) => {
+  const joined = new Date(value);
+  return Number.isNaN(joined.getTime()) ? '' : joined.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+};
+const profileMetaMarkup = (user = {}) => {
+  const items = [];
+  if (user.pronouns) items.push(`<span><span aria-hidden="true">◈</span> ${escapeHtml(user.pronouns)}</span>`);
+  if (user.location) items.push(`<span><span aria-hidden="true">⌖</span> ${escapeHtml(user.location)}</span>`);
+  const link = safeLinkUrl(user.website);
+  if (link) {
+    const label = link.replace(/^https:\/\//i, '').replace(/\/$/, '');
+    items.push(`<a href="${escapeHtml(link)}" target="_blank" rel="noopener nofollow ugc"><span aria-hidden="true">⧉</span> ${escapeHtml(label)}</a>`);
+  }
+  const joined = joinedLabel(user.createdAt);
+  if (joined) items.push(`<span><span aria-hidden="true">◷</span> Joined ${escapeHtml(joined)}</span>`);
+  return items.join('');
+};
+const renderProfileMeta = (element, user) => {
+  if (!element) return;
+  const markup = profileMetaMarkup(user);
+  element.innerHTML = markup;
+  element.hidden = !markup;
 };
 const timeAgo = (value) => {
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
@@ -575,7 +645,7 @@ function postMarkup(post, profile = false) {
     ? `<small class="reposted-label">↻ ${escapeHtml(wrapper.displayName || 'A member')} reposted</small>`
     : '';
   const media = postMediaMarkup(display, displayName);
-  return `<article class="post" data-post-card="${escapeHtml(display.id)}">${repostLabel}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(display.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || display)}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(display.createdAt)}${display.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? ` &middot; <span class="post-rank">${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(display)}</div>${display.content ? `<p class="post-content">${body}</p>` : ''}${quoteMarkup}${media}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(display.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options" class="${alreadyReposted ? 'reposted' : ''}">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(display.id)}">${alreadyReposted ? 'Undo repost' : 'Repost'}</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(display.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(display.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-engage="share" data-post-id="${escapeHtml(display.id)}">${postActionIcon('share')}</button></div></article>`;
+  return `<article class="post" data-post-card="${escapeHtml(display.id)}">${repostLabel}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(display.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || display)}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(display.createdAt)}${display.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? `<span class="post-rank"> &middot; ${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(display)}</div>${display.content ? `<p class="post-content">${body}</p>` : ''}${quoteMarkup}${media}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(display.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options" class="${alreadyReposted ? 'reposted' : ''}">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(display.id)}">${alreadyReposted ? 'Undo repost' : 'Repost'}</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(display.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(display.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-engage="share" data-post-id="${escapeHtml(display.id)}">${postActionIcon('share')}</button></div></article>`;
 }
 
 function safeGifUrl(value) {
@@ -612,11 +682,40 @@ function pauseReelVideos() {
     video.pause();
     video.muted = true;
   });
-  activeReelWithSound = null;
 }
 
-function soundIcon() {
-  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Zm12.5.2a4 4 0 0 1 0 5.6m2.7-8.3a8 8 0 0 1 0 11" /></svg>';
+function soundIcon(on = false) {
+  return on
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Zm12.5.2a4 4 0 0 1 0 5.6m2.7-8.3a8 8 0 0 1 0 11" /></svg>'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Zm12 1.6 5 4.8m0-4.8-5 4.8" /></svg>';
+}
+
+function syncReelSoundControls() {
+  document.querySelectorAll('[data-reels-viewport] [data-reel-sound]').forEach((button) => {
+    button.classList.toggle('is-on', reelsSoundOn);
+    button.setAttribute('aria-pressed', reelsSoundOn ? 'true' : 'false');
+    button.setAttribute('aria-label', reelsSoundOn ? 'Turn off sound' : 'Turn on sound');
+    button.innerHTML = `${soundIcon(reelsSoundOn)}<span class="sr-only">${reelsSoundOn ? 'Sound on' : 'Muted'}</span>`;
+  });
+}
+
+function setReelSound(on) {
+  reelsSoundOn = Boolean(on);
+  document.querySelectorAll('[data-reels-viewport] video').forEach((video) => {
+    video.muted = !reelsSoundOn || video.paused;
+  });
+  syncReelSoundControls();
+}
+
+function toggleReelSound(card) {
+  setReelSound(!reelsSoundOn);
+  const video = card?.querySelector('video');
+  if (!video || !reelsSoundOn) return;
+  video.muted = false;
+  void video.play().catch(() => {
+    setReelSound(false);
+    void video.play().catch(() => {});
+  });
 }
 
 function bindReelAutoplay() {
@@ -628,16 +727,135 @@ function bindReelAutoplay() {
       const video = entry.target.querySelector('video');
       if (!video) return;
       if (entry.isIntersecting && entry.intersectionRatio > 0.65) {
-        video.muted = entry.target.dataset.reelId !== activeReelWithSound;
-        void video.play().catch(() => {});
+        video.muted = !reelsSoundOn;
+        void video.play().catch(() => {
+          // Autoplay with sound can be refused; fall back to a muted play so the reel never stalls.
+          setReelSound(false);
+          void video.play().catch(() => {});
+        });
       } else {
         video.pause();
         video.muted = true;
-        if (entry.target.dataset.reelId === activeReelWithSound) activeReelWithSound = null;
       }
     });
   }, { root: viewport, threshold: [0.65] });
   viewport.querySelectorAll('.reel-card').forEach((card) => reelObserver.observe(card));
+  bindReelGestures(viewport);
+}
+
+function clearReelTap() {
+  if (reelTapTimer) window.clearTimeout(reelTapTimer);
+  reelTapTimer = 0;
+  reelTapCard = null;
+}
+
+function flashReelGlyph(card, paused) {
+  if (!card) return;
+  card.querySelector('.reel-tap-glyph')?.remove();
+  const glyph = document.createElement('div');
+  glyph.className = 'reel-tap-glyph';
+  glyph.setAttribute('aria-hidden', 'true');
+  glyph.innerHTML = paused
+    ? '<svg viewBox="0 0 24 24"><path d="M9 5h2.6v14H9zm3.4 0H15v14h-2.6z" /></svg>'
+    : '<svg viewBox="0 0 24 24"><path d="M8 5.2v13.6L19 12z" /></svg>';
+  card.append(glyph);
+  glyph.addEventListener('animationend', () => glyph.remove(), { once: true });
+  window.setTimeout(() => glyph.remove(), 1200);
+}
+
+function burstReelHeart(card) {
+  if (!card) return;
+  const burst = document.createElement('div');
+  burst.className = 'reel-heart-burst';
+  burst.setAttribute('aria-hidden', 'true');
+  burst.innerHTML = '<svg viewBox="0 0 24 24"><path d="M20.8 8.6c0 5-8.8 10.4-8.8 10.4S3.2 13.6 3.2 8.6A4.6 4.6 0 0 1 12 6.8a4.6 4.6 0 0 1 8.8 1.8Z" /></svg>';
+  card.append(burst);
+  burst.addEventListener('animationend', () => burst.remove(), { once: true });
+  window.setTimeout(() => burst.remove(), 1400);
+}
+
+function toggleReelPlayback(card) {
+  const video = card?.querySelector('video');
+  if (!video) return;
+  if (video.paused) {
+    flashReelGlyph(card, false);
+    video.muted = !reelsSoundOn;
+    void video.play().catch(() => {
+      setReelSound(false);
+      void video.play().catch(() => {});
+    });
+    return;
+  }
+  video.pause();
+  flashReelGlyph(card, true);
+}
+
+function likeReelFromTap(card) {
+  const button = card?.querySelector('[data-reel-like]');
+  if (!button) return;
+  burstReelHeart(card);
+  // Double tap only ever likes; unliking stays on the side rail button.
+  if (button.classList.contains('liked')) return;
+  void handlePostEngagement('like', button.dataset.reelLike, button);
+}
+
+function handleReelTap(card, x, y) {
+  const now = Date.now();
+  const nearby = Math.abs(x - reelTapX) < 56 && Math.abs(y - reelTapY) < 56;
+  if (reelTapTimer && reelTapCard === card && now - reelTapAt < 320 && nearby) {
+    clearReelTap();
+    likeReelFromTap(card);
+    return;
+  }
+  clearReelTap();
+  reelTapCard = card;
+  reelTapAt = now;
+  reelTapX = x;
+  reelTapY = y;
+  reelTapTimer = window.setTimeout(() => {
+    reelTapTimer = 0;
+    reelTapCard = null;
+    toggleReelPlayback(card);
+  }, 260);
+}
+
+function bindReelGestures(viewport) {
+  if (!viewport || viewport.dataset.reelGestures === 'on') return;
+  viewport.dataset.reelGestures = 'on';
+  viewport.addEventListener('pointerdown', (event) => {
+    reelPointer = null;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    const card = event.target.closest('.reel-card');
+    if (!card || event.target.closest('button, a, input, textarea, .reel-actions')) return;
+    reelPointer = { id: event.pointerId, card, x: event.clientX, y: event.clientY, at: Date.now() };
+  });
+  viewport.addEventListener('pointerup', (event) => {
+    const start = reelPointer;
+    reelPointer = null;
+    if (!start || start.id !== event.pointerId) return;
+    // Anything that drifted is a swipe between reels, not a tap.
+    if (Math.abs(event.clientX - start.x) > 12 || Math.abs(event.clientY - start.y) > 12) return;
+    if (Date.now() - start.at > 700) return;
+    handleReelTap(start.card, event.clientX, event.clientY);
+  });
+  viewport.addEventListener('pointercancel', () => { reelPointer = null; });
+  viewport.addEventListener('dblclick', (event) => {
+    if (event.target.closest('.reel-card')) event.preventDefault();
+  });
+}
+
+function updateReelStats(card, reel) {
+  if (!card || !reel) return;
+  const likes = Array.isArray(reel.likes) ? reel.likes : [];
+  const liked = likes.includes(activeUserId());
+  const comments = allPosts.filter((item) => item.parentId === reel.id).length;
+  const likeButton = card.querySelector('[data-reel-like]');
+  if (likeButton) {
+    likeButton.classList.toggle('liked', liked);
+    likeButton.innerHTML = `${postActionIcon('like', liked)}<span>${likes.length || ''}</span>`;
+  }
+  const commentCount = card.querySelector('[data-reel-comments] span');
+  if (commentCount) commentCount.textContent = comments || '';
 }
 
 function renderReels() {
@@ -645,21 +863,40 @@ function renderReels() {
   if (!viewport) return;
   const reels = allPosts.filter((post) => post.kind === 'reel' && !post.parentId && !socialState.muted.includes(post.authorId) && !socialState.blocked.includes(post.authorId));
   if (!reels.length) {
+    viewport.dataset.reelSignature = '';
     viewport.innerHTML = '<p class="reels-empty">No Reels yet. Post a photo or short video to start the feed.</p>';
     return;
   }
+  // Patch counts in place when the line-up is unchanged so liking never restarts playback or loses scroll position.
+  const signature = reels.map((reel) => reel.id).join('|');
+  const cards = viewport.querySelectorAll('.reel-card');
+  if (viewport.dataset.reelSignature === signature && cards.length === reels.length) {
+    cards.forEach((card, index) => updateReelStats(card, reels[index]));
+    return;
+  }
+  viewport.dataset.reelSignature = signature;
+  clearReelTap();
+  const anchorId = [...cards].find((card) => card.offsetTop + card.offsetHeight > viewport.scrollTop + 8)?.dataset.reelId || '';
   viewport.innerHTML = reels.map((reel) => {
     const likes = Array.isArray(reel.likes) ? reel.likes : [];
     const liked = likes.includes(activeUserId());
     const comments = allPosts.filter((item) => item.parentId === reel.id).length;
+    const author = internetUsers.get(reel.authorId) || {};
+    const displayName = author.displayName || reel.displayName || reel.username || 'member';
+    const username = author.username || reel.username || 'member';
+    const avatarUrl = author.avatarUrl || reel.avatarUrl || 'assets/clearwater-logo.png';
     const media = safeVideoUrl(reel.videoUrl)
       ? `<video src="${escapeHtml(reel.videoUrl)}" loop muted playsinline preload="auto"></video>`
       : (safeImageUrl(reel.imageUrl) ? `<img src="${escapeHtml(reel.imageUrl)}" alt="" />` : '<p class="reel-missing">This Reel could not be loaded.</p>');
     const sound = safeVideoUrl(reel.videoUrl)
-      ? `<button type="button" class="reel-sound" data-reel-sound="${escapeHtml(reel.id)}" aria-label="Turn on sound">${soundIcon()}</button>`
+      ? `<button type="button" class="reel-mute${reelsSoundOn ? ' is-on' : ''}" data-reel-sound="${escapeHtml(reel.id)}" aria-pressed="${reelsSoundOn ? 'true' : 'false'}" aria-label="${reelsSoundOn ? 'Turn off sound' : 'Turn on sound'}">${soundIcon(reelsSoundOn)}<span class="sr-only">${reelsSoundOn ? 'Sound on' : 'Muted'}</span></button>`
       : '';
-    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}${sound}<div class="reel-gradient"></div><div class="reel-meta"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(reel.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span>@${escapeHtml(reel.username || 'member')}</span></button>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}">${postActionIcon('share')}</button></div></article>`;
+    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient" aria-hidden="true"></div><div class="reel-meta"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(avatarUrl)}" alt="" /><span class="reel-author"><b>${escapeHtml(displayName)}</b><small>@${escapeHtml(username)}</small></span></button>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}" aria-label="Like">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}" aria-label="Comments">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}" aria-label="Share">${postActionIcon('share')}</button>${sound}</div></article>`;
   }).join('');
+  if (anchorId) {
+    const stayOn = [...viewport.querySelectorAll('.reel-card')].find((card) => card.dataset.reelId === anchorId);
+    if (stayOn) viewport.scrollTo({ top: stayOn.offsetTop, behavior: 'instant' });
+  }
   bindReelAutoplay();
 }
 
@@ -814,6 +1051,25 @@ function renderPosts() {
   renderBookmarks();
 }
 
+function profileTabPosts(userId, tab) {
+  const authored = allPosts.filter((post) => post.authorId === userId);
+  if (tab === 'replies') return authored.filter((post) => post.parentId);
+  if (tab === 'media') return authored.filter((post) => !post.parentId && (post.imageUrl || post.videoUrl || post.gifUrl));
+  if (tab === 'likes') return allPosts.filter((post) => !post.parentId && Array.isArray(post.likes) && post.likes.includes(userId));
+  return authored.filter((post) => post.kind !== 'reel' && !post.parentId);
+}
+
+// The pinned post is lifted to the top of the Posts tab only. Other tabs keep
+// plain reverse-chronological order so the pin does not show up twice.
+function profileListMarkup(posts, tab, pinnedPostId, emptyMessage) {
+  if (!posts.length) return `<p>${escapeHtml(emptyMessage)}</p>`;
+  const pinned = tab === 'posts' && pinnedPostId ? posts.find((post) => post.id === pinnedPostId) : null;
+  const ordered = pinned ? [pinned, ...posts.filter((post) => post.id !== pinned.id)] : posts;
+  return ordered.map((post) => (pinned && post.id === pinned.id
+    ? `<div class="pinned-post"><span class="pinned-flag"><span aria-hidden="true">📌</span> Pinned post</span>${postMarkup(post, true)}</div>`
+    : postMarkup(post, true))).join('');
+}
+
 function renderProfilePosts() {
   if (!profileList) return;
   if (!currentUserId) {
@@ -821,11 +1077,44 @@ function renderProfilePosts() {
     return;
   }
 
-  const posts = allPosts.filter((post) => post.authorId === currentUserId && post.kind !== 'reel' && !post.parentId);
-  if (profilePostCount) profilePostCount.textContent = posts.length.toLocaleString();
-  profileList.innerHTML = posts.length
-    ? posts.map((post) => postMarkup(post, true)).join('')
-    : '<p>You have not posted yet.</p>';
+  const me = internetUsers.get(currentUserId);
+  const posts = profileTabPosts(currentUserId, profileTab);
+  if (profilePostCount) profilePostCount.textContent = profileTabPosts(currentUserId, 'posts').length.toLocaleString();
+  const empty = {
+    posts: 'You have not posted yet.',
+    replies: 'Your replies will appear here.',
+    media: 'Photos, GIFs, and Reels you post will appear here.',
+    likes: 'Posts you like will appear here.',
+  }[profileTab] || 'Nothing here yet.';
+  profileList.innerHTML = profileListMarkup(posts, profileTab, me?.pinnedPostId, empty);
+}
+
+function renderOwnProfileDetails() {
+  if (!currentUserId) return;
+  const me = internetUsers.get(currentUserId);
+  if (!me) return;
+  const root = document.querySelector('[data-profile-root]');
+  setProfileAccent(root, me.accentColor);
+  setBannerImage(profileBanner, me.bannerUrl || sessionUser?.bannerUrl, sessionUser?.bannerColor, me.accentColor);
+  if (profileCopy) {
+    profileCopy.textContent = me.bio
+      || sessionUser?.bio
+      || (sessionUser?.staffRank ? `${sessionUser.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
+  }
+  renderProfileMeta(document.querySelector('[data-profile-meta]'), { ...me, createdAt: me.createdAt });
+  const following = Array.isArray(me.following) ? me.following : [];
+  const followers = Array.isArray(me.followers) ? me.followers : [];
+  const followingButton = document.querySelector('[data-profile-following]');
+  const followersButton = document.querySelector('[data-profile-followers]');
+  const hideStats = preferenceState.hideStats === true;
+  if (followingButton) {
+    followingButton.hidden = hideStats;
+    followingButton.innerHTML = `<b>${Number(me.followingCount ?? following.length).toLocaleString()}</b> Following`;
+  }
+  if (followersButton) {
+    followersButton.hidden = hideStats;
+    followersButton.innerHTML = `<b>${followers.length.toLocaleString()}</b> Followers`;
+  }
 }
 
 function renderBookmarks() {
@@ -863,6 +1152,8 @@ function showView(view) {
   if (activeView === 'messages') void loadMessages();
   if (activeView === 'notifications') void loadNotifications();
   if (activeView === 'staff') void loadModeration();
+  if (activeView === 'profile') renderOwnProfileDetails();
+  if (activeView === 'settings' && currentUserId) void loadProfileEditor();
 }
 
 function showViewFromAddress() {
@@ -967,7 +1258,12 @@ function staffMemberLookup(id, fallback = {}) {
     staffRank: fromSnapshot.staffRank || fromMap.staffRank || null,
     lockPosts: fromSnapshot.lockPosts === true,
     lockMessages: fromSnapshot.lockMessages === true,
+    lockReels: fromSnapshot.lockReels === true,
+    lockProfile: fromSnapshot.lockProfile === true,
+    deactivated: fromSnapshot.deactivated === true,
     shadowbanned: fromSnapshot.shadowbanned === true,
+    reportCount: Number(fromSnapshot.reportCount || 0),
+    postCount: Number(fromSnapshot.postCount || 0),
   };
 }
 
@@ -975,10 +1271,65 @@ function staffAvatarMarkup(url) {
   return `<img src="${escapeHtml(url || 'assets/clearwater-logo.png')}" alt="" draggable="false" />`;
 }
 
+function staffReportStatus(report) {
+  if (report?.status === 'accepted') return { key: 'actioned', label: 'Actioned' };
+  if (report?.status === 'denied') return { key: 'dismissed', label: 'Dismissed' };
+  return { key: 'open', label: 'Open' };
+}
+
+function staffReportCategory(report) {
+  if (Array.isArray(report?.categories) && report.categories[0]) return String(report.categories[0]).replace(/-/g, ' ');
+  if (report?.source === 'automod') return 'automod';
+  return report?.kind === 'message' ? 'direct message' : 'post';
+}
+
+function staffReportReporter(report) {
+  if (!report || report.source === 'automod') return null;
+  return staffMemberLookup(report.reporterId, { displayName: report.reporterName, avatarUrl: report.reporterAvatarUrl });
+}
+
 function staffReportQueueMarkup(report, selected) {
   const author = staffMemberLookup(report.authorId, report);
-  const category = Array.isArray(report.categories) && report.categories[0] ? report.categories[0] : (report.source === 'automod' ? 'automod' : report.kind || 'report');
-  return `<button type="button" class="staff-live-report ${report.id === selected ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}">${staffAvatarMarkup(author.avatarUrl)}<span><b>${escapeHtml(author.displayName)}</b><small>${escapeHtml(report.content || report.reason || 'No text captured')}</small></span><em>${escapeHtml(category)}</em></button>`;
+  const reporter = staffReportReporter(report);
+  const status = staffReportStatus(report);
+  const reportedBy = reporter ? `Reported by ${reporter.displayName}` : 'Flagged by automod';
+  return `<button type="button" class="staff-case-row ${report.id === selected ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}">
+    <span class="staff-case-row-avatar">
+      ${staffAvatarMarkup(author.avatarUrl)}
+      ${reporter ? `<img class="staff-case-row-reporter" src="${escapeHtml(reporter.avatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" />` : '<span class="staff-case-row-reporter automod" aria-hidden="true">A</span>'}
+    </span>
+    <span class="staff-case-row-body">
+      <span class="staff-case-row-head"><b>${escapeHtml(author.displayName)}</b><i>${escapeHtml(timeAgo(report.createdAt))}</i></span>
+      <span class="staff-case-row-text">${escapeHtml(report.content || report.reason || 'No text captured')}</span>
+      <span class="staff-case-row-tags"><em>${escapeHtml(staffReportCategory(report))}</em><span>${escapeHtml(reportedBy)}</span></span>
+    </span>
+    <span class="staff-case-row-status ${status.key}">${status.label}</span>
+  </button>`;
+}
+
+const STAFF_RESTRICTIONS = [
+  { key: 'banned', label: 'Banned', untilKey: 'banUntil', tone: 'danger' },
+  { key: 'muted', label: 'Muted', untilKey: 'mutedUntil', tone: 'warn' },
+  { key: 'shadowbanned', label: 'Shadowbanned', untilKey: '', tone: 'warn' },
+  { key: 'lockPosts', label: 'Posting locked', untilKey: 'lockPostsUntil', tone: '' },
+  { key: 'lockMessages', label: 'Messages locked', untilKey: 'lockMessagesUntil', tone: '' },
+  { key: 'lockReels', label: 'Reels locked', untilKey: 'lockReelsUntil', tone: '' },
+  { key: 'lockProfile', label: 'Profile locked', untilKey: 'lockProfileUntil', tone: '' },
+  { key: 'watched', label: 'On the watchlist', untilKey: '', tone: 'watch' },
+  { key: 'deactivated', label: 'Account deactivated', untilKey: '', tone: '' },
+];
+
+// `detailed` is only true for the staff user panel, where the store sends the
+// expiry timestamps. The report queue lookup only knows the on/off state.
+function staffActiveRestrictions(user, detailed = false) {
+  return STAFF_RESTRICTIONS.filter((item) => user?.[item.key] === true).map((item) => {
+    const until = item.untilKey ? user[item.untilKey] : null;
+    return {
+      label: item.label,
+      tone: item.tone,
+      expires: until ? staffUntil(until) : (detailed && item.untilKey ? 'No expiry' : ''),
+    };
+  });
 }
 
 function staffCaseMarkup(selected) {
@@ -993,41 +1344,68 @@ function staffCaseMarkup(selected) {
     ? staffMemberLookup(selected.targetId, { displayName: selected.targetName, username: selected.targetUsername, avatarUrl: selected.targetAvatarUrl })
     : null;
   const categories = Array.isArray(selected.categories) ? selected.categories : [];
+  const status = staffReportStatus(selected);
+  const restrictions = staffActiveRestrictions(author);
   const facts = [
     reportKindLabel(selected),
     reportSourceLabel(selected),
     timeAgo(selected.createdAt),
-    author.warningCount ? `${author.warningCount} warning${author.warningCount === 1 ? '' : 's'}` : null,
   ].filter(Boolean);
-  const actions = closed
-    ? `<div class="staff-case-actions">
-        <button type="button" data-staff-open-user="${escapeHtml(author.id)}">Open user panel</button>
-        <button type="button" data-open-member="${escapeHtml(author.id)}">Public profile</button>
-      </div>
-      <p class="staff-case-status">${escapeHtml(staffHistoryLabel(selected))} · ${timeAgo(selected.reviewedAt || selected.createdAt)}</p>`
+  const resolve = closed
+    ? `<p class="staff-case-outcome">${escapeHtml(staffHistoryLabel(selected))} · ${escapeHtml(timeAgo(selected.reviewedAt || selected.createdAt))}${selected.reviewerName ? ` · by ${escapeHtml(selected.reviewerName)}` : ''}</p>`
     : `<div class="staff-case-actions">
-        <button type="button" data-report-review="accept" data-report-action="warning" data-report-id="${escapeHtml(selected.id)}">Warn</button>
-        ${canDelete ? `<button type="button" data-report-review="accept" data-report-action="delete" data-report-id="${escapeHtml(selected.id)}">Delete post</button>` : `<button type="button" data-report-review="accept" data-report-action="delete" data-report-id="${escapeHtml(selected.id)}">Confirm hold</button>`}
-        <button type="button" class="danger" data-report-review="accept" data-report-action="ban" data-report-id="${escapeHtml(selected.id)}">Ban</button>
-        <button type="button" class="danger" data-report-review="deny" data-report-id="${escapeHtml(selected.id)}">Dismiss</button>
-        <button type="button" data-staff-open-user="${escapeHtml(author.id)}">Open user panel</button>
+        <button type="button" class="staff-action-btn primary" data-report-review="accept" data-report-action="warning" data-report-id="${escapeHtml(selected.id)}">Warn</button>
+        <button type="button" class="staff-action-btn" data-report-review="accept" data-report-action="delete" data-report-id="${escapeHtml(selected.id)}">${canDelete ? 'Delete post' : 'Confirm hold'}</button>
+        <button type="button" class="staff-action-btn" data-report-review="deny" data-report-id="${escapeHtml(selected.id)}">Dismiss</button>
+        <button type="button" class="staff-action-btn danger" data-report-review="accept" data-report-action="ban" data-report-id="${escapeHtml(selected.id)}">Ban</button>
       </div>`;
   return `<article class="staff-case" data-report-card>
-    <button type="button" class="staff-case-identity" data-staff-open-user="${escapeHtml(author.id)}">
-      ${staffAvatarMarkup(author.avatarUrl)}
-      <div>
-        <b>${escapeHtml(author.displayName)}</b>
-        <small>@${escapeHtml(author.username || 'member')}</small>
+    <header class="staff-case-head">
+      <button type="button" class="staff-case-identity" data-staff-open-user="${escapeHtml(author.id)}">
+        ${staffAvatarMarkup(author.avatarUrl)}
+        <div>
+          <b>${escapeHtml(author.displayName)}</b>
+          <small>@${escapeHtml(author.username || 'member')}</small>
+        </div>
+      </button>
+      <div class="staff-case-head-actions">
+        <button type="button" class="staff-case-open" data-staff-open-user="${escapeHtml(author.id)}">Open user</button>
+        <span class="staff-case-badge ${status.key}">${status.label}</span>
       </div>
-      <span class="staff-case-open">Open user</span>
-    </button>
-    <div class="staff-chip-row">${staffUserChips(author)}${categories.map((category) => `<span class="staff-chip warn">${escapeHtml(String(category).replace(/-/g, ' '))}</span>`).join('')}</div>
+    </header>
     <p class="staff-case-meta">${facts.map((fact) => `<span>${escapeHtml(fact)}</span>`).join('')}</p>
-    <blockquote class="staff-case-copy">${escapeHtml(selected.content || 'No text captured')}</blockquote>
-    <p class="staff-case-reason">${escapeHtml(selected.reason || 'No reason given')}</p>
-    ${target ? `<p class="staff-case-target">Sent to <button type="button" data-staff-open-user="${escapeHtml(target.id)}">${staffAvatarMarkup(target.avatarUrl)}<b>${escapeHtml(target.displayName)}</b></button></p>` : ''}
-    ${reporter ? `<p class="staff-case-target">Reported by <button type="button" data-staff-open-user="${escapeHtml(reporter.id)}">${staffAvatarMarkup(reporter.avatarUrl)}<b>${escapeHtml(reporter.displayName)}</b></button></p>` : ''}
-    ${actions}
+    <div class="staff-case-body">
+      <section class="staff-case-panel">
+        <h4>Reported content</h4>
+        <blockquote class="staff-case-copy">${escapeHtml(selected.content || 'No text captured')}</blockquote>
+        <div class="staff-case-field"><span>Reason given</span><p>${escapeHtml(selected.reason || 'No reason given')}</p></div>
+        ${categories.length ? `<div class="staff-chip-row">${categories.map((category) => `<span class="staff-chip warn">${escapeHtml(String(category).replace(/-/g, ' '))}</span>`).join('')}</div>` : ''}
+        <div class="staff-case-parties">
+          ${reporter ? `<p class="staff-case-target">Reported by <button type="button" data-staff-open-user="${escapeHtml(reporter.id)}">${staffAvatarMarkup(reporter.avatarUrl)}<b>${escapeHtml(reporter.displayName)}</b></button></p>` : '<p class="staff-case-target">Flagged automatically by automod.</p>'}
+          ${target ? `<p class="staff-case-target">Sent to <button type="button" data-staff-open-user="${escapeHtml(target.id)}">${staffAvatarMarkup(target.avatarUrl)}<b>${escapeHtml(target.displayName)}</b></button></p>` : ''}
+        </div>
+      </section>
+      <aside class="staff-case-panel staff-case-standing">
+        <h4>Author standing</h4>
+        <dl class="staff-case-counts">
+          <div><dt>Warnings</dt><dd>${Number(author.warningCount || 0)}</dd></div>
+          <div><dt>Reports</dt><dd>${Number(author.reportCount || 0)}</dd></div>
+          <div><dt>Posts</dt><dd>${Number(author.postCount || 0)}</dd></div>
+        </dl>
+        ${restrictions.length
+          ? `<ul class="staff-standing-list">${restrictions.map((item) => `<li class="${item.tone}"><b>${escapeHtml(item.label)}</b></li>`).join('')}</ul>`
+          : '<p class="staff-standing-clear">No active restrictions.</p>'}
+        <div class="staff-chip-row">${staffUserChips(author)}</div>
+        <div class="staff-case-links">
+          <button type="button" class="staff-action-btn" data-staff-open-user="${escapeHtml(author.id)}">Open user panel</button>
+          <button type="button" class="staff-action-btn" data-open-member="${escapeHtml(author.id)}">Public profile</button>
+        </div>
+      </aside>
+    </div>
+    <footer class="staff-case-resolve">
+      <h4>${closed ? 'Outcome' : 'Resolve this report'}</h4>
+      ${resolve}
+    </footer>
   </article>`;
 }
 
@@ -1039,7 +1417,17 @@ function staffWhen(value) {
 }
 
 function staffUntil(until) {
-  return until ? `Until ${staffWhen(until)}` : 'Forever';
+  if (!until) return 'Forever';
+  const time = new Date(until).getTime();
+  if (!Number.isFinite(time)) return 'Forever';
+  return `Until ${new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(time))}`;
+}
+
+function staffDateLabel(value) {
+  if (!value) return 'Unknown';
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return 'Unknown';
+  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(time));
 }
 
 function staffDurationSelect(field = 'duration', selected = '7') {
@@ -1058,21 +1446,36 @@ function staffUserChips(user) {
   if (user.lockPosts) chips.push('<span class="staff-chip">Post lock</span>');
   if (user.lockMessages) chips.push('<span class="staff-chip">DM lock</span>');
   if (user.lockReels) chips.push('<span class="staff-chip">Reel lock</span>');
+  if (user.lockProfile) chips.push('<span class="staff-chip">Profile lock</span>');
+  if (user.deactivated) chips.push('<span class="staff-chip">Deactivated</span>');
   if (user.staffRank) chips.push(`<span class="staff-chip">${escapeHtml(user.staffRank)}</span>`);
   return chips.join('');
 }
 
+function staffToggleMarkup({ active, onAction, offAction, label, expires = '', tone = '' }) {
+  const action = active ? offAction : onAction;
+  const state = active ? (expires || 'Active') : 'Off';
+  return `<button type="button" class="staff-toggle${active ? ' on' : ''}${tone ? ` ${tone}` : ''}" role="switch" aria-checked="${active ? 'true' : 'false'}" data-staff-user-action="${escapeHtml(action)}">
+    <span class="staff-toggle-switch" aria-hidden="true"></span>
+    <span class="staff-toggle-label"><b>${escapeHtml(label)}</b><small>${escapeHtml(state)}</small></span>
+  </button>`;
+}
+
+function staffActionGroupMarkup(title, hint, body) {
+  return `<section class="staff-action-group">
+    <header><h4>${escapeHtml(title)}</h4>${hint ? `<span>${escapeHtml(hint)}</span>` : ''}</header>
+    ${body}
+  </section>`;
+}
+
 function staffUserPanelMarkup(detail) {
   if (!detail?.user) return '<div class="staff-empty staff-empty-lg">Select a user to open their staff panel.</div>';
-  const user = detail.user;
+  const user = { ...detail.user, banUntil: detail.user.ban?.until || null };
   const posts = Array.isArray(detail.posts) ? detail.posts : [];
   const warnings = Array.isArray(detail.warnings) ? detail.warnings : [];
   const reports = Array.isArray(detail.reports) ? detail.reports : [];
-  const toggle = (on, onAction, offAction, onLabel, offLabel, danger = false) => (
-    on
-      ? `<button type="button" data-staff-user-action="${offAction}">${offLabel}</button>`
-      : `<button type="button" class="${danger ? 'danger' : ''}" data-staff-user-action="${onAction}">${onLabel}</button>`
-  );
+  const restrictions = staffActiveRestrictions(user, true);
+  const button = (action, label, extra = '') => `<button type="button" class="staff-action-btn${extra ? ` ${extra}` : ''}" data-staff-user-action="${action}">${label}</button>`;
   return `<article class="staff-user-dossier">
     <header class="staff-user-hero">
       <img src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" />
@@ -1094,50 +1497,71 @@ function staffUserPanelMarkup(detail) {
       <div><dt>Reports</dt><dd>${Number(user.reportCount || 0)}</dd></div>
       <div><dt>Followers</dt><dd>${Number(user.followerCount || 0)}</dd></div>
       <div><dt>Following</dt><dd>${Number(user.followingCount || 0)}</dd></div>
-      <div><dt>DMs stored</dt><dd>${Number(user.messageCount || 0)}</dd></div>
+      <div><dt>DMs</dt><dd>${Number(user.messageCount || 0)}</dd></div>
       <div><dt>Networks</dt><dd>${Number(user.ipHashCount || 0)}</dd></div>
-      <div><dt>Joined</dt><dd>${escapeHtml(staffWhen(user.createdAt))}</dd></div>
-      <div><dt>Last seen</dt><dd>${escapeHtml(staffWhen(user.lastSeenAt))}</dd></div>
     </dl>
-    ${user.ban ? `<p class="staff-user-alert">Banned: ${escapeHtml(user.ban.reason)} · ${escapeHtml(staffUntil(user.ban.until))}</p>` : ''}
-    ${user.mute ? `<p class="staff-user-alert">Muted: ${escapeHtml(user.mute.reason)} · ${escapeHtml(staffUntil(user.mute.until))}</p>` : ''}
-    ${user.bio ? `<p class="staff-user-bio">${escapeHtml(user.bio)}</p>` : ''}
-    <section class="staff-user-block">
-      <h3>Staff note</h3>
-      <textarea data-staff-field="note" maxlength="500" placeholder="Private note for staff only">${escapeHtml(user.note || '')}</textarea>
-      <button type="button" data-staff-user-action="note">Save note</button>
+    <p class="staff-user-timeline"><span>Joined ${escapeHtml(staffDateLabel(user.createdAt))}</span><span>Last seen ${escapeHtml(staffDateLabel(user.lastSeenAt))}</span></p>
+    <section class="staff-user-block staff-standing-block">
+      <h3>Current standing</h3>
+      ${restrictions.length
+        ? `<ul class="staff-standing-list">${restrictions.map((item) => `<li class="${item.tone}"><b>${escapeHtml(item.label)}</b>${item.expires ? `<small>${escapeHtml(item.expires)}</small>` : ''}</li>`).join('')}</ul>`
+        : '<p class="staff-standing-clear">No restrictions are active on this account.</p>'}
+      ${user.ban ? `<p class="staff-user-alert">Ban reason: ${escapeHtml(user.ban.reason)} · ${escapeHtml(staffUntil(user.ban.until))}</p>` : ''}
+      ${user.mute ? `<p class="staff-user-alert">Mute reason: ${escapeHtml(user.mute.reason)} · ${escapeHtml(staffUntil(user.mute.until))}</p>` : ''}
     </section>
-    <section class="staff-user-block">
-      <h3>Moderation</h3>
-      <label>Reason / notice<textarea data-staff-field="reason" maxlength="300" placeholder="Reason for warn, ban, mute, or staff notice"></textarea></label>
-      <label>Duration${staffDurationSelect('duration')}</label>
-      <label class="ip-ban-option"><input type="checkbox" data-staff-field="ipBan" /> Also block known network hashes</label>
-      <div class="staff-user-actions">
-        ${toggle(user.verified, 'verify', 'unverify', 'Verify', 'Remove verification')}
-        ${toggle(user.banned, 'ban', 'unban', 'Ban account', 'Unban', true)}
-        ${toggle(user.muted, 'mute', 'unmute', 'Mute', 'Unmute', true)}
-        <button type="button" data-staff-user-action="warn">Warn</button>
-        <button type="button" data-staff-user-action="send-notice">Send notice</button>
-        <button type="button" class="danger" data-staff-user-action="ip-ban">IP ban</button>
-        <button type="button" data-staff-user-action="clear-ip-ban">Clear IP ban</button>
-        ${toggle(user.lockPosts, 'lock-posts', 'unlock-posts', 'Lock posts', 'Unlock posts')}
-        ${toggle(user.lockMessages, 'lock-messages', 'unlock-messages', 'Lock messages', 'Unlock messages')}
-        ${toggle(user.lockReels, 'lock-reels', 'unlock-reels', 'Lock Reels', 'Unlock Reels')}
-        ${toggle(user.shadowbanned, 'shadowban', 'unshadowban', 'Shadowban', 'Remove shadowban', true)}
-        ${toggle(user.watched, 'watch', 'unwatch', 'Watch', 'Unwatch')}
-        <button type="button" data-staff-user-action="clear-warnings">Clear warnings</button>
-        <button type="button" data-staff-user-action="reset-profile">Reset bio</button>
-        <button type="button" data-staff-user-action="clear-ip-hashes">Clear network hashes</button>
-        <button type="button" class="danger" data-staff-user-action="wipe-posts">Delete all posts</button>
-        <button type="button" class="danger" data-staff-user-action="wipe-reels">Delete all Reels</button>
-        <button type="button" class="danger" data-staff-user-action="wipe-comments">Delete comments</button>
-        <button type="button" class="danger" data-staff-user-action="wipe-messages">Wipe DMs</button>
+    ${user.bio ? `<p class="staff-user-bio">${escapeHtml(user.bio)}</p>` : ''}
+    <section class="staff-user-block staff-actions-card">
+      <h3>Moderation actions</h3>
+      <div class="staff-action-context">
+        <label>Reason or notice<textarea data-staff-field="reason" maxlength="300" placeholder="Explain the warn, ban, mute, lock, or notice"></textarea></label>
+        <div class="staff-action-context-side">
+          <label>Duration${staffDurationSelect('duration')}</label>
+          <label class="staff-check"><input type="checkbox" data-staff-field="ipBan" /><span>Also block known networks on ban</span></label>
+          <p class="staff-action-hint">The reason and duration above are applied to every action in this panel.</p>
+        </div>
       </div>
+      <div class="staff-action-groups">
+        ${staffActionGroupMarkup('Account status', 'Verification and account access', `<div class="staff-toggle-grid">
+          ${staffToggleMarkup({ active: user.verified === true, onAction: 'verify', offAction: 'unverify', label: 'Verified' })}
+          ${staffToggleMarkup({ active: user.banned === true, onAction: 'ban', offAction: 'unban', label: 'Banned', expires: user.banUntil ? staffUntil(user.banUntil) : '', tone: 'danger' })}
+        </div>`)}
+        ${staffActionGroupMarkup('Restrictions', 'Reversible limits, shown with their expiry', `<div class="staff-toggle-grid">
+          ${staffToggleMarkup({ active: user.muted === true, onAction: 'mute', offAction: 'unmute', label: 'Muted', expires: user.mutedUntil ? staffUntil(user.mutedUntil) : '', tone: 'warn' })}
+          ${staffToggleMarkup({ active: user.lockPosts === true, onAction: 'lock-posts', offAction: 'unlock-posts', label: 'Posting locked', expires: user.lockPostsUntil ? staffUntil(user.lockPostsUntil) : '' })}
+          ${staffToggleMarkup({ active: user.lockMessages === true, onAction: 'lock-messages', offAction: 'unlock-messages', label: 'Messages locked', expires: user.lockMessagesUntil ? staffUntil(user.lockMessagesUntil) : '' })}
+          ${staffToggleMarkup({ active: user.lockReels === true, onAction: 'lock-reels', offAction: 'unlock-reels', label: 'Reels locked', expires: user.lockReelsUntil ? staffUntil(user.lockReelsUntil) : '' })}
+          ${staffToggleMarkup({ active: user.lockProfile === true, onAction: 'lock-profile', offAction: 'unlock-profile', label: 'Profile locked', expires: user.lockProfileUntil ? staffUntil(user.lockProfileUntil) : '' })}
+          ${staffToggleMarkup({ active: user.shadowbanned === true, onAction: 'shadowban', offAction: 'unshadowban', label: 'Shadowbanned', tone: 'warn' })}
+          ${staffToggleMarkup({ active: user.watched === true, onAction: 'watch', offAction: 'unwatch', label: 'On the watchlist', tone: 'watch' })}
+        </div>`)}
+        ${staffActionGroupMarkup('Notices', 'Messages this member will see', `<div class="staff-action-grid">
+          ${button('warn', 'Send a warning', 'primary')}
+          ${button('send-notice', 'Send a staff notice')}
+          ${button('clear-warnings', 'Clear warning history')}
+        </div>`)}
+      </div>
+      <details class="staff-danger-zone" data-staff-group="danger">
+        <summary><b>Destructive actions</b><span>Content removal and network blocks cannot be undone</span></summary>
+        <div class="staff-action-grid">
+          ${button('wipe-posts', 'Delete all posts', 'danger')}
+          ${button('wipe-reels', 'Delete all Reels', 'danger')}
+          ${button('wipe-comments', 'Delete all comments', 'danger')}
+          ${button('wipe-messages', 'Wipe stored DMs', 'danger')}
+          ${button('reset-profile', 'Reset public profile', 'danger')}
+          ${button('ip-ban', `Block ${Number(user.ipHashCount || 0)} network hash${Number(user.ipHashCount || 0) === 1 ? '' : 'es'}`, 'danger')}
+          ${button('clear-ip-ban', 'Lift network block')}
+        </div>
+      </details>
       <p class="staff-user-status" data-staff-user-status role="status"></p>
     </section>
     <section class="staff-user-block">
+      <h3>Staff note</h3>
+      <textarea data-staff-field="note" maxlength="500" placeholder="Private note for staff only">${escapeHtml(user.note || '')}</textarea>
+      <div class="staff-action-grid">${button('note', 'Save note')}</div>
+    </section>
+    <section class="staff-user-block">
       <h3>Recent content</h3>
-      ${posts.length ? posts.map((post) => `<article class="staff-user-content"><b>${escapeHtml(post.kind)}</b><p>${escapeHtml(post.content || 'No text')}</p><small>${escapeHtml(timeAgo(post.createdAt))} · ${Number(post.likes || 0)} likes</small><button type="button" class="danger" data-staff-user-action="delete-post" data-staff-post-id="${escapeHtml(post.id)}">Delete</button></article>`).join('') : '<p class="staff-empty">No posts, Reels, or comments on file.</p>'}
+      ${posts.length ? posts.map((post) => `<article class="staff-user-content"><b>${escapeHtml(post.kind)}</b><p>${escapeHtml(post.content || 'No text')}</p><small>${escapeHtml(timeAgo(post.createdAt))} · ${Number(post.likes || 0)} likes</small><button type="button" class="staff-action-btn danger" data-staff-user-action="delete-post" data-staff-post-id="${escapeHtml(post.id)}">Delete</button></article>`).join('') : '<p class="staff-empty">No posts, Reels, or comments on file.</p>'}
     </section>
     <section class="staff-user-block">
       <h3>Warnings</h3>
@@ -1187,13 +1611,26 @@ function renderStaffDashboard() {
   const queueItems = staffQueueFilter === 'pending'
     ? reports
     : history.filter((report) => staffQueueFilter === 'actioned' ? report.status === 'accepted' : report.status === 'denied');
-  if (reportCount) reportCount.textContent = String(queueItems.length);
+  if (reportCount) reportCount.textContent = String(reports.length);
+  const queueCounts = {
+    pending: reports.length,
+    actioned: history.filter((report) => report.status === 'accepted').length,
+    dismissed: history.filter((report) => report.status === 'denied').length,
+  };
+  document.querySelectorAll('[data-staff-queue-count]').forEach((badge) => {
+    badge.textContent = String(queueCounts[badge.dataset.staffQueueCount] ?? 0);
+  });
+  const queueEmpty = {
+    pending: 'The queue is clear. New reports land here.',
+    actioned: 'No reports have been actioned yet.',
+    dismissed: 'No reports have been dismissed yet.',
+  };
   if (queueList) {
     queueList.innerHTML = queueItems.length
       ? queueItems.map((report) => staffReportQueueMarkup(report, selectedReportId)).join('')
-      : '<p class="staff-empty">Nothing in this queue.</p>';
+      : `<p class="staff-empty">${escapeHtml(queueEmpty[staffQueueFilter] || 'Nothing in this queue.')}</p>`;
   }
-  if (casePane) casePane.innerHTML = selected ? staffCaseMarkup(selected) : '<div class="staff-empty staff-empty-lg">Select a report to review it here.</div>';
+  if (casePane) casePane.innerHTML = selected ? staffCaseMarkup(selected) : '<div class="staff-empty staff-empty-lg">Pick a case from the queue to review it here.</div>';
   const historyQuery = staffHistoryQuery.trim().toLowerCase();
   const historyCards = history.filter((report) => {
     const haystack = `${report.authorName || ''} ${report.action || ''} ${report.content || ''} ${report.reviewerName || ''}`.toLowerCase();
@@ -1247,19 +1684,29 @@ function renderStaffDashboard() {
   const settings = moderationSnapshot.settings || {};
   const siteTools = document.querySelector('[data-staff-site-tools]');
   if (siteTools) {
+    const siteToggle = (action, enabled, label, onCopy, offCopy) => `<button type="button" class="staff-toggle${enabled ? ' on warn' : ''}" role="switch" aria-checked="${enabled ? 'true' : 'false'}" data-staff-site-action="${action}" data-staff-enabled="${enabled ? 'false' : 'true'}">
+      <span class="staff-toggle-switch" aria-hidden="true"></span>
+      <span class="staff-toggle-label"><b>${label}</b><small>${enabled ? onCopy : offCopy}</small></span>
+    </button>`;
     siteTools.innerHTML = `<h2>Site controls</h2>
-      <p>Pause posting, Reels, or DMs for everyone except the official account.</p>
-      <div class="staff-user-actions">
-        <button type="button" data-staff-site-action="pause-posts" data-staff-enabled="${settings.pausePosts ? 'false' : 'true'}">${settings.pausePosts ? 'Resume posts' : 'Pause posts'}</button>
-        <button type="button" data-staff-site-action="pause-reels" data-staff-enabled="${settings.pauseReels ? 'false' : 'true'}">${settings.pauseReels ? 'Resume Reels' : 'Pause Reels'}</button>
-        <button type="button" data-staff-site-action="pause-messages" data-staff-enabled="${settings.pauseMessages ? 'false' : 'true'}">${settings.pauseMessages ? 'Resume messages' : 'Pause messages'}</button>
-        <button type="button" data-staff-site-action="clear-dismissed-reports">Clear dismissed reports</button>
-        <button type="button" class="danger" data-staff-site-action="clear-ip-bans">Clear all IP bans</button>
+      <p>Site-wide switches apply to everyone except the official account.</p>
+      <div class="staff-action-groups">
+        ${staffActionGroupMarkup('Community pauses', 'Stop new activity without banning anyone', `<div class="staff-toggle-grid">
+          ${siteToggle('pause-posts', settings.pausePosts === true, 'Posting', 'Paused for members', 'Open to members')}
+          ${siteToggle('pause-reels', settings.pauseReels === true, 'Reels', 'Paused for members', 'Open to members')}
+          ${siteToggle('pause-messages', settings.pauseMessages === true, 'Direct messages', 'Paused for members', 'Open to members')}
+        </div>`)}
+        ${staffActionGroupMarkup('Queue maintenance', 'Housekeeping for the reports queue', `<div class="staff-action-grid">
+          <button type="button" class="staff-action-btn" data-staff-site-action="clear-dismissed-reports">Clear dismissed reports</button>
+        </div>`)}
+        ${staffActionGroupMarkup('Network blocks', `${Number(stats.ipBans || 0)} hashed network ban${Number(stats.ipBans || 0) === 1 ? '' : 's'} active`, `<div class="staff-action-grid">
+          <button type="button" class="staff-action-btn danger" data-staff-site-action="clear-ip-bans">Lift every network ban</button>
+        </div>`)}
       </div>
       <div class="staff-site-lists">
-        <section><h3>Watched</h3>${(moderationSnapshot.watched || []).length ? moderationSnapshot.watched.map((member) => `<button type="button" data-staff-open-user="${escapeHtml(member.id)}">${escapeHtml(member.displayName)}</button>`).join('') : '<p class="staff-empty">Nobody is on the watchlist.</p>'}</section>
+        <section><h3>Watchlist</h3>${(moderationSnapshot.watched || []).length ? moderationSnapshot.watched.map((member) => `<button type="button" data-staff-open-user="${escapeHtml(member.id)}">${escapeHtml(member.displayName)}</button>`).join('') : '<p class="staff-empty">Nobody is on the watchlist.</p>'}</section>
         <section><h3>Muted</h3>${(moderationSnapshot.mutes || []).length ? moderationSnapshot.mutes.map((member) => `<button type="button" data-staff-open-user="${escapeHtml(member.id)}">${escapeHtml(member.displayName)}</button>`).join('') : '<p class="staff-empty">Nobody is muted.</p>'}</section>
-        <section><h3>Network bans</h3><p>${Number(stats.ipBans || 0)} active hashed network ban${Number(stats.ipBans || 0) === 1 ? '' : 's'}.</p></section>
+        <section><h3>Banned</h3>${bans.length ? bans.slice(0, 12).map((ban) => `<button type="button" data-staff-open-user="${escapeHtml(ban.id)}">${escapeHtml(ban.displayName)}</button>`).join('') : '<p class="staff-empty">Nobody is banned.</p>'}</section>
       </div>
       <p data-staff-site-status role="status"></p>`;
   }
@@ -1314,6 +1761,34 @@ function staffPanelFields() {
   };
 }
 
+function staffPanelUiState() {
+  const panel = document.querySelector('[data-staff-user-panel]');
+  return {
+    fields: staffPanelFields(),
+    openGroups: panel ? [...panel.querySelectorAll('details[data-staff-group]')].filter((group) => group.open).map((group) => group.dataset.staffGroup) : [],
+    scrollTop: panel ? panel.scrollTop : 0,
+  };
+}
+
+// Toggles only read correctly when the panel redraws after every action, so the
+// typed reason, chosen duration, open groups, and scroll position are restored.
+function redrawStaffUserPanel(detail, state) {
+  const panel = document.querySelector('[data-staff-user-panel]');
+  if (!panel || !detail?.user) return;
+  const fields = state?.fields || {};
+  panel.innerHTML = staffUserPanelMarkup(detail);
+  panel.querySelectorAll('details[data-staff-group]').forEach((group) => {
+    group.open = (state?.openGroups || []).includes(group.dataset.staffGroup);
+  });
+  const reason = panel.querySelector('[data-staff-field="reason"]');
+  const duration = panel.querySelector('[data-staff-field="duration"]');
+  const ipBan = panel.querySelector('[data-staff-field="ipBan"]');
+  if (reason && fields.reason) reason.value = fields.reason;
+  if (duration && fields.durationDays) duration.value = fields.durationDays;
+  if (ipBan) ipBan.checked = fields.ipBan === true;
+  panel.scrollTop = state?.scrollTop || 0;
+}
+
 async function openStaffUser(userId) {
   selectedStaffUserId = String(userId || '');
   staffTab = 'users';
@@ -1324,9 +1799,10 @@ async function openStaffUser(userId) {
 
 async function runStaffUserAction(staffAction, postId = '') {
   if (!selectedStaffUserId || staffUserBusy) return;
-  const fields = staffPanelFields();
-  const destructive = new Set(['ban', 'ip-ban', 'wipe-posts', 'wipe-reels', 'wipe-comments', 'wipe-messages', 'delete-post', 'clear-ip-hashes', 'shadowban']);
-  if (destructive.has(staffAction) && !window.confirm(`Run "${staffAction.replace(/-/g, ' ')}" on this account?`)) return;
+  const panelState = staffPanelUiState();
+  const fields = panelState.fields;
+  const destructive = new Set(['ban', 'ip-ban', 'wipe-posts', 'wipe-reels', 'wipe-comments', 'wipe-messages', 'delete-post', 'reset-profile', 'shadowban']);
+  if (destructive.has(staffAction) && !window.confirm(`Run "${staffAction.replace(/-/g, ' ')}" on this account? This cannot be undone.`)) return;
   staffUserBusy = true;
   const status = document.querySelector('[data-staff-user-status]');
   if (status) status.textContent = 'Saving...';
@@ -1350,6 +1826,7 @@ async function runStaffUserAction(staffAction, postId = '') {
     staffUserDetail = result;
     if (result.snapshot) moderationSnapshot = result.snapshot;
     renderStaffDashboard();
+    redrawStaffUserPanel(result, panelState);
     const nextStatus = document.querySelector('[data-staff-user-status]');
     if (nextStatus) nextStatus.textContent = 'Saved.';
   } catch (error) {
@@ -1465,18 +1942,163 @@ async function loadSocial() {
   } catch { /* Feed stays usable during a temporary connection issue. */ }
 }
 
+function applyPreferenceState(preferences = {}) {
+  preferenceState = { ...preferences };
+  const root = document.documentElement;
+  root.classList.toggle('pref-compact', preferences.compactPosts === true);
+  root.classList.toggle('pref-large-text', preferences.largeText === true);
+  root.classList.toggle('pref-reduce-motion', preferences.reduceMotion === true);
+  document.querySelectorAll('[data-preference]').forEach((input) => { input.checked = preferences[input.dataset.preference] === true; });
+}
+
 async function loadPreferences() {
   if (!currentUserId) return;
   const storageKey = `clearwater-preferences-${currentUserId}`;
   const localPreferences = (() => { try { return JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch { return {}; } })();
-  document.querySelectorAll('[data-preference]').forEach((input) => { input.checked = localPreferences[input.dataset.preference] === true; });
+  applyPreferenceState(localPreferences);
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'preferences' }) });
     const result = await readApiJson(response, 'Could not load settings.');
     if (!response.ok) throw new Error(result.error || 'Could not load settings.');
-    document.querySelectorAll('[data-preference]').forEach((input) => { input.checked = result.preferences?.[input.dataset.preference] === true; });
+    applyPreferenceState(result.preferences || {});
     localStorage.setItem(storageKey, JSON.stringify(result.preferences || {}));
   } catch { /* Settings remain usable if the bot host is briefly unavailable. */ }
+}
+
+const ACCENT_SWATCHES = ['#1257a3', '#0f8b8d', '#2f8f5b', '#c9a227', '#d4622e', '#c23b5a', '#7a4fd0', '#5a6b7d'];
+const BANNER_PRESETS = [
+  'assets/clearwater-police-night.png',
+  'assets/clearwater-sunset-beach.png',
+  'assets/clearwater-campfire.png',
+  'assets/clearwater-home.png',
+  'assets/state-trooper-night.png',
+  'assets/sheriff-station.png',
+  'assets/fire-rescue-scene.png',
+  'assets/liberty-county-map.png',
+];
+const DEFAULT_PROFILE_DRAFT = { bio: '', pronouns: '', location: '', website: '', bannerUrl: '', accentColor: '', pinnedPostId: '', deactivated: false, presets: BANNER_PRESETS };
+
+function setProfileStatus(message, tone = '') {
+  const status = document.querySelector('[data-profile-status]');
+  if (!status) return;
+  status.textContent = message;
+  status.dataset.tone = tone;
+}
+
+function renderProfilePreview() {
+  if (!profileDraft) return;
+  const preview = document.querySelector('[data-profile-preview]');
+  setProfileAccent(preview, profileDraft.accentColor);
+  setBannerImage(document.querySelector('[data-preview-banner]'), profileDraft.bannerUrl, '', profileDraft.accentColor);
+  const previewAvatar = document.querySelector('[data-preview-avatar]');
+  if (previewAvatar) previewAvatar.src = sessionUser?.avatarUrl || 'assets/clearwater-logo.png';
+  const previewName = document.querySelector('[data-preview-name]');
+  if (previewName) previewName.textContent = sessionUser?.displayName || sessionUser?.username || 'Your name';
+  const previewHandle = document.querySelector('[data-preview-handle]');
+  if (previewHandle) previewHandle.textContent = `@${sessionUser?.username || 'clearwater'}`;
+  const previewBio = document.querySelector('[data-preview-bio]');
+  if (previewBio) previewBio.textContent = profileDraft.bio || 'Add a bio so people know who you are.';
+  renderProfileMeta(document.querySelector('[data-preview-meta]'), {
+    ...profileDraft,
+    createdAt: internetUsers.get(currentUserId)?.createdAt,
+  });
+
+  document.querySelectorAll('[data-banner-preset]').forEach((button) => {
+    button.classList.toggle('selected', button.dataset.bannerPreset === profileDraft.bannerUrl);
+  });
+  document.querySelectorAll('[data-accent-swatch]').forEach((button) => {
+    button.classList.toggle('selected', button.dataset.accentSwatch === profileDraft.accentColor);
+  });
+  const counter = document.querySelector('[data-bio-count]');
+  if (counter) counter.textContent = `${profileDraft.bio.length} / 300`;
+}
+
+function renderProfileEditorChoices() {
+  const presets = document.querySelector('[data-banner-presets]');
+  if (presets) {
+    const options = profileDraft?.presets?.length ? profileDraft.presets : DEFAULT_PROFILE_DRAFT.presets;
+    presets.innerHTML = options.map((preset) => `<button type="button" data-banner-preset="${escapeHtml(preset)}" style="background-image:url('${escapeHtml(preset)}')" aria-label="Use ${escapeHtml(preset.replace(/^assets\/|\.[a-z]+$/gi, '').replace(/-/g, ' '))} banner"></button>`).join('');
+  }
+  const swatches = document.querySelector('[data-accent-swatches]');
+  if (swatches) {
+    swatches.innerHTML = ACCENT_SWATCHES.map((colour) => `<button type="button" data-accent-swatch="${escapeHtml(colour)}" style="background:${escapeHtml(colour)}" aria-label="Use accent ${escapeHtml(colour)}"></button>`).join('');
+  }
+}
+
+function renderPinnedPostOptions() {
+  const select = document.querySelector('[data-profile-pinned]');
+  if (!select || !currentUserId) return;
+  const posts = allPosts.filter((post) => post.authorId === currentUserId && !post.parentId).slice(0, 50);
+  const chosen = profileDraft?.pinnedPostId || '';
+  select.innerHTML = [
+    '<option value="">No pinned post</option>',
+    ...posts.map((post) => {
+      const label = (post.content || (post.kind === 'reel' ? 'Reel' : 'Media post')).slice(0, 60);
+      return `<option value="${escapeHtml(post.id)}"${post.id === chosen ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+    }),
+  ].join('');
+  select.value = chosen;
+}
+
+function fillProfileEditor() {
+  if (!profileDraft) return;
+  const set = (selector, value) => { const field = document.querySelector(selector); if (field) field.value = value; };
+  set('[data-profile-bio]', profileDraft.bio);
+  set('[data-profile-pronouns]', profileDraft.pronouns);
+  set('[data-profile-location]', profileDraft.location);
+  set('[data-profile-website]', profileDraft.website);
+  const accent = document.querySelector('[data-accent-input]');
+  if (accent) accent.value = profileDraft.accentColor || '#1257a3';
+  renderProfileEditorChoices();
+  renderPinnedPostOptions();
+  renderProfilePreview();
+}
+
+function fillAccountPane() {
+  const avatarImage = document.querySelector('[data-settings-avatar]');
+  if (avatarImage) avatarImage.src = sessionUser?.avatarUrl || 'assets/clearwater-logo.png';
+  const nameLabel = document.querySelector('[data-settings-name]');
+  if (nameLabel) nameLabel.textContent = sessionUser?.displayName || sessionUser?.username || 'Clearwater member';
+  const handleLabel = document.querySelector('[data-settings-handle]');
+  if (handleLabel) handleLabel.textContent = `@${sessionUser?.username || 'clearwater'}`;
+  const joined = document.querySelector('[data-settings-joined]');
+  const joinedText = joinedLabel(internetUsers.get(currentUserId)?.createdAt);
+  if (joined) joined.textContent = joinedText ? `Joined ${joinedText}` : '';
+  const deactivated = profileDraft?.deactivated === true;
+  const button = document.querySelector('[data-deactivate]');
+  if (button) button.textContent = deactivated ? 'Reactivate' : 'Deactivate';
+  const title = document.querySelector('[data-deactivate-title]');
+  if (title) title.textContent = deactivated ? 'Account deactivated' : 'Deactivate account';
+  const copy = document.querySelector('[data-deactivate-copy]');
+  if (copy) {
+    copy.textContent = deactivated
+      ? 'Your profile, posts, and Reels are hidden from everyone else. Reactivate to bring them back.'
+      : 'Hides your profile, posts, and Reels from everyone. Reactivate any time from this page.';
+  }
+}
+
+async function loadProfileEditor() {
+  if (!currentUserId) return;
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'profile-get' }) });
+    const result = await readApiJson(response, 'Could not load your profile.');
+    if (!response.ok) throw new Error(result.error || 'Could not load your profile.');
+    profileDraft = { ...DEFAULT_PROFILE_DRAFT, ...(result.profile || {}) };
+    fillProfileEditor();
+    fillAccountPane();
+  } catch (error) {
+    profileDraft = { ...DEFAULT_PROFILE_DRAFT };
+    fillProfileEditor();
+    setProfileStatus(error.message || 'Could not load your profile.', 'error');
+  }
+}
+
+function showSettingsTab(tab) {
+  const available = new Set(['profile', 'privacy', 'appearance', 'account']);
+  const active = available.has(tab) ? tab : 'profile';
+  document.querySelectorAll('[data-settings-tab]').forEach((button) => button.classList.toggle('selected', button.dataset.settingsTab === active));
+  document.querySelectorAll('[data-settings-pane]').forEach((pane) => { pane.hidden = pane.dataset.settingsPane !== active; });
+  if (active === 'account') fillAccountPane();
 }
 
 async function socialAction(type, { targetId = '', postId = '', enabled = true } = {}) {
@@ -1488,10 +2110,14 @@ async function socialAction(type, { targetId = '', postId = '', enabled = true }
 
 function openMemberProfile(memberId, updateHash = true) {
   const user = internetUsers.get(memberId); if (!user) return;
+  if (viewedMember?.id !== user.id) memberTab = 'posts';
   viewedMember = user;
-  const posts = allPosts.filter((post) => post.authorId === user.id && post.kind !== 'reel' && !post.parentId);
+  document.querySelectorAll('[data-member-tab]').forEach((tab) => tab.classList.toggle('selected', tab.dataset.memberTab === memberTab));
+  const posts = profileTabPosts(user.id, memberTab);
   const banner = document.querySelector('[data-member-page-banner]');
-  setBannerImage(banner, user.bannerUrl || user.avatarUrl || 'assets/clearwater-police-night.png');
+  setProfileAccent(document.querySelector('[data-member-root]'), user.accentColor);
+  setBannerImage(banner, user.bannerUrl || user.avatarUrl || 'assets/clearwater-police-night.png', '', user.accentColor);
+  renderProfileMeta(document.querySelector('[data-member-page-meta]'), user);
   document.querySelector('[data-member-page-avatar]').src = user.avatarUrl || 'assets/clearwater-logo.png';
   document.querySelector('[data-member-page-name]').textContent = user.displayName;
   document.querySelector('[data-member-page-handle]').textContent = `@${user.username}`;
@@ -1500,15 +2126,25 @@ function openMemberProfile(memberId, updateHash = true) {
   document.querySelector('[data-member-page-verified]').hidden = user.verified !== true;
   const memberStaffBadge = document.querySelector('[data-member-page-staff-badge]');
   if (memberStaffBadge) memberStaffBadge.hidden = !Array.isArray(user.badges) || !user.badges.includes('staff');
-  document.querySelector('[data-member-page-post-count]').textContent = posts.length.toLocaleString();
+  document.querySelector('[data-member-page-post-count]').textContent = profileTabPosts(user.id, 'posts').length.toLocaleString();
   const memberFollowing = Array.isArray(user.following) ? user.following : [];
   const memberFollowers = Array.isArray(user.followers) ? user.followers : [];
   const followingButton = document.querySelector('[data-member-page-following]');
   const followersButton = document.querySelector('[data-member-page-followers]');
   const connections = document.querySelector('[data-member-page-connections]');
-  if (followingButton) followingButton.innerHTML = `<b>${Number(user.followingCount ?? memberFollowing.length).toLocaleString()}</b> Following`;
-  if (followersButton) followersButton.innerHTML = `<b>${memberFollowers.length.toLocaleString()}</b> Followers`;
-  if (connections) {
+  const memberHidesStats = user.hideStats === true;
+  if (followingButton) {
+    followingButton.hidden = memberHidesStats;
+    followingButton.innerHTML = `<b>${Number(user.followingCount ?? memberFollowing.length).toLocaleString()}</b> Following`;
+  }
+  if (followersButton) {
+    followersButton.hidden = memberHidesStats;
+    followersButton.innerHTML = `<b>${memberFollowers.length.toLocaleString()}</b> Followers`;
+  }
+  if (connections && memberHidesStats) {
+    connections.hidden = true;
+    connections.innerHTML = '';
+  } else if (connections) {
     const memberIds = [...new Set([...memberFollowing, ...memberFollowers])].filter((id) => internetUsers.has(id));
     connections.hidden = memberIds.length === 0;
     connections.innerHTML = memberIds.map((id) => {
@@ -1527,7 +2163,8 @@ function openMemberProfile(memberId, updateHash = true) {
     mutuals.hidden = mutualIds.length === 0;
     mutuals.innerHTML = mutualIds.length ? `<span>${mutualIds.slice(0, 3).map((id) => `<img src="${escapeHtml(internetUsers.get(id).avatarUrl || 'assets/clearwater-logo.png')}" alt="" />`).join('')}</span><button type="button" data-open-member="${escapeHtml(mutualIds[0])}">${mutualIds.length === 1 ? `${escapeHtml(internetUsers.get(mutualIds[0]).displayName || 'One member')} is a mutual friend` : `${mutualIds.length} mutual friends`}</button>` : '';
   }
-  document.querySelector('[data-member-page-posts]').innerHTML = posts.length ? posts.map((post) => postMarkup(post, true)).join('') : '<p>No posts yet.</p>';
+  const memberEmpty = { posts: 'No posts yet.', replies: 'No replies yet.', media: 'No photos or Reels yet.' }[memberTab] || 'Nothing here yet.';
+  document.querySelector('[data-member-page-posts]').innerHTML = profileListMarkup(posts, memberTab, user.pinnedPostId, memberEmpty);
   const following = socialState.following.includes(user.id);
   const followsYou = socialState.followers.includes(user.id);
   document.querySelector('[data-member-page-follow]').textContent = following && followsYou ? 'Friends' : following ? 'Following' : followsYou ? 'Follow back' : 'Follow';
@@ -1676,6 +2313,8 @@ async function loadPosts() {
     }
     refreshProfileVerified();
     renderPosts();
+    renderOwnProfileDetails();
+    renderPinnedPostOptions();
     const route = readInternetRoute();
     if (route.view === 'post' && route.id) showPostDetail(route.id, false);
     if (route.view === 'member' && route.id) openMemberProfile(route.id, false);
@@ -1727,6 +2366,10 @@ async function loadSession() {
     await loadMessages();
     await loadSocial();
     await loadPreferences();
+    renderOwnProfileDetails();
+    // Landing straight on /internet/settings renders the view before the
+    // session exists, so the editor has to be filled once sign-in resolves.
+    if (!document.querySelector('[data-view="settings"]')?.hidden) await loadProfileEditor();
   } catch {
     // Session is valid even if a secondary inbox or settings call fails.
   }
@@ -1781,11 +2424,15 @@ document.querySelectorAll('[data-preference]').forEach((input) => input.addEvent
     localStorage.setItem(storageKey, JSON.stringify(preferences));
   };
   saveOnDevice();
+  applyPreferenceState({ ...preferenceState, [input.dataset.preference]: input.checked });
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'preference-save', key: input.dataset.preference, enabled: input.checked }) });
     const result = await readApiJson(response, 'Could not save this setting.');
     if (!response.ok) throw new Error(result.error || 'Could not save this setting.');
-    input.checked = result.preferences?.[input.dataset.preference] === true;
+    applyPreferenceState(result.preferences || {});
+    localStorage.setItem(`clearwater-preferences-${currentUserId}`, JSON.stringify(result.preferences || {}));
+    renderOwnProfileDetails();
+    if (['followersOnly', 'hideProfile', 'hideFollowing'].includes(input.dataset.preference)) await loadPosts();
   } catch (error) {
     if (!/owner access required/i.test(error.message || '')) { input.checked = original; window.alert(error.message || 'Could not save this setting.'); }
   }
@@ -1807,10 +2454,187 @@ document.querySelector('[data-compose-link]')?.addEventListener('click', () => {
   content?.focus();
 });
 document.querySelectorAll('[data-profile-tab]').forEach((button) => button.addEventListener('click', () => {
+  profileTab = button.dataset.profileTab || 'posts';
   document.querySelectorAll('[data-profile-tab]').forEach((tab) => tab.classList.toggle('selected', tab === button));
-  if (button.dataset.profileTab === 'posts') return renderProfilePosts();
-  if (profileList) profileList.innerHTML = `<p>${button.textContent} will appear here when community interactions are enabled.</p>`;
+  renderProfilePosts();
 }));
+document.querySelectorAll('[data-member-tab]').forEach((button) => button.addEventListener('click', () => {
+  memberTab = button.dataset.memberTab || 'posts';
+  document.querySelectorAll('[data-member-tab]').forEach((tab) => tab.classList.toggle('selected', tab === button));
+  if (viewedMember) openMemberProfile(viewedMember.id, false);
+}));
+document.querySelector('[data-edit-profile]')?.addEventListener('click', () => {
+  history.pushState({}, '', internetUrl('settings'));
+  showView('settings');
+  showSettingsTab('profile');
+});
+document.querySelector('[data-profile-following]')?.addEventListener('click', () => {
+  const connections = document.querySelector('[data-profile-connections]');
+  if (connections) connections.hidden = !connections.hidden;
+});
+document.querySelector('[data-profile-followers]')?.addEventListener('click', () => {
+  const connections = document.querySelector('[data-profile-connections]');
+  if (connections) connections.hidden = !connections.hidden;
+});
+document.querySelectorAll('[data-settings-tab]').forEach((button) => button.addEventListener('click', () => {
+  showSettingsTab(button.dataset.settingsTab || 'profile');
+}));
+document.querySelector('[data-settings-logout]')?.addEventListener('click', async () => {
+  try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }); } catch { /* Sign-out still clears the page. */ }
+  window.location.href = '/internet';
+});
+
+const profileDraftField = (key, selector, transform = (value) => value) => {
+  document.querySelector(selector)?.addEventListener('input', (event) => {
+    if (!profileDraft) profileDraft = { ...DEFAULT_PROFILE_DRAFT };
+    profileDraft[key] = transform(event.target.value || '');
+    renderProfilePreview();
+  });
+};
+profileDraftField('bio', '[data-profile-bio]');
+profileDraftField('pronouns', '[data-profile-pronouns]');
+profileDraftField('location', '[data-profile-location]');
+profileDraftField('website', '[data-profile-website]');
+document.querySelector('[data-profile-pinned]')?.addEventListener('change', (event) => {
+  if (!profileDraft) profileDraft = { ...DEFAULT_PROFILE_DRAFT };
+  profileDraft.pinnedPostId = event.target.value || '';
+});
+document.querySelector('[data-accent-input]')?.addEventListener('input', (event) => {
+  if (!profileDraft) profileDraft = { ...DEFAULT_PROFILE_DRAFT };
+  profileDraft.accentColor = String(event.target.value || '').toLowerCase();
+  renderProfilePreview();
+});
+document.querySelector('[data-accent-clear]')?.addEventListener('click', () => {
+  if (!profileDraft) return;
+  profileDraft.accentColor = '';
+  const accent = document.querySelector('[data-accent-input]');
+  if (accent) accent.value = '#1257a3';
+  renderProfilePreview();
+});
+document.querySelector('[data-banner-clear]')?.addEventListener('click', () => {
+  if (!profileDraft) return;
+  profileDraft.bannerUrl = '';
+  renderProfilePreview();
+});
+document.querySelector('[data-banner-upload]')?.addEventListener('click', () => {
+  document.querySelector('[data-banner-file]')?.click();
+});
+document.querySelector('[data-banner-presets]')?.addEventListener('click', (event) => {
+  const preset = event.target.closest('[data-banner-preset]');
+  if (!preset || !profileDraft) return;
+  profileDraft.bannerUrl = preset.dataset.bannerPreset || '';
+  renderProfilePreview();
+});
+document.querySelector('[data-accent-swatches]')?.addEventListener('click', (event) => {
+  const swatch = event.target.closest('[data-accent-swatch]');
+  if (!swatch || !profileDraft) return;
+  profileDraft.accentColor = swatch.dataset.accentSwatch || '';
+  const accent = document.querySelector('[data-accent-input]');
+  if (accent && profileDraft.accentColor) accent.value = profileDraft.accentColor;
+  renderProfilePreview();
+});
+document.querySelector('[data-banner-file]')?.addEventListener('change', async (event) => {
+  const input = event.target;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file || profileBannerBusy) return;
+  if (!/^image\/(?:png|jpeg|webp|gif)$/.test(file.type || '')) {
+    setProfileStatus('Choose a PNG, JPEG, WebP, or GIF image.', 'error');
+    return;
+  }
+  if (file.size > 12 * 1024 * 1024) {
+    setProfileStatus('Keep banner images under 12 MB.', 'error');
+    return;
+  }
+  profileBannerBusy = true;
+  setProfileStatus('Uploading banner...');
+  try {
+    const upload = globalThis.VercelBlob?.upload;
+    if (typeof upload !== 'function') throw new Error('Banner uploads are unavailable. Refresh and try again.');
+    const safeName = String(file.name || 'banner.jpg').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'banner.jpg';
+    const blob = await upload(`profile/${safeName}`, file, {
+      access: 'public',
+      handleUploadUrl: '/api/internet',
+      contentType: file.type,
+      onUploadProgress: (progress) => setProfileStatus(`Uploading banner... ${Math.round(progress.percentage || 0)}%`),
+    });
+    if (!profileDraft) profileDraft = { ...DEFAULT_PROFILE_DRAFT };
+    profileDraft.bannerUrl = blob.url;
+    renderProfilePreview();
+    setProfileStatus('Banner ready. Save your profile to publish it.', 'ok');
+  } catch (error) {
+    setProfileStatus(error.message || 'Could not upload that banner.', 'error');
+  } finally {
+    profileBannerBusy = false;
+  }
+});
+document.querySelector('[data-profile-form]')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!profileDraft) return;
+  const save = document.querySelector('[data-profile-save]');
+  if (save) save.disabled = true;
+  setProfileStatus('Saving...');
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'profile-save',
+        profile: {
+          bio: profileDraft.bio || '',
+          pronouns: profileDraft.pronouns || '',
+          location: profileDraft.location || '',
+          website: profileDraft.website || '',
+          bannerUrl: profileDraft.bannerUrl || '',
+          accentColor: profileDraft.accentColor || '',
+          pinnedPostId: profileDraft.pinnedPostId || '',
+        },
+      }),
+    });
+    const result = await readApiJson(response, 'Could not save your profile.');
+    if (!response.ok) throw new Error(result.error || 'Could not save your profile.');
+    profileDraft = { ...DEFAULT_PROFILE_DRAFT, ...(result.profile || {}) };
+    fillProfileEditor();
+    setProfileStatus('Profile saved.', 'ok');
+    await loadPosts();
+  } catch (error) {
+    setProfileStatus(error.message || 'Could not save your profile.', 'error');
+  } finally {
+    if (save) save.disabled = false;
+  }
+});
+document.querySelector('[data-deactivate]')?.addEventListener('click', async () => {
+  const status = document.querySelector('[data-account-status]');
+  const deactivate = profileDraft?.deactivated !== true;
+  if (deactivate && !window.confirm('Deactivate your account? Your profile, posts, and Reels will be hidden until you reactivate.')) return;
+  if (status) { status.textContent = deactivate ? 'Deactivating...' : 'Reactivating...'; status.dataset.tone = ''; }
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'account-active', deactivated: deactivate }) });
+    const result = await readApiJson(response, 'Could not update your account.');
+    if (!response.ok) throw new Error(result.error || 'Could not update your account.');
+    if (profileDraft) profileDraft.deactivated = result.deactivated === true;
+    fillAccountPane();
+    if (status) { status.textContent = result.deactivated ? 'Your account is deactivated.' : 'Your account is active again.'; status.dataset.tone = 'ok'; }
+    await loadPosts();
+  } catch (error) {
+    if (status) { status.textContent = error.message || 'Could not update your account.'; status.dataset.tone = 'error'; }
+  }
+});
+document.querySelector('[data-delete-account]')?.addEventListener('click', async () => {
+  const status = document.querySelector('[data-account-status]');
+  const typed = window.prompt('This permanently erases your account, posts, Reels, and messages. Type DELETE to confirm.');
+  if (String(typed || '').trim().toLowerCase() !== 'delete') return;
+  if (status) { status.textContent = 'Deleting your account...'; status.dataset.tone = ''; }
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'account-delete', confirm: 'delete' }) });
+    const result = await readApiJson(response, 'Could not delete your account.');
+    if (!response.ok) throw new Error(result.error || 'Could not delete your account.');
+    try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }); } catch { /* The account is already gone. */ }
+    window.location.href = '/';
+  } catch (error) {
+    if (status) { status.textContent = error.message || 'Could not delete your account.'; status.dataset.tone = 'error'; }
+  }
+});
 document.addEventListener('click', (event) => {
   const notificationPost = event.target.closest('[data-notification-post]');
   if (notificationPost) { showPostDetail(notificationPost.dataset.notificationPost); return; }
@@ -1897,25 +2721,7 @@ document.addEventListener('click', (event) => {
   if (reelShare) { void handlePostEngagement('share', reelShare.dataset.reelShare); return; }
   const reelSound = event.target.closest('[data-reel-sound]');
   if (reelSound) {
-    const reelCard = reelSound.closest('.reel-card');
-    const video = reelCard?.querySelector('video');
-    if (!video) return;
-    const turnOn = activeReelWithSound !== reelSound.dataset.reelSound || video.muted;
-    document.querySelectorAll('[data-reels-viewport] video').forEach((item) => { item.muted = true; });
-    activeReelWithSound = turnOn ? reelSound.dataset.reelSound : null;
-    video.muted = !turnOn;
-    reelSound.classList.toggle('is-on', turnOn);
-    reelSound.setAttribute('aria-label', turnOn ? 'Turn off sound' : 'Turn on sound');
-    void video.play().catch(() => {});
-    return;
-  }
-  const reelCard = event.target.closest('.reel-card');
-  if (reelCard && !event.target.closest('button')) {
-    const video = reelCard.querySelector('video');
-    if (video) {
-      video.muted = !video.muted;
-      void video.play().catch(() => {});
-    }
+    toggleReelSound(reelSound.closest('.reel-card'));
     return;
   }
   const gifChoice = event.target.closest('[data-gif-url]');

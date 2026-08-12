@@ -4,10 +4,11 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260811-staff-badge';
+const INTERNET_VERSION = '20260812-polish';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
+const MAX_PROFILE_IMAGE_BYTES = 12 * 1024 * 1024;
 
 async function readBody(request) {
   if (request.body && typeof request.body === 'object') return request.body;
@@ -101,12 +102,15 @@ async function serveReelViaBot(request, response, url) {
   response.end(buffer);
 }
 
-async function callBot(request, payload) {
+async function callBot(request, payload, viewerId = '') {
   const apiUrl = process.env.BOT_API_URL?.replace(/\/$/, '');
   const apiKey = process.env.BOT_API_KEY;
   if (!apiUrl || !apiKey) return { ok: false, status: 503, body: { error: 'Clearwater Internet is not configured yet' } };
 
-  const upstream = await fetch(`${apiUrl}/api/internet`, {
+  // Privacy settings are applied per viewer, so the feed request has to say who
+  // is reading it.
+  const query = viewerId ? `?viewer=${encodeURIComponent(viewerId)}` : '';
+  const upstream = await fetch(`${apiUrl}/api/internet${query}`, {
     method: request.method,
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -154,7 +158,7 @@ export default async function handler(request, response) {
       const { sessionSecret } = getAuthConfig();
       const viewer = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
       if (!viewer) return sendJson(response, 401, { error: 'Sign in with Discord to use Clearwater Internet' });
-      const result = await callBot(request);
+      const result = await callBot(request, undefined, viewer.id);
       return sendJson(response, result.ok ? 200 : result.status, redactPublicPayload(result.body));
     }
 
@@ -182,7 +186,17 @@ export default async function handler(request, response) {
           body,
           request,
           onBeforeGenerateToken: async (pathname) => {
-            if (!/^reels\/[a-z0-9._-]+$/i.test(String(pathname || ''))) throw new Error('Invalid Reel path');
+            const path = String(pathname || '');
+            if (/^profile\/[a-z0-9._-]+$/i.test(path)) {
+              return {
+                allowedContentTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+                maximumSizeInBytes: MAX_PROFILE_IMAGE_BYTES,
+                addRandomSuffix: true,
+                allowOverwrite: false,
+                tokenPayload: JSON.stringify({ id: user.id }),
+              };
+            }
+            if (!/^reels\/[a-z0-9._-]+$/i.test(path)) throw new Error('Invalid upload path');
             return {
               allowedContentTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'video/mp4', 'video/webm', 'video/quicktime'],
               maximumSizeInBytes: MAX_REEL_BYTES,
@@ -281,6 +295,26 @@ export default async function handler(request, response) {
       payload = { action: 'preferences', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
     } else if (body.action === 'preference-save') {
       payload = { action: 'preference-save', key: String(body.key || ''), enabled: body.enabled === true, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
+    } else if (body.action === 'profile-get') {
+      payload = { action: 'profile-get', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
+    } else if (body.action === 'profile-save') {
+      const submitted = body.profile && typeof body.profile === 'object' ? body.profile : {};
+      const profile = {};
+      if ('bio' in submitted) profile.bio = String(submitted.bio || '').slice(0, 300);
+      if ('pronouns' in submitted) profile.pronouns = String(submitted.pronouns || '').slice(0, 40);
+      if ('location' in submitted) profile.location = String(submitted.location || '').slice(0, 60);
+      if ('website' in submitted) profile.website = String(submitted.website || '').slice(0, 200);
+      if ('bannerUrl' in submitted) profile.bannerUrl = String(submitted.bannerUrl || '').trim().slice(0, 500);
+      if ('accentColor' in submitted) profile.accentColor = String(submitted.accentColor || '').trim().slice(0, 9);
+      if ('pinnedPostId' in submitted) profile.pinnedPostId = String(submitted.pinnedPostId || '').slice(0, 64);
+      payload = { action: 'profile-save', profile, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
+    } else if (body.action === 'account-active') {
+      payload = { action: 'account-active', deactivated: body.deactivated === true, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
+    } else if (body.action === 'account-delete') {
+      if (String(body.confirm || '').trim().toLowerCase() !== 'delete') {
+        return sendJson(response, 400, { error: 'Type DELETE to confirm.' });
+      }
+      payload = { action: 'account-delete', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
     } else if (body.action === 'social') {
       payload = { action: 'social', type: String(body.type || ''), enabled: body.enabled === true, targetId: String(body.targetId || ''), postId: String(body.postId || ''), asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
     } else if (body.action === 'post-interaction') {

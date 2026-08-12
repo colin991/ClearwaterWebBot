@@ -79,10 +79,11 @@ function hostedMediaUrl(value) {
   }
 }
 
-function publicPost(post) {
+function publicPost(post, maskedAuthors) {
   const next = { ...post };
   if (String(next.imageUrl || '').startsWith('data:')) next.imageUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=image`;
   if (String(next.videoUrl || '').startsWith('data:')) next.videoUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=video`;
+  if (maskedAuthors?.has(next.authorId)) next.avatarUrl = null;
   return next;
 }
 
@@ -94,36 +95,68 @@ export function publicInternetSettings(store) {
   };
 }
 
-export function publicPosts(store) {
-  const hiddenAuthors = new Set(
-    Object.values(store.users).filter((user) => user.shadowbanned === true).map((user) => user.id)
-  );
+// Privacy settings are enforced per viewer, so the public feed is rendered
+// against whoever is asking for it. A signed-out reader is treated as a
+// stranger, which is the most restrictive case.
+function viewerPrivacy(store, viewerId) {
+  const viewer = text(viewerId, 24);
+  const follows = (targetId) => {
+    if (!viewer) return false;
+    const following = store.users[viewer]?.following;
+    return Array.isArray(following) && following.includes(targetId);
+  };
+  const hiddenAuthors = new Set();
+  const maskedAuthors = new Set();
+  for (const user of Object.values(store.users)) {
+    const self = user.id === viewer;
+    if (user.shadowbanned === true && !self) hiddenAuthors.add(user.id);
+    if (user.deactivated === true && !self) hiddenAuthors.add(user.id);
+    if (user.preferences?.followersOnly === true && !self && !follows(user.id)) hiddenAuthors.add(user.id);
+    if (user.preferences?.hideProfile === true && !self) maskedAuthors.add(user.id);
+  }
+  return { viewer, hiddenAuthors, maskedAuthors };
+}
+
+export function publicPosts(store, viewerId) {
+  const { hiddenAuthors, maskedAuthors } = viewerPrivacy(store, viewerId);
   const visible = store.posts.filter((post) => !hiddenAuthors.has(post.authorId));
   const feed = visible.filter((post) => post.kind !== 'reel');
   const reels = visible.filter((post) => post.kind === 'reel' && !post.parentId);
   const reelIds = new Set(reels.map((reel) => reel.id));
   const comments = visible.filter((post) => post.parentId && reelIds.has(post.parentId));
-  return [...reels, ...feed, ...comments].map(publicPost);
+  return [...reels, ...feed, ...comments].map((post) => publicPost(post, maskedAuthors));
 }
 
-export function publicUsers(store) {
+export function publicUsers(store, viewerId) {
+  const { viewer, maskedAuthors } = viewerPrivacy(store, viewerId);
   const users = Object.values(store.users);
-  return users.map((user) => ({
-    id: user.id,
-    username: user.username,
-    displayName: user.displayName,
-    avatarUrl: user.avatarUrl,
-    bannerUrl: user.bannerUrl || null,
-    bio: user.bio || '',
-    staffRank: user.staffRank || null,
-    verified: user.verified === true,
-    badges: Array.isArray(user.badges) ? sanitizeInternetBadges(user.badges) : [],
-    banned: Boolean(getActiveBan(user)),
-    official: user.official === true,
-    following: user.preferences?.hideFollowing === true ? [] : (Array.isArray(user.following) ? user.following : []),
-    followingCount: Array.isArray(user.following) ? user.following.length : 0,
-    followers: users.filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).map((member) => member.id),
-  }));
+  return users.map((user) => {
+    const masked = maskedAuthors.has(user.id);
+    return {
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      avatarUrl: masked ? null : user.avatarUrl,
+      bannerUrl: masked ? null : (user.bannerUrl || null),
+      bio: user.bio || '',
+      pronouns: user.pronouns || '',
+      location: user.location || '',
+      website: user.website || '',
+      accentColor: user.accentColor || '',
+      pinnedPostId: user.pinnedPostId || '',
+      createdAt: user.createdAt || null,
+      deactivated: user.deactivated === true,
+      hideStats: user.preferences?.hideStats === true,
+      staffRank: user.staffRank || null,
+      verified: user.verified === true,
+      badges: Array.isArray(user.badges) ? sanitizeInternetBadges(user.badges) : [],
+      banned: Boolean(getActiveBan(user)),
+      official: user.official === true,
+      following: user.preferences?.hideFollowing === true && user.id !== viewer ? [] : (Array.isArray(user.following) ? user.following : []),
+      followingCount: Array.isArray(user.following) ? user.following.length : 0,
+      followers: users.filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).map((member) => member.id),
+    };
+  });
 }
 
 export function getActiveBan(user) {
@@ -367,6 +400,142 @@ export function updateOfficialInternetProfile(store, profile = {}) {
       : (previous.bannerUrl || officialDefaults.bannerUrl),
   };
   return ensureOfficialInternetAccount(store);
+}
+
+// Banners have to satisfy the site Content-Security-Policy, so only bundled
+// assets, Clearwater blob uploads, and Discord CDN images can be stored.
+const BANNER_HOSTS = /(^|\.)(?:blob\.vercel-storage\.com|cdn\.discordapp\.com|media\.discordapp\.net)$/i;
+
+export const PROFILE_BANNER_PRESETS = Object.freeze([
+  'assets/clearwater-police-night.png',
+  'assets/clearwater-sunset-beach.png',
+  'assets/clearwater-campfire.png',
+  'assets/clearwater-home.png',
+  'assets/state-trooper-night.png',
+  'assets/sheriff-station.png',
+  'assets/fire-rescue-scene.png',
+  'assets/liberty-county-map.png',
+]);
+
+function safeBannerUrl(value) {
+  const candidate = text(value, 500);
+  if (!candidate) return '';
+  if (PROFILE_BANNER_PRESETS.includes(candidate)) return candidate;
+  const invalid = new Error('Upload a banner or pick one of the Clearwater presets.');
+  if (/["'()\\\s]/.test(candidate)) throw invalid;
+  let url;
+  try {
+    url = new URL(candidate);
+  } catch {
+    throw invalid;
+  }
+  if (url.protocol !== 'https:' || url.username || url.password) throw invalid;
+  if (!BANNER_HOSTS.test(url.hostname)) throw invalid;
+  return url.href;
+}
+
+function safeWebsiteUrl(value) {
+  const candidate = text(value, 200);
+  if (!candidate) return '';
+  const invalid = new Error('Website links need to be a valid https:// address.');
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(candidate) ? candidate : `https://${candidate}`;
+  let url;
+  try {
+    url = new URL(withScheme);
+  } catch {
+    throw invalid;
+  }
+  if (url.protocol !== 'https:' || url.username || url.password) throw invalid;
+  return url.href.slice(0, 200);
+}
+
+function safeAccentColor(value) {
+  const candidate = text(value, 9);
+  if (!candidate) return '';
+  if (!/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(candidate)) throw new Error('Pick an accent colour in #rrggbb format.');
+  return candidate.toLowerCase();
+}
+
+// Profile text is rejected outright instead of being held for review, because
+// there is no queued copy of a profile the way there is for a post.
+function cleanProfileText(value, length, label) {
+  const candidate = text(value, length);
+  if (candidate && scanInternetContent(candidate)) {
+    throw new Error(`Your ${label} breaks the Clearwater community rules. Remove the flagged wording and try again.`);
+  }
+  return candidate;
+}
+
+function profilePayload(user) {
+  return {
+    bio: user.bio || '',
+    pronouns: user.pronouns || '',
+    location: user.location || '',
+    website: user.website || '',
+    bannerUrl: user.bannerUrl || '',
+    accentColor: user.accentColor || '',
+    pinnedPostId: user.pinnedPostId || '',
+    deactivated: user.deactivated === true,
+    presets: PROFILE_BANNER_PRESETS,
+  };
+}
+
+export function internetProfile(store, actor) {
+  return profilePayload(upsertInternetUser(store, actor));
+}
+
+export function updateInternetProfile(store, { actor, profile = {} }) {
+  const user = upsertInternetUser(store, actor);
+  if (user.official === true) throw new Error('Edit the official account from the staff controls.');
+  if (getActiveBan(user)) throw new Error('This account is banned from Clearwater Internet');
+  if (flagActive(user, 'lockProfile', 'lockProfileUntil')) throw new Error('Staff locked profile edits on this account.');
+  const has = (key) => Object.prototype.hasOwnProperty.call(profile, key);
+  if (has('bio')) user.bio = cleanProfileText(profile.bio, 300, 'bio');
+  if (has('pronouns')) user.pronouns = cleanProfileText(profile.pronouns, 40, 'pronouns');
+  if (has('location')) user.location = cleanProfileText(profile.location, 60, 'location');
+  if (has('website')) user.website = safeWebsiteUrl(profile.website);
+  if (has('bannerUrl')) user.bannerUrl = safeBannerUrl(profile.bannerUrl);
+  if (has('accentColor')) user.accentColor = safeAccentColor(profile.accentColor);
+  if (has('pinnedPostId')) {
+    const pinned = text(profile.pinnedPostId, 64);
+    const owned = pinned && store.posts.some((post) => post.id === pinned && post.authorId === user.id && !post.parentId);
+    user.pinnedPostId = owned ? pinned : '';
+  }
+  user.profileUpdatedAt = new Date().toISOString();
+  return profilePayload(user);
+}
+
+export function setInternetAccountActive(store, { actor, deactivated }) {
+  const user = upsertInternetUser(store, actor);
+  assertNotOfficial(user, 'deactivated');
+  user.deactivated = deactivated === true;
+  user.deactivatedAt = user.deactivated ? new Date().toISOString() : null;
+  return { deactivated: user.deactivated };
+}
+
+export function deleteInternetAccount(store, { actor }) {
+  const user = upsertInternetUser(store, actor);
+  assertNotOfficial(user, 'deleted');
+  const id = user.id;
+  const removedPosts = store.posts.filter((post) => post.authorId === id).map((post) => post.id);
+  const removed = new Set(removedPosts);
+  store.posts = store.posts.filter((post) => !removed.has(post.id) && !removed.has(post.parentId));
+  for (const post of store.posts) {
+    if (Array.isArray(post.likes)) post.likes = post.likes.filter((like) => like !== id);
+    if (Array.isArray(post.reposts)) post.reposts = post.reposts.filter((repost) => repost !== id);
+  }
+  store.reports = store.reports.filter((report) => report.authorId !== id && report.reporterId !== id);
+  for (const member of Object.values(store.users)) {
+    if (Array.isArray(member.following)) member.following = member.following.filter((followed) => followed !== id);
+    if (Array.isArray(member.blocked)) member.blocked = member.blocked.filter((blocked) => blocked !== id);
+    if (Array.isArray(member.muted)) member.muted = member.muted.filter((muted) => muted !== id);
+    if (Array.isArray(member.bookmarks)) member.bookmarks = member.bookmarks.filter((bookmark) => !removed.has(bookmark));
+    if (Array.isArray(member.notifications)) member.notifications = member.notifications.filter((note) => note.actorId !== id);
+    if (Array.isArray(member.messages)) member.messages = member.messages.filter((message) => message.fromId !== id && message.toId !== id);
+  }
+  delete store.users[id];
+  addInternetLog(store, `${user.displayName || 'A member'} deleted their Clearwater Internet account.`);
+  return { deleted: true, posts: removedPosts.length };
 }
 
 function sanitizeDropLocation(raw) {
@@ -756,7 +925,17 @@ export function socialSnapshot(store, actor) {
   };
 }
 
-const preferenceKeys = new Set(['followersOnly', 'hideFollowing', 'hideProfile', 'friendsMessages']);
+const preferenceKeys = new Set([
+  'followersOnly',
+  'hideFollowing',
+  'hideProfile',
+  'friendsMessages',
+  'hideStats',
+  'reduceMotion',
+  'compactPosts',
+  'autoplayReels',
+  'largeText',
+]);
 
 export function internetPreferences(store, actor) {
   const user = upsertInternetUser(store, actor);
@@ -836,6 +1015,8 @@ function staffUserFlags(user) {
     lockPosts: flagActive(user, 'lockPosts', 'lockPostsUntil'),
     lockMessages: flagActive(user, 'lockMessages', 'lockMessagesUntil'),
     lockReels: flagActive(user, 'lockReels', 'lockReelsUntil'),
+    lockProfile: flagActive(user, 'lockProfile', 'lockProfileUntil'),
+    deactivated: user.deactivated === true,
   };
 }
 
@@ -881,6 +1062,11 @@ export function staffUserDetail(store, targetId) {
       muteReason: text(user.muteReason, 300),
       banReason: text(user.banReason, 300),
       banSource: user.banSource || null,
+      mutedUntil: flags.muted ? user.mutedUntil || null : null,
+      lockPostsUntil: flags.lockPosts ? user.lockPostsUntil || null : null,
+      lockMessagesUntil: flags.lockMessages ? user.lockMessagesUntil || null : null,
+      lockReelsUntil: flags.lockReels ? user.lockReelsUntil || null : null,
+      lockProfileUntil: flags.lockProfile ? user.lockProfileUntil || null : null,
     },
     warnings: (Array.isArray(user.warnings) ? user.warnings : []).slice(0, 30).map((warning) => ({
       id: warning.id,
@@ -936,7 +1122,7 @@ export function applyStaffUserAction(store, {
   const actorName = text(actor?.displayName, 80) || 'Staff';
   const label = text(user.displayName, 80) || user.username || 'a member';
   const noteText = text(reason, 300) || text(note, 300);
-  const destructive = new Set(['ban', 'ip-ban', 'mute', 'lock-posts', 'lock-messages', 'lock-reels', 'shadowban', 'wipe-posts', 'wipe-reels', 'wipe-comments', 'wipe-messages', 'reset-profile', 'delete-post', 'clear-ip-hashes']);
+  const destructive = new Set(['ban', 'ip-ban', 'mute', 'lock-posts', 'lock-messages', 'lock-reels', 'lock-profile', 'shadowban', 'wipe-posts', 'wipe-reels', 'wipe-comments', 'wipe-messages', 'reset-profile', 'delete-post']);
   if (destructive.has(action)) assertNotOfficial(user, 'moderated that way');
 
   if (action === 'verify') {
@@ -1001,6 +1187,12 @@ export function applyStaffUserAction(store, {
   } else if (action === 'unlock-reels') {
     setTimedFlag(user, 'lockReels', 'lockReelsUntil', false);
     addInternetLog(store, `${actorName} unlocked Reels for ${label}.`);
+  } else if (action === 'lock-profile') {
+    setTimedFlag(user, 'lockProfile', 'lockProfileUntil', true, durationDays);
+    addInternetLog(store, `${actorName} locked profile editing for ${label}.`);
+  } else if (action === 'unlock-profile') {
+    setTimedFlag(user, 'lockProfile', 'lockProfileUntil', false);
+    addInternetLog(store, `${actorName} unlocked profile editing for ${label}.`);
   } else if (action === 'shadowban') {
     user.shadowbanned = true;
     addInternetLog(store, `${actorName} shadowbanned ${label}.`);
@@ -1035,7 +1227,12 @@ export function applyStaffUserAction(store, {
   } else if (action === 'reset-profile') {
     user.bio = '';
     user.bannerUrl = null;
-    addInternetLog(store, `${actorName} reset ${label}'s public profile text.`);
+    user.pronouns = '';
+    user.location = '';
+    user.website = '';
+    user.accentColor = '';
+    user.pinnedPostId = '';
+    addInternetLog(store, `${actorName} reset ${label}'s public profile.`);
   } else if (action === 'delete-post') {
     deleteInternetPost(store, { postId, actorId: actor?.id, owner: true });
     addInternetLog(store, `${actorName} deleted a post from ${label}.`);
@@ -1043,9 +1240,6 @@ export function applyStaffUserAction(store, {
     if (!noteText) throw new Error('Write a staff notice first');
     addInternetMessage(store, user.id, `Staff notice: ${noteText}`);
     addInternetLog(store, `${actorName} sent a staff notice to ${label}.`);
-  } else if (action === 'clear-ip-hashes') {
-    user.ipHashes = [];
-    addInternetLog(store, `${actorName} cleared stored network hashes for ${label}.`);
   } else {
     throw new Error('Unsupported staff action');
   }
