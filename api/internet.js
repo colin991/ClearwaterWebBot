@@ -1,11 +1,13 @@
+import { handleUpload } from '@vercel/blob/client';
 import { SESSION_COOKIE, avatarUrl, getAuthConfig, isSameSiteRequest, parseCookies, readSessionToken, sendJson } from '../lib/discord-auth.js';
 import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260811-staff-tabs';
+const INTERNET_VERSION = '20260811-reels-2gb';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
+const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 
 async function readBody(request) {
   if (request.body && typeof request.body === 'object') return request.body;
@@ -54,6 +56,51 @@ function safeHttpsUrl(value) {
   }
 }
 
+function safeBlobMediaUrl(value) {
+  const href = safeHttpsUrl(value);
+  try {
+    return href && /(^|\.)blob\.vercel-storage\.com$/i.test(new URL(href).hostname) ? href : '';
+  } catch {
+    return '';
+  }
+}
+
+function mediaPayload(raw, kind) {
+  if (!raw || typeof raw !== 'object') return null;
+  const hosted = safeBlobMediaUrl(raw.url);
+  if (hosted) return { url: hosted };
+  const dataUrl = kind === 'video' ? safeVideoDataUrl(raw.dataUrl) : safeImageDataUrl(raw.dataUrl);
+  return dataUrl ? { dataUrl: dataUrl.slice(0, MAX_MEDIA_DATA_URL) } : null;
+}
+
+async function serveReelViaBot(request, response, url) {
+  const apiUrl = process.env.BOT_API_URL?.replace(/\/$/, '');
+  const apiKey = process.env.BOT_API_KEY;
+  if (!apiUrl || !apiKey) return sendJson(response, 503, { error: 'Clearwater Internet is not configured yet' });
+  const upstream = await fetch(`${apiUrl}/api/internet?${url.searchParams.toString()}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(20000),
+    redirect: 'manual',
+  });
+  const location = upstream.headers.get('location');
+  if (upstream.status >= 300 && upstream.status < 400 && location) {
+    response.statusCode = 302;
+    response.setHeader('Location', location);
+    return response.end();
+  }
+  if (!upstream.ok) {
+    response.statusCode = upstream.status === 404 ? 404 : 502;
+    return response.end();
+  }
+  const buffer = Buffer.from(await upstream.arrayBuffer());
+  response.statusCode = 200;
+  response.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream');
+  response.setHeader('Cache-Control', 'private, max-age=3600');
+  response.setHeader('X-Content-Type-Options', 'nosniff');
+  response.setHeader('Content-Length', buffer.length);
+  response.end(buffer);
+}
+
 async function callBot(request, payload) {
   const apiUrl = process.env.BOT_API_URL?.replace(/\/$/, '');
   const apiKey = process.env.BOT_API_KEY;
@@ -90,14 +137,17 @@ async function callBot(request, payload) {
 
 export default async function handler(request, response) {
   if (!['GET', 'POST'].includes(request.method)) return sendJson(response, 405, { error: 'Method not allowed' });
-  if (request.method === 'POST' && !isSameSiteRequest(request)) {
-    return sendJson(response, 403, { error: 'Invalid request origin' });
-  }
 
   try {
     if (request.method === 'GET') {
       const url = new URL(request.url, `https://${request.headers.host || 'cwrpvc.lol'}`);
       if (url.searchParams.get('t')) return serveProxiedMedia(request, response);
+      if (url.searchParams.get('reel')) {
+        const { sessionSecret } = getAuthConfig();
+        const viewer = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
+        if (!viewer) return sendJson(response, 401, { error: 'Sign in with Discord to use Clearwater Internet' });
+        return serveReelViaBot(request, response, url);
+      }
       if (url.searchParams.get('meta') === 'version' || url.pathname.endsWith('/internet-version')) {
         return sendJson(response, 200, { version: INTERNET_VERSION });
       }
@@ -108,11 +158,46 @@ export default async function handler(request, response) {
       return sendJson(response, result.ok ? 200 : result.status, redactPublicPayload(result.body));
     }
 
+    const body = await readBody(request);
+    if (body?.type === 'blob.upload-completed') {
+      const result = await handleUpload({
+        body,
+        request,
+        onBeforeGenerateToken: async () => ({}),
+        onUploadCompleted: async () => {},
+      });
+      return sendJson(response, 200, result);
+    }
+    if (request.method === 'POST' && !isSameSiteRequest(request)) {
+      return sendJson(response, 403, { error: 'Invalid request origin' });
+    }
+
     const { sessionSecret } = getAuthConfig();
     const user = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
     if (!user) return sendJson(response, 401, { error: 'Sign in with Discord to post' });
 
-    const body = await readBody(request);
+    if (body?.type === 'blob.generate-client-token') {
+      try {
+        const result = await handleUpload({
+          body,
+          request,
+          onBeforeGenerateToken: async (pathname) => {
+            if (!/^reels\/[a-z0-9._-]+$/i.test(String(pathname || ''))) throw new Error('Invalid Reel path');
+            return {
+              allowedContentTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'video/mp4', 'video/webm', 'video/quicktime'],
+              maximumSizeInBytes: MAX_REEL_BYTES,
+              addRandomSuffix: true,
+              allowOverwrite: false,
+              tokenPayload: JSON.stringify({ id: user.id }),
+            };
+          },
+          onUploadCompleted: async () => {},
+        });
+        return sendJson(response, 200, result);
+      } catch (error) {
+        return sendJson(response, 503, { error: /token/i.test(String(error?.message || '')) ? 'Create a Blob store in Vercel Storage so Reels can upload videos.' : (error.message || 'Could not start this Reel upload.') });
+      }
+    }
     // Access checks call the bot service. A normal ban-status check does not
     // need ownership data, so skip that extra round trip and show a ban screen
     // as quickly as possible.
@@ -124,8 +209,8 @@ export default async function handler(request, response) {
         action: 'post',
         content: String(body.content || '').slice(0, 500),
         gif: body.gif && typeof body.gif === 'object' ? { url: compatibleGiphyUrl(body.gif.url), title: String(body.gif.title || '').slice(0, 120) } : null,
-        image: body.image && typeof body.image === 'object' ? { dataUrl: safeImageDataUrl(body.image.dataUrl).slice(0, MAX_MEDIA_DATA_URL) } : null,
-        video: body.video && typeof body.video === 'object' ? { dataUrl: safeVideoDataUrl(body.video.dataUrl).slice(0, MAX_MEDIA_DATA_URL) } : null,
+        image: mediaPayload(body.image, 'image'),
+        video: mediaPayload(body.video, 'video'),
         reel: body.reel === true,
         location: body.location && typeof body.location === 'object' ? body.location : null,
         quoteId: String(body.quoteId || '').slice(0, 80) || null,

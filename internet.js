@@ -93,7 +93,8 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const MAX_REEL_BYTES = 3_000_000;
+const INTERNET_VERSION = '20260811-reels-2gb';
+const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const INTERNET_PATH = '/internet';
 const SIGNIN_INTERNET = '/signin?next=/internet';
 const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'post']);
@@ -530,12 +531,25 @@ function safeGifUrl(value) {
   try { return /^https:\/\/(?:media\d*|i)\.giphy\.com\//.test(new URL(String(value)).href); } catch { return false; }
 }
 
+function isHostedMediaUrl(value) {
+  const raw = String(value || '').trim();
+  if (/^\/api\/media\?(?:reel|t)=/i.test(raw)) return true;
+  try {
+    const url = new URL(raw, location.origin);
+    if (url.origin === location.origin && url.pathname === '/api/media') return true;
+    if (url.protocol === 'https:' && /(^|\.)blob\.vercel-storage\.com$/i.test(url.hostname)) return true;
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 function safeImageUrl(value) {
-  return /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(String(value || ''));
+  return /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(String(value || '')) || isHostedMediaUrl(value);
 }
 
 function safeVideoUrl(value) {
-  return /^data:video\/(?:mp4|webm|quicktime);base64,[a-z0-9+/=]+$/i.test(String(value || ''));
+  return /^data:video\/(?:mp4|webm|quicktime);base64,[a-z0-9+/=]+$/i.test(String(value || '')) || isHostedMediaUrl(value);
 }
 
 function isReelsTab() {
@@ -581,8 +595,8 @@ function renderReels() {
     const liked = likes.includes(activeUserId());
     const comments = allPosts.filter((item) => item.parentId === reel.id).length;
     const media = safeVideoUrl(reel.videoUrl)
-      ? `<video src="${escapeHtml(reel.videoUrl)}" loop muted playsinline preload="metadata"></video>`
-      : (safeImageUrl(reel.imageUrl) ? `<img src="${escapeHtml(reel.imageUrl)}" alt="" />` : '');
+      ? `<video src="${escapeHtml(reel.videoUrl)}" loop muted playsinline preload="auto"></video>`
+      : (safeImageUrl(reel.imageUrl) ? `<img src="${escapeHtml(reel.imageUrl)}" alt="" />` : '<p class="reel-missing">This Reel could not be loaded.</p>');
     return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient"></div><div class="reel-meta"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(reel.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span>@${escapeHtml(reel.username || 'member')}</span></button>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}">${postActionIcon('share')}</button></div></article>`;
   }).join('');
   bindReelAutoplay();
@@ -1778,6 +1792,7 @@ moderationForm?.addEventListener('submit', async (event) => {
 });
 
 function resetReelComposer() {
+  if (reelMedia?.previewUrl) URL.revokeObjectURL(reelMedia.previewUrl);
   reelMedia = null;
   const preview = document.querySelector('[data-reel-preview]');
   const label = document.querySelector('[data-reel-file-label]');
@@ -1785,7 +1800,7 @@ function resetReelComposer() {
   const submit = document.querySelector('[data-reel-submit]');
   const error = document.querySelector('[data-reel-error]');
   if (preview) { preview.hidden = true; preview.innerHTML = ''; }
-  if (label) label.textContent = 'Tap to add a photo or short video';
+  if (label) label.textContent = 'Tap to add a photo or video up to 2 GB';
   if (caption) caption.value = '';
   if (submit) submit.disabled = true;
   if (error) error.textContent = '';
@@ -1799,42 +1814,52 @@ document.querySelector('[data-reel-file]')?.addEventListener('change', () => {
   const label = document.querySelector('[data-reel-file-label]');
   document.querySelector('[data-reel-file]').value = '';
   if (!file) return;
-  const isImage = /^image\/(?:png|jpeg|webp|gif)$/.test(file.type);
-  const isVideo = /^video\/(?:mp4|webm|quicktime)$/.test(file.type);
+  const type = file.type || (/\.(?:png|jpe?g|webp|gif)$/i.test(file.name) ? 'image/jpeg' : (/\.(?:mp4|webm|mov)$/i.test(file.name) ? 'video/mp4' : ''));
+  const isImage = /^image\/(?:png|jpeg|webp|gif)$/.test(type);
+  const isVideo = /^video\/(?:mp4|webm|quicktime)$/.test(type);
   if (!isImage && !isVideo) {
     if (error) error.textContent = 'Choose a photo or an MP4/WebM video.';
     return;
   }
   if (file.size > MAX_REEL_BYTES) {
-    if (error) error.textContent = 'Keep Reels under 3 MB so the clip can upload.';
+    if (error) error.textContent = 'Keep Reels under 2 GB.';
     return;
   }
-  const reader = new FileReader();
-  reader.onload = () => {
-    const dataUrl = String(reader.result || '');
-    if (isImage && !safeImageUrl(dataUrl)) { if (error) error.textContent = 'Choose a supported photo.'; return; }
-    if (isVideo && !safeVideoUrl(dataUrl)) { if (error) error.textContent = 'Choose a supported video.'; return; }
-    reelMedia = isVideo ? { video: { dataUrl } } : { image: { dataUrl } };
-    if (preview) {
-      preview.hidden = false;
-      preview.innerHTML = isVideo ? `<video src="${escapeHtml(dataUrl)}" muted loop playsinline controls></video>` : `<img src="${escapeHtml(dataUrl)}" alt="" />`;
-    }
-    if (label) label.textContent = 'Replace photo or video';
-    if (submit) submit.disabled = false;
-    if (error) error.textContent = '';
-  };
-  reader.readAsDataURL(file);
+  if (reelMedia?.previewUrl) URL.revokeObjectURL(reelMedia.previewUrl);
+  const previewUrl = URL.createObjectURL(file);
+  reelMedia = { file, type, isVideo, previewUrl };
+  if (preview) {
+    preview.hidden = false;
+    preview.innerHTML = isVideo ? `<video src="${escapeHtml(previewUrl)}" muted loop playsinline controls></video>` : `<img src="${escapeHtml(previewUrl)}" alt="" />`;
+  }
+  if (label) label.textContent = 'Replace photo or video';
+  if (submit) submit.disabled = false;
+  if (error) error.textContent = '';
 });
 document.querySelector('[data-reel-form]')?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const error = document.querySelector('[data-reel-error]');
   const submit = document.querySelector('[data-reel-submit]');
   const caption = String(document.querySelector('[data-reel-caption]')?.value || '').trim();
-  if (!reelMedia) { if (error) error.textContent = 'Add a photo or short video first.'; return; }
+  if (!reelMedia?.file) { if (error) error.textContent = 'Add a photo or short video first.'; return; }
   if (submit) submit.disabled = true;
-  if (error) error.textContent = 'Posting Reel...';
+  if (error) error.textContent = 'Uploading Reel...';
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: caption, reel: true, image: reelMedia.image || null, video: reelMedia.video || null, ...activeAccountRequest() }) });
+    const upload = globalThis.VercelBlob?.upload;
+    if (typeof upload !== 'function') throw new Error('Reel uploads are unavailable. Refresh and try again.');
+    const safeName = String(reelMedia.file.name || (reelMedia.isVideo ? 'reel.mp4' : 'reel.jpg')).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || (reelMedia.isVideo ? 'reel.mp4' : 'reel.jpg');
+    const blob = await upload(`reels/${safeName}`, reelMedia.file, {
+      access: 'public',
+      handleUploadUrl: '/api/internet',
+      multipart: reelMedia.file.size > 80_000_000,
+      contentType: reelMedia.type,
+      onUploadProgress: (progress) => {
+        if (error) error.textContent = `Uploading Reel... ${Math.round(progress.percentage || 0)}%`;
+      },
+    });
+    if (error) error.textContent = 'Posting Reel...';
+    const media = reelMedia.isVideo ? { video: { url: blob.url } } : { image: { url: blob.url } };
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: caption, reel: true, image: media.image || null, video: media.video || null, ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Could not post this Reel.');
     if (!response.ok) throw new Error(result.error || 'Could not post this Reel.');
     resetReelComposer();
@@ -1843,7 +1868,12 @@ document.querySelector('[data-reel-form]')?.addEventListener('submit', async (ev
     localStorage.setItem('clearwater-feed-tab', 'reels');
     await loadPosts();
   } catch (exception) {
-    if (error) error.textContent = exception.message || 'Could not post this Reel.';
+    const message = String(exception.message || '');
+    if (error) {
+      error.textContent = /token|blob store|No token/i.test(message)
+        ? 'Reels need a Vercel Blob store. Create one under Vercel → Storage, then try again.'
+        : (message || 'Could not post this Reel.');
+    }
   } finally {
     if (submit) submit.disabled = !reelMedia;
   }

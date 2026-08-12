@@ -17,6 +17,34 @@ const json = (response, statusCode, body) => {
   response.end(JSON.stringify(body));
 };
 
+function serveStoredReel(response, store, reelId, kind) {
+  const post = store.posts.find((item) => item.id === reelId);
+  const source = kind === 'video'
+    ? post?.videoUrl
+    : (kind === 'image' ? post?.imageUrl : (post?.videoUrl || post?.imageUrl));
+  if (!post || !source) {
+    response.writeHead(404, { 'Cache-Control': 'no-store' });
+    return response.end();
+  }
+  if (/^https:\/\//i.test(source)) {
+    response.writeHead(302, { Location: source, 'Cache-Control': 'no-store' });
+    return response.end();
+  }
+  const match = String(source).replace(/\s+/g, '').match(/^data:([^;]+);base64,([a-z0-9+/]+=*)$/i);
+  if (!match) {
+    response.writeHead(404, { 'Cache-Control': 'no-store' });
+    return response.end();
+  }
+  const buffer = Buffer.from(match[2], 'base64');
+  response.writeHead(200, {
+    'Content-Type': match[1],
+    'Content-Length': buffer.length,
+    'Cache-Control': 'private, max-age=3600',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  return response.end(buffer);
+}
+
 const safeEqual = (left = '', right = '') => {
   const a = Buffer.from(left);
   const b = Buffer.from(right);
@@ -201,6 +229,8 @@ export function startStatusServer(client, config) {
       try {
         store = await readInternetStore();
         if (request.method === 'GET') {
+          const reelId = url.searchParams.get('reel');
+          if (reelId) return serveStoredReel(response, store, reelId, url.searchParams.get('kind'));
           const createdOfficialAccount = !store.users[OFFICIAL_INTERNET_ACCOUNT_ID];
           ensureOfficialInternetAccount(store);
           if (createdOfficialAccount || await syncInternetRoles(store)) await saveInternetStore(store);
