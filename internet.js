@@ -763,6 +763,7 @@ function renderPosts() {
   if (isReelsTab()) renderReels();
   else showPosts(posts, empty);
   document.querySelectorAll('[data-feed-tab]').forEach((button) => button.classList.toggle('selected', button.dataset.feedTab === feedTab));
+  document.querySelector('[data-reels-link]')?.classList.toggle('selected', feedTab === 'reels');
   renderProfilePosts();
   renderTrending();
   renderBookmarks();
@@ -1356,6 +1357,14 @@ document.querySelectorAll('[data-feed-tab]').forEach((button) => button.addEvent
   showView('home');
   renderPosts();
 }));
+document.querySelector('[data-reels-link]')?.addEventListener('click', (event) => {
+  event.preventDefault();
+  feedTab = 'reels';
+  localStorage.setItem('clearwater-feed-tab', feedTab);
+  history.pushState({}, '', internetUrl('home'));
+  showView('home');
+  renderPosts();
+});
 document.querySelectorAll('[data-staff-tab]').forEach((button) => button.addEventListener('click', () => {
   staffTab = button.dataset.staffTab || 'overview';
   renderStaffDashboard();
