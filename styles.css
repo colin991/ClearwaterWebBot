@@ -68,6 +68,23 @@ img { display: block; max-width: 100%; }
 .nav-links a:hover, .nav-links a.active { color: white; }
 .nav-links a.active::after { content: ""; position: absolute; left: 0; right: 0; bottom: 4px; width: 4px; height: 4px; margin: auto; border-radius: 50%; background: var(--blue); }
 .nav-actions { gap: 8px; }
+.cash-balance {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px 0 8px;
+  border: 1px solid rgba(126, 172, 255, .28);
+  border-radius: 11px;
+  color: #f3f8ff;
+  background: rgba(4, 13, 28, .56);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  white-space: nowrap;
+}
+.cash-balance svg { width: 18px; height: 18px; fill: rgba(108, 164, 255, .2); stroke: #9bc4ff; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.65; }
 .nav-button { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; padding: 0 17px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; font-weight: 720; transition: min-height .35s ease, padding .35s ease, transform .2s ease, border-color .2s ease, background .2s ease; }
 .nav-button:hover { transform: translateY(-1px); }
 .nav-button-ghost:hover { border-color: rgba(255,255,255,.32); background: rgba(255,255,255,.04); }
@@ -728,6 +745,8 @@ body {
   .nav-links a { padding: 8px 10px; font-size: 12px; }
   .nav-actions { gap: 5px; }
   .nav-button { min-height: 36px; padding-inline: 12px; font-size: 12px; }
+  .cash-balance { min-height: 34px; padding: 0 9px 0 7px; font-size: 11px; }
+  .cash-balance svg { width: 16px; height: 16px; }
   .discord-account { min-height: 36px; gap: 6px; padding: 3px 5px 3px 4px; }
   .discord-avatar { width: 28px; height: 28px; flex-basis: 28px; }
   .discord-name,
