@@ -1328,7 +1328,34 @@ body { margin: 0; }
   font-weight: 850;
 }
 .rail-signin[hidden] { display: none !important; }
-.rail-primary { margin-top: 18px; border: 0; width: 100%; cursor: pointer; font: inherit; }
+.rail-primary {
+  position: fixed;
+  z-index: 30;
+  right: 26px;
+  bottom: 26px;
+  width: auto;
+  min-width: 118px;
+  min-height: 48px;
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 999px;
+  color: #081018;
+  background: #f4f8ff;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, .42);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 850;
+}
+.rail-primary:hover { background: #fff; transform: translateY(-2px); }
+@media (max-width: 660px) {
+  .rail-primary {
+    right: 16px;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    min-width: 106px;
+    min-height: 45px;
+  }
+}
 
 .feed-tabs {
   position: sticky;
