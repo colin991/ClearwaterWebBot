@@ -93,7 +93,8 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-chat-dock';
+const INTERNET_VERSION = '20260811-drop-refresh';
+const MAX_REEL_BYTES = 3_000_000;
 const INTERNET_PATH = '/internet';
 const SIGNIN_INTERNET = '/signin?next=/internet';
 const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'post']);
@@ -170,6 +171,8 @@ let moderationSnapshot = null;
 let selectedReportId = null;
 let feedTab = ['foryou', 'recent', 'following', 'official', 'reels'].includes(localStorage.getItem('clearwater-feed-tab')) ? localStorage.getItem('clearwater-feed-tab') : 'foryou';
 let selectedLocation = null;
+let dropLocationTimer = 0;
+let dropLocationBusy = false;
 let selectedQuoteId = null;
 let activeReelId = null;
 let reelMedia = null;
@@ -340,6 +343,65 @@ function renderDropPreview() {
   preview.hidden = false;
   preview.innerHTML = `${dropMapMarkup(selectedLocation)}<button type="button" data-remove-location>Remove location</button>`;
   composer?.classList.add('composer-expanded');
+}
+
+function locationLine(location) {
+  if (!location) return '';
+  return `📍 ${location.label}${location.postal ? ` · Postal ${location.postal}` : ''}`;
+}
+
+function applyDroppedLocation(location) {
+  const previousLine = locationLine(selectedLocation);
+  selectedLocation = location;
+  const line = locationLine(location);
+  if (content && line) {
+    if (previousLine && content.value.includes(previousLine) && previousLine !== line) {
+      content.value = content.value.split(previousLine).join(line);
+    } else if (!content.value.includes(location.label)) {
+      content.value = content.value.trim() ? `${content.value.trim()}\n${line}` : line;
+    }
+    count.textContent = `${content.value.length} / 500`;
+    updateComposerHighlight();
+  }
+  renderDropPreview();
+  postButton.disabled = !canComposePost();
+}
+
+function stopDropLocationRefresh() {
+  if (dropLocationTimer) {
+    window.clearInterval(dropLocationTimer);
+    dropLocationTimer = 0;
+  }
+}
+
+function startDropLocationRefresh() {
+  stopDropLocationRefresh();
+  dropLocationTimer = window.setInterval(() => {
+    void refreshDropLocation({ silent: true });
+  }, 15_000);
+}
+
+async function refreshDropLocation({ silent = false } = {}) {
+  if (!currentUserId || dropLocationBusy) return false;
+  dropLocationBusy = true;
+  const button = document.querySelector('[data-drop-location]');
+  if (!silent && button) button.disabled = true;
+  if (!silent) postMessage.textContent = 'Checking your ER:LC location...';
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'erlc-location', ...activeAccountRequest() }) });
+    const result = await readApiJson(response, 'Could not read your in-game location.');
+    if (!response.ok) throw new Error(result.error || 'Could not read your in-game location.');
+    applyDroppedLocation(result.location);
+    if (!silent) postMessage.textContent = 'Location dropped from ER:LC.';
+    startDropLocationRefresh();
+    return true;
+  } catch (error) {
+    if (!silent) postMessage.textContent = error.message || 'Could not read your in-game location.';
+    return false;
+  } finally {
+    dropLocationBusy = false;
+    if (button) button.disabled = false;
+  }
 }
 
 function dropMapMarkup(location) {
@@ -793,18 +855,30 @@ function staffHistoryLabel(report) {
   return String(report.action || 'Take action').replace(/_/g, ' ');
 }
 
+function syncStaffPanes() {
+  if (staffTab === 'search') staffTab = 'users';
+  document.querySelectorAll('[data-staff-pane]').forEach((pane) => {
+    const on = pane.dataset.staffPane === staffTab;
+    pane.hidden = !on;
+  });
+  document.querySelectorAll('[data-staff-tab]').forEach((button) => button.classList.toggle('selected', button.dataset.staffTab === staffTab));
+}
+
 function renderStaffDashboard() {
-  if (!staffContent || !moderationSnapshot) return;
+  syncStaffPanes();
+  if (!moderationSnapshot) return;
   const reports = moderationSnapshot.reports || [];
   const history = moderationSnapshot.history || [];
   const bans = moderationSnapshot.bans || [];
   const logs = moderationSnapshot.logs || [];
   const stats = moderationSnapshot.stats || {};
+  const overview = document.querySelector('[data-staff-overview]');
   const queueList = document.querySelector('[data-staff-queue-list]');
+  const casePane = document.querySelector('[data-staff-case]');
   const historyList = document.querySelector('[data-staff-history-list]');
+  const usersPane = document.querySelector('[data-staff-users]');
   const reportCount = document.querySelector('[data-staff-report-count]');
   const operator = document.querySelector('[data-staff-operator]');
-  document.querySelectorAll('[data-staff-tab]').forEach((button) => button.classList.toggle('selected', button.dataset.staffTab === staffTab));
   document.querySelectorAll('[data-staff-queue]').forEach((button) => button.classList.toggle('selected', button.dataset.staffQueue === staffQueueFilter));
   document.querySelectorAll('[data-history-filter]').forEach((button) => button.classList.toggle('selected', button.dataset.historyFilter === staffHistoryFilter));
   if (operator) operator.textContent = sessionUser?.username ? `@${sessionUser.username}` : '';
@@ -819,6 +893,7 @@ function renderStaffDashboard() {
       ? queueItems.map((report) => `<button type="button" class="staff-live-report ${report.id === selectedReportId ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}"><b>${escapeHtml(report.authorName || 'Unknown')}</b><small>${escapeHtml(report.content || report.reason || 'No text captured')}</small></button>`).join('')
       : '<p class="staff-empty">Nothing in this queue.</p>';
   }
+  if (casePane) casePane.innerHTML = selected ? staffCaseMarkup(selected) : '<div class="staff-empty staff-empty-lg">Select a report to review it here.</div>';
   const historyQuery = staffHistoryQuery.trim().toLowerCase();
   const historyCards = history.filter((report) => {
     const haystack = `${report.authorName || ''} ${report.action || ''} ${report.content || ''} ${report.reviewerName || ''}`.toLowerCase();
@@ -841,21 +916,17 @@ function renderStaffDashboard() {
         ? logCards.map((log) => `<article class="staff-history-item"><b>${escapeHtml(log.message)}</b><small>${timeAgo(log.createdAt)}</small></article>`).join('')
         : '<p class="staff-empty">No staff actions yet.</p>';
   }
-
-  if (staffTab === 'search') {
-    const query = staffUserQuery.trim().toLowerCase();
-    const members = [...internetUsers.values()].filter((member) => !query || `${member.displayName} ${member.username}`.toLowerCase().includes(query)).slice(0, 40);
-    staffContent.innerHTML = `<div class="staff-search-desk"><header><h2>User Search</h2><span>${members.length}</span></header>${members.length ? members.map((member) => `<button type="button" class="staff-user-row" data-open-member="${escapeHtml(member.id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(member.displayName)}</b><small>@${escapeHtml(member.username)}</small></span></button>`).join('') : '<p class="staff-empty">No members match that search.</p>'}</div>`;
-    return;
+  const query = staffUserQuery.trim().toLowerCase();
+  const members = [...internetUsers.values()].filter((member) => !query || `${member.displayName} ${member.username}`.toLowerCase().includes(query)).slice(0, 40);
+  if (usersPane) {
+    usersPane.innerHTML = members.length
+      ? members.map((member) => `<button type="button" class="staff-user-row" data-open-member="${escapeHtml(member.id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(member.displayName)}</b><small>@${escapeHtml(member.username)}</small></span></button>`).join('')
+      : '<p class="staff-empty">No members match that search.</p>';
   }
-
   const metrics = `<div class="staff-metrics"><article><b>${Number(stats.pending || reports.length)}</b><span>Pending</span></article><article><b>${Number(stats.automod || 0)}</b><span>Automod</span></article><article><b>${Number(stats.actioned || 0)}</b><span>Actioned</span></article><article><b>${Number(stats.dismissed || 0)}</b><span>Dismissed</span></article></div>`;
-  if (staffTab === 'overview') {
-    staffContent.innerHTML = `${metrics}<div class="staff-overview-grid"><section class="staff-column"><header><h2>Oldest pending reports</h2><span>${reports.length}</span></header>${reports.length ? reports.slice(0, 6).map((report) => `<button type="button" class="staff-report-card ${report.id === selectedReportId ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}"><div><b>${escapeHtml(report.authorName)}</b><small>${escapeHtml(reportSourceLabel(report))}</small></div><p>${escapeHtml(report.content || 'No text captured')}</p></button>`).join('') : '<div class="staff-empty">Nothing in this queue.</div>'}</section><section class="staff-column"><header><h2>Active bans</h2></header>${bans.length ? bans.map((ban) => `<article class="staff-compact"><b>${escapeHtml(ban.displayName)}</b><span>${escapeHtml(ban.reason)}</span><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></article>`).join('') : '<div class="staff-empty">No active bans.</div>'}</section></div>`;
-    return;
+  if (overview) {
+    overview.innerHTML = `${metrics}<div class="staff-overview-grid"><section class="staff-column"><header><h2>Oldest pending reports</h2><span>${reports.length}</span></header>${reports.length ? reports.slice(0, 8).map((report) => `<button type="button" class="staff-report-card ${report.id === selectedReportId ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}"><div><b>${escapeHtml(report.authorName)}</b><small>${escapeHtml(reportSourceLabel(report))}</small></div><p>${escapeHtml(report.content || 'No text captured')}</p></button>`).join('') : '<div class="staff-empty">Nothing in this queue.</div>'}</section><section class="staff-column"><header><h2>Active bans</h2></header>${bans.length ? bans.map((ban) => `<article class="staff-compact"><b>${escapeHtml(ban.displayName)}</b><span>${escapeHtml(ban.reason)}</span><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></article>`).join('') : '<div class="staff-empty">No active bans.</div>'}</section></div>`;
   }
-
-  staffContent.innerHTML = `<div class="staff-workspace-head"><div class="staff-pills"><button type="button" class="${staffQueueFilter === 'pending' ? 'selected' : ''}" data-staff-queue="pending">Pending</button><button type="button" class="${staffQueueFilter === 'actioned' ? 'selected' : ''}" data-staff-queue="actioned">Actioned</button><button type="button" class="${staffQueueFilter === 'dismissed' ? 'selected' : ''}" data-staff-queue="dismissed">Dismissed</button></div><span>${queueItems.length} loaded</span></div>${selected ? staffCaseMarkup(selected) : '<div class="staff-empty staff-empty-lg">Nothing in this queue.</div>'}`;
 }
 
 async function loadModeration() {
@@ -1218,28 +1289,7 @@ async function loadSession() {
 content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; postButton.disabled = !canComposePost(); updateComposerHighlight(); });
 document.querySelector('[data-drop-location]')?.addEventListener('click', async () => {
   if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
-  const button = document.querySelector('[data-drop-location]');
-  if (button) button.disabled = true;
-  postMessage.textContent = 'Checking your ER:LC location...';
-  try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'erlc-location', ...activeAccountRequest() }) });
-    const result = await readApiJson(response, 'Could not read your in-game location.');
-    if (!response.ok) throw new Error(result.error || 'Could not read your in-game location.');
-    selectedLocation = result.location;
-    const line = `📍 ${selectedLocation.label}${selectedLocation.postal ? ` · Postal ${selectedLocation.postal}` : ''}`;
-    if (content && !content.value.includes(selectedLocation.label)) {
-      content.value = content.value.trim() ? `${content.value.trim()}\n${line}` : line;
-      count.textContent = `${content.value.length} / 500`;
-      updateComposerHighlight();
-    }
-    renderDropPreview();
-    postButton.disabled = !canComposePost();
-    postMessage.textContent = 'Location dropped from ER:LC.';
-  } catch (error) {
-    postMessage.textContent = error.message || 'Could not read your in-game location.';
-  } finally {
-    if (button) button.disabled = false;
-  }
+  await refreshDropLocation();
 });
 search?.addEventListener('input', () => { showView('home'); renderPosts(); });
 document.querySelectorAll('[data-feed-tab]').forEach((button) => button.addEventListener('click', () => {
@@ -1254,7 +1304,7 @@ document.querySelectorAll('[data-staff-tab]').forEach((button) => button.addEven
 }));
 document.querySelector('[data-staff-user-search]')?.addEventListener('input', (event) => {
   staffUserQuery = event.target.value || '';
-  staffTab = 'search';
+  staffTab = 'users';
   renderStaffDashboard();
 });
 document.querySelector('[data-history-search]')?.addEventListener('input', (event) => {
@@ -1375,6 +1425,7 @@ document.addEventListener('click', (event) => {
   if (event.target.closest('[data-remove-conversation-gif]')) { messageGif = null; if (conversationGifPreview) { conversationGifPreview.hidden = true; conversationGifPreview.innerHTML = ''; } return; }
   if (event.target.closest('[data-remove-media]')) { selectedGif = null; selectedImage = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder?.hidden && !selectedLocation && !selectedQuoteId) composer?.classList.remove('composer-expanded'); postButton.disabled = !canComposePost(); return; }
   if (event.target.closest('[data-remove-location]')) {
+    stopDropLocationRefresh();
     selectedLocation = null;
     renderDropPreview();
     if (pollBuilder?.hidden && !selectedGif && !selectedImage && !selectedQuoteId) composer?.classList.remove('composer-expanded');
@@ -1732,8 +1783,8 @@ document.querySelector('[data-reel-file]')?.addEventListener('change', () => {
     if (error) error.textContent = 'Choose a photo or an MP4/WebM video.';
     return;
   }
-  if (file.size > 1_200_000) {
-    if (error) error.textContent = 'Keep Reels under 1.2 MB so the short clip can upload.';
+  if (file.size > MAX_REEL_BYTES) {
+    if (error) error.textContent = 'Keep Reels under 3 MB so the clip can upload.';
     return;
   }
   const reader = new FileReader();
@@ -1800,7 +1851,7 @@ postButton?.addEventListener('click', async () => {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, image: selectedImage, poll, location: selectedLocation, quoteId: selectedQuoteId, asOfficial: activeAccount === 'official' }) });
     const result = await readApiJson(response, 'Posting is unavailable because the website service is not connected.');
     if (!response.ok) throw new Error(result.error);
-    content.value = ''; count.textContent = '0 / 500'; postButton.disabled = true; updateComposerHighlight(); selectedGif = null; selectedImage = null; selectedLocation = null; selectedQuoteId = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; renderDropPreview(); renderQuotePreview(); if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
+    content.value = ''; count.textContent = '0 / 500'; postButton.disabled = true; updateComposerHighlight(); selectedGif = null; selectedImage = null; stopDropLocationRefresh(); selectedLocation = null; selectedQuoteId = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; renderDropPreview(); renderQuotePreview(); if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
   } catch (error) {
     const message = error.message || 'Could not post.';
     postMessage.textContent = message;

@@ -3,7 +3,9 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260811-chat-dock';
+const INTERNET_VERSION = '20260811-staff-tabs';
+const MAX_INTERNET_BODY = 4_400_000;
+const MAX_MEDIA_DATA_URL = 4_200_000;
 
 async function readBody(request) {
   if (request.body && typeof request.body === 'object') return request.body;
@@ -11,7 +13,7 @@ async function readBody(request) {
   let raw = '';
   for await (const chunk of request) {
     raw += chunk;
-    if (raw.length > 2_100_000) throw new Error('Request body too large');
+    if (raw.length > MAX_INTERNET_BODY) throw new Error('Request body too large');
   }
   return raw ? JSON.parse(raw) : {};
 }
@@ -122,8 +124,8 @@ export default async function handler(request, response) {
         action: 'post',
         content: String(body.content || '').slice(0, 500),
         gif: body.gif && typeof body.gif === 'object' ? { url: compatibleGiphyUrl(body.gif.url), title: String(body.gif.title || '').slice(0, 120) } : null,
-        image: body.image && typeof body.image === 'object' ? { dataUrl: safeImageDataUrl(body.image.dataUrl).slice(0, 2_100_000) } : null,
-        video: body.video && typeof body.video === 'object' ? { dataUrl: safeVideoDataUrl(body.video.dataUrl).slice(0, 2_100_000) } : null,
+        image: body.image && typeof body.image === 'object' ? { dataUrl: safeImageDataUrl(body.image.dataUrl).slice(0, MAX_MEDIA_DATA_URL) } : null,
+        video: body.video && typeof body.video === 'object' ? { dataUrl: safeVideoDataUrl(body.video.dataUrl).slice(0, MAX_MEDIA_DATA_URL) } : null,
         reel: body.reel === true,
         location: body.location && typeof body.location === 'object' ? body.location : null,
         quoteId: String(body.quoteId || '').slice(0, 80) || null,
