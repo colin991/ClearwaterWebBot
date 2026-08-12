@@ -891,7 +891,7 @@ function renderReels() {
     const sound = safeVideoUrl(reel.videoUrl)
       ? `<button type="button" class="reel-mute${reelsSoundOn ? ' is-on' : ''}" data-reel-sound="${escapeHtml(reel.id)}" aria-pressed="${reelsSoundOn ? 'true' : 'false'}" aria-label="${reelsSoundOn ? 'Turn off sound' : 'Turn on sound'}">${soundIcon(reelsSoundOn)}<span class="sr-only">${reelsSoundOn ? 'Sound on' : 'Muted'}</span></button>`
       : '';
-    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient" aria-hidden="true"></div><div class="reel-meta"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(avatarUrl)}" alt="" /><span class="reel-author"><b>${escapeHtml(displayName)}</b><small>@${escapeHtml(username)}</small></span></button>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}" aria-label="Like">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}" aria-label="Comments">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}" aria-label="Share">${postActionIcon('share')}</button>${sound}</div></article>`;
+    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient" aria-hidden="true"></div>${sound}<div class="reel-meta"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(avatarUrl)}" alt="" /><span class="reel-author"><b>${escapeHtml(displayName)}</b><small>@${escapeHtml(username)}</small></span></button>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}" aria-label="Like">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}" aria-label="Comments">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}" aria-label="Share">${postActionIcon('share')}</button></div></article>`;
   }).join('');
   if (anchorId) {
     const stayOn = [...viewport.querySelectorAll('.reel-card')].find((card) => card.dataset.reelId === anchorId);
@@ -1045,7 +1045,7 @@ function renderPosts() {
   if (isReelsTab()) renderReels();
   else showPosts(posts, empty);
   document.querySelectorAll('[data-feed-tab]').forEach((button) => button.classList.toggle('selected', button.dataset.feedTab === feedTab));
-  document.querySelector('[data-reels-link]')?.classList.toggle('selected', feedTab === 'reels');
+  document.querySelectorAll('[data-reels-link]').forEach((link) => link.classList.toggle('selected', isReelsTab()));
   renderProfilePosts();
   renderTrending();
   renderBookmarks();
@@ -2441,6 +2441,13 @@ document.querySelectorAll('[data-view-link]').forEach((link) => link.addEventLis
   event.preventDefault();
   const view = link.dataset.viewLink || 'home';
   if (view === 'profile' && activeAccount === 'official') { openMemberProfile(officialAccountId); return; }
+  // Home is always the regular post feed. Without this reset, the saved Reels
+  // tab could leave the Reels surface open even after someone clicked Home.
+  if (view === 'home') {
+    feedTab = 'foryou';
+    localStorage.setItem('clearwater-feed-tab', feedTab);
+    pauseReelVideos();
+  }
   if (currentInternetPath() === internetUrl(view) && !location.hash) showView(view);
   else {
     history.pushState({}, '', internetUrl(view));
