@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260812-mobile-drop';
+const INTERNET_VERSION = '20260813-profile-fix';
 const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const INTERNET_PATH = '/internet';
@@ -241,6 +241,9 @@ const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character
 const safeCssImageUrl = (value) => {
   const candidate = String(value || '').trim();
   if (/^assets\/[a-z0-9._-]+$/i.test(candidate)) return candidate;
+  // Discord CDN images are served through the privacy proxy; CSS backgrounds
+  // need the same relative path the <img> tags already use.
+  if (/^\/api\/media\?t=[A-Za-z0-9_-]+$/.test(candidate)) return candidate;
   try {
     const url = new URL(candidate);
     if (url.protocol !== 'https:' || url.username || url.password || /["'()\\\s]/.test(candidate)) return '';
@@ -337,6 +340,11 @@ const timeAgo = (value) => {
   return `${days} day${days === 1 ? '' : 's'} ago`;
 };
 const verifiedBadge = () => '<span class="verified" role="img" aria-label="Verified" data-tooltip="Verified"><img src="assets/verified-badge.png" alt="" /></span>';
+const businessBadge = () => '<span class="role-badge business-badge" role="img" aria-label="Business" data-tooltip="Business account"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 16.7 4.8 12.3l1.7-1.7 2.7 2.7 8.3-8.3 1.7 1.7z"/></svg></span>';
+const warningBadge = (tooltip) => {
+  const label = String(tooltip || 'Account warning').trim() || 'Account warning';
+  return `<span class="role-badge warning-badge" role="img" aria-label="${escapeHtml(label)}" data-tooltip="${escapeHtml(label)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.4 22 20.6H2L12 3.4Zm0 5.2c-.7 0-1.2.5-1.1 1.2l.4 5.2h1.4l.4-5.2c.1-.7-.4-1.2-1.1-1.2Zm0 9.3a1.15 1.15 0 1 0 0-2.3 1.15 1.15 0 0 0 0 2.3Z"/></svg></span>`;
+};
 const roleBadges = (user) => {
   const badges = Array.isArray(user?.badges) ? user.badges : [];
   const premium = badges.includes('clearwater-role')
@@ -345,7 +353,9 @@ const roleBadges = (user) => {
   const staff = badges.includes('staff')
     ? '<span class="role-badge staff-badge" role="img" aria-label="Staff" data-tooltip="Staff"><img src="assets/clearwater-staff-badge.png" alt="" /></span>'
     : '';
-  return `${premium}${staff}`;
+  const business = badges.includes('business') ? businessBadge() : '';
+  const warning = badges.includes('warning') ? warningBadge(user?.warningBadgeText) : '';
+  return `${premium}${staff}${business}${warning}`;
 };
 const identityBadges = (user) => `${user?.verified === true ? verifiedBadge() : ''}${roleBadges(user)}`;
 const currentAuthor = (post) => internetUsers.get(post.authorId) || null;
@@ -356,6 +366,18 @@ function refreshProfileVerified() {
   if (profileVerified) profileVerified.hidden = me?.verified !== true;
   const staffBadge = document.querySelector('[data-profile-staff-badge]');
   if (staffBadge) staffBadge.hidden = !Array.isArray(me?.badges) || !me.badges.includes('staff');
+  const business = document.querySelector('[data-profile-business-badge]');
+  if (business) business.hidden = !Array.isArray(me?.badges) || !me.badges.includes('business');
+  const warning = document.querySelector('[data-profile-warning-badge]');
+  if (warning) {
+    const on = Array.isArray(me?.badges) && me.badges.includes('warning');
+    warning.hidden = !on;
+    if (on) {
+      const label = String(me.warningBadgeText || 'Account warning').trim() || 'Account warning';
+      warning.setAttribute('aria-label', label);
+      warning.dataset.tooltip = label;
+    }
+  }
 }
 
 function activeAuthor() {
@@ -746,11 +768,12 @@ function bindReelAutoplay() {
   reelObserver?.disconnect();
   const viewport = document.querySelector('[data-reels-viewport]');
   if (!viewport) return;
+  const autoplay = preferenceState.autoplayReels !== false;
   reelObserver = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
       const video = entry.target.querySelector('video');
       if (!video) return;
-      if (entry.isIntersecting && entry.intersectionRatio > 0.65) {
+      if (autoplay && entry.isIntersecting && entry.intersectionRatio > 0.65) {
         video.muted = !reelsSoundOn;
         void video.play().catch(() => {
           // Autoplay with sound can be refused; fall back to a muted play so the reel never stalls.
@@ -1081,6 +1104,12 @@ function renderPosts() {
 function profileTabPosts(userId, tab) {
   const authored = allPosts.filter((post) => post.authorId === userId);
   if (tab === 'replies') return authored.filter((post) => post.parentId);
+  if (tab === 'mentions') {
+    const handle = String(internetUsers.get(userId)?.username || '').toLowerCase();
+    if (!handle) return [];
+    const mention = new RegExp(`(?:^|[^\\w])@${handle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|[^\\w])`, 'i');
+    return allPosts.filter((post) => post.authorId !== userId && post.kind !== 'reel' && mention.test(String(post.content || '')));
+  }
   if (tab === 'media') return authored.filter((post) => !post.parentId && (post.imageUrl || post.videoUrl || post.gifUrl));
   if (tab === 'likes') return allPosts.filter((post) => !post.parentId && Array.isArray(post.likes) && post.likes.includes(userId));
   return authored.filter((post) => post.kind !== 'reel' && !post.parentId);
@@ -1110,10 +1139,34 @@ function renderProfilePosts() {
   const empty = {
     posts: 'You have not posted yet.',
     replies: 'Your replies will appear here.',
+    mentions: 'Posts that mention you will appear here.',
     media: 'Photos, GIFs, and Reels you post will appear here.',
     likes: 'Posts you like will appear here.',
   }[profileTab] || 'Nothing here yet.';
   profileList.innerHTML = profileListMarkup(posts, profileTab, me?.pinnedPostId, empty);
+}
+
+function profileBannerFor(user, fallbackSession = null) {
+  // Empty string means the member cleared their custom banner. Missing/null
+  // still allows the Discord session banner as a fallback.
+  if (typeof user?.bannerUrl === 'string') return user.bannerUrl;
+  return fallbackSession?.bannerUrl || '';
+}
+
+function mutualFriendIds(member) {
+  const memberFollowerIds = Array.isArray(member?.followers) ? member.followers : [];
+  // Mutuals = people you follow who also follow this profile (Twitter-style),
+  // not only two-way friendships between both of you.
+  return socialState.following.filter((id) => id !== activeUserId() && memberFollowerIds.includes(id) && internetUsers.has(id));
+}
+
+function mutualFriendsMarkup(mutualIds) {
+  if (!mutualIds.length) return '';
+  const faces = mutualIds.slice(0, 3).map((id) => `<img src="${escapeHtml(internetUsers.get(id).avatarUrl || 'assets/clearwater-logo.png')}" alt="" />`).join('');
+  const label = mutualIds.length === 1
+    ? `${escapeHtml(internetUsers.get(mutualIds[0]).displayName || 'One member')} is a mutual`
+    : `${mutualIds.length} mutuals`;
+  return `<span class="mutual-faces">${faces}</span><button type="button" data-open-member="${escapeHtml(mutualIds[0])}">${label}</button>`;
 }
 
 function renderOwnProfileDetails() {
@@ -1122,25 +1175,44 @@ function renderOwnProfileDetails() {
   if (!me) return;
   const root = document.querySelector('[data-profile-root]');
   setProfileAccent(root, me.accentColor);
-  setBannerImage(profileBanner, me.bannerUrl || sessionUser?.bannerUrl, sessionUser?.bannerColor, me.accentColor);
+  setBannerImage(profileBanner, profileBannerFor(me, sessionUser), sessionUser?.bannerColor, me.accentColor);
   if (profileCopy) {
     profileCopy.textContent = me.bio
       || sessionUser?.bio
       || (sessionUser?.staffRank ? `${sessionUser.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
   }
   renderProfileMeta(document.querySelector('[data-profile-meta]'), { ...me, createdAt: me.createdAt });
+  refreshProfileVerified();
   const following = Array.isArray(me.following) ? me.following : [];
   const followers = Array.isArray(me.followers) ? me.followers : [];
   const followingButton = document.querySelector('[data-profile-following]');
   const followersButton = document.querySelector('[data-profile-followers]');
-  const hideStats = preferenceState.hideStats === true;
+  const hideStats = preferenceState.hideStats === true || me.hideStats === true;
   if (followingButton) {
     followingButton.hidden = hideStats;
     followingButton.innerHTML = `<b>${Number(me.followingCount ?? following.length).toLocaleString()}</b> Following`;
   }
   if (followersButton) {
     followersButton.hidden = hideStats;
-    followersButton.innerHTML = `<b>${followers.length.toLocaleString()}</b> Followers`;
+    followersButton.innerHTML = `<b>${Number(me.followerCount ?? followers.length).toLocaleString()}</b> Followers`;
+  }
+  const connections = document.querySelector('[data-profile-connections]');
+  if (connections && hideStats) {
+    connections.hidden = true;
+    connections.innerHTML = '';
+  } else if (connections) {
+    const memberIds = [...new Set([...following, ...followers])].filter((id) => internetUsers.has(id));
+    connections.hidden = memberIds.length === 0;
+    connections.innerHTML = memberIds.slice(0, 24).map((id) => {
+      const member = internetUsers.get(id);
+      const label = followers.includes(id) ? 'Follows you' : 'Following';
+      return `<button type="button" data-open-member="${escapeHtml(id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(member.displayName || 'Clearwater member')}</b><small>${label}</small></span></button>`;
+    }).join('');
+  }
+  const mutuals = document.querySelector('[data-profile-mutuals]');
+  if (mutuals) {
+    mutuals.hidden = true;
+    mutuals.innerHTML = '';
   }
 }
 
@@ -1473,6 +1545,8 @@ function staffUserChips(user) {
   const chips = [];
   if (user.official) chips.push('<span class="staff-chip official">Official</span>');
   if (user.verified) chips.push('<span class="staff-chip verified">Verified</span>');
+  if (user.business) chips.push('<span class="staff-chip business">Business</span>');
+  if (user.warningBadge) chips.push('<span class="staff-chip warn">Warning tag</span>');
   if (user.banned) chips.push('<span class="staff-chip danger">Banned</span>');
   if (user.muted) chips.push('<span class="staff-chip warn">Muted</span>');
   if (user.watched) chips.push('<span class="staff-chip watch">Watched</span>');
@@ -1564,7 +1638,13 @@ function staffUserPanelMarkup(detail) {
       <div class="staff-action-groups">
         ${staffActionGroupMarkup('Account status', 'Verification and account access', `<div class="staff-toggle-grid">
           ${staffToggleMarkup({ active: user.verified === true, onAction: 'verify', offAction: 'unverify', label: 'Verified' })}
+          ${staffToggleMarkup({ active: user.business === true, onAction: 'badge-business', offAction: 'unbadge-business', label: 'Business check' })}
           ${staffToggleMarkup({ active: user.banned === true, onAction: 'ban', offAction: 'unban', label: 'Banned', expires: user.banUntil ? staffUntil(user.banUntil) : '', tone: 'danger' })}
+        </div>`)}
+        ${staffActionGroupMarkup('Profile tags', 'Shown next to the display name on posts and profiles', `<div class="staff-action-grid">
+          ${user.warningBadge
+            ? `<p class="staff-action-hint">Warning hover text: ${escapeHtml(user.warningBadgeText || 'Account warning')}</p>${button('unbadge-warning', 'Remove warning tag')}`
+            : `${button('badge-warning', 'Add warning tag', 'primary')}<p class="staff-action-hint">Uses the reason box above as the hover text.</p>`}
         </div>`)}
         ${staffActionGroupMarkup('Restrictions', 'Reversible limits, shown with their expiry', `<div class="staff-toggle-grid">
           ${staffToggleMarkup({ active: user.muted === true, onAction: 'mute', offAction: 'unmute', label: 'Muted', expires: user.mutedUntil ? staffUntil(user.mutedUntil) : '', tone: 'warn' })}
@@ -1674,25 +1754,32 @@ function renderStaffDashboard() {
   if (casePane) casePane.innerHTML = selected ? staffCaseMarkup(selected) : '<div class="staff-empty staff-empty-lg">Pick a case from the queue to review it here.</div>';
   const historyQuery = staffHistoryQuery.trim().toLowerCase();
   const historyCards = history.filter((report) => {
-    const haystack = `${report.authorName || ''} ${report.action || ''} ${report.content || ''} ${report.reviewerName || ''}`.toLowerCase();
+    const haystack = `${report.authorName || ''} ${report.action || ''} ${report.content || ''} ${report.reviewerName || ''} ${report.reason || ''}`.toLowerCase();
     if (historyQuery && !haystack.includes(historyQuery)) return false;
-    if (staffHistoryFilter === 'users') return /ban|warn|user|account/i.test(`${report.action || ''} ${report.reason || ''}`);
-    if (staffHistoryFilter === 'posts') return report.kind !== 'message';
+    if (staffHistoryFilter === 'users') return /ban|warn|user|account|mute|verify|watch|shadow/i.test(`${report.action || ''} ${report.reason || ''}`);
+    if (staffHistoryFilter === 'posts') return report.kind !== 'message' || /post|automod|delete|hold|reel/i.test(`${report.action || ''} ${report.reason || ''}`);
     return true;
-  });
-  const logCards = (!historyCards.length ? logs : []).filter((log) => {
+  }).map((report) => ({
+    kind: 'report',
+    at: report.reviewedAt || report.createdAt || '',
+    markup: `<article class="staff-history-item ${report.status === 'accepted' ? 'actioned' : 'dismissed'}"><b>${escapeHtml(staffHistoryLabel(report))}</b><span>@${escapeHtml((report.authorName || 'member').replace(/\s+/g, '').toLowerCase())}</span><small>${timeAgo(report.reviewedAt || report.createdAt)}</small></article>`,
+  }));
+  const logCards = logs.filter((log) => {
     const message = String(log.message || '').toLowerCase();
     if (historyQuery && !message.includes(historyQuery)) return false;
-    if (staffHistoryFilter === 'users') return /banned|warned|unban/.test(message);
-    if (staffHistoryFilter === 'posts') return /post|automod|deleted|hold/.test(message);
+    if (staffHistoryFilter === 'users') return /banned|warned|unban|mute|verify|watch|shadow|badge|business|warning badge|account/i.test(message);
+    if (staffHistoryFilter === 'posts') return /post|automod|deleted|hold|reel|comment/i.test(message);
     return true;
-  });
+  }).map((log) => ({
+    kind: 'log',
+    at: log.createdAt || '',
+    markup: `<article class="staff-history-item"><b>${escapeHtml(log.message)}</b><small>${timeAgo(log.createdAt)}</small></article>`,
+  }));
+  const historyItems = [...historyCards, ...logCards].sort((left, right) => new Date(right.at || 0) - new Date(left.at || 0));
   if (historyList) {
-    historyList.innerHTML = historyCards.length
-      ? historyCards.map((report) => `<article class="staff-history-item ${report.status === 'accepted' ? 'actioned' : 'dismissed'}"><b>${escapeHtml(staffHistoryLabel(report))}</b><span>@${escapeHtml((report.authorName || 'member').replace(/\s+/g, '').toLowerCase())}</span><small>${timeAgo(report.reviewedAt || report.createdAt)}</small></article>`).join('')
-      : logCards.length
-        ? logCards.map((log) => `<article class="staff-history-item"><b>${escapeHtml(log.message)}</b><small>${timeAgo(log.createdAt)}</small></article>`).join('')
-        : '<p class="staff-empty">No staff actions yet.</p>';
+    historyList.innerHTML = historyItems.length
+      ? historyItems.map((item) => item.markup).join('')
+      : '<p class="staff-empty">No staff actions yet.</p>';
   }
   const query = staffUserQuery.trim().toLowerCase();
   const staffMembers = (Array.isArray(moderationSnapshot.users) && moderationSnapshot.users.length
@@ -2060,12 +2147,15 @@ async function loadSocial() {
 }
 
 function applyPreferenceState(preferences = {}) {
-  preferenceState = { ...preferences };
+  preferenceState = { ...preferenceState, ...preferences };
   const root = document.documentElement;
-  root.classList.toggle('pref-compact', preferences.compactPosts === true);
-  root.classList.toggle('pref-large-text', preferences.largeText === true);
-  root.classList.toggle('pref-reduce-motion', preferences.reduceMotion === true);
-  document.querySelectorAll('[data-preference]').forEach((input) => { input.checked = preferences[input.dataset.preference] === true; });
+  root.classList.toggle('pref-compact', preferenceState.compactPosts === true);
+  root.classList.toggle('pref-large-text', preferenceState.largeText === true);
+  root.classList.toggle('pref-reduce-motion', preferenceState.reduceMotion === true);
+  document.querySelectorAll('[data-preference]').forEach((input) => {
+    input.checked = preferenceState[input.dataset.preference] === true;
+  });
+  if (feedTab === 'reels') bindReelAutoplay();
 }
 
 async function loadPreferences() {
@@ -2218,11 +2308,35 @@ function showSettingsTab(tab) {
   if (active === 'account') fillAccountPane();
 }
 
+function patchFollowGraphs(targetId, enabled) {
+  const actorId = activeUserId();
+  if (!actorId || !targetId || actorId === targetId) return;
+  const actor = internetUsers.get(actorId);
+  const target = internetUsers.get(targetId);
+  if (actor) {
+    const following = new Set(Array.isArray(actor.following) ? actor.following : []);
+    if (enabled) following.add(targetId); else following.delete(targetId);
+    actor.following = [...following];
+    actor.followingCount = actor.following.length;
+    internetUsers.set(actorId, actor);
+  }
+  if (target) {
+    const followers = new Set(Array.isArray(target.followers) ? target.followers : []);
+    if (enabled) followers.add(actorId); else followers.delete(actorId);
+    target.followers = [...followers];
+    target.followerCount = target.followers.length;
+    internetUsers.set(targetId, target);
+  }
+}
+
 async function socialAction(type, { targetId = '', postId = '', enabled = true } = {}) {
   const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'social', type, targetId, postId, enabled, ...activeAccountRequest() }) });
   const result = await readApiJson(response, 'Could not save this change.');
   if (!response.ok) throw new Error(result.error || 'Could not save this change.');
-  socialState = { ...socialState, ...result.social }; renderPosts();
+  socialState = { ...socialState, ...result.social };
+  if (type === 'follow' && targetId) patchFollowGraphs(targetId, enabled === true);
+  renderPosts();
+  renderOwnProfileDetails();
 }
 
 function openMemberProfile(memberId, updateHash = true) {
@@ -2233,7 +2347,7 @@ function openMemberProfile(memberId, updateHash = true) {
   const posts = profileTabPosts(user.id, memberTab);
   const banner = document.querySelector('[data-member-page-banner]');
   setProfileAccent(document.querySelector('[data-member-root]'), user.accentColor);
-  setBannerImage(banner, user.bannerUrl || user.avatarUrl || 'assets/clearwater-police-night.png', '', user.accentColor);
+  setBannerImage(banner, profileBannerFor(user) || 'assets/clearwater-police-night.png', '', user.accentColor);
   renderProfileMeta(document.querySelector('[data-member-page-meta]'), user);
   document.querySelector('[data-member-page-avatar]').src = user.avatarUrl || 'assets/clearwater-logo.png';
   document.querySelector('[data-member-page-name]').textContent = user.displayName;
@@ -2243,6 +2357,18 @@ function openMemberProfile(memberId, updateHash = true) {
   document.querySelector('[data-member-page-verified]').hidden = user.verified !== true;
   const memberStaffBadge = document.querySelector('[data-member-page-staff-badge]');
   if (memberStaffBadge) memberStaffBadge.hidden = !Array.isArray(user.badges) || !user.badges.includes('staff');
+  const memberBusiness = document.querySelector('[data-member-page-business-badge]');
+  if (memberBusiness) memberBusiness.hidden = !Array.isArray(user.badges) || !user.badges.includes('business');
+  const memberWarning = document.querySelector('[data-member-page-warning-badge]');
+  if (memberWarning) {
+    const on = Array.isArray(user.badges) && user.badges.includes('warning');
+    memberWarning.hidden = !on;
+    if (on) {
+      const label = String(user.warningBadgeText || 'Account warning').trim() || 'Account warning';
+      memberWarning.setAttribute('aria-label', label);
+      memberWarning.dataset.tooltip = label;
+    }
+  }
   document.querySelector('[data-member-page-post-count]').textContent = profileTabPosts(user.id, 'posts').length.toLocaleString();
   const memberFollowing = Array.isArray(user.following) ? user.following : [];
   const memberFollowers = Array.isArray(user.followers) ? user.followers : [];
@@ -2256,7 +2382,7 @@ function openMemberProfile(memberId, updateHash = true) {
   }
   if (followersButton) {
     followersButton.hidden = memberHidesStats;
-    followersButton.innerHTML = `<b>${memberFollowers.length.toLocaleString()}</b> Followers`;
+    followersButton.innerHTML = `<b>${Number(user.followerCount ?? memberFollowers.length).toLocaleString()}</b> Followers`;
   }
   if (connections && memberHidesStats) {
     connections.hidden = true;
@@ -2264,7 +2390,7 @@ function openMemberProfile(memberId, updateHash = true) {
   } else if (connections) {
     const memberIds = [...new Set([...memberFollowing, ...memberFollowers])].filter((id) => internetUsers.has(id));
     connections.hidden = memberIds.length === 0;
-    connections.innerHTML = memberIds.map((id) => {
+    connections.innerHTML = memberIds.slice(0, 24).map((id) => {
       const member = internetUsers.get(id);
       const label = memberFollowers.includes(id) ? 'Follows them' : 'They follow';
       return `<button type="button" data-open-member="${escapeHtml(id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(member.displayName || 'Clearwater member')}</b><small>${label}</small></span></button>`;
@@ -2272,15 +2398,16 @@ function openMemberProfile(memberId, updateHash = true) {
   }
   const mutuals = document.querySelector('[data-member-page-mutuals]');
   if (mutuals) {
-    // A mutual friend must be an actual two-way connection for both members.
-    // One-sided follows belong in the connection list above, not here.
-    const myFriendIds = socialState.following.filter((id) => socialState.followers.includes(id));
-    const memberFriendIds = memberFollowing.filter((id) => memberFollowers.includes(id));
-    const mutualIds = myFriendIds.filter((id) => id !== activeUserId() && memberFriendIds.includes(id) && internetUsers.has(id));
-    mutuals.hidden = mutualIds.length === 0;
-    mutuals.innerHTML = mutualIds.length ? `<span>${mutualIds.slice(0, 3).map((id) => `<img src="${escapeHtml(internetUsers.get(id).avatarUrl || 'assets/clearwater-logo.png')}" alt="" />`).join('')}</span><button type="button" data-open-member="${escapeHtml(mutualIds[0])}">${mutualIds.length === 1 ? `${escapeHtml(internetUsers.get(mutualIds[0]).displayName || 'One member')} is a mutual friend` : `${mutualIds.length} mutual friends`}</button>` : '';
+    const mutualIds = mutualFriendIds(user);
+    mutuals.hidden = mutualIds.length === 0 || memberHidesStats;
+    mutuals.innerHTML = mutualFriendsMarkup(mutualIds);
   }
-  const memberEmpty = { posts: 'No posts yet.', replies: 'No replies yet.', media: 'No photos or Reels yet.' }[memberTab] || 'Nothing here yet.';
+  const memberEmpty = {
+    posts: 'No posts yet.',
+    replies: 'No replies yet.',
+    mentions: 'No mentions yet.',
+    media: 'No photos or Reels yet.',
+  }[memberTab] || 'Nothing here yet.';
   document.querySelector('[data-member-page-posts]').innerHTML = profileListMarkup(posts, memberTab, user.pinnedPostId, memberEmpty);
   const following = socialState.following.includes(user.id);
   const followsYou = socialState.followers.includes(user.id);
@@ -2538,26 +2665,28 @@ document.querySelector('[data-history-search]')?.addEventListener('input', (even
   renderStaffDashboard();
 });
 document.querySelectorAll('[data-preference]').forEach((input) => input.addEventListener('change', async () => {
-  const original = !input.checked;
-  const saveOnDevice = () => {
-    if (!currentUserId) return;
-    const storageKey = `clearwater-preferences-${currentUserId}`;
-    const preferences = (() => { try { return JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch { return {}; } })();
-    preferences[input.dataset.preference] = input.checked;
-    localStorage.setItem(storageKey, JSON.stringify(preferences));
-  };
-  saveOnDevice();
-  applyPreferenceState({ ...preferenceState, [input.dataset.preference]: input.checked });
+  if (!currentUserId) return;
+  const key = input.dataset.preference;
+  const original = preferenceState[key] === true;
+  const nextValue = input.checked === true;
+  const previous = { ...preferenceState };
+  applyPreferenceState({ [key]: nextValue });
+  localStorage.setItem(`clearwater-preferences-${currentUserId}`, JSON.stringify(preferenceState));
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'preference-save', key: input.dataset.preference, enabled: input.checked }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'preference-save', key, enabled: nextValue }) });
     const result = await readApiJson(response, 'Could not save this setting.');
     if (!response.ok) throw new Error(result.error || 'Could not save this setting.');
     applyPreferenceState(result.preferences || {});
-    localStorage.setItem(`clearwater-preferences-${currentUserId}`, JSON.stringify(result.preferences || {}));
+    localStorage.setItem(`clearwater-preferences-${currentUserId}`, JSON.stringify(preferenceState));
     renderOwnProfileDetails();
-    if (['followersOnly', 'hideProfile', 'hideFollowing'].includes(input.dataset.preference)) await loadPosts();
+    if (['followersOnly', 'hideProfile', 'hideFollowing'].includes(key)) await loadPosts();
+    else if (key === 'autoplayReels' && feedTab === 'reels') bindReelAutoplay();
+    else if (['compactPosts', 'largeText', 'reduceMotion', 'hideStats'].includes(key)) renderPosts();
   } catch (error) {
-    if (!/owner access required/i.test(error.message || '')) { input.checked = original; window.alert(error.message || 'Could not save this setting.'); }
+    applyPreferenceState(previous);
+    localStorage.setItem(`clearwater-preferences-${currentUserId}`, JSON.stringify(previous));
+    input.checked = original;
+    window.alert(error.message || 'Could not save this setting.');
   }
 }));
 document.querySelectorAll('[data-view-link]').forEach((link) => link.addEventListener('click', (event) => {
@@ -2731,8 +2860,21 @@ document.querySelector('[data-profile-form]')?.addEventListener('submit', async 
     }
     profileDraft = { ...DEFAULT_PROFILE_DRAFT, ...(result.profile || {}) };
     fillProfileEditor();
+    const me = internetUsers.get(currentUserId);
+    if (me) {
+      me.bannerUrl = profileDraft.bannerUrl || '';
+      me.bio = profileDraft.bio || '';
+      me.pronouns = profileDraft.pronouns || '';
+      me.location = profileDraft.location || '';
+      me.website = profileDraft.website || '';
+      me.accentColor = profileDraft.accentColor || '';
+      me.pinnedPostId = profileDraft.pinnedPostId || '';
+      internetUsers.set(currentUserId, me);
+      renderOwnProfileDetails();
+    }
     setProfileStatus('Profile saved.', 'ok');
     await loadPosts();
+    renderOwnProfileDetails();
   } catch (error) {
     setProfileStatus(error.message || 'Could not save your profile.', 'error');
   } finally {
@@ -3144,7 +3286,18 @@ document.querySelector('[data-close-warning]')?.addEventListener('click', () => 
 document.querySelector('[data-close-profile]')?.addEventListener('click', () => { profileModal.hidden = true; });
 document.querySelector('[data-member-page-follow]')?.addEventListener('click', async () => {
   if (!viewedMember) return;
-  try { await socialAction('follow', { targetId: viewedMember.id, enabled: !socialState.following.includes(viewedMember.id) }); openMemberProfile(viewedMember.id); } catch (error) { window.alert(error.message); }
+  const button = document.querySelector('[data-member-page-follow]');
+  if (button) button.disabled = true;
+  try {
+    await socialAction('follow', { targetId: viewedMember.id, enabled: !socialState.following.includes(viewedMember.id) });
+    await loadSocial();
+    await loadPosts();
+    if (viewedMember) openMemberProfile(viewedMember.id, false);
+  } catch (error) {
+    window.alert(error.message);
+  } finally {
+    if (button) button.disabled = false;
+  }
 });
 document.querySelector('[data-member-page-menu]')?.addEventListener('click', () => { const menu = document.querySelector('[data-member-page-menu-list]'); menu.hidden = !menu.hidden; });
 document.querySelector('[data-mute-member]')?.addEventListener('click', async () => { if (!viewedMember) return; try { await socialAction('mute', { targetId: viewedMember.id, enabled: !socialState.muted.includes(viewedMember.id) }); showView('home'); } catch (error) { window.alert(error.message); } });

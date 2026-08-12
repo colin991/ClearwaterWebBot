@@ -22,7 +22,9 @@ export function getHighestStaffRank(member) {
 
 export const CLEARWATER_PREMIUM_ROLE_ID = '1514033571160133733';
 export const CLEARWATER_STAFF_BADGE_ROLE_ID = '1514744040778760252';
-export const ALLOWED_INTERNET_BADGES = Object.freeze(['clearwater-role', 'staff']);
+export const DISCORD_INTERNET_BADGES = Object.freeze(['clearwater-role', 'staff']);
+export const STAFF_ASSIGNABLE_BADGES = Object.freeze(['business', 'warning']);
+export const ALLOWED_INTERNET_BADGES = Object.freeze([...DISCORD_INTERNET_BADGES, ...STAFF_ASSIGNABLE_BADGES]);
 
 const ROLE_BADGES = Object.freeze([
   { id: CLEARWATER_PREMIUM_ROLE_ID, badge: 'clearwater-role' },
@@ -30,9 +32,15 @@ const ROLE_BADGES = Object.freeze([
 ]);
 
 export function sanitizeInternetBadges(badges) {
-  return Array.isArray(badges) ? badges.filter((badge) => ALLOWED_INTERNET_BADGES.includes(badge)) : [];
+  return Array.isArray(badges) ? [...new Set(badges.filter((badge) => ALLOWED_INTERNET_BADGES.includes(badge)))] : [];
 }
 
 export function getInternetBadges(member) {
   return ROLE_BADGES.filter((item) => member?.roles?.cache?.has(item.id)).map((item) => item.badge);
+}
+
+/** Keep staff-assigned badges when Discord role sync refreshes Discord-only badges. */
+export function mergeInternetBadges(existing, discordBadges) {
+  const kept = sanitizeInternetBadges(existing).filter((badge) => STAFF_ASSIGNABLE_BADGES.includes(badge));
+  return sanitizeInternetBadges([...(Array.isArray(discordBadges) ? discordBadges : []), ...kept]);
 }

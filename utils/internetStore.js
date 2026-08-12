@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { AUTOMOD_HOLD_MESSAGE, AutomodHoldError, scanInternetContent } from './internetAutomod.js';
-import { sanitizeInternetBadges } from './staffRanks.js';
+import { mergeInternetBadges, sanitizeInternetBadges } from './staffRanks.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
 export { AutomodHoldError };
@@ -137,7 +137,8 @@ export function publicUsers(store, viewerId) {
       username: user.username,
       displayName: user.displayName,
       avatarUrl: masked ? null : user.avatarUrl,
-      bannerUrl: masked ? null : (user.bannerUrl || null),
+      // Preserve empty string after a clear so the client does not fall back to Discord.
+      bannerUrl: masked ? null : (typeof user.bannerUrl === 'string' ? user.bannerUrl : null),
       bio: user.bio || '',
       pronouns: user.pronouns || '',
       location: user.location || '',
@@ -150,11 +151,13 @@ export function publicUsers(store, viewerId) {
       staffRank: user.staffRank || null,
       verified: user.verified === true,
       badges: Array.isArray(user.badges) ? sanitizeInternetBadges(user.badges) : [],
+      warningBadgeText: text(user.warningBadgeText, 120) || '',
       banned: Boolean(getActiveBan(user)),
       official: user.official === true,
       following: user.preferences?.hideFollowing === true && user.id !== viewer ? [] : (Array.isArray(user.following) ? user.following : []),
       followingCount: Array.isArray(user.following) ? user.following.length : 0,
       followers: users.filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).map((member) => member.id),
+      followerCount: users.filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).length,
     };
   });
 }
@@ -348,7 +351,7 @@ export function upsertInternetUser(store, user) {
     avatarUrl: has('avatarUrl') ? text(user?.avatarUrl, 300) || null : existing.avatarUrl || null,
     staffRank: has('staffRank') ? text(user?.staffRank, 80) || null : existing.staffRank || null,
     badges: has('badges') && Array.isArray(user?.badges)
-      ? sanitizeInternetBadges(user.badges)
+      ? mergeInternetBadges(existing.badges, user.badges)
       : sanitizeInternetBadges(existing.badges),
   };
   return store.users[id];
@@ -1160,6 +1163,7 @@ export function sendInternetMessage(store, { actor, to, content, gif, username }
 function staffUserFlags(user) {
   const ban = getActiveBan(user);
   const mute = getActiveMute(user);
+  const badges = sanitizeInternetBadges(user.badges);
   return {
     verified: user.verified === true,
     official: user.official === true,
@@ -1172,6 +1176,10 @@ function staffUserFlags(user) {
     lockReels: flagActive(user, 'lockReels', 'lockReelsUntil'),
     lockProfile: flagActive(user, 'lockProfile', 'lockProfileUntil'),
     deactivated: user.deactivated === true,
+    business: badges.includes('business'),
+    warningBadge: badges.includes('warning'),
+    warningBadgeText: text(user.warningBadgeText, 120) || '',
+    badges,
   };
 }
 
@@ -1288,6 +1296,21 @@ export function applyStaffUserAction(store, {
   } else if (action === 'unverify') {
     user.verified = false;
     addInternetLog(store, `${actorName} removed verification from ${label}.`);
+  } else if (action === 'badge-business') {
+    user.badges = sanitizeInternetBadges([...(Array.isArray(user.badges) ? user.badges : []), 'business']);
+    addInternetLog(store, `${actorName} marked ${label} as a business account.`);
+  } else if (action === 'unbadge-business') {
+    user.badges = sanitizeInternetBadges(user.badges).filter((badge) => badge !== 'business');
+    addInternetLog(store, `${actorName} removed the business badge from ${label}.`);
+  } else if (action === 'badge-warning') {
+    if (!noteText) throw new Error('Enter the warning tooltip text');
+    user.badges = sanitizeInternetBadges([...(Array.isArray(user.badges) ? user.badges : []), 'warning']);
+    user.warningBadgeText = noteText.slice(0, 120);
+    addInternetLog(store, `${actorName} added a warning badge to ${label}.`);
+  } else if (action === 'unbadge-warning') {
+    user.badges = sanitizeInternetBadges(user.badges).filter((badge) => badge !== 'warning');
+    user.warningBadgeText = '';
+    addInternetLog(store, `${actorName} removed the warning badge from ${label}.`);
   } else if (action === 'ban') {
     setInternetBan(user, { enabled: true, reason: noteText, durationDays });
     if (ipBan === true) banKnownInternetIps(store, user, { enabled: true, reason: noteText, durationDays });
