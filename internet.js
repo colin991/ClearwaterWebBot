@@ -93,7 +93,8 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-staff-panel';
+const INTERNET_VERSION = '20260811-staff-badge';
+const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const INTERNET_PATH = '/internet';
 const SIGNIN_INTERNET = '/signin?next=/internet';
@@ -195,6 +196,36 @@ const clearwaterEmojiChoices = [
 ];
 const emojiChoices = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😍','😘','🥰','😎','🤩','🥳','🤔','😢','😭','😡','🤯','😴','👀','💀','❤️','💙','💚','🔥','✨','🎉','🚓','🚒','🚑','👍','👎','✅','❌','⚠️','📌','📷','🎮'];
 
+function scanClientContent(value) {
+  const raw = String(value || '');
+  if (!raw.trim()) return null;
+  const compact = raw.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[а]/gi, 'a').replace(/[с]/gi, 'c').replace(/[е]/gi, 'e').replace(/[һ]/gi, 'h').replace(/[іı]/gi, 'i').replace(/[ј]/gi, 'j').replace(/[к]/gi, 'k').replace(/[оο]/gi, 'o').replace(/[р]/gi, 'p').replace(/[ѕ]/gi, 's').replace(/[т]/gi, 't').replace(/[х]/gi, 'x').toLowerCase().replace(/ph/g, 'f').replace(/[@$0]/g, 'o').replace(/[1!|]/g, 'i').replace(/[3]/g, 'e').replace(/[4]/g, 'a').replace(/[5$]/g, 's').replace(/[7]/g, 't').replace(/v/g, 'u');
+  const folded = compact.replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const collapsed = compact.replace(/[^a-z0-9]+/g, '');
+  const fuzzy = ['nigger', 'nigga', 'faggot', 'fagot', 'kike', 'tranny', 'trannie', 'retard', 'wetback', 'chink', 'gook', 'spic', 'beaner', 'raghead', 'towelhead', 'fuck', 'fuk', 'fck', 'fvck', 'phuck', 'fcuk', 'shit', 'bitch', 'pussy', 'whore', 'slut', 'dick', 'dildo', 'handjob', 'blowjob', 'nudes'];
+  const words = ['asshole', 'jackass', 'dumbass', 'dickhead', 'dipshit', 'bullshit', 'motherfucker', 'cunt', 'twat', 'stfu', 'rape', 'rapist', 'incest'];
+  const hitFuzzy = fuzzy.some((term) => {
+    const letters = term.replace(/[^a-z0-9]/g, '');
+    return new RegExp(letters.split('').map((letter) => `${letter}+`).join('[^a-z0-9]*')).test(collapsed);
+  });
+  const hitWord = words.some((term) => new RegExp(`\\b${term}\\b`, 'i').test(folded));
+  const hitHate = /\b(?:nigg(?:a|er)s?|fag+ots?|kikes?|trann(?:y|ies)|retard(?:ed|s)?)\b/i.test(raw) || /n+i+g{2,}(?:a|e+r?)s?/.test(collapsed);
+  const hitThreat = /\b(?:kys|kill\s+your\s*self|unalive\s+yourself)\b/i.test(raw);
+  if (hitFuzzy || hitWord || hitHate || hitThreat) return { reason: AUTOMOD_HOLD_MESSAGE };
+  return null;
+}
+
+function automodHoldError(result, fallback) {
+  if (result?.held || /held for staff/i.test(result?.error || fallback || '')) return AUTOMOD_HOLD_MESSAGE;
+  return result?.error || fallback;
+}
+
+function setConversationHold(message = '') {
+  if (!conversationError) return;
+  conversationError.hidden = !message;
+  conversationError.textContent = message;
+}
+
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 const safeCssImageUrl = (value) => {
   const candidate = String(value || '').trim();
@@ -236,15 +267,25 @@ const timeAgo = (value) => {
   return `${days} day${days === 1 ? '' : 's'} ago`;
 };
 const verifiedBadge = () => '<span class="verified" role="img" aria-label="Verified" data-tooltip="Verified"><img src="assets/verified-badge.png" alt="" /></span>';
-const roleBadges = (user) => (Array.isArray(user?.badges) && user.badges.includes('clearwater-role')
-  ? '<span class="role-badge" role="img" aria-label="Premium" data-tooltip="Premium"><img src="assets/clearwater-role-badge.webp" alt="" /></span>'
-  : '');
+const roleBadges = (user) => {
+  const badges = Array.isArray(user?.badges) ? user.badges : [];
+  const premium = badges.includes('clearwater-role')
+    ? '<span class="role-badge" role="img" aria-label="Premium" data-tooltip="Premium"><img src="assets/clearwater-role-badge.webp" alt="" /></span>'
+    : '';
+  const staff = badges.includes('staff')
+    ? '<span class="role-badge staff-badge" role="img" aria-label="Staff" data-tooltip="Staff"><img src="assets/clearwater-staff-badge.png" alt="" /></span>'
+    : '';
+  return `${premium}${staff}`;
+};
 const identityBadges = (user) => `${user?.verified === true ? verifiedBadge() : ''}${roleBadges(user)}`;
 const currentAuthor = (post) => internetUsers.get(post.authorId) || null;
 const isVerified = (post) => currentAuthor(post)?.verified === true;
 
 function refreshProfileVerified() {
-  if (profileVerified) profileVerified.hidden = !internetUsers.get(currentUserId)?.verified;
+  const me = internetUsers.get(currentUserId);
+  if (profileVerified) profileVerified.hidden = me?.verified !== true;
+  const staffBadge = document.querySelector('[data-profile-staff-badge]');
+  if (staffBadge) staffBadge.hidden = !Array.isArray(me?.badges) || !me.badges.includes('staff');
 }
 
 function activeAuthor() {
@@ -909,12 +950,85 @@ function reportKindLabel(report) {
   return report?.kind === 'message' ? 'Direct message' : 'Post';
 }
 
+function staffMemberLookup(id, fallback = {}) {
+  const fromMap = internetUsers.get(id) || {};
+  const fromSnapshot = (moderationSnapshot?.users || []).find((user) => user.id === id) || {};
+  return {
+    id,
+    displayName: fromMap.displayName || fromSnapshot.displayName || fallback.authorName || fallback.displayName || 'Discord user',
+    username: fromMap.username || fromSnapshot.username || fallback.authorUsername || fallback.username || '',
+    avatarUrl: fromMap.avatarUrl || fromSnapshot.avatarUrl || fallback.authorAvatarUrl || fallback.avatarUrl || 'assets/clearwater-logo.png',
+    verified: fromSnapshot.verified === true || fromMap.verified === true,
+    banned: fromSnapshot.banned === true || fromMap.banned === true,
+    muted: fromSnapshot.muted === true,
+    watched: fromSnapshot.watched === true,
+    warningCount: Number(fromSnapshot.warningCount || 0),
+    official: fromSnapshot.official === true || fromMap.official === true,
+    staffRank: fromSnapshot.staffRank || fromMap.staffRank || null,
+    lockPosts: fromSnapshot.lockPosts === true,
+    lockMessages: fromSnapshot.lockMessages === true,
+    shadowbanned: fromSnapshot.shadowbanned === true,
+  };
+}
+
+function staffAvatarMarkup(url) {
+  return `<img src="${escapeHtml(url || 'assets/clearwater-logo.png')}" alt="" draggable="false" />`;
+}
+
+function staffReportQueueMarkup(report, selected) {
+  const author = staffMemberLookup(report.authorId, report);
+  const category = Array.isArray(report.categories) && report.categories[0] ? report.categories[0] : (report.source === 'automod' ? 'automod' : report.kind || 'report');
+  return `<button type="button" class="staff-live-report ${report.id === selected ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}">${staffAvatarMarkup(author.avatarUrl)}<span><b>${escapeHtml(author.displayName)}</b><small>${escapeHtml(report.content || report.reason || 'No text captured')}</small></span><em>${escapeHtml(category)}</em></button>`;
+}
+
 function staffCaseMarkup(selected) {
-  if (!selected) return '<div class="staff-empty staff-empty-lg">Nothing in this queue.</div>';
+  if (!selected) return '<div class="staff-empty staff-empty-lg">Select a report to review it here.</div>';
   const closed = selected.status && selected.status !== 'open';
-  const canDelete = selected.source !== 'automod' && selected.kind !== 'message';
-  const openUser = selected.authorId ? `<button type="button" data-staff-open-user="${escapeHtml(selected.authorId)}">Open user panel</button>` : '';
-  return `<article class="staff-case" data-report-card><div class="staff-case-identity"><span>${escapeHtml((selected.authorName || '?').slice(0, 1))}</span><div><b>${escapeHtml(selected.authorName)}</b><small>${escapeHtml(reportSourceLabel(selected))} · ${escapeHtml(reportKindLabel(selected))}</small></div></div><p class="staff-case-copy">${escapeHtml(selected.content || 'No text captured')}</p><p class="staff-case-reason">${escapeHtml(selected.reason || 'No reason given')}</p>${Array.isArray(selected.categories) && selected.categories.length ? `<p class="staff-case-tags">${selected.categories.map((category) => `<span>${escapeHtml(category)}</span>`).join('')}</p>` : ''}${closed ? `<p class="staff-case-status">${escapeHtml(staffHistoryLabel(selected))} · ${timeAgo(selected.reviewedAt || selected.createdAt)}</p>` : `<div class="report-actions"><select data-report-action><option value="warning">Give warning</option>${canDelete ? '<option value="delete">Delete post</option>' : '<option value="delete">Confirm removal</option>'}<option value="ban">Ban account</option></select><button type="button" data-report-review="accept" data-report-id="${escapeHtml(selected.id)}">Take action</button><button type="button" class="danger" data-report-review="deny" data-report-id="${escapeHtml(selected.id)}">Dismiss</button>${openUser}</div>`}</article>`;
+  const canDelete = selected.kind !== 'message' && Boolean(selected.postId);
+  const author = staffMemberLookup(selected.authorId, selected);
+  const reporter = selected.source === 'automod'
+    ? null
+    : staffMemberLookup(selected.reporterId, { displayName: selected.reporterName, avatarUrl: selected.reporterAvatarUrl });
+  const target = selected.targetId
+    ? staffMemberLookup(selected.targetId, { displayName: selected.targetName, username: selected.targetUsername, avatarUrl: selected.targetAvatarUrl })
+    : null;
+  const categories = Array.isArray(selected.categories) ? selected.categories : [];
+  const facts = [
+    reportKindLabel(selected),
+    reportSourceLabel(selected),
+    timeAgo(selected.createdAt),
+    author.warningCount ? `${author.warningCount} warning${author.warningCount === 1 ? '' : 's'}` : null,
+  ].filter(Boolean);
+  const actions = closed
+    ? `<div class="staff-case-actions">
+        <button type="button" data-staff-open-user="${escapeHtml(author.id)}">Open user panel</button>
+        <button type="button" data-open-member="${escapeHtml(author.id)}">Public profile</button>
+      </div>
+      <p class="staff-case-status">${escapeHtml(staffHistoryLabel(selected))} · ${timeAgo(selected.reviewedAt || selected.createdAt)}</p>`
+    : `<div class="staff-case-actions">
+        <button type="button" data-report-review="accept" data-report-action="warning" data-report-id="${escapeHtml(selected.id)}">Warn</button>
+        ${canDelete ? `<button type="button" data-report-review="accept" data-report-action="delete" data-report-id="${escapeHtml(selected.id)}">Delete post</button>` : `<button type="button" data-report-review="accept" data-report-action="delete" data-report-id="${escapeHtml(selected.id)}">Confirm hold</button>`}
+        <button type="button" class="danger" data-report-review="accept" data-report-action="ban" data-report-id="${escapeHtml(selected.id)}">Ban</button>
+        <button type="button" class="danger" data-report-review="deny" data-report-id="${escapeHtml(selected.id)}">Dismiss</button>
+        <button type="button" data-staff-open-user="${escapeHtml(author.id)}">Open user panel</button>
+      </div>`;
+  return `<article class="staff-case" data-report-card>
+    <button type="button" class="staff-case-identity" data-staff-open-user="${escapeHtml(author.id)}">
+      ${staffAvatarMarkup(author.avatarUrl)}
+      <div>
+        <b>${escapeHtml(author.displayName)}</b>
+        <small>@${escapeHtml(author.username || 'member')}</small>
+      </div>
+      <span class="staff-case-open">Open user</span>
+    </button>
+    <div class="staff-chip-row">${staffUserChips(author)}${categories.map((category) => `<span class="staff-chip warn">${escapeHtml(String(category).replace(/-/g, ' '))}</span>`).join('')}</div>
+    <p class="staff-case-meta">${facts.map((fact) => `<span>${escapeHtml(fact)}</span>`).join('')}</p>
+    <blockquote class="staff-case-copy">${escapeHtml(selected.content || 'No text captured')}</blockquote>
+    <p class="staff-case-reason">${escapeHtml(selected.reason || 'No reason given')}</p>
+    ${target ? `<p class="staff-case-target">Sent to <button type="button" data-staff-open-user="${escapeHtml(target.id)}">${staffAvatarMarkup(target.avatarUrl)}<b>${escapeHtml(target.displayName)}</b></button></p>` : ''}
+    ${reporter ? `<p class="staff-case-target">Reported by <button type="button" data-staff-open-user="${escapeHtml(reporter.id)}">${staffAvatarMarkup(reporter.avatarUrl)}<b>${escapeHtml(reporter.displayName)}</b></button></p>` : ''}
+    ${actions}
+  </article>`;
 }
 
 function staffWhen(value) {
@@ -1076,7 +1190,7 @@ function renderStaffDashboard() {
   if (reportCount) reportCount.textContent = String(queueItems.length);
   if (queueList) {
     queueList.innerHTML = queueItems.length
-      ? queueItems.map((report) => `<button type="button" class="staff-live-report ${report.id === selectedReportId ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}"><b>${escapeHtml(report.authorName || 'Unknown')}</b><small>${escapeHtml(report.content || report.reason || 'No text captured')}</small></button>`).join('')
+      ? queueItems.map((report) => staffReportQueueMarkup(report, selectedReportId)).join('')
       : '<p class="staff-empty">Nothing in this queue.</p>';
   }
   if (casePane) casePane.innerHTML = selected ? staffCaseMarkup(selected) : '<div class="staff-empty staff-empty-lg">Select a report to review it here.</div>';
@@ -1151,7 +1265,10 @@ function renderStaffDashboard() {
   }
   const metrics = `<div class="staff-metrics"><article><b>${Number(stats.pending || reports.length)}</b><span>Pending</span></article><article><b>${Number(stats.automod || 0)}</b><span>Automod</span></article><article><b>${Number(stats.banned || bans.length)}</b><span>Bans</span></article><article><b>${Number(stats.watched || 0)}</b><span>Watched</span></article><article><b>${Number(stats.muted || 0)}</b><span>Muted</span></article><article><b>${Number(stats.users || internetUsers.size)}</b><span>Users</span></article></div>`;
   if (overview) {
-    overview.innerHTML = `${metrics}<div class="staff-overview-grid"><section class="staff-column"><header><h2>Oldest pending reports</h2><span>${reports.length}</span></header>${reports.length ? reports.slice(0, 8).map((report) => `<button type="button" class="staff-report-card ${report.id === selectedReportId ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}"><div><b>${escapeHtml(report.authorName)}</b><small>${escapeHtml(reportSourceLabel(report))}</small></div><p>${escapeHtml(report.content || 'No text captured')}</p></button>`).join('') : '<div class="staff-empty">Nothing in this queue.</div>'}</section><section class="staff-column"><header><h2>Active bans</h2></header>${bans.length ? bans.map((ban) => `<button type="button" class="staff-compact" data-staff-open-user="${escapeHtml(ban.id)}"><b>${escapeHtml(ban.displayName)}</b><span>${escapeHtml(ban.reason)}</span><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></button>`).join('') : '<div class="staff-empty">No active bans.</div>'}</section></div>`;
+    overview.innerHTML = `${metrics}<div class="staff-overview-grid"><section class="staff-column"><header><h2>Oldest pending reports</h2><span>${reports.length}</span></header>${reports.length ? reports.slice(0, 8).map((report) => {
+      const author = staffMemberLookup(report.authorId, report);
+      return `<button type="button" class="staff-report-card ${report.id === selectedReportId ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}">${staffAvatarMarkup(author.avatarUrl)}<div><b>${escapeHtml(author.displayName)}</b><small>${escapeHtml(reportSourceLabel(report))} · ${escapeHtml(reportKindLabel(report))}</small><p>${escapeHtml(report.content || 'No text captured')}</p></div></button>`;
+    }).join('') : '<div class="staff-empty">Nothing in this queue.</div>'}</section><section class="staff-column"><header><h2>Active bans</h2></header>${bans.length ? bans.map((ban) => `<button type="button" class="staff-compact" data-staff-open-user="${escapeHtml(ban.id)}"><b>${escapeHtml(ban.displayName)}</b><span>${escapeHtml(ban.reason)}</span><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></button>`).join('') : '<div class="staff-empty">No active bans.</div>'}</section></div>`;
   }
 }
 
@@ -1381,6 +1498,8 @@ function openMemberProfile(memberId, updateHash = true) {
   document.querySelector('[data-member-page-rank]').textContent = user.staffRank || 'Clearwater community member';
   document.querySelector('[data-member-page-copy]').textContent = user.bio || (user.staffRank ? `${user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
   document.querySelector('[data-member-page-verified]').hidden = user.verified !== true;
+  const memberStaffBadge = document.querySelector('[data-member-page-staff-badge]');
+  if (memberStaffBadge) memberStaffBadge.hidden = !Array.isArray(user.badges) || !user.badges.includes('staff');
   document.querySelector('[data-member-page-post-count]').textContent = posts.length.toLocaleString();
   const memberFollowing = Array.isArray(user.following) ? user.following : [];
   const memberFollowers = Array.isArray(user.followers) ? user.followers : [];
@@ -1421,7 +1540,7 @@ function openConversation(member) {
   if (!member) return;
   viewedMember = member;
   messageGif = null;
-  if (conversationError) { conversationError.hidden = true; conversationError.textContent = ''; }
+  setConversationHold('');
   if (conversationGifPreview) { conversationGifPreview.hidden = true; conversationGifPreview.innerHTML = ''; }
   document.querySelector('[data-conversation-avatar]').src = member.avatarUrl || 'assets/clearwater-logo.png';
   document.querySelector('[data-conversation-name]').textContent = member.displayName;
@@ -1449,16 +1568,14 @@ async function loadConversation(member) {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'conversation', withUserId: member.id, username: member.username, ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Could not load this conversation.');
     if (!response.ok) throw new Error(result.error || 'Could not load this conversation.');
-    if (conversationError) { conversationError.hidden = true; conversationError.textContent = ''; }
     const messages = result.messages || [];
     conversationMessages.innerHTML = messages.length ? messages.map((message) => conversationBubble(message)).join('') : '<p class="conversation-empty">Start a conversation with this member.</p>';
     conversationMessages.scrollTop = conversationMessages.scrollHeight;
     void loadMessages();
   } catch (error) {
     conversationMessages.innerHTML = '<p class="conversation-empty">No messages yet.</p>';
-    if (conversationError) {
-      conversationError.hidden = false;
-      conversationError.textContent = error.message || 'Could not load this conversation.';
+    if (!conversationError?.textContent || conversationError.hidden) {
+      setConversationHold(error.message || 'Could not load this conversation.');
     }
   }
 }
@@ -1489,7 +1606,7 @@ function reviewReport(button) {
   const decision = button.dataset.reportReview;
   const reportId = button.dataset.reportId;
   const card = button.closest('[data-report-card]');
-  const moderationAction = card?.querySelector('[data-report-action]')?.value || 'warning';
+  const moderationAction = button.dataset.reportAction || card?.querySelector('[data-report-action]')?.value || 'warning';
   if (decision === 'deny') {
     void submitReportReview({ reportId, decision, moderationAction });
     return;
@@ -1616,7 +1733,12 @@ async function loadSession() {
   return true;
 }
 
-content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; postButton.disabled = !canComposePost(); updateComposerHighlight(); });
+content?.addEventListener('input', () => {
+  count.textContent = `${content.value.length} / 500`;
+  postButton.disabled = !canComposePost();
+  updateComposerHighlight();
+  if (postMessage) postMessage.textContent = scanClientContent(content.value) ? AUTOMOD_HOLD_MESSAGE : '';
+});
 document.querySelector('[data-drop-location]')?.addEventListener('click', async () => {
   if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
   await refreshDropLocation();
@@ -1925,7 +2047,7 @@ async function postInteraction({ postId, type, content = '', quote = false }, { 
   const result = await readApiJson(response, 'Could not update this post.');
   if (!response.ok) {
     if (result.error === 'Owner access required') throw new Error('Your bot host needs the newest GitHub files and a restart before post actions can work.');
-    throw new Error(result.error || 'Could not update this post.');
+    throw new Error(automodHoldError(result, 'Could not update this post.'));
   }
   if (reload) await loadPosts();
 }
@@ -2076,28 +2198,27 @@ document.querySelector('[data-conversation-gif]')?.addEventListener('click', () 
 document.querySelector('[data-conversation-emoji]')?.addEventListener('click', () => { pickerTarget = 'message'; emojiModal.hidden = false; renderEmojiGrid(); emojiQuery?.focus(); });
 document.querySelector('[data-close-conversation]')?.addEventListener('click', () => { showView('messages'); });
 document.querySelector('[data-open-conversation-profile]')?.addEventListener('click', () => { if (viewedMember) openMemberProfile(viewedMember.id); });
+conversationInput?.addEventListener('input', () => {
+  const hit = scanClientContent(conversationInput.value);
+  setConversationHold(hit ? AUTOMOD_HOLD_MESSAGE : '');
+});
 conversationForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const text = conversationInput?.value.trim();
   if (!viewedMember || (!text && !messageGif)) return;
-  if (conversationError) { conversationError.hidden = true; conversationError.textContent = ''; }
   const submit = conversationForm.querySelector('button[type="submit"]');
   if (submit) submit.disabled = true;
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'message-send', to: viewedMember.id, username: viewedMember.username, content: text, gif: messageGif, ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Could not send your message.');
-    if (!response.ok) throw new Error(result.error || 'Could not send your message.');
+    if (!response.ok) throw new Error(automodHoldError(result, 'Could not send your message.'));
     conversationInput.value = '';
     messageGif = null;
+    setConversationHold('');
     if (conversationGifPreview) { conversationGifPreview.hidden = true; conversationGifPreview.innerHTML = ''; }
     await loadConversation(viewedMember);
   } catch (error) {
-    if (conversationError) {
-      conversationError.hidden = false;
-      conversationError.textContent = error.message || 'Could not send your message.';
-    } else {
-      window.alert(error.message || 'Could not send your message.');
-    }
+    setConversationHold(automodHoldError({ error: error.message }, error.message || 'Could not send your message.'));
   } finally {
     if (submit) submit.disabled = false;
     conversationInput?.focus();
@@ -2243,10 +2364,10 @@ postButton?.addEventListener('click', async () => {
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, image: selectedImage, poll, location: selectedLocation, quoteId: selectedQuoteId, asOfficial: activeAccount === 'official' }) });
     const result = await readApiJson(response, 'Posting is unavailable because the website service is not connected.');
-    if (!response.ok) throw new Error(result.error);
+    if (!response.ok) throw new Error(automodHoldError(result, result.error || 'Could not post.'));
     content.value = ''; count.textContent = '0 / 500'; postButton.disabled = true; updateComposerHighlight(); selectedGif = null; selectedImage = null; stopDropLocationRefresh(); selectedLocation = null; selectedQuoteId = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; renderDropPreview(); renderQuotePreview(); if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
   } catch (error) {
-    const message = error.message || 'Could not post.';
+    const message = automodHoldError({ error: error.message }, error.message || 'Could not post.');
     postMessage.textContent = message;
     if (/member of the Clearwater Roleplay Discord server/i.test(message)) showJoinRequired();
     else if (/banned/i.test(message)) showBan({ reason: 'This account is banned from Clearwater Internet.', until: null });

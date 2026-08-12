@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
-import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
+import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges } from './staffRanks.js';
 import { dropLocationNameCandidates, findPlayerDropLocation } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
@@ -140,12 +140,14 @@ export function startStatusServer(client, config) {
     let changed = false;
     const activeAuthorIds = new Set(store.posts.slice(0, 100).map((post) => post.authorId));
     for (const user of Object.values(store.users)) {
-      if (!activeAuthorIds.has(user.id) || !user.staffRank) continue;
+      if (!activeAuthorIds.has(user.id) && !user.staffRank && !(user.badges || []).includes('staff')) continue;
       const member = await guild.members.fetch(user.id).catch(() => null);
       if (!member) continue;
       const staffRank = getHighestStaffRank(member)?.name || null;
-      if (user.staffRank !== staffRank) {
-        upsertInternetUser(store, { id: user.id, staffRank });
+      const badges = getInternetBadges(member);
+      const sameBadges = JSON.stringify(user.badges || []) === JSON.stringify(badges);
+      if (user.staffRank !== staffRank || !sameBadges) {
+        upsertInternetUser(store, { id: user.id, staffRank, badges });
         changed = true;
       }
     }
@@ -201,7 +203,7 @@ export function startStatusServer(client, config) {
         allowed,
         member: Boolean(member),
         staffRank: staffRank?.name || null,
-        badges: member?.roles?.cache?.has('1514033571160133733') ? ['clearwater-role'] : [],
+        badges: getInternetBadges(member),
       });
     }
 

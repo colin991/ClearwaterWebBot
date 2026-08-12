@@ -1,5 +1,5 @@
 import { Events } from 'discord.js';
-import { CLEARWATER_GUILD_ID, getHighestStaffRank } from '../utils/staffRanks.js';
+import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges } from '../utils/staffRanks.js';
 import { readInternetStore, saveInternetStore, upsertInternetUser } from '../utils/internetStore.js';
 
 export default {
@@ -17,6 +17,7 @@ export default {
       displayName: member.user.globalName || member.user.username,
       avatarUrl: member.user.displayAvatarURL({ extension: 'png', size: 64 }),
       staffRank: rank?.name || null,
+      badges: getInternetBadges(member),
     });
     await saveInternetStore(store);
   },

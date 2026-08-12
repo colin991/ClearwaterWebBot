@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { AutomodHoldError, scanInternetContent } from './internetAutomod.js';
+import { AUTOMOD_HOLD_MESSAGE, AutomodHoldError, scanInternetContent } from './internetAutomod.js';
+import { sanitizeInternetBadges } from './staffRanks.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
 export { AutomodHoldError };
@@ -116,7 +117,7 @@ export function publicUsers(store) {
     bio: user.bio || '',
     staffRank: user.staffRank || null,
     verified: user.verified === true,
-    badges: Array.isArray(user.badges) ? user.badges.filter((badge) => badge === 'clearwater-role') : [],
+    badges: Array.isArray(user.badges) ? sanitizeInternetBadges(user.badges) : [],
     banned: Boolean(getActiveBan(user)),
     official: user.official === true,
     following: user.preferences?.hideFollowing === true ? [] : (Array.isArray(user.following) ? user.following : []),
@@ -314,8 +315,8 @@ export function upsertInternetUser(store, user) {
     avatarUrl: has('avatarUrl') ? text(user?.avatarUrl, 300) || null : existing.avatarUrl || null,
     staffRank: has('staffRank') ? text(user?.staffRank, 80) || null : existing.staffRank || null,
     badges: has('badges') && Array.isArray(user?.badges)
-      ? user.badges.filter((badge) => badge === 'clearwater-role')
-      : (Array.isArray(existing.badges) ? existing.badges : []),
+      ? sanitizeInternetBadges(user.badges)
+      : sanitizeInternetBadges(existing.badges),
   };
   return store.users[id];
 }
@@ -415,6 +416,11 @@ export function createInternetPost(store, user, content, media = {}) {
   if (videoUrl && !isVideo) throw new Error('Choose a supported MP4 or WebM video before posting');
   if ((question && options.length < 2) || (!question && options.length)) throw new Error('A poll needs a question and at least two options');
   assertCanPost(store, user, { reel: isReel });
+  enforceAutomod(store, {
+    actor: user,
+    kind: 'post',
+    content: [body, question, gifTitle, ...options].filter(Boolean).join('\n'),
+  });
   if (!parentId) {
     const cooldownRemaining = 60_000 - (Date.now() - new Date(user.lastPostAt || 0).getTime());
     if (cooldownRemaining > 0) throw new Error(`Please wait ${Math.ceil(cooldownRemaining / 1000)} seconds before posting again`);
@@ -429,11 +435,6 @@ export function createInternetPost(store, user, content, media = {}) {
   if (/(.)\1{11,}/.test(body) || (body.match(/https?:\/\//gi) || []).length > 2) {
     throw new Error('That post looks like spam. Please shorten it and try again');
   }
-  enforceAutomod(store, {
-    actor: user,
-    kind: 'post',
-    content: [body, question, ...options].filter(Boolean).join('\n'),
-  });
   const post = {
     id: randomUUID(),
     kind: isReel ? 'reel' : 'post',
@@ -443,7 +444,7 @@ export function createInternetPost(store, user, content, media = {}) {
     avatarUrl: user.avatarUrl,
     staffRank: user.staffRank,
     verified: user.verified === true,
-    badges: Array.isArray(user.badges) ? user.badges.filter((badge) => badge === 'clearwater-role') : [],
+    badges: Array.isArray(user.badges) ? sanitizeInternetBadges(user.badges) : [],
     content: body,
     parentId,
     quoteId: text(media?.quoteId, 80) || null,
@@ -536,7 +537,7 @@ export function interactInternetPost(store, { actor, postId, type, content = '',
         avatarUrl: user.avatarUrl,
         staffRank: user.staffRank,
         verified: user.verified === true,
-        badges: Array.isArray(user.badges) ? user.badges.filter((badge) => badge === 'clearwater-role') : [],
+        badges: Array.isArray(user.badges) ? sanitizeInternetBadges(user.badges) : [],
         content: '',
         repostOf: post.id,
         parentId: null,
@@ -597,6 +598,8 @@ export function createInternetReport(store, { postId, actor, reason }) {
     reporterName: text(actor.displayName, 80) || 'Discord user',
     authorId: post.authorId,
     authorName: post.displayName,
+    authorUsername: text(post.username, 80),
+    authorAvatarUrl: text(post.avatarUrl, 300) || null,
     content: post.content,
     reason: reportReason,
     createdAt: new Date().toISOString(),
@@ -633,6 +636,8 @@ function enforceAutomod(store, { actor, kind, content, extra = {} }) {
       reporterName: 'Clearwater Automod',
       authorId: String(actor.id),
       authorName: text(actor.displayName, 80) || 'Discord user',
+      authorUsername: text(actor.username, 80),
+      authorAvatarUrl: text(actor.avatarUrl, 300) || null,
       content: snippet,
       reason: hit.reason,
       categories: hit.categories,
@@ -642,7 +647,7 @@ function enforceAutomod(store, { actor, kind, content, extra = {} }) {
     store.reports = store.reports.slice(0, 200);
     addInternetLog(store, `Automod held ${text(actor.displayName, 80) || 'a member'}'s ${kind}. ${hit.reason}`);
   }
-  throw new AutomodHoldError('That was held for staff review.', hit);
+  throw new AutomodHoldError(AUTOMOD_HOLD_MESSAGE, hit);
 }
 
 function addInternetMessage(store, userId, message) {
@@ -802,9 +807,9 @@ export function sendInternetMessage(store, { actor, to, content, gif, username }
   if (recipientPrefs.friendsMessages === true && !(Array.isArray(recipient.following) && recipient.following.includes(sender.id))) {
     throw new Error('This member only accepts messages from people they follow');
   }
+  enforceAutomod(store, { actor: sender, kind: 'message', content: [body, gifTitle].filter(Boolean).join('\n'), extra: { targetId: recipient.id } });
   const wait = 1_500 - (Date.now() - new Date(sender.lastMessageAt || 0).getTime());
   if (wait > 0) throw new Error('Please wait a moment before sending another message');
-  enforceAutomod(store, { actor: sender, kind: 'message', content: body, extra: { targetId: recipient.id } });
   const sentAt = new Date().toISOString();
   const message = { id: randomUUID(), kind: 'direct', fromId: sender.id, toId: recipient.id, content: body, ...(isGif ? { gifUrl, gifTitle } : {}), createdAt: sentAt, readAt: null };
   sender.messages = Array.isArray(sender.messages) ? sender.messages : [];
@@ -1077,9 +1082,25 @@ export function applyStaffSiteAction(store, { actor, staffAction, enabled }) {
   return publicInternetSettings(store);
 }
 
+function enrichInternetReport(store, report) {
+  const author = store.users[String(report.authorId || '')] || {};
+  const reporter = report.reporterId && report.reporterId !== 'automod' ? store.users[String(report.reporterId)] : null;
+  const target = report.targetId ? store.users[String(report.targetId)] : null;
+  return {
+    ...report,
+    authorName: report.authorName || author.displayName || 'Discord user',
+    authorUsername: report.authorUsername || author.username || '',
+    authorAvatarUrl: author.avatarUrl || report.authorAvatarUrl || null,
+    reporterAvatarUrl: reporter?.avatarUrl || report.reporterAvatarUrl || null,
+    targetName: target?.displayName || report.targetName || null,
+    targetUsername: target?.username || null,
+    targetAvatarUrl: target?.avatarUrl || null,
+  };
+}
+
 export function moderationSnapshot(store) {
-  const open = store.reports.filter((report) => report.status === 'open');
-  const reviewed = store.reports.filter((report) => report.status !== 'open');
+  const open = store.reports.filter((report) => report.status === 'open').map((report) => enrichInternetReport(store, report));
+  const reviewed = store.reports.filter((report) => report.status !== 'open').map((report) => enrichInternetReport(store, report));
   const users = Object.values(store.users).map((user) => staffUserSummary(store, user));
   const bans = users.filter((user) => user.banned).map((user) => {
     const ban = getActiveBan(store.users[user.id]);

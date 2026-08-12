@@ -1,5 +1,5 @@
 import { Events } from 'discord.js';
-import { CLEARWATER_GUILD_ID, getHighestStaffRank } from '../utils/staffRanks.js';
+import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges } from '../utils/staffRanks.js';
 import { readInternetStore, saveInternetStore, setInternetBan, upsertInternetUser } from '../utils/internetStore.js';
 import { logger } from '../utils/logger.js';
 
@@ -17,6 +17,7 @@ export default {
       displayName: member.user.globalName || member.user.username,
       avatarUrl: member.user.displayAvatarURL({ extension: 'png', size: 64 }),
       staffRank: staffRank?.name || null,
+      badges: getInternetBadges(member),
     });
 
     if (existingUser?.banned === true) {
