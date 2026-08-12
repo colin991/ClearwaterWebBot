@@ -162,6 +162,7 @@ let pendingReportReview = null;
 let selectedGif = null;
 let selectedImage = null;
 let messageGif = null;
+let activeReelWithSound = null;
 let pickerTarget = 'post';
 let socialState = { following: [], followers: [], blocked: [], muted: [], bookmarks: [], unreadNotifications: 0, unreadMessages: 0 };
 let viewedMember = null;
@@ -561,6 +562,11 @@ function pauseReelVideos() {
     video.pause();
     video.muted = true;
   });
+  activeReelWithSound = null;
+}
+
+function soundIcon() {
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Zm12.5.2a4 4 0 0 1 0 5.6m2.7-8.3a8 8 0 0 1 0 11" /></svg>';
 }
 
 function bindReelAutoplay() {
@@ -572,10 +578,12 @@ function bindReelAutoplay() {
       const video = entry.target.querySelector('video');
       if (!video) return;
       if (entry.isIntersecting && entry.intersectionRatio > 0.65) {
-        video.muted = true;
+        video.muted = entry.target.dataset.reelId !== activeReelWithSound;
         void video.play().catch(() => {});
       } else {
         video.pause();
+        video.muted = true;
+        if (entry.target.dataset.reelId === activeReelWithSound) activeReelWithSound = null;
       }
     });
   }, { root: viewport, threshold: [0.65] });
@@ -597,7 +605,10 @@ function renderReels() {
     const media = safeVideoUrl(reel.videoUrl)
       ? `<video src="${escapeHtml(reel.videoUrl)}" loop muted playsinline preload="auto"></video>`
       : (safeImageUrl(reel.imageUrl) ? `<img src="${escapeHtml(reel.imageUrl)}" alt="" />` : '<p class="reel-missing">This Reel could not be loaded.</p>');
-    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient"></div><div class="reel-meta"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(reel.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span>@${escapeHtml(reel.username || 'member')}</span></button>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}">${postActionIcon('share')}</button></div></article>`;
+    const sound = safeVideoUrl(reel.videoUrl)
+      ? `<button type="button" class="reel-sound" data-reel-sound="${escapeHtml(reel.id)}" aria-label="Turn on sound">${soundIcon()}</button>`
+      : '';
+    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}${sound}<div class="reel-gradient"></div><div class="reel-meta"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(reel.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span>@${escapeHtml(reel.username || 'member')}</span></button>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}">${postActionIcon('share')}</button></div></article>`;
   }).join('');
   bindReelAutoplay();
 }
@@ -1453,6 +1464,20 @@ document.addEventListener('click', (event) => {
   }
   const reelShare = event.target.closest('[data-reel-share]');
   if (reelShare) { void handlePostEngagement('share', reelShare.dataset.reelShare); return; }
+  const reelSound = event.target.closest('[data-reel-sound]');
+  if (reelSound) {
+    const reelCard = reelSound.closest('.reel-card');
+    const video = reelCard?.querySelector('video');
+    if (!video) return;
+    const turnOn = activeReelWithSound !== reelSound.dataset.reelSound || video.muted;
+    document.querySelectorAll('[data-reels-viewport] video').forEach((item) => { item.muted = true; });
+    activeReelWithSound = turnOn ? reelSound.dataset.reelSound : null;
+    video.muted = !turnOn;
+    reelSound.classList.toggle('is-on', turnOn);
+    reelSound.setAttribute('aria-label', turnOn ? 'Turn off sound' : 'Turn on sound');
+    void video.play().catch(() => {});
+    return;
+  }
   const reelCard = event.target.closest('.reel-card');
   if (reelCard && !event.target.closest('button')) {
     const video = reelCard.querySelector('video');

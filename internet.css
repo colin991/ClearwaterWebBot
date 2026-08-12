@@ -2135,6 +2135,24 @@ body { margin: 0; }
   background: #07111e;
   z-index: 0;
 }
+.reel-sound {
+  position: absolute;
+  top: 17px;
+  right: 17px;
+  z-index: 2;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .28);
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(4, 10, 20, .66);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+.reel-sound:hover,.reel-sound.is-on { background: rgba(57, 125, 236, .9); }
+.reel-sound svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.9; }
 .reel-missing {
   position: absolute;
   inset: 0;
