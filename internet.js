@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-drop';
+const INTERNET_VERSION = '20260811-composer-tabs';
 let officialAccountId = '';
 const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
   id: '',
@@ -426,12 +426,16 @@ function renderReels() {
   bindReelAutoplay();
 }
 
+function canShowComposer() {
+  return Boolean(currentUserId) && (feedTab === 'foryou' || feedTab === 'recent');
+}
+
 function syncHomeSurfaces() {
   const reelsOn = isReelsTab();
   document.querySelector('[data-reels-stage]')?.toggleAttribute('hidden', !reelsOn);
   document.querySelector('.posts')?.toggleAttribute('hidden', reelsOn);
   document.querySelector('[data-feed-tabs]')?.classList.toggle('reels-tabs', reelsOn);
-  if (composer && currentUserId) composer.hidden = reelsOn;
+  if (composer) composer.hidden = !canShowComposer();
   if (!reelsOn) {
     pauseReelVideos();
     document.querySelector('[data-reel-comments]')?.setAttribute('hidden', '');
@@ -1093,7 +1097,7 @@ async function loadSession() {
   if (!session.authenticated || !session.user) return false;
   if (login) login.hidden = true;
   if (userBox) userBox.hidden = true;
-  if (composer) composer.hidden = false;
+  if (composer) composer.hidden = !(feedTab === 'foryou' || feedTab === 'recent');
   if (signedOut) signedOut.hidden = true;
   name.textContent = session.user.displayName || session.user.username;
   if (session.user.avatarUrl) { avatar.src = session.user.avatarUrl; composerAvatar.src = session.user.avatarUrl; }
