@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-profiles';
+const INTERNET_VERSION = '20260812-polish';
 const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const INTERNET_PATH = '/internet';
@@ -695,7 +695,7 @@ function syncReelSoundControls() {
     button.classList.toggle('is-on', reelsSoundOn);
     button.setAttribute('aria-pressed', reelsSoundOn ? 'true' : 'false');
     button.setAttribute('aria-label', reelsSoundOn ? 'Turn off sound' : 'Turn on sound');
-    button.innerHTML = `${soundIcon(reelsSoundOn)}<span>${reelsSoundOn ? 'Sound' : 'Muted'}</span>`;
+    button.innerHTML = `${soundIcon(reelsSoundOn)}<span class="sr-only">${reelsSoundOn ? 'Sound on' : 'Muted'}</span>`;
   });
 }
 
@@ -881,13 +881,17 @@ function renderReels() {
     const likes = Array.isArray(reel.likes) ? reel.likes : [];
     const liked = likes.includes(activeUserId());
     const comments = allPosts.filter((item) => item.parentId === reel.id).length;
+    const author = internetUsers.get(reel.authorId) || {};
+    const displayName = author.displayName || reel.displayName || reel.username || 'member';
+    const username = author.username || reel.username || 'member';
+    const avatarUrl = author.avatarUrl || reel.avatarUrl || 'assets/clearwater-logo.png';
     const media = safeVideoUrl(reel.videoUrl)
       ? `<video src="${escapeHtml(reel.videoUrl)}" loop muted playsinline preload="auto"></video>`
       : (safeImageUrl(reel.imageUrl) ? `<img src="${escapeHtml(reel.imageUrl)}" alt="" />` : '<p class="reel-missing">This Reel could not be loaded.</p>');
     const sound = safeVideoUrl(reel.videoUrl)
-      ? `<button type="button" class="reel-mute${reelsSoundOn ? ' is-on' : ''}" data-reel-sound="${escapeHtml(reel.id)}" aria-pressed="${reelsSoundOn ? 'true' : 'false'}" aria-label="${reelsSoundOn ? 'Turn off sound' : 'Turn on sound'}">${soundIcon(reelsSoundOn)}<span>${reelsSoundOn ? 'Sound' : 'Muted'}</span></button>`
+      ? `<button type="button" class="reel-mute${reelsSoundOn ? ' is-on' : ''}" data-reel-sound="${escapeHtml(reel.id)}" aria-pressed="${reelsSoundOn ? 'true' : 'false'}" aria-label="${reelsSoundOn ? 'Turn off sound' : 'Turn on sound'}">${soundIcon(reelsSoundOn)}<span class="sr-only">${reelsSoundOn ? 'Sound on' : 'Muted'}</span></button>`
       : '';
-    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient"></div><div class="reel-meta"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(reel.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span>@${escapeHtml(reel.username || 'member')}</span></button>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}">${postActionIcon('share')}</button>${sound}</div></article>`;
+    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient" aria-hidden="true"></div><div class="reel-meta"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(avatarUrl)}" alt="" /><span class="reel-author"><b>${escapeHtml(displayName)}</b><small>@${escapeHtml(username)}</small></span></button>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}" aria-label="Like">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}" aria-label="Comments">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}" aria-label="Share">${postActionIcon('share')}</button>${sound}</div></article>`;
   }).join('');
   if (anchorId) {
     const stayOn = [...viewport.querySelectorAll('.reel-card')].find((card) => card.dataset.reelId === anchorId);
@@ -1350,10 +1354,10 @@ function staffCaseMarkup(selected) {
   const resolve = closed
     ? `<p class="staff-case-outcome">${escapeHtml(staffHistoryLabel(selected))} · ${escapeHtml(timeAgo(selected.reviewedAt || selected.createdAt))}${selected.reviewerName ? ` · by ${escapeHtml(selected.reviewerName)}` : ''}</p>`
     : `<div class="staff-case-actions">
-        <button type="button" class="staff-action-btn primary" data-report-review="accept" data-report-action="warning" data-report-id="${escapeHtml(selected.id)}">Warn the author</button>
-        <button type="button" class="staff-action-btn" data-report-review="accept" data-report-action="delete" data-report-id="${escapeHtml(selected.id)}">${canDelete ? 'Delete the post' : 'Confirm hold'}</button>
-        <button type="button" class="staff-action-btn" data-report-review="deny" data-report-id="${escapeHtml(selected.id)}">Dismiss report</button>
-        <button type="button" class="staff-action-btn danger" data-report-review="accept" data-report-action="ban" data-report-id="${escapeHtml(selected.id)}">Ban the author</button>
+        <button type="button" class="staff-action-btn primary" data-report-review="accept" data-report-action="warning" data-report-id="${escapeHtml(selected.id)}">Warn</button>
+        <button type="button" class="staff-action-btn" data-report-review="accept" data-report-action="delete" data-report-id="${escapeHtml(selected.id)}">${canDelete ? 'Delete post' : 'Confirm hold'}</button>
+        <button type="button" class="staff-action-btn" data-report-review="deny" data-report-id="${escapeHtml(selected.id)}">Dismiss</button>
+        <button type="button" class="staff-action-btn danger" data-report-review="accept" data-report-action="ban" data-report-id="${escapeHtml(selected.id)}">Ban</button>
       </div>`;
   return `<article class="staff-case" data-report-card>
     <header class="staff-case-head">
@@ -1363,9 +1367,11 @@ function staffCaseMarkup(selected) {
           <b>${escapeHtml(author.displayName)}</b>
           <small>@${escapeHtml(author.username || 'member')}</small>
         </div>
-        <span class="staff-case-open">Open user</span>
       </button>
-      <span class="staff-case-badge ${status.key}">${status.label}</span>
+      <div class="staff-case-head-actions">
+        <button type="button" class="staff-case-open" data-staff-open-user="${escapeHtml(author.id)}">Open user</button>
+        <span class="staff-case-badge ${status.key}">${status.label}</span>
+      </div>
     </header>
     <p class="staff-case-meta">${facts.map((fact) => `<span>${escapeHtml(fact)}</span>`).join('')}</p>
     <div class="staff-case-body">
@@ -1411,7 +1417,17 @@ function staffWhen(value) {
 }
 
 function staffUntil(until) {
-  return until ? `Until ${staffWhen(until)}` : 'Forever';
+  if (!until) return 'Forever';
+  const time = new Date(until).getTime();
+  if (!Number.isFinite(time)) return 'Forever';
+  return `Until ${new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(time))}`;
+}
+
+function staffDateLabel(value) {
+  if (!value) return 'Unknown';
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return 'Unknown';
+  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(time));
 }
 
 function staffDurationSelect(field = 'duration', selected = '7') {
@@ -1481,11 +1497,10 @@ function staffUserPanelMarkup(detail) {
       <div><dt>Reports</dt><dd>${Number(user.reportCount || 0)}</dd></div>
       <div><dt>Followers</dt><dd>${Number(user.followerCount || 0)}</dd></div>
       <div><dt>Following</dt><dd>${Number(user.followingCount || 0)}</dd></div>
-      <div><dt>DMs stored</dt><dd>${Number(user.messageCount || 0)}</dd></div>
+      <div><dt>DMs</dt><dd>${Number(user.messageCount || 0)}</dd></div>
       <div><dt>Networks</dt><dd>${Number(user.ipHashCount || 0)}</dd></div>
-      <div><dt>Joined</dt><dd>${escapeHtml(staffWhen(user.createdAt))}</dd></div>
-      <div><dt>Last seen</dt><dd>${escapeHtml(staffWhen(user.lastSeenAt))}</dd></div>
     </dl>
+    <p class="staff-user-timeline"><span>Joined ${escapeHtml(staffDateLabel(user.createdAt))}</span><span>Last seen ${escapeHtml(staffDateLabel(user.lastSeenAt))}</span></p>
     <section class="staff-user-block staff-standing-block">
       <h3>Current standing</h3>
       ${restrictions.length
@@ -1501,7 +1516,7 @@ function staffUserPanelMarkup(detail) {
         <label>Reason or notice<textarea data-staff-field="reason" maxlength="300" placeholder="Explain the warn, ban, mute, lock, or notice"></textarea></label>
         <div class="staff-action-context-side">
           <label>Duration${staffDurationSelect('duration')}</label>
-          <label class="staff-check"><input type="checkbox" data-staff-field="ipBan" /><span>Also block known network hashes when banning</span></label>
+          <label class="staff-check"><input type="checkbox" data-staff-field="ipBan" /><span>Also block known networks on ban</span></label>
           <p class="staff-action-hint">The reason and duration above are applied to every action in this panel.</p>
         </div>
       </div>
