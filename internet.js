@@ -93,7 +93,6 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-drop-refresh';
 const MAX_REEL_BYTES = 3_000_000;
 const INTERNET_PATH = '/internet';
 const SIGNIN_INTERNET = '/signin?next=/internet';
@@ -1944,15 +1943,3 @@ window.setInterval(() => {
   if (!document.hidden) void loadBanStatus();
 }, 5_000);
 window.setInterval(updateBanCountdown, 60 * 1000);
-
-const checkForInternetUpdate = async () => {
-  try {
-    const response = await fetch('/api/internet-version', { cache: 'no-store' });
-    const update = await response.json();
-    if (update.version && update.version !== INTERNET_VERSION) window.location.reload();
-  } catch {
-    // Keep the current page usable if the update check is briefly unavailable.
-  }
-};
-
-window.setInterval(checkForInternetUpdate, 30_000);
