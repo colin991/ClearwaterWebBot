@@ -221,3 +221,14 @@ if ('IntersectionObserver' in window) {
 } else {
   reveals.forEach((element) => element.classList.add('visible'));
 }
+
+document.querySelectorAll('a[href="/internet.html"]').forEach((link) => {
+  link.addEventListener('click', (event) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target === '_blank') return;
+    event.preventDefault();
+    document.documentElement.classList.add('leaving-for-internet');
+    window.setTimeout(() => {
+      window.location.href = '/internet.html';
+    }, 220);
+  });
+});

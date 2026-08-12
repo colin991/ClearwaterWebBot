@@ -7,12 +7,19 @@
     <meta name="description" content="Clearwater Internet - the community social feed for Clearwater Roleplay." />
     <title>Clearwater Internet</title>
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
-    <link rel="stylesheet" href="internet.css?v=20260811-smooth" />
+    <link rel="stylesheet" href="internet.css?v=20260811-sidebar" />
   </head>
-  <body>
+  <body class="internet-booting">
+    <div class="internet-boot" data-internet-boot aria-live="polite">
+      <div class="internet-boot-card">
+        <img src="assets/clearwater-logo.png" alt="" draggable="false" />
+        <p>Loading Clearwater Internet</p>
+        <span class="internet-boot-bar" aria-hidden="true"></span>
+      </div>
+    </div>
     <main class="internet-shell">
       <aside class="internet-rail">
-        <a class="internet-brand" href="/"><img src="assets/clearwater-logo.png" alt="" /><span>Clearwater<br /><b>Internet</b></span></a>
+        <a class="internet-brand" href="/"><img src="assets/clearwater-logo.png" alt="" draggable="false" /><span>Clearwater<br /><b>Internet</b></span></a>
         <nav class="internet-nav" aria-label="Clearwater Internet navigation">
           <a class="selected" href="#home" data-view-link="home"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>Home</a>
           <a href="#notifications" data-view-link="notifications" class="notification-nav"><span class="notification-nav-icon"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 22h4" /></svg><i class="notification-dot" data-notification-dot hidden></i></span>Notifications</a>
@@ -21,8 +28,7 @@
           <a href="#settings" data-view-link="settings"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56v.09h-3v-.09A1.7 1.7 0 0 0 10.69 18.65a1.7 1.7 0 0 0-1.87.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7.04 15a1.7 1.7 0 0 0-1.56-1.03h-.09v-3h.09A1.7 1.7 0 0 0 7.04 9.94a1.7 1.7 0 0 0-.34-1.87l-.06-.06 2.12-2.12.06.06a1.7 1.7 0 0 0 1.87.34 1.7 1.7 0 0 0 1.03-1.56v-.09h3v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06 2.12 2.12-.06.06a1.7 1.7 0 0 0-.34 1.87 1.7 1.7 0 0 0 1.56 1.03h.09v3h-.09A1.7 1.7 0 0 0 19.4 15z" /></svg>Settings</a>
           <a href="#staff" data-view-link="staff" data-staff-link hidden><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.4 8.2 8 9 4.6-.8 8-4 8-9V7z" /><path d="m9 12 2 2 4-4" /></svg>Staff</a>
         </nav>
-        <a class="rail-primary" href="#home" data-compose-link>New post</a>
-        <a class="back-button" href="/">Back to Clearwater Roleplay</a>
+        <a class="back-button" href="/">← Clearwater Roleplay</a>
         <div class="rail-account" data-account-switch hidden>
           <button type="button" data-account-switch-button aria-expanded="false"><img data-account-switch-avatar src="assets/clearwater-logo.png" alt="" /><span><b data-account-switch-name>Account</b><small data-account-switch-handle>@clearwater</small></span><i>•••</i></button>
           <div class="account-switch-menu" data-account-switch-menu hidden>
@@ -38,23 +44,34 @@
       <section class="internet-feed">
         <section class="internet-view" data-view="home">
           <div class="feed-cover">
-            <img src="assets/clearwater-home.png" alt="Clearwater Roleplay" />
+            <img src="assets/clearwater-home.png" alt="Clearwater Roleplay" draggable="false" />
           </div>
           <label class="internet-search"><span>Search Clearwater Internet</span><input data-search type="search" placeholder="Search Clearwater Internet" /></label>
           <header class="internet-header">
             <div><p>Clearwater Internet</p><h1>For you</h1></div>
             <a href="/api/auth/discord" data-login>Sign in with Discord</a>
-            <div class="internet-user" data-user hidden><img data-avatar src="assets/clearwater-logo.png" alt="" /><span><b data-name>Discord user</b><small data-rank></small></span></div>
+            <div class="internet-user" data-user hidden><img data-avatar src="assets/clearwater-logo.png" alt="" draggable="false" /><span><b data-name>Discord user</b><small data-rank></small></span></div>
           </header>
 
           <section class="composer" data-composer hidden>
-            <img src="assets/clearwater-logo.png" alt="" data-composer-avatar />
-            <div class="composer-main"><div class="composer-entry"><div class="composer-highlight" data-composer-highlight aria-hidden="true"></div><textarea data-post-content maxlength="500" placeholder="What's happening?"></textarea></div><div class="poll-builder" data-poll-builder hidden><div class="poll-builder-heading"><span>Poll</span><button type="button" data-close-poll aria-label="Remove poll">×</button></div><input data-poll-question maxlength="180" placeholder="Poll question" /><input data-poll-option placeholder="Option 1" maxlength="80" /><input data-poll-option placeholder="Option 2" maxlength="80" /><div class="poll-builder-footer"><button type="button" data-add-poll-option>Add option</button><select data-poll-duration aria-label="Poll duration"><option value="1">1 day</option><option value="3">3 days</option><option value="7">7 days</option></select></div></div><div class="composer-tools"><button type="button" data-gif-button aria-label="Add GIF">GIF</button><button type="button" data-image-button aria-label="Upload image"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="14" height="14" rx="2" /><circle cx="8" cy="10" r="1.4" /><path d="m5.5 17 4-4 2.5 2.5 2-2" /><path d="M19 5v6m-3-3h6" /></svg></button><input data-image-upload type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden /><button type="button" data-emoji-button aria-label="Add emoji"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><circle cx="9" cy="10" r=".8" fill="currentColor" /><circle cx="15" cy="10" r=".8" fill="currentColor" /><path d="M8.5 14c1 1.1 2.1 1.6 3.5 1.6S14.5 15.1 15.5 14" /></svg></button><button type="button" data-mention-button aria-label="Mention a member">@</button><button type="button" data-poll-button aria-label="Create a poll"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18V11M12 18v-9M18 18v-6" /></svg></button></div><div class="gif-preview" data-gif-preview hidden></div><div class="composer-footer"><span data-character-count>0 / 500</span><button type="button" data-post-button disabled>Post</button></div><p data-post-message role="status"></p></div>
+            <div class="composer-top">
+              <img src="assets/clearwater-logo.png" alt="" data-composer-avatar draggable="false" />
+              <div class="composer-entry"><div class="composer-highlight" data-composer-highlight aria-hidden="true"></div><textarea data-post-content maxlength="500" placeholder="What's happening?"></textarea></div>
+            </div>
+            <div class="composer-main">
+              <div class="poll-builder" data-poll-builder hidden><div class="poll-builder-heading"><span>Poll</span><button type="button" data-close-poll aria-label="Remove poll">×</button></div><input data-poll-question maxlength="180" placeholder="Poll question" /><input data-poll-option placeholder="Option 1" maxlength="80" /><input data-poll-option placeholder="Option 2" maxlength="80" /><div class="poll-builder-footer"><button type="button" data-add-poll-option>Add option</button><select data-poll-duration aria-label="Poll duration"><option value="1">1 day</option><option value="3">3 days</option><option value="7">7 days</option></select></div></div>
+              <div class="gif-preview" data-gif-preview hidden></div>
+              <div class="composer-dock">
+                <div class="composer-tools"><button type="button" data-gif-button aria-label="Add GIF">GIF</button><button type="button" data-image-button aria-label="Upload image"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="14" height="14" rx="2" /><circle cx="8" cy="10" r="1.4" /><path d="m5.5 17 4-4 2.5 2.5 2-2" /><path d="M19 5v6m-3-3h6" /></svg></button><input data-image-upload type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden /><button type="button" data-emoji-button aria-label="Add emoji"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><circle cx="9" cy="10" r=".8" fill="currentColor" /><circle cx="15" cy="10" r=".8" fill="currentColor" /><path d="M8.5 14c1 1.1 2.1 1.6 3.5 1.6S14.5 15.1 15.5 14" /></svg></button><button type="button" data-mention-button aria-label="Mention a member">@</button><button type="button" data-poll-button aria-label="Create a poll"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18V11M12 18v-9M18 18v-6" /></svg></button></div>
+                <div class="composer-footer"><span data-character-count>0 / 500</span><button type="button" data-post-button disabled>Post</button></div>
+              </div>
+              <p data-post-message role="status"></p>
+            </div>
           </section>
 
           <section class="signed-out" data-signed-out><img src="assets/clearwater-logo.png" alt="" /><h2>Sign in to join the conversation.</h2><p>Clearwater Internet is for the Clearwater Roleplay community.</p><a href="/api/auth/discord">Sign in with Discord</a></section>
 
-          <section class="posts" id="feed" aria-live="polite"><p class="feed-note" data-feed-note>Loading posts...</p><div data-post-list></div></section>
+          <section class="posts" id="feed" aria-live="polite"><p class="feed-note" data-feed-note hidden>Loading posts...</p><div data-post-list></div></section>
         </section>
         <section class="internet-view post-detail-view" data-view="post" hidden><header class="post-detail-header"><button type="button" data-back-home aria-label="Back to feed">←</button><h1>Post</h1></header><div data-post-detail><p class="feed-note">Loading post...</p></div></section>
 
@@ -152,7 +169,7 @@
       </section>
 
       <aside class="internet-side">
-        <div class="community-card"><img class="community-cover" src="assets/clearwater-patrol.png" alt="" /><img class="community-logo" src="assets/clearwater-logo.png" alt="" /><h2>Clearwater Roleplay</h2><p>Departments, training, events, and stories from the Gulf Coast.</p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a></div>
+        <div class="community-card"><img class="community-cover" src="assets/clearwater-patrol.png" alt="" draggable="false" /><h2>Clearwater Roleplay</h2><p>Departments, training, events, and stories from the Gulf Coast.</p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a></div>
         <div class="trending"><h2>Trending in Clearwater</h2><div data-trending-list><a href="#home" data-topic="#ClearwaterRP">#ClearwaterRP <span>Community</span></a><a href="#home" data-topic="#ERLC">#ERLC <span>Roleplay</span></a><a href="#home" data-topic="#FireRescue">#FireRescue <span>Departments</span></a></div></div>
       </aside>
     </main>
@@ -168,6 +185,6 @@
     <section class="composer-modal" data-post-modal hidden role="dialog" aria-modal="true"><div><header><h2 data-post-modal-title>Reply</h2><button type="button" data-close-post-modal aria-label="Close">×</button></header><form data-post-modal-form><textarea data-post-modal-content maxlength="500" placeholder="Post your reply"></textarea><div class="quoted-post" data-quoted-post hidden></div><div class="post-modal-buttons"><button type="button" data-quote-post hidden>Quote post</button><button>Post</button></div><p data-post-modal-error></p></form></div></section>
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
-    <script src="internet.js?v=20260811-smooth"></script>
+    <script src="internet.js?v=20260811-sidebar"></script>
   </body>
 </html>

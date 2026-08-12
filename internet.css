@@ -898,3 +898,352 @@ body::before {
   }
   .internet-rail { border-radius: var(--cw-radius) !important; }
 }
+
+/* Sticky left sidebar, boot loader, non-draggable media, redesigned composer. */
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+  pointer-events: auto;
+}
+img[draggable="false"] { -webkit-user-drag: none; }
+
+.post-content,
+.post-name,
+.post-meta,
+.internet-header h1,
+.page-heading h1,
+.community-card p,
+.privacy-settings small,
+.danger-zone small,
+.notification-item span,
+.message-list .internet-message p {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.internet-boot {
+  position: fixed;
+  z-index: 400;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(47, 107, 255, .18), transparent 42%),
+    rgba(2, 5, 12, .92);
+  backdrop-filter: blur(10px);
+}
+.internet-boot[hidden] { display: none !important; }
+.internet-boot-card {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  width: min(100% - 40px, 280px);
+  padding: 28px 24px;
+  border: 1px solid rgba(148, 184, 255, .18);
+  border-radius: 18px;
+  background: linear-gradient(155deg, rgba(12, 22, 40, .96), rgba(5, 11, 22, .98));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .35);
+}
+.internet-boot-card img { width: 54px; height: 54px; object-fit: contain; }
+.internet-boot-card p {
+  margin: 0;
+  color: #dce8f8;
+  font-size: 14px;
+  font-weight: 750;
+}
+.internet-boot-bar {
+  display: block;
+  width: 120px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .08);
+}
+.internet-boot-bar::after {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #64a4ff, #357dec);
+  content: '';
+  animation: internetBoot 1s ease-in-out infinite;
+}
+@keyframes internetBoot {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(280%); }
+}
+
+body.internet-booting .internet-shell {
+  visibility: hidden;
+}
+
+.rail-primary { display: none !important; }
+.community-card .community-logo { display: none !important; }
+.community-card h2 { margin-top: 18px; }
+
+@media (min-width: 941px) {
+  .internet-shell {
+    width: min(1180px, calc(100% - 40px)) !important;
+    display: grid !important;
+    grid-template-columns: 212px minmax(0, 1fr) 292px !important;
+    grid-template-areas: "rail feed side" !important;
+    align-items: start !important;
+    gap: 22px 26px !important;
+    padding: 28px 0 56px !important;
+    justify-content: center !important;
+  }
+  .internet-feed { grid-area: feed !important; min-width: 0; }
+  .internet-side { grid-area: side !important; position: sticky; top: 28px; }
+  .internet-rail {
+    grid-area: rail !important;
+    position: sticky !important;
+    top: 28px !important;
+    z-index: 30;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    height: calc(100vh - 56px) !important;
+    min-height: 0 !important;
+    padding: 18px 12px !important;
+    overflow: visible !important;
+    border: 1px solid rgba(148, 184, 255, .18) !important;
+    border-radius: 18px !important;
+    background: linear-gradient(165deg, rgba(8, 16, 30, .94), rgba(4, 9, 18, .96)) !important;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, .22), inset 0 1px 0 rgba(255, 255, 255, .04) !important;
+    backdrop-filter: blur(18px) saturate(130%);
+  }
+  .internet-brand {
+    flex: 0 0 auto !important;
+    gap: 10px;
+    padding: 4px 8px;
+    font-size: 15px;
+  }
+  .internet-brand img { width: 34px !important; height: 34px !important; }
+  .internet-nav {
+    display: grid !important;
+    flex: 0 0 auto !important;
+    gap: 4px !important;
+    margin: 22px 0 0 !important;
+    width: 100%;
+  }
+  .internet-nav a {
+    min-height: 42px;
+    width: 100%;
+    gap: 12px !important;
+    padding: 10px 12px !important;
+    border-radius: 12px !important;
+    font-size: 13px !important;
+  }
+  .back-button {
+    display: inline-flex !important;
+    align-items: center;
+    margin-top: 18px !important;
+    padding: 8px 10px;
+    border-radius: 12px;
+    color: #9eb0c8;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .back-button:hover { color: #e8f1ff; background: rgba(255, 255, 255, .04); }
+  .rail-account {
+    width: 100% !important;
+    margin-top: auto !important;
+    padding-top: 18px !important;
+  }
+  .rail-account > button {
+    width: 100%;
+    border-radius: 12px !important;
+    background: rgba(255, 255, 255, .04) !important;
+  }
+  .account-switch-menu {
+    top: auto !important;
+    right: 0 !important;
+    bottom: calc(100% + 8px) !important;
+    left: 0 !important;
+    width: 100% !important;
+  }
+  .internet-shell.staff-mode {
+    width: min(1360px, calc(100% - 40px)) !important;
+    grid-template-columns: 212px minmax(0, 1fr) !important;
+    grid-template-areas: "rail feed" !important;
+  }
+  .staff-mode .internet-side { display: none !important; }
+}
+
+@media (max-width: 940px) {
+  .internet-shell {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas: "rail" "feed" !important;
+  }
+  .internet-rail {
+    position: sticky !important;
+    top: 10px !important;
+    z-index: 40;
+    height: auto !important;
+    margin-bottom: 14px;
+  }
+  .internet-side { display: none !important; }
+}
+
+/* Redesigned post composer — squared card with a clear writing dock. */
+.internet-view[data-view="home"] .composer {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  margin: 0 0 14px !important;
+  padding: 16px !important;
+  border: 1px solid rgba(148, 184, 255, .2) !important;
+  border-radius: 18px !important;
+  background: linear-gradient(155deg, rgba(14, 26, 48, .92), rgba(6, 12, 24, .94)) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .16), inset 0 1px 0 rgba(255, 255, 255, .04) !important;
+}
+.internet-view[data-view="home"] .composer-top {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.internet-view[data-view="home"] .composer-top > img,
+.internet-view[data-view="home"] .composer [data-composer-avatar] {
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #0c1522;
+}
+.internet-view[data-view="home"] .composer-main {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  grid-template-rows: none !important;
+  gap: 0;
+  min-width: 0;
+}
+.internet-view[data-view="home"] .composer-entry {
+  position: relative;
+  height: auto !important;
+  min-height: 52px;
+}
+.internet-view[data-view="home"] .composer-highlight,
+.internet-view[data-view="home"] .composer-entry textarea {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100%;
+  min-height: 52px !important;
+  height: 100% !important;
+  margin: 0;
+  padding: 8px 0 !important;
+  overflow: hidden;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.internet-view[data-view="home"] .composer-highlight {
+  z-index: 0;
+  color: #fff;
+  pointer-events: none;
+}
+.internet-view[data-view="home"] .composer-entry textarea {
+  z-index: 1;
+  resize: none;
+  border: 0;
+  outline: 0;
+  color: transparent !important;
+  caret-color: #fff;
+  background: transparent;
+}
+.internet-view[data-view="home"] .composer-dock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 184, 255, .14);
+}
+.internet-view[data-view="home"] .composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+.internet-view[data-view="home"] .composer .composer-tools button {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 12px !important;
+  color: #7eb0ff;
+}
+.internet-view[data-view="home"] .composer .composer-tools button:first-child {
+  width: 42px !important;
+  font-size: 11px;
+  font-weight: 850;
+}
+.internet-view[data-view="home"] .composer-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  min-height: 0 !important;
+  transform: none !important;
+}
+.internet-view[data-view="home"] .composer-footer [data-character-count] {
+  color: #8fa3bd;
+  font-size: 12px;
+  font-weight: 650;
+}
+.internet-view[data-view="home"] .composer-footer [data-post-button] {
+  min-width: 84px;
+  min-height: 36px;
+  padding: 0 18px;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, #64a4ff, #357dec) !important;
+  font-weight: 850;
+}
+.internet-view[data-view="home"] .composer-footer [data-post-button]:disabled {
+  color: #8795ac !important;
+  background: #1a2740 !important;
+}
+.internet-view[data-view="home"] .composer.composer-expanded {
+  height: auto !important;
+  min-height: 0 !important;
+}
+.internet-view[data-view="home"] .composer.composer-expanded .composer-main {
+  display: grid !important;
+}
+.internet-view[data-view="home"] .composer.composer-expanded .composer-entry {
+  min-height: 72px;
+}
+.internet-view[data-view="home"] .composer.composer-expanded .composer-entry textarea,
+.internet-view[data-view="home"] .composer.composer-expanded .composer-highlight {
+  min-height: 72px !important;
+}
+.internet-view[data-view="home"] .composer [data-post-message] {
+  margin: 8px 0 0;
+  min-height: 0;
+}
+
+.internet-ready .internet-shell {
+  animation: internetEnter .45s cubic-bezier(.22, .8, .24, 1);
+}
+@keyframes internetEnter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 660px) {
+  .internet-view[data-view="home"] .composer { padding: 14px !important; }
+  .internet-view[data-view="home"] .composer-top { grid-template-columns: 38px minmax(0, 1fr); gap: 10px; }
+  .internet-view[data-view="home"] .composer-top > img { width: 38px; height: 38px; }
+  .internet-view[data-view="home"] .composer-dock { flex-wrap: wrap; }
+  .internet-view[data-view="home"] .composer-footer { width: 100%; justify-content: flex-end; }
+}

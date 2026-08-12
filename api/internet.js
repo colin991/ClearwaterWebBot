@@ -3,7 +3,7 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260811-smooth';
+const INTERNET_VERSION = '20260811-sidebar';
 
 async function readBody(request) {
   if (request.body && typeof request.body === 'object') return request.body;

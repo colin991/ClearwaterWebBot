@@ -91,7 +91,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-smooth';
+const INTERNET_VERSION = '20260811-sidebar';
 let officialAccountId = '';
 const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
   id: '',
@@ -1175,8 +1175,21 @@ document.querySelector('[data-save-official-profile]')?.addEventListener('click'
 });
 
 showViewFromAddress();
-loadSession().catch(() => {});
-loadPosts();
+
+async function bootInternet() {
+  try {
+    await Promise.all([
+      loadSession().catch(() => {}),
+      loadPosts(),
+    ]);
+  } finally {
+    document.body.classList.remove('internet-booting');
+    document.body.classList.add('internet-ready');
+    document.querySelector('[data-internet-boot]')?.setAttribute('hidden', '');
+  }
+}
+
+bootInternet();
 window.setInterval(() => {
   if (!document.hidden) { loadPosts(); loadSocial(); }
 }, 15_000);
