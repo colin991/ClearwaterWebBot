@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank } from './staffRanks.js';
-import { findPlayerDropLocation } from './erlc.js';
+import { dropLocationNameCandidates, findPlayerDropLocation } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
 import { AutomodHoldError, banKnownInternetIps, clearExpiredInternetBans, clearExpiredInternetIpBans, clearExpiredInternetPosts, clearKnownInternetIpBans, createInternetPost, createInternetReport, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, moderationSnapshot, OFFICIAL_INTERNET_ACCOUNT_ID, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetBan, socialSnapshot, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, updateInternetPreference, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll } from './internetStore.js';
@@ -31,6 +31,25 @@ const readJson = async (request) => {
   }
   return raw ? JSON.parse(raw) : {};
 };
+
+async function discordDropUsernames(client, actor) {
+  const discordId = String(actor?.id || '');
+  const fallback = dropLocationNameCandidates(actor?.username, actor?.displayName);
+  if (!/^\d{16,22}$/.test(discordId)) return fallback;
+  const guild = client.guilds.cache.get(CLEARWATER_GUILD_ID)
+    || await client.guilds.fetch(CLEARWATER_GUILD_ID).catch(() => null);
+  if (!guild) return fallback;
+  const member = await guild.members.fetch(discordId).catch(() => null);
+  if (!member) return fallback;
+  return dropLocationNameCandidates(
+    member.nickname,
+    member.displayName,
+    member.user?.username,
+    member.user?.globalName,
+    actor?.username,
+    actor?.displayName,
+  );
+}
 
 export function startStatusServer(client, config) {
   let lastInternetRoleSync = 0;
@@ -202,6 +221,7 @@ export function startStatusServer(client, config) {
         if (body.asOfficial === true && body.owner === true) body.actor = ensureOfficialInternetAccount(store);
         if (body.action === 'erlc-location') {
           if (!config.erlcServerKey) return json(response, 503, { error: 'ER:LC is not configured on the bot host yet.' });
+          const usernames = await discordDropUsernames(client, body.actor);
           const cache = await getIdentityCache();
           let identity = cache.byDiscord?.[String(body.actor?.id || '')] || null;
           if (!identity?.robloxId && config.melonlyApiKey) {
@@ -209,17 +229,14 @@ export function startStatusServer(client, config) {
               identity = await findRobloxIdentity(body.actor.id, config.melonlyApiKey);
               if (identity?.robloxId) await rememberIdentity(identity);
             } catch (error) {
-              return json(response, 503, { error: safeMelonlyError(error) });
+              logger.warn(`Melonly lookup failed for drop location: ${safeMelonlyError(error)}`);
             }
-          }
-          if (!identity?.robloxId) {
-            return json(response, 404, { error: 'Link your Roblox account in Melonly, then join the Clearwater ER:LC server.' });
           }
           try {
             const location = await findPlayerDropLocation({
               serverKey: config.erlcServerKey,
-              robloxId: identity.robloxId,
-              username: identity.robloxUsername,
+              robloxId: identity?.robloxId,
+              usernames: [...usernames, identity?.robloxUsername].filter(Boolean),
             });
             if (!location) return json(response, 404, { error: 'Join the Clearwater ER:LC server first, then drop your location.' });
             return json(response, 200, { location });

@@ -52,12 +52,31 @@ export function libertyMapPoint(x, z) {
   };
 }
 
-export async function findPlayerDropLocation({ serverKey, robloxId, username }) {
+export function dropLocationNameCandidates(...values) {
+  const names = new Set();
+  for (const value of values) {
+    let raw = String(value || '').trim();
+    if (!raw) continue;
+    names.add(raw);
+    while (/^\[[^\]]+\]\s*/.test(raw) || /^\([^)]+\)\s*/.test(raw)) {
+      raw = raw.replace(/^\[[^\]]+\]\s*/, '').replace(/^\([^)]+\)\s*/, '').trim();
+      if (raw) names.add(raw);
+    }
+    const compact = raw.replace(/\s+/g, '');
+    if (compact) names.add(compact);
+  }
+  return [...names];
+}
+
+export async function findPlayerDropLocation({ serverKey, robloxId, username, usernames = [] }) {
   const server = await fetchErlcServer(serverKey);
   const players = (server.Players || []).map(parseErlcPlayer);
   const id = String(robloxId || '');
-  const handle = String(username || '').toLowerCase();
-  const player = players.find((entry) => (id && entry.robloxId === id) || (handle && entry.username.toLowerCase() === handle));
+  const handles = new Set(
+    dropLocationNameCandidates(username, ...usernames).map((name) => name.toLowerCase()),
+  );
+  const player = players.find((entry) => handles.has(entry.username.toLowerCase()))
+    || players.find((entry) => id && entry.robloxId === id);
   if (!player) return null;
   if (!Number.isFinite(player.location?.x) || !Number.isFinite(player.location?.z)) {
     throw new Error('Your in-game location is not available yet. Move a little in ER:LC and try again.');

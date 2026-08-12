@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-staff-tabs';
+const INTERNET_VERSION = '20260811-drop-refresh';
 const MAX_REEL_BYTES = 3_000_000;
 const INTERNET_PATH = '/internet';
 const SIGNIN_INTERNET = '/signin?next=/internet';
@@ -171,6 +171,8 @@ let moderationSnapshot = null;
 let selectedReportId = null;
 let feedTab = ['foryou', 'recent', 'following', 'official', 'reels'].includes(localStorage.getItem('clearwater-feed-tab')) ? localStorage.getItem('clearwater-feed-tab') : 'foryou';
 let selectedLocation = null;
+let dropLocationTimer = 0;
+let dropLocationBusy = false;
 let selectedQuoteId = null;
 let activeReelId = null;
 let reelMedia = null;
@@ -341,6 +343,65 @@ function renderDropPreview() {
   preview.hidden = false;
   preview.innerHTML = `${dropMapMarkup(selectedLocation)}<button type="button" data-remove-location>Remove location</button>`;
   composer?.classList.add('composer-expanded');
+}
+
+function locationLine(location) {
+  if (!location) return '';
+  return `📍 ${location.label}${location.postal ? ` · Postal ${location.postal}` : ''}`;
+}
+
+function applyDroppedLocation(location) {
+  const previousLine = locationLine(selectedLocation);
+  selectedLocation = location;
+  const line = locationLine(location);
+  if (content && line) {
+    if (previousLine && content.value.includes(previousLine) && previousLine !== line) {
+      content.value = content.value.split(previousLine).join(line);
+    } else if (!content.value.includes(location.label)) {
+      content.value = content.value.trim() ? `${content.value.trim()}\n${line}` : line;
+    }
+    count.textContent = `${content.value.length} / 500`;
+    updateComposerHighlight();
+  }
+  renderDropPreview();
+  postButton.disabled = !canComposePost();
+}
+
+function stopDropLocationRefresh() {
+  if (dropLocationTimer) {
+    window.clearInterval(dropLocationTimer);
+    dropLocationTimer = 0;
+  }
+}
+
+function startDropLocationRefresh() {
+  stopDropLocationRefresh();
+  dropLocationTimer = window.setInterval(() => {
+    void refreshDropLocation({ silent: true });
+  }, 15_000);
+}
+
+async function refreshDropLocation({ silent = false } = {}) {
+  if (!currentUserId || dropLocationBusy) return false;
+  dropLocationBusy = true;
+  const button = document.querySelector('[data-drop-location]');
+  if (!silent && button) button.disabled = true;
+  if (!silent) postMessage.textContent = 'Checking your ER:LC location...';
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'erlc-location', ...activeAccountRequest() }) });
+    const result = await readApiJson(response, 'Could not read your in-game location.');
+    if (!response.ok) throw new Error(result.error || 'Could not read your in-game location.');
+    applyDroppedLocation(result.location);
+    if (!silent) postMessage.textContent = 'Location dropped from ER:LC.';
+    startDropLocationRefresh();
+    return true;
+  } catch (error) {
+    if (!silent) postMessage.textContent = error.message || 'Could not read your in-game location.';
+    return false;
+  } finally {
+    dropLocationBusy = false;
+    if (button) button.disabled = false;
+  }
 }
 
 function dropMapMarkup(location) {
@@ -1228,28 +1289,7 @@ async function loadSession() {
 content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; postButton.disabled = !canComposePost(); updateComposerHighlight(); });
 document.querySelector('[data-drop-location]')?.addEventListener('click', async () => {
   if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
-  const button = document.querySelector('[data-drop-location]');
-  if (button) button.disabled = true;
-  postMessage.textContent = 'Checking your ER:LC location...';
-  try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'erlc-location', ...activeAccountRequest() }) });
-    const result = await readApiJson(response, 'Could not read your in-game location.');
-    if (!response.ok) throw new Error(result.error || 'Could not read your in-game location.');
-    selectedLocation = result.location;
-    const line = `📍 ${selectedLocation.label}${selectedLocation.postal ? ` · Postal ${selectedLocation.postal}` : ''}`;
-    if (content && !content.value.includes(selectedLocation.label)) {
-      content.value = content.value.trim() ? `${content.value.trim()}\n${line}` : line;
-      count.textContent = `${content.value.length} / 500`;
-      updateComposerHighlight();
-    }
-    renderDropPreview();
-    postButton.disabled = !canComposePost();
-    postMessage.textContent = 'Location dropped from ER:LC.';
-  } catch (error) {
-    postMessage.textContent = error.message || 'Could not read your in-game location.';
-  } finally {
-    if (button) button.disabled = false;
-  }
+  await refreshDropLocation();
 });
 search?.addEventListener('input', () => { showView('home'); renderPosts(); });
 document.querySelectorAll('[data-feed-tab]').forEach((button) => button.addEventListener('click', () => {
@@ -1385,6 +1425,7 @@ document.addEventListener('click', (event) => {
   if (event.target.closest('[data-remove-conversation-gif]')) { messageGif = null; if (conversationGifPreview) { conversationGifPreview.hidden = true; conversationGifPreview.innerHTML = ''; } return; }
   if (event.target.closest('[data-remove-media]')) { selectedGif = null; selectedImage = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; if (pollBuilder?.hidden && !selectedLocation && !selectedQuoteId) composer?.classList.remove('composer-expanded'); postButton.disabled = !canComposePost(); return; }
   if (event.target.closest('[data-remove-location]')) {
+    stopDropLocationRefresh();
     selectedLocation = null;
     renderDropPreview();
     if (pollBuilder?.hidden && !selectedGif && !selectedImage && !selectedQuoteId) composer?.classList.remove('composer-expanded');
@@ -1810,7 +1851,7 @@ postButton?.addEventListener('click', async () => {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, image: selectedImage, poll, location: selectedLocation, quoteId: selectedQuoteId, asOfficial: activeAccount === 'official' }) });
     const result = await readApiJson(response, 'Posting is unavailable because the website service is not connected.');
     if (!response.ok) throw new Error(result.error);
-    content.value = ''; count.textContent = '0 / 500'; postButton.disabled = true; updateComposerHighlight(); selectedGif = null; selectedImage = null; selectedLocation = null; selectedQuoteId = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; renderDropPreview(); renderQuotePreview(); if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
+    content.value = ''; count.textContent = '0 / 500'; postButton.disabled = true; updateComposerHighlight(); selectedGif = null; selectedImage = null; stopDropLocationRefresh(); selectedLocation = null; selectedQuoteId = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; renderDropPreview(); renderQuotePreview(); if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
   } catch (error) {
     const message = error.message || 'Could not post.';
     postMessage.textContent = message;
