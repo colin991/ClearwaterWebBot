@@ -30,6 +30,7 @@
         <nav class="internet-nav" aria-label="Clearwater Internet navigation">
           <a class="selected" href="/internet" data-view-link="home"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>Home</a>
           <a href="/internet" data-reels-link><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3" /><path d="m10 8 5 4-5 4z" /></svg>Reels</a>
+          <a href="/internet/wallet" data-view-link="wallet"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg>Wallet</a>
           <a href="/internet/notifications" data-view-link="notifications" class="notification-nav"><span class="notification-nav-icon"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 22h4" /></svg><i class="notification-dot" data-notification-dot hidden></i></span>Notifications</a>
           <a href="/internet/messages" data-view-link="messages" class="notification-nav"><span class="notification-nav-icon"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg><i class="notification-dot" data-message-dot hidden></i></span>Messages</a>
           <a href="/internet/profile" data-view-link="profile"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>Profile</a>
@@ -92,6 +93,12 @@
           </section>
         </section>
         <section class="internet-view post-detail-view" data-view="post" hidden><header class="post-detail-header"><button type="button" data-back-home aria-label="Back to feed">←</button><h1>Post</h1></header><div data-post-detail><p class="feed-note">Loading post...</p></div></section>
+        <section class="internet-view wallet-view" data-view="wallet" hidden>
+          <header class="page-heading"><div><p>Clearwater credits</p><h1>Your wallet</h1></div></header>
+          <section class="wallet-balance-card"><div><span>Balance</span><strong data-wallet-balance>C$0</strong><small>Clearwater credits</small></div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg></section>
+          <section class="wallet-card"><header><div><h2>Daily credits</h2><p>You receive C$75 every 24 hours.</p></div></header><p class="wallet-status" data-wallet-claim-status role="status">Loading your next daily credit…</p></section>
+          <section class="wallet-card"><header><div><h2>Transactions</h2><p>Your recent Clearwater credit activity.</p></div><span class="wallet-count" data-wallet-transaction-count>0</span></header><div class="wallet-transactions" data-wallet-transactions><p>Loading transactions…</p></div></section>
+        </section>
 
         <section class="internet-view empty-view notifications-view" data-view="notifications" hidden><header class="page-heading"><div><p>Notifications</p><h1>Your activity</h1></div><span class="unread-count" data-notification-count hidden></span></header><div class="notification-list" data-notification-list><p>Sign in to see your notifications.</p></div></section>
         <section class="internet-view messages-view" data-view="messages" hidden>
@@ -358,6 +365,9 @@
       </section>
 
       <aside class="internet-side">
+        <a class="internet-wallet-link" href="/internet/wallet" data-view-link="wallet" aria-label="Open your Clearwater credit wallet">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg><span data-internet-cash-amount>C$0</span>
+        </a>
         <label class="internet-search"><span>Search Clearwater Internet</span><input data-search type="search" placeholder="Search" /></label>
         <div class="trending"><h2>What's happening</h2><div data-trending-list><a href="/internet" data-topic="#ClearwaterRP">#ClearwaterRP <span>Community</span></a><a href="/internet" data-topic="#ERLC">#ERLC <span>Roleplay</span></a><a href="/internet" data-topic="#FireRescue">#FireRescue <span>Departments</span></a></div></div>
       </aside>

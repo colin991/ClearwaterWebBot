@@ -6,7 +6,7 @@ import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges } from './s
 import { dropLocationNameCandidates, findPlayerDropLocation } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
-import { AutomodHoldError, applyStaffSiteAction, applyStaffUserAction, banKnownInternetIps, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, internetProfile, moderationSnapshot, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetAccountActive, setInternetBan, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll } from './internetStore.js';
+import { AutomodHoldError, adjustInternetCredits, applyStaffSiteAction, applyStaffUserAction, banKnownInternetIps, claimInternetDailyCredits, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, internetProfile, moderationSnapshot, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetAccountActive, setInternetBan, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -305,6 +305,18 @@ export function startStatusServer(client, config) {
           return json(response, 200, { banned: Boolean(ban), ban });
         }
 
+        if (body.action === 'wallet') {
+          const wallet = walletSnapshot(store, body.actor);
+          await saveInternetStore(store);
+          return json(response, 200, { wallet });
+        }
+
+        if (body.action === 'wallet-claim') {
+          const wallet = claimInternetDailyCredits(store, body.actor);
+          await saveInternetStore(store);
+          return json(response, 200, { wallet });
+        }
+
         if (body.action === 'edit' || body.action === 'delete') {
           const result = body.action === 'edit'
             ? editInternetPost(store, { postId: body.postId, actorId: body.actor?.id, content: body.content, owner: body.owner === true })
@@ -444,6 +456,13 @@ export function startStatusServer(client, config) {
           const detail = applyStaffUserAction(store, body);
           await saveInternetStore(store);
           return json(response, 200, { ...detail, snapshot: moderationSnapshot(store) });
+        }
+
+        if (body.action === 'staff-wallet') {
+          if (!body.owner) return json(response, 403, { error: 'Owner access required' });
+          const result = adjustInternetCredits(store, body);
+          await saveInternetStore(store);
+          return json(response, 200, { ...staffUserDetail(store, body.targetId), wallet: result.wallet, applied: result.applied, snapshot: moderationSnapshot(store) });
         }
 
         if (body.action === 'staff-site') {

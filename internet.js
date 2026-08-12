@@ -98,7 +98,7 @@ const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not deliver
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const INTERNET_PATH = '/internet';
 const SIGNIN_INTERNET = '/signin?next=/internet';
-const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'post']);
+const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post']);
 
 function internetUrl(view = 'home', id = '') {
   if (view === 'home') return INTERNET_PATH;
@@ -1151,7 +1151,7 @@ function renderBookmarks() {
 }
 
 function showView(view) {
-  const availableViews = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'post']);
+  const availableViews = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post']);
   let activeView = availableViews.has(view) ? view : 'home';
   if (activeView === 'staff' && !sessionIsOwner) activeView = 'home';
   const shell = document.querySelector('.internet-shell');
@@ -1185,6 +1185,7 @@ function showView(view) {
   if (activeView === 'messages') void loadMessages();
   if (activeView === 'notifications') void loadNotifications();
   if (activeView === 'staff') void loadModeration();
+  if (activeView === 'wallet') void loadWallet();
   if (activeView === 'profile') renderOwnProfileDetails();
   if (activeView === 'settings' && currentUserId) void loadProfileEditor();
 }
@@ -1534,6 +1535,13 @@ function staffUserPanelMarkup(detail) {
       <div><dt>Networks</dt><dd>${Number(user.ipHashCount || 0)}</dd></div>
     </dl>
     <p class="staff-user-timeline"><span>Joined ${escapeHtml(staffDateLabel(user.createdAt))}</span><span>Last seen ${escapeHtml(staffDateLabel(user.lastSeenAt))}</span></p>
+    <section class="staff-user-block staff-wallet-controls" data-staff-wallet-user="${escapeHtml(user.id)}">
+      <h3>Clearwater credits</h3>
+      <p class="staff-wallet-balance">Current balance <b>C$${Number(user.credits || 0).toLocaleString()}</b></p>
+      <div class="staff-wallet-fields"><label>Amount<input data-staff-wallet-amount type="number" min="1" max="1000000" step="1" value="75" inputmode="numeric" /></label><label>Note <input data-staff-wallet-note maxlength="220" placeholder="Reason for this adjustment" /></label></div>
+      <div class="staff-user-actions"><button type="button" class="staff-action-btn" data-staff-wallet-adjust="add">Add credits</button><button type="button" class="staff-action-btn danger" data-staff-wallet-adjust="remove">Remove credits</button></div>
+      <p class="staff-user-status" data-staff-wallet-status role="status"></p>
+    </section>
     <section class="staff-user-block staff-standing-block">
       <h3>Current standing</h3>
       ${restrictions.length
@@ -1871,6 +1879,33 @@ async function runStaffUserAction(staffAction, postId = '') {
   }
 }
 
+async function runStaffWalletAdjustment(button) {
+  const panel = document.querySelector('[data-staff-user-panel]');
+  const userId = panel?.querySelector('[data-staff-wallet-user]')?.dataset.staffWalletUser || selectedStaffUserId;
+  const rawAmount = Number(panel?.querySelector('[data-staff-wallet-amount]')?.value);
+  const note = panel?.querySelector('[data-staff-wallet-note]')?.value || '';
+  const amount = button.dataset.staffWalletAdjust === 'remove' ? -Math.abs(rawAmount) : Math.abs(rawAmount);
+  const status = panel?.querySelector('[data-staff-wallet-status]');
+  if (!userId || !Number.isSafeInteger(amount) || Math.abs(amount) < 1 || Math.abs(amount) > 1000000) {
+    if (status) status.textContent = 'Enter an amount between 1 and 1,000,000.';
+    return;
+  }
+  if (amount < 0 && !window.confirm(`Remove C$${Math.abs(amount).toLocaleString()} from this member?`)) return;
+  if (status) status.textContent = 'Saving...';
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'staff-wallet', targetId: userId, amount, note }) });
+    const result = await readApiJson(response, 'Could not update this wallet.');
+    if (!response.ok) throw new Error(result.error || 'Could not update this wallet.');
+    staffUserDetail = result;
+    if (result.snapshot) moderationSnapshot = result.snapshot;
+    renderStaffDashboard();
+    redrawStaffUserPanel(result, staffPanelUiState());
+    document.querySelector('[data-staff-wallet-status]')?.replaceChildren(document.createTextNode(`Saved ${amount > 0 ? 'C$' : '-C$'}${Math.abs(result.applied ?? amount).toLocaleString()}.`));
+  } catch (error) {
+    if (status) status.textContent = error.message || 'Could not update this wallet.';
+  }
+}
+
 async function runStaffSiteAction(staffAction, enabled) {
   if (staffAction === 'clear-ip-bans' && !window.confirm('Clear every hashed network ban?')) return;
   const status = document.querySelector('[data-staff-site-status]');
@@ -1891,6 +1926,55 @@ async function runStaffSiteAction(staffAction, enabled) {
     const nextStatus = document.querySelector('[data-staff-site-status]');
     if (nextStatus) nextStatus.textContent = error.message || 'Could not update site controls.';
     else window.alert(error.message || 'Could not update site controls.');
+  }
+}
+
+function formatCredits(value) {
+  return `C$${Math.max(0, Math.floor(Number(value) || 0)).toLocaleString()}`;
+}
+
+function walletClaimCopy(wallet) {
+  const next = wallet?.nextClaimAt ? new Date(wallet.nextClaimAt).getTime() : 0;
+  const remaining = Math.max(0, next - Date.now());
+  const hours = Math.floor(remaining / 3_600_000);
+  const minutes = Math.ceil((remaining % 3_600_000) / 60_000);
+  return next ? `Your next C$75 is added automatically in ${hours}h ${minutes}m.` : 'Your C$75 daily credit is being added.';
+}
+
+function renderWallet(wallet) {
+  if (!wallet) return;
+  const balance = document.querySelector('[data-wallet-balance]');
+  const status = document.querySelector('[data-wallet-claim-status]');
+  const count = document.querySelector('[data-wallet-transaction-count]');
+  const list = document.querySelector('[data-wallet-transactions]');
+  if (balance) balance.textContent = formatCredits(wallet.balance);
+  document.querySelectorAll('[data-internet-cash-amount]').forEach((element) => { element.textContent = formatCredits(wallet.balance); });
+  if (status) status.textContent = walletClaimCopy(wallet);
+  const transactions = Array.isArray(wallet.transactions) ? wallet.transactions : [];
+  if (count) count.textContent = String(transactions.length);
+  if (list) {
+    list.innerHTML = transactions.length ? transactions.map((transaction) => {
+      const value = Number(transaction.amount) || 0;
+      const plus = value >= 0;
+      return `<article class="wallet-transaction ${plus ? 'credit' : 'debit'}"><div><b>${escapeHtml(transaction.note || (plus ? 'Credits added' : 'Credits removed'))}</b><small>${escapeHtml(timeAgo(transaction.createdAt))} · ${escapeHtml(transaction.actorName || 'Clearwater')}</small></div><strong>${plus ? '+' : '−'}${formatCredits(Math.abs(value))}</strong></article>`;
+    }).join('') : '<p class="wallet-empty">No transactions yet.</p>';
+  }
+}
+
+async function loadWallet() {
+  if (!currentUserId) {
+    const status = document.querySelector('[data-wallet-claim-status]');
+    if (status) status.textContent = 'Sign in with Discord to use Clearwater credits.';
+    return;
+  }
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'wallet' }) });
+    const result = await readApiJson(response, 'Could not load your wallet.');
+    if (!response.ok) throw new Error(result.error || 'Could not load your wallet.');
+    renderWallet(result.wallet);
+  } catch (error) {
+    const status = document.querySelector('[data-wallet-claim-status]');
+    if (status) status.textContent = error.message || 'Could not load your wallet.';
   }
 }
 
@@ -2404,6 +2488,7 @@ async function loadSession() {
     await loadMessages();
     await loadSocial();
     await loadPreferences();
+    void loadWallet();
     renderOwnProfileDetails();
     // Landing straight on /internet/settings renders the view before the
     // session exists, so the editor has to be filled once sign-in resolves.
@@ -2721,6 +2806,8 @@ document.addEventListener('click', (event) => {
   if (staffOpenUser) { void openStaffUser(staffOpenUser.dataset.staffOpenUser); return; }
   const staffUserAction = event.target.closest('[data-staff-user-action]');
   if (staffUserAction) { void runStaffUserAction(staffUserAction.dataset.staffUserAction, staffUserAction.dataset.staffPostId || ''); return; }
+  const staffWalletAdjust = event.target.closest('[data-staff-wallet-adjust]');
+  if (staffWalletAdjust) { void runStaffWalletAdjustment(staffWalletAdjust); return; }
   const staffUsersFilterButton = event.target.closest('[data-staff-users-filter]');
   if (staffUsersFilterButton) {
     staffUsersFilter = staffUsersFilterButton.dataset.staffUsersFilter || 'all';

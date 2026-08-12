@@ -291,6 +291,8 @@ export default async function handler(request, response) {
       payload = { action: 'notifications', asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
     } else if (body.action === 'social-status') {
       payload = { action: 'social-status', asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
+    } else if (body.action === 'wallet' || body.action === 'wallet-claim') {
+      payload = { action: body.action, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
     } else if (body.action === 'preferences') {
       payload = { action: 'preferences', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
     } else if (body.action === 'preference-save') {
@@ -354,6 +356,16 @@ export default async function handler(request, response) {
         durationDays: body.durationDays === 'forever' ? 'forever' : Number(body.durationDays),
         ipBan: body.ipBan === true,
         postId: String(body.postId || ''),
+        actor: { id: user.id, displayName: user.displayName },
+        owner: true,
+      };
+    } else if (body.action === 'staff-wallet') {
+      if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
+      payload = {
+        action: 'staff-wallet',
+        targetId: String(body.targetId || ''),
+        amount: Number(body.amount),
+        note: String(body.note || '').slice(0, 220),
         actor: { id: user.id, displayName: user.displayName },
         owner: true,
       };

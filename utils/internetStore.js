@@ -354,6 +354,97 @@ export function upsertInternetUser(store, user) {
   return store.users[id];
 }
 
+const DAILY_CREDITS = 75;
+const WELCOME_CREDITS = 100;
+const DAILY_CREDIT_DELAY = 24 * 60 * 60 * 1000;
+
+function creditBalance(user) {
+  return Math.max(0, Math.floor(Number(user?.credits) || 0));
+}
+
+function addCreditTransaction(user, { amount, type, note = '', actorName = 'Clearwater' }) {
+  user.creditTransactions = Array.isArray(user.creditTransactions) ? user.creditTransactions : [];
+  user.creditTransactions.unshift({
+    id: randomUUID(),
+    amount: Math.trunc(Number(amount) || 0),
+    type: text(type, 40) || 'adjustment',
+    note: text(note, 220),
+    actorName: text(actorName, 80) || 'Clearwater',
+    createdAt: new Date().toISOString(),
+    balanceAfter: creditBalance(user),
+  });
+  user.creditTransactions = user.creditTransactions.slice(0, 100);
+}
+
+function ensureInternetWallet(store, actor) {
+  const user = upsertInternetUser(store, actor);
+  if (!user.walletStartedAt) {
+    user.walletStartedAt = new Date().toISOString();
+    user.dailyCreditClaimedAt = user.walletStartedAt;
+    user.credits = creditBalance(user) + WELCOME_CREDITS;
+    addCreditTransaction(user, { amount: WELCOME_CREDITS, type: 'welcome', note: 'Welcome to Clearwater Internet', actorName: 'Clearwater' });
+    addInternetLog(store, `Clearwater gave ${text(user.displayName, 80) || 'a member'} their C$${WELCOME_CREDITS} welcome credit.`);
+  } else {
+    user.credits = creditBalance(user);
+  }
+  return user;
+}
+
+function walletView(user) {
+  const lastClaim = user.dailyCreditClaimedAt ? new Date(user.dailyCreditClaimedAt).getTime() : 0;
+  const nextClaimAt = lastClaim ? lastClaim + DAILY_CREDIT_DELAY : 0;
+  const canClaim = !lastClaim || Date.now() >= nextClaimAt;
+  return {
+    balance: creditBalance(user),
+    dailyAmount: DAILY_CREDITS,
+    canClaim,
+    nextClaimAt: canClaim ? null : new Date(nextClaimAt).toISOString(),
+    transactions: (Array.isArray(user.creditTransactions) ? user.creditTransactions : []).slice(0, 50),
+  };
+}
+
+export function walletSnapshot(store, actor) {
+  const user = ensureInternetWallet(store, actor);
+  const lastClaim = user.dailyCreditClaimedAt ? new Date(user.dailyCreditClaimedAt).getTime() : 0;
+  if (lastClaim && Date.now() - lastClaim >= DAILY_CREDIT_DELAY) {
+    user.credits = creditBalance(user) + DAILY_CREDITS;
+    user.dailyCreditClaimedAt = new Date().toISOString();
+    addCreditTransaction(user, { amount: DAILY_CREDITS, type: 'daily', note: '24-hour daily credit', actorName: 'Clearwater' });
+    addInternetLog(store, `${text(user.displayName, 80) || 'A member'} received C$${DAILY_CREDITS} daily credits.`);
+  }
+  return walletView(user);
+}
+
+export function claimInternetDailyCredits(store, actor) {
+  const user = ensureInternetWallet(store, actor);
+  const snapshot = walletView(user);
+  if (!snapshot.canClaim) throw new Error('Your next C$75 daily credit is not ready yet.');
+  user.credits = creditBalance(user) + DAILY_CREDITS;
+  user.dailyCreditClaimedAt = new Date().toISOString();
+  addCreditTransaction(user, { amount: DAILY_CREDITS, type: 'daily', note: '24-hour daily credit', actorName: 'Clearwater' });
+  addInternetLog(store, `${text(user.displayName, 80) || 'A member'} claimed C$${DAILY_CREDITS} daily credits.`);
+  return walletView(user);
+}
+
+export function adjustInternetCredits(store, { actor, targetId, amount, note = '' }) {
+  const id = String(targetId || '').trim();
+  const change = Math.trunc(Number(amount));
+  if (!/^\d{16,22}$/.test(id)) throw new Error('Enter a valid Discord user ID');
+  if (!Number.isSafeInteger(change) || change === 0 || Math.abs(change) > 1_000_000) throw new Error('Enter a credit amount between 1 and 1,000,000');
+  const user = store.users[id] || upsertInternetUser(store, { id });
+  const before = creditBalance(user);
+  const applied = change < 0 ? -Math.min(before, Math.abs(change)) : change;
+  user.credits = before + applied;
+  addCreditTransaction(user, {
+    amount: applied,
+    type: applied >= 0 ? 'staff-credit' : 'staff-debit',
+    note: text(note, 220) || (applied >= 0 ? 'Added by staff' : 'Removed by staff'),
+    actorName: text(actor?.displayName, 80) || 'Staff',
+  });
+  addInternetLog(store, `${text(actor?.displayName, 80) || 'Staff'} ${applied >= 0 ? 'added' : 'removed'} C$${Math.abs(applied)} ${applied >= 0 ? 'to' : 'from'} ${text(user.displayName, 80) || 'a member'}.`);
+  return { user, wallet: walletView(user), applied };
+}
+
 function safeProfileUrl(value, fallback) {
   const candidate = text(value, 500);
   if (!candidate) return fallback;
@@ -1120,6 +1211,8 @@ export function staffUserDetail(store, targetId) {
       ipHashCount: Array.isArray(user.ipHashes) ? user.ipHashes.length : 0,
       followingCount: Array.isArray(user.following) ? user.following.length : 0,
       followerCount: followers,
+      credits: creditBalance(user),
+      creditTransactions: (Array.isArray(user.creditTransactions) ? user.creditTransactions : []).slice(0, 15),
       messageCount: Array.isArray(user.messages) ? user.messages.filter((message) => message.kind === 'direct').length : 0,
       ban: flags.banned ? getActiveBan(user) : null,
       mute: flags.muted ? getActiveMute(user) : null,
