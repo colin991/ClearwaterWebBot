@@ -93,7 +93,8 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-chat-dock';
+const INTERNET_VERSION = '20260811-reels-media';
+const MAX_REEL_BYTES = 3_000_000;
 const INTERNET_PATH = '/internet';
 const SIGNIN_INTERNET = '/signin?next=/internet';
 const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'post']);
@@ -1732,8 +1733,8 @@ document.querySelector('[data-reel-file]')?.addEventListener('change', () => {
     if (error) error.textContent = 'Choose a photo or an MP4/WebM video.';
     return;
   }
-  if (file.size > 1_200_000) {
-    if (error) error.textContent = 'Keep Reels under 1.2 MB so the short clip can upload.';
+  if (file.size > MAX_REEL_BYTES) {
+    if (error) error.textContent = 'Keep Reels under 3 MB so the clip can upload.';
     return;
   }
   const reader = new FileReader();

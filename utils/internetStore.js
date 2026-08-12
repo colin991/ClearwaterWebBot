@@ -291,9 +291,9 @@ export function createInternetPost(store, user, content, media = {}) {
   const gifUrl = text(media?.gif?.url, 500);
   const gifTitle = text(media?.gif?.title, 120);
   const isGif = /^https:\/\/(?:media\d*|i)\.giphy\.com\//.test(gifUrl);
-  const imageUrl = text(media?.image?.dataUrl, 2_100_000);
+  const imageUrl = text(media?.image?.dataUrl, 4_200_000);
   const isImage = /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(imageUrl);
-  const videoUrl = text(media?.video?.dataUrl, 2_100_000);
+  const videoUrl = text(media?.video?.dataUrl, 4_200_000);
   const isVideo = /^data:video\/(?:mp4|webm|quicktime);base64,[a-z0-9+/=]+$/i.test(videoUrl);
   const question = text(media?.poll?.question, 180);
   const options = Array.isArray(media?.poll?.options) ? media.poll.options.map((option) => text(option, 80)).filter(Boolean).slice(0, 4) : [];

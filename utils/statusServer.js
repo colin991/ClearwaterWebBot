@@ -27,7 +27,7 @@ const readJson = async (request) => {
   let raw = '';
   for await (const chunk of request) {
     raw += chunk;
-    if (raw.length > 2_100_000) throw new Error('Request body too large');
+    if (raw.length > 4_400_000) throw new Error('Request body too large');
   }
   return raw ? JSON.parse(raw) : {};
 };
