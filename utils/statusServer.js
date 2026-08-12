@@ -201,7 +201,7 @@ export function startStatusServer(client, config) {
           const user = body.asOfficial === true && body.owner === true
             ? ensureOfficialInternetAccount(store)
             : upsertInternetUser(store, body.actor);
-          const post = createInternetPost(store, user, body.content, { gif: body.gif, image: body.image, poll: body.poll });
+          const post = createInternetPost(store, user, body.content, { gif: body.gif, image: body.image, poll: body.poll, video: body.video, reel: body.reel === true });
           await saveInternetStore(store);
           return json(response, 201, { post });
         }

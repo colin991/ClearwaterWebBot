@@ -3,7 +3,7 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260811-desk';
+const INTERNET_VERSION = '20260811-reels';
 
 async function readBody(request) {
   if (request.body && typeof request.body === 'object') return request.body;
@@ -33,6 +33,11 @@ function compatibleGiphyUrl(value) {
 function safeImageDataUrl(value) {
   const dataUrl = String(value || '').replace(/\s+/g, '');
   return /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/]+=*$/i.test(dataUrl) ? dataUrl : '';
+}
+
+function safeVideoDataUrl(value) {
+  const dataUrl = String(value || '').replace(/\s+/g, '');
+  return /^data:video\/(?:mp4|webm|quicktime);base64,[a-z0-9+/]+=*$/i.test(dataUrl) ? dataUrl : '';
 }
 
 function safeHttpsUrl(value) {
@@ -118,6 +123,8 @@ export default async function handler(request, response) {
         content: String(body.content || '').slice(0, 500),
         gif: body.gif && typeof body.gif === 'object' ? { url: compatibleGiphyUrl(body.gif.url), title: String(body.gif.title || '').slice(0, 120) } : null,
         image: body.image && typeof body.image === 'object' ? { dataUrl: safeImageDataUrl(body.image.dataUrl).slice(0, 2_100_000) } : null,
+        video: body.video && typeof body.video === 'object' ? { dataUrl: safeVideoDataUrl(body.video.dataUrl).slice(0, 2_100_000) } : null,
+        reel: body.reel === true,
         poll: body.poll && typeof body.poll === 'object' ? { question: String(body.poll.question || '').slice(0, 180), options: Array.isArray(body.poll.options) ? body.poll.options.map((option) => String(option).slice(0, 80)).slice(0, 4) : [], durationDays: Math.min(30, Math.max(1, Number(body.poll.durationDays) || 1)) } : null,
         asOfficial,
         owner: access.allowed,

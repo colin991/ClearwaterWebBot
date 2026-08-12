@@ -53,7 +53,11 @@ export async function saveInternetStore(store) {
 }
 
 export function publicPosts(store) {
-  return store.posts.slice(0, 100);
+  const feed = store.posts.filter((post) => post.kind !== 'reel').slice(0, 100);
+  const reels = store.posts.filter((post) => post.kind === 'reel' && !post.parentId).slice(0, 40);
+  const reelIds = new Set(reels.map((reel) => reel.id));
+  const comments = store.posts.filter((post) => post.parentId && reelIds.has(post.parentId)).slice(0, 200);
+  return [...reels, ...feed, ...comments];
 }
 
 export function publicUsers(store) {
@@ -264,27 +268,39 @@ export function updateOfficialInternetProfile(store, profile = {}) {
 
 export function createInternetPost(store, user, content, media = {}) {
   const body = text(content, 500);
+  const isReel = media?.reel === true;
   const gifUrl = text(media?.gif?.url, 500);
   const gifTitle = text(media?.gif?.title, 120);
   const isGif = /^https:\/\/(?:media\d*|i)\.giphy\.com\//.test(gifUrl);
   const imageUrl = text(media?.image?.dataUrl, 2_100_000);
   const isImage = /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(imageUrl);
+  const videoUrl = text(media?.video?.dataUrl, 2_100_000);
+  const isVideo = /^data:video\/(?:mp4|webm|quicktime);base64,[a-z0-9+/=]+$/i.test(videoUrl);
   const question = text(media?.poll?.question, 180);
   const options = Array.isArray(media?.poll?.options) ? media.poll.options.map((option) => text(option, 80)).filter(Boolean).slice(0, 4) : [];
   const pollDays = Math.min(30, Math.max(1, Number(media?.poll?.durationDays) || 1));
-  if (!body && !isGif && !isImage && !question && !text(media?.quoteId, 80)) throw new Error('Write something, add an image or GIF, or create a poll before posting');
+  const parentId = text(media?.parentId, 80) || null;
+  if (isReel) {
+    if (!isImage && !isVideo) throw new Error('Add a photo or a short video to post a Reel');
+    if (isGif || question) throw new Error('Reels can only include a photo or video');
+  } else if (!body && !isGif && !isImage && !question && !text(media?.quoteId, 80)) {
+    throw new Error('Write something, add an image or GIF, or create a poll before posting');
+  }
   if (gifUrl && !isGif) throw new Error('Only GIFs selected from Clearwater Internet can be posted');
   if (imageUrl && !isImage) throw new Error('Choose a supported image before posting');
+  if (videoUrl && !isVideo) throw new Error('Choose a short MP4 or WebM video before posting');
   if ((question && options.length < 2) || (!question && options.length)) throw new Error('A poll needs a question and at least two options');
   if (getActiveBan(user)) throw new Error('This account is banned from Clearwater Internet');
-  const cooldownRemaining = 60_000 - (Date.now() - new Date(user.lastPostAt || 0).getTime());
-  if (cooldownRemaining > 0) throw new Error(`Please wait ${Math.ceil(cooldownRemaining / 1000)} seconds before posting again`);
-  const normalized = body.toLowerCase().replace(/\s+/g, ' ').trim();
-  const duplicateCooldown = 5 * 60 * 1000;
-  if (body && store.posts.some((post) => post.authorId === user.id
-    && post.content.toLowerCase().replace(/\s+/g, ' ').trim() === normalized
-    && Date.now() - new Date(post.createdAt).getTime() < duplicateCooldown)) {
-    throw new Error('You can post the same message again after 5 minutes');
+  if (!parentId) {
+    const cooldownRemaining = 60_000 - (Date.now() - new Date(user.lastPostAt || 0).getTime());
+    if (cooldownRemaining > 0) throw new Error(`Please wait ${Math.ceil(cooldownRemaining / 1000)} seconds before posting again`);
+    const normalized = body.toLowerCase().replace(/\s+/g, ' ').trim();
+    const duplicateCooldown = 5 * 60 * 1000;
+    if (body && store.posts.some((post) => post.authorId === user.id
+      && post.content.toLowerCase().replace(/\s+/g, ' ').trim() === normalized
+      && Date.now() - new Date(post.createdAt).getTime() < duplicateCooldown)) {
+      throw new Error('You can post the same message again after 5 minutes');
+    }
   }
   if (/(.)\1{11,}/.test(body) || (body.match(/https?:\/\//gi) || []).length > 2) {
     throw new Error('That post looks like spam. Please shorten it and try again');
@@ -296,6 +312,7 @@ export function createInternetPost(store, user, content, media = {}) {
   });
   const post = {
     id: randomUUID(),
+    kind: isReel ? 'reel' : 'post',
     authorId: user.id,
     displayName: user.displayName,
     username: user.username,
@@ -304,21 +321,29 @@ export function createInternetPost(store, user, content, media = {}) {
     verified: user.verified === true,
     badges: Array.isArray(user.badges) ? user.badges.filter((badge) => badge === 'clearwater-role') : [],
     content: body,
-    parentId: text(media?.parentId, 80) || null,
+    parentId,
     quoteId: text(media?.quoteId, 80) || null,
     ...(isGif ? { gifUrl, gifTitle } : {}),
     ...(isImage ? { imageUrl } : {}),
+    ...(isVideo ? { videoUrl } : {}),
     ...(question ? { poll: { question, options, votes: {}, endsAt: new Date(Date.now() + (pollDays * 24 * 60 * 60 * 1000)).toISOString() } } : {}),
     createdAt: new Date().toISOString(),
   };
   store.posts.unshift(post);
+  if (isReel) {
+    const extraReels = store.posts.filter((item) => item.kind === 'reel' && !item.parentId).slice(40);
+    if (extraReels.length) {
+      const drop = new Set(extraReels.flatMap((item) => [item.id]));
+      store.posts = store.posts.filter((item) => !drop.has(item.id) && !drop.has(item.parentId));
+    }
+  }
   store.posts = store.posts.slice(0, 500);
   const mentionedHandles = [...new Set((body.match(/(?:^|\s)@([a-z0-9_]{1,80})/gi) || []).map((mention) => mention.trim().slice(1).toLowerCase()))];
   mentionedHandles.forEach((handle) => {
     const recipient = Object.values(store.users).find((member) => String(member.username || '').toLowerCase() === handle);
     if (recipient) addInternetNotification(store, { recipientId: recipient.id, actor: user, type: 'mention', post });
   });
-  user.lastPostAt = post.createdAt;
+  if (!parentId) user.lastPostAt = post.createdAt;
   return post;
 }
 
