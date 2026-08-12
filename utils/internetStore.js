@@ -627,8 +627,17 @@ export function sendInternetMessage(store, { actor, to, content, gif }) {
 }
 
 export function moderationSnapshot(store) {
+  const open = store.reports.filter((report) => report.status === 'open');
+  const reviewed = store.reports.filter((report) => report.status !== 'open');
   return {
-    reports: store.reports.filter((report) => report.status === 'open').slice(0, 100),
+    reports: open.slice(0, 100),
+    history: reviewed.slice(0, 100),
+    stats: {
+      pending: open.length,
+      automod: open.filter((report) => report.source === 'automod').length,
+      actioned: reviewed.filter((report) => report.status === 'accepted').length,
+      dismissed: reviewed.filter((report) => report.status === 'denied').length,
+    },
     bans: Object.values(store.users).flatMap((user) => {
       const ban = getActiveBan(user);
       return ban ? [{ id: user.id, displayName: user.displayName || user.username || 'Discord user', ...ban }] : [];

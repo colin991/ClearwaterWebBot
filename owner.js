@@ -38,7 +38,7 @@ async function loadPanel() {
     const sessionResponse = await fetch('/api/auth/me');
     const session = await sessionResponse.json();
     if (!session.authenticated) {
-      notice.innerHTML = 'Please <a href="/api/auth/discord">sign in with Discord</a> to continue.';
+      notice.innerHTML = 'Please <a href="/signin.html?next=/owner.html">sign in with Discord</a> to continue.';
       return;
     }
     if (!session.user?.owner) {

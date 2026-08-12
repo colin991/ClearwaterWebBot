@@ -1,9 +1,17 @@
-import { STATE_COOKIE, createState, getAuthConfig, makeCookie, redirect, sendJson } from '../../lib/discord-auth.js';
+import { NEXT_COOKIE, SAFE_NEXT_PATHS, STATE_COOKIE, createState, getAuthConfig, makeCookie, redirect, sendJson } from '../../lib/discord-auth.js';
 
 export default function handler(request, response) {
   if (request.method !== 'GET') return sendJson(response, 405, { error: 'Method not allowed' });
 
   try {
+    const requestUrl = new URL(request.url, `https://${request.headers.host || 'cwrpvc.lol'}`);
+    const next = SAFE_NEXT_PATHS.includes(requestUrl.searchParams.get('next') || '')
+      ? requestUrl.searchParams.get('next')
+      : '/';
+    if (requestUrl.searchParams.get('agreed') !== '1') {
+      return redirect(response, `/signin.html?next=${encodeURIComponent(next)}`);
+    }
+
     const { clientId, redirectUri } = getAuthConfig();
     const state = createState();
     const authorizationUrl = new URL('https://discord.com/oauth2/authorize');
@@ -17,7 +25,10 @@ export default function handler(request, response) {
       state,
     }).toString();
 
-    return redirect(response, authorizationUrl.toString(), [makeCookie(STATE_COOKIE, state, 600)]);
+    return redirect(response, authorizationUrl.toString(), [
+      makeCookie(STATE_COOKIE, state, 600),
+      makeCookie(NEXT_COOKIE, next, 600),
+    ]);
   } catch {
     return sendJson(response, 500, { error: 'Discord login is not configured' });
   }

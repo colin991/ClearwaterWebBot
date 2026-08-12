@@ -7,7 +7,7 @@
     <meta name="description" content="Clearwater Internet - the community social feed for Clearwater Roleplay." />
     <title>Clearwater Internet</title>
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
-    <link rel="stylesheet" href="internet.css?v=20260811-messaging" />
+    <link rel="stylesheet" href="internet.css?v=20260811-twitter" />
   </head>
   <body class="internet-booting">
     <div class="internet-boot" data-internet-boot aria-live="polite">
@@ -28,7 +28,9 @@
           <a href="#settings" data-view-link="settings"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56v.09h-3v-.09A1.7 1.7 0 0 0 10.69 18.65a1.7 1.7 0 0 0-1.87.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7.04 15a1.7 1.7 0 0 0-1.56-1.03h-.09v-3h.09A1.7 1.7 0 0 0 7.04 9.94a1.7 1.7 0 0 0-.34-1.87l-.06-.06 2.12-2.12.06.06a1.7 1.7 0 0 0 1.87.34 1.7 1.7 0 0 0 1.03-1.56v-.09h3v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06 2.12 2.12-.06.06a1.7 1.7 0 0 0-.34 1.87 1.7 1.7 0 0 0 1.56 1.03h.09v3h-.09A1.7 1.7 0 0 0 19.4 15z" /></svg>Settings</a>
           <a href="#staff" data-view-link="staff" data-staff-link hidden><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.4 8.2 8 9 4.6-.8 8-4 8-9V7z" /><path d="m9 12 2 2 4-4" /></svg>Staff</a>
         </nav>
-        <a class="back-button" href="/">← Clearwater Roleplay</a>
+        <button class="rail-primary" type="button" data-compose-link>Post</button>
+        <a class="rail-signin" href="/signin.html?next=/internet.html" data-login>Sign in</a>
+        <div class="internet-user" data-user hidden><img data-avatar src="assets/clearwater-logo.png" alt="" draggable="false" /><span><b data-name>Discord user</b><small data-rank></small></span></div>
         <div class="rail-account" data-account-switch hidden>
           <button type="button" data-account-switch-button aria-expanded="false"><img data-account-switch-avatar src="assets/clearwater-logo.png" alt="" /><span><b data-account-switch-name>Account</b><small data-account-switch-handle>@clearwater</small></span><i>•••</i></button>
           <div class="account-switch-menu" data-account-switch-menu hidden>
@@ -43,15 +45,11 @@
 
       <section class="internet-feed">
         <section class="internet-view" data-view="home">
-          <div class="feed-cover">
-            <img src="assets/clearwater-home.png" alt="Clearwater Roleplay" draggable="false" />
-          </div>
-          <label class="internet-search"><span>Search Clearwater Internet</span><input data-search type="search" placeholder="Search Clearwater Internet" /></label>
-          <header class="internet-header">
-            <div><p>Clearwater Internet</p><h1>For you</h1></div>
-            <a href="/api/auth/discord" data-login>Sign in with Discord</a>
-            <div class="internet-user" data-user hidden><img data-avatar src="assets/clearwater-logo.png" alt="" draggable="false" /><span><b data-name>Discord user</b><small data-rank></small></span></div>
-          </header>
+          <nav class="feed-tabs" data-feed-tabs aria-label="Feed sort">
+            <button type="button" class="selected" data-feed-tab="foryou">For you</button>
+            <button type="button" data-feed-tab="following">Following</button>
+            <button type="button" data-feed-tab="official">Official</button>
+          </nav>
 
           <section class="composer" data-composer hidden>
             <div class="composer-top">
@@ -69,7 +67,12 @@
             </div>
           </section>
 
-          <section class="signed-out" data-signed-out><img src="assets/clearwater-logo.png" alt="" /><h2>Sign in to join the conversation.</h2><p>Clearwater Internet is for the Clearwater Roleplay community.</p><a href="/api/auth/discord">Sign in with Discord</a></section>
+          <section class="signed-out" data-signed-out>
+            <img src="assets/clearwater-logo.png" alt="" />
+            <h2>Sign in to post</h2>
+            <p>Join the Clearwater Internet feed with Discord.</p>
+            <a href="/signin.html?next=/internet.html">Continue with Discord</a>
+          </section>
 
           <section class="posts" id="feed" aria-live="polite"><p class="feed-note" data-feed-note hidden>Loading posts...</p><div data-post-list></div></section>
         </section>
@@ -131,6 +134,7 @@
               <label><span><b>Hide profile picture &amp; banner</b><small>Your avatar and banner will be hidden from everyone but you.</small></span><input type="checkbox" data-preference="hideProfile" /></label>
               <label><span><b>Restrict direct messages</b><small>Only accounts you follow will be able to message you.</small></span><input type="checkbox" data-preference="friendsMessages" /></label>
             </div>
+            <p class="settings-legal">Read the <a href="/terms.html">Terms of Service</a> and <a href="/privacy.html">Privacy Policy</a>.</p>
           </section>
           <section class="settings-card danger-zone">
             <h2>Danger zone</h2>
@@ -141,11 +145,18 @@
           </section>
         </section>
         <section class="internet-view staff-panel-view" data-view="staff" hidden>
-          <header class="staff-hero">
-            <div><p>Staff command</p><h1>Moderation desk</h1></div>
-            <button class="staff-refresh" type="button" data-refresh-staff>Refresh queue</button>
-          </header>
-          <div class="staff-desk" data-staff-content><p>Loading moderation information...</p></div>
+          <div class="staff-app">
+            <aside class="staff-rail">
+              <p>Staff</p>
+              <nav aria-label="Staff panels">
+                <button type="button" class="selected" data-staff-tab="overview">Overview</button>
+                <button type="button" data-staff-tab="reports">Live Reports</button>
+                <button type="button" data-staff-tab="history">Moderation History</button>
+              </nav>
+              <button class="staff-refresh" type="button" data-refresh-staff>Refresh</button>
+            </aside>
+            <div class="staff-desk" data-staff-content><p class="staff-loading">Loading the moderation desk...</p></div>
+          </div>
           <section class="admin-panel owner-controls" data-admin hidden>
             <h2>Account controls</h2>
             <p>Enter a Discord user ID to verify, remove verification, ban, or unban an account.</p>
@@ -176,8 +187,8 @@
       </section>
 
       <aside class="internet-side">
-        <div class="community-card"><img class="community-cover" src="assets/clearwater-patrol.png" alt="" draggable="false" /><h2>Clearwater Roleplay</h2><p>Departments, training, events, and stories from the Gulf Coast.</p></div>
-        <div class="trending"><h2>Trending in Clearwater</h2><div data-trending-list><a href="#home" data-topic="#ClearwaterRP">#ClearwaterRP <span>Community</span></a><a href="#home" data-topic="#ERLC">#ERLC <span>Roleplay</span></a><a href="#home" data-topic="#FireRescue">#FireRescue <span>Departments</span></a></div></div>
+        <label class="internet-search"><span>Search Clearwater Internet</span><input data-search type="search" placeholder="Search" /></label>
+        <div class="trending"><h2>What's happening</h2><div data-trending-list><a href="#home" data-topic="#ClearwaterRP">#ClearwaterRP <span>Community</span></a><a href="#home" data-topic="#ERLC">#ERLC <span>Roleplay</span></a><a href="#home" data-topic="#FireRescue">#FireRescue <span>Departments</span></a></div></div>
       </aside>
     </main>
     <section class="ban-screen" data-ban-screen hidden aria-live="assertive"><div class="ban-card"><span class="ban-emoji" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" /><path d="m6 6 12 12" /></svg></span><p>Clearwater Internet</p><h1>Banned</h1><strong>Account access has been suspended.</strong><dl><div><dt>Reason</dt><dd data-ban-reason-display>No reason was provided.</dd></div><div><dt>Duration</dt><dd data-ban-duration-display>Forever</dd></div></dl><p>Please contact support if there are any issues.</p><a href="https://discord.com/channels/1514026810348671026/1514122689566998559" target="_blank" rel="noopener">Contact support</a></div></section>
@@ -192,6 +203,6 @@
     <section class="composer-modal" data-post-modal hidden role="dialog" aria-modal="true"><div><header><h2 data-post-modal-title>Reply</h2><button type="button" data-close-post-modal aria-label="Close">×</button></header><form data-post-modal-form><textarea data-post-modal-content maxlength="500" placeholder="Post your reply"></textarea><div class="quoted-post" data-quoted-post hidden></div><div class="post-modal-buttons"><button type="button" data-quote-post hidden>Quote post</button><button>Post</button></div><p data-post-modal-error></p></form></div></section>
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
-    <script src="internet.js?v=20260811-messaging"></script>
+    <script src="internet.js?v=20260811-twitter"></script>
   </body>
 </html>

@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260811-messaging';
+const INTERNET_VERSION = '20260811-twitter';
 let officialAccountId = '';
 const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
   id: '',
@@ -126,6 +126,9 @@ let pendingPostAction = null;
 let openPostId = null;
 let moderationSnapshot = null;
 let selectedReportId = null;
+let feedTab = ['foryou', 'following', 'official'].includes(localStorage.getItem('clearwater-feed-tab')) ? localStorage.getItem('clearwater-feed-tab') : 'foryou';
+let staffTab = 'overview';
+let staffHistoryFilter = 'all';
 const expandedPollVoters = new Set();
 const emojiChoices = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😍','😘','🥰','😎','🤩','🥳','🤔','😢','😭','😡','🤯','😴','👀','💀','❤️','💙','💚','🔥','✨','🎉','🚓','🚒','🚑','👍','👎','✅','❌','⚠️','📌','📷','🎮'];
 
@@ -314,17 +317,73 @@ function renderTrending() {
   trendingList.innerHTML = tags.map(([tag, amount]) => `<a href="#home" data-topic="${escapeHtml(tag)}">${escapeHtml(tag)} <span>${amount} post${amount === 1 ? '' : 's'}</span></a>`).join('');
 }
 
-function showPosts(posts) {
+function showPosts(posts, emptyMessage) {
   note.hidden = Boolean(posts.length);
-  note.textContent = posts.length ? '' : 'No posts yet. Be the first to share an update.';
+  note.textContent = posts.length ? '' : (emptyMessage || 'No posts yet. Be the first to share an update.');
   list.innerHTML = posts.map((post) => postMarkup(post)).join('');
+}
+
+function trendingTagKeys() {
+  const counts = new Map();
+  allPosts.forEach((post) => String(post.content || '').match(/#[a-z0-9_]{1,60}/gi)?.forEach((tag) => {
+    const key = tag.toLowerCase();
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }));
+  return [...counts.entries()].sort((left, right) => right[1] - left[1]).slice(0, 8).map(([tag]) => tag);
+}
+
+function isLowEffortPost(post) {
+  if (post.gifUrl || post.imageUrl || post.poll) return false;
+  const text = String(post.content || '').trim();
+  const words = text.split(/\s+/).filter(Boolean);
+  return words.length <= 2 || text.length <= 8;
+}
+
+function scoreForYouPost(post, trending) {
+  const likes = Array.isArray(post.likes) ? post.likes.length : 0;
+  const replies = allPosts.filter((item) => item.parentId === post.id).length;
+  const ageHours = Math.max(0, (Date.now() - new Date(post.createdAt).getTime()) / 3_600_000);
+  const recency = Math.max(0, 72 - ageHours) / 72;
+  const text = String(post.content || '').toLowerCase();
+  const hasMedia = Boolean(post.gifUrl || post.imageUrl || post.poll);
+  const official = post.authorId === officialAccountId || post.verified === true;
+  const trendingHit = trending.some((tag) => text.includes(tag));
+  let score = likes * 6 + replies * 8 + recency * 18;
+  if (hasMedia) score += 12;
+  if (official) score += 16;
+  if (trendingHit) score += 14;
+  if (isLowEffortPost(post)) score -= 40;
+  if (text.length > 80) score += 4;
+  return score;
+}
+
+function rankedForYouPosts(posts) {
+  const trending = trendingTagKeys();
+  return [...posts].sort((left, right) => {
+    const scoreGap = scoreForYouPost(right, trending) - scoreForYouPost(left, trending);
+    if (scoreGap) return scoreGap;
+    return new Date(right.createdAt) - new Date(left.createdAt);
+  });
 }
 
 function renderPosts() {
   const query = String(search?.value || '').trim().toLowerCase();
-  const visible = allPosts.filter((post) => !post.parentId && !socialState.blocked.includes(post.authorId));
-  const posts = query ? visible.filter((post) => `${post.displayName} ${post.username} ${post.content}`.toLowerCase().includes(query)) : visible;
-  showPosts(posts);
+  const visible = allPosts.filter((post) => !post.parentId && !socialState.muted.includes(post.authorId) && !socialState.blocked.includes(post.authorId));
+  const searched = query ? visible.filter((post) => `${post.displayName} ${post.username} ${post.content}`.toLowerCase().includes(query)) : visible;
+  let posts = searched;
+  let empty = 'No posts yet. Be the first to share an update.';
+  if (!query && feedTab === 'following') {
+    posts = searched.filter((post) => post.authorId === activeUserId() || socialState.following.includes(post.authorId));
+    empty = 'Posts from people you follow will show up here.';
+  } else if (!query && feedTab === 'official') {
+    posts = searched.filter((post) => post.authorId === officialAccountId);
+    empty = 'Official Clearwater Roleplay posts will appear here.';
+  } else if (!query) {
+    posts = rankedForYouPosts(searched);
+    empty = 'Nothing trending yet. Post something with more than a hello.';
+  }
+  showPosts(posts, empty);
+  document.querySelectorAll('[data-feed-tab]').forEach((button) => button.classList.toggle('selected', button.dataset.feedTab === feedTab));
   renderProfilePosts();
   renderTrending();
   renderBookmarks();
@@ -449,29 +508,45 @@ function reportKindLabel(report) {
   return report?.kind === 'message' ? 'Direct message' : 'Post';
 }
 
+function staffCaseMarkup(selected) {
+  if (!selected) return '<div class="staff-empty">Nothing pending. The queue is clear.</div>';
+  const canDelete = selected.source !== 'automod' && selected.kind !== 'message';
+  return `<article class="staff-case" data-report-card><div class="staff-case-identity"><span>${escapeHtml((selected.authorName || '?').slice(0, 1))}</span><div><b>${escapeHtml(selected.authorName)}</b><small>${escapeHtml(reportSourceLabel(selected))} · ${escapeHtml(reportKindLabel(selected))}</small></div></div><p class="staff-case-copy">${escapeHtml(selected.content || 'No text captured')}</p><p class="staff-case-reason">${escapeHtml(selected.reason || 'No reason given')}</p>${Array.isArray(selected.categories) && selected.categories.length ? `<p class="staff-case-tags">${selected.categories.map((category) => `<span>${escapeHtml(category)}</span>`).join('')}</p>` : ''}<div class="report-actions"><select data-report-action><option value="warning">Give warning</option>${canDelete ? '<option value="delete">Delete post</option>' : '<option value="delete">Confirm removal</option>'}<option value="ban">Ban account</option></select><button type="button" data-report-review="accept" data-report-id="${escapeHtml(selected.id)}">Take action</button><button type="button" class="danger" data-report-review="deny" data-report-id="${escapeHtml(selected.id)}">Dismiss</button></div></article>`;
+}
+
 function renderStaffDashboard() {
   if (!staffContent || !moderationSnapshot) return;
   const reports = moderationSnapshot.reports || [];
+  const history = moderationSnapshot.history || [];
   const bans = moderationSnapshot.bans || [];
   const logs = moderationSnapshot.logs || [];
-  const automodCount = reports.filter((report) => report.source === 'automod').length;
+  const stats = moderationSnapshot.stats || {};
+  document.querySelectorAll('[data-staff-tab]').forEach((button) => button.classList.toggle('selected', button.dataset.staffTab === staffTab));
   if (!reports.some((report) => report.id === selectedReportId)) selectedReportId = reports[0]?.id || null;
   const selected = reports.find((report) => report.id === selectedReportId) || null;
   const reportCards = reports.length
     ? reports.map((report) => `<button type="button" class="staff-report-card ${report.id === selectedReportId ? 'selected' : ''} ${report.source === 'automod' ? 'automod' : ''}" data-staff-select="${escapeHtml(report.id)}"><div><b>${escapeHtml(report.authorName)}</b><small>${escapeHtml(reportSourceLabel(report))} · ${escapeHtml(reportKindLabel(report))}</small></div><p>${escapeHtml(report.content || 'No text captured')}</p><span>${escapeHtml(report.reason || 'No reason given')}</span></button>`).join('')
-    : '<div class="staff-empty">The report queue is clear.</div>';
-  const banCards = bans.length
-    ? bans.map((ban) => `<article class="staff-compact"><b>${escapeHtml(ban.displayName)}</b><span>${escapeHtml(ban.reason)}</span><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></article>`).join('')
-    : '<div class="staff-empty">No active bans.</div>';
-  const logCards = logs.length
-    ? logs.slice(0, 8).map((log) => `<article class="staff-compact"><span>${escapeHtml(log.message)}</span><small>${new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(log.createdAt))}</small></article>`).join('')
-    : '<div class="staff-empty">No staff actions yet.</div>';
-  const canDelete = selected && selected.source !== 'automod' && selected.kind !== 'message';
-  const caseFile = selected
-    ? `<article class="staff-case" data-report-card><div class="staff-case-identity"><span>${escapeHtml((selected.authorName || '?').slice(0, 1))}</span><div><b>${escapeHtml(selected.authorName)}</b><small>${escapeHtml(reportSourceLabel(selected))} · ${escapeHtml(reportKindLabel(selected))}</small></div></div><p class="staff-case-copy">${escapeHtml(selected.content || 'No text captured')}</p><p class="staff-case-reason">${escapeHtml(selected.reason || 'No reason given')}</p>${Array.isArray(selected.categories) && selected.categories.length ? `<p class="staff-case-tags">${selected.categories.map((category) => `<span>${escapeHtml(category)}</span>`).join('')}</p>` : ''}<div class="report-actions"><select data-report-action><option value="warning">Give warning</option>${canDelete ? '<option value="delete">Delete post</option>' : '<option value="delete">Confirm removal</option>'}<option value="ban">Ban account</option></select><button type="button" data-report-review="accept" data-report-id="${escapeHtml(selected.id)}">Take action</button><button type="button" class="danger" data-report-review="deny" data-report-id="${escapeHtml(selected.id)}">Dismiss</button></div></article>`
-    : '<div class="staff-empty">Select a report to open the case file.</div>';
+    : '<div class="staff-empty">Nothing pending. The queue is clear.</div>';
+  const metrics = `<div class="staff-metrics"><article><b>${Number(stats.pending || reports.length)}</b><span>Pending</span></article><article><b>${Number(stats.automod || 0)}</b><span>Automod</span></article><article><b>${Number(stats.actioned || 0)}</b><span>Actioned</span></article><article><b>${Number(stats.dismissed || 0)}</b><span>Dismissed</span></article></div>`;
 
-  staffContent.innerHTML = `<div class="staff-metrics"><article><b>${reports.length}</b><span>Pending reports</span></article><article><b>${automodCount}</b><span>Automod holds</span></article><article><b>${bans.length}</b><span>Active bans</span></article><article><b>${logs.length}</b><span>Actions logged</span></article></div><div class="staff-grid"><section class="staff-column"><header><h2>Report queue</h2><span>${reports.length}</span></header>${reportCards}</section><section class="staff-column staff-column-side"><header><h2>Case file</h2></header>${caseFile}<header><h2>Active bans</h2></header>${banCards}<header><h2>Recent actions</h2></header>${logCards}</section></div>`;
+  if (staffTab === 'overview') {
+    staffContent.innerHTML = `${metrics}<div class="staff-overview-grid"><section class="staff-column"><header><h2>Oldest pending reports</h2><span>${reports.length}</span></header>${reportCards}</section><section class="staff-column"><header><h2>Active bans</h2></header>${bans.length ? bans.map((ban) => `<article class="staff-compact"><b>${escapeHtml(ban.displayName)}</b><span>${escapeHtml(ban.reason)}</span><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></article>`).join('') : '<div class="staff-empty">No active bans.</div>'}</section></div>`;
+    return;
+  }
+
+  if (staffTab === 'history') {
+    const filtered = staffHistoryFilter === 'all' ? logs : logs.filter((log) => {
+      const message = String(log.message || '').toLowerCase();
+      if (staffHistoryFilter === 'users') return /banned|warned|unban/.test(message);
+      if (staffHistoryFilter === 'posts') return /post|automod|deleted|hold/.test(message);
+      return true;
+    });
+    const historyCards = (history.length ? history : []).map((report) => `<article class="staff-history-item ${report.status === 'accepted' ? 'actioned' : 'dismissed'}"><b>${report.status === 'accepted' ? (report.action || 'actioned') : 'dismissed'}</b><span>${escapeHtml(report.authorName)} · ${escapeHtml(reportSourceLabel(report))}</span><p>${escapeHtml(report.content || '')}</p><small>${timeAgo(report.reviewedAt || report.createdAt)}</small></article>`).join('');
+    staffContent.innerHTML = `<div class="staff-history-head"><header><h2>Moderation History</h2></header><div class="staff-filters"><button type="button" data-history-filter="all" class="${staffHistoryFilter === 'all' ? 'selected' : ''}">All</button><button type="button" data-history-filter="users" class="${staffHistoryFilter === 'users' ? 'selected' : ''}">Users</button><button type="button" data-history-filter="posts" class="${staffHistoryFilter === 'posts' ? 'selected' : ''}">Posts</button></div></div><div class="staff-history-list">${historyCards || filtered.map((log) => `<article class="staff-history-item"><span>${escapeHtml(log.message)}</span><small>${timeAgo(log.createdAt)}</small></article>`).join('') || '<div class="staff-empty">No staff actions yet.</div>'}</div>`;
+    return;
+  }
+
+  staffContent.innerHTML = `<div class="staff-workspace">${metrics}<div class="staff-grid"><section class="staff-column"><header><h2>Live Reports</h2><span>${reports.length}</span></header>${reportCards}</section><section class="staff-column staff-column-side"><header><h2>Report workspace</h2></header>${staffCaseMarkup(selected)}<header><h2>Recent actions</h2></header>${logs.length ? logs.slice(0, 8).map((log) => `<article class="staff-compact"><span>${escapeHtml(log.message)}</span><small>${timeAgo(log.createdAt)}</small></article>`).join('') : '<div class="staff-empty">No staff actions yet.</div>'}</section></div></div>`;
 }
 
 async function loadModeration() {
@@ -777,7 +852,7 @@ async function loadSession() {
   const session = await readApiJson(response, 'Discord sign-in is temporarily unavailable.');
   if (!session.authenticated || !session.user) return;
   login.hidden = true;
-  userBox.hidden = false;
+  if (userBox) userBox.hidden = true;
   composer.hidden = false;
   signedOut.hidden = true;
   name.textContent = session.user.displayName || session.user.username;
@@ -811,6 +886,16 @@ async function loadSession() {
 
 content?.addEventListener('input', () => { count.textContent = `${content.value.length} / 500`; postButton.disabled = !content.value.trim() && !selectedGif && !selectedImage; updateComposerHighlight(); });
 search?.addEventListener('input', () => { showView('home'); renderPosts(); });
+document.querySelectorAll('[data-feed-tab]').forEach((button) => button.addEventListener('click', () => {
+  feedTab = button.dataset.feedTab || 'foryou';
+  localStorage.setItem('clearwater-feed-tab', feedTab);
+  showView('home');
+  renderPosts();
+}));
+document.querySelectorAll('[data-staff-tab]').forEach((button) => button.addEventListener('click', () => {
+  staffTab = button.dataset.staffTab || 'overview';
+  renderStaffDashboard();
+}));
 document.querySelectorAll('[data-preference]').forEach((input) => input.addEventListener('change', async () => {
   const original = !input.checked;
   const saveOnDevice = () => {
@@ -837,7 +922,11 @@ document.querySelectorAll('[data-view-link]').forEach((link) => link.addEventLis
   if (location.hash === `#${view}`) showView(view);
   else location.hash = view;
 }));
-document.querySelector('[data-compose-link]')?.addEventListener('click', () => { showView('home'); content?.focus(); });
+document.querySelector('[data-compose-link]')?.addEventListener('click', () => {
+  if (!currentUserId) { window.location.href = '/signin.html?next=/internet.html'; return; }
+  showView('home');
+  content?.focus();
+});
 document.querySelectorAll('[data-profile-tab]').forEach((button) => button.addEventListener('click', () => {
   document.querySelectorAll('[data-profile-tab]').forEach((tab) => tab.classList.toggle('selected', tab === button));
   if (button.dataset.profileTab === 'posts') return renderProfilePosts();
@@ -886,6 +975,13 @@ document.addEventListener('click', (event) => {
   const staffSelect = event.target.closest('[data-staff-select]');
   if (staffSelect) {
     selectedReportId = staffSelect.dataset.staffSelect;
+    staffTab = 'reports';
+    renderStaffDashboard();
+    return;
+  }
+  const historyFilter = event.target.closest('[data-history-filter]');
+  if (historyFilter) {
+    staffHistoryFilter = historyFilter.dataset.historyFilter || 'all';
     renderStaffDashboard();
     return;
   }

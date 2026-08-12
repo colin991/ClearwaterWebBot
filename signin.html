@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#02040a" />
+    <meta name="description" content="Sign in to Clearwater Internet with Discord." />
+    <title>Sign in · Clearwater Internet</title>
+    <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
+    <link rel="stylesheet" href="signin.css?v=20260811-twitter" />
+  </head>
+  <body class="signin-body">
+    <div class="signin-atmosphere" aria-hidden="true">
+      <span class="signin-orb signin-orb-a"></span>
+      <span class="signin-orb signin-orb-b"></span>
+      <span class="signin-orb signin-orb-c"></span>
+      <span class="signin-grid"></span>
+    </div>
+    <main class="signin-stage">
+      <a class="signin-mark" href="/">
+        <img src="assets/clearwater-logo.png" alt="" draggable="false" />
+        <span>CLEARWATER</span>
+      </a>
+      <h1>Welcome back to the Gulf Coast.</h1>
+      <p class="signin-lead">Sign in or create your Clearwater Internet account with Discord.</p>
+      <form class="signin-form" data-signin-form>
+        <label class="signin-agree">
+          <input type="checkbox" data-legal-agree />
+          <span>I agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+        </label>
+        <button type="submit" data-signin-submit disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.3 5.2A19.1 19.1 0 0 0 15.6 4l-.3.6c1.8.4 2.7.9 3.8 1.6-1.6-.8-3.2-1.3-5-1.6-.9-.1-1.8-.1-2.7 0-1.8.3-3.4.8-5 1.6 1.1-.7 2.2-1.2 3.8-1.6L9.9 4A19.2 19.2 0 0 0 5.2 5.2C2.4 9.3 1.7 13.3 2 17.2A19.5 19.5 0 0 0 8 20l.8-1.1a12.7 12.7 0 0 1-1.3-.6l.3-.2c2.6 1.2 5.4 1.2 8 0l.3.2c-.4.3-.8.5-1.3.7L17.5 20a19.4 19.4 0 0 0 6-2.8c.5-4.3-.4-8.2-3.2-12zm-11 9.6c-.8 0-1.5-.8-1.5-1.7s.7-1.7 1.5-1.7 1.5.8 1.5 1.7-.7 1.7-1.5 1.7m5.4 0c-.8 0-1.5-.8-1.5-1.7s.7-1.7 1.5-1.7 1.5.8 1.5 1.7-.6 1.7-1.5 1.7"/></svg>
+          Continue with Discord
+        </button>
+      </form>
+      <p class="signin-note">You must be in the Clearwater Roleplay Discord server to use Clearwater Internet.</p>
+    </main>
+    <script>
+      const form = document.querySelector('[data-signin-form]');
+      const agree = document.querySelector('[data-legal-agree]');
+      const submit = document.querySelector('[data-signin-submit]');
+      const next = new URLSearchParams(location.search).get('next') || '';
+      const allowed = new Set(['/', '/internet.html', '/owner.html']);
+      const destination = allowed.has(next) ? next : '';
+      const sync = () => { submit.disabled = !agree.checked; };
+      agree.addEventListener('change', sync);
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        if (!agree.checked) return;
+        const url = new URL('/api/auth/discord', location.origin);
+        url.searchParams.set('agreed', '1');
+        if (destination) url.searchParams.set('next', destination);
+        location.href = url.toString();
+      });
+      sync();
+    </script>
+  </body>
+</html>

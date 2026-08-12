@@ -1,4 +1,6 @@
 import {
+  NEXT_COOKIE,
+  SAFE_NEXT_PATHS,
   SESSION_COOKIE,
   STATE_COOKIE,
   clearCookie,
@@ -70,9 +72,12 @@ export default async function handler(request, response) {
       guildBanner: guildMember?.banner || null,
       guildRoles: guildMember?.roles || [],
     }, sessionSecret);
+    const next = SAFE_NEXT_PATHS.includes(cookies[NEXT_COOKIE] || '') ? cookies[NEXT_COOKIE] : '/';
+    const destination = next === '/' ? '/?login=success' : next;
 
-    return redirect(response, '/?login=success', [
+    return redirect(response, destination, [
       clearCookie(STATE_COOKIE),
+      clearCookie(NEXT_COOKIE),
       makeCookie(SESSION_COOKIE, session, 60 * 60 * 24 * 7),
     ]);
   } catch {
