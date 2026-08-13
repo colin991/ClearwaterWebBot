@@ -4599,6 +4599,49 @@ async function bootInternet() {
 }
 
 bootInternet();
+
+let mobileRailScrollY = window.scrollY || 0;
+let mobileRailScrollFrame = 0;
+function syncMobileRailScroll() {
+  const rail = document.querySelector('.internet-rail');
+  const postButton = document.querySelector('[data-compose-link]');
+  const mobile = window.matchMedia('(max-width: 660px)').matches;
+  const staffMode = document.querySelector('.internet-shell')?.classList.contains('staff-mode');
+  const reelsOn = document.body.classList.contains('reels-watching');
+  const menuOpen = document.querySelector('[data-account-switch-menu]:not([hidden])');
+  if (!rail || !mobile || staffMode || reelsOn || menuOpen) {
+    rail?.classList.remove('rail-scroll-away');
+    document.body.classList.remove('rail-chrome-hidden');
+    postButton?.classList.remove('rail-scroll-away');
+    mobileRailScrollY = window.scrollY || 0;
+    return;
+  }
+  const y = window.scrollY || document.documentElement.scrollTop || 0;
+  const delta = y - mobileRailScrollY;
+  if (y < 24) {
+    rail.classList.remove('rail-scroll-away');
+    document.body.classList.remove('rail-chrome-hidden');
+    postButton?.classList.remove('rail-scroll-away');
+  } else if (delta > 10) {
+    rail.classList.add('rail-scroll-away');
+    document.body.classList.add('rail-chrome-hidden');
+    postButton?.classList.add('rail-scroll-away');
+  } else if (delta < -10) {
+    rail.classList.remove('rail-scroll-away');
+    document.body.classList.remove('rail-chrome-hidden');
+    postButton?.classList.remove('rail-scroll-away');
+  }
+  mobileRailScrollY = y;
+}
+window.addEventListener('scroll', () => {
+  if (mobileRailScrollFrame) return;
+  mobileRailScrollFrame = requestAnimationFrame(() => {
+    mobileRailScrollFrame = 0;
+    syncMobileRailScroll();
+  });
+}, { passive: true });
+window.addEventListener('resize', syncMobileRailScroll, { passive: true });
+
 window.setInterval(() => {
   if (document.hidden) return;
   loadPosts();

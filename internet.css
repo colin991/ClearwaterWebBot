@@ -6116,3 +6116,120 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
   }
   body.reels-watching .reel-follow { min-height: 30px; }
 }
+
+/* Mobile chrome: compact bottom dock that tucks away while scrolling. */
+@media (max-width: 660px) {
+  .internet-shell:not(.staff-mode) {
+    padding-top: 8px !important;
+    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .internet-shell:not(.staff-mode) .internet-rail {
+    position: fixed !important;
+    top: auto !important;
+    right: 12px !important;
+    bottom: max(10px, env(safe-area-inset-bottom, 0px)) !important;
+    left: 12px !important;
+    z-index: 60 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    width: auto !important;
+    height: 64px !important;
+    min-height: 64px !important;
+    max-height: 64px !important;
+    margin: 0 !important;
+    padding: 6px 8px !important;
+    overflow: visible !important;
+    border: 1px solid rgba(148, 184, 255, .2) !important;
+    border-radius: 22px !important;
+    background: linear-gradient(180deg, rgba(10, 18, 34, .96), rgba(4, 9, 18, .98)) !important;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .05) !important;
+    backdrop-filter: blur(18px) saturate(140%);
+    transition: transform .28s cubic-bezier(.22, .8, .24, 1), opacity .22s ease !important;
+  }
+  .internet-shell:not(.staff-mode) .internet-rail.rail-scroll-away {
+    transform: translateY(calc(100% + 28px));
+    opacity: 0;
+    pointer-events: none;
+  }
+  .internet-shell:not(.staff-mode) .internet-brand,
+  .internet-shell:not(.staff-mode) .rail-primary,
+  .internet-shell:not(.staff-mode) .back-button,
+  .internet-shell:not(.staff-mode) .rail-account {
+    display: none !important;
+  }
+  .internet-shell:not(.staff-mode) .rail-signin {
+    display: flex !important;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    margin: 0 !important;
+    min-height: 44px;
+    border-radius: 14px;
+    font-size: 13px;
+  }
+  .internet-shell:not(.staff-mode) .internet-nav {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    grid-column: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    overflow: visible !important;
+    justify-content: space-between;
+  }
+  .internet-shell:not(.staff-mode) .internet-nav a {
+    flex: 1 1 0 !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 3px !important;
+    min-width: 0 !important;
+    min-height: 52px !important;
+    padding: 6px 2px !important;
+    border: 0 !important;
+    border-radius: 14px !important;
+    color: #9eb0c8 !important;
+    background: transparent !important;
+    font-size: 10px !important;
+    font-weight: 750 !important;
+    line-height: 1.1 !important;
+    white-space: nowrap !important;
+  }
+  .internet-shell:not(.staff-mode) .internet-nav .nav-icon {
+    width: 22px !important;
+    height: 22px !important;
+    flex: 0 0 22px !important;
+  }
+  .internet-shell:not(.staff-mode) .internet-nav a.selected {
+    color: #fff !important;
+    background: rgba(78, 145, 249, .2) !important;
+    box-shadow: none !important;
+  }
+  .internet-shell:not(.staff-mode) .internet-nav a[data-view-link="settings"],
+  .internet-shell:not(.staff-mode) .internet-nav a[data-view-link="staff"] {
+    display: none !important;
+  }
+  .internet-shell:not(.staff-mode) .notification-nav-icon {
+    position: relative;
+  }
+  .internet-shell:not(.staff-mode) .rail-primary.rail-scroll-away,
+  body.rail-chrome-hidden .rail-primary {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(18px);
+  }
+  body:not(.reels-watching) .rail-primary {
+    left: auto !important;
+    right: 16px !important;
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important;
+    transition: opacity .22s ease, transform .28s cubic-bezier(.22, .8, .24, 1);
+  }
+  body.reels-watching .internet-rail.rail-scroll-away {
+    transform: none;
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
