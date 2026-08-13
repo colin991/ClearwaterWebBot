@@ -3346,8 +3346,15 @@ async function loadPreferences() {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'preferences' }) });
     const result = await readApiJson(response, 'Could not load settings.');
     if (!response.ok) throw new Error(result.error || 'Could not load settings.');
-    applyPreferenceState(result.preferences || {});
-    localStorage.setItem(storageKey, JSON.stringify(result.preferences || {}));
+    const server = result.preferences && typeof result.preferences === 'object' ? result.preferences : {};
+    // Keep device appearance choices when the bot host has not stored them yet.
+    const merged = { ...server };
+    for (const key of ['compactPosts', 'largeText', 'reduceMotion', 'autoplayReels']) {
+      if (server[key] !== true && localPreferences[key] === true) merged[key] = true;
+      if (key === 'autoplayReels' && localPreferences[key] === false) merged[key] = false;
+    }
+    applyPreferenceState(merged);
+    localStorage.setItem(storageKey, JSON.stringify(preferenceState));
   } catch { /* Settings remain usable if the bot host is briefly unavailable. */ }
 }
 
@@ -3475,6 +3482,7 @@ async function loadProfileEditor() {
   } catch (error) {
     profileDraft = { ...DEFAULT_PROFILE_DRAFT };
     fillProfileEditor();
+    fillAccountPane();
     setProfileStatus(error.message || 'Could not load your profile.', 'error');
   }
 }
@@ -3910,25 +3918,43 @@ document.querySelector('[data-history-search]')?.addEventListener('input', (even
   staffHistoryQuery = event.target.value || '';
   renderStaffDashboard();
 });
+const LOCAL_APPEARANCE_PREFS = new Set(['compactPosts', 'largeText', 'reduceMotion', 'autoplayReels']);
+
 document.querySelectorAll('[data-preference]').forEach((input) => input.addEventListener('change', async () => {
-  if (!currentUserId) return;
+  if (!currentUserId) {
+    input.checked = false;
+    void siteAlert('Sign in to change settings.');
+    return;
+  }
   const key = input.dataset.preference;
   const original = key === 'autoplayReels' ? isReelAutoplayEnabled() : preferenceState[key] === true;
   const nextValue = input.checked === true;
   const previous = { ...preferenceState };
+  const localOnly = LOCAL_APPEARANCE_PREFS.has(key);
   applyPreferenceState({ [key]: nextValue });
   localStorage.setItem(`clearwater-preferences-${currentUserId}`, JSON.stringify(preferenceState));
+  if (key === 'autoplayReels' && feedTab === 'reels') bindReelAutoplay();
+  else if (['compactPosts', 'largeText', 'reduceMotion', 'hideStats'].includes(key)) renderPosts();
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'preference-save', key, enabled: nextValue }) });
     const result = await readApiJson(response, 'Could not save this setting.');
-    if (!response.ok) throw new Error(result.error || 'Could not save this setting.');
-    applyPreferenceState(result.preferences || {});
+    if (!response.ok) {
+      const detail = String(result.error || '');
+      if (/unsupported action/i.test(detail)) {
+        throw new Error('Settings need the latest bot host files and a restart.');
+      }
+      throw new Error(detail || 'Could not save this setting.');
+    }
+    // Keep the just-toggled value if the host omits keys from an older payload.
+    applyPreferenceState({ ...(result.preferences || {}), [key]: nextValue });
     localStorage.setItem(`clearwater-preferences-${currentUserId}`, JSON.stringify(preferenceState));
     renderOwnProfileDetails();
     if (['followersOnly', 'hideProfile', 'hideFollowing'].includes(key)) await loadPosts();
-    else if (key === 'autoplayReels' && feedTab === 'reels') bindReelAutoplay();
-    else if (['compactPosts', 'largeText', 'reduceMotion', 'hideStats'].includes(key)) renderPosts();
   } catch (error) {
+    if (localOnly) {
+      // Appearance still applies on this device even if the bot host is stale.
+      return;
+    }
     applyPreferenceState(previous);
     localStorage.setItem(`clearwater-preferences-${currentUserId}`, JSON.stringify(previous));
     input.checked = original;

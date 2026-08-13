@@ -881,14 +881,18 @@ body::before {
   line-height: 1.45;
 }
 .privacy-settings input {
+  position: relative;
   width: 48px;
   height: 28px;
   flex: 0 0 auto;
   margin: 0;
+  -webkit-appearance: none;
   appearance: none;
+  border: 0;
   border-radius: 999px;
   background: #3d4658;
   cursor: pointer;
+  touch-action: manipulation;
   transition: background .18s var(--cw-ease);
 }
 .privacy-settings input::after {
@@ -900,6 +904,7 @@ body::before {
   background: #fff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, .25);
   content: '';
+  pointer-events: none;
   transition: transform .18s var(--cw-ease);
 }
 .privacy-settings input:checked { background: #3d7eff; }
@@ -991,7 +996,6 @@ body::before {
   .feed-cover { height: 132px; }
   .settings-card,
   .page-heading { padding-inline: 16px; }
-  .privacy-settings label,
   .danger-zone-box > div {
     align-items: flex-start;
     flex-direction: column;
@@ -3616,14 +3620,18 @@ body { margin: 0; }
   overflow-wrap: anywhere;
 }
 .settings-stack input[type="checkbox"] {
+  position: relative;
   width: 48px;
   height: 28px;
   flex: 0 0 auto;
   margin: 0;
+  -webkit-appearance: none;
   appearance: none;
+  border: 0;
   border-radius: 999px;
   background: #3d4658;
   cursor: pointer;
+  touch-action: manipulation;
   transition: background .18s var(--cw-ease);
 }
 .settings-stack input[type="checkbox"]::after {
@@ -3635,6 +3643,7 @@ body { margin: 0; }
   background: #fff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, .25);
   content: '';
+  pointer-events: none;
   transition: transform .18s var(--cw-ease);
 }
 .settings-stack input[type="checkbox"]:checked { background: #3d7eff; }
@@ -3784,19 +3793,33 @@ body { margin: 0; }
   box-shadow: 0 0 0 3px rgba(255, 255, 255, .18);
 }
 
-/* Appearance preferences */
-.pref-large-text .post p,
-.pref-large-text .conversation-messages,
-.pref-large-text .profile-copy,
-.pref-large-text .internet-message p,
-.pref-large-text .composer textarea { font-size: 17px; }
-.pref-compact .post { padding-top: 12px !important; padding-bottom: 12px !important; }
-.pref-compact .post-top { gap: 8px; }
-.pref-compact .internet-feed > * + * { margin-top: 0; }
-.pref-compact .post-actions { margin-top: 8px; }
-.pref-reduce-motion *,
-.pref-reduce-motion *::before,
-.pref-reduce-motion *::after {
+/* Appearance preferences — beat feed !important padding rules. */
+html.pref-large-text .post-content,
+html.pref-large-text .post p,
+html.pref-large-text .conversation-bubble,
+html.pref-large-text .conversation-messages,
+html.pref-large-text .profile-copy,
+html.pref-large-text .internet-message p,
+html.pref-large-text .composer textarea,
+html.pref-large-text .composer-highlight {
+  font-size: 18px !important;
+  line-height: 1.5 !important;
+}
+html.pref-compact .post,
+html.pref-compact .internet-view[data-view="home"] .post,
+html.pref-compact .internet-view[data-view="home"] .post:first-child,
+html.pref-compact .internet-view[data-view="home"] .post + .post {
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+}
+html.pref-compact .post-top { gap: 8px; }
+html.pref-compact .post-content { margin-top: 4px !important; }
+html.pref-compact .post-actions,
+html.pref-compact .post-action-row { margin-top: 6px !important; }
+html.pref-compact .internet-feed > * + * { margin-top: 0; }
+html.pref-reduce-motion *,
+html.pref-reduce-motion *::before,
+html.pref-reduce-motion *::after {
   animation-duration: .001ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: .001ms !important;
@@ -5138,13 +5161,32 @@ body { margin: 0; }
     scrollbar-width: none;
   }
   .settings-nav::-webkit-scrollbar { display: none; }
-  .settings-stack label {
-    align-items: flex-start;
+  .settings-view {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+  .settings-stack label,
+  .privacy-settings label {
+    align-items: center !important;
+    flex-direction: row !important;
     gap: 14px;
     padding: 14px !important;
   }
-  .settings-stack small {
+  .settings-stack small,
+  .privacy-settings small {
     max-width: none !important;
+  }
+  .settings-field input,
+  .settings-field textarea,
+  .settings-field select {
+    font-size: 16px !important; /* avoid iOS focus zoom */
+  }
+  .settings-actions {
+    position: sticky;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    z-index: 5;
+    margin-top: 12px;
+    padding: 10px 0 4px;
+    background: linear-gradient(180deg, transparent, rgba(3, 7, 13, .92) 28%);
   }
   .conversation-view {
     min-height: calc(100dvh - 120px);
