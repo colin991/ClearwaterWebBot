@@ -313,6 +313,7 @@ let selectedQuoteId = null;
 let activeReelId = null;
 let reelMedia = null;
 let reelObserver = null;
+let reelScrollSyncTimer = 0;
 let reelTapTimer = 0;
 let reelTapCard = null;
 let reelTapAt = 0;
@@ -914,62 +915,81 @@ function isReelAutoplayEnabled() {
   return preferenceState.autoplayReels !== false;
 }
 
+function centeredReelCard(viewport = document.querySelector('[data-reels-viewport]')) {
+  if (!viewport) return null;
+  const cards = [...viewport.querySelectorAll('.reel-card')];
+  if (!cards.length) return null;
+  const mid = viewport.scrollTop + (viewport.clientHeight / 2);
+  return cards.find((card) => card.offsetTop <= mid && (card.offsetTop + card.offsetHeight) > mid) || cards[0];
+}
+
 function playReelVideo(video) {
   if (!video) return;
-  video.muted = !reelsSoundOn;
-  void video.play().catch(() => {
-    // Autoplay with sound can be refused; fall back to muted play so the reel never stalls.
+  // Browsers allow muted autoplay without a gesture; unmute only after play starts.
+  video.muted = true;
+  const wantSound = reelsSoundOn;
+  void video.play().then(() => {
+    if (wantSound && reelsSoundOn) video.muted = false;
+  }).catch(() => {
     setReelSound(false);
+    video.muted = true;
     void video.play().catch(() => {});
   });
 }
 
-function playCenteredReel(viewport = document.querySelector('[data-reels-viewport]')) {
-  if (!viewport || !isReelAutoplayEnabled()) return;
-  const cards = [...viewport.querySelectorAll('.reel-card')];
-  if (!cards.length) return;
-  const mid = viewport.scrollTop + (viewport.clientHeight / 2);
-  const active = cards.find((card) => card.offsetTop <= mid && (card.offsetTop + card.offsetHeight) > mid) || cards[0];
-  const video = active?.querySelector('video');
-  if (!video) return;
-  cards.forEach((card) => {
-    if (card === active) return;
-    const other = card.querySelector('video');
-    if (!other) return;
-    other.pause();
-    other.muted = true;
+function syncActiveReelPlayback(viewport = document.querySelector('[data-reels-viewport]')) {
+  if (!viewport || !isVisibleReelsTab()) return;
+  const active = centeredReelCard(viewport);
+  if (!active) return;
+  const reelId = active.dataset.reelId || '';
+  if (reelId && reelId !== activeReelId) renderReelPanel(reelId);
+
+  viewport.querySelectorAll('.reel-card').forEach((card) => {
+    const video = card.querySelector('video');
+    if (!video) return;
+    if (card === active && isReelAutoplayEnabled()) {
+      if (video.paused) playReelVideo(video);
+      else video.muted = !reelsSoundOn;
+      return;
+    }
+    if (!video.paused) video.pause();
+    video.muted = true;
   });
-  playReelVideo(video);
+}
+
+function scheduleActiveReelPlayback(viewport = document.querySelector('[data-reels-viewport]')) {
+  if (reelScrollSyncTimer) cancelAnimationFrame(reelScrollSyncTimer);
+  reelScrollSyncTimer = requestAnimationFrame(() => {
+    reelScrollSyncTimer = 0;
+    syncActiveReelPlayback(viewport);
+  });
 }
 
 function bindReelAutoplay() {
   reelObserver?.disconnect();
   const viewport = document.querySelector('[data-reels-viewport]');
   if (!viewport) return;
-  const autoplay = isReelAutoplayEnabled();
-  reelObserver = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      const video = entry.target.querySelector('video');
-      if (entry.isIntersecting && entry.intersectionRatio > 0.65) {
-        const reelId = entry.target.dataset.reelId;
-        if (reelId && reelId !== activeReelId) renderReelPanel(reelId);
-        if (video && autoplay) playReelVideo(video);
-      } else if (video) {
-        video.pause();
-        video.muted = true;
-      }
-    });
-  }, { root: viewport, threshold: [0.65] });
+
+  // Scroll is the source of truth: whichever reel is centered plays; others pause.
+  reelObserver = new IntersectionObserver(() => {
+    scheduleActiveReelPlayback(viewport);
+  }, { root: viewport, threshold: [0, 0.25, 0.5, 0.75, 1] });
   viewport.querySelectorAll('.reel-card').forEach((card) => reelObserver.observe(card));
+
+  if (viewport.dataset.reelScrollBound !== '1') {
+    viewport.dataset.reelScrollBound = '1';
+    viewport.addEventListener('scroll', () => scheduleActiveReelPlayback(viewport), { passive: true });
+    viewport.addEventListener('scrollend', () => syncActiveReelPlayback(viewport), { passive: true });
+  }
+
   bindReelGestures(viewport);
   const firstCard = viewport.querySelector('.reel-card');
   const stillVisible = activeReelId
     && [...viewport.querySelectorAll('.reel-card')].some((card) => card.dataset.reelId === activeReelId);
   if (firstCard?.dataset.reelId && !stillVisible) renderReelPanel(firstCard.dataset.reelId);
-  // IntersectionObserver can miss the already-centered card after a tab switch or height sync.
   requestAnimationFrame(() => {
     syncReelCardHeights(viewport);
-    playCenteredReel(viewport);
+    syncActiveReelPlayback(viewport);
   });
 }
 
