@@ -3231,7 +3231,7 @@ async function loadPosts() {
     });
     const result = await readApiJson(response, 'Clearwater Internet could not reach the website service.');
     if (!response.ok) throw new Error(result.error || 'Service unavailable');
-    allPosts = result.posts || [];
+    allPosts = uniquePostsById(result.posts || []);
     internetUsers = new Map((result.users || []).map((user) => [user.id, user]));
     applySiteBanner(result.settings?.siteBanner || null);
     officialAccountId = result.officialUserId || [...internetUsers.values()].find((user) => user.official)?.id || officialAccountId;
