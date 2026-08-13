@@ -25,7 +25,6 @@ export function parseErlcPlayer(player) {
   const position = Array.isArray(player?.position)
     ? player.position
     : (Array.isArray(loc.position) ? loc.position : null);
-  // Official docs: LocationX/LocationZ use the centre of the map as origin.
   const x = firstFinite(loc.LocationX, loc.x, player?.x, player?.X, position?.[0]);
   const z = firstFinite(loc.LocationZ, loc.z, player?.z, player?.Z, position?.[1]);
   return {
@@ -43,17 +42,29 @@ export function parseErlcPlayer(player) {
   };
 }
 
-// Official map images are 3121². API X/Z are studs from the map centre:
-// +X right, +Z down, -X left, -Z up. Full span is treated as 3120 studs.
-const LIBERTY_WORLD = 3120;
+// Official map images are 3121² and cover the in-game 3120² stud plane.
+// Live /v2/server player payloads use northwest-origin studs (0..3120):
+// +X east/right, +Z south/down. Docs also describe a centre-origin variant
+// (negative values allowed); support both so pins never fall off the map.
+export const LIBERTY_WORLD = 3120;
+
+function clamp01(value) {
+  return Math.min(1, Math.max(0, value));
+}
 
 export function libertyMapPoint(x, z) {
-  const left = 0.5 + (Number(x) / LIBERTY_WORLD);
-  const top = 0.5 + (Number(z) / LIBERTY_WORLD);
-  if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
+  const nx = Number(x);
+  const nz = Number(z);
+  if (!Number.isFinite(nx) || !Number.isFinite(nz)) return null;
+
+  // Centre-origin only when a negative axis appears. Otherwise treat as the
+  // northwest-origin values that live servers still return (e.g. 1084, 2302).
+  const centreOrigin = nx < 0 || nz < 0;
+  const left = centreOrigin ? 0.5 + (nx / LIBERTY_WORLD) : nx / LIBERTY_WORLD;
+  const top = centreOrigin ? 0.5 + (nz / LIBERTY_WORLD) : nz / LIBERTY_WORLD;
   return {
-    left: Number(Math.min(1, Math.max(0, left)).toFixed(5)),
-    top: Number(Math.min(1, Math.max(0, top)).toFixed(5)),
+    left: Number(clamp01(left).toFixed(5)),
+    top: Number(clamp01(top).toFixed(5)),
   };
 }
 

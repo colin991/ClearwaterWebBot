@@ -1216,13 +1216,14 @@ function sanitizeDropLocation(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const x = Number(raw.x);
   const z = Number(raw.z);
-  // Always recompute pin placement from world coords so older posts that used
-  // the northwest-origin math land correctly on the centred official map.
+  // Always recompute pin placement from world coords. Live ER:LC payloads use
+  // northwest-origin studs; centre-origin only when a negative axis appears.
   let left = Number(raw.left);
   let top = Number(raw.top);
   if (Number.isFinite(x) && Number.isFinite(z)) {
-    left = 0.5 + (x / 3120);
-    top = 0.5 + (z / 3120);
+    const centreOrigin = x < 0 || z < 0;
+    left = centreOrigin ? 0.5 + (x / 3120) : x / 3120;
+    top = centreOrigin ? 0.5 + (z / 3120) : z / 3120;
   }
   if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
   return {

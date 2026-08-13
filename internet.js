@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260813-ads-map';
+const INTERNET_VERSION = '20260813-map-nw';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
@@ -682,14 +682,18 @@ async function refreshDropLocation({ silent = false } = {}) {
   }
 }
 
-// Official ER:LC docs: LocationX/LocationZ use the centre of the map as
-// origin. +X is right, +Z is down. Official map images are full-bleed 3121².
+// Official map images are full-bleed 3121² over the 3120² stud plane.
+// Live player payloads use northwest-origin studs (0..3120). Centre-origin
+// (negative axes) is also supported if the API returns that shape.
 const LIBERTY_WORLD = 3120;
 
 function libertyMapPoint(x, z) {
-  const left = 0.5 + (Number(x) / LIBERTY_WORLD);
-  const top = 0.5 + (Number(z) / LIBERTY_WORLD);
-  if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
+  const nx = Number(x);
+  const nz = Number(z);
+  if (!Number.isFinite(nx) || !Number.isFinite(nz)) return null;
+  const centreOrigin = nx < 0 || nz < 0;
+  const left = centreOrigin ? 0.5 + (nx / LIBERTY_WORLD) : nx / LIBERTY_WORLD;
+  const top = centreOrigin ? 0.5 + (nz / LIBERTY_WORLD) : nz / LIBERTY_WORLD;
   return {
     left: Math.min(1, Math.max(0, left)),
     top: Math.min(1, Math.max(0, top)),
@@ -708,7 +712,8 @@ function mapPinFromLocation(location) {
 function dropMapMarkup(location) {
   const pin = mapPinFromLocation(location);
   if (!pin) return '';
-  const zoom = 2.7;
+  // Mild zoom so edge pins stay on the terrain instead of sitting in black void.
+  const zoom = 1.85;
   const minTranslate = (1 - zoom) * 100;
   const tx = Math.max(minTranslate, Math.min(0, 50 - pin.left * 100 * zoom));
   const ty = Math.max(minTranslate, Math.min(0, 50 - pin.top * 100 * zoom));
