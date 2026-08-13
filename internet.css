@@ -6179,6 +6179,11 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
     border-radius: 14px;
     font-size: 13px;
   }
+  /* More specific than the flex rule above so login can actually hide Sign in. */
+  .internet-shell:not(.staff-mode) .rail-signin[hidden],
+  body.internet-signed-in .rail-signin {
+    display: none !important;
+  }
   .internet-shell:not(.staff-mode) .internet-nav {
     display: flex !important;
     flex: 1 1 auto !important;
@@ -6186,33 +6191,34 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
     width: 100% !important;
     max-width: none !important;
     margin: 0 !important;
-    padding: 0 !important;
-    gap: 0 !important;
+    padding: 0 2px !important;
+    gap: 2px !important;
     overflow: visible !important;
-    justify-content: space-between;
+    justify-content: space-around;
   }
   .internet-shell:not(.staff-mode) .internet-nav a {
     flex: 1 1 0 !important;
     flex-direction: column !important;
     justify-content: center !important;
     align-items: center !important;
-    gap: 3px !important;
+    gap: 0 !important;
     min-width: 0 !important;
-    min-height: 52px !important;
-    padding: 6px 2px !important;
+    min-height: 48px !important;
+    padding: 8px 4px !important;
     border: 0 !important;
     border-radius: 14px !important;
     color: #9eb0c8 !important;
     background: transparent !important;
-    font-size: 10px !important;
+    /* Icon-only dock — labels made the bar feel crammed. */
+    font-size: 0 !important;
     font-weight: 750 !important;
-    line-height: 1.1 !important;
+    line-height: 0 !important;
     white-space: nowrap !important;
   }
   .internet-shell:not(.staff-mode) .internet-nav .nav-icon {
-    width: 22px !important;
-    height: 22px !important;
-    flex: 0 0 22px !important;
+    width: 24px !important;
+    height: 24px !important;
+    flex: 0 0 24px !important;
   }
   .internet-shell:not(.staff-mode) .internet-nav a.selected {
     color: #fff !important;
@@ -6345,6 +6351,103 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
 }
 .sidebar-ad-promo-btn:hover { filter: brightness(1.05); }
 .sidebar-ad-empty-card h3 { font-size: 18px; }
+
+.who-to-follow {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 16px 14px 14px;
+  border: 1px solid rgba(148, 184, 255, .16);
+  border-radius: 18px;
+  background: linear-gradient(165deg, rgba(10, 20, 38, .94), rgba(5, 11, 20, .96));
+}
+.who-to-follow[hidden] { display: none !important; }
+.who-to-follow h2 {
+  margin: 0 2px 2px;
+  color: #eef5ff;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -.02em;
+}
+.who-to-follow-list {
+  display: grid;
+  gap: 4px;
+}
+.who-to-follow-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 6px;
+  border-radius: 12px;
+}
+.who-to-follow-row:hover { background: rgba(255, 255, 255, .04); }
+.who-to-follow-avatar {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.who-to-follow-avatar img {
+  display: block;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #0c1522;
+}
+.who-to-follow-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.who-to-follow-copy b {
+  overflow: hidden;
+  color: #f3f7ff;
+  font-size: 14px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.who-to-follow-copy small {
+  overflow: hidden;
+  color: #8ea0b8;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.who-to-follow-action {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  color: #081018;
+  background: #f4f8ff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+.who-to-follow-action.following {
+  color: #dce9ff;
+  background: transparent;
+  border: 1px solid rgba(148, 184, 255, .28);
+}
+.who-to-follow-empty {
+  margin: 0;
+  padding: 6px 4px 2px;
+  color: #8ea0b8;
+  font-size: 13px;
+  line-height: 1.4;
+}
 .sponsored-view {
   overflow: auto;
   padding: 0 0 28px;

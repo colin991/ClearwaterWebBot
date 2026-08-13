@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260813-reel-aspect';
+const INTERNET_VERSION = '20260813-who-follow';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -2750,6 +2750,61 @@ function adStatusLabel(status) {
   return status || 'Unknown';
 }
 
+function whoToFollowCandidates(limit = 3) {
+  const me = activeUserId();
+  const following = new Set(socialState.following || []);
+  const blocked = new Set([...(socialState.blocked || []), ...(socialState.muted || [])]);
+  return [...internetUsers.values()]
+    .filter((user) => {
+      if (!user?.id || user.id === me) return false;
+      if (user.banned || user.deactivated || user.bank) return false;
+      if (following.has(user.id) || blocked.has(user.id)) return false;
+      return Boolean(user.username || user.displayName);
+    })
+    .sort((left, right) => {
+      const score = (user) => (
+        (user.official ? 1000 : 0)
+        + (user.verified ? 200 : 0)
+        + (user.staffRank ? 120 : 0)
+        + (Number(user.followerCount) || 0)
+        + (Array.isArray(user.badges) && user.badges.includes('business') ? 40 : 0)
+      );
+      return score(right) - score(left)
+        || String(left.displayName || '').localeCompare(String(right.displayName || ''));
+    })
+    .slice(0, limit);
+}
+
+function renderWhoToFollow() {
+  const panel = document.querySelector('[data-who-to-follow]');
+  const list = document.querySelector('[data-who-to-follow-list]');
+  if (!panel || !list) return;
+  if (!currentUserId) {
+    panel.hidden = true;
+    return;
+  }
+  const people = whoToFollowCandidates(3);
+  panel.hidden = false;
+  if (!people.length) {
+    list.innerHTML = '<p class="who-to-follow-empty">You’re caught up. Follow people from search or profiles.</p>';
+    return;
+  }
+  list.innerHTML = people.map((user) => {
+    const following = socialState.following.includes(user.id);
+    const handle = user.username ? `@${user.username}` : 'Clearwater member';
+    return `<div class="who-to-follow-row">
+      <button type="button" class="who-to-follow-avatar" data-open-member="${escapeHtml(user.id)}" aria-label="Open ${escapeHtml(user.displayName || 'member')}">
+        <img src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" />
+      </button>
+      <button type="button" class="who-to-follow-copy" data-open-member="${escapeHtml(user.id)}">
+        <b>${escapeHtml(user.displayName || 'Clearwater member')}${identityBadges(user)}</b>
+        <small>${escapeHtml(handle)}${user.staffRank ? ` · ${escapeHtml(user.staffRank)}` : ''}</small>
+      </button>
+      <button type="button" class="who-to-follow-action${following ? ' following' : ''}" data-who-follow="${escapeHtml(user.id)}" aria-pressed="${following ? 'true' : 'false'}">${following ? 'Following' : 'Follow'}</button>
+    </div>`;
+  }).join('');
+}
+
 function renderSidebarAds(ads = sidebarAds) {
   const list = document.querySelector('[data-sidebar-ad-list]');
   const panel = document.querySelector('[data-sidebar-ads]');
@@ -3063,7 +3118,12 @@ async function loadSocial() {
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'social-status', ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Could not load your social settings.');
-    if (response.ok && result.social) { socialState = { ...socialState, ...result.social }; updateNotificationIndicators(); renderPosts(); }
+    if (response.ok && result.social) {
+      socialState = { ...socialState, ...result.social };
+      updateNotificationIndicators();
+      renderPosts();
+      renderWhoToFollow();
+    }
   } catch { /* Feed stays usable during a temporary connection issue. */ }
 }
 
@@ -3257,6 +3317,7 @@ async function socialAction(type, { targetId = '', postId = '', enabled = true }
   socialState = { ...socialState, ...result.social };
   if (type === 'follow' && targetId) patchFollowGraphs(targetId, enabled === true);
   renderPosts();
+  renderWhoToFollow();
   renderOwnProfileDetails();
 }
 
@@ -3512,6 +3573,7 @@ async function loadPosts() {
     if (result.adPricing) adPricing = { ...adPricing, ...result.adPricing };
     syncAdBoostLabels();
     renderSidebarAds(sidebarAds);
+    renderWhoToFollow();
     officialAccountId = result.officialUserId || [...internetUsers.values()].find((user) => user.official)?.id || officialAccountId;
     updateAccountSwitcher();
     const official = internetUsers.get(officialAccountId);
@@ -3546,8 +3608,17 @@ async function loadPosts() {
 async function loadSession() {
   const response = await fetch('/api/auth/me', { credentials: 'same-origin' });
   const session = await readApiJson(response, 'Discord sign-in is temporarily unavailable.');
-  if (!session.authenticated || !session.user) return false;
-  if (login) login.hidden = true;
+  if (!session.authenticated || !session.user) {
+    document.body.classList.remove('internet-signed-in');
+    if (login) login.hidden = false;
+    return false;
+  }
+  document.body.classList.add('internet-signed-in');
+  if (login) {
+    login.hidden = true;
+    login.setAttribute('hidden', '');
+    login.style.display = 'none';
+  }
   if (userBox) userBox.hidden = true;
   if (composer) composer.hidden = !(feedTab === 'foryou' || feedTab === 'recent');
   if (signedOut) signedOut.hidden = true;
@@ -4020,6 +4091,16 @@ document.addEventListener('click', (event) => {
       copyStaffId.textContent = 'Copied ID';
       window.setTimeout(() => { copyStaffId.textContent = copyStaffId.dataset.staffCopyId; }, 1200);
     }).catch(() => {});
+    return;
+  }
+  const whoFollow = event.target.closest('[data-who-follow]');
+  if (whoFollow) {
+    event.preventDefault();
+    const targetId = whoFollow.dataset.whoFollow;
+    if (!targetId) return;
+    if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
+    const enabled = !socialState.following.includes(targetId);
+    void socialAction('follow', { targetId, enabled }).catch((error) => void siteAlert(error.message || 'Could not update follow.'));
     return;
   }
   const authorButton = event.target.closest('[data-open-member]');
