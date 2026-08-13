@@ -14,7 +14,7 @@
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <link rel="apple-touch-icon" href="assets/clearwater-logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260813-ads-promo" />
+    <link rel="stylesheet" href="internet.css?v=20260813-sponsored-learn" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260813-coming-soon"></script>
   </head>
@@ -148,6 +148,34 @@
           </section>
         </section>
         <section class="internet-view post-detail-view" data-view="post" hidden><header class="post-detail-header"><button type="button" data-back-home aria-label="Back to feed">←</button><h1>Post</h1></header><div data-post-detail><p class="feed-note">Loading post...</p></div></section>
+        <section class="internet-view sponsored-view" data-view="sponsored" hidden>
+          <header class="post-detail-header">
+            <button type="button" data-back-home aria-label="Back to feed">←</button>
+            <h1>Sponsored ads</h1>
+          </header>
+          <article class="sponsored-doc">
+            <p class="wallet-kicker">Clearwater Ads</p>
+            <h2>About sponsored placements</h2>
+            <p>Clearwater departments and businesses can buy a 24-hour sidebar slot with Clearwater Credits. Staff review every ad before it goes live.</p>
+            <ul>
+              <li>Base price is C$1200 for 24 hours. Optional boosts raise how often the ad is shown.</li>
+              <li>Ads must promote an in-game department or business — not Discord invites, Roblox groups, or off-platform spam.</li>
+              <li>Use <b>Account</b> on a sponsored card to open the advertiser’s Clearwater profile.</li>
+              <li>If an ad is misleading, harassing, or breaks the rules, report it below so staff can review it.</li>
+            </ul>
+            <p><a href="/internet/wallet" data-view-link="wallet">Buy a sidebar ad from Wallet</a></p>
+            <section class="sponsored-report" data-sponsored-report-panel>
+              <h3>Report a sponsored ad</h3>
+              <p data-sponsored-report-target>Choose a live sponsored ad from the sidebar, or open Learn on that card.</p>
+              <form data-sponsored-report-form>
+                <label>Ad ID<input data-sponsored-ad-id maxlength="80" placeholder="Filled automatically from Learn" autocomplete="off" /></label>
+                <label>Reason<textarea data-sponsored-report-reason maxlength="300" rows="4" placeholder="What’s wrong with this sponsored ad?"></textarea></label>
+                <button type="submit">Send report to staff</button>
+              </form>
+              <p class="wallet-status" data-sponsored-report-status role="status"></p>
+            </section>
+          </article>
+        </section>
         <section class="internet-view wallet-view" data-view="wallet" hidden>
           <div class="wallet-stack">
             <article class="wallet-intro-card">
@@ -571,6 +599,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260813-ads-promo"></script>
+    <script src="internet.js?v=20260813-sponsored-learn"></script>
   </body>
 </html>

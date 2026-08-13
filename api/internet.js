@@ -4,7 +4,7 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260813-ads-promo';
+const INTERNET_VERSION = '20260813-sponsored-learn';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
@@ -320,6 +320,13 @@ export default async function handler(request, response) {
       payload = {
         action: 'report',
         postId: String(body.postId || ''),
+        reason: String(body.reason || '').slice(0, 300),
+        actor: { id: user.id, displayName: user.displayName },
+      };
+    } else if (body.action === 'ad-report') {
+      payload = {
+        action: 'ad-report',
+        adId: String(body.adId || ''),
         reason: String(body.reason || '').slice(0, 300),
         actor: { id: user.id, displayName: user.displayName },
       };

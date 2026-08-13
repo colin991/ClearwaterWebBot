@@ -6317,11 +6317,16 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
   line-height: 1.4;
   text-align: center;
 }
+.sidebar-ad-promo-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
 .sidebar-ad-promo-btn {
   display: grid;
   place-items: center;
   min-height: 42px;
-  padding: 0 16px;
+  padding: 0 14px;
   border-radius: 999px;
   color: #fff !important;
   background: linear-gradient(180deg, #3b82f6, #2563eb);
@@ -6330,8 +6335,80 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
   text-decoration: none !important;
   box-shadow: 0 8px 18px rgba(37, 99, 235, .28);
 }
+.sidebar-ad-promo-btn-secondary {
+  color: #16325c !important;
+  background: #fff;
+  border: 1px solid rgba(37, 99, 235, .28);
+  box-shadow: none;
+}
 .sidebar-ad-promo-btn:hover { filter: brightness(1.05); }
 .sidebar-ad-empty-card h3 { font-size: 18px; }
+.sponsored-view {
+  overflow: auto;
+  padding: 0 0 28px;
+}
+.sponsored-doc {
+  display: grid;
+  gap: 14px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 8px 22px 28px;
+}
+.sponsored-doc h2,
+.sponsored-doc h3 { margin: 0; }
+.sponsored-doc p,
+.sponsored-doc li {
+  color: var(--muted);
+  line-height: 1.5;
+}
+.sponsored-doc ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 8px;
+}
+.sponsored-report {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 18px;
+  border: 1px solid rgba(113, 158, 224, .18);
+  border-radius: 18px;
+  background: rgba(8, 16, 30, .55);
+}
+.sponsored-report form {
+  display: grid;
+  gap: 12px;
+}
+.sponsored-report label {
+  display: grid;
+  gap: 6px;
+  color: #d7e3f4;
+  font-size: 13px;
+  font-weight: 700;
+}
+.sponsored-report input,
+.sponsored-report textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid rgba(113, 158, 224, .22);
+  border-radius: 12px;
+  color: #eef5ff;
+  background: rgba(5, 11, 20, .88);
+  font: inherit;
+}
+.sponsored-report button {
+  justify-self: start;
+  min-height: 42px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--blue);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
 .wallet-ad-media-preview {
   overflow: hidden;
   border-radius: 12px;

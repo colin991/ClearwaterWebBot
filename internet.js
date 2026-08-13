@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260813-ads-promo';
+const INTERNET_VERSION = '20260813-sponsored-learn';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -104,7 +104,7 @@ const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const SMALL_REEL_BYTES = 3_200_000;
 const INTERNET_PATH = '/internet';
 const SIGNIN_INTERNET = '/signin?next=/internet';
-const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post']);
+const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post', 'sponsored']);
 
 const siteDialog = document.querySelector('[data-site-dialog]');
 const siteDialogForm = document.querySelector('[data-site-dialog-form]');
@@ -229,6 +229,7 @@ function internetUrl(view = 'home', id = '') {
   if (view === 'home') return INTERNET_PATH;
   if (view === 'post' && id) return `${INTERNET_PATH}/post/${encodeURIComponent(id)}`;
   if (view === 'member' && id) return `${INTERNET_PATH}/member/${encodeURIComponent(id)}`;
+  if (view === 'sponsored' && id) return `${INTERNET_PATH}/sponsored/${encodeURIComponent(id)}`;
   if (view === 'conversation') return `${INTERNET_PATH}/messages`;
   return `${INTERNET_PATH}/${view}`;
 }
@@ -249,7 +250,8 @@ function readInternetRoute() {
   if (!parts.length) return { view: 'home', id: '' };
   if (parts[0] === 'post' && parts[1]) return { view: 'post', id: decodeURIComponent(parts[1]) };
   if (parts[0] === 'member' && parts[1]) return { view: 'member', id: decodeURIComponent(parts[1]) };
-  if (INTERNET_VIEWS.has(parts[0]) && parts[0] !== 'post' && parts[0] !== 'member') {
+  if (parts[0] === 'sponsored') return { view: 'sponsored', id: parts[1] ? decodeURIComponent(parts[1]) : '' };
+  if (INTERNET_VIEWS.has(parts[0]) && parts[0] !== 'post' && parts[0] !== 'member' && parts[0] !== 'sponsored') {
     return { view: parts[0], id: '' };
   }
   return { view: 'home', id: '' };
@@ -1195,6 +1197,25 @@ function reelMediaProxyUrl(reelId, kind = 'video') {
   return `/api/media?reel=${encodeURIComponent(reelId)}&kind=${encodeURIComponent(kind)}`;
 }
 
+function markReelMediaBroken(card, message) {
+  if (!card || card.querySelector('.reel-missing')) return;
+  card.querySelector('video, img')?.remove();
+  const note = document.createElement('p');
+  note.className = 'reel-missing';
+  note.textContent = message || 'This Reel could not be loaded.';
+  card.prepend(note);
+}
+
+function syncReelCardHeights(viewport = document.querySelector('[data-reels-viewport]')) {
+  if (!viewport) return;
+  const height = Math.max(240, Math.round(viewport.clientHeight || 0));
+  if (!height) return;
+  viewport.querySelectorAll('.reel-card').forEach((card) => {
+    card.style.height = `${height}px`;
+    card.style.minHeight = `${height}px`;
+  });
+}
+
 function bindReelMediaFallback(viewport) {
   viewport.querySelectorAll('.reel-card > video').forEach((video) => {
     if (video.dataset.fallbackBound === '1') return;
@@ -1202,10 +1223,14 @@ function bindReelMediaFallback(viewport) {
     video.addEventListener('error', () => {
       const card = video.closest('.reel-card');
       const reelId = card?.dataset.reelId;
-      if (!reelId || video.dataset.fallbackTried === '1') return;
-      video.dataset.fallbackTried = '1';
-      video.src = reelMediaProxyUrl(reelId, 'video');
-      video.load();
+      if (!reelId) return;
+      if (video.dataset.fallbackTried !== '1') {
+        video.dataset.fallbackTried = '1';
+        video.src = reelMediaProxyUrl(reelId, 'video');
+        video.load();
+        return;
+      }
+      markReelMediaBroken(card, 'This Reel video cannot play here. Re-upload as MP4 (H.264) or WebM.');
     });
   });
   viewport.querySelectorAll('.reel-card > img').forEach((image) => {
@@ -1214,9 +1239,13 @@ function bindReelMediaFallback(viewport) {
     image.addEventListener('error', () => {
       const card = image.closest('.reel-card');
       const reelId = card?.dataset.reelId;
-      if (!reelId || image.dataset.fallbackTried === '1') return;
-      image.dataset.fallbackTried = '1';
-      image.src = reelMediaProxyUrl(reelId, 'image');
+      if (!reelId) return;
+      if (image.dataset.fallbackTried !== '1') {
+        image.dataset.fallbackTried = '1';
+        image.src = reelMediaProxyUrl(reelId, 'image');
+        return;
+      }
+      markReelMediaBroken(card, 'This Reel photo could not be loaded.');
     });
   });
 }
@@ -1237,6 +1266,7 @@ function renderReels() {
   const cards = viewport.querySelectorAll('.reel-card');
   if (viewport.dataset.reelSignature === signature && cards.length === reels.length) {
     cards.forEach((card, index) => updateReelStats(card, reels[index]));
+    syncReelCardHeights(viewport);
     if (activeReelId) {
       const active = reels.find((reel) => reel.id === activeReelId);
       if (active) {
@@ -1264,8 +1294,9 @@ function renderReels() {
     const displayName = author.displayName || reel.displayName || reel.username || 'member';
     const username = author.username || reel.username || 'member';
     const avatarUrl = author.avatarUrl || reel.avatarUrl || 'assets/clearwater-logo.png';
-    const videoSrc = safeVideoUrl(reel.videoUrl) ? reel.videoUrl : (reel.videoUrl ? reelMediaProxyUrl(reel.id, 'video') : '');
-    const imageSrc = safeImageUrl(reel.imageUrl) ? reel.imageUrl : (reel.imageUrl ? reelMediaProxyUrl(reel.id, 'image') : '');
+    // Always load through /api/media so new blob-hosted Reels match older data-URL Reels.
+    const videoSrc = reel.videoUrl ? reelMediaProxyUrl(reel.id, 'video') : '';
+    const imageSrc = !videoSrc && reel.imageUrl ? reelMediaProxyUrl(reel.id, 'image') : '';
     const media = videoSrc
       ? `<video src="${escapeHtml(videoSrc)}" loop muted playsinline preload="auto"></video>`
       : (imageSrc ? `<img src="${escapeHtml(imageSrc)}" alt="" />` : '<p class="reel-missing">This Reel could not be loaded.</p>');
@@ -1288,6 +1319,7 @@ function renderReels() {
       : '';
     return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient" aria-hidden="true"></div>${sound}<div class="reel-meta"><div class="reel-meta-user"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(avatarUrl)}" alt="" /><span class="reel-author"><b>${escapeHtml(displayName)}</b><small>@${escapeHtml(username)}</small></span></button>${follow}</div>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}" aria-label="Like">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}" aria-label="Comments">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}" aria-label="Share">${postActionIcon('share')}</button>${more}</div></article>`;
   }).join('');
+  syncReelCardHeights(viewport);
   if (anchorId) {
     const stayOn = [...viewport.querySelectorAll('.reel-card')].find((card) => card.dataset.reelId === anchorId);
     if (stayOn) viewport.scrollTo({ top: stayOn.offsetTop, behavior: 'instant' });
@@ -1707,7 +1739,7 @@ function renderBookmarks() {
 }
 
 function showView(view) {
-  const availableViews = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post']);
+  const availableViews = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post', 'sponsored']);
   let activeView = availableViews.has(view) ? view : 'home';
   if (activeView === 'staff' && !sessionCanStaff) activeView = 'home';
   const shell = document.querySelector('.internet-shell');
@@ -1745,6 +1777,7 @@ function showView(view) {
     void loadWallet();
     void loadAds();
   }
+  if (activeView === 'sponsored') fillSponsoredReportForm();
   if (activeView === 'profile') renderOwnProfileDetails();
   if (activeView === 'settings' && currentUserId) void loadProfileEditor();
 }
@@ -1758,6 +1791,10 @@ function showViewFromAddress() {
   }
   if (route.view === 'member' && route.id) {
     openMemberProfile(route.id, false);
+    return;
+  }
+  if (route.view === 'sponsored') {
+    showSponsoredPage(route.id || '', false);
     return;
   }
   showView(route.view || 'home');
@@ -1860,6 +1897,7 @@ function reportKindLabel(report) {
   if (report?.kind === 'message') return 'Direct message';
   if (report?.kind === 'comment') return 'Comment';
   if (report?.kind === 'reel') return 'Reel';
+  if (report?.kind === 'ad') return 'Sponsored ad';
   return 'Post';
 }
 
@@ -2724,20 +2762,56 @@ function renderSidebarAds(ads = sidebarAds) {
       <header class="sidebar-ad-promo-brand"><img src="assets/clearwater-logo.png" alt="" /><span>Clearwater Ads</span><i>Sponsored</i></header>
       <h3>Promote your department or business</h3>
       <p>Buy a 24-hour sidebar slot with Clearwater Credits.</p>
-      <a class="sidebar-ad-promo-btn" href="/internet/wallet" data-view-link="wallet">Advertise here</a>
+      <div class="sidebar-ad-promo-actions">
+        <a class="sidebar-ad-promo-btn" href="/internet/sponsored" data-view-link="sponsored">Learn</a>
+        <a class="sidebar-ad-promo-btn sidebar-ad-promo-btn-secondary" href="/internet/wallet" data-view-link="wallet">Advertise</a>
+      </div>
     </article>`;
     return;
   }
   const media = safeVideoUrl(ad.videoUrl)
     ? `<video class="sidebar-ad-promo-media" src="${escapeHtml(ad.videoUrl)}" muted loop playsinline autoplay></video>`
     : (safeImageUrl(ad.imageUrl) ? `<img class="sidebar-ad-promo-media" src="${escapeHtml(ad.imageUrl)}" alt="" />` : '');
-  list.innerHTML = `<article class="sidebar-ad-promo">
+  const accountHref = ad.advertiserId
+    ? internetUrl('member', ad.advertiserId)
+    : internetUrl('sponsored', ad.id);
+  const accountAttrs = ad.advertiserId
+    ? `href="${escapeHtml(accountHref)}" data-open-member="${escapeHtml(ad.advertiserId)}"`
+    : `href="${escapeHtml(accountHref)}" data-view-link="sponsored"`;
+  list.innerHTML = `<article class="sidebar-ad-promo" data-sidebar-ad-id="${escapeHtml(ad.id)}">
     <header class="sidebar-ad-promo-brand"><img src="assets/clearwater-logo.png" alt="" /><span>${escapeHtml(ad.businessName)}</span><i>Sponsored</i></header>
     ${media}
     <h3>${escapeHtml(ad.title)}</h3>
     <p>${escapeHtml(ad.body)}</p>
-    <a class="sidebar-ad-promo-btn" href="/internet/wallet" data-view-link="wallet">${escapeHtml(ad.category === 'department' ? 'Join department' : 'Visit business')}</a>
+    <div class="sidebar-ad-promo-actions">
+      <a class="sidebar-ad-promo-btn" href="${escapeHtml(internetUrl('sponsored', ad.id))}" data-open-sponsored="${escapeHtml(ad.id)}">Learn</a>
+      <a class="sidebar-ad-promo-btn sidebar-ad-promo-btn-secondary" ${accountAttrs}>Account</a>
+    </div>
   </article>`;
+}
+
+function fillSponsoredReportForm(adId = '') {
+  const route = readInternetRoute();
+  const id = String(adId || route.id || '').trim();
+  const input = document.querySelector('[data-sponsored-ad-id]');
+  const target = document.querySelector('[data-sponsored-report-target]');
+  const status = document.querySelector('[data-sponsored-report-status]');
+  const ad = sidebarAds.find((item) => item.id === id) || null;
+  if (input && id) input.value = id;
+  if (target) {
+    target.textContent = ad
+      ? `Reporting “${ad.title}” from ${ad.businessName || ad.advertiserName || 'a Clearwater advertiser'}.`
+      : (id
+        ? 'Reporting this sponsored ad. Add a short reason for staff.'
+        : 'Open Learn on a sponsored card to prefill the ad, or paste an ad ID below.');
+  }
+  if (status && !status.dataset.keep) status.textContent = '';
+}
+
+function showSponsoredPage(adId = '', updateRoute = true) {
+  if (updateRoute) setInternetRoute('sponsored', adId || '');
+  showView('sponsored');
+  fillSponsoredReportForm(adId);
 }
 
 function renderAdMediaPreview() {
@@ -3589,10 +3663,22 @@ document.querySelectorAll('[data-preference]').forEach((input) => input.addEvent
     void siteAlert(error.message || 'Could not save this setting.');
   }
 }));
-document.querySelectorAll('[data-view-link]').forEach((link) => link.addEventListener('click', (event) => {
+document.addEventListener('click', (event) => {
+  const sponsored = event.target.closest('[data-open-sponsored]');
+  if (sponsored) {
+    event.preventDefault();
+    showSponsoredPage(sponsored.dataset.openSponsored || '');
+    return;
+  }
+  const link = event.target.closest('[data-view-link]');
+  if (!link) return;
   event.preventDefault();
   const view = link.dataset.viewLink || 'home';
   if (view === 'profile' && activeAccount === 'official') { openMemberProfile(officialAccountId); return; }
+  if (view === 'sponsored') {
+    showSponsoredPage('');
+    return;
+  }
   // Home is always the regular post feed. Without this reset, the saved Reels
   // tab could leave the Reels surface open even after someone clicked Home.
   if (view === 'home') {
@@ -3605,7 +3691,7 @@ document.querySelectorAll('[data-view-link]').forEach((link) => link.addEventLis
     history.pushState({}, '', internetUrl(view));
     showView(view);
   }
-}));
+});
 document.querySelector('[data-compose-link]')?.addEventListener('click', () => {
   if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
   history.pushState({}, '', internetUrl('home'));
@@ -3937,7 +4023,11 @@ document.addEventListener('click', (event) => {
     return;
   }
   const authorButton = event.target.closest('[data-open-member]');
-  if (authorButton) { openMemberProfile(authorButton.dataset.openMember); return; }
+  if (authorButton) {
+    event.preventDefault();
+    openMemberProfile(authorButton.dataset.openMember);
+    return;
+  }
   const messageUser = event.target.closest('[data-message-user]');
   if (messageUser) { messageModal.hidden = true; openConversation(internetUsers.get(messageUser.dataset.messageUser)); return; }
   const bookmark = event.target.closest('[data-bookmark-post]');
@@ -4544,9 +4634,13 @@ document.querySelector('[data-reel-file]')?.addEventListener('change', () => {
   const label = document.querySelector('[data-reel-file-label]');
   document.querySelector('[data-reel-file]').value = '';
   if (!file) return;
-  const type = file.type || (/\.(?:png|jpe?g|webp|gif)$/i.test(file.name) ? 'image/jpeg' : (/\.(?:mp4|webm|mov)$/i.test(file.name) ? 'video/mp4' : ''));
+  const type = file.type || (/\.(?:png|jpe?g|webp|gif)$/i.test(file.name) ? 'image/jpeg' : (/\.(?:mp4|webm)$/i.test(file.name) ? 'video/mp4' : (/\.mov$/i.test(file.name) ? 'video/quicktime' : '')));
   const isImage = /^image\/(?:png|jpeg|webp|gif)$/.test(type);
-  const isVideo = /^video\/(?:mp4|webm|quicktime)$/.test(type);
+  const isVideo = /^video\/(?:mp4|webm)$/.test(type);
+  if (type === 'video/quicktime' || /\.mov$/i.test(file.name || '')) {
+    if (error) error.textContent = 'MOV files often will not play for everyone. Export as MP4 (H.264) or WebM and try again.';
+    return;
+  }
   if (!isImage && !isVideo) {
     if (error) error.textContent = 'Choose a photo or an MP4/WebM video.';
     return;
@@ -4566,6 +4660,47 @@ document.querySelector('[data-reel-file]')?.addEventListener('change', () => {
   if (submit) submit.disabled = false;
   if (error) error.textContent = '';
 });
+document.querySelector('[data-sponsored-report-form]')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const status = document.querySelector('[data-sponsored-report-status]');
+  const adId = String(document.querySelector('[data-sponsored-ad-id]')?.value || '').trim();
+  const reason = String(document.querySelector('[data-sponsored-report-reason]')?.value || '').trim();
+  if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
+  if (!adId) {
+    if (status) status.textContent = 'Open Learn on a sponsored card first, or paste the ad ID.';
+    return;
+  }
+  if (reason.length < 8) {
+    if (status) status.textContent = 'Add a bit more detail so staff can review the ad.';
+    return;
+  }
+  if (status) {
+    status.dataset.keep = '1';
+    status.textContent = 'Sending report…';
+  }
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'ad-report', adId, reason }),
+    });
+    const result = await readApiJson(response, 'Could not report this sponsored ad.');
+    if (!response.ok) throw new Error(result.error || 'Could not report this sponsored ad.');
+    const reasonField = document.querySelector('[data-sponsored-report-reason]');
+    if (reasonField) reasonField.value = '';
+    if (status) status.textContent = 'Report sent to the staff panel.';
+    void siteAlert('Sponsored ad report sent to staff.', 'Report sent');
+  } catch (error) {
+    if (status) status.textContent = error.message || 'Could not report this sponsored ad.';
+  } finally {
+    if (status) delete status.dataset.keep;
+  }
+});
+
+window.addEventListener('resize', () => {
+  if (isVisibleReelsTab()) syncReelCardHeights();
+});
+
 document.querySelector('[data-reel-form]')?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const error = document.querySelector('[data-reel-error]');

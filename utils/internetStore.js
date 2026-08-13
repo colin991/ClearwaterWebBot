@@ -265,8 +265,15 @@ function hostedMediaUrl(value) {
 
 function publicPost(post, maskedAuthors) {
   const next = { ...post };
-  if (String(next.imageUrl || '').startsWith('data:')) next.imageUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=image`;
-  if (String(next.videoUrl || '').startsWith('data:')) next.videoUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=video`;
+  // Reels always use the same-origin media proxy. Direct blob URLs flake in the
+  // vertical player (CORS/range/codec), which made newly uploaded Reels look broken.
+  if (next.kind === 'reel') {
+    if (next.imageUrl) next.imageUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=image`;
+    if (next.videoUrl) next.videoUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=video`;
+  } else {
+    if (String(next.imageUrl || '').startsWith('data:')) next.imageUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=image`;
+    if (String(next.videoUrl || '').startsWith('data:')) next.videoUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=video`;
+  }
   if (maskedAuthors?.has(next.authorId)) next.avatarUrl = null;
   return next;
 }
@@ -1310,6 +1317,7 @@ export function createInternetPost(store, user, content, media = {}) {
     content: body,
     parentId,
     quoteId: text(media?.quoteId, 80) || null,
+    likes: [],
     ...(isGif ? { gifUrl, gifTitle } : {}),
     ...(isImage ? { imageUrl } : {}),
     ...(isVideo ? { videoUrl } : {}),
@@ -1483,6 +1491,43 @@ export function createInternetReport(store, { postId, actor, reason }) {
   return report;
 }
 
+export function createInternetAdReport(store, { adId, actor, reason }) {
+  expireInternetAds(store);
+  const ad = store.ads.find((item) => item.id === String(adId || ''));
+  if (!ad || !['active', 'pending'].includes(ad.status)) throw new Error('Sponsored ad not found');
+  if (ad.advertiserId === String(actor?.id || '')) throw new Error('You cannot report your own sponsored ad');
+  const reportReason = text(reason, 300);
+  if (!reportReason) throw new Error('Enter a reason for the report');
+  if (store.reports.some((report) => report.kind === 'ad' && report.adId === ad.id && report.reporterId === String(actor.id) && report.status === 'open')) {
+    throw new Error('You have already reported this sponsored ad');
+  }
+  const report = {
+    id: randomUUID(),
+    kind: 'ad',
+    source: 'member',
+    adId: ad.id,
+    postId: null,
+    reporterId: String(actor.id),
+    reporterName: text(actor.displayName, 80) || 'Discord user',
+    authorId: ad.advertiserId,
+    authorName: ad.advertiserName,
+    authorUsername: text(ad.advertiserUsername, 80),
+    authorAvatarUrl: store.users[ad.advertiserId]?.avatarUrl || null,
+    content: `${ad.businessName}\n${ad.title}\n${ad.body}`,
+    hasVideo: Boolean(ad.videoUrl),
+    adImageUrl: ad.imageUrl || '',
+    adVideoUrl: ad.videoUrl || '',
+    adBusinessName: ad.businessName,
+    adTitle: ad.title,
+    reason: reportReason,
+    createdAt: new Date().toISOString(),
+    status: 'open',
+  };
+  store.reports.unshift(report);
+  store.reports = store.reports.slice(0, 200);
+  return report;
+}
+
 function addInternetLog(store, message) {
   store.logs.unshift({ id: randomUUID(), message: text(message, 400), createdAt: new Date().toISOString() });
   store.logs = store.logs.slice(0, 300);
@@ -1641,7 +1686,9 @@ export function reviewInternetReport(store, { reportId, decision, action, reason
       ? 'comment'
       : report.kind === 'reel'
         ? 'reel'
-        : 'post';
+        : report.kind === 'ad'
+          ? 'sponsored ad'
+          : 'post';
   if (decision === 'deny') {
     let released = null;
     if (report.source === 'automod' && report.kind === 'post' && !report.postId) {
@@ -1662,11 +1709,21 @@ export function reviewInternetReport(store, { reportId, decision, action, reason
   report.action = action;
   report.actionReason = note;
   if (action === 'delete') {
-    const index = store.posts.findIndex((post) => post.id === report.postId);
-    if (index >= 0) store.posts.splice(index, 1);
-    addInternetLog(store, report.source === 'automod'
-      ? `Confirmed automod hold on ${report.authorName}'s ${kindLabel}. Reason: ${note}`
-      : `Deleted ${report.authorName}'s reported post. Reason: ${note}`);
+    if (report.kind === 'ad' && report.adId) {
+      const ad = store.ads.find((item) => item.id === report.adId);
+      if (ad) {
+        ad.status = 'denied';
+        ad.endsAt = new Date().toISOString();
+        ad.reviewNote = note;
+      }
+      addInternetLog(store, `Removed ${report.authorName}'s sponsored ad after a report. Reason: ${note}`);
+    } else {
+      const index = store.posts.findIndex((post) => post.id === report.postId);
+      if (index >= 0) store.posts.splice(index, 1);
+      addInternetLog(store, report.source === 'automod'
+        ? `Confirmed automod hold on ${report.authorName}'s ${kindLabel}. Reason: ${note}`
+        : `Deleted ${report.authorName}'s reported post. Reason: ${note}`);
+    }
   }
   if (action === 'ban') {
     const user = upsertInternetUser(store, { id: report.authorId, displayName: report.authorName });
@@ -2221,6 +2278,7 @@ function publicAd(ad) {
     startsAt: ad.startsAt || null,
     endsAt: ad.endsAt || null,
     createdAt: ad.createdAt,
+    advertiserId: ad.advertiserId,
     advertiserName: ad.advertiserName,
     advertiserUsername: ad.advertiserUsername,
   };
