@@ -721,7 +721,11 @@ function dropMapMarkup(location) {
 function postMediaMarkup(post, displayName) {
   const gif = safeGifUrl(post.gifUrl) ? `<img class="post-gif" src="${escapeHtml(post.gifUrl)}" alt="${escapeHtml(post.gifTitle || 'GIF')}" />` : '';
   const image = safeImageUrl(post.imageUrl) ? `<img class="post-image" src="${escapeHtml(post.imageUrl)}" alt="Image shared by ${escapeHtml(displayName || 'a Clearwater member')}" />` : '';
-  return `${gif}${image}${dropMapMarkup(post.location)}`;
+  const videoSrc = safeVideoUrl(post.videoUrl) ? post.videoUrl : (post.videoUrl && post.kind === 'reel' ? reelMediaProxyUrl(post.id, 'video') : '');
+  const video = videoSrc
+    ? `<video class="post-reel-video" src="${escapeHtml(videoSrc)}" muted loop playsinline preload="metadata" controls></video>`
+    : '';
+  return `${gif}${image}${video}${dropMapMarkup(post.location)}`;
 }
 
 function quoteCardMarkup(quoted, { interactive = true } = {}) {
@@ -805,7 +809,10 @@ function postMarkup(post, profile = false) {
     ? `<small class="reposted-label">↻ ${escapeHtml(wrapper.displayName || 'A member')} reposted</small>`
     : '';
   const media = postMediaMarkup(display, displayName);
-  return `<article class="post" data-post-card="${escapeHtml(display.id)}">${repostLabel}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(display.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || display)}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(display.createdAt)}${display.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? `<span class="post-rank"> &middot; ${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(display)}</div>${display.content ? `<p class="post-content">${body}</p>` : ''}${quoteMarkup}${media}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(display.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options" class="${alreadyReposted ? 'reposted' : ''}">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(display.id)}">${alreadyReposted ? 'Undo repost' : 'Repost'}</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(display.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(display.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-engage="share" data-post-id="${escapeHtml(display.id)}">${postActionIcon('share')}</button></div></article>`;
+  const reelChip = display.kind === 'reel'
+    ? `<button type="button" class="search-reel-chip" data-open-reel="${escapeHtml(display.id)}">Open Reel</button>`
+    : '';
+  return `<article class="post" data-post-card="${escapeHtml(display.id)}">${repostLabel}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(display.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || display)}${display.kind === 'reel' ? '<span class="post-reel-tag">Reel</span>' : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(display.createdAt)}${display.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? `<span class="post-rank"> &middot; ${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(display)}</div>${display.content ? `<p class="post-content">${body}</p>` : ''}${quoteMarkup}${media}${poll}${reelChip}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(display.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options" class="${alreadyReposted ? 'reposted' : ''}">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(display.id)}">${alreadyReposted ? 'Undo repost' : 'Repost'}</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(display.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(display.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-engage="share" data-post-id="${escapeHtml(display.id)}">${postActionIcon('share')}</button></div></article>`;
 }
 
 function safeGifUrl(value) {
@@ -1369,8 +1376,8 @@ function matchingSearchUsers(query) {
   const needle = String(query || '').trim().toLowerCase().replace(/^@+/, '');
   if (!needle) return [];
   return [...internetUsers.values()]
-    .filter((user) => user && !user.deactivated && !socialState.blocked.includes(user.id))
-    .filter((user) => `${user.displayName || ''} ${user.username || ''}`.toLowerCase().includes(needle))
+    .filter((user) => user && !user.deactivated && !user.bank && !socialState.blocked.includes(user.id))
+    .filter((user) => `${user.displayName || ''} ${user.username || ''} ${user.staffRank || ''}`.toLowerCase().includes(needle))
     .sort((left, right) => {
       const leftUser = String(left.username || '').toLowerCase();
       const rightUser = String(right.username || '').toLowerCase();
@@ -1386,6 +1393,32 @@ function matchingSearchUsers(query) {
       return rank(leftUser, leftName) - rank(rightUser, rightName) || leftName.localeCompare(rightName);
     })
     .slice(0, 12);
+}
+
+function postSearchText(post) {
+  const author = internetUsers.get(post.authorId) || {};
+  return [
+    author.displayName,
+    author.username,
+    author.staffRank,
+    post.displayName,
+    post.username,
+    post.content,
+    post.gifTitle,
+    post.location?.name,
+    post.kind === 'reel' ? 'reel' : '',
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function matchingSearchPosts(query) {
+  const needle = String(query || '').trim().toLowerCase().replace(/^@+/, '');
+  if (!needle) return [];
+  return allPosts.filter((post) => (
+    !post.parentId
+    && !socialState.muted.includes(post.authorId)
+    && !socialState.blocked.includes(post.authorId)
+    && postSearchText(post).includes(needle)
+  ));
 }
 
 function searchPersonButton(user) {
@@ -1433,27 +1466,31 @@ function renderSearchResults(query, postCount) {
 }
 
 function renderPosts() {
-  const query = String(search?.value || '').trim().toLowerCase();
+  const query = String(search?.value || '').trim();
   const visible = allPosts.filter((post) => post.kind !== 'reel' && !post.parentId && !socialState.muted.includes(post.authorId) && !socialState.blocked.includes(post.authorId));
-  let searched = query ? visible.filter((post) => `${post.displayName} ${post.username} ${post.content}`.toLowerCase().includes(query)) : visible;
-  if (feedTab === 'foryou' || feedTab === 'recent') searched = searched.filter((post) => !isNativeRepost(post));
-  let posts = searched;
+  let posts = visible;
   let empty = 'No posts yet. Be the first to share an update.';
   if (query) {
+    // Search ignores the active feed tab so people/posts/reels all stay findable.
+    posts = matchingSearchPosts(query)
+      .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
     empty = matchingSearchUsers(query).length
       ? 'No posts match that search.'
       : 'No people or posts match that search.';
   } else if (feedTab === 'following') {
-    posts = searched.filter((post) => post.authorId === activeUserId() || socialState.following.includes(post.authorId));
+    posts = visible.filter((post) => post.authorId === activeUserId() || socialState.following.includes(post.authorId));
     empty = 'Posts from people you follow will show up here.';
   } else if (feedTab === 'official') {
-    posts = searched.filter((post) => post.authorId === officialAccountId);
+    posts = visible.filter((post) => post.authorId === officialAccountId);
     empty = 'Official Clearwater Roleplay posts will appear here.';
   } else if (feedTab === 'recent') {
-    posts = [...searched].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+    posts = visible.filter((post) => !isNativeRepost(post))
+      .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
     empty = 'No posts yet. Be the first to share an update.';
-  } else if (feedTab !== 'reels') {
-    posts = rankedForYouPosts(searched);
+  } else if (feedTab === 'reels') {
+    posts = [];
+  } else {
+    posts = rankedForYouPosts(visible.filter((post) => !isNativeRepost(post)));
     empty = 'Nothing trending yet. Post something with more than a hello.';
   }
   syncHomeSurfaces();
@@ -3233,6 +3270,7 @@ document.querySelectorAll('[data-feed-tab]').forEach((button) => button.addEvent
 }));
 document.querySelector('[data-reels-link]')?.addEventListener('click', (event) => {
   event.preventDefault();
+  if (search) search.value = '';
   feedTab = 'reels';
   localStorage.setItem('clearwater-feed-tab', feedTab);
   history.pushState({}, '', internetUrl('home'));
@@ -3647,6 +3685,22 @@ document.addEventListener('click', (event) => {
   if (bookmark) { void socialAction('bookmark', { postId: bookmark.dataset.bookmarkPost, enabled: !socialState.bookmarks.includes(bookmark.dataset.bookmarkPost) }).catch((error) => void siteAlert(error.message)); return; }
   const topic = event.target.closest('[data-topic]');
   if (topic) { event.preventDefault(); showView('home'); search.value = topic.dataset.topic; renderPosts(); return; }
+  const openReel = event.target.closest('[data-open-reel]');
+  if (openReel) {
+    if (search) search.value = '';
+    feedTab = 'reels';
+    localStorage.setItem('clearwater-feed-tab', feedTab);
+    history.pushState({}, '', internetUrl('home'));
+    showView('home');
+    renderPosts();
+    const viewport = document.querySelector('[data-reels-viewport]');
+    const card = viewport?.querySelector(`[data-reel-id="${openReel.dataset.openReel}"]`);
+    if (card) {
+      card.scrollIntoView({ block: 'start' });
+      renderReelPanel(openReel.dataset.openReel);
+    }
+    return;
+  }
   if (event.target.closest('[data-open-reel-composer]')) {
     if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
     const modal = document.querySelector('[data-reel-composer]');
