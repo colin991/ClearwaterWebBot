@@ -146,10 +146,15 @@ if (window.history.replaceState && /[?&]login=/.test(window.location.search)) {
 }
 
 discordProfile?.addEventListener('click', () => {
-  if (ownerLink?.hidden && discordProfileMenuRank?.hidden) return;
-  const isOpen = discordProfile.getAttribute('aria-expanded') === 'true';
-  discordProfile.setAttribute('aria-expanded', String(!isOpen));
-  if (discordProfileMenu) discordProfileMenu.hidden = isOpen;
+  const canOpen = Boolean(
+    (ownerLink && !ownerLink.hidden)
+    || (discordProfileMenuRank && !discordProfileMenuRank.hidden)
+    || cashBalance
+  );
+  if (!canOpen) return;
+  const open = discordProfile.getAttribute('aria-expanded') === 'true';
+  discordProfile.setAttribute('aria-expanded', String(!open));
+  if (discordProfileMenu) discordProfileMenu.hidden = open;
 });
 
 document.addEventListener('click', (event) => {
