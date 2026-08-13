@@ -4438,7 +4438,9 @@ body { margin: 0; }
   overflow-y: auto;
   overscroll-behavior-y: contain;
   scroll-snap-type: y mandatory;
-  scroll-behavior: smooth;
+  /* Instant snap keeps scrollTop/geometry in sync for autoplay on mobile. */
+  scroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
 .reels-viewport::-webkit-scrollbar { display: none; }
@@ -5029,14 +5031,30 @@ body { margin: 0; }
     margin: 0 0 10px !important;
     padding: 12px !important;
   }
-  .internet-view[data-view="home"] .composer-main > .composer-entry,
-  .internet-view[data-view="home"] .composer textarea,
+  /* Mobile: drop the highlight overlay. Stacking it as position:relative put
+     visible text in one box and the caret in another, so typing looked offset. */
+  .internet-view[data-view="home"] .composer-entry {
+    position: relative !important;
+    height: auto !important;
+    min-height: 44px !important;
+  }
   .internet-view[data-view="home"] .composer-highlight {
+    display: none !important;
+  }
+  .internet-view[data-view="home"] .composer-entry textarea {
     position: relative !important;
     inset: auto !important;
+    display: block;
+    width: 100%;
     height: auto !important;
     min-height: 44px !important;
     max-height: none !important;
+    padding: 6px 0 !important;
+    overflow: auto;
+    color: #fff !important;
+    caret-color: #fff;
+    -webkit-user-select: text;
+    user-select: text;
   }
   .composer-tools {
     flex-wrap: wrap;

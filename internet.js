@@ -919,12 +919,27 @@ function centeredReelCard(viewport = document.querySelector('[data-reels-viewpor
   if (!viewport) return null;
   const cards = [...viewport.querySelectorAll('.reel-card')];
   if (!cards.length) return null;
-  const mid = viewport.scrollTop + (viewport.clientHeight / 2);
-  return cards.find((card) => card.offsetTop <= mid && (card.offsetTop + card.offsetHeight) > mid) || cards[0];
+  // Use viewport geometry — offsetTop breaks when the scroll parent is not the offsetParent (common on mobile).
+  const root = viewport.getBoundingClientRect();
+  const mid = root.top + (root.height / 2);
+  let best = cards[0];
+  let bestDist = Infinity;
+  cards.forEach((card) => {
+    const rect = card.getBoundingClientRect();
+    const dist = Math.abs((rect.top + (rect.height / 2)) - mid);
+    if (dist < bestDist) {
+      best = card;
+      bestDist = dist;
+    }
+  });
+  return best;
 }
 
 function playReelVideo(video) {
   if (!video) return;
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
+  video.defaultMuted = true;
   // Browsers allow muted autoplay without a gesture; unmute only after play starts.
   video.muted = true;
   const wantSound = reelsSoundOn;
@@ -980,6 +995,8 @@ function bindReelAutoplay() {
     viewport.dataset.reelScrollBound = '1';
     viewport.addEventListener('scroll', () => scheduleActiveReelPlayback(viewport), { passive: true });
     viewport.addEventListener('scrollend', () => syncActiveReelPlayback(viewport), { passive: true });
+    // iOS often finishes momentum scrolling without a reliable scrollend; touch end re-syncs play.
+    viewport.addEventListener('touchend', () => scheduleActiveReelPlayback(viewport), { passive: true });
   }
 
   bindReelGestures(viewport);
@@ -990,6 +1007,11 @@ function bindReelAutoplay() {
   requestAnimationFrame(() => {
     syncReelCardHeights(viewport);
     syncActiveReelPlayback(viewport);
+    // Second pass after mobile layout settles (address bar / dvh changes).
+    window.setTimeout(() => {
+      syncReelCardHeights(viewport);
+      syncActiveReelPlayback(viewport);
+    }, 120);
   });
 }
 
@@ -1350,7 +1372,7 @@ function renderReels() {
     const videoSrc = reel.videoUrl ? reelMediaProxyUrl(reel.id, 'video') : '';
     const imageSrc = !videoSrc && reel.imageUrl ? reelMediaProxyUrl(reel.id, 'image') : '';
     const media = videoSrc
-      ? `<video src="${escapeHtml(videoSrc)}" loop muted playsinline preload="auto"></video>`
+      ? `<video src="${escapeHtml(videoSrc)}" loop muted playsinline webkit-playsinline preload="auto" autoplay></video>`
       : (imageSrc ? `<img src="${escapeHtml(imageSrc)}" alt="" />` : '<p class="reel-missing">This Reel could not be loaded.</p>');
     const sound = videoSrc
       ? `<button type="button" class="reel-mute${reelsSoundOn ? ' is-on' : ''}" data-reel-sound="${escapeHtml(reel.id)}" aria-pressed="${reelsSoundOn ? 'true' : 'false'}" aria-label="${reelsSoundOn ? 'Turn off sound' : 'Turn on sound'}">${soundIcon(reelsSoundOn)}<span class="sr-only">${reelsSoundOn ? 'Sound on' : 'Muted'}</span></button>`
