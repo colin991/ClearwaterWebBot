@@ -307,7 +307,22 @@ let pendingReportReview = null;
 let selectedGif = null;
 let selectedImage = null;
 let messageGif = null;
-let reelsSoundOn = false;
+let reelsSoundOn = (() => {
+  try {
+    const saved = localStorage.getItem('clearwater-reels-sound');
+    if (saved === '0') return false;
+    if (saved === '1') return true;
+  } catch { /* keep default */ }
+  return true;
+})();
+let reelsVolume = (() => {
+  try {
+    const saved = Number(localStorage.getItem('clearwater-reels-volume'));
+    if (Number.isFinite(saved)) return Math.min(1, Math.max(0, saved));
+  } catch { /* keep default */ }
+  return 1;
+})();
+let reelsAudioUnlocked = false;
 let pickerTarget = 'post';
 let socialState = { following: [], followers: [], blocked: [], muted: [], bookmarks: [], unreadNotifications: 0, unreadMessages: 0 };
 let viewedMember = null;
@@ -906,35 +921,95 @@ function pauseReelVideos() {
   });
 }
 
+function persistReelAudioPrefs() {
+  try {
+    localStorage.setItem('clearwater-reels-sound', reelsSoundOn ? '1' : '0');
+    localStorage.setItem('clearwater-reels-volume', String(reelsVolume));
+  } catch {
+    // Ignore private-mode storage failures.
+  }
+}
+
 function soundIcon(on = false) {
   return on
     ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Zm12.5.2a4 4 0 0 1 0 5.6m2.7-8.3a8 8 0 0 1 0 11" /></svg>'
     : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Zm12 1.6 5 4.8m0-4.8-5 4.8" /></svg>';
 }
 
+function reelAudioControlsMarkup(reelId = '') {
+  const volumePct = Math.round(reelsVolume * 100);
+  return `<div class="reel-audio">
+    <button type="button" class="reel-mute${reelsSoundOn ? ' is-on' : ''}" data-reel-sound="${escapeHtml(reelId)}" aria-pressed="${reelsSoundOn ? 'true' : 'false'}" aria-label="${reelsSoundOn ? 'Mute reel' : 'Unmute reel'}">${soundIcon(reelsSoundOn)}<span class="sr-only">${reelsSoundOn ? 'Sound on' : 'Muted'}</span></button>
+    <label class="reel-volume${reelsSoundOn ? '' : ' is-muted'}" aria-label="Reel volume">
+      <input type="range" min="0" max="100" step="1" value="${volumePct}" data-reel-volume />
+      <span data-reel-volume-label>${volumePct}%</span>
+    </label>
+  </div>`;
+}
+
 function syncReelSoundControls() {
   document.querySelectorAll('[data-reels-viewport] [data-reel-sound]').forEach((button) => {
     button.classList.toggle('is-on', reelsSoundOn);
     button.setAttribute('aria-pressed', reelsSoundOn ? 'true' : 'false');
-    button.setAttribute('aria-label', reelsSoundOn ? 'Turn off sound' : 'Turn on sound');
+    button.setAttribute('aria-label', reelsSoundOn ? 'Mute reel' : 'Unmute reel');
     button.innerHTML = `${soundIcon(reelsSoundOn)}<span class="sr-only">${reelsSoundOn ? 'Sound on' : 'Muted'}</span>`;
   });
+  document.querySelectorAll('[data-reels-viewport] .reel-volume').forEach((wrap) => {
+    wrap.classList.toggle('is-muted', !reelsSoundOn);
+    const slider = wrap.querySelector('[data-reel-volume]');
+    const label = wrap.querySelector('[data-reel-volume-label]');
+    const volumePct = Math.round(reelsVolume * 100);
+    if (slider && Number(slider.value) !== volumePct) slider.value = String(volumePct);
+    if (label) label.textContent = `${volumePct}%`;
+  });
+}
+
+function applyReelVolume(video) {
+  if (!video) return;
+  video.volume = reelsVolume;
+  video.muted = !reelsSoundOn || video.paused || reelsVolume <= 0;
+}
+
+function setReelVolume(value) {
+  const next = Math.min(1, Math.max(0, Number(value)));
+  reelsVolume = Number.isFinite(next) ? next : 1;
+  if (reelsVolume > 0 && !reelsSoundOn) reelsSoundOn = true;
+  if (reelsVolume <= 0) reelsSoundOn = false;
+  persistReelAudioPrefs();
+  document.querySelectorAll('[data-reels-viewport] video').forEach((video) => applyReelVolume(video));
+  syncReelSoundControls();
 }
 
 function setReelSound(on) {
   reelsSoundOn = Boolean(on);
-  document.querySelectorAll('[data-reels-viewport] video').forEach((video) => {
-    video.muted = !reelsSoundOn || video.paused;
-  });
+  if (reelsSoundOn && reelsVolume <= 0) reelsVolume = 1;
+  persistReelAudioPrefs();
+  document.querySelectorAll('[data-reels-viewport] video').forEach((video) => applyReelVolume(video));
+  syncReelSoundControls();
+}
+
+function unlockReelAudio() {
+  if (reelsAudioUnlocked) return;
+  reelsAudioUnlocked = true;
+  if (isReelAutoplayEnabled() && !reelsSoundOn && reelsVolume > 0) {
+    reelsSoundOn = true;
+    persistReelAudioPrefs();
+  }
+  const active = centeredReelCard()?.querySelector('video');
+  if (active && !active.paused) applyReelVolume(active);
   syncReelSoundControls();
 }
 
 function toggleReelSound(card) {
+  unlockReelAudio();
   setReelSound(!reelsSoundOn);
   const video = card?.querySelector('video');
-  if (!video || !reelsSoundOn) return;
-  video.muted = false;
-  void video.play().catch(() => {
+  if (!video) return;
+  applyReelVolume(video);
+  if (!reelsSoundOn) return;
+  void video.play().then(() => {
+    applyReelVolume(video);
+  }).catch(() => {
     setReelSound(false);
     void video.play().catch(() => {});
   });
@@ -942,6 +1017,10 @@ function toggleReelSound(card) {
 
 function isReelAutoplayEnabled() {
   return preferenceState.autoplayReels !== false;
+}
+
+function wantsReelAutoSound() {
+  return isReelAutoplayEnabled() && reelsSoundOn && reelsVolume > 0;
 }
 
 function centeredReelCard(viewport = document.querySelector('[data-reels-viewport]')) {
@@ -968,21 +1047,42 @@ function playReelVideo(video) {
   if (!video) return;
   video.setAttribute('playsinline', '');
   video.setAttribute('webkit-playsinline', '');
-  video.defaultMuted = true;
-  // Browsers allow muted autoplay without a gesture; unmute only after play starts.
-  video.muted = true;
-  const wantSound = reelsSoundOn;
-  void video.play().then(() => {
-    if (wantSound && reelsSoundOn) video.muted = false;
-  }).catch(() => {
-    setReelSound(false);
+  video.volume = reelsVolume;
+  const wantSound = wantsReelAutoSound();
+
+  const startMutedThenUnmute = () => {
+    video.defaultMuted = true;
     video.muted = true;
-    void video.play().catch(() => {});
-  });
+    void video.play().then(() => {
+      if (!wantSound || !wantsReelAutoSound()) return;
+      video.muted = false;
+      video.volume = reelsVolume;
+    }).catch(() => {
+      setReelSound(false);
+      video.muted = true;
+      void video.play().catch(() => {});
+    });
+  };
+
+  // With autoplay + sound on, try unmuted first (works after a user gesture / scroll).
+  if (wantSound && (reelsAudioUnlocked || document.hasFocus())) {
+    video.defaultMuted = false;
+    video.muted = false;
+    void video.play().then(() => {
+      applyReelVolume(video);
+      reelsAudioUnlocked = true;
+    }).catch(() => {
+      startMutedThenUnmute();
+    });
+    return;
+  }
+
+  startMutedThenUnmute();
 }
 
 function syncActiveReelPlayback(viewport = document.querySelector('[data-reels-viewport]')) {
   if (!viewport || !isVisibleReelsTab()) return;
+  if (isReelAutoplayEnabled() && reelsSoundOn) unlockReelAudio();
   const active = centeredReelCard(viewport);
   if (!active) return;
   const reelId = active.dataset.reelId || '';
@@ -993,7 +1093,7 @@ function syncActiveReelPlayback(viewport = document.querySelector('[data-reels-v
     if (!video) return;
     if (card === active && isReelAutoplayEnabled()) {
       if (video.paused) playReelVideo(video);
-      else video.muted = !reelsSoundOn;
+      else applyReelVolume(video);
       return;
     }
     if (!video.paused) video.pause();
@@ -1014,6 +1114,9 @@ function bindReelAutoplay() {
   const viewport = document.querySelector('[data-reels-viewport]');
   if (!viewport) return;
 
+  // When Reels autoplay is enabled, default to sound on so scroll-start includes audio.
+  if (isReelAutoplayEnabled() && reelsSoundOn) unlockReelAudio();
+
   // Scroll is the source of truth: whichever reel is centered plays; others pause.
   reelObserver = new IntersectionObserver(() => {
     scheduleActiveReelPlayback(viewport);
@@ -1022,10 +1125,15 @@ function bindReelAutoplay() {
 
   if (viewport.dataset.reelScrollBound !== '1') {
     viewport.dataset.reelScrollBound = '1';
-    viewport.addEventListener('scroll', () => scheduleActiveReelPlayback(viewport), { passive: true });
+    const onScrollGesture = () => {
+      unlockReelAudio();
+      scheduleActiveReelPlayback(viewport);
+    };
+    viewport.addEventListener('scroll', onScrollGesture, { passive: true });
     viewport.addEventListener('scrollend', () => syncActiveReelPlayback(viewport), { passive: true });
     // iOS often finishes momentum scrolling without a reliable scrollend; touch end re-syncs play.
-    viewport.addEventListener('touchend', () => scheduleActiveReelPlayback(viewport), { passive: true });
+    viewport.addEventListener('touchend', onScrollGesture, { passive: true });
+    viewport.addEventListener('pointerdown', () => unlockReelAudio(), { passive: true });
   }
 
   bindReelGestures(viewport);
@@ -1078,10 +1186,13 @@ function burstReelHeart(card) {
 function toggleReelPlayback(card) {
   const video = card?.querySelector('video');
   if (!video) return;
+  unlockReelAudio();
   if (video.paused) {
     flashReelGlyph(card, false);
-    video.muted = !reelsSoundOn;
-    void video.play().catch(() => {
+    applyReelVolume(video);
+    void video.play().then(() => {
+      applyReelVolume(video);
+    }).catch(() => {
       setReelSound(false);
       void video.play().catch(() => {});
     });
@@ -1127,7 +1238,7 @@ function bindReelGestures(viewport) {
     reelPointer = null;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     const card = event.target.closest('.reel-card');
-    if (!card || event.target.closest('button, a, input, textarea, summary, details, .reel-actions, .reel-card-more, .reel-more')) return;
+    if (!card || event.target.closest('button, a, input, textarea, label, summary, details, .reel-actions, .reel-audio, .reel-card-more, .reel-more')) return;
     reelPointer = { id: event.pointerId, card, x: event.clientX, y: event.clientY, at: Date.now() };
   });
   viewport.addEventListener('pointerup', (event) => {
@@ -1421,9 +1532,7 @@ function renderReels() {
     const media = videoSrc
       ? `<video src="${escapeHtml(videoSrc)}" loop muted playsinline webkit-playsinline preload="auto" autoplay></video>`
       : (imageSrc ? `<img src="${escapeHtml(imageSrc)}" alt="" />` : '<p class="reel-missing">This Reel could not be loaded.</p>');
-    const sound = videoSrc
-      ? `<button type="button" class="reel-mute${reelsSoundOn ? ' is-on' : ''}" data-reel-sound="${escapeHtml(reel.id)}" aria-pressed="${reelsSoundOn ? 'true' : 'false'}" aria-label="${reelsSoundOn ? 'Turn off sound' : 'Turn on sound'}">${soundIcon(reelsSoundOn)}<span class="sr-only">${reelsSoundOn ? 'Sound on' : 'Muted'}</span></button>`
-      : '';
+    const sound = videoSrc ? reelAudioControlsMarkup(reel.id) : '';
     const isSelf = reel.authorId === activeUserId();
     const following = socialState.following.includes(reel.authorId);
     const canFollow = Boolean(currentUserId) && !isSelf;
@@ -3904,6 +4013,8 @@ function applyPreferenceState(preferences = {}) {
       ? isReelAutoplayEnabled()
       : preferenceState[key] === true;
   });
+  // Autoplay Reels should also start with audio unless the member muted them.
+  if (isReelAutoplayEnabled() && reelsSoundOn) unlockReelAudio();
   if (feedTab === 'reels') bindReelAutoplay();
 }
 
@@ -4827,6 +4938,14 @@ document.querySelector('[data-delete-account]')?.addEventListener('click', async
     if (status) { status.textContent = error.message || 'Could not delete your account.'; status.dataset.tone = 'error'; }
   }
 });
+document.addEventListener('input', (event) => {
+  const reelVolume = event.target.closest?.('[data-reel-volume]');
+  if (!reelVolume) return;
+  unlockReelAudio();
+  setReelVolume(Number(reelVolume.value) / 100);
+  const video = reelVolume.closest('.reel-card')?.querySelector('video');
+  if (video && !video.paused) applyReelVolume(video);
+});
 document.addEventListener('click', (event) => {
   const notificationPost = event.target.closest('[data-notification-post]');
   if (notificationPost) { showPostDetail(notificationPost.dataset.notificationPost); return; }
@@ -5101,6 +5220,15 @@ document.addEventListener('click', (event) => {
   const reelSound = event.target.closest('[data-reel-sound]');
   if (reelSound) {
     toggleReelSound(reelSound.closest('.reel-card'));
+    return;
+  }
+  const reelVolume = event.target.closest('[data-reel-volume]');
+  if (reelVolume) {
+    unlockReelAudio();
+    setReelVolume(Number(reelVolume.value) / 100);
+    const card = reelVolume.closest('.reel-card');
+    const video = card?.querySelector('video');
+    if (video && video.paused && isReelAutoplayEnabled()) playReelVideo(video);
     return;
   }
   const gifChoice = event.target.closest('[data-gif-url]');
