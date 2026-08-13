@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260813-discord-dm-notify';
+const INTERNET_VERSION = '20260813-ads-blue';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -2827,12 +2827,6 @@ function renderSidebarAds(ads = sidebarAds) {
   const media = safeVideoUrl(ad.videoUrl)
     ? `<video class="sidebar-ad-promo-media" src="${escapeHtml(ad.videoUrl)}" muted loop playsinline autoplay></video>`
     : (safeImageUrl(ad.imageUrl) ? `<img class="sidebar-ad-promo-media" src="${escapeHtml(ad.imageUrl)}" alt="" />` : '');
-  const accountHref = ad.advertiserId
-    ? internetUrl('member', ad.advertiserId)
-    : internetUrl('sponsored', ad.id);
-  const accountAttrs = ad.advertiserId
-    ? `href="${escapeHtml(accountHref)}" data-open-member="${escapeHtml(ad.advertiserId)}"`
-    : `href="${escapeHtml(accountHref)}" data-view-link="sponsored"`;
   list.innerHTML = `<article class="sidebar-ad-promo" data-sidebar-ad-id="${escapeHtml(ad.id)}">
     <header class="sidebar-ad-promo-brand"><img src="assets/clearwater-logo.png" alt="" /><span>${escapeHtml(ad.businessName)}</span><i>Sponsored</i></header>
     ${media}
@@ -2840,9 +2834,49 @@ function renderSidebarAds(ads = sidebarAds) {
     <p>${escapeHtml(ad.body)}</p>
     <div class="sidebar-ad-promo-actions">
       <a class="sidebar-ad-promo-btn" href="${escapeHtml(internetUrl('sponsored', ad.id))}" data-open-sponsored="${escapeHtml(ad.id)}">Learn</a>
-      <a class="sidebar-ad-promo-btn sidebar-ad-promo-btn-secondary" ${accountAttrs}>Account</a>
+      <button type="button" class="sidebar-ad-promo-btn sidebar-ad-promo-btn-secondary" data-open-ad-account data-ad-advertiser-id="${escapeHtml(ad.advertiserId || '')}" data-ad-advertiser-username="${escapeHtml(ad.advertiserUsername || '')}" data-ad-advertiser-name="${escapeHtml(ad.advertiserName || '')}">Account</button>
     </div>
   </article>`;
+}
+
+function findInternetMember(memberId = '', username = '') {
+  const id = String(memberId || '').trim();
+  if (id && internetUsers.has(id)) return internetUsers.get(id);
+  const handle = String(username || '').replace(/^@/, '').trim().toLowerCase();
+  if (!handle) return null;
+  return [...internetUsers.values()].find((user) => String(user.username || '').toLowerCase() === handle) || null;
+}
+
+function openAdAdvertiserAccount(button) {
+  const id = button?.dataset?.adAdvertiserId || '';
+  const username = button?.dataset?.adAdvertiserUsername || '';
+  const displayName = button?.dataset?.adAdvertiserName || '';
+  const user = findInternetMember(id, username);
+  if (user) {
+    openMemberProfile(user.id);
+    return;
+  }
+  if (id || username) {
+    // Advertiser may not be in the current feed snapshot — still open a usable profile shell.
+    const fallback = {
+      id: id || `pending:${username || displayName || 'advertiser'}`,
+      username: username || 'member',
+      displayName: displayName || username || 'Clearwater member',
+      avatarUrl: 'assets/clearwater-logo.png',
+      bio: '',
+      staffRank: null,
+      verified: false,
+      badges: [],
+      following: [],
+      followers: [],
+      followingCount: 0,
+      followerCount: 0,
+    };
+    internetUsers.set(fallback.id, fallback);
+    openMemberProfile(fallback.id);
+    return;
+  }
+  void siteAlert('That advertiser account is not available right now.');
 }
 
 function fillSponsoredReportForm(adId = '') {
@@ -3322,7 +3356,8 @@ async function socialAction(type, { targetId = '', postId = '', enabled = true }
 }
 
 function openMemberProfile(memberId, updateHash = true) {
-  const user = internetUsers.get(memberId); if (!user) return;
+  const user = findInternetMember(memberId) || internetUsers.get(memberId);
+  if (!user) return;
   if (viewedMember?.id !== user.id) memberTab = 'posts';
   viewedMember = user;
   document.querySelectorAll('[data-member-tab]').forEach((tab) => tab.classList.toggle('selected', tab.dataset.memberTab === memberTab));
@@ -4101,6 +4136,12 @@ document.addEventListener('click', (event) => {
     if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
     const enabled = !socialState.following.includes(targetId);
     void socialAction('follow', { targetId, enabled }).catch((error) => void siteAlert(error.message || 'Could not update follow.'));
+    return;
+  }
+  const adAccount = event.target.closest('[data-open-ad-account]');
+  if (adAccount) {
+    event.preventDefault();
+    openAdAdvertiserAccount(adAccount);
     return;
   }
   const authorButton = event.target.closest('[data-open-member]');
