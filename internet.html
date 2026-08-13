@@ -14,7 +14,7 @@
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <link rel="apple-touch-icon" href="assets/clearwater-logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260813-search-badges" />
+    <link rel="stylesheet" href="internet.css?v=20260813-reels-mobile-menu" />
   </head>
   <body class="internet-booting">
     <aside class="site-update-banner" data-site-banner hidden>
@@ -102,6 +102,9 @@
 
           <section class="posts" id="feed" aria-live="polite"><p class="feed-note" data-feed-note hidden>Loading posts...</p><div data-post-list></div></section>
           <section class="reels-stage" data-reels-stage hidden>
+            <div class="reels-toolbar">
+              <button class="reel-post-btn" type="button" data-open-reel-composer>Post a Reel</button>
+            </div>
             <div class="reels-layout">
               <div class="reels-viewport" data-reels-viewport></div>
               <aside class="reel-panel" data-reel-panel aria-label="Reel details and comments">
@@ -114,7 +117,12 @@
                     </button>
                     <div class="reel-panel-head-actions">
                       <button type="button" class="reel-panel-follow" data-reel-panel-follow>Follow</button>
-                      <button type="button" class="reel-panel-report" data-reel-panel-report hidden>Report</button>
+                      <details class="reel-more" data-reel-panel-more hidden>
+                        <summary aria-label="More reel actions">⋯</summary>
+                        <div class="reel-more-menu">
+                          <button type="button" data-reel-panel-report>Report Reel</button>
+                        </div>
+                      </details>
                     </div>
                   </header>
                   <p class="reel-panel-caption" data-reel-panel-caption></p>
@@ -133,7 +141,6 @@
                 </div>
               </aside>
             </div>
-            <button class="reel-post-btn" type="button" data-open-reel-composer>Post a Reel</button>
           </section>
         </section>
         <section class="internet-view post-detail-view" data-view="post" hidden><header class="post-detail-header"><button type="button" data-back-home aria-label="Back to feed">←</button><h1>Post</h1></header><div data-post-detail><p class="feed-note">Loading post...</p></div></section>
@@ -509,6 +516,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260813-dedupe-reel-comments-2"></script>
+    <script src="internet.js?v=20260813-reels-mobile-menu"></script>
   </body>
 </html>

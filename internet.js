@@ -1013,7 +1013,7 @@ function bindReelGestures(viewport) {
     reelPointer = null;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     const card = event.target.closest('.reel-card');
-    if (!card || event.target.closest('button, a, input, textarea, .reel-actions')) return;
+    if (!card || event.target.closest('button, a, input, textarea, summary, details, .reel-actions, .reel-card-more, .reel-more')) return;
     reelPointer = { id: event.pointerId, card, x: event.clientX, y: event.clientY, at: Date.now() };
   });
   viewport.addEventListener('pointerup', (event) => {
@@ -1144,11 +1144,13 @@ function renderReelPanel(reelId, { focusInput = false } = {}) {
     follow.classList.toggle('following', following);
     follow.dataset.reelPanelFollow = reel.authorId;
   }
+  const more = document.querySelector('[data-reel-panel-more]');
   const reportReel = document.querySelector('[data-reel-panel-report]');
-  if (reportReel) {
-    reportReel.hidden = isSelf || !currentUserId;
-    reportReel.dataset.reportPost = reel.id;
+  if (more) {
+    more.hidden = isSelf || !currentUserId;
+    more.open = false;
   }
+  if (reportReel) reportReel.dataset.reportPost = reel.id;
   const share = document.querySelector('[data-reel-panel-share]');
   if (share) share.dataset.reelShare = reel.id;
   const selfAvatar = document.querySelector('[data-reel-panel-self-avatar]');
@@ -1251,11 +1253,17 @@ function renderReels() {
     const sound = videoSrc
       ? `<button type="button" class="reel-mute${reelsSoundOn ? ' is-on' : ''}" data-reel-sound="${escapeHtml(reel.id)}" aria-pressed="${reelsSoundOn ? 'true' : 'false'}" aria-label="${reelsSoundOn ? 'Turn off sound' : 'Turn on sound'}">${soundIcon(reelsSoundOn)}<span class="sr-only">${reelsSoundOn ? 'Sound on' : 'Muted'}</span></button>`
       : '';
-    const canReport = currentUserId && reel.authorId !== activeUserId();
-    const report = canReport
-      ? `<button type="button" data-report-post="${escapeHtml(reel.id)}" aria-label="Report reel"><span aria-hidden="true">⚑</span><span>Report</span></button>`
+    const isSelf = reel.authorId === activeUserId();
+    const following = socialState.following.includes(reel.authorId);
+    const canFollow = Boolean(currentUserId) && !isSelf;
+    const canReport = Boolean(currentUserId) && !isSelf;
+    const follow = canFollow
+      ? `<button type="button" class="reel-follow${following ? ' following' : ''}" data-reel-follow="${escapeHtml(reel.authorId)}">${following ? 'Following' : 'Follow'}</button>`
       : '';
-    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient" aria-hidden="true"></div>${sound}<div class="reel-meta"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(avatarUrl)}" alt="" /><span class="reel-author"><b>${escapeHtml(displayName)}</b><small>@${escapeHtml(username)}</small></span></button>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}" aria-label="Like">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}" aria-label="Comments">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}" aria-label="Share">${postActionIcon('share')}</button>${report}</div></article>`;
+    const more = canReport
+      ? `<details class="reel-card-more reel-more"><summary aria-label="More reel actions">⋯</summary><div class="reel-more-menu"><button type="button" data-report-post="${escapeHtml(reel.id)}">Report Reel</button></div></details>`
+      : '';
+    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient" aria-hidden="true"></div>${sound}${more}<div class="reel-meta"><div class="reel-meta-user"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(avatarUrl)}" alt="" /><span class="reel-author"><b>${escapeHtml(displayName)}</b><small>@${escapeHtml(username)}</small></span></button>${follow}</div>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}" aria-label="Like">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}" aria-label="Comments">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}" aria-label="Share">${postActionIcon('share')}</button></div></article>`;
   }).join('');
   if (anchorId) {
     const stayOn = [...viewport.querySelectorAll('.reel-card')].find((card) => card.dataset.reelId === anchorId);
@@ -3793,15 +3801,31 @@ document.addEventListener('click', (event) => {
     document.querySelector('[data-reel-panel-comment-input]')?.focus();
     return;
   }
-  const reelPanelFollow = event.target.closest('[data-reel-panel-follow]');
-  if (reelPanelFollow) {
-    const targetId = reelPanelFollow.dataset.reelPanelFollow;
+  const reelFollow = event.target.closest('[data-reel-panel-follow], [data-reel-follow]');
+  if (reelFollow) {
+    const targetId = reelFollow.dataset.reelPanelFollow || reelFollow.dataset.reelFollow;
     if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
     if (!targetId) return;
     void socialAction('follow', { targetId, enabled: !socialState.following.includes(targetId) })
-      .then(() => { if (activeReelId) renderReelPanel(activeReelId); })
+      .then(() => {
+        if (activeReelId) renderReelPanel(activeReelId);
+        document.querySelectorAll(`[data-reel-follow="${targetId}"]`).forEach((button) => {
+          const on = socialState.following.includes(targetId);
+          button.textContent = on ? 'Following' : 'Follow';
+          button.classList.toggle('following', on);
+        });
+      })
       .catch((error) => void siteAlert(error.message || 'Could not update follow.'));
     return;
+  }
+  const reportReel = event.target.closest('[data-reel-panel-report]');
+  if (reportReel) {
+    reportReel.closest('details')?.removeAttribute('open');
+    void runPostAction('report', reportReel.dataset.reportPost || activeReelId);
+    return;
+  }
+  if (event.target.closest('.reel-more-menu [data-report-post]')) {
+    event.target.closest('details')?.removeAttribute('open');
   }
   const reelShare = event.target.closest('[data-reel-share]');
   if (reelShare) { void handlePostEngagement('share', reelShare.dataset.reelShare); return; }
@@ -3865,8 +3889,12 @@ document.addEventListener('click', (event) => {
   if (repostPopup && !event.target.closest('[data-repost-popup]')) repostPopup.hidden = true;
   const reportPost = event.target.closest('[data-report-post]');
   if (reportPost) {
+    reportPost.closest('details')?.removeAttribute('open');
     void runPostAction('report', reportPost.dataset.reportPost);
     return;
+  }
+  if (!event.target.closest('.reel-more')) {
+    document.querySelectorAll('.reel-more[open]').forEach((menu) => { menu.open = false; });
   }
   const deletePost = event.target.closest('[data-delete-post]');
   if (deletePost) {
