@@ -22,18 +22,19 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@450;550;650;750;850&display=swap" rel="stylesheet" />
     <script>document.documentElement.classList.add('js');</script>
-    <link rel="stylesheet" href="styles.css?v=20260813-anchor-home" />
+    <link rel="stylesheet" href="styles.css?v=20260813-banner-center" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <aside class="site-update-banner" data-site-banner hidden>
       <div class="site-update-banner-bar">
-        <p data-site-banner-message></p>
-        <button type="button" data-site-banner-details-toggle hidden aria-expanded="false">What changed? <span aria-hidden="true">⌄</span></button>
+        <div class="site-update-banner-copy">
+          <p data-site-banner-message></p>
+          <p class="site-update-banner-details" data-site-banner-details hidden></p>
+        </div>
         <a data-site-banner-link hidden href="https://status.cwrpvc.lol/" target="_blank" rel="noopener">View status</a>
         <button type="button" class="site-update-banner-dismiss" data-site-banner-dismiss aria-label="Dismiss update">×</button>
       </div>
-      <div class="site-update-banner-details" data-site-banner-details hidden></div>
     </aside>
 
     <header class="site-header" data-header>
@@ -185,6 +186,6 @@
       </div>
     </footer>
 
-    <script src="script.js?v=20260813-anchor-home"></script>
+    <script src="script.js?v=20260813-banner-center"></script>
   </body>
 </html>

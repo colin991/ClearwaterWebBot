@@ -259,7 +259,6 @@ const applySiteBanner = (banner) => {
   if (!root) return;
   const message = document.querySelector('[data-site-banner-message]');
   const details = document.querySelector('[data-site-banner-details]');
-  const detailsToggle = document.querySelector('[data-site-banner-details-toggle]');
   const link = document.querySelector('[data-site-banner-link]');
   const active = banner && banner.message && siteBannerDismissedId() !== String(banner.id || '');
   if (!active) {
@@ -270,12 +269,10 @@ const applySiteBanner = (banner) => {
   }
   if (message) message.textContent = banner.message;
   if (details) {
-    details.textContent = banner.details || '';
-    details.hidden = true;
-  }
-  if (detailsToggle) {
-    detailsToggle.hidden = !banner.details;
-    detailsToggle.setAttribute('aria-expanded', 'false');
+    const detailText = String(banner.details || '').trim();
+    // Keep linked banners (like maintenance + status) to one clean line.
+    details.textContent = detailText;
+    details.hidden = !detailText || Boolean(banner.linkUrl);
   }
   if (link) {
     if (banner.linkUrl) {
@@ -307,21 +304,6 @@ const loadSiteBanner = async () => {
 };
 
 document.addEventListener('click', (event) => {
-  const detailsToggle = event.target.closest('[data-site-banner-details-toggle]');
-  if (detailsToggle) {
-    const details = document.querySelector('[data-site-banner-details]');
-    const root = document.querySelector('[data-site-banner]');
-    if (details) {
-      details.hidden = !details.hidden;
-      detailsToggle.setAttribute('aria-expanded', details.hidden ? 'false' : 'true');
-      if (root && !root.hidden) {
-        requestAnimationFrame(() => {
-          document.body.style.setProperty('--site-banner-height', `${Math.max(36, root.offsetHeight)}px`);
-        });
-      }
-    }
-    return;
-  }
   if (event.target.closest('[data-site-banner-dismiss]')) {
     const root = document.querySelector('[data-site-banner]');
     try {

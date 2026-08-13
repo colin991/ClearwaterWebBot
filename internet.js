@@ -2294,7 +2294,7 @@ function renderStaffDashboard() {
         ${staffActionGroupMarkup('Site banner', 'Shown at the very top of the homepage and Clearwater Internet', `<div class="staff-banner-form">
           ${banner ? `<p class="staff-banner-live"><b>Live now:</b> ${escapeHtml(banner.message)}${banner.linkUrl ? ` · <a href="${escapeHtml(banner.linkUrl)}" target="_blank" rel="noopener">link</a>` : ''}</p>` : '<p class="staff-empty">No site banner is live.</p>'}
           <label><span>Message</span><input data-staff-banner-message maxlength="160" placeholder="Scheduled maintenance tonight" value="${escapeHtml(bannerMessage)}" /></label>
-          <label><span>Details (optional)</span><textarea data-staff-banner-details maxlength="800" rows="3" placeholder="Shown when members expand What changed?">${escapeHtml(bannerDetails)}</textarea></label>
+          <label><span>Details (optional)</span><textarea data-staff-banner-details maxlength="800" rows="3" placeholder="Optional secondary line under the message">${escapeHtml(bannerDetails)}</textarea></label>
           <label><span>Link URL</span><input data-staff-banner-link maxlength="300" placeholder="https://status.cwrpvc.lol/" value="${escapeHtml(bannerLink)}" /></label>
           <label><span>Link label</span><input data-staff-banner-link-label maxlength="40" placeholder="View status" value="${escapeHtml(bannerLinkLabel)}" /></label>
           <div class="staff-action-grid">
@@ -2519,7 +2519,6 @@ function applySiteBanner(banner, forceShow = false) {
   if (!root) return;
   const message = document.querySelector('[data-site-banner-message]');
   const details = document.querySelector('[data-site-banner-details]');
-  const detailsToggle = document.querySelector('[data-site-banner-details-toggle]');
   const link = document.querySelector('[data-site-banner-link]');
   const active = banner && banner.message && (forceShow || siteBannerDismissedId() !== String(banner.id || ''));
   if (!active) {
@@ -2530,12 +2529,10 @@ function applySiteBanner(banner, forceShow = false) {
   }
   if (message) message.textContent = banner.message;
   if (details) {
-    details.textContent = banner.details || '';
-    details.hidden = true;
-  }
-  if (detailsToggle) {
-    detailsToggle.hidden = !banner.details;
-    detailsToggle.setAttribute('aria-expanded', 'false');
+    const detailText = String(banner.details || '').trim();
+    // Keep linked banners (like maintenance + status) to one clean line.
+    details.textContent = detailText;
+    details.hidden = !detailText || Boolean(banner.linkUrl);
   }
   if (link) {
     if (banner.linkUrl) {
@@ -3691,12 +3688,12 @@ document.addEventListener('click', (event) => {
     const linkLabel = tools?.querySelector('[data-staff-banner-link-label]');
     if (staffBannerPreset.dataset.staffBannerPreset === 'maintenance') {
       if (message) message.value = 'Scheduled maintenance is coming up.';
-      if (details) details.value = 'Some Clearwater services may be briefly unavailable. Check the status page for live updates.';
+      if (details) details.value = '';
       if (link) link.value = 'https://status.cwrpvc.lol/';
       if (linkLabel) linkLabel.value = 'View status';
     } else {
       if (message) message.value = 'We posted a Clearwater update.';
-      if (details) details.value = 'Share the short details members should see when they expand this banner.';
+      if (details) details.value = '';
       if (link) link.value = '';
       if (linkLabel) linkLabel.value = '';
     }
@@ -3716,21 +3713,6 @@ document.addEventListener('click', (event) => {
       return;
     }
     void runStaffSiteAction(action, staffSiteAction.dataset.staffEnabled === 'true');
-    return;
-  }
-  const siteBannerDetailsToggle = event.target.closest('[data-site-banner-details-toggle]');
-  if (siteBannerDetailsToggle) {
-    const details = document.querySelector('[data-site-banner-details]');
-    if (details) {
-      details.hidden = !details.hidden;
-      siteBannerDetailsToggle.setAttribute('aria-expanded', details.hidden ? 'false' : 'true');
-      const root = document.querySelector('[data-site-banner]');
-      if (root && !root.hidden) {
-        requestAnimationFrame(() => {
-          document.body.style.setProperty('--site-banner-height', `${Math.max(36, root.offsetHeight)}px`);
-        });
-      }
-    }
     return;
   }
   if (event.target.closest('[data-site-banner-dismiss]')) {

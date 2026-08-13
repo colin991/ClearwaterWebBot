@@ -5406,14 +5406,23 @@ body { margin: 0; }
 }
 .site-update-banner[hidden] { display: none !important; }
 .site-update-banner-bar {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
   width: min(1100px, calc(100% - 28px));
   min-height: 38px;
   margin: 0 auto;
-  padding: 8px 0;
+  padding: 8px 40px;
+  text-align: center;
+}
+.site-update-banner-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  max-width: min(720px, 100%);
 }
 .site-update-banner-bar p {
   margin: 0;
@@ -5422,29 +5431,28 @@ body { margin: 0; }
   font-weight: 650;
   line-height: 1.35;
 }
-.site-update-banner-bar a,
-.site-update-banner-bar button[data-site-banner-details-toggle] {
+.site-update-banner-bar a {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   padding: 0;
   border: 0;
   color: #dce5f4;
   background: transparent;
   font: inherit;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 750;
   text-decoration: underline;
   text-underline-offset: 2px;
-  cursor: pointer;
   white-space: nowrap;
 }
-.site-update-banner-bar a:hover,
-.site-update-banner-bar button[data-site-banner-details-toggle]:hover { color: #fff; }
+.site-update-banner-bar a:hover { color: #fff; }
 .site-update-banner-dismiss {
+  position: absolute;
+  top: 50%;
+  right: 0;
   width: 28px;
   height: 28px;
-  margin-left: 4px;
+  margin: 0;
   padding: 0;
   border: 0;
   border-radius: 8px;
@@ -5452,16 +5460,15 @@ body { margin: 0; }
   background: transparent;
   font-size: 20px;
   line-height: 1;
+  transform: translateY(-50%);
   cursor: pointer;
 }
 .site-update-banner-dismiss:hover { color: #fff; background: rgba(255,255,255,.08); }
 .site-update-banner-details {
-  width: min(1100px, calc(100% - 28px));
-  margin: 0 auto;
-  padding: 0 0 12px;
   color: #b7c3d6;
   font-size: 12px;
-  line-height: 1.5;
+  font-weight: 550;
+  line-height: 1.45;
   white-space: pre-wrap;
 }
 .site-update-banner-details[hidden] { display: none !important; }
