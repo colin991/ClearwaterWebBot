@@ -249,3 +249,88 @@ document.querySelectorAll('a[href="/internet"]').forEach((link) => {
     goToInternet();
   });
 });
+
+const siteBannerDismissedId = () => {
+  try { return localStorage.getItem('cw-site-banner-dismissed') || ''; } catch { return ''; }
+};
+
+const applySiteBanner = (banner) => {
+  const root = document.querySelector('[data-site-banner]');
+  if (!root) return;
+  const message = document.querySelector('[data-site-banner-message]');
+  const details = document.querySelector('[data-site-banner-details]');
+  const detailsToggle = document.querySelector('[data-site-banner-details-toggle]');
+  const link = document.querySelector('[data-site-banner-link]');
+  const active = banner && banner.message && siteBannerDismissedId() !== String(banner.id || '');
+  if (!active) {
+    root.hidden = true;
+    document.body.classList.remove('has-site-banner');
+    document.body.style.removeProperty('--site-banner-height');
+    return;
+  }
+  if (message) message.textContent = banner.message;
+  if (details) {
+    details.textContent = banner.details || '';
+    details.hidden = true;
+  }
+  if (detailsToggle) {
+    detailsToggle.hidden = !banner.details;
+    detailsToggle.setAttribute('aria-expanded', 'false');
+  }
+  if (link) {
+    if (banner.linkUrl) {
+      link.hidden = false;
+      link.href = banner.linkUrl;
+      link.textContent = banner.linkLabel || 'Learn more';
+    } else {
+      link.hidden = true;
+      link.removeAttribute('href');
+    }
+  }
+  root.dataset.bannerId = String(banner.id || '');
+  root.hidden = false;
+  document.body.classList.add('has-site-banner');
+  requestAnimationFrame(() => {
+    document.body.style.setProperty('--site-banner-height', `${Math.max(36, root.offsetHeight)}px`);
+  });
+};
+
+const loadSiteBanner = async () => {
+  try {
+    const response = await fetch(`/api/internet?banner=${Date.now()}`, { cache: 'no-store' });
+    if (!response.ok) return;
+    const result = await response.json();
+    applySiteBanner(result.settings?.siteBanner || null);
+  } catch {
+    // Keep the homepage usable if the bot host is offline.
+  }
+};
+
+document.addEventListener('click', (event) => {
+  const detailsToggle = event.target.closest('[data-site-banner-details-toggle]');
+  if (detailsToggle) {
+    const details = document.querySelector('[data-site-banner-details]');
+    const root = document.querySelector('[data-site-banner]');
+    if (details) {
+      details.hidden = !details.hidden;
+      detailsToggle.setAttribute('aria-expanded', details.hidden ? 'false' : 'true');
+      if (root && !root.hidden) {
+        requestAnimationFrame(() => {
+          document.body.style.setProperty('--site-banner-height', `${Math.max(36, root.offsetHeight)}px`);
+        });
+      }
+    }
+    return;
+  }
+  if (event.target.closest('[data-site-banner-dismiss]')) {
+    const root = document.querySelector('[data-site-banner]');
+    try {
+      if (root?.dataset.bannerId) localStorage.setItem('cw-site-banner-dismissed', root.dataset.bannerId);
+    } catch {
+      // Ignore storage failures.
+    }
+    applySiteBanner(null);
+  }
+});
+
+loadSiteBanner();

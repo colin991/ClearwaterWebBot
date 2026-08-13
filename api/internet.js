@@ -388,10 +388,17 @@ export default async function handler(request, response) {
       };
     } else if (body.action === 'staff-site') {
       if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
+      const banner = body.banner && typeof body.banner === 'object' ? body.banner : {};
       payload = {
         action: 'staff-site',
         staffAction: String(body.staffAction || ''),
         enabled: body.enabled === true,
+        banner: {
+          message: String(banner.message || '').slice(0, 160),
+          details: String(banner.details || '').slice(0, 800),
+          linkUrl: String(banner.linkUrl || '').slice(0, 300),
+          linkLabel: String(banner.linkLabel || '').slice(0, 40),
+        },
         actor: { id: user.id, displayName: user.displayName },
         owner: true,
       };

@@ -14,9 +14,39 @@ const emptyStore = Object.freeze({
   logs: [],
   ipBans: [],
   creditTransfers: [],
+  siteBanner: null,
   officialProfile: {},
   settings: { pausePosts: false, pauseReels: false, pauseMessages: false },
 });
+
+function sanitizeHttpsUrl(value, length = 300) {
+  const candidate = String(value || '').trim().slice(0, length);
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== 'https:' || url.username || url.password || /["'()\\\s]/.test(candidate)) return '';
+    return url.href;
+  } catch {
+    return '';
+  }
+}
+
+function sanitizeSiteBanner(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const message = text(raw.message, 160);
+  if (!message) return null;
+  const details = text(raw.details, 800);
+  const linkUrl = sanitizeHttpsUrl(raw.linkUrl, 300);
+  const linkLabel = text(raw.linkLabel, 40) || (linkUrl ? 'Learn more' : '');
+  return {
+    id: text(raw.id, 80) || randomUUID(),
+    message,
+    details,
+    linkUrl,
+    linkLabel,
+    createdAt: text(raw.createdAt, 40) || new Date().toISOString(),
+    updatedAt: text(raw.updatedAt, 40) || new Date().toISOString(),
+  };
+}
 export const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
 const officialDefaults = Object.freeze({
   displayName: 'Clearwater Roleplay',
@@ -55,6 +85,7 @@ export async function readInternetStore() {
     logs: Array.isArray(data?.logs) ? data.logs : [],
     ipBans: Array.isArray(data?.ipBans) ? data.ipBans : [],
     creditTransfers: Array.isArray(data?.creditTransfers) ? data.creditTransfers : [],
+    siteBanner: sanitizeSiteBanner(data?.siteBanner),
     officialProfile: data?.officialProfile && typeof data.officialProfile === 'object' ? data.officialProfile : {},
     settings: {
       pausePosts: data?.settings?.pausePosts === true,
@@ -94,6 +125,7 @@ export function publicInternetSettings(store) {
     pausePosts: store.settings?.pausePosts === true,
     pauseReels: store.settings?.pauseReels === true,
     pauseMessages: store.settings?.pauseMessages === true,
+    siteBanner: sanitizeSiteBanner(store.siteBanner),
   };
 }
 
@@ -1769,7 +1801,7 @@ export function applyStaffUserAction(store, {
   return staffUserDetail(store, user.id);
 }
 
-export function applyStaffSiteAction(store, { actor, staffAction, enabled }) {
+export function applyStaffSiteAction(store, { actor, staffAction, enabled, banner }) {
   const action = String(staffAction || '').trim();
   const actorName = text(actor?.displayName, 80) || 'Staff';
   store.settings = store.settings && typeof store.settings === 'object'
@@ -1792,6 +1824,19 @@ export function applyStaffSiteAction(store, { actor, staffAction, enabled }) {
     const count = Array.isArray(store.ipBans) ? store.ipBans.length : 0;
     store.ipBans = [];
     addInternetLog(store, `${actorName} cleared ${count} network ban(s).`);
+  } else if (action === 'set-site-banner') {
+    const next = sanitizeSiteBanner({
+      ...(banner && typeof banner === 'object' ? banner : {}),
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    if (!next) throw new Error('Enter a banner message');
+    store.siteBanner = next;
+    addInternetLog(store, `${actorName} published a site banner: ${next.message}`);
+  } else if (action === 'clear-site-banner') {
+    store.siteBanner = null;
+    addInternetLog(store, `${actorName} took down the site banner.`);
   } else {
     throw new Error('Unsupported site action');
   }

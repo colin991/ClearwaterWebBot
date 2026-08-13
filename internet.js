@@ -2048,9 +2048,28 @@ function renderStaffDashboard() {
       <span class="staff-toggle-switch" aria-hidden="true"></span>
       <span class="staff-toggle-label"><b>${label}</b><small>${enabled ? onCopy : offCopy}</small></span>
     </button>`;
+    const banner = settings.siteBanner || null;
+    const bannerBusy = siteTools.contains(document.activeElement);
+    const bannerMessage = bannerBusy ? (siteTools.querySelector('[data-staff-banner-message]')?.value || '') : (banner?.message || '');
+    const bannerDetails = bannerBusy ? (siteTools.querySelector('[data-staff-banner-details]')?.value || '') : (banner?.details || '');
+    const bannerLink = bannerBusy ? (siteTools.querySelector('[data-staff-banner-link]')?.value || '') : (banner?.linkUrl || '');
+    const bannerLinkLabel = bannerBusy ? (siteTools.querySelector('[data-staff-banner-link-label]')?.value || '') : (banner?.linkLabel || '');
     siteTools.innerHTML = `<h2>Site controls</h2>
       <p>Site-wide switches apply to everyone except the official account.</p>
       <div class="staff-action-groups">
+        ${staffActionGroupMarkup('Site banner', 'Shown at the very top of the homepage and Clearwater Internet', `<div class="staff-banner-form">
+          ${banner ? `<p class="staff-banner-live"><b>Live now:</b> ${escapeHtml(banner.message)}${banner.linkUrl ? ` · <a href="${escapeHtml(banner.linkUrl)}" target="_blank" rel="noopener">link</a>` : ''}</p>` : '<p class="staff-empty">No site banner is live.</p>'}
+          <label><span>Message</span><input data-staff-banner-message maxlength="160" placeholder="Scheduled maintenance tonight" value="${escapeHtml(bannerMessage)}" /></label>
+          <label><span>Details (optional)</span><textarea data-staff-banner-details maxlength="800" rows="3" placeholder="Shown when members expand What changed?">${escapeHtml(bannerDetails)}</textarea></label>
+          <label><span>Link URL</span><input data-staff-banner-link maxlength="300" placeholder="https://status.cwrpvc.lol/" value="${escapeHtml(bannerLink)}" /></label>
+          <label><span>Link label</span><input data-staff-banner-link-label maxlength="40" placeholder="View status" value="${escapeHtml(bannerLinkLabel)}" /></label>
+          <div class="staff-action-grid">
+            <button type="button" class="staff-action-btn ghost" data-staff-banner-preset="maintenance">Maintenance preset</button>
+            <button type="button" class="staff-action-btn ghost" data-staff-banner-preset="update">Update preset</button>
+            <button type="button" class="staff-action-btn" data-staff-site-action="set-site-banner">Publish banner</button>
+            <button type="button" class="staff-action-btn danger" data-staff-site-action="clear-site-banner"${banner ? '' : ' disabled'}>Take down</button>
+          </div>
+        </div>`)}
         ${staffActionGroupMarkup('Community pauses', 'Stop new activity without banning anyone', `<div class="staff-toggle-grid">
           ${siteToggle('pause-posts', settings.pausePosts === true, 'Posting', 'Paused for members', 'Open to members')}
           ${siteToggle('pause-reels', settings.pauseReels === true, 'Reels', 'Paused for members', 'Open to members')}
@@ -2225,19 +2244,23 @@ async function runStaffWalletAdjustment(button) {
   }
 }
 
-async function runStaffSiteAction(staffAction, enabled) {
+async function runStaffSiteAction(staffAction, enabled, banner) {
   if (staffAction === 'clear-ip-bans' && !(await siteConfirm('Clear every hashed network ban?', 'Clear network bans'))) return;
+  if (staffAction === 'clear-site-banner' && !(await siteConfirm('Take down the live site banner?', 'Take down banner'))) return;
   const status = document.querySelector('[data-staff-site-status]');
   if (status) status.textContent = 'Saving...';
   try {
     const response = await fetch('/api/internet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'staff-site', staffAction, enabled }),
+      body: JSON.stringify({ action: 'staff-site', staffAction, enabled, banner }),
     });
     const result = await readApiJson(response, 'Could not update site controls.');
     if (!response.ok) throw new Error(result.error || 'Could not update site controls.');
     if (result.snapshot) moderationSnapshot = result.snapshot;
+    if (result.settings?.siteBanner !== undefined || staffAction === 'set-site-banner' || staffAction === 'clear-site-banner') {
+      applySiteBanner(result.settings?.siteBanner || result.snapshot?.settings?.siteBanner || null, true);
+    }
     renderStaffDashboard();
     const nextStatus = document.querySelector('[data-staff-site-status]');
     if (nextStatus) nextStatus.textContent = 'Saved.';
@@ -2246,6 +2269,56 @@ async function runStaffSiteAction(staffAction, enabled) {
     if (nextStatus) nextStatus.textContent = error.message || 'Could not update site controls.';
     else void siteAlert(error.message || 'Could not update site controls.');
   }
+}
+
+function siteBannerDismissedId() {
+  try { return localStorage.getItem('cw-site-banner-dismissed') || ''; } catch { return ''; }
+}
+
+function dismissSiteBanner(id) {
+  try { if (id) localStorage.setItem('cw-site-banner-dismissed', String(id)); } catch { /* ignore */ }
+  applySiteBanner(null, false);
+}
+
+function applySiteBanner(banner, forceShow = false) {
+  const root = document.querySelector('[data-site-banner]');
+  if (!root) return;
+  const message = document.querySelector('[data-site-banner-message]');
+  const details = document.querySelector('[data-site-banner-details]');
+  const detailsToggle = document.querySelector('[data-site-banner-details-toggle]');
+  const link = document.querySelector('[data-site-banner-link]');
+  const active = banner && banner.message && (forceShow || siteBannerDismissedId() !== String(banner.id || ''));
+  if (!active) {
+    root.hidden = true;
+    document.body.classList.remove('has-site-banner');
+    document.body.style.removeProperty('--site-banner-height');
+    return;
+  }
+  if (message) message.textContent = banner.message;
+  if (details) {
+    details.textContent = banner.details || '';
+    details.hidden = true;
+  }
+  if (detailsToggle) {
+    detailsToggle.hidden = !banner.details;
+    detailsToggle.setAttribute('aria-expanded', 'false');
+  }
+  if (link) {
+    if (banner.linkUrl) {
+      link.hidden = false;
+      link.href = banner.linkUrl;
+      link.textContent = banner.linkLabel || 'Learn more';
+    } else {
+      link.hidden = true;
+      link.removeAttribute('href');
+    }
+  }
+  root.dataset.bannerId = String(banner.id || '');
+  root.hidden = false;
+  document.body.classList.add('has-site-banner');
+  requestAnimationFrame(() => {
+    document.body.style.setProperty('--site-banner-height', `${Math.max(36, root.offsetHeight)}px`);
+  });
 }
 
 function formatCredits(value) {
@@ -2928,6 +3001,7 @@ async function loadPosts() {
     if (!response.ok) throw new Error(result.error || 'Service unavailable');
     allPosts = result.posts || [];
     internetUsers = new Map((result.users || []).map((user) => [user.id, user]));
+    applySiteBanner(result.settings?.siteBanner || null);
     officialAccountId = result.officialUserId || [...internetUsers.values()].find((user) => user.official)?.id || officialAccountId;
     updateAccountSwitcher();
     const official = internetUsers.get(officialAccountId);
@@ -3367,9 +3441,60 @@ document.addEventListener('click', (event) => {
     renderStaffDashboard();
     return;
   }
+  const staffBannerPreset = event.target.closest('[data-staff-banner-preset]');
+  if (staffBannerPreset) {
+    const tools = document.querySelector('[data-staff-site-tools]');
+    const message = tools?.querySelector('[data-staff-banner-message]');
+    const details = tools?.querySelector('[data-staff-banner-details]');
+    const link = tools?.querySelector('[data-staff-banner-link]');
+    const linkLabel = tools?.querySelector('[data-staff-banner-link-label]');
+    if (staffBannerPreset.dataset.staffBannerPreset === 'maintenance') {
+      if (message) message.value = 'Scheduled maintenance is coming up.';
+      if (details) details.value = 'Some Clearwater services may be briefly unavailable. Check the status page for live updates.';
+      if (link) link.value = 'https://status.cwrpvc.lol/';
+      if (linkLabel) linkLabel.value = 'View status';
+    } else {
+      if (message) message.value = 'We posted a Clearwater update.';
+      if (details) details.value = 'Share the short details members should see when they expand this banner.';
+      if (link) link.value = '';
+      if (linkLabel) linkLabel.value = '';
+    }
+    return;
+  }
   const staffSiteAction = event.target.closest('[data-staff-site-action]');
   if (staffSiteAction) {
-    void runStaffSiteAction(staffSiteAction.dataset.staffSiteAction, staffSiteAction.dataset.staffEnabled === 'true');
+    const action = staffSiteAction.dataset.staffSiteAction;
+    if (action === 'set-site-banner') {
+      const tools = document.querySelector('[data-staff-site-tools]');
+      void runStaffSiteAction(action, false, {
+        message: tools?.querySelector('[data-staff-banner-message]')?.value || '',
+        details: tools?.querySelector('[data-staff-banner-details]')?.value || '',
+        linkUrl: tools?.querySelector('[data-staff-banner-link]')?.value || '',
+        linkLabel: tools?.querySelector('[data-staff-banner-link-label]')?.value || '',
+      });
+      return;
+    }
+    void runStaffSiteAction(action, staffSiteAction.dataset.staffEnabled === 'true');
+    return;
+  }
+  const siteBannerDetailsToggle = event.target.closest('[data-site-banner-details-toggle]');
+  if (siteBannerDetailsToggle) {
+    const details = document.querySelector('[data-site-banner-details]');
+    if (details) {
+      details.hidden = !details.hidden;
+      siteBannerDetailsToggle.setAttribute('aria-expanded', details.hidden ? 'false' : 'true');
+      const root = document.querySelector('[data-site-banner]');
+      if (root && !root.hidden) {
+        requestAnimationFrame(() => {
+          document.body.style.setProperty('--site-banner-height', `${Math.max(36, root.offsetHeight)}px`);
+        });
+      }
+    }
+    return;
+  }
+  if (event.target.closest('[data-site-banner-dismiss]')) {
+    const root = document.querySelector('[data-site-banner]');
+    dismissSiteBanner(root?.dataset.bannerId || '');
     return;
   }
   const copyStaffId = event.target.closest('[data-staff-copy-id]');

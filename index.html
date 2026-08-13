@@ -19,10 +19,19 @@
     <title>Clearwater Roleplay</title>
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <script>document.documentElement.classList.add('js');</script>
-    <link rel="stylesheet" href="styles.css?v=20260813-home-bar" />
+    <link rel="stylesheet" href="styles.css?v=20260813-site-banner" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
+    <aside class="site-update-banner" data-site-banner hidden>
+      <div class="site-update-banner-bar">
+        <p data-site-banner-message></p>
+        <button type="button" data-site-banner-details-toggle hidden aria-expanded="false">What changed? <span aria-hidden="true">⌄</span></button>
+        <a data-site-banner-link hidden href="https://status.cwrpvc.lol/" target="_blank" rel="noopener">View status</a>
+        <button type="button" class="site-update-banner-dismiss" data-site-banner-dismiss aria-label="Dismiss update">×</button>
+      </div>
+      <div class="site-update-banner-details" data-site-banner-details hidden></div>
+    </aside>
 
     <header class="site-header" data-header>
       <div class="nav-shell">
@@ -163,6 +172,6 @@
       </div>
     </footer>
 
-    <script src="script.js?v=20260813-home-bar"></script>
+    <script src="script.js?v=20260813-site-banner"></script>
   </body>
 </html>
