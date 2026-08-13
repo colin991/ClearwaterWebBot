@@ -2751,6 +2751,141 @@ body { margin: 0; }
   }
 }
 
+/* Mobile messaging: full-screen chat above the dock, sane inbox sizing. */
+@media (max-width: 660px) {
+  .internet-view[data-view="messages"] {
+    min-height: 0 !important;
+    gap: 10px;
+  }
+  .messages-heading {
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 14px 14px 12px !important;
+  }
+  .messages-heading h1 { font-size: 22px !important; }
+  .messages-heading .inline-button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 8px 12px !important;
+    font-size: 12px;
+  }
+  .message-list {
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border-radius: 14px !important;
+  }
+  .message-list > .message-empty,
+  .message-list > p.message-empty {
+    min-height: 180px !important;
+    padding: 36px 18px !important;
+  }
+  .message-list .internet-message {
+    align-items: flex-start !important;
+    gap: 12px !important;
+    padding: 14px 44px 14px 12px !important;
+  }
+  .message-list .internet-message span {
+    gap: 3px;
+  }
+  .message-list .internet-message b {
+    font-size: 14px;
+    line-height: 1.25;
+  }
+  .message-list .internet-message p {
+    white-space: nowrap !important;
+    font-size: 13px;
+  }
+  .message-list .internet-message small {
+    font-size: 11px !important;
+  }
+  .message-list .internet-message em {
+    right: 10px !important;
+    top: 16px !important;
+    transform: none !important;
+  }
+
+  /* Open thread: hide bottom nav so the composer is not covered. */
+  body.conversation-open .internet-shell:not(.staff-mode) {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 100dvh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  body.conversation-open .internet-shell:not(.staff-mode) .internet-rail {
+    display: none !important;
+  }
+  body.conversation-open .internet-shell:not(.staff-mode) .internet-side,
+  body.conversation-open .internet-shell:not(.staff-mode) .rail-primary {
+    display: none !important;
+  }
+  body.conversation-open .internet-feed {
+    display: flex !important;
+    width: 100% !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  body.conversation-open .internet-view.conversation-view:not([hidden]) {
+    display: flex !important;
+    width: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #060b14 !important;
+  }
+  body.conversation-open .conversation-header {
+    padding: 10px 12px calc(10px + env(safe-area-inset-top, 0px)) !important;
+    padding-top: calc(10px + env(safe-area-inset-top, 0px)) !important;
+    border-bottom: 1px solid rgba(148, 184, 255, .14);
+    background: rgba(6, 11, 20, .96);
+  }
+  body.conversation-open .conversation-messages {
+    padding: 14px 12px !important;
+    gap: 8px !important;
+  }
+  body.conversation-open .conversation-bubble {
+    max-width: min(86%, 420px) !important;
+  }
+  body.conversation-open .conversation-dock {
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 12 !important;
+    padding: 8px 10px calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+    border-top: 1px solid rgba(148, 184, 255, .14);
+    background: rgba(6, 11, 20, .98) !important;
+  }
+  body.conversation-open .conversation-compose {
+    gap: 6px !important;
+    padding: 0 !important;
+    border-top: 0 !important;
+  }
+  body.conversation-open .conversation-compose input {
+    min-height: 44px !important;
+    padding: 11px 14px !important;
+    font-size: 16px !important; /* prevent iOS zoom */
+  }
+  body.conversation-open .conversation-compose [data-conversation-gif],
+  body.conversation-open .conversation-compose [data-conversation-emoji] {
+    width: 36px !important;
+    height: 36px !important;
+    flex: 0 0 36px !important;
+    border-radius: 10px !important;
+  }
+  body.conversation-open .conversation-compose button:last-child {
+    width: 40px !important;
+    height: 40px !important;
+    flex: 0 0 40px;
+  }
+}
+
 .internet-shell.staff-mode {
   height: 100dvh !important;
   min-height: 100dvh !important;
@@ -5189,15 +5324,17 @@ html.pref-reduce-motion *::after {
     background: linear-gradient(180deg, transparent, rgba(3, 7, 13, .92) 28%);
   }
   .conversation-view {
-    min-height: calc(100dvh - 120px);
+    min-height: 0;
   }
   .conversation-compose {
     gap: 6px !important;
     padding: 8px !important;
   }
-  .message-list .internet-message,
   .notification-list .notification-item {
     padding: 12px !important;
+  }
+  .message-list .internet-message {
+    padding: 14px 44px 14px 12px !important;
   }
   .staff-mode .internet-shell {
     width: 100% !important;

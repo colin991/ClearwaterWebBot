@@ -1829,6 +1829,8 @@ function showView(view) {
   const shell = document.querySelector('.internet-shell');
   const feed = document.querySelector('.internet-feed');
   shell?.classList.toggle('staff-mode', activeView === 'staff');
+  document.body.classList.toggle('conversation-open', activeView === 'conversation');
+  document.body.classList.toggle('messages-open', activeView === 'messages' || activeView === 'conversation');
   if (feed) feed.dataset.activeView = activeView;
   document.querySelectorAll('[data-view]').forEach((section) => {
     const on = section.dataset.view === activeView;
