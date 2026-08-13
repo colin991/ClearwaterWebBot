@@ -2825,21 +2825,21 @@ function renderWalletBoost(wallet) {
   const perks = document.querySelector('[data-wallet-boost-perks]');
   const percent = Math.round(Math.max(0, Math.min(1, Number(boost.progress) || 0)) * 100);
   if (level) level.textContent = `Level ${Number(boost.level) || 0} · ${boost.label || 'Starter'}`;
-  if (rate) rate.textContent = `${formatCredits(boost.hourly || 5)} / hour`;
+  if (rate) rate.textContent = `${formatCredits(boost.daily || wallet?.dailyAmount || 75)} / day`;
   if (fill) fill.style.width = `${percent}%`;
   if (track) {
     track.setAttribute('aria-valuenow', String(percent));
-    track.setAttribute('aria-label', `Chat boost progress ${percent}%`);
+    track.setAttribute('aria-label', `Daily chat level progress ${percent}%`);
   }
   if (copy) {
-    copy.textContent = wallet?.hourlyGranted
-      ? `${formatCredits(wallet.hourlyGranted)} in hourly chat boost just landed.`
-      : 'Send messages and posts on Clearwater Internet to raise your hourly credits.';
+    copy.textContent = wallet?.dailySource === 'role'
+      ? `Your Discord role currently pays ${formatCredits(wallet.dailyAmount || 75)}/day. Keep chatting to raise your own level too.`
+      : 'Send messages and posts on Clearwater Internet to raise your daily credit drop.';
   }
   if (next) {
     next.textContent = boost.maxLevel
-      ? `Max level · ${Number(boost.messages || 0).toLocaleString()} chats counted.`
-      : `${Number(boost.messages || 0).toLocaleString()} / ${Number(boost.nextMessages || 0).toLocaleString()} chats to Level ${boost.nextLevel} · ${boost.nextLabel} (${formatCredits(boost.nextHourly || 0)}/hr).`;
+      ? `Max chat level · ${Number(boost.messages || 0).toLocaleString()} chats counted.`
+      : `${Number(boost.messages || 0).toLocaleString()} / ${Number(boost.nextMessages || 0).toLocaleString()} chats to Level ${boost.nextLevel} · ${boost.nextLabel} (${formatCredits(boost.nextDaily || 0)}/day).`;
   }
   if (perks) {
     const levels = Array.isArray(boost.levels) ? boost.levels : [];
@@ -2847,7 +2847,7 @@ function renderWalletBoost(wallet) {
       ? levels.map((entry) => {
         const active = Number(entry.level) === Number(boost.level);
         const unlocked = Number(boost.messages || 0) >= Number(entry.messages || 0);
-        return `<li class="${active ? 'active' : ''} ${unlocked ? 'unlocked' : ''}"><b>Lv ${entry.level} · ${escapeHtml(entry.label)}</b><span>${Number(entry.messages || 0).toLocaleString()} chats · ${formatCredits(entry.hourly)}/hr</span></li>`;
+        return `<li class="${active ? 'active' : ''} ${unlocked ? 'unlocked' : ''}"><b>Lv ${entry.level} · ${escapeHtml(entry.label)}</b><span>${Number(entry.messages || 0).toLocaleString()} chats · ${formatCredits(entry.daily)}/day</span></li>`;
       }).join('')
       : '';
   }
@@ -3189,14 +3189,14 @@ function renderWallet(wallet) {
   if (lede) {
     lede.textContent = wallet.claimedNow
       ? `${formatCredits(wallet.dailyAmount || 75)} just landed. Come back tomorrow for another drop.`
-      : wallet.hourlyGranted
-        ? `${formatCredits(wallet.hourlyGranted)} hourly chat boost collected. Keep chatting to climb levels.`
-        : 'Track your balance, daily drops, chat boosts, and recent credit activity.';
+      : 'Track your balance, daily drops, chat levels, and recent credit activity.';
   }
   if (dailyCopy) {
-    const perk = wallet.dailyLabel && wallet.dailyLabel !== 'Member'
-      ? ` Your ${wallet.dailyLabel} role raises this to ${formatCredits(wallet.dailyAmount || 75)}.`
-      : ` Members get ${formatCredits(wallet.baseDailyAmount || 75)}; Discord roles can raise it to C$200–C$300.`;
+    const perk = wallet.dailySource === 'role'
+      ? ` Your ${wallet.dailyLabel} role currently pays ${formatCredits(wallet.dailyAmount || 75)}.`
+      : wallet.dailySource === 'chat'
+        ? ` Your chat level pays ${formatCredits(wallet.dailyAmount || 75)}.`
+        : ` Start at ${formatCredits(wallet.baseDailyAmount || 75)}; chat levels and Discord roles can raise it.`;
     dailyCopy.textContent = `You receive credits every 24 hours.${perk}`;
   }
   if (status) {
