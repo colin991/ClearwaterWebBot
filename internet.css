@@ -4868,9 +4868,23 @@ html.pref-reduce-motion *::after {
   align-items: center;
   gap: 8px;
   max-width: calc(100% - 24px);
+  opacity: 0;
   pointer-events: none;
+  transition: opacity .18s ease;
 }
 .reel-audio > * { pointer-events: auto; }
+.reel-card:hover .reel-audio,
+.reel-card:focus-within .reel-audio,
+.reel-audio:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .reel-audio {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
 .reel-mute {
   position: relative;
   top: auto;
