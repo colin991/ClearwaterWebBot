@@ -5507,7 +5507,15 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
   font-size: 11px;
   font-style: normal;
 }
-.reel-panel-follow {
+.reel-panel-head-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.reel-panel-follow,
+.reel-panel-report {
   flex: 0 0 auto;
   min-height: 32px;
   padding: 0 14px;
@@ -5520,10 +5528,12 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
   font-weight: 800;
   cursor: pointer;
 }
-.reel-panel-follow.following {
+.reel-panel-follow.following,
+.reel-panel-report {
   color: #dce7f8;
   background: #243247;
 }
+.reel-panel-report:hover { color: #ffb4c0; }
 .reel-panel-caption {
   margin: 0;
   padding: 0 16px 12px;
@@ -5625,6 +5635,18 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
 }
 .reel-panel-comments .reel-comment small,
 .reel-comments .reel-comment small { color: #7f8da3; font-size: 11px; }
+.reel-comment-action {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  color: #8ea0b8;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.reel-comment-action:hover { color: #ffb4c0; }
 .reel-panel-comments .reel-comment p,
 .reel-comments .reel-comment p {
   margin: 4px 0 0;

@@ -1387,15 +1387,16 @@ export function deleteInternetPost(store, { postId, actorId, owner = false }) {
 export function createInternetReport(store, { postId, actor, reason }) {
   const post = store.posts.find((item) => item.id === String(postId || ''));
   if (!post) throw new Error('Post not found');
-  if (post.authorId === String(actor?.id)) throw new Error('You cannot report your own post');
+  const kind = post.parentId ? 'comment' : (post.kind === 'reel' ? 'reel' : 'post');
+  if (post.authorId === String(actor?.id)) throw new Error(`You cannot report your own ${kind}`);
   const reportReason = text(reason, 300);
   if (!reportReason) throw new Error('Enter a reason for the report');
   if (store.reports.some((report) => report.postId === post.id && report.reporterId === String(actor.id))) {
-    throw new Error('You have already reported this post');
+    throw new Error(`You have already reported this ${kind}`);
   }
   const report = {
     id: randomUUID(),
-    kind: 'post',
+    kind,
     source: 'member',
     postId: post.id,
     reporterId: String(actor.id),
@@ -1514,7 +1515,13 @@ export function reviewInternetReport(store, { reportId, decision, action, reason
   report.status = decision === 'accept' ? 'accepted' : 'denied';
   report.reviewedAt = new Date().toISOString();
   const notifyReporter = report.reporterId && report.reporterId !== 'automod';
-  const kindLabel = report.kind === 'message' ? 'message' : 'post';
+  const kindLabel = report.kind === 'message'
+    ? 'message'
+    : report.kind === 'comment'
+      ? 'comment'
+      : report.kind === 'reel'
+        ? 'reel'
+        : 'post';
   if (decision === 'deny') {
     let released = null;
     if (report.source === 'automod' && report.kind === 'post' && !report.postId) {

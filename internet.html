@@ -14,7 +14,7 @@
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <link rel="apple-touch-icon" href="assets/clearwater-logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260813-search-reels-fix" />
+    <link rel="stylesheet" href="internet.css?v=20260813-reel-comment-report" />
   </head>
   <body class="internet-booting">
     <aside class="site-update-banner" data-site-banner hidden>
@@ -112,7 +112,10 @@
                       <img data-reel-panel-avatar src="assets/clearwater-logo.png" alt="" />
                       <span><b data-reel-panel-name>Member</b><small data-reel-panel-handle>@member</small><em data-reel-panel-time></em></span>
                     </button>
-                    <button type="button" class="reel-panel-follow" data-reel-panel-follow>Follow</button>
+                    <div class="reel-panel-head-actions">
+                      <button type="button" class="reel-panel-follow" data-reel-panel-follow>Follow</button>
+                      <button type="button" class="reel-panel-report" data-reel-panel-report hidden>Report</button>
+                    </div>
                   </header>
                   <p class="reel-panel-caption" data-reel-panel-caption></p>
                   <div class="reel-panel-stats">
@@ -506,6 +509,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260813-search-reels-fix"></script>
+    <script src="internet.js?v=20260813-reel-comment-report"></script>
   </body>
 </html>

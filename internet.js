@@ -1046,13 +1046,25 @@ function updateReelStats(card, reel) {
   if (activeReelId === reel.id) syncReelPanelStats(reel);
 }
 
+function contentKindLabel(post) {
+  if (post?.parentId) return 'comment';
+  if (post?.kind === 'reel') return 'reel';
+  return 'post';
+}
+
 function reelCommentMarkup(comment) {
   const author = internetUsers.get(comment.authorId) || {};
   const isCreator = activeReelId && (allPosts.find((post) => post.id === activeReelId)?.authorId === comment.authorId);
-  return `<article class="reel-comment">
+  const own = comment.authorId === activeUserId();
+  const action = !currentUserId
+    ? ''
+    : own
+      ? `<button type="button" class="reel-comment-action" data-delete-post="${escapeHtml(comment.id)}">Delete</button>`
+      : `<button type="button" class="reel-comment-action" data-report-post="${escapeHtml(comment.id)}">Report</button>`;
+  return `<article class="reel-comment" data-comment-id="${escapeHtml(comment.id)}">
     <img src="${escapeHtml(author.avatarUrl || comment.avatarUrl || 'assets/clearwater-logo.png')}" alt="" />
     <div>
-      <header><b>@${escapeHtml(author.username || comment.username || 'member')}</b>${isCreator ? '<em>Creator</em>' : ''}<small>${timeAgo(comment.createdAt)}</small></header>
+      <header><b>@${escapeHtml(author.username || comment.username || 'member')}</b>${isCreator ? '<em>Creator</em>' : ''}<small>${timeAgo(comment.createdAt)}</small>${action}</header>
       <p>${escapeHtml(comment.content || '')}</p>
     </div>
   </article>`;
@@ -1116,6 +1128,11 @@ function renderReelPanel(reelId, { focusInput = false } = {}) {
     follow.textContent = following ? 'Following' : 'Follow';
     follow.classList.toggle('following', following);
     follow.dataset.reelPanelFollow = reel.authorId;
+  }
+  const reportReel = document.querySelector('[data-reel-panel-report]');
+  if (reportReel) {
+    reportReel.hidden = isSelf || !currentUserId;
+    reportReel.dataset.reportPost = reel.id;
   }
   const share = document.querySelector('[data-reel-panel-share]');
   if (share) share.dataset.reelShare = reel.id;
@@ -1223,7 +1240,11 @@ function renderReels() {
     const sound = videoSrc
       ? `<button type="button" class="reel-mute${reelsSoundOn ? ' is-on' : ''}" data-reel-sound="${escapeHtml(reel.id)}" aria-pressed="${reelsSoundOn ? 'true' : 'false'}" aria-label="${reelsSoundOn ? 'Turn off sound' : 'Turn on sound'}">${soundIcon(reelsSoundOn)}<span class="sr-only">${reelsSoundOn ? 'Sound on' : 'Muted'}</span></button>`
       : '';
-    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient" aria-hidden="true"></div>${sound}<div class="reel-meta"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(avatarUrl)}" alt="" /><span class="reel-author"><b>${escapeHtml(displayName)}</b><small>@${escapeHtml(username)}</small></span></button>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}" aria-label="Like">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}" aria-label="Comments">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}" aria-label="Share">${postActionIcon('share')}</button></div></article>`;
+    const canReport = currentUserId && reel.authorId !== activeUserId();
+    const report = canReport
+      ? `<button type="button" data-report-post="${escapeHtml(reel.id)}" aria-label="Report reel"><span aria-hidden="true">⚑</span><span>Report</span></button>`
+      : '';
+    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient" aria-hidden="true"></div>${sound}<div class="reel-meta"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(avatarUrl)}" alt="" /><span class="reel-author"><b>${escapeHtml(displayName)}</b><small>@${escapeHtml(username)}</small></span></button>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}" aria-label="Like">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}" aria-label="Comments">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}" aria-label="Share">${postActionIcon('share')}</button>${report}</div></article>`;
   }).join('');
   if (anchorId) {
     const stayOn = [...viewport.querySelectorAll('.reel-card')].find((card) => card.dataset.reelId === anchorId);
@@ -1265,18 +1286,37 @@ function openReelComments(reelId) {
   document.querySelector('[data-reel-comment-input]')?.focus();
 }
 
+let reelCommentBusy = false;
+
 async function submitReelComment(input) {
   const text = String(input?.value || '').trim();
-  if (!activeReelId || !text) return;
+  if (!activeReelId || !text || reelCommentBusy) return;
   if (!currentUserId) {
     window.location.href = SIGNIN_INTERNET;
     return;
   }
-  await postInteraction({ postId: activeReelId, type: 'reply', content: text });
-  if (input) input.value = '';
-  renderReelPanel(activeReelId);
-  const sheet = document.querySelector('[data-reel-comments]');
-  if (sheet && !sheet.hidden) openReelComments(activeReelId);
+  reelCommentBusy = true;
+  const forms = [
+    document.querySelector('[data-reel-panel-comment-form]'),
+    document.querySelector('[data-reel-comment-form]'),
+  ].filter(Boolean);
+  const inputs = document.querySelectorAll('[data-reel-panel-comment-input], [data-reel-comment-input]');
+  forms.forEach((form) => {
+    form.querySelectorAll('button, input').forEach((el) => { el.disabled = true; });
+  });
+  // Clear immediately so a second Enter/click cannot resubmit the same text.
+  inputs.forEach((el) => { el.value = ''; });
+  try {
+    await postInteraction({ postId: activeReelId, type: 'reply', content: text });
+    renderReelPanel(activeReelId);
+    const sheet = document.querySelector('[data-reel-comments]');
+    if (sheet && !sheet.hidden) openReelComments(activeReelId);
+  } finally {
+    reelCommentBusy = false;
+    forms.forEach((form) => {
+      form.querySelectorAll('button, input').forEach((el) => { el.disabled = false; });
+    });
+  }
 }
 
 function renderTrending() {
@@ -1747,7 +1787,10 @@ function reportSourceLabel(report) {
 }
 
 function reportKindLabel(report) {
-  return report?.kind === 'message' ? 'Direct message' : 'Post';
+  if (report?.kind === 'message') return 'Direct message';
+  if (report?.kind === 'comment') return 'Comment';
+  if (report?.kind === 'reel') return 'Reel';
+  return 'Post';
 }
 
 function staffMemberLookup(id, fallback = {}) {
@@ -3116,15 +3159,16 @@ async function reviewReport(button) {
 async function runPostAction(action, postId) {
   const post = allPosts.find((item) => item.id === postId);
   if (!post) return;
+  const kind = contentKindLabel(post);
   let content = '';
   let reason = '';
   if (action === 'edit') {
     content = await sitePrompt({
-      title: 'Edit post',
-      message: 'Update your post text.',
-      label: 'Post',
+      title: `Edit ${kind}`,
+      message: `Update your ${kind} text.`,
+      label: kind === 'comment' ? 'Comment' : 'Post',
       value: post.content || '',
-      placeholder: 'What is happening?',
+      placeholder: kind === 'comment' ? 'Write a comment…' : 'What is happening?',
       confirmLabel: 'Save',
       maxLength: 500,
     });
@@ -3132,8 +3176,8 @@ async function runPostAction(action, postId) {
   }
   if (action === 'report') {
     reason = await sitePrompt({
-      title: 'Report post',
-      message: 'Tell staff why this post should be reviewed.',
+      title: `Report ${kind}`,
+      message: `Tell staff why this ${kind} should be reviewed.`,
       label: 'Reason',
       value: '',
       placeholder: 'Describe the issue…',
@@ -3142,15 +3186,20 @@ async function runPostAction(action, postId) {
     });
     if (reason == null || !String(reason).trim()) return;
   }
-  if (action === 'delete' && !(await siteConfirm('Delete this post? This cannot be undone.', 'Delete post', 'Delete'))) return;
+  if (action === 'delete' && !(await siteConfirm(`Delete this ${kind}? This cannot be undone.`, `Delete ${kind}`, 'Delete'))) return;
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, postId, content, reason }) });
-    const result = await readApiJson(response, 'Could not update this post.');
-    if (!response.ok) throw new Error(result.error || 'Could not update this post.');
+    const result = await readApiJson(response, `Could not update this ${kind}.`);
+    if (!response.ok) throw new Error(result.error || `Could not update this ${kind}.`);
     await loadPosts();
     if (action === 'report') void siteAlert('Report sent to the staff panel.', 'Report sent');
+    if (action === 'delete' && activeReelId) {
+      renderReelPanel(activeReelId);
+      const sheet = document.querySelector('[data-reel-comments]');
+      if (sheet && !sheet.hidden) openReelComments(activeReelId);
+    }
   } catch (error) {
-    void siteAlert(error.message || 'Could not update this post.');
+    void siteAlert(error.message || `Could not update this ${kind}.`);
   }
 }
 
@@ -3802,6 +3851,16 @@ document.addEventListener('click', (event) => {
     return;
   }
   if (repostPopup && !event.target.closest('[data-repost-popup]')) repostPopup.hidden = true;
+  const reportPost = event.target.closest('[data-report-post]');
+  if (reportPost) {
+    void runPostAction('report', reportPost.dataset.reportPost);
+    return;
+  }
+  const deletePost = event.target.closest('[data-delete-post]');
+  if (deletePost) {
+    void runPostAction('delete', deletePost.dataset.deletePost);
+    return;
+  }
   const button = event.target.closest('[data-post-action]');
   if (!button) return;
   const postId = button.parentElement?.dataset.postId;
