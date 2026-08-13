@@ -18,3 +18,7 @@ Thumbs.db
 # Runtime bot state (created on the bot host)
 /data/owner-config.json
 /data/identity-cache.json
+/data/clearwater-internet.json
+/data/clearwater-internet.json.bak
+/data/clearwater-internet.json.bak.1
+/data/*.tmp

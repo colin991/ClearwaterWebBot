@@ -236,7 +236,8 @@ export function startStatusServer(client, config) {
           const createdBankAccount = !store.users[BANK_INTERNET_ACCOUNT_ID];
           ensureOfficialInternetAccount(store);
           ensureBankInternetAccount(store);
-          if (createdOfficialAccount || createdBankAccount || await syncInternetRoles(store)) await saveInternetStore(store);
+          const rolesChanged = await syncInternetRoles(store);
+          if (createdOfficialAccount || createdBankAccount || rolesChanged) await saveInternetStore(store);
           const viewerId = url.searchParams.get('viewer') || '';
           return json(response, 200, {
             posts: publicPosts(store, viewerId),

@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { AUTOMOD_HOLD_MESSAGE, AutomodHoldError, scanInternetContent } from './internetAutomod.js';
+import { JsonStoreCorruptError, readJsonFile, writeJsonFile } from './jsonStore.js';
+import { logger } from './logger.js';
 import { mergeInternetBadges, sanitizeInternetBadges } from './staffRanks.js';
-import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
 export { AutomodHoldError };
 
@@ -18,6 +19,18 @@ const emptyStore = Object.freeze({
   officialProfile: {},
   settings: { pausePosts: false, pauseReels: false, pauseMessages: false },
 });
+
+let liveStore = null;
+let storeQueue = Promise.resolve();
+let lastPersistedStats = null;
+
+function enqueueStoreOp(fn) {
+  const run = storeQueue.then(fn, fn);
+  storeQueue = run.then(() => undefined, () => undefined);
+  return run;
+}
+
+const text = (value, length) => String(value || '').trim().slice(0, length);
 
 function sanitizeHttpsUrl(value, length = 300) {
   const candidate = String(value || '').trim().slice(0, length);
@@ -47,6 +60,111 @@ function sanitizeSiteBanner(raw) {
     updatedAt: text(raw.updatedAt, 40) || new Date().toISOString(),
   };
 }
+
+function storeStats(store) {
+  return {
+    users: store?.users && typeof store.users === 'object' ? Object.keys(store.users).length : 0,
+    posts: Array.isArray(store?.posts) ? store.posts.length : 0,
+    reports: Array.isArray(store?.reports) ? store.reports.length : 0,
+    transfers: Array.isArray(store?.creditTransfers) ? store.creditTransfers.length : 0,
+  };
+}
+
+function normalizeInternetStore(data) {
+  const source = data && typeof data === 'object' ? data : {};
+  return {
+    ...source,
+    users: source.users && typeof source.users === 'object' ? source.users : {},
+    posts: Array.isArray(source.posts) ? source.posts : [],
+    reports: Array.isArray(source.reports) ? source.reports : [],
+    logs: Array.isArray(source.logs) ? source.logs : [],
+    ipBans: Array.isArray(source.ipBans) ? source.ipBans : [],
+    creditTransfers: Array.isArray(source.creditTransfers) ? source.creditTransfers : [],
+    siteBanner: sanitizeSiteBanner(source.siteBanner),
+    officialProfile: source.officialProfile && typeof source.officialProfile === 'object' ? source.officialProfile : {},
+    settings: {
+      pausePosts: source.settings?.pausePosts === true,
+      pauseReels: source.settings?.pauseReels === true,
+      pauseMessages: source.settings?.pauseMessages === true,
+    },
+  };
+}
+
+async function readBackupStore(candidate) {
+  return normalizeInternetStore(await readJsonFile(candidate, emptyStore, {
+    missingFallback: false,
+    corruptFallback: false,
+  }));
+}
+
+async function recoverFromBackups(reason) {
+  for (const candidate of [`${storePath}.bak`, `${storePath}.bak.1`]) {
+    try {
+      const recovered = await readBackupStore(candidate);
+      const stats = storeStats(recovered);
+      if (stats.users < 1 && stats.posts < 1) continue;
+      logger.error(`Clearwater Internet store ${reason}; recovered from ${candidate} (users=${stats.users}, posts=${stats.posts})`);
+      await writeJsonFile(storePath, recovered, { backup: false });
+      return recovered;
+    } catch {
+      // Try the next backup.
+    }
+  }
+  return null;
+}
+
+async function readStoreFromDisk() {
+  try {
+    const live = normalizeInternetStore(await readJsonFile(storePath, emptyStore, {
+      missingFallback: true,
+      corruptFallback: false,
+    }));
+    const liveStats = storeStats(live);
+    // If the live file looks wiped but a backup still has the community, restore it.
+    if (liveStats.users <= 3) {
+      for (const candidate of [`${storePath}.bak`, `${storePath}.bak.1`]) {
+        try {
+          const backup = await readBackupStore(candidate);
+          const backupStats = storeStats(backup);
+          if (backupStats.users >= 8 && backupStats.users > liveStats.users * 2) {
+            logger.error(
+              `Clearwater Internet live store looks wiped (users=${liveStats.users}); `
+              + `restoring ${candidate} (users=${backupStats.users}, posts=${backupStats.posts})`,
+            );
+            await writeJsonFile(storePath, backup, { backup: false });
+            return backup;
+          }
+        } catch {
+          // Try the next backup.
+        }
+      }
+    }
+    return live;
+  } catch (error) {
+    if (!(error instanceof JsonStoreCorruptError)) throw error;
+    const recovered = await recoverFromBackups('was corrupt');
+    if (recovered) return recovered;
+    logger.error('Clearwater Internet store is corrupt and no backup could be recovered. Refusing to invent an empty database.');
+    throw error;
+  }
+}
+
+function assertSafeStoreWrite(store) {
+  const next = storeStats(store);
+  const previous = lastPersistedStats;
+  if (!previous) return next;
+  const collapsingUsers = previous.users >= 8 && next.users <= 3 && next.users < Math.ceil(previous.users * 0.35);
+  const collapsingPosts = previous.posts >= 10 && next.posts === 0 && next.users <= 3;
+  if (collapsingUsers || collapsingPosts) {
+    throw new Error(
+      `Refusing to overwrite Clearwater Internet data with a collapsed store `
+      + `(users ${previous.users}→${next.users}, posts ${previous.posts}→${next.posts}). `
+      + 'Check data/clearwater-internet.json.bak on the bot host.',
+    );
+  }
+  return next;
+}
+
 export const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
 export const BANK_INTERNET_ACCOUNT_ID = '1514026810348671099';
 const officialDefaults = Object.freeze({
@@ -63,8 +181,6 @@ const bankDefaults = Object.freeze({
   avatarUrl: 'assets/clearwater-logo.png',
   bannerUrl: 'assets/clearwater-police-night.png',
 });
-
-const text = (value, length) => String(value || '').trim().slice(0, length);
 
 function addInternetNotification(store, { recipientId, actor, type, post = null }) {
   const recipient = store.users[String(recipientId || '')];
@@ -85,26 +201,22 @@ function addInternetNotification(store, { recipientId, actor, type, post = null 
 }
 
 export async function readInternetStore() {
-  const data = await readJsonFile(storePath, emptyStore);
-  return {
-    users: data?.users && typeof data.users === 'object' ? data.users : {},
-    posts: Array.isArray(data?.posts) ? data.posts : [],
-    reports: Array.isArray(data?.reports) ? data.reports : [],
-    logs: Array.isArray(data?.logs) ? data.logs : [],
-    ipBans: Array.isArray(data?.ipBans) ? data.ipBans : [],
-    creditTransfers: Array.isArray(data?.creditTransfers) ? data.creditTransfers : [],
-    siteBanner: sanitizeSiteBanner(data?.siteBanner),
-    officialProfile: data?.officialProfile && typeof data.officialProfile === 'object' ? data.officialProfile : {},
-    settings: {
-      pausePosts: data?.settings?.pausePosts === true,
-      pauseReels: data?.settings?.pauseReels === true,
-      pauseMessages: data?.settings?.pauseMessages === true,
-    },
-  };
+  return enqueueStoreOp(async () => {
+    if (!liveStore) {
+      liveStore = await readStoreFromDisk();
+      lastPersistedStats = storeStats(liveStore);
+    }
+    return liveStore;
+  });
 }
 
 export async function saveInternetStore(store) {
-  await writeJsonFile(storePath, store);
+  return enqueueStoreOp(async () => {
+    const nextStats = assertSafeStoreWrite(store);
+    await writeJsonFile(storePath, store, { backup: true });
+    liveStore = store;
+    lastPersistedStats = nextStats;
+  });
 }
 
 function hostedMediaUrl(value) {
