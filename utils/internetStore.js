@@ -23,8 +23,8 @@ const emptyStore = Object.freeze({
 });
 
 /** Sidebar ads: 24h run after staff approval, paid with Clearwater Credits. */
-export const AD_BASE_COST = 200;
-export const AD_BOOST_COST = 100;
+export const AD_BASE_COST = 1200;
+export const AD_BOOST_COST = 300;
 export const AD_MAX_BOOST = 5;
 export const AD_DURATION_MS = 24 * 60 * 60 * 1000;
 export const AD_CATEGORIES = Object.freeze(['department', 'business']);
@@ -2191,6 +2191,22 @@ function expireInternetAds(store) {
   return changed;
 }
 
+function sanitizeAdMedia(image, video) {
+  const hostedImage = hostedMediaUrl(image?.url);
+  const hostedVideo = hostedMediaUrl(video?.url);
+  const imageData = text(image?.dataUrl, 900_000);
+  const isImageData = /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(imageData);
+  if (hostedVideo && (hostedImage || isImageData)) throw new Error('Choose either an image or a short video, not both');
+  if (video?.dataUrl && !hostedVideo) throw new Error('Short ad videos need to finish uploading first. Try again in a moment.');
+  if (video?.url && !hostedVideo) throw new Error('That video host is not allowed for ads');
+  if (image?.dataUrl && !hostedImage && !isImageData) throw new Error('Choose a supported image (PNG, JPEG, WebP, or GIF)');
+  if (image?.url && !hostedImage && !isImageData) throw new Error('That image host is not allowed for ads');
+  return {
+    imageUrl: hostedImage || (isImageData ? imageData : ''),
+    videoUrl: hostedVideo || '',
+  };
+}
+
 function publicAd(ad) {
   return {
     id: ad.id,
@@ -2198,6 +2214,8 @@ function publicAd(ad) {
     businessName: ad.businessName,
     title: ad.title,
     body: ad.body,
+    imageUrl: ad.imageUrl || '',
+    videoUrl: ad.videoUrl || '',
     weight: ad.weight,
     status: ad.status,
     startsAt: ad.startsAt || null,
@@ -2228,10 +2246,11 @@ function assertAdCopy({ category, businessName, title, body }) {
   return { category, businessName: name, title: headline, body: copy };
 }
 
-export function purchaseInternetAd(store, { actor, category, businessName, title, body, boost = 0 }) {
+export function purchaseInternetAd(store, { actor, category, businessName, title, body, boost = 0, image = null, video = null }) {
   const user = ensureInternetWallet(store, actor);
   assertNotBanned(user);
   const copy = assertAdCopy({ category, businessName, title, body });
+  const media = sanitizeAdMedia(image, video);
   const boostLevels = Math.min(AD_MAX_BOOST, Math.max(0, Math.trunc(Number(boost) || 0)));
   const cost = AD_BASE_COST + (boostLevels * AD_BOOST_COST);
   if (creditBalance(user) < cost) throw new Error(`You need C$${cost} to place this ad`);
@@ -2249,6 +2268,7 @@ export function purchaseInternetAd(store, { actor, category, businessName, title
     advertiserName: text(user.displayName, 80) || 'Discord user',
     advertiserUsername: text(user.username, 80),
     ...copy,
+    ...media,
     weight: 1 + boostLevels,
     boost: boostLevels,
     cost,

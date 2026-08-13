@@ -4,7 +4,7 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260813-map-nw';
+const INTERNET_VERSION = '20260813-ads-media';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
@@ -223,6 +223,15 @@ export default async function handler(request, response) {
                 tokenPayload: JSON.stringify({ id: user.id }),
               };
             }
+            if (/^ads\/[a-z0-9._-]+$/i.test(path)) {
+              return {
+                allowedContentTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'video/mp4', 'video/webm', 'video/quicktime'],
+                maximumSizeInBytes: 40 * 1024 * 1024,
+                addRandomSuffix: true,
+                allowOverwrite: false,
+                tokenPayload: JSON.stringify({ id: user.id }),
+              };
+            }
             if (!/^reels\/[a-z0-9._-]+$/i.test(path)) throw new Error('Invalid upload path');
             return {
               allowedContentTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'video/mp4', 'video/webm', 'video/quicktime'],
@@ -325,6 +334,8 @@ export default async function handler(request, response) {
         title: String(body.title || '').slice(0, 80),
         body: String(body.body || '').slice(0, 220),
         boost: Math.min(5, Math.max(0, Number(body.boost) || 0)),
+        image: mediaPayload(body.image, 'image'),
+        video: mediaPayload(body.video, 'video'),
         actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges },
       };
     } else if (body.action === 'ad-review') {

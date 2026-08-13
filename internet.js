@@ -93,9 +93,11 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260813-map-nw';
+const INTERNET_VERSION = '20260813-ads-media';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
+let adMedia = null;
+const MAX_AD_MEDIA_BYTES = 40 * 1024 * 1024;
 const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
 const AUTOMOD_HOLD_PREVIEW = 'This may be held for staff review when you send it.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
@@ -326,7 +328,7 @@ let staffUserDetail = null;
 let staffUserBusy = false;
 let sidebarAds = [];
 let myAds = [];
-let adPricing = { base: 200, boost: 100, maxBoost: 5, durationHours: 24 };
+let adPricing = { base: 1200, boost: 300, maxBoost: 5, durationHours: 24 };
 let adRotateTimer = 0;
 const expandedPollVoters = new Set();
 const clearwaterEmojiChoices = [
@@ -2387,7 +2389,12 @@ function renderStaffDashboard() {
     overview.innerHTML = `${metrics}<div class="staff-overview-grid"><section class="staff-column"><header><h2>Oldest pending reports</h2><span>${reports.length}</span></header>${reports.length ? reports.slice(0, 8).map((report) => {
       const author = staffMemberLookup(report.authorId, report);
       return `<button type="button" class="staff-report-card ${report.id === selectedReportId ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}">${staffAvatarMarkup(author.avatarUrl)}<div><b>${escapeHtml(author.displayName)}</b><small>${escapeHtml(reportSourceLabel(report))} · ${escapeHtml(reportKindLabel(report))}</small><p>${escapeHtml(report.content || 'No text captured')}</p></div></button>`;
-    }).join('') : '<div class="staff-empty">Nothing in this queue.</div>'}</section><section class="staff-column"><header><h2>Ads awaiting approval</h2><span>${pendingAds.length}</span></header>${pendingAds.length ? pendingAds.map((ad) => `<article class="staff-ad-card"><div><b>${escapeHtml(ad.title)}</b><small>${escapeHtml(ad.category)} · ${escapeHtml(ad.businessName)} · ${escapeHtml(ad.advertiserName || 'Member')}${ad.weight > 1 ? ` · ${ad.weight}x` : ''}</small><p>${escapeHtml(ad.body)}</p></div><div class="staff-ad-actions"><button type="button" class="staff-action-btn primary" data-ad-review="accept" data-ad-id="${escapeHtml(ad.id)}">Approve 24h</button><button type="button" class="staff-action-btn" data-ad-review="deny" data-ad-id="${escapeHtml(ad.id)}">Deny & refund</button></div></article>`).join('') : '<div class="staff-empty">No ads waiting for review.</div>'}</section></div>`;
+    }).join('') : '<div class="staff-empty">Nothing in this queue.</div>'}</section><section class="staff-column"><header><h2>Ads awaiting approval</h2><span>${pendingAds.length}</span></header>${pendingAds.length ? pendingAds.map((ad) => {
+      const media = safeVideoUrl(ad.videoUrl)
+        ? `<video class="staff-ad-media" src="${escapeHtml(ad.videoUrl)}" controls playsinline muted></video>`
+        : (safeImageUrl(ad.imageUrl) ? `<img class="staff-ad-media" src="${escapeHtml(ad.imageUrl)}" alt="" />` : '');
+      return `<article class="staff-ad-card"><div><b>${escapeHtml(ad.title)}</b><small>${escapeHtml(ad.category)} · ${escapeHtml(ad.businessName)} · ${escapeHtml(ad.advertiserName || 'Member')}${ad.weight > 1 ? ` · ${ad.weight}x` : ''}</small><p>${escapeHtml(ad.body)}</p>${media}</div><div class="staff-ad-actions"><button type="button" class="staff-action-btn primary" data-ad-review="accept" data-ad-id="${escapeHtml(ad.id)}">Approve 24h</button><button type="button" class="staff-action-btn" data-ad-review="deny" data-ad-id="${escapeHtml(ad.id)}">Deny & refund</button></div></article>`;
+    }).join('') : '<div class="staff-empty">No ads waiting for review.</div>'}</section></div>`;
   }
 }
 
@@ -2713,7 +2720,56 @@ function renderSidebarAds(ads = sidebarAds) {
     list.innerHTML = '<p class="sidebar-ad-empty">No live ads right now. Departments and businesses can buy a slot with credits.</p>';
     return;
   }
-  list.innerHTML = items.map((ad) => `<article class="sidebar-ad"><em>${escapeHtml(ad.category === 'department' ? 'Department' : 'Business')}</em><b>${escapeHtml(ad.title)}</b><span>${escapeHtml(ad.businessName)}</span><p>${escapeHtml(ad.body)}</p></article>`).join('');
+  list.innerHTML = items.map((ad) => {
+    const media = safeVideoUrl(ad.videoUrl)
+      ? `<video class="sidebar-ad-media" src="${escapeHtml(ad.videoUrl)}" muted loop playsinline autoplay></video>`
+      : (safeImageUrl(ad.imageUrl) ? `<img class="sidebar-ad-media" src="${escapeHtml(ad.imageUrl)}" alt="" />` : '');
+    return `<article class="sidebar-ad"><em>${escapeHtml(ad.category === 'department' ? 'Department' : 'Business')}</em><b>${escapeHtml(ad.title)}</b><span>${escapeHtml(ad.businessName)}</span><p>${escapeHtml(ad.body)}</p>${media}</article>`;
+  }).join('');
+}
+
+function renderAdMediaPreview() {
+  const preview = document.querySelector('[data-ad-media-preview]');
+  if (!preview) return;
+  if (!adMedia?.previewUrl) {
+    preview.hidden = true;
+    preview.innerHTML = '';
+    return;
+  }
+  preview.hidden = false;
+  preview.innerHTML = adMedia.isVideo
+    ? `<video src="${escapeHtml(adMedia.previewUrl)}" muted loop playsinline controls></video><button type="button" data-remove-ad-media>Remove media</button>`
+    : `<img src="${escapeHtml(adMedia.previewUrl)}" alt="Ad media preview" /><button type="button" data-remove-ad-media>Remove media</button>`;
+}
+
+async function uploadAdMedia(file, isVideo) {
+  const upload = globalThis.VercelBlob?.upload;
+  let blobError = '';
+  if (typeof upload === 'function') {
+    try {
+      const safeName = String(file.name || (isVideo ? 'ad.mp4' : 'ad.jpg')).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || (isVideo ? 'ad.mp4' : 'ad.jpg');
+      const blob = await upload(`ads/${safeName}`, file, {
+        access: 'public',
+        handleUploadUrl: '/api/internet',
+        multipart: file.size > 80_000_000,
+        contentType: file.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+      });
+      if (blob?.url) return isVideo ? { video: { url: blob.url } } : { image: { url: blob.url } };
+    } catch (error) {
+      blobError = String(error?.message || error || '');
+      if (isVideo || file.size > SMALL_REEL_BYTES) {
+        throw new Error(/token|blob store|No token|Failed to retrieve/i.test(blobError)
+          ? 'Ad media needs Vercel Blob storage configured for larger files.'
+          : (blobError || 'Could not upload this ad media.'));
+      }
+    }
+  } else if (isVideo || file.size > SMALL_REEL_BYTES) {
+    throw new Error('Ad video uploads need Vercel Blob storage. Use a smaller image under 3 MB, or configure Blob.');
+  }
+  const dataUrl = await readFileAsDataUrl(file);
+  if (isVideo) throw new Error('Short ad videos need Blob storage. Upload an image instead, or finish Blob setup.');
+  if (!safeImageUrl(dataUrl)) throw new Error('Choose a supported image.');
+  return { image: { dataUrl } };
 }
 
 function renderMyAds(ads = myAds) {
@@ -4685,6 +4741,37 @@ document.querySelector('[data-wallet-transfer-form]')?.addEventListener('submit'
   }
 });
 
+document.querySelector('[data-ad-media]')?.addEventListener('change', async (event) => {
+  const input = event.target;
+  const file = input?.files?.[0];
+  const status = document.querySelector('[data-ad-status]');
+  if (!file) return;
+  if (file.size > MAX_AD_MEDIA_BYTES) {
+    if (status) { status.dataset.tone = 'error'; status.textContent = 'Keep ad media under 40 MB.'; }
+    input.value = '';
+    return;
+  }
+  const isVideo = /^video\//i.test(file.type);
+  const isImage = /^image\//i.test(file.type);
+  if (!isVideo && !isImage) {
+    if (status) { status.dataset.tone = 'error'; status.textContent = 'Choose an image or a short MP4/WebM video.'; }
+    input.value = '';
+    return;
+  }
+  adMedia = { file, isVideo, previewUrl: URL.createObjectURL(file) };
+  renderAdMediaPreview();
+  if (status) { status.dataset.tone = 'wait'; status.textContent = isVideo ? 'Short video ready to upload with your ad.' : 'Image ready to upload with your ad.'; }
+});
+
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('[data-remove-ad-media]')) return;
+  if (adMedia?.previewUrl) URL.revokeObjectURL(adMedia.previewUrl);
+  adMedia = null;
+  const input = document.querySelector('[data-ad-media]');
+  if (input) input.value = '';
+  renderAdMediaPreview();
+});
+
 document.querySelector('[data-ad-form]')?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const status = document.querySelector('[data-ad-status]');
@@ -4692,6 +4779,14 @@ document.querySelector('[data-ad-form]')?.addEventListener('submit', async (even
   if (submit) submit.disabled = true;
   if (status) { status.dataset.tone = 'wait'; status.textContent = 'Submitting your ad for staff review...'; }
   try {
+    let image = null;
+    let video = null;
+    if (adMedia?.file) {
+      if (status) status.textContent = 'Uploading ad media...';
+      const media = await uploadAdMedia(adMedia.file, adMedia.isVideo);
+      image = media.image || null;
+      video = media.video || null;
+    }
     const response = await fetch('/api/internet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -4702,6 +4797,8 @@ document.querySelector('[data-ad-form]')?.addEventListener('submit', async (even
         title: document.querySelector('[data-ad-title]')?.value || '',
         body: document.querySelector('[data-ad-body]')?.value || '',
         boost: Number(document.querySelector('[data-ad-boost]')?.value || 0),
+        image,
+        video,
       }),
     });
     const result = await readApiJson(response, 'Could not submit this ad.');
@@ -4714,6 +4811,11 @@ document.querySelector('[data-ad-form]')?.addEventListener('submit', async (even
     document.querySelector('[data-ad-title]').value = '';
     document.querySelector('[data-ad-body]').value = '';
     document.querySelector('[data-ad-boost]').value = '0';
+    if (adMedia?.previewUrl) URL.revokeObjectURL(adMedia.previewUrl);
+    adMedia = null;
+    const mediaInput = document.querySelector('[data-ad-media]');
+    if (mediaInput) mediaInput.value = '';
+    renderAdMediaPreview();
     if (status) {
       status.dataset.tone = 'ok';
       status.textContent = 'Submitted. Staff will review it before it can run for 24 hours.';

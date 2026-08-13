@@ -5110,7 +5110,16 @@ body { margin: 0; }
 
 /* Clearwater credit wallet */
 .wallet-view { padding: 18px 16px 48px; }
-.wallet-stack { display: grid; gap: 14px; max-width: 720px; }
+.wallet-stack { display: grid; gap: 14px; max-width: 1100px; }
+.wallet-pair {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .wallet-pair { grid-template-columns: 1fr; }
+}
 .wallet-intro-card,
 .wallet-balance-card,
 .wallet-card {
@@ -6263,10 +6272,53 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
 .sidebar-ad b { font-size: 14px; line-height: 1.25; }
 .sidebar-ad span { color: var(--muted); font-size: 12px; font-weight: 700; }
 .sidebar-ad p { margin: 2px 0 0; color: #d7e3f4; font-size: 12px; line-height: 1.4; }
+.sidebar-ad-media {
+  display: block;
+  width: 100%;
+  max-height: 160px;
+  margin-top: 6px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: #05070a;
+}
 .sidebar-ad-cta {
   color: var(--blue);
   font-size: 12px;
   font-weight: 800;
+}
+.wallet-ad-media-preview {
+  overflow: hidden;
+  border-radius: 12px;
+  background: #05070a;
+}
+.wallet-ad-media-preview[hidden] { display: none !important; }
+.wallet-ad-media-preview img,
+.wallet-ad-media-preview video {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+}
+.wallet-ad-media-preview button {
+  margin: 8px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 999px;
+  color: #dce9fb;
+  background: #24364c;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.staff-ad-card .staff-ad-media {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  margin-top: 8px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: #05070a;
 }
 .wallet-ad-form {
   display: grid;
