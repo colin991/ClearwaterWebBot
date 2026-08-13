@@ -5230,6 +5230,26 @@ body { margin: 0; }
 .staff-wallet-fields { display: grid; grid-template-columns: minmax(100px, .5fr) minmax(0, 1fr); gap: 8px; }
 .staff-wallet-fields label { display: grid; gap: 5px; color: #9eaeca; font-size: 11px; font-weight: 800; }
 .staff-wallet-fields input { width: 100%; min-height: 40px; padding: 9px 11px; border: 1px solid rgba(148, 184, 255, .2); border-radius: 10px; color: #fff; background: #07111e; font: inherit; }
+.search-header { padding: 8px 0 18px; border-bottom: 1px solid rgba(255,255,255,.14); }
+.search-header[hidden] { display: none !important; }
+.search-header h1 { margin: 0; font-size: 22px; letter-spacing: -.04em; }
+.search-header p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+.search-people { margin: 0 0 10px; padding: 16px 0 8px; border-bottom: 1px solid rgba(255,255,255,.12); }
+.search-people[hidden], .search-side[hidden], .trending[hidden], .feed-tabs[hidden] { display: none !important; }
+.search-people h2, .search-side h2 { margin: 0 0 10px; font-size: 14px; }
+.search-people-list { display: grid; gap: 4px; }
+.search-person { display: flex; align-items: center; gap: 11px; width: 100%; padding: 10px 8px; border: 0; border-radius: 12px; color: #edf4ff; background: transparent; text-align: left; font: inherit; cursor: pointer; }
+.search-person:hover { background: rgba(255,255,255,.06); }
+.search-person img { width: 42px; height: 42px; flex: 0 0 42px; border-radius: 50%; object-fit: cover; background: #111d2d; }
+.search-person span { display: grid; min-width: 0; gap: 2px; flex: 1; }
+.search-person b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.search-person small { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.search-person .verified, .search-person .role-badge { margin-left: 0; }
+.search-empty { margin: 0; color: var(--muted); font-size: 12px; }
+.search-posts-heading { margin: 18px 0 4px; font-size: 14px; }
+.search-side { padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: rgba(8,16,27,.9); }
+.search-side .search-person { padding: 8px; }
+.search-side .search-person img { width: 36px; height: 36px; flex-basis: 36px; }
 @media (max-width: 640px) {
   .wallet-view { padding: 12px 10px 36px; }
   .wallet-balance-card { min-height: 120px; padding: 18px; }

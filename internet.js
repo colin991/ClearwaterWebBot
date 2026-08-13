@@ -721,8 +721,12 @@ function isHomeViewActive() {
   return !document.querySelector('[data-view="home"]')?.hidden;
 }
 
+function isSearchingFeed() {
+  return Boolean(String(search?.value || '').trim());
+}
+
 function isVisibleReelsTab() {
-  return isHomeViewActive() && isReelsTab();
+  return isHomeViewActive() && isReelsTab() && !isSearchingFeed();
 }
 
 function pauseReelVideos() {
@@ -950,7 +954,7 @@ function renderReels() {
 }
 
 function canShowComposer() {
-  return Boolean(currentUserId) && (feedTab === 'foryou' || feedTab === 'recent');
+  return Boolean(currentUserId) && !isSearchingFeed() && (feedTab === 'foryou' || feedTab === 'recent');
 }
 
 function syncHomeSurfaces() {
@@ -1001,7 +1005,8 @@ function showPosts(posts, emptyMessage) {
   const visible = collapseReposts(posts);
   note.hidden = Boolean(visible.length);
   note.textContent = visible.length ? '' : (emptyMessage || 'No posts yet. Be the first to share an update.');
-  list.innerHTML = visible.map((post) => postMarkup(post)).join('');
+  const heading = isSearchingFeed() && visible.length ? '<h2 class="search-posts-heading">Posts</h2>' : '';
+  list.innerHTML = `${heading}${visible.map((post) => postMarkup(post)).join('')}`;
 }
 
 function trendingTagKeys() {
@@ -1073,6 +1078,73 @@ function rankedForYouPosts(posts) {
   return result;
 }
 
+function matchingSearchUsers(query) {
+  const needle = String(query || '').trim().toLowerCase().replace(/^@+/, '');
+  if (!needle) return [];
+  return [...internetUsers.values()]
+    .filter((user) => user && !user.deactivated && !socialState.blocked.includes(user.id))
+    .filter((user) => `${user.displayName || ''} ${user.username || ''}`.toLowerCase().includes(needle))
+    .sort((left, right) => {
+      const leftUser = String(left.username || '').toLowerCase();
+      const rightUser = String(right.username || '').toLowerCase();
+      const leftName = String(left.displayName || '').toLowerCase();
+      const rightName = String(right.displayName || '').toLowerCase();
+      const rank = (username, name) => {
+        if (username === needle) return 0;
+        if (name === needle) return 1;
+        if (username.startsWith(needle)) return 2;
+        if (name.startsWith(needle)) return 3;
+        return 4;
+      };
+      return rank(leftUser, leftName) - rank(rightUser, rightName) || leftName.localeCompare(rightName);
+    })
+    .slice(0, 12);
+}
+
+function searchPersonButton(user) {
+  return `<button type="button" class="search-person" data-open-member="${escapeHtml(user.id)}"><img src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(user.displayName || 'Clearwater member')}</b><small>@${escapeHtml(user.username || 'member')}${user.staffRank ? ` · ${escapeHtml(user.staffRank)}` : ''}</small></span>${identityBadges(user)}</button>`;
+}
+
+function renderSearchResults(query, postCount) {
+  const people = matchingSearchUsers(query);
+  const searching = Boolean(query);
+  const feedPeople = document.querySelector('[data-search-people]');
+  const sideResults = document.querySelector('[data-search-results]');
+  const searchHeader = document.querySelector('[data-search-header]');
+  const searchSummary = document.querySelector('[data-search-summary]');
+  const trendingPanel = document.querySelector('[data-trending-panel]');
+  const feedTabs = document.querySelector('[data-feed-tabs]');
+
+  if (feedTabs) feedTabs.hidden = searching;
+  if (searchHeader) searchHeader.hidden = !searching;
+  if (searchSummary) {
+    searchSummary.textContent = searching
+      ? `${people.length} ${people.length === 1 ? 'person' : 'people'} · ${postCount} ${postCount === 1 ? 'post' : 'posts'}`
+      : 'People and posts';
+  }
+  if (trendingPanel) trendingPanel.hidden = searching;
+
+  if (!searching) {
+    if (feedPeople) { feedPeople.hidden = true; feedPeople.innerHTML = ''; }
+    if (sideResults) { sideResults.hidden = true; sideResults.innerHTML = ''; }
+    return;
+  }
+
+  const peopleMarkup = people.length
+    ? `<h2>People</h2><div class="search-people-list">${people.map(searchPersonButton).join('')}</div>`
+    : '<h2>People</h2><p class="search-empty">No people match that search.</p>';
+  if (feedPeople) {
+    feedPeople.hidden = false;
+    feedPeople.innerHTML = peopleMarkup;
+  }
+  if (sideResults) {
+    sideResults.hidden = false;
+    sideResults.innerHTML = people.length
+      ? `<h2>People</h2><div class="search-people-list">${people.slice(0, 6).map(searchPersonButton).join('')}</div>`
+      : '<h2>People</h2><p class="search-empty">No people found.</p>';
+  }
+}
+
 function renderPosts() {
   const query = String(search?.value || '').trim().toLowerCase();
   const visible = allPosts.filter((post) => post.kind !== 'reel' && !post.parentId && !socialState.muted.includes(post.authorId) && !socialState.blocked.includes(post.authorId));
@@ -1080,20 +1152,25 @@ function renderPosts() {
   if (feedTab === 'foryou' || feedTab === 'recent') searched = searched.filter((post) => !isNativeRepost(post));
   let posts = searched;
   let empty = 'No posts yet. Be the first to share an update.';
-  if (!query && feedTab === 'following') {
+  if (query) {
+    empty = matchingSearchUsers(query).length
+      ? 'No posts match that search.'
+      : 'No people or posts match that search.';
+  } else if (feedTab === 'following') {
     posts = searched.filter((post) => post.authorId === activeUserId() || socialState.following.includes(post.authorId));
     empty = 'Posts from people you follow will show up here.';
-  } else if (!query && feedTab === 'official') {
+  } else if (feedTab === 'official') {
     posts = searched.filter((post) => post.authorId === officialAccountId);
     empty = 'Official Clearwater Roleplay posts will appear here.';
-  } else if (!query && feedTab === 'recent') {
+  } else if (feedTab === 'recent') {
     posts = [...searched].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
     empty = 'No posts yet. Be the first to share an update.';
-  } else if (!query && feedTab !== 'reels') {
+  } else if (feedTab !== 'reels') {
     posts = rankedForYouPosts(searched);
     empty = 'Nothing trending yet. Post something with more than a hello.';
   }
   syncHomeSurfaces();
+  renderSearchResults(query, posts.length);
   if (isVisibleReelsTab()) renderReels();
   else showPosts(posts, empty);
   document.querySelectorAll('[data-feed-tab]').forEach((button) => button.classList.toggle('selected', button.dataset.feedTab === feedTab));
