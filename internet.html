@@ -14,7 +14,7 @@
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <link rel="apple-touch-icon" href="assets/clearwater-logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260813-sponsored-placements" />
+    <link rel="stylesheet" href="internet.css?v=20260813-wallet-market-hub" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260813-coming-soon"></script>
   </head>
@@ -193,14 +193,6 @@
                 <svg viewBox="0 0 24 24"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg>
               </span>
             </article>
-            <article class="wallet-card wallet-store-card">
-              <div class="wallet-card-copy">
-                <h2>Credit store</h2>
-                <p>Buy a Roblox pack, then claim the matching Clearwater credits on your wallet.</p>
-              </div>
-              <div class="wallet-store-grid" data-wallet-store></div>
-              <p class="wallet-status" data-wallet-store-status role="status">Purchase on Roblox, then use Claim after buying to verify and receive credits.</p>
-            </article>
             <article class="wallet-card">
               <div class="wallet-card-copy">
                 <h2>Daily credits</h2>
@@ -208,6 +200,24 @@
               </div>
               <p class="wallet-status" data-wallet-claim-status role="status">Loading your next daily credit…</p>
             </article>
+            <div class="wallet-pair">
+              <button type="button" class="wallet-card wallet-hub-entry" data-open-advertise>
+                <div class="wallet-card-copy">
+                  <p class="wallet-kicker">Clearwater Ads</p>
+                  <h2>Advertise</h2>
+                  <p>Sponsored sidebar, feed posts, and Reels — create, track, and manage placements.</p>
+                </div>
+                <span class="wallet-hub-entry-chevron" aria-hidden="true">→</span>
+              </button>
+              <button type="button" class="wallet-card wallet-hub-entry" data-open-market>
+                <div class="wallet-card-copy">
+                  <p class="wallet-kicker">Credit market</p>
+                  <h2>Market</h2>
+                  <p>Buy Roblox packs and claim Clearwater credits on this wallet.</p>
+                </div>
+                <span class="wallet-hub-entry-chevron" aria-hidden="true">→</span>
+              </button>
+            </div>
             <div class="wallet-pair">
               <article class="wallet-card wallet-transfer-card">
                 <div class="wallet-card-copy">
@@ -239,14 +249,22 @@
                 </form>
                 <div class="wallet-pending" data-wallet-pending hidden></div>
               </article>
-              <button type="button" class="wallet-card wallet-advertise-entry" data-open-advertise>
+              <article class="wallet-card wallet-boost-card">
                 <div class="wallet-card-copy">
-                  <p class="wallet-kicker">Clearwater Ads</p>
-                  <h2>Advertise</h2>
-                  <p>Sponsored sidebar, feed posts, and Reels — create, track, and manage placements.</p>
+                  <h2>Daily chat levels</h2>
+                  <p data-wallet-boost-copy>Send messages and posts to climb Level 1–5 and raise your daily drop.</p>
                 </div>
-                <span class="wallet-advertise-entry-chevron" aria-hidden="true">→</span>
-              </button>
+                <div class="wallet-boost-meta">
+                  <strong data-wallet-boost-level>Level 0 · Starter</strong>
+                  <span data-wallet-boost-rate>C$75 / day</span>
+                </div>
+                <p class="wallet-earnings" data-wallet-earnings hidden></p>
+                <div class="wallet-boost-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-wallet-boost-track>
+                  <span data-wallet-boost-fill></span>
+                </div>
+                <p class="wallet-boost-next" data-wallet-boost-next>Chat to unlock Level 1.</p>
+                <div class="wallet-boost-perks" data-wallet-boost-perks></div>
+              </article>
             </div>
             <article class="wallet-card wallet-advertise-hub" data-advertise-hub hidden>
               <button type="button" class="wallet-advertise-back" data-advertise-back aria-label="Back to wallet">← Back</button>
@@ -313,21 +331,15 @@
                 <div data-ad-analytics><p class="wallet-empty">Analytics appear while your ad is running.</p></div>
               </div>
             </article>
-            <article class="wallet-card wallet-boost-card">
+            <article class="wallet-card wallet-store-card wallet-market-hub" data-market-hub hidden>
+              <button type="button" class="wallet-advertise-back" data-market-back aria-label="Back to wallet">← Back</button>
               <div class="wallet-card-copy">
-                <h2>Daily chat levels</h2>
-                <p data-wallet-boost-copy>Send messages and posts to climb Level 1–5 and raise your daily drop.</p>
+                <p class="wallet-kicker">Credit market</p>
+                <h2>Credit store</h2>
+                <p>Buy a Roblox pack, then claim the matching Clearwater credits on your wallet.</p>
               </div>
-              <div class="wallet-boost-meta">
-                <strong data-wallet-boost-level>Level 0 · Starter</strong>
-                <span data-wallet-boost-rate>C$75 / day</span>
-              </div>
-              <p class="wallet-earnings" data-wallet-earnings hidden></p>
-              <div class="wallet-boost-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-wallet-boost-track>
-                <span data-wallet-boost-fill></span>
-              </div>
-              <p class="wallet-boost-next" data-wallet-boost-next>Chat to unlock Level 1.</p>
-              <div class="wallet-boost-perks" data-wallet-boost-perks></div>
+              <div class="wallet-store-grid" data-wallet-store></div>
+              <p class="wallet-status" data-wallet-store-status role="status">Purchase on Roblox, then use Claim after buying to verify and receive credits.</p>
             </article>
             <article class="wallet-card">
               <header>
@@ -662,6 +674,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260813-ads-analytics-head"></script>
+    <script src="internet.js?v=20260813-wallet-market-hub"></script>
   </body>
 </html>

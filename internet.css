@@ -5423,6 +5423,8 @@ html.pref-reduce-motion *::after {
 .wallet-stack { display: grid; gap: 14px; max-width: 1100px; }
 .wallet-stack.advertise-open > :not([data-advertise-hub]) { display: none !important; }
 .wallet-stack.advertise-open > [data-advertise-hub] { display: grid; }
+.wallet-stack.market-open > :not([data-market-hub]) { display: none !important; }
+.wallet-stack.market-open > [data-market-hub] { display: grid; }
 .wallet-pair {
   display: grid;
   gap: 14px;
@@ -5523,7 +5525,9 @@ html.pref-reduce-motion *::after {
 .wallet-store-card {
   display: grid;
   gap: 14px;
+  padding: 20px 22px 24px;
 }
+.wallet-market-hub[hidden] { display: none !important; }
 .wallet-store-grid {
   display: grid;
   gap: 10px;
@@ -7136,7 +7140,7 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
 }
 .wallet-ad-row b { display: block; font-size: 13px; }
 .wallet-ad-row small { color: var(--muted); font-size: 11px; }
-.wallet-advertise-entry {
+.wallet-hub-entry {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -7148,11 +7152,11 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
   cursor: pointer;
   font: inherit;
 }
-.wallet-advertise-entry:hover {
+.wallet-hub-entry:hover {
   border-color: rgba(106, 168, 255, .35);
   filter: brightness(1.05);
 }
-.wallet-advertise-entry-chevron {
+.wallet-hub-entry-chevron {
   flex: none;
   color: #6aa8ff;
   font-size: 22px;

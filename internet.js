@@ -2002,10 +2002,12 @@ function showView(view) {
   if (activeView === 'wallet') {
     renderWalletStore();
     maybeStartRobloxClaim();
+    maybeOpenWalletHubs();
     void loadWallet();
     void loadAds();
   } else {
     setAdvertiseHubOpen(false);
+    setMarketHubOpen(false);
   }
   if (activeView === 'sponsored') fillSponsoredReportForm();
   if (activeView === 'profile') renderOwnProfileDetails();
@@ -3006,7 +3008,7 @@ function renderWalletStore() {
     </article>
   `).join('')}
   <div class="wallet-store-claim">
-    <a class="wallet-store-claim-btn" href="/api/auth/roblox?next=${encodeURIComponent('/internet/wallet')}">Claim purchases</a>
+    <a class="wallet-store-claim-btn" href="/api/auth/roblox?next=${encodeURIComponent('/internet/wallet?market=1')}">Claim purchases</a>
     <p>Signs into Roblox, checks your inventory, and adds any unclaimed packs to this wallet.</p>
   </div>`;
   if (status) {
@@ -3046,7 +3048,19 @@ function maybeStartRobloxClaim() {
   const clean = new URL(window.location.href);
   clean.searchParams.delete('claimRoblox');
   history.replaceState({}, '', `${clean.pathname}${clean.search}${clean.hash}`);
-  window.location.href = `/api/auth/roblox?next=${encodeURIComponent('/internet/wallet')}`;
+  window.location.href = `/api/auth/roblox?next=${encodeURIComponent('/internet/wallet?market=1')}`;
+}
+
+function maybeOpenWalletHubs() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('robloxClaim') || params.get('market') === '1') {
+    setMarketHubOpen(true);
+    if (params.get('market') === '1') {
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete('market');
+      history.replaceState({}, '', `${clean.pathname}${clean.search}${clean.hash}`);
+    }
+  }
 }
 
 function walletClaimCopy(wallet) {
@@ -3442,6 +3456,7 @@ function setAdvertiseHubOpen(open = false) {
   const hub = document.querySelector('[data-advertise-hub]');
   if (!stack || !hub) return;
   const show = Boolean(open);
+  if (show) setMarketHubOpen(false);
   stack.classList.toggle('advertise-open', show);
   hub.hidden = !show;
   if (show) {
@@ -3449,6 +3464,21 @@ function setAdvertiseHubOpen(open = false) {
     syncAdBoostLabels();
     renderMyAds(myAds);
   }
+}
+
+function setMarketHubOpen(open = false) {
+  const stack = document.querySelector('.wallet-stack');
+  const hub = document.querySelector('[data-market-hub]');
+  if (!stack || !hub) return;
+  const show = Boolean(open);
+  if (show) {
+    stack.classList.remove('advertise-open');
+    const adsHub = document.querySelector('[data-advertise-hub]');
+    if (adsHub) adsHub.hidden = true;
+  }
+  stack.classList.toggle('market-open', show);
+  hub.hidden = !show;
+  if (show) renderWalletStore();
 }
 
 function syncAdPlacementUi() {
@@ -5895,6 +5925,14 @@ document.querySelector('[data-open-advertise]')?.addEventListener('click', () =>
 
 document.querySelector('[data-advertise-back]')?.addEventListener('click', () => {
   setAdvertiseHubOpen(false);
+});
+
+document.querySelector('[data-open-market]')?.addEventListener('click', () => {
+  setMarketHubOpen(true);
+});
+
+document.querySelector('[data-market-back]')?.addEventListener('click', () => {
+  setMarketHubOpen(false);
 });
 
 document.querySelectorAll('[data-ad-placement-option]').forEach((button) => {
