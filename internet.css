@@ -5251,16 +5251,40 @@ body { margin: 0; }
 .search-people-list { display: grid; gap: 4px; }
 .search-person { display: flex; align-items: center; gap: 11px; width: 100%; padding: 10px 8px; border: 0; border-radius: 12px; color: #edf4ff; background: transparent; text-align: left; font: inherit; cursor: pointer; }
 .search-person:hover { background: rgba(255,255,255,.06); }
-.search-person img { width: 42px; height: 42px; flex: 0 0 42px; border-radius: 50%; object-fit: cover; background: #111d2d; }
-.search-person span { display: grid; min-width: 0; gap: 2px; flex: 1; }
-.search-person b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.search-person-avatar { width: 42px; height: 42px; flex: 0 0 42px; border-radius: 50%; object-fit: cover; background: #111d2d; }
+.search-person-copy { display: grid; min-width: 0; gap: 2px; flex: 1; }
+.search-person-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+.search-person-name b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.search-person-name .verified,
+.search-person-name .role-badge {
+  flex: 0 0 14px;
+  margin-left: 0;
+}
+.search-person-name .verified img,
+.search-person-name .role-badge img {
+  width: 14px;
+  height: 14px;
+  border-radius: 0;
+  object-fit: contain;
+  background: transparent;
+}
 .search-person small { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.search-person .verified, .search-person .role-badge { margin-left: 0; }
 .search-empty { margin: 0; color: var(--muted); font-size: 12px; }
 .search-posts-heading { margin: 18px 0 4px; font-size: 14px; }
 .search-side { padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: rgba(8,16,27,.9); }
 .search-side .search-person { padding: 8px; }
-.search-side .search-person img { width: 36px; height: 36px; flex-basis: 36px; }
+.search-side .search-person-avatar { width: 36px; height: 36px; flex-basis: 36px; }
 .site-dialog { position: fixed; z-index: 90; inset: 0; display: grid; padding: 20px; place-items: center; background: rgba(1,5,11,.72); }
 .site-dialog[hidden] { display: none; }
 .site-dialog form { width: min(100%, 470px); padding: 26px; border: 1px solid #274a78; border-radius: 18px; color: #f5f8ff; background: #0a1422; box-shadow: 0 24px 70px rgba(0,0,0,.55); }

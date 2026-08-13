@@ -1462,7 +1462,7 @@ function matchingSearchPosts(query) {
 }
 
 function searchPersonButton(user) {
-  return `<button type="button" class="search-person" data-open-member="${escapeHtml(user.id)}"><img src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(user.displayName || 'Clearwater member')}</b><small>@${escapeHtml(user.username || 'member')}${user.staffRank ? ` · ${escapeHtml(user.staffRank)}` : ''}</small></span>${identityBadges(user)}</button>`;
+  return `<button type="button" class="search-person" data-open-member="${escapeHtml(user.id)}"><img class="search-person-avatar" src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span class="search-person-copy"><span class="search-person-name"><b>${escapeHtml(user.displayName || 'Clearwater member')}</b>${identityBadges(user)}</span><small>@${escapeHtml(user.username || 'member')}${user.staffRank ? ` · ${escapeHtml(user.staffRank)}` : ''}</small></span></button>`;
 }
 
 function renderSearchResults(query, postCount) {
