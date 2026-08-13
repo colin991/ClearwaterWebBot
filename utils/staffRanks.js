@@ -57,6 +57,7 @@ export const DEVELOPER_DISCORD_IDS = Object.freeze([
 ]);
 export const DEVELOPER_USERNAMES = Object.freeze([
   'colin',
+  'colinxyz',
   'pixel',
   'pixelnovaa',
   'plxelnovaa',
