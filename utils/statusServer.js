@@ -6,6 +6,7 @@ import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPa
 import { dropLocationNameCandidates, findPlayerDropLocation } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
+import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
 import { AutomodHoldError, adjustInternetCredits, applyStaffSiteAction, applyStaffUserAction, assertLimitedStaffBanQuota, banKnownInternetIps, claimInternetDailyCredits, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, internetProfile, moderationSnapshot, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, recordLimitedStaffBan, respondCreditTransfer, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetAccountActive, setInternetBan, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
@@ -523,9 +524,21 @@ export function startStatusServer(client, config) {
         await saveInternetStore(store);
         return json(response, 200, { user: target });
       } catch (error) {
-        if (error instanceof AutomodHoldError && store) {
-          await saveInternetStore(store);
-          return json(response, 451, { error: error.message, held: true, reason: error.reason });
+        const held = error instanceof AutomodHoldError
+          || error?.held === true
+          || error?.name === 'AutomodHoldError'
+          || /held for staff/i.test(String(error?.message || ''));
+        if (held && store) {
+          try {
+            await saveInternetStore(store);
+          } catch (saveError) {
+            logger.error(`Failed to persist automod hold: ${saveError?.message || saveError}`);
+          }
+          return json(response, 451, {
+            error: AUTOMOD_HOLD_MESSAGE,
+            held: true,
+            reason: error.reason || '',
+          });
         }
         return json(response, 400, { error: error.message || 'Could not update Clearwater Internet' });
       }

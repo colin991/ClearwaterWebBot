@@ -76,11 +76,16 @@ function storeStats(store) {
 
 function normalizeInternetStore(data) {
   const source = data && typeof data === 'object' ? data : {};
+  const reports = Array.isArray(source.reports) ? source.reports.map((report) => {
+    if (!report || typeof report !== 'object') return report;
+    if (!report.heldPayload) return report;
+    return { ...report, heldPayload: sanitizeHeldPayload(report.heldPayload) };
+  }) : [];
   return {
     ...source,
     users: source.users && typeof source.users === 'object' ? source.users : {},
     posts: Array.isArray(source.posts) ? source.posts : [],
-    reports: Array.isArray(source.reports) ? source.reports : [],
+    reports,
     logs: Array.isArray(source.logs) ? source.logs : [],
     ipBans: Array.isArray(source.ipBans) ? source.ipBans : [],
     staffBanLog: Array.isArray(source.staffBanLog) ? source.staffBanLog : [],
@@ -120,10 +125,22 @@ async function recoverFromBackups(reason) {
 
 async function readStoreFromDisk() {
   try {
-    const live = normalizeInternetStore(await readJsonFile(storePath, emptyStore, {
+    const raw = await readJsonFile(storePath, emptyStore, {
       missingFallback: true,
       corruptFallback: false,
-    }));
+    });
+    const hadHeavyHold = Array.isArray(raw?.reports)
+      && raw.reports.some((report) => typeof report?.heldPayload?.imageUrl === 'string'
+        && report.heldPayload.imageUrl.startsWith('data:'));
+    const live = normalizeInternetStore(raw);
+    if (hadHeavyHold) {
+      try {
+        await writeJsonFile(storePath, live, { backup: true });
+        logger.info('Scrubbed inline image data from automod held payloads in the Internet store.');
+      } catch (error) {
+        logger.error(`Could not scrub automod held payloads: ${error?.message || error}`);
+      }
+    }
     const liveStats = storeStats(live);
     // If the live file looks wiped but a backup still has the community, restore it.
     if (liveStats.users <= 3) {
@@ -1229,14 +1246,14 @@ export function createInternetPost(store, user, content, media = {}) {
     kind: 'post',
     content: [body, question, gifTitle, ...options].filter(Boolean).join('\n'),
     extra: {
-      heldPayload: {
+      heldPayload: sanitizeHeldPayload({
         content: body,
         location: dropLocation,
         gifUrl: isGif ? gifUrl : '',
         gifTitle: isGif ? gifTitle : '',
         imageUrl: isImage ? imageUrl : '',
         quoteId: text(media?.quoteId, 80) || '',
-      },
+      }),
     },
   });
   if (!parentId) {
@@ -1446,6 +1463,39 @@ function addInternetLog(store, message) {
   store.logs = store.logs.slice(0, 300);
 }
 
+function sanitizeHeldPayload(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  const hostedImage = hostedMediaUrl(payload.imageUrl);
+  const rawImage = String(payload.imageUrl || '');
+  const hadInlineImage = /^data:image\/(?:png|jpeg|webp|gif);base64,/i.test(rawImage);
+  const gifUrl = text(payload.gifUrl, 500);
+  const gifTitle = text(payload.gifTitle, 120);
+  const isGif = /^https:\/\/(?:media\d*|i)\.giphy\.com\//.test(gifUrl);
+  const next = {
+    content: text(payload.content, 500),
+    location: sanitizeDropLocation(payload.location),
+    gifUrl: isGif ? gifUrl : '',
+    gifTitle: isGif ? gifTitle : '',
+    // Never persist multi-megabyte data URLs into reports — they break store
+    // writes and make the staff moderation payload too large to load.
+    imageUrl: hostedImage || '',
+    hasImage: Boolean(hostedImage) || hadInlineImage,
+    quoteId: text(payload.quoteId, 80) || '',
+  };
+  if (!next.content && !next.gifUrl && !next.imageUrl && !next.hasImage && !next.location && !next.quoteId) return null;
+  return next;
+}
+
+function publicStaffReport(store, report) {
+  const enriched = enrichInternetReport(store, report);
+  const held = enriched.heldPayload && typeof enriched.heldPayload === 'object' ? enriched.heldPayload : null;
+  const { heldPayload, ...rest } = enriched;
+  return {
+    ...rest,
+    hasHeldMedia: Boolean(held && (held.imageUrl || held.gifUrl || held.hasImage)),
+  };
+}
+
 function enforceAutomod(store, { actor, kind, content, extra = {} }) {
   if (!actor?.id || actor.id === OFFICIAL_INTERNET_ACCOUNT_ID) return null;
   const hit = scanInternetContent(content);
@@ -1472,7 +1522,7 @@ function enforceAutomod(store, { actor, kind, content, extra = {} }) {
       content: snippet,
       reason: hit.reason,
       categories: hit.categories,
-      heldPayload: extra.heldPayload && typeof extra.heldPayload === 'object' ? extra.heldPayload : null,
+      heldPayload: sanitizeHeldPayload(extra.heldPayload),
       createdAt: new Date().toISOString(),
       status: 'open',
     });
@@ -1483,7 +1533,7 @@ function enforceAutomod(store, { actor, kind, content, extra = {} }) {
 }
 
 function releaseHeldInternetPost(store, report) {
-  const payload = report?.heldPayload && typeof report.heldPayload === 'object' ? report.heldPayload : null;
+  const payload = sanitizeHeldPayload(report?.heldPayload);
   if (!payload || report.postId) return null;
   const author = upsertInternetUser(store, {
     id: report.authorId,
@@ -1496,8 +1546,8 @@ function releaseHeldInternetPost(store, report) {
   const gifUrl = text(payload.gifUrl, 500);
   const gifTitle = text(payload.gifTitle, 120);
   const isGif = /^https:\/\/(?:media\d*|i)\.giphy\.com\//.test(gifUrl);
-  const imageUrl = hostedMediaUrl(payload.imageUrl) || text(payload.imageUrl, 4_200_000);
-  const isImage = Boolean(hostedMediaUrl(payload.imageUrl)) || /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(imageUrl);
+  const imageUrl = hostedMediaUrl(payload.imageUrl);
+  const isImage = Boolean(imageUrl);
   if (!body && !isGif && !isImage && !dropLocation && !text(payload.quoteId, 80)) return null;
   const post = {
     id: randomUUID(),
@@ -2077,8 +2127,8 @@ export function recordLimitedStaffBan(store, staffId) {
 }
 
 export function moderationSnapshot(store) {
-  const open = store.reports.filter((report) => report.status === 'open').map((report) => enrichInternetReport(store, report));
-  const reviewed = store.reports.filter((report) => report.status !== 'open').map((report) => enrichInternetReport(store, report));
+  const open = store.reports.filter((report) => report.status === 'open').map((report) => publicStaffReport(store, report));
+  const reviewed = store.reports.filter((report) => report.status !== 'open').map((report) => publicStaffReport(store, report));
   const users = Object.values(store.users).map((user) => staffUserSummary(store, user));
   const bans = users.filter((user) => user.banned).map((user) => {
     const ban = getActiveBan(store.users[user.id]);

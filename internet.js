@@ -97,6 +97,7 @@ const INTERNET_VERSION = '20260813-home-reels';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
+const AUTOMOD_HOLD_PREVIEW = 'This may be held for staff review when you send it.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const SMALL_REEL_BYTES = 3_200_000;
 const INTERNET_PATH = '/internet';
@@ -2395,7 +2396,7 @@ async function loadModeration() {
     renderStaffDashboard();
     if (selectedStaffUserId && staffTab === 'users') void loadStaffUserDetail(selectedStaffUserId, true);
   } catch (error) {
-    if (overview && !moderationSnapshot) overview.innerHTML = `<p class="staff-loading">${escapeHtml(error.message || 'Could not load the staff panel.')}</p>`;
+    if (overview) overview.innerHTML = `<p class="staff-loading">${escapeHtml(error.message || 'Could not load the staff panel.')}</p>`;
   }
 }
 
@@ -3379,7 +3380,9 @@ content?.addEventListener('input', () => {
   count.textContent = `${content.value.length} / 500`;
   postButton.disabled = !canComposePost();
   updateComposerHighlight();
-  if (postMessage) postMessage.textContent = scanClientContent(content.value) ? AUTOMOD_HOLD_MESSAGE : '';
+  // Preview only — nothing is held until the server accepts the post and
+  // writes an automod report for the staff queue.
+  if (postMessage) postMessage.textContent = scanClientContent(content.value) ? AUTOMOD_HOLD_PREVIEW : '';
 });
 document.querySelector('[data-drop-location]')?.addEventListener('click', async () => {
   if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
@@ -4224,7 +4227,7 @@ document.querySelector('[data-close-conversation]')?.addEventListener('click', (
 document.querySelector('[data-open-conversation-profile]')?.addEventListener('click', () => { if (viewedMember) openMemberProfile(viewedMember.id); });
 conversationInput?.addEventListener('input', () => {
   const hit = scanClientContent(conversationInput.value);
-  setConversationHold(hit ? AUTOMOD_HOLD_MESSAGE : '');
+  setConversationHold(hit ? AUTOMOD_HOLD_PREVIEW : '');
 });
 conversationForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
