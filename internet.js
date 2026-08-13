@@ -1035,7 +1035,7 @@ function updateReelStats(card, reel) {
   if (!card || !reel) return;
   const likes = Array.isArray(reel.likes) ? reel.likes : [];
   const liked = likes.includes(activeUserId());
-  const comments = allPosts.filter((item) => item.parentId === reel.id).length;
+  const comments = reelCommentsFor(reel.id).length;
   const likeButton = card.querySelector('[data-reel-like]');
   if (likeButton) {
     likeButton.classList.toggle('liked', liked);
@@ -1050,6 +1050,21 @@ function contentKindLabel(post) {
   if (post?.parentId) return 'comment';
   if (post?.kind === 'reel') return 'reel';
   return 'post';
+}
+
+function uniquePostsById(posts) {
+  const seen = new Set();
+  return posts.filter((post) => {
+    const id = String(post?.id || '');
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+function reelCommentsFor(reelId) {
+  return uniquePostsById(allPosts.filter((item) => item.parentId === reelId))
+    .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
 }
 
 function reelCommentMarkup(comment) {
@@ -1074,7 +1089,7 @@ function syncReelPanelStats(reel) {
   if (!reel) return;
   const likes = Array.isArray(reel.likes) ? reel.likes : [];
   const liked = likes.includes(activeUserId());
-  const comments = allPosts.filter((item) => item.parentId === reel.id).length;
+  const comments = reelCommentsFor(reel.id).length;
   const likeButton = document.querySelector('[data-reel-panel-like]');
   const likeIcon = document.querySelector('[data-reel-panel-like-icon]');
   const likeCount = document.querySelector('[data-reel-panel-like-count]');
@@ -1139,9 +1154,7 @@ function renderReelPanel(reelId, { focusInput = false } = {}) {
   const selfAvatar = document.querySelector('[data-reel-panel-self-avatar]');
   if (selfAvatar) selfAvatar.src = document.querySelector('[data-avatar]')?.src || 'assets/clearwater-logo.png';
   syncReelPanelStats(reel);
-  const comments = allPosts
-    .filter((item) => item.parentId === reelId)
-    .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
+  const comments = reelCommentsFor(reelId);
   const panelList = document.querySelector('[data-reel-panel-comments]');
   if (panelList) {
     panelList.innerHTML = comments.length
@@ -1210,9 +1223,7 @@ function renderReels() {
         const panelList = document.querySelector('[data-reel-panel-comments]');
         const composing = document.querySelector('[data-reel-panel-comment-input]');
         if (panelList && document.activeElement !== composing) {
-          const comments = allPosts
-            .filter((item) => item.parentId === activeReelId)
-            .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
+          const comments = reelCommentsFor(activeReelId);
           panelList.innerHTML = comments.length
             ? comments.map((comment) => reelCommentMarkup(comment)).join('')
             : '<p class="reels-empty">No comments yet. Be the first.</p>';
@@ -1227,7 +1238,7 @@ function renderReels() {
   viewport.innerHTML = reels.map((reel) => {
     const likes = Array.isArray(reel.likes) ? reel.likes : [];
     const liked = likes.includes(activeUserId());
-    const comments = allPosts.filter((item) => item.parentId === reel.id).length;
+    const comments = reelCommentsFor(reel.id).length;
     const author = internetUsers.get(reel.authorId) || {};
     const displayName = author.displayName || reel.displayName || reel.username || 'member';
     const username = author.username || reel.username || 'member';
@@ -1278,7 +1289,7 @@ function openReelComments(reelId) {
   const list = document.querySelector('[data-reel-comment-list]');
   if (!sheet || !list) return;
   renderReelPanel(reelId);
-  const comments = allPosts.filter((item) => item.parentId === reelId).sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
+  const comments = reelCommentsFor(reelId);
   list.innerHTML = comments.length
     ? comments.map((comment) => reelCommentMarkup(comment)).join('')
     : '<p class="reels-empty">No comments yet. Be the first.</p>';
@@ -1289,8 +1300,9 @@ function openReelComments(reelId) {
 let reelCommentBusy = false;
 
 async function submitReelComment(input) {
+  if (reelCommentBusy) return;
   const text = String(input?.value || '').trim();
-  if (!activeReelId || !text || reelCommentBusy) return;
+  if (!activeReelId || !text) return;
   if (!currentUserId) {
     window.location.href = SIGNIN_INTERNET;
     return;

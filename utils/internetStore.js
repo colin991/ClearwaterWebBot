@@ -274,11 +274,13 @@ function viewerPrivacy(store, viewerId) {
 export function publicPosts(store, viewerId) {
   const { hiddenAuthors, maskedAuthors } = viewerPrivacy(store, viewerId);
   const visible = store.posts.filter((post) => !hiddenAuthors.has(post.authorId));
-  const feed = visible.filter((post) => post.kind !== 'reel');
   const reels = visible.filter((post) => post.kind === 'reel' && !post.parentId);
   const reelIds = new Set(reels.map((reel) => reel.id));
-  const comments = visible.filter((post) => post.parentId && reelIds.has(post.parentId));
-  return [...reels, ...feed, ...comments].map((post) => publicPost(post, maskedAuthors));
+  // Reel comments used to land in both the normal feed (kind !== 'reel') and this
+  // dedicated comments list, so every Reel reply rendered twice in the UI.
+  const reelComments = visible.filter((post) => post.parentId && reelIds.has(post.parentId));
+  const feed = visible.filter((post) => post.kind !== 'reel' && !reelIds.has(post.parentId));
+  return [...reels, ...feed, ...reelComments].map((post) => publicPost(post, maskedAuthors));
 }
 
 export function publicUsers(store, viewerId) {
@@ -1322,6 +1324,15 @@ export function interactInternetPost(store, { actor, postId, type, content = '',
     return { post, liked: !liked };
   }
   if (type === 'reply') {
+    const body = text(content, 500);
+    const normalized = body.toLowerCase().replace(/\s+/g, ' ').trim();
+    const recentDuplicate = normalized
+      ? store.posts.find((item) => item.parentId === post.id
+        && item.authorId === user.id
+        && String(item.content || '').toLowerCase().replace(/\s+/g, ' ').trim() === normalized
+        && Date.now() - new Date(item.createdAt).getTime() < 15_000)
+      : null;
+    if (recentDuplicate) return { post: recentDuplicate, duplicate: true };
     const reply = createInternetPost(store, user, content, { parentId: post.id });
     addInternetNotification(store, { recipientId: post.authorId, actor: user, type: 'reply', post: reply });
     return { post: reply };
