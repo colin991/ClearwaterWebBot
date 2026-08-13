@@ -1146,11 +1146,19 @@ function renderReelPanel(reelId, { focusInput = false } = {}) {
   }
   const more = document.querySelector('[data-reel-panel-more]');
   const reportReel = document.querySelector('[data-reel-panel-report]');
+  const deleteReel = document.querySelector('[data-reel-panel-delete]');
   if (more) {
-    more.hidden = isSelf || !currentUserId;
+    more.hidden = !currentUserId;
     more.open = false;
   }
-  if (reportReel) reportReel.dataset.reportPost = reel.id;
+  if (reportReel) {
+    reportReel.hidden = isSelf;
+    reportReel.dataset.reportPost = reel.id;
+  }
+  if (deleteReel) {
+    deleteReel.hidden = !isSelf;
+    deleteReel.dataset.deletePost = reel.id;
+  }
   const share = document.querySelector('[data-reel-panel-share]');
   if (share) share.dataset.reelShare = reel.id;
   const selfAvatar = document.querySelector('[data-reel-panel-self-avatar]');
@@ -1256,14 +1264,18 @@ function renderReels() {
     const isSelf = reel.authorId === activeUserId();
     const following = socialState.following.includes(reel.authorId);
     const canFollow = Boolean(currentUserId) && !isSelf;
-    const canReport = Boolean(currentUserId) && !isSelf;
     const follow = canFollow
       ? `<button type="button" class="reel-follow${following ? ' following' : ''}" data-reel-follow="${escapeHtml(reel.authorId)}">${following ? 'Following' : 'Follow'}</button>`
       : '';
-    const more = canReport
-      ? `<details class="reel-card-more reel-more"><summary aria-label="More reel actions">⋯</summary><div class="reel-more-menu"><button type="button" data-report-post="${escapeHtml(reel.id)}">Report Reel</button></div></details>`
+    const moreItem = !currentUserId
+      ? ''
+      : isSelf
+        ? `<button type="button" data-delete-post="${escapeHtml(reel.id)}">Delete Reel</button>`
+        : `<button type="button" data-report-post="${escapeHtml(reel.id)}">Report Reel</button>`;
+    const more = moreItem
+      ? `<details class="reel-more reel-actions-more"><summary aria-label="More reel actions"><span aria-hidden="true">⋯</span><span>More</span></summary><div class="reel-more-menu">${moreItem}</div></details>`
       : '';
-    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient" aria-hidden="true"></div>${sound}${more}<div class="reel-meta"><div class="reel-meta-user"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(avatarUrl)}" alt="" /><span class="reel-author"><b>${escapeHtml(displayName)}</b><small>@${escapeHtml(username)}</small></span></button>${follow}</div>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}" aria-label="Like">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}" aria-label="Comments">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}" aria-label="Share">${postActionIcon('share')}</button></div></article>`;
+    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient" aria-hidden="true"></div>${sound}<div class="reel-meta"><div class="reel-meta-user"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(avatarUrl)}" alt="" /><span class="reel-author"><b>${escapeHtml(displayName)}</b><small>@${escapeHtml(username)}</small></span></button>${follow}</div>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}" aria-label="Like">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}" aria-label="Comments">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}" aria-label="Share">${postActionIcon('share')}</button>${more}</div></article>`;
   }).join('');
   if (anchorId) {
     const stayOn = [...viewport.querySelectorAll('.reel-card')].find((card) => card.dataset.reelId === anchorId);
@@ -1282,6 +1294,7 @@ function syncHomeSurfaces() {
   // previously opened Reel can lock Settings, Profile, or other pages to the
   // fixed full-screen Reel height.
   const reelsOn = isVisibleReelsTab();
+  document.body.classList.toggle('reels-watching', reelsOn);
   document.querySelector('[data-reels-stage]')?.toggleAttribute('hidden', !reelsOn);
   document.querySelector('.posts')?.toggleAttribute('hidden', reelsOn);
   document.querySelector('[data-feed-tabs]')?.classList.toggle('reels-tabs', reelsOn);
@@ -3806,7 +3819,13 @@ document.addEventListener('click', (event) => {
     void runPostAction('report', reportReel.dataset.reportPost || activeReelId);
     return;
   }
-  if (event.target.closest('.reel-more-menu [data-report-post]')) {
+  const deleteReel = event.target.closest('[data-reel-panel-delete]');
+  if (deleteReel) {
+    deleteReel.closest('details')?.removeAttribute('open');
+    void runPostAction('delete', deleteReel.dataset.deletePost || activeReelId);
+    return;
+  }
+  if (event.target.closest('.reel-more-menu [data-report-post], .reel-more-menu [data-delete-post]')) {
     event.target.closest('details')?.removeAttribute('open');
   }
   const reelShare = event.target.closest('[data-reel-share]');
