@@ -4653,8 +4653,15 @@ document.querySelectorAll('[data-preference]').forEach((input) => input.addEvent
   const localOnly = LOCAL_APPEARANCE_PREFS.has(key);
   applyPreferenceState({ [key]: nextValue });
   localStorage.setItem(`clearwater-preferences-${currentUserId}`, JSON.stringify(preferenceState));
-  if (key === 'autoplayReels' && feedTab === 'reels') bindReelAutoplay();
-  else if (['compactPosts', 'largeText', 'reduceMotion', 'hideStats'].includes(key)) renderPosts();
+  if (key === 'autoplayReels') {
+    if (nextValue) {
+      reelsSoundOn = true;
+      if (reelsVolume <= 0) reelsVolume = 1;
+      persistReelAudioPrefs();
+      unlockReelAudio();
+    }
+    if (feedTab === 'reels') bindReelAutoplay();
+  } else if (['compactPosts', 'largeText', 'reduceMotion', 'hideStats'].includes(key)) renderPosts();
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'preference-save', key, enabled: nextValue }) });
     const result = await readApiJson(response, 'Could not save this setting.');
