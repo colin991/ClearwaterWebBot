@@ -6,6 +6,7 @@ import {
   handleMe,
   handleRobloxCallback,
   handleRobloxStart,
+  handleRobloxSync,
 } from '../lib/auth-handlers.js';
 
 function routeKey(request) {
@@ -31,6 +32,7 @@ export default async function handler(request, response) {
   if (route === 'logout') return handleLogout(request, response);
   if (route === 'roblox') return handleRobloxStart(request, response);
   if (route === 'roblox/callback') return handleRobloxCallback(request, response);
+  if (route === 'roblox/sync') return handleRobloxSync(request, response);
 
   return sendJson(response, 404, { error: 'Not found' });
 }

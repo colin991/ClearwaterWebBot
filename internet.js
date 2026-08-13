@@ -2993,10 +2993,20 @@ const CREDIT_STORE_PACKS = Object.freeze([
   },
 ]);
 
-function renderWalletStore() {
+let robloxStoreLinked = false;
+let robloxStoreSyncing = false;
+let robloxStoreWatching = false;
+
+function renderWalletStore(options = {}) {
   const root = document.querySelector('[data-wallet-store]');
   const status = document.querySelector('[data-wallet-store-status]');
   if (!root) return;
+
+  const params = new URLSearchParams(window.location.search);
+  const claim = params.get('robloxClaim');
+  if (claim === 'ok' || claim === 'none') robloxStoreLinked = true;
+  if (options.linked != null) robloxStoreLinked = Boolean(options.linked);
+
   root.innerHTML = `${CREDIT_STORE_PACKS.map((pack) => `
     <article class="wallet-store-pack">
       <div class="wallet-store-pack-copy">
@@ -3004,41 +3014,119 @@ function renderWalletStore() {
         <span>${escapeHtml(pack.label)}</span>
         <small>R$${Number(pack.robux).toLocaleString()} on Roblox</small>
       </div>
-      <a class="wallet-store-buy" href="${escapeHtml(pack.url)}" target="_blank" rel="noopener noreferrer">Buy on Roblox</a>
+      <a class="wallet-store-buy" href="${escapeHtml(pack.url)}" target="_blank" rel="noopener noreferrer" data-roblox-buy>Buy on Roblox</a>
     </article>
   `).join('')}
+  ${robloxStoreLinked ? '' : `
   <div class="wallet-store-claim">
-    <a class="wallet-store-claim-btn" href="/api/auth/roblox?next=${encodeURIComponent('/internet/wallet?market=1')}">Claim purchases</a>
-    <p>Signs into Roblox, checks your inventory, and adds any unclaimed packs to this wallet.</p>
-  </div>`;
-  if (status) {
-    const params = new URLSearchParams(window.location.search);
-    const claim = params.get('robloxClaim');
-    if (claim === 'ok') {
-      status.dataset.tone = 'ok';
-      status.textContent = `Claimed ${formatCredits(params.get('credits') || 0)} from Roblox${params.get('packs') ? ` (${params.get('packs')} pack${params.get('packs') === '1' ? '' : 's'})` : ''}.`;
-    } else if (claim === 'none') {
-      status.dataset.tone = 'wait';
-      status.textContent = 'No new packs to claim. Buy on Roblox first, or these packs were already claimed.';
-    } else if (claim === 'inventory') {
-      status.dataset.tone = 'error';
-      status.textContent = 'Could not read your Roblox inventory. Allow inventory access and try Claim again.';
-    } else if (claim === 'config') {
-      status.dataset.tone = 'error';
-      status.textContent = 'Roblox claim is not configured on the website yet.';
-    } else if (claim === 'error' || claim === 'denied') {
-      status.dataset.tone = 'error';
-      status.textContent = 'Roblox verification failed. Try Claim purchases again.';
-    } else {
-      status.dataset.tone = 'wait';
-      status.textContent = 'Purchase on Roblox, then use Claim purchases to verify inventory and receive credits.';
-    }
-    if (claim) {
-      const clean = new URL(window.location.href);
-      ['robloxClaim', 'credits', 'packs'].forEach((key) => clean.searchParams.delete(key));
-      history.replaceState({}, '', `${clean.pathname}${clean.search}${clean.hash}`);
-    }
+    <a class="wallet-store-claim-btn" href="/api/auth/roblox?next=${encodeURIComponent('/internet/wallet?market=1')}">Link Roblox</a>
+    <p>Link once so purchases credit this wallet automatically and show in Transactions.</p>
+  </div>`}`;
+
+  root.querySelectorAll('[data-roblox-buy]').forEach((link) => {
+    link.addEventListener('click', () => {
+      if (!robloxStoreLinked) return;
+      watchRobloxPurchaseReturn();
+    });
+  });
+
+  if (!status) return;
+
+  if (options.statusText) {
+    status.dataset.tone = options.statusTone || 'wait';
+    status.textContent = options.statusText;
+    return;
   }
+
+  if (claim === 'ok') {
+    status.dataset.tone = 'ok';
+    status.textContent = `Added ${formatCredits(params.get('credits') || 0)} from Roblox${params.get('packs') ? ` (${params.get('packs')} pack${params.get('packs') === '1' ? '' : 's'})` : ''}.`;
+  } else if (claim === 'none') {
+    status.dataset.tone = 'wait';
+    status.textContent = 'Roblox linked. Buy a pack, then return here — credits add automatically.';
+  } else if (claim === 'inventory') {
+    status.dataset.tone = 'error';
+    status.textContent = 'Could not read your Roblox inventory. Link again and allow inventory access.';
+  } else if (claim === 'config') {
+    status.dataset.tone = 'error';
+    status.textContent = 'Roblox credit store is not configured on the website yet.';
+  } else if (claim === 'error' || claim === 'denied') {
+    status.dataset.tone = 'error';
+    status.textContent = 'Roblox verification failed. Try linking again.';
+  } else if (robloxStoreLinked) {
+    status.dataset.tone = 'wait';
+    status.textContent = 'Roblox linked. Buy a pack, then return here — credits add automatically.';
+  } else {
+    status.dataset.tone = 'wait';
+    status.textContent = 'Link Roblox once. After that, purchases credit this wallet automatically.';
+  }
+
+  if (claim) {
+    const clean = new URL(window.location.href);
+    ['robloxClaim', 'credits', 'packs'].forEach((key) => clean.searchParams.delete(key));
+    history.replaceState({}, '', `${clean.pathname}${clean.search}${clean.hash}`);
+  }
+}
+
+async function syncRobloxPurchases({ silent = false } = {}) {
+  if (!currentUserId || robloxStoreSyncing) return null;
+  robloxStoreSyncing = true;
+  const status = document.querySelector('[data-wallet-store-status]');
+  if (!silent && status) {
+    status.dataset.tone = 'wait';
+    status.textContent = 'Checking Roblox purchases…';
+  }
+  try {
+    const response = await fetch('/api/auth/roblox/sync', { credentials: 'same-origin', cache: 'no-store' });
+    const result = await response.json().catch(() => ({}));
+    if (result.needsAuth || result.linked === false) {
+      robloxStoreLinked = false;
+      renderWalletStore({
+        linked: false,
+        statusText: silent ? undefined : 'Link Roblox once. After that, purchases credit this wallet automatically.',
+        statusTone: 'wait',
+      });
+      return result;
+    }
+
+    robloxStoreLinked = true;
+    const granted = Number(result.grantedCredits) || 0;
+    if (result.wallet) renderWallet(result.wallet);
+    else if (granted > 0) await loadWallet();
+
+    renderWalletStore({
+      linked: true,
+      statusText: granted > 0
+        ? `Added ${formatCredits(granted)} from Roblox${result.grantedPacks ? ` (${result.grantedPacks} pack${result.grantedPacks === 1 ? '' : 's'})` : ''}.`
+        : (result.robloxUsername
+          ? `Linked as ${result.robloxUsername}. New purchases credit this wallet automatically.`
+          : 'Roblox linked. Buy a pack, then return here — credits add automatically.'),
+      statusTone: granted > 0 ? 'ok' : 'wait',
+    });
+    return result;
+  } catch {
+    if (!silent && status) {
+      status.dataset.tone = 'error';
+      status.textContent = 'Could not check Roblox purchases right now.';
+    }
+    return null;
+  } finally {
+    robloxStoreSyncing = false;
+  }
+}
+
+function watchRobloxPurchaseReturn() {
+  if (robloxStoreWatching) return;
+  robloxStoreWatching = true;
+  const onVisible = () => {
+    if (document.visibilityState !== 'visible') return;
+    document.removeEventListener('visibilitychange', onVisible);
+    window.removeEventListener('focus', onVisible);
+    robloxStoreWatching = false;
+    void syncRobloxPurchases({ silent: false });
+  };
+  document.addEventListener('visibilitychange', onVisible);
+  window.addEventListener('focus', onVisible);
 }
 
 function maybeStartRobloxClaim() {
@@ -3059,6 +3147,9 @@ function maybeOpenWalletHubs() {
       const clean = new URL(window.location.href);
       clean.searchParams.delete('market');
       history.replaceState({}, '', `${clean.pathname}${clean.search}${clean.hash}`);
+    }
+    if (params.get('robloxClaim') === 'ok' || params.get('robloxClaim') === 'none') {
+      robloxStoreLinked = true;
     }
   }
 }
@@ -3478,7 +3569,13 @@ function setMarketHubOpen(open = false) {
   }
   stack.classList.toggle('market-open', show);
   hub.hidden = !show;
-  if (show) renderWalletStore();
+  if (show) {
+    renderWalletStore();
+    void syncRobloxPurchases({ silent: true }).then((result) => {
+      if (!result) return;
+      if (result.needsAuth) renderWalletStore({ linked: false });
+    });
+  }
 }
 
 function syncAdPlacementUi() {
