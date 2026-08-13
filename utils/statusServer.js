@@ -6,7 +6,7 @@ import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges } from './s
 import { dropLocationNameCandidates, findPlayerDropLocation } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
-import { AutomodHoldError, adjustInternetCredits, applyStaffSiteAction, applyStaffUserAction, banKnownInternetIps, claimInternetDailyCredits, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, internetProfile, moderationSnapshot, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, respondCreditTransfer, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetAccountActive, setInternetBan, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot } from './internetStore.js';
+import { AutomodHoldError, adjustInternetCredits, applyStaffSiteAction, applyStaffUserAction, banKnownInternetIps, claimInternetDailyCredits, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, internetProfile, moderationSnapshot, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, respondCreditTransfer, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetAccountActive, setInternetBan, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -233,8 +233,10 @@ export function startStatusServer(client, config) {
           const reelId = url.searchParams.get('reel');
           if (reelId) return serveStoredReel(response, store, reelId, url.searchParams.get('kind'));
           const createdOfficialAccount = !store.users[OFFICIAL_INTERNET_ACCOUNT_ID];
+          const createdBankAccount = !store.users[BANK_INTERNET_ACCOUNT_ID];
           ensureOfficialInternetAccount(store);
-          if (createdOfficialAccount || await syncInternetRoles(store)) await saveInternetStore(store);
+          ensureBankInternetAccount(store);
+          if (createdOfficialAccount || createdBankAccount || await syncInternetRoles(store)) await saveInternetStore(store);
           const viewerId = url.searchParams.get('viewer') || '';
           return json(response, 200, {
             posts: publicPosts(store, viewerId),

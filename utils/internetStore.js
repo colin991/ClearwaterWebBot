@@ -48,10 +48,18 @@ function sanitizeSiteBanner(raw) {
   };
 }
 export const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
+export const BANK_INTERNET_ACCOUNT_ID = '1514026810348671099';
 const officialDefaults = Object.freeze({
   displayName: 'Clearwater Roleplay',
   username: 'clearwaterroleplay',
   bio: 'Official Clearwater Roleplay updates and announcements.',
+  avatarUrl: 'assets/clearwater-logo.png',
+  bannerUrl: 'assets/clearwater-police-night.png',
+});
+const bankDefaults = Object.freeze({
+  displayName: 'Bank',
+  username: 'bank',
+  bio: 'Clearwater Credits transfers and statements.',
   avatarUrl: 'assets/clearwater-logo.png',
   bannerUrl: 'assets/clearwater-police-night.png',
 });
@@ -188,6 +196,7 @@ export function publicUsers(store, viewerId) {
       warningBadgeText: text(user.warningBadgeText, 120) || '',
       banned: Boolean(getActiveBan(user)),
       official: user.official === true,
+      bank: user.bank === true,
       following: user.preferences?.hideFollowing === true && user.id !== viewer ? [] : (Array.isArray(user.following) ? user.following : []),
       followingCount: Array.isArray(user.following) ? user.following.length : 0,
       followers: users.filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).map((member) => member.id),
@@ -514,13 +523,20 @@ function transferIsExpired(transfer) {
   return Date.now() >= new Date(transferExpiresAt(transfer)).getTime();
 }
 
-function internetUsersShareNetwork(left, right, extraHashes = []) {
-  const leftHashes = new Set([
-    ...(Array.isArray(left?.ipHashes) ? left.ipHashes : []),
-    ...(Array.isArray(extraHashes) ? extraHashes : []),
-  ].map((hash) => String(hash || '')).filter(Boolean));
-  if (!leftHashes.size) return false;
-  return (Array.isArray(right?.ipHashes) ? right.ipHashes : []).some((hash) => leftHashes.has(String(hash || '')));
+function normalizeIpHashes(hashes = []) {
+  return (Array.isArray(hashes) ? hashes : [hashes])
+    .map((hash) => String(hash || '').trim())
+    .filter((hash) => /^[A-Za-z0-9_-]{32,100}$/.test(hash));
+}
+
+// Only compare the actor's current request IP against the other account's saved
+// hashes. Mixing both histories (or adding the actor IP to both sides) caused
+// false "same network" blocks on Accept.
+function otherAccountHasCurrentNetwork(otherUser, currentHashes = []) {
+  const currents = normalizeIpHashes(currentHashes);
+  if (!currents.length) return false;
+  const other = new Set(normalizeIpHashes(otherUser?.ipHashes));
+  return currents.some((hash) => other.has(hash));
 }
 
 function syncTransferMessages(store, transfer) {
@@ -547,20 +563,20 @@ function expireCreditTransfer(store, transfer) {
       amount: transfer.amount,
       type: 'transfer-refund',
       note: 'Transfer expired after 24 hours',
-      actorName: 'Clearwater',
+      actorName: 'Bank',
     });
   }
   transfer.status = 'expired';
   transfer.resolvedAt = new Date().toISOString();
   transfer.expiresAt = transfer.expiresAt || transferExpiresAt(transfer);
   syncTransferMessages(store, transfer);
-  deliverOfficialDirectMessage(store, {
+  deliverBankDirectMessage(store, {
     toId: from.id,
     content: transfer.type === 'send'
       ? `Your transfer of ${money} expired after 24 hours and was returned to your wallet.`
       : `Your request for ${money} expired after 24 hours.`,
   });
-  deliverOfficialDirectMessage(store, {
+  deliverBankDirectMessage(store, {
     toId: to.id,
     content: transfer.type === 'send'
       ? `A pending credit transfer of ${money} expired after 24 hours.`
@@ -580,14 +596,15 @@ function expireStaleCreditTransfers(store) {
   return changed;
 }
 
-function deliverOfficialDirectMessage(store, { toId, content, transfer = null, actionable = false }) {
-  const official = ensureOfficialInternetAccount(store);
+function deliverBankDirectMessage(store, { toId, content, transfer = null, actionable = false }) {
+  const bank = ensureBankInternetAccount(store);
   const recipient = upsertInternetUser(store, { id: toId });
+  if (recipient.id === BANK_INTERNET_ACCOUNT_ID) return null;
   const sentAt = new Date().toISOString();
   const message = {
     id: randomUUID(),
     kind: 'direct',
-    fromId: OFFICIAL_INTERNET_ACCOUNT_ID,
+    fromId: BANK_INTERNET_ACCOUNT_ID,
     toId: recipient.id,
     content: text(content, 1000),
     createdAt: sentAt,
@@ -603,13 +620,13 @@ function deliverOfficialDirectMessage(store, { toId, content, transfer = null, a
       transferActionable: actionable === true && transfer.status === 'pending',
     } : {}),
   };
-  official.messages = Array.isArray(official.messages) ? official.messages : [];
+  bank.messages = Array.isArray(bank.messages) ? bank.messages : [];
   recipient.messages = Array.isArray(recipient.messages) ? recipient.messages : [];
-  official.messages.unshift({ ...message, readAt: sentAt });
+  bank.messages.unshift({ ...message, readAt: sentAt });
   recipient.messages.unshift({ ...message, readAt: null });
-  official.messages = official.messages.slice(0, 200);
+  bank.messages = bank.messages.slice(0, 200);
   recipient.messages = recipient.messages.slice(0, 120);
-  addInternetNotification(store, { recipientId: recipient.id, actor: official, type: 'message' });
+  addInternetNotification(store, { recipientId: recipient.id, actor: bank, type: 'message' });
   return message;
 }
 
@@ -640,8 +657,13 @@ export function createCreditTransfer(store, { actor, type, targetId, username, a
     throw new Error('Enter an amount from C$1 to C$100,000');
   }
   const initiator = ensureInternetWallet(store, actor);
-  if (initiator.id === OFFICIAL_INTERNET_ACCOUNT_ID || initiator.official === true) {
-    throw new Error('The official account cannot start member transfers this way');
+  if (
+    initiator.id === OFFICIAL_INTERNET_ACCOUNT_ID
+    || initiator.id === BANK_INTERNET_ACCOUNT_ID
+    || initiator.official === true
+    || initiator.bank === true
+  ) {
+    throw new Error('This account cannot start member transfers');
   }
   if (getActiveBan(initiator)) throw new Error('This account is banned from Clearwater Internet');
   recordInternetIpHash(store, initiator.id, ipHash);
@@ -649,11 +671,16 @@ export function createCreditTransfer(store, { actor, type, targetId, username, a
   const target = findInternetMember(store, { id: targetId, username });
   if (!target) throw new Error('That member has not joined Clearwater Internet yet');
   if (target.id === initiator.id) throw new Error('Choose another member');
-  if (target.id === OFFICIAL_INTERNET_ACCOUNT_ID || target.official === true) {
-    throw new Error('You cannot transfer credits with the official account');
+  if (
+    target.id === OFFICIAL_INTERNET_ACCOUNT_ID
+    || target.id === BANK_INTERNET_ACCOUNT_ID
+    || target.official === true
+    || target.bank === true
+  ) {
+    throw new Error('You cannot transfer credits with that account');
   }
   ensureInternetWallet(store, target);
-  if (internetUsersShareNetwork(initiator, target, [ipHash, ipHashLegacy])) {
+  if (otherAccountHasCurrentNetwork(target, [ipHash, ipHashLegacy])) {
     throw new Error('You cannot transfer credits between accounts on the same network');
   }
   if ((target.blocked || []).includes(initiator.id) || (initiator.blocked || []).includes(target.id)) {
@@ -693,26 +720,26 @@ export function createCreditTransfer(store, { actor, type, targetId, username, a
   const noteLine = noteText ? `\nNote: ${noteText}` : '';
 
   if (kind === 'send') {
-    deliverOfficialDirectMessage(store, {
+    deliverBankDirectMessage(store, {
       toId: target.id,
       content: `${actorLabel} wants to send you ${money}.${noteLine}\n\nAccept within 24 hours to add it to your wallet.`,
       transfer,
       actionable: true,
     });
-    deliverOfficialDirectMessage(store, {
+    deliverBankDirectMessage(store, {
       toId: initiator.id,
       content: `Your transfer of ${money} to ${targetLabel} is waiting for them to accept. It expires in 24 hours.`,
       transfer,
       actionable: false,
     });
   } else {
-    deliverOfficialDirectMessage(store, {
+    deliverBankDirectMessage(store, {
       toId: target.id,
       content: `${actorLabel} requested ${money} from you.${noteLine}\n\nAccept within 24 hours to pay from your Clearwater credits.`,
       transfer,
       actionable: true,
     });
-    deliverOfficialDirectMessage(store, {
+    deliverBankDirectMessage(store, {
       toId: initiator.id,
       content: `Your request for ${money} from ${targetLabel} was sent. It expires in 24 hours.`,
       transfer,
@@ -744,7 +771,8 @@ export function respondCreditTransfer(store, { actor, transferId, decision, ipHa
   const from = ensureInternetWallet(store, { id: transfer.fromId });
   const to = ensureInternetWallet(store, { id: transfer.toId });
   const money = moneyLabel(transfer.amount);
-  if (accept && internetUsersShareNetwork(from, to, [ipHash, ipHashLegacy])) {
+  // Recipient is acting: only block if their current IP is already known on the sender.
+  if (accept && otherAccountHasCurrentNetwork(from, [ipHash, ipHashLegacy])) {
     throw new Error('You cannot transfer credits between accounts on the same network');
   }
 
@@ -782,7 +810,7 @@ export function respondCreditTransfer(store, { actor, transferId, decision, ipHa
         amount: transfer.amount,
         type: 'transfer-refund',
         note: `Declined by @${to.username}`,
-        actorName: 'Clearwater',
+        actorName: 'Bank',
       });
     }
     transfer.status = 'declined';
@@ -791,26 +819,26 @@ export function respondCreditTransfer(store, { actor, transferId, decision, ipHa
   syncTransferMessages(store, transfer);
 
   if (accept) {
-    deliverOfficialDirectMessage(store, {
+    deliverBankDirectMessage(store, {
       toId: from.id,
       content: transfer.type === 'send'
         ? `${text(to.displayName, 80) || 'A member'} accepted your ${money} transfer.`
         : `${text(to.displayName, 80) || 'A member'} paid your ${money} request.`,
     });
-    deliverOfficialDirectMessage(store, {
+    deliverBankDirectMessage(store, {
       toId: to.id,
       content: transfer.type === 'send'
         ? `You accepted ${money} from ${text(from.displayName, 80) || 'a member'}.`
         : `You paid ${money} to ${text(from.displayName, 80) || 'a member'}.`,
     });
   } else {
-    deliverOfficialDirectMessage(store, {
+    deliverBankDirectMessage(store, {
       toId: from.id,
       content: transfer.type === 'send'
         ? `${text(to.displayName, 80) || 'A member'} declined your ${money} transfer. The credits were returned.`
         : `${text(to.displayName, 80) || 'A member'} declined your ${money} request.`,
     });
-    deliverOfficialDirectMessage(store, {
+    deliverBankDirectMessage(store, {
       toId: to.id,
       content: `You declined the ${money} ${transfer.type === 'send' ? 'transfer' : 'request'} from ${text(from.displayName, 80) || 'a member'}.`,
     });
@@ -849,6 +877,23 @@ export function ensureOfficialInternetAccount(store) {
   account.official = true;
   account.bio = profile.bio;
   account.bannerUrl = profile.bannerUrl;
+  return account;
+}
+
+export function ensureBankInternetAccount(store) {
+  const account = upsertInternetUser(store, {
+    id: BANK_INTERNET_ACCOUNT_ID,
+    displayName: bankDefaults.displayName,
+    username: bankDefaults.username,
+    avatarUrl: bankDefaults.avatarUrl,
+    staffRank: 'Bank',
+  });
+  account.verified = true;
+  account.bank = true;
+  account.official = false;
+  account.bio = bankDefaults.bio;
+  account.bannerUrl = bankDefaults.bannerUrl;
+  account.credits = Number.isFinite(Number(account.credits)) ? account.credits : 0;
   return account;
 }
 
