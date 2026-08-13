@@ -520,6 +520,15 @@ export default async function handler(request, response) {
       await callBot(request, { action: 'delete', postId: result.body.post?.id, actor: { id: user.id }, owner: true });
       return sendJson(response, 409, { error: 'The bot host needs the latest GitHub files and a restart before the Clearwater Roleplay account can post.' });
     }
+    if (
+      body.action === 'ad-report'
+      && !result.ok
+      && /unsupported action/i.test(String(result.body?.error || ''))
+    ) {
+      return sendJson(response, 503, {
+        error: 'Sponsored ad reporting needs the latest bot files. Restart the Sparked bot host after it pulls from GitHub.',
+      });
+    }
     return sendJson(response, result.ok ? (result.status === 201 ? 201 : 200) : result.status, redactPublicPayload(result.body));
   } catch {
     return sendJson(response, 502, { error: 'Clearwater Internet is temporarily unavailable' });
