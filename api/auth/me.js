@@ -1,6 +1,5 @@
 import { SESSION_COOKIE, avatarUrl, bannerUrl, getAuthConfig, parseCookies, readSessionToken, sendJson } from '../../lib/discord-auth.js';
 import { getStaffAccess } from '../../lib/owner-access.js';
-import { hasSiteAccess } from '../../lib/site-access.js';
 import { proxiedMediaUrl, publicUserId } from '../../lib/privacy.js';
 import { withSiteBadges } from '../../utils/staffRanks.js';
 
@@ -13,11 +12,12 @@ export default async function handler(request, response) {
     const user = readSessionToken(cookies[SESSION_COOKIE], sessionSecret);
     if (!user) return sendJson(response, 200, { authenticated: false, siteAccess: false });
 
-    if (!hasSiteAccess(user)) {
+    // Live Discord role check via the bot — session guildRoles alone are not enough.
+    const staffAccess = await getStaffAccess(user);
+    if (!staffAccess.siteAccess) {
       return sendJson(response, 200, { authenticated: false, siteAccess: false, denied: true });
     }
 
-    const staffAccess = await getStaffAccess(user);
     return sendJson(response, 200, {
       authenticated: true,
       siteAccess: true,

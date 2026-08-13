@@ -1,7 +1,6 @@
 import { handleUpload } from '@vercel/blob/client';
 import { SESSION_COOKIE, avatarUrl, getAuthConfig, isSameSiteRequest, parseCookies, readSessionToken, sendJson } from '../lib/discord-auth.js';
 import { getStaffAccess } from '../lib/owner-access.js';
-import { hasSiteAccess } from '../lib/site-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
@@ -103,14 +102,18 @@ async function serveReelViaBot(request, response, url) {
   response.end(buffer);
 }
 
-async function callBot(request, payload, viewerId = '') {
+async function callBot(request, payload, viewerId = '', ipHashes = null) {
   const apiUrl = process.env.BOT_API_URL?.replace(/\/$/, '');
   const apiKey = process.env.BOT_API_KEY;
   if (!apiUrl || !apiKey) return { ok: false, status: 503, body: { error: 'Clearwater Internet is not configured yet' } };
 
   // Privacy settings are applied per viewer, so the feed request has to say who
-  // is reading it.
-  const query = viewerId ? `?viewer=${encodeURIComponent(viewerId)}` : '';
+  // is reading it. IP hashes let the bot enforce network bans on GET too.
+  const params = new URLSearchParams();
+  if (viewerId) params.set('viewer', viewerId);
+  if (ipHashes?.hash) params.set('ipHash', ipHashes.hash);
+  if (ipHashes?.legacy && ipHashes.legacy !== ipHashes.hash) params.set('ipHashLegacy', ipHashes.legacy);
+  const query = params.toString() ? `?${params.toString()}` : '';
   const upstream = await fetch(`${apiUrl}/api/internet${query}`, {
     method: request.method,
     headers: {
@@ -150,7 +153,9 @@ export default async function handler(request, response) {
       if (url.searchParams.get('reel')) {
         const { sessionSecret } = getAuthConfig();
         const viewer = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
-        if (!viewer || !hasSiteAccess(viewer)) return sendJson(response, 401, { error: 'Sign in with Discord to use Clearwater Internet' });
+        if (!viewer) return sendJson(response, 401, { error: 'Sign in with Discord to use Clearwater Internet' });
+        const reelAccess = await getStaffAccess(viewer);
+        if (!reelAccess.siteAccess) return sendJson(response, 403, { error: 'Clearwater Internet access required' });
         return serveReelViaBot(request, response, url);
       }
       if (url.searchParams.get('meta') === 'version' || url.pathname.endsWith('/internet-version')) {
@@ -158,20 +163,32 @@ export default async function handler(request, response) {
       }
       const { sessionSecret } = getAuthConfig();
       const viewer = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
-      if (!viewer || !hasSiteAccess(viewer)) return sendJson(response, 401, { error: 'Sign in with Discord to use Clearwater Internet' });
-      const result = await callBot(request, undefined, viewer.id);
+      if (!viewer) return sendJson(response, 401, { error: 'Sign in with Discord to use Clearwater Internet' });
+      const liveAccess = await getStaffAccess(viewer);
+      if (!liveAccess.siteAccess) {
+        return sendJson(response, 403, { error: 'Clearwater Internet access required' });
+      }
+      const result = await callBot(request, undefined, viewer.id, hashClientIp(request));
       return sendJson(response, result.ok ? 200 : result.status, redactPublicPayload(result.body));
     }
 
     const body = await readBody(request);
     if (body?.type === 'blob.upload-completed') {
-      const result = await handleUpload({
-        body,
-        request,
-        onBeforeGenerateToken: async () => ({}),
-        onUploadCompleted: async () => {},
-      });
-      return sendJson(response, 200, result);
+      // Vercel Blob verifies this callback cryptographically inside handleUpload.
+      // Reject anything that is not a completed-upload event.
+      try {
+        const result = await handleUpload({
+          body,
+          request,
+          onBeforeGenerateToken: async () => {
+            throw new Error('Upload token generation is not allowed on this callback');
+          },
+          onUploadCompleted: async () => {},
+        });
+        return sendJson(response, 200, result);
+      } catch {
+        return sendJson(response, 400, { error: 'Invalid upload callback' });
+      }
     }
     if (request.method === 'POST' && !isSameSiteRequest(request)) {
       return sendJson(response, 403, { error: 'Invalid request origin' });
@@ -179,7 +196,16 @@ export default async function handler(request, response) {
 
     const { sessionSecret } = getAuthConfig();
     const user = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
-    if (!user || !hasSiteAccess(user)) return sendJson(response, 401, { error: 'Sign in with Discord to post' });
+    if (!user) return sendJson(response, 401, { error: 'Sign in with Discord to post' });
+
+    // Live Discord role check — session guildRoles alone are not authorization.
+    const access = await getStaffAccess(user);
+    if (!access.siteAccess) {
+      return sendJson(response, 403, { error: 'Clearwater Internet access required' });
+    }
+    const staffPanel = access.panelAccess === 'full' || access.panelAccess === 'limited' ? access.panelAccess : null;
+    const canStaff = Boolean(staffPanel);
+    const asOfficial = access.allowed && body.asOfficial === true;
 
     if (body?.type === 'blob.generate-client-token') {
       try {
@@ -213,13 +239,6 @@ export default async function handler(request, response) {
         return sendJson(response, 503, { error: /token/i.test(String(error?.message || '')) ? 'Create a Blob store in Vercel Storage so Reels can upload videos.' : (error.message || 'Could not start this Reel upload.') });
       }
     }
-    // Access checks call the bot service. A normal ban-status check does not
-    // need ownership data, so skip that extra round trip and show a ban screen
-    // as quickly as possible.
-    const access = await getStaffAccess(user);
-    const staffPanel = access.panelAccess === 'full' || access.panelAccess === 'limited' ? access.panelAccess : null;
-    const canStaff = Boolean(staffPanel);
-    const asOfficial = access.allowed && body.asOfficial === true;
     let payload;
     if (body.action === 'post') {
       payload = {

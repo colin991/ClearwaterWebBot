@@ -90,7 +90,7 @@ export default async function handler(request, response) {
     return redirect(response, destination, [
       clearCookie(STATE_COOKIE),
       clearCookie(NEXT_COOKIE),
-      makeCookie(SESSION_COOKIE, session, 60 * 60 * 24 * 7),
+      makeCookie(SESSION_COOKIE, session, 60 * 60 * 24),
     ]);
   } catch {
     return redirect(response, siteRedirect, [clearCookie(STATE_COOKIE)]);

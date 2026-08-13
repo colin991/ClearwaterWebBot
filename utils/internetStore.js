@@ -429,9 +429,14 @@ function assertNotOfficial(user, action) {
   }
 }
 
-export function assertCanPost(store, user, { reel = false } = {}) {
+export function assertNotBanned(user) {
   if (user?.id === OFFICIAL_INTERNET_ACCOUNT_ID || user?.official === true) return;
   if (getActiveBan(user)) throw new Error('This account is banned from Clearwater Internet');
+}
+
+export function assertCanPost(store, user, { reel = false } = {}) {
+  if (user?.id === OFFICIAL_INTERNET_ACCOUNT_ID || user?.official === true) return;
+  assertNotBanned(user);
   const mute = getActiveMute(user);
   if (mute) throw new Error(`This account is muted. ${mute.reason}`);
   if (store.settings?.pausePosts === true) throw new Error('Posting is temporarily paused by staff');
@@ -442,7 +447,7 @@ export function assertCanPost(store, user, { reel = false } = {}) {
 
 export function assertCanMessage(store, user) {
   if (user?.id === OFFICIAL_INTERNET_ACCOUNT_ID || user?.official === true) return;
-  if (getActiveBan(user)) throw new Error('This account is banned from Clearwater Internet');
+  assertNotBanned(user);
   const mute = getActiveMute(user);
   if (mute) throw new Error(`This account is muted. ${mute.reason}`);
   if (store.settings?.pauseMessages === true) throw new Error('Direct messages are temporarily paused by staff');
@@ -602,6 +607,7 @@ function walletView(user, { claimedNow = false } = {}) {
 export function walletSnapshot(store, actor) {
   expireStaleCreditTransfers(store);
   const user = ensureInternetWallet(store, actor);
+  assertNotBanned(user);
   const lastClaim = user.dailyCreditClaimedAt ? new Date(user.dailyCreditClaimedAt).getTime() : 0;
   let claimedNow = false;
   if (lastClaim && Date.now() - lastClaim >= DAILY_CREDIT_DELAY) {
@@ -619,6 +625,7 @@ export function walletSnapshot(store, actor) {
 
 export function claimInternetDailyCredits(store, actor) {
   const user = ensureInternetWallet(store, actor);
+  assertNotBanned(user);
   const snapshot = walletView(user);
   if (!snapshot.canClaim) throw new Error('Your next C$75 daily credit is not ready yet.');
   user.credits = creditBalance(user) + DAILY_CREDITS;
@@ -899,6 +906,7 @@ export function createCreditTransfer(store, { actor, type, targetId, username, a
 export function respondCreditTransfer(store, { actor, transferId, decision, ipHash = '', ipHashLegacy = '' }) {
   expireStaleCreditTransfers(store);
   const user = ensureInternetWallet(store, actor);
+  assertNotBanned(user);
   recordInternetIpHash(store, user.id, ipHash);
   recordInternetIpHash(store, user.id, ipHashLegacy);
   const transfer = creditTransfers(store).find((item) => item.id === String(transferId || ''));
@@ -1342,7 +1350,7 @@ function nativeRepostByUser(store, userId, postId) {
 
 export function interactInternetPost(store, { actor, postId, type, content = '', quote = false }) {
   const user = upsertInternetUser(store, actor);
-  if (type === 'reply') assertCanPost(store, user);
+  if (type === 'reply' || type === 'repost') assertCanPost(store, user);
   else if (getActiveBan(user) || getActiveMute(user)) throw new Error(getActiveBan(user) ? 'This account is banned from Clearwater Internet' : 'This account is muted');
   const requested = store.posts.find((item) => item.id === String(postId || ''));
   if (!requested) throw new Error('Post not found');
@@ -1724,6 +1732,7 @@ export function updateInternetPreference(store, { actor, key, enabled }) {
 
 export function updateInternetSocial(store, { actor, targetId, type, enabled, postId }) {
   const user = upsertInternetUser(store, actor);
+  assertNotBanned(user);
   if (type === 'bookmark') {
     if (!store.posts.some((post) => post.id === String(postId))) throw new Error('Post not found');
     user.bookmarks = Array.isArray(user.bookmarks) ? user.bookmarks : [];

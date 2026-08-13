@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
+import { memberHasSiteAccess } from '../lib/site-access.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess, LIMITED_STAFF_FORBIDDEN_ACTIONS } from './staffRanks.js';
 import { dropLocationNameCandidates, findPlayerDropLocation } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
@@ -82,6 +83,16 @@ async function discordDropUsernames(client, actor) {
 
 export function startStatusServer(client, config) {
   let lastInternetRoleSync = 0;
+
+  const resolveLiveStaffPanel = async (actorId) => {
+    const discordId = String(actorId || '');
+    if (!/^\d{16,22}$/.test(discordId)) return null;
+    const guild = client.guilds.cache.get(CLEARWATER_GUILD_ID)
+      || await client.guilds.fetch(CLEARWATER_GUILD_ID).catch(() => null);
+    if (!guild) return null;
+    const member = await guild.members.fetch(discordId).catch(() => null);
+    return getStaffPanelAccess(member, { ownerDiscordIds: config.ownerDiscordIds || [] });
+  };
 
   const enforceInternetMembership = async (store, actor) => {
     const discordId = String(actor?.id || '');
@@ -197,11 +208,14 @@ export function startStatusServer(client, config) {
         || await client.guilds.fetch(CLEARWATER_GUILD_ID).catch(() => null);
       const member = guild ? await guild.members.fetch(discordId).catch(() => null) : null;
       const staffRank = getHighestStaffRank(member);
-      const panelAccess = getStaffPanelAccess(member, { ownerDiscordIds: config.ownerDiscordIds || [] });
+      const ownerDiscordIds = config.ownerDiscordIds || [];
+      const panelAccess = getStaffPanelAccess(member, { ownerDiscordIds });
       const allowed = panelAccess === 'full';
+      const siteAccess = memberHasSiteAccess(member, { ownerDiscordIds });
       return json(response, 200, {
         allowed,
         panelAccess,
+        siteAccess,
         member: Boolean(member),
         staffRank: staffRank?.name || null,
         badges: getInternetBadges(member),
@@ -232,13 +246,26 @@ export function startStatusServer(client, config) {
         if (request.method === 'GET') {
           const reelId = url.searchParams.get('reel');
           if (reelId) return serveStoredReel(response, store, reelId, url.searchParams.get('kind'));
+          const ipBan = getActiveInternetIpBan(store, [
+            url.searchParams.get('ipHash'),
+            url.searchParams.get('ipHashLegacy'),
+          ]);
+          if (ipBan) {
+            return json(response, 403, { error: 'This network is banned from Clearwater Internet.', ban: ipBan });
+          }
+          const viewerId = url.searchParams.get('viewer') || '';
+          if (viewerId && store.users[viewerId]) {
+            const ban = getActiveBan(store.users[viewerId]);
+            if (ban) {
+              return json(response, 403, { error: 'This account is banned from Clearwater Internet.', ban });
+            }
+          }
           const createdOfficialAccount = !store.users[OFFICIAL_INTERNET_ACCOUNT_ID];
           const createdBankAccount = !store.users[BANK_INTERNET_ACCOUNT_ID];
           ensureOfficialInternetAccount(store);
           ensureBankInternetAccount(store);
           const rolesChanged = await syncInternetRoles(store);
           if (createdOfficialAccount || createdBankAccount || rolesChanged) await saveInternetStore(store);
-          const viewerId = url.searchParams.get('viewer') || '';
           return json(response, 200, {
             posts: publicPosts(store, viewerId),
             users: publicUsers(store, viewerId),
@@ -255,9 +282,44 @@ export function startStatusServer(client, config) {
         const membership = await enforceInternetMembership(store, body.actor);
         if (membership === false) return json(response, 403, { error: 'You must be a member of the Clearwater Roleplay Discord server to use Clearwater Internet.' });
         if (membership === null) return json(response, 503, { error: 'Clearwater Internet could not verify Discord membership right now. Please try again shortly.' });
-        // The website has already verified Ownership before sending this flag.
-        // Keep Discord membership tied to the real person, then perform the action as the official account.
-        if (body.asOfficial === true && body.owner === true) body.actor = ensureOfficialInternetAccount(store);
+
+        // Privilege flags from the website proxy are never trusted. Re-resolve
+        // staff/owner access from live Discord membership on every request.
+        const actorId = String(body.actor?.id || '');
+        const wantsOfficial = body.asOfficial === true;
+        const requestedOwner = body.owner === true;
+        const staffAction = ['moderation', 'staff-user', 'staff-user-detail', 'staff-wallet', 'staff-site', 'report-review', 'verify', 'ban'].includes(body.action);
+        const needsLivePanel = wantsOfficial
+          || requestedOwner
+          || staffAction
+          || body.action === 'official-profile-save';
+        let livePanel = null;
+        if (needsLivePanel) {
+          livePanel = await resolveLiveStaffPanel(actorId);
+        }
+        body.asOfficial = false;
+        body.owner = false;
+        body.staffPanel = null;
+        if (wantsOfficial) {
+          if (livePanel !== 'full') return json(response, 403, { error: 'Ownership access required' });
+          body.actor = ensureOfficialInternetAccount(store);
+          body.asOfficial = true;
+          body.owner = true;
+        } else if (livePanel === 'full' && (
+          body.action === 'official-profile-save'
+          || ((body.action === 'edit' || body.action === 'delete') && requestedOwner)
+          || ['verify', 'ban', 'staff-wallet', 'staff-site'].includes(body.action)
+        )) {
+          body.owner = true;
+        }
+        if (staffAction) {
+          if (!livePanel) return json(response, 403, { error: 'Staff access required' });
+          body.staffPanel = livePanel;
+          if (livePanel === 'full') body.owner = true;
+        }
+        if (body.action === 'official-profile-save' && livePanel !== 'full') {
+          return json(response, 403, { error: 'Ownership access required' });
+        }
         if (body.action === 'erlc-location') {
           if (!config.erlcServerKey) return json(response, 503, { error: 'ER:LC is not configured on the bot host yet.' });
           const usernames = await discordDropUsernames(client, body.actor);
@@ -439,12 +501,8 @@ export function startStatusServer(client, config) {
 
         if (body.action === 'report-review') {
           const reviewerId = String(body.actor?.id || '');
-          const guild = client.guilds.cache.get(CLEARWATER_GUILD_ID)
-            || await client.guilds.fetch(CLEARWATER_GUILD_ID).catch(() => null);
-          const reviewer = guild ? await guild.members.fetch(reviewerId).catch(() => null) : null;
-          const panelAccess = getStaffPanelAccess(reviewer, { ownerDiscordIds: config.ownerDiscordIds || [] })
-            || (body.staffPanel === 'full' || body.staffPanel === 'limited' ? body.staffPanel : null);
-          if (!panelAccess) return json(response, 403, { error: 'Staff access required' });
+          const panelAccess = body.staffPanel;
+          if (!['full', 'limited'].includes(panelAccess)) return json(response, 403, { error: 'Staff access required' });
           const modAction = String(body.moderationAction || body.action || '');
           if (panelAccess === 'limited' && modAction === 'ban' && body.decision !== 'deny') {
             assertLimitedStaffBanQuota(store, reviewerId);
@@ -478,14 +536,14 @@ export function startStatusServer(client, config) {
           if (body.staffPanel === 'limited' && LIMITED_STAFF_FORBIDDEN_ACTIONS.includes(staffAction)) {
             return json(response, 403, { error: 'Limited staff cannot use verification or network tools.' });
           }
-          const actorId = String(body.actor?.id || '');
+          const staffActorId = String(body.actor?.id || '');
           if (body.staffPanel === 'limited' && staffAction === 'ban') {
-            assertLimitedStaffBanQuota(store, actorId);
+            assertLimitedStaffBanQuota(store, staffActorId);
           }
           if (body.staffPanel === 'limited') body.ipBan = false;
           const detail = applyStaffUserAction(store, body);
           if (body.staffPanel === 'limited' && staffAction === 'ban') {
-            recordLimitedStaffBan(store, actorId);
+            recordLimitedStaffBan(store, staffActorId);
           }
           await saveInternetStore(store);
           return json(response, 200, { ...detail, snapshot: moderationSnapshot(store) });
@@ -508,7 +566,7 @@ export function startStatusServer(client, config) {
         if (!['verify', 'ban'].includes(body.action)) {
           return json(response, 400, { error: `Unsupported action: ${String(body.action || 'unknown')}` });
         }
-        if (body.staffPanel !== 'full' && body.owner !== true) {
+        if (body.staffPanel !== 'full') {
           return json(response, 403, { error: 'Full staff access required' });
         }
 

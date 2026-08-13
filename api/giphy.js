@@ -1,4 +1,5 @@
-import { sendJson } from '../lib/discord-auth.js';
+import { SESSION_COOKIE, getAuthConfig, parseCookies, readSessionToken, sendJson } from '../lib/discord-auth.js';
+import { getStaffAccess } from '../lib/owner-access.js';
 
 export default async function handler(request, response) {
   if (request.method !== 'GET') return sendJson(response, 405, { error: 'Method not allowed' });
@@ -7,6 +8,12 @@ export default async function handler(request, response) {
   if (!key) return sendJson(response, 503, { error: 'GIF search is not configured yet' });
 
   try {
+    const { sessionSecret } = getAuthConfig();
+    const user = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
+    if (!user) return sendJson(response, 401, { error: 'Sign in with Discord to search GIFs' });
+    const access = await getStaffAccess(user);
+    if (!access.siteAccess) return sendJson(response, 403, { error: 'Clearwater Internet access required' });
+
     const url = new URL(request.url, `https://${request.headers.host || 'cwrpvc.lol'}`);
     const query = String(url.searchParams.get('q') || '').trim().slice(0, 50);
     const giphy = new URL(query ? 'https://api.giphy.com/v1/gifs/search' : 'https://api.giphy.com/v1/gifs/trending');
@@ -19,9 +26,9 @@ export default async function handler(request, response) {
 
     const giphyUrl = (value) => {
       try {
-        const url = new URL(String(value || ''));
-        if (url.protocol !== 'https:' || !/^(?:media\d*|i)\.giphy\.com$/i.test(url.hostname)) return '';
-        return url.href;
+        const parsed = new URL(String(value || ''));
+        if (parsed.protocol !== 'https:' || !/^(?:media\d*|i)\.giphy\.com$/i.test(parsed.hostname)) return '';
+        return parsed.href;
       } catch {
         return '';
       }
@@ -35,7 +42,10 @@ export default async function handler(request, response) {
         previewUrl: giphyUrl(gif.images?.fixed_height_small?.url || gif.images?.fixed_height?.url),
       })).filter((gif) => gif.url && gif.previewUrl),
     });
-  } catch {
+  } catch (error) {
+    if (/Missing authentication configuration/i.test(String(error?.message || ''))) {
+      return sendJson(response, 503, { error: 'GIF search is not configured yet' });
+    }
     return sendJson(response, 502, { error: 'GIF search is temporarily unavailable' });
   }
 }
