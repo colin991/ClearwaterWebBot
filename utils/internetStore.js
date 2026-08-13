@@ -213,22 +213,40 @@ const bankDefaults = Object.freeze({
   bannerUrl: 'assets/clearwater-police-night.png',
 });
 
+let discordInternetNotify = null;
+
+/** Bot host registers a Discord DM sender for opted-in members. */
+export function setDiscordInternetNotify(handler) {
+  discordInternetNotify = typeof handler === 'function' ? handler : null;
+}
+
 function addInternetNotification(store, { recipientId, actor, type, post = null }) {
   const recipient = store.users[String(recipientId || '')];
   if (!recipient || recipient.id === actor?.id) return;
+  const actorName = text(actor?.displayName, 80) || 'A Clearwater member';
+  const postContent = text(post?.content, 180);
   recipient.notifications = Array.isArray(recipient.notifications) ? recipient.notifications : [];
   recipient.notifications.unshift({
     id: randomUUID(),
     type,
     actorId: String(actor?.id || ''),
-    actorName: text(actor?.displayName, 80) || 'A Clearwater member',
+    actorName,
     actorAvatarUrl: text(actor?.avatarUrl, 300) || null,
     postId: post?.id || null,
-    postContent: text(post?.content, 180),
+    postContent,
     createdAt: new Date().toISOString(),
     readAt: null,
   });
   recipient.notifications = recipient.notifications.slice(0, 100);
+
+  if (recipient.preferences?.discordDmNotifications === true && discordInternetNotify) {
+    void discordInternetNotify({
+      recipientId: recipient.id,
+      actorName,
+      type: String(type || ''),
+      postContent,
+    });
+  }
 }
 
 export async function readInternetStore() {
@@ -1808,6 +1826,7 @@ const preferenceKeys = new Set([
   'compactPosts',
   'autoplayReels',
   'largeText',
+  'discordDmNotifications',
 ]);
 
 export function internetPreferences(store, actor) {
