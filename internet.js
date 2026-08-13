@@ -3569,8 +3569,13 @@ function setAdWalletTab(tab = 'create') {
   const next = tab === 'analytics' ? 'analytics' : 'create';
   const hasAnalytics = activeMyAds().length > 0;
   adWalletTab = next === 'analytics' && hasAnalytics ? 'analytics' : 'create';
+  const onAnalytics = adWalletTab === 'analytics';
   const tabs = document.querySelector('[data-ad-tabs]');
   if (tabs) tabs.hidden = !hasAnalytics;
+  const intro = document.querySelector('[data-advertise-hub-intro]');
+  if (intro) intro.hidden = onAnalytics;
+  const placement = document.querySelector('[data-ad-placement]');
+  if (placement) placement.hidden = onAnalytics;
   document.querySelectorAll('[data-ad-tab]').forEach((button) => {
     const selected = button.dataset.adTab === adWalletTab;
     button.classList.toggle('selected', selected);
