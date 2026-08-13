@@ -1754,14 +1754,40 @@ function showViewFromAddress() {
   showView(route.view || 'home');
 }
 
-function showPostDetail(postId, updateHash = true) {
+function detailReplyComposerMarkup(postId) {
+  if (!currentUserId) {
+    return `<section class="detail-reply-composer signed-out"><p>Sign in to reply.</p><a href="${SIGNIN_INTERNET}">Continue with Discord</a></section>`;
+  }
+  const me = activeAuthor() || internetUsers.get(currentUserId) || sessionUser || {};
+  const avatar = me.avatarUrl || sessionUser?.avatarUrl || 'assets/clearwater-logo.png';
+  return `<section class="detail-reply-composer" data-detail-reply>
+    <img src="${escapeHtml(avatar)}" alt="" draggable="false" />
+    <form data-detail-reply-form data-post-id="${escapeHtml(postId)}">
+      <textarea data-detail-reply-content maxlength="500" placeholder="Post your reply" rows="2"></textarea>
+      <div class="detail-reply-actions">
+        <button type="submit" data-detail-reply-submit disabled>Post</button>
+      </div>
+      <p class="detail-reply-error" data-detail-reply-error role="status"></p>
+    </form>
+  </section>`;
+}
+
+function focusDetailReplyComposer() {
+  const input = document.querySelector('[data-detail-reply-content]');
+  if (!input) return;
+  input.focus({ preventScroll: true });
+  input.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function showPostDetail(postId, updateHash = true, { focusReply = false } = {}) {
   const post = allPosts.find((item) => item.id === postId);
   if (!post || !postDetail) return showView('home');
   openPostId = postId;
   if (updateHash) setInternetRoute('post', postId);
   showView('post');
   const replies = allPosts.filter((item) => item.parentId === postId);
-  postDetail.innerHTML = `${postMarkup(post)}<section class="detail-replies"><button type="button" class="detail-reply-button" data-engage="reply" data-post-id="${escapeHtml(post.id)}">Reply to this post</button>${replies.length ? replies.map((reply) => postMarkup(reply)).join('') : '<p>There are no replies yet.</p>'}</section>`;
+  postDetail.innerHTML = `${postMarkup(post)}${detailReplyComposerMarkup(post.id)}<section class="detail-replies">${replies.length ? replies.map((reply) => postMarkup(reply)).join('') : '<p>There are no replies yet.</p>'}</section>`;
+  if (focusReply) queueMicrotask(focusDetailReplyComposer);
 }
 
 function showBan(ban) {
@@ -4005,10 +4031,9 @@ async function handlePostEngagement(type, postId, control = null) {
     return;
   }
   if (type === 'reply') {
-    pendingPostAction = { postId: post.id, type, quote: false };
-    document.querySelector('[data-post-modal-title]').textContent = 'Reply';
-    document.querySelector('[data-post-modal-content]').placeholder = 'Post your reply';
-    postModal.hidden = false;
+    const onDetail = openPostId === post.id && !document.querySelector('[data-view="post"]')?.hidden;
+    if (onDetail) focusDetailReplyComposer();
+    else showPostDetail(post.id, true, { focusReply: true });
     return;
   }
   try { await postInteraction({ postId: post.id, type }); } catch (error) { void siteAlert(error.message); }
@@ -4232,6 +4257,34 @@ postModalForm?.addEventListener('submit', async (event) => {
   const error = document.querySelector('[data-post-modal-error]'); error.textContent = '';
   const text = document.querySelector('[data-post-modal-content]').value;
   try { await postInteraction({ ...pendingPostAction, content: text }); postModal.hidden = true; postModalForm.reset(); pendingPostAction = null; } catch (exception) { error.textContent = exception.message || 'Could not post.'; }
+});
+document.addEventListener('input', (event) => {
+  const replyInput = event.target.closest('[data-detail-reply-content]');
+  if (!replyInput) return;
+  const form = replyInput.closest('[data-detail-reply-form]');
+  const submit = form?.querySelector('[data-detail-reply-submit]');
+  if (submit) submit.disabled = !String(replyInput.value || '').trim();
+});
+document.addEventListener('submit', async (event) => {
+  const form = event.target.closest('[data-detail-reply-form]');
+  if (!form) return;
+  event.preventDefault();
+  const postId = form.dataset.postId;
+  const input = form.querySelector('[data-detail-reply-content]');
+  const error = form.querySelector('[data-detail-reply-error]');
+  const submit = form.querySelector('[data-detail-reply-submit]');
+  const text = String(input?.value || '').trim();
+  if (!postId || !text) return;
+  if (error) error.textContent = '';
+  if (submit) submit.disabled = true;
+  try {
+    await postInteraction({ postId, type: 'reply', content: text });
+    if (input) input.value = '';
+    showPostDetail(postId, false);
+  } catch (exception) {
+    if (error) error.textContent = exception.message || 'Could not post your reply.';
+    if (submit) submit.disabled = !text;
+  }
 });
 document.querySelector('[data-close-share]')?.addEventListener('click', () => { shareModal.hidden = true; pendingPostAction = null; });
 document.querySelector('[data-copy-post-link]')?.addEventListener('click', async () => {
