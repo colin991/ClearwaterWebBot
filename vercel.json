@@ -10,6 +10,7 @@
     { "source": "/terms", "destination": "/terms.html" },
     { "source": "/privacy", "destination": "/privacy.html" },
     { "source": "/signin", "destination": "/signin.html" },
+    { "source": "/coming-soon", "destination": "/coming-soon.html" },
     { "source": "/wallet", "destination": "/wallet.html" }
   ],
   "headers": [

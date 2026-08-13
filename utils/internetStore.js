@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { AUTOMOD_HOLD_MESSAGE, AutomodHoldError, scanInternetContent } from './internetAutomod.js';
 import { JsonStoreCorruptError, readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
-import { mergeInternetBadges, sanitizeInternetBadges } from './staffRanks.js';
+import { mergeInternetBadges, sanitizeInternetBadges, withSiteBadges } from './staffRanks.js';
 
 export { AutomodHoldError };
 
@@ -311,7 +311,7 @@ export function publicUsers(store, viewerId) {
       hideStats: user.preferences?.hideStats === true,
       staffRank: user.staffRank || null,
       verified: user.verified === true,
-      badges: Array.isArray(user.badges) ? sanitizeInternetBadges(user.badges) : [],
+      badges: withSiteBadges(user.badges, user),
       warningBadgeText: text(user.warningBadgeText, 120) || '',
       banned: Boolean(getActiveBan(user)),
       official: user.official === true,
@@ -512,9 +512,18 @@ export function upsertInternetUser(store, user) {
     displayName: has('displayName') ? text(user?.displayName, 80) || existing.displayName || 'Discord user' : existing.displayName || 'Discord user',
     avatarUrl: has('avatarUrl') ? text(user?.avatarUrl, 300) || null : existing.avatarUrl || null,
     staffRank: has('staffRank') ? text(user?.staffRank, 80) || null : existing.staffRank || null,
-    badges: has('badges') && Array.isArray(user?.badges)
-      ? mergeInternetBadges(existing.badges, user.badges)
-      : sanitizeInternetBadges(existing.badges),
+    badges: withSiteBadges(
+      has('badges') && Array.isArray(user?.badges)
+        ? mergeInternetBadges(existing.badges, user.badges, {
+          id,
+          username: has('username') ? user?.username : existing.username,
+        })
+        : existing.badges,
+      {
+        id,
+        username: has('username') ? text(user?.username, 80) || existing.username : existing.username,
+      },
+    ),
   };
   return store.users[id];
 }
@@ -1255,7 +1264,7 @@ export function createInternetPost(store, user, content, media = {}) {
     avatarUrl: user.avatarUrl,
     staffRank: user.staffRank,
     verified: user.verified === true,
-    badges: Array.isArray(user.badges) ? sanitizeInternetBadges(user.badges) : [],
+    badges: withSiteBadges(user.badges, user),
     content: body,
     parentId,
     quoteId: text(media?.quoteId, 80) || null,
@@ -1357,7 +1366,7 @@ export function interactInternetPost(store, { actor, postId, type, content = '',
         avatarUrl: user.avatarUrl,
         staffRank: user.staffRank,
         verified: user.verified === true,
-        badges: Array.isArray(user.badges) ? sanitizeInternetBadges(user.badges) : [],
+        badges: withSiteBadges(user.badges, user),
         content: '',
         repostOf: post.id,
         parentId: null,
@@ -1499,7 +1508,7 @@ function releaseHeldInternetPost(store, report) {
     avatarUrl: author.avatarUrl,
     staffRank: author.staffRank,
     verified: author.verified === true,
-    badges: Array.isArray(author.badges) ? sanitizeInternetBadges(author.badges) : [],
+    badges: withSiteBadges(author.badges, author),
     content: body,
     parentId: null,
     quoteId: text(payload.quoteId, 80) || null,
@@ -1718,7 +1727,7 @@ export function sendInternetMessage(store, { actor, to, content, gif, username }
 function staffUserFlags(user) {
   const ban = getActiveBan(user);
   const mute = getActiveMute(user);
-  const badges = sanitizeInternetBadges(user.badges);
+  const badges = withSiteBadges(user.badges, user);
   return {
     verified: user.verified === true,
     official: user.official === true,
@@ -1733,6 +1742,7 @@ function staffUserFlags(user) {
     deactivated: user.deactivated === true,
     business: badges.includes('business'),
     warningBadge: badges.includes('warning'),
+    developer: badges.includes('developer'),
     warningBadgeText: text(user.warningBadgeText, 120) || '',
     badges,
   };

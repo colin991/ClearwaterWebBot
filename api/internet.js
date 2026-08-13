@@ -1,6 +1,7 @@
 import { handleUpload } from '@vercel/blob/client';
 import { SESSION_COOKIE, avatarUrl, getAuthConfig, isSameSiteRequest, parseCookies, readSessionToken, sendJson } from '../lib/discord-auth.js';
 import { getStaffAccess } from '../lib/owner-access.js';
+import { hasSiteAccess } from '../lib/site-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
@@ -149,7 +150,7 @@ export default async function handler(request, response) {
       if (url.searchParams.get('reel')) {
         const { sessionSecret } = getAuthConfig();
         const viewer = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
-        if (!viewer) return sendJson(response, 401, { error: 'Sign in with Discord to use Clearwater Internet' });
+        if (!viewer || !hasSiteAccess(viewer)) return sendJson(response, 401, { error: 'Sign in with Discord to use Clearwater Internet' });
         return serveReelViaBot(request, response, url);
       }
       if (url.searchParams.get('meta') === 'version' || url.pathname.endsWith('/internet-version')) {
@@ -157,7 +158,7 @@ export default async function handler(request, response) {
       }
       const { sessionSecret } = getAuthConfig();
       const viewer = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
-      if (!viewer) return sendJson(response, 401, { error: 'Sign in with Discord to use Clearwater Internet' });
+      if (!viewer || !hasSiteAccess(viewer)) return sendJson(response, 401, { error: 'Sign in with Discord to use Clearwater Internet' });
       const result = await callBot(request, undefined, viewer.id);
       return sendJson(response, result.ok ? 200 : result.status, redactPublicPayload(result.body));
     }
@@ -178,7 +179,7 @@ export default async function handler(request, response) {
 
     const { sessionSecret } = getAuthConfig();
     const user = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
-    if (!user) return sendJson(response, 401, { error: 'Sign in with Discord to post' });
+    if (!user || !hasSiteAccess(user)) return sendJson(response, 401, { error: 'Sign in with Discord to post' });
 
     if (body?.type === 'blob.generate-client-token') {
       try {

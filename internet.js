@@ -477,9 +477,12 @@ const roleBadges = (user) => {
   const staff = badges.includes('staff')
     ? '<span class="role-badge staff-badge" role="img" aria-label="Staff" data-tooltip="Staff"><img src="assets/clearwater-staff-badge.png" alt="" /></span>'
     : '';
+  const developer = badges.includes('developer')
+    ? '<span class="role-badge developer-badge" role="img" aria-label="Developer" data-tooltip="Developer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 7.2 3.8 12l4.4 4.8 1.5-1.4L6.7 12l3-3.4-1.5-1.4Zm7.6 0-1.5 1.4 3 3.4-3 3.4 1.5 1.4L20.2 12l-4.4-4.8Z"/></svg></span>'
+    : '';
   const business = badges.includes('business') ? businessBadge() : '';
   const warning = badges.includes('warning') ? warningBadge(user?.warningBadgeText) : '';
-  return `${premium}${staff}${business}${warning}`;
+  return `${premium}${staff}${developer}${business}${warning}`;
 };
 const identityBadges = (user) => `${user?.verified === true ? verifiedBadge() : ''}${roleBadges(user)}`;
 const currentAuthor = (post) => internetUsers.get(post.authorId) || null;
@@ -2026,6 +2029,7 @@ function staffUserChips(user) {
   const chips = [];
   if (user.official) chips.push('<span class="staff-chip official">Official</span>');
   if (user.verified) chips.push('<span class="staff-chip is-verified">Verified</span>');
+  if (user.developer || (Array.isArray(user.badges) && user.badges.includes('developer'))) chips.push('<span class="staff-chip developer">Developer</span>');
   if (user.business) chips.push('<span class="staff-chip business">Business</span>');
   if (user.warningBadge) chips.push('<span class="staff-chip warn">Warning tag</span>');
   if (user.banned) chips.push('<span class="staff-chip danger">Banned</span>');

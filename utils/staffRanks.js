@@ -44,7 +44,23 @@ export const CLEARWATER_PREMIUM_ROLE_ID = '1514033571160133733';
 export const CLEARWATER_STAFF_BADGE_ROLE_ID = '1514744040778760252';
 export const DISCORD_INTERNET_BADGES = Object.freeze(['clearwater-role', 'staff']);
 export const STAFF_ASSIGNABLE_BADGES = Object.freeze(['business', 'warning']);
-export const ALLOWED_INTERNET_BADGES = Object.freeze([...DISCORD_INTERNET_BADGES, ...STAFF_ASSIGNABLE_BADGES]);
+export const SITE_FIXED_BADGES = Object.freeze(['developer']);
+export const ALLOWED_INTERNET_BADGES = Object.freeze([
+  ...DISCORD_INTERNET_BADGES,
+  ...STAFF_ASSIGNABLE_BADGES,
+  ...SITE_FIXED_BADGES,
+]);
+
+/** Colin (owner) + Pixel — hardcoded developer badge accounts. */
+export const DEVELOPER_DISCORD_IDS = Object.freeze([
+  '1044686997194805280',
+]);
+export const DEVELOPER_USERNAMES = Object.freeze([
+  'colin',
+  'pixel',
+  'pixelnovaa',
+  'plxelnovaa',
+]);
 
 const ROLE_BADGES = Object.freeze([
   { id: CLEARWATER_PREMIUM_ROLE_ID, badge: 'clearwater-role' },
@@ -55,12 +71,32 @@ export function sanitizeInternetBadges(badges) {
   return Array.isArray(badges) ? [...new Set(badges.filter((badge) => ALLOWED_INTERNET_BADGES.includes(badge)))] : [];
 }
 
-export function getInternetBadges(member) {
-  return ROLE_BADGES.filter((item) => member?.roles?.cache?.has(item.id)).map((item) => item.badge);
+export function isDeveloperAccount(user = {}) {
+  const id = String(user.id || '').trim();
+  if (id && DEVELOPER_DISCORD_IDS.includes(id)) return true;
+  const username = String(user.username || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+  return Boolean(username && DEVELOPER_USERNAMES.includes(username));
 }
 
-/** Keep staff-assigned badges when Discord role sync refreshes Discord-only badges. */
-export function mergeInternetBadges(existing, discordBadges) {
-  const kept = sanitizeInternetBadges(existing).filter((badge) => STAFF_ASSIGNABLE_BADGES.includes(badge));
-  return sanitizeInternetBadges([...(Array.isArray(discordBadges) ? discordBadges : []), ...kept]);
+/** Apply fixed site badges (developer) after role/store sanitization. */
+export function withSiteBadges(badges, user = {}) {
+  const next = sanitizeInternetBadges(badges);
+  if (isDeveloperAccount(user) && !next.includes('developer')) next.push('developer');
+  return next;
+}
+
+export function getInternetBadges(member) {
+  const roleBadges = ROLE_BADGES.filter((item) => member?.roles?.cache?.has(item.id)).map((item) => item.badge);
+  return withSiteBadges(roleBadges, {
+    id: member?.id || member?.user?.id,
+    username: member?.user?.username || member?.username,
+  });
+}
+
+/** Keep staff-assigned + fixed badges when Discord role sync refreshes Discord-only badges. */
+export function mergeInternetBadges(existing, discordBadges, user = {}) {
+  const kept = sanitizeInternetBadges(existing).filter((badge) => (
+    STAFF_ASSIGNABLE_BADGES.includes(badge) || SITE_FIXED_BADGES.includes(badge)
+  ));
+  return withSiteBadges([...(Array.isArray(discordBadges) ? discordBadges : []), ...kept], user);
 }

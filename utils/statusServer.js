@@ -145,8 +145,7 @@ export function startStatusServer(client, config) {
       if (!member) continue;
       const staffRank = getHighestStaffRank(member)?.name || null;
       const badges = getInternetBadges(member);
-      const discordBadges = (user.badges || []).filter((badge) => badge === 'staff' || badge === 'clearwater-role');
-      const sameBadges = JSON.stringify(discordBadges) === JSON.stringify(badges);
+      const sameBadges = JSON.stringify([...(user.badges || [])].sort()) === JSON.stringify([...badges].sort());
       if (user.staffRank !== staffRank || !sameBadges) {
         upsertInternetUser(store, { id: user.id, staffRank, badges });
         changed = true;
