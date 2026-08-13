@@ -412,6 +412,7 @@ function walletView(user, { claimedNow = false } = {}) {
 }
 
 export function walletSnapshot(store, actor) {
+  expireStaleCreditTransfers(store);
   const user = ensureInternetWallet(store, actor);
   const lastClaim = user.dailyCreditClaimedAt ? new Date(user.dailyCreditClaimedAt).getTime() : 0;
   let claimedNow = false;
@@ -458,6 +459,8 @@ export function adjustInternetCredits(store, { actor, targetId, amount, note = '
   return { user, wallet: walletView(user), applied };
 }
 
+const TRANSFER_TTL_MS = 24 * 60 * 60 * 1000;
+
 function creditTransfers(store) {
   if (!Array.isArray(store.creditTransfers)) store.creditTransfers = [];
   return store.creditTransfers;
@@ -467,13 +470,80 @@ function moneyLabel(amount) {
   return `C$${Math.trunc(Number(amount) || 0).toLocaleString()}`;
 }
 
+function transferExpiresAt(transfer) {
+  if (transfer?.expiresAt) return transfer.expiresAt;
+  const created = new Date(transfer?.createdAt || Date.now()).getTime();
+  return new Date((Number.isFinite(created) ? created : Date.now()) + TRANSFER_TTL_MS).toISOString();
+}
+
+function transferIsExpired(transfer) {
+  return Date.now() >= new Date(transferExpiresAt(transfer)).getTime();
+}
+
+function internetUsersShareNetwork(left, right, extraHashes = []) {
+  const leftHashes = new Set([
+    ...(Array.isArray(left?.ipHashes) ? left.ipHashes : []),
+    ...(Array.isArray(extraHashes) ? extraHashes : []),
+  ].map((hash) => String(hash || '')).filter(Boolean));
+  if (!leftHashes.size) return false;
+  return (Array.isArray(right?.ipHashes) ? right.ipHashes : []).some((hash) => leftHashes.has(String(hash || '')));
+}
+
 function syncTransferMessages(store, transfer) {
   for (const user of Object.values(store.users)) {
     if (!Array.isArray(user.messages)) continue;
     for (const message of user.messages) {
-      if (message.transferId === transfer.id) message.transferStatus = transfer.status;
+      if (message.transferId === transfer.id) {
+        message.transferStatus = transfer.status;
+        message.transferExpiresAt = transfer.expiresAt || transferExpiresAt(transfer);
+        message.transferActionable = transfer.status === 'pending' && message.transferActionable === true;
+      }
     }
   }
+}
+
+function expireCreditTransfer(store, transfer) {
+  if (!transfer || transfer.status !== 'pending') return transfer;
+  const from = ensureInternetWallet(store, { id: transfer.fromId });
+  const to = ensureInternetWallet(store, { id: transfer.toId });
+  const money = moneyLabel(transfer.amount);
+  if (transfer.type === 'send') {
+    from.credits = creditBalance(from) + transfer.amount;
+    addCreditTransaction(from, {
+      amount: transfer.amount,
+      type: 'transfer-refund',
+      note: 'Transfer expired after 24 hours',
+      actorName: 'Clearwater',
+    });
+  }
+  transfer.status = 'expired';
+  transfer.resolvedAt = new Date().toISOString();
+  transfer.expiresAt = transfer.expiresAt || transferExpiresAt(transfer);
+  syncTransferMessages(store, transfer);
+  deliverOfficialDirectMessage(store, {
+    toId: from.id,
+    content: transfer.type === 'send'
+      ? `Your transfer of ${money} expired after 24 hours and was returned to your wallet.`
+      : `Your request for ${money} expired after 24 hours.`,
+  });
+  deliverOfficialDirectMessage(store, {
+    toId: to.id,
+    content: transfer.type === 'send'
+      ? `A pending credit transfer of ${money} expired after 24 hours.`
+      : `A credit request for ${money} expired after 24 hours.`,
+  });
+  return transfer;
+}
+
+function expireStaleCreditTransfers(store) {
+  let changed = false;
+  for (const transfer of creditTransfers(store)) {
+    if (transfer.status === 'pending' && transferIsExpired(transfer)) {
+      expireCreditTransfer(store, transfer);
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 function deliverOfficialDirectMessage(store, { toId, content, transfer = null, actionable = false }) {
@@ -495,7 +565,8 @@ function deliverOfficialDirectMessage(store, { toId, content, transfer = null, a
       transferStatus: transfer.status,
       transferFromId: transfer.fromId,
       transferToId: transfer.toId,
-      transferActionable: actionable === true,
+      transferExpiresAt: transfer.expiresAt || transferExpiresAt(transfer),
+      transferActionable: actionable === true && transfer.status === 'pending',
     } : {}),
   };
   official.messages = Array.isArray(official.messages) ? official.messages : [];
@@ -509,6 +580,7 @@ function deliverOfficialDirectMessage(store, { toId, content, transfer = null, a
 }
 
 function pendingTransfersFor(store, userId) {
+  expireStaleCreditTransfers(store);
   return creditTransfers(store)
     .filter((transfer) => transfer.status === 'pending' && (transfer.fromId === userId || transfer.toId === userId))
     .slice(0, 20)
@@ -521,11 +593,13 @@ function pendingTransfersFor(store, userId) {
       note: transfer.note || '',
       status: transfer.status,
       createdAt: transfer.createdAt,
+      expiresAt: transferExpiresAt(transfer),
       actionable: transfer.toId === userId,
     }));
 }
 
-export function createCreditTransfer(store, { actor, type, targetId, username, amount, note = '' }) {
+export function createCreditTransfer(store, { actor, type, targetId, username, amount, note = '', ipHash = '', ipHashLegacy = '' }) {
+  expireStaleCreditTransfers(store);
   const kind = type === 'request' ? 'request' : 'send';
   const value = Math.trunc(Number(amount));
   if (!Number.isSafeInteger(value) || value < 1 || value > 100_000) {
@@ -536,6 +610,8 @@ export function createCreditTransfer(store, { actor, type, targetId, username, a
     throw new Error('The official account cannot start member transfers this way');
   }
   if (getActiveBan(initiator)) throw new Error('This account is banned from Clearwater Internet');
+  recordInternetIpHash(store, initiator.id, ipHash);
+  recordInternetIpHash(store, initiator.id, ipHashLegacy);
   const target = findInternetMember(store, { id: targetId, username });
   if (!target) throw new Error('That member has not joined Clearwater Internet yet');
   if (target.id === initiator.id) throw new Error('Choose another member');
@@ -543,6 +619,9 @@ export function createCreditTransfer(store, { actor, type, targetId, username, a
     throw new Error('You cannot transfer credits with the official account');
   }
   ensureInternetWallet(store, target);
+  if (internetUsersShareNetwork(initiator, target, [ipHash, ipHashLegacy])) {
+    throw new Error('You cannot transfer credits between accounts on the same network');
+  }
   if ((target.blocked || []).includes(initiator.id) || (initiator.blocked || []).includes(target.id)) {
     throw new Error('This transfer is unavailable');
   }
@@ -558,6 +637,7 @@ export function createCreditTransfer(store, { actor, type, targetId, username, a
     });
   }
 
+  const createdAt = new Date().toISOString();
   const transfer = {
     id: randomUUID(),
     type: kind,
@@ -566,7 +646,8 @@ export function createCreditTransfer(store, { actor, type, targetId, username, a
     toId: target.id,
     note: noteText,
     status: 'pending',
-    createdAt: new Date().toISOString(),
+    createdAt,
+    expiresAt: new Date(Date.now() + TRANSFER_TTL_MS).toISOString(),
     resolvedAt: null,
   };
   creditTransfers(store).unshift(transfer);
@@ -580,26 +661,26 @@ export function createCreditTransfer(store, { actor, type, targetId, username, a
   if (kind === 'send') {
     deliverOfficialDirectMessage(store, {
       toId: target.id,
-      content: `${actorLabel} wants to send you ${money}.${noteLine}\n\nAccept to add it to your wallet.`,
+      content: `${actorLabel} wants to send you ${money}.${noteLine}\n\nAccept within 24 hours to add it to your wallet.`,
       transfer,
       actionable: true,
     });
     deliverOfficialDirectMessage(store, {
       toId: initiator.id,
-      content: `Your transfer of ${money} to ${targetLabel} is waiting for them to accept.`,
+      content: `Your transfer of ${money} to ${targetLabel} is waiting for them to accept. It expires in 24 hours.`,
       transfer,
       actionable: false,
     });
   } else {
     deliverOfficialDirectMessage(store, {
       toId: target.id,
-      content: `${actorLabel} requested ${money} from you.${noteLine}\n\nAccept to pay from your Clearwater credits.`,
+      content: `${actorLabel} requested ${money} from you.${noteLine}\n\nAccept within 24 hours to pay from your Clearwater credits.`,
       transfer,
       actionable: true,
     });
     deliverOfficialDirectMessage(store, {
       toId: initiator.id,
-      content: `Your request for ${money} from ${targetLabel} was sent.`,
+      content: `Your request for ${money} from ${targetLabel} was sent. It expires in 24 hours.`,
       transfer,
       actionable: false,
     });
@@ -609,10 +690,19 @@ export function createCreditTransfer(store, { actor, type, targetId, username, a
   return { transfer, wallet: { ...walletView(initiator), pendingTransfers: pendingTransfersFor(store, initiator.id) } };
 }
 
-export function respondCreditTransfer(store, { actor, transferId, decision }) {
+export function respondCreditTransfer(store, { actor, transferId, decision, ipHash = '', ipHashLegacy = '' }) {
+  expireStaleCreditTransfers(store);
   const user = ensureInternetWallet(store, actor);
+  recordInternetIpHash(store, user.id, ipHash);
+  recordInternetIpHash(store, user.id, ipHashLegacy);
   const transfer = creditTransfers(store).find((item) => item.id === String(transferId || ''));
-  if (!transfer || transfer.status !== 'pending') throw new Error('That transfer is no longer available');
+  if (!transfer) throw new Error('That transfer is no longer available');
+  if (transfer.status === 'pending' && transferIsExpired(transfer)) {
+    expireCreditTransfer(store, transfer);
+    throw new Error('This transfer expired after 24 hours');
+  }
+  if (transfer.status === 'expired') throw new Error('This transfer expired after 24 hours');
+  if (transfer.status !== 'pending') throw new Error('That transfer is no longer available');
   if (transfer.toId !== user.id) throw new Error('Only the recipient can respond to this transfer');
   const accept = decision === 'accept';
   if (!accept && decision !== 'decline') throw new Error('Choose Accept or Decline');
@@ -620,6 +710,9 @@ export function respondCreditTransfer(store, { actor, transferId, decision }) {
   const from = ensureInternetWallet(store, { id: transfer.fromId });
   const to = ensureInternetWallet(store, { id: transfer.toId });
   const money = moneyLabel(transfer.amount);
+  if (accept && internetUsersShareNetwork(from, to, [ipHash, ipHashLegacy])) {
+    throw new Error('You cannot transfer credits between accounts on the same network');
+  }
 
   if (accept) {
     if (transfer.type === 'send') {
@@ -1284,6 +1377,7 @@ export function takeUnreadInternetWarnings(store, actor) {
 }
 
 export function takeInternetMessages(store, actor) {
+  expireStaleCreditTransfers(store);
   const user = upsertInternetUser(store, actor);
   const messages = (Array.isArray(user.messages) ? user.messages : []).filter((message) => message.kind === 'direct');
   return messages.slice(0, 120);
@@ -1298,6 +1392,7 @@ function findInternetMember(store, { id, username } = {}) {
 }
 
 export function takeInternetConversation(store, { actor, withUserId, username }) {
+  expireStaleCreditTransfers(store);
   const user = upsertInternetUser(store, actor);
   const other = findInternetMember(store, { id: withUserId, username });
   if (!other) throw new Error('That member has not joined Clearwater Internet yet');

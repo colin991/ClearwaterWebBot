@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260813-wallet-pay';
+const INTERNET_VERSION = '20260813-transfer-ui';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
@@ -101,6 +101,125 @@ const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const INTERNET_PATH = '/internet';
 const SIGNIN_INTERNET = '/signin?next=/internet';
 const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post']);
+
+const siteDialog = document.querySelector('[data-site-dialog]');
+const siteDialogForm = document.querySelector('[data-site-dialog-form]');
+const siteDialogTitle = document.querySelector('[data-site-dialog-title]');
+const siteDialogMessage = document.querySelector('[data-site-dialog-message]');
+const siteDialogField = document.querySelector('[data-site-dialog-field]');
+const siteDialogLabel = document.querySelector('[data-site-dialog-label]');
+const siteDialogInput = document.querySelector('[data-site-dialog-input]');
+const siteDialogError = document.querySelector('[data-site-dialog-error]');
+const siteDialogCancel = document.querySelector('[data-site-dialog-cancel]');
+const siteDialogConfirm = document.querySelector('[data-site-dialog-confirm]');
+let siteDialogResolver = null;
+let siteDialogMode = 'alert';
+
+function closeSiteDialog(result) {
+  if (siteDialog) siteDialog.hidden = true;
+  const resolve = siteDialogResolver;
+  siteDialogResolver = null;
+  if (resolve) resolve(result);
+}
+
+function openSiteDialog({
+  title = 'Notice',
+  message = '',
+  mode = 'alert',
+  label = 'Details',
+  value = '',
+  placeholder = '',
+  confirmLabel = 'OK',
+  cancelLabel = 'Cancel',
+  required = false,
+  maxLength = 500,
+} = {}) {
+  return new Promise((resolve) => {
+    if (!siteDialog || !siteDialogForm) {
+      resolve(mode === 'confirm' ? false : mode === 'prompt' ? null : undefined);
+      return;
+    }
+    if (siteDialogResolver) closeSiteDialog(mode === 'confirm' ? false : mode === 'prompt' ? null : undefined);
+    siteDialogMode = mode;
+    siteDialogResolver = resolve;
+    if (siteDialogTitle) siteDialogTitle.textContent = title;
+    if (siteDialogMessage) {
+      siteDialogMessage.hidden = !message;
+      siteDialogMessage.textContent = message || '';
+    }
+    if (siteDialogError) siteDialogError.textContent = '';
+    if (siteDialogField) siteDialogField.hidden = mode !== 'prompt';
+    if (siteDialogLabel) siteDialogLabel.textContent = label;
+    if (siteDialogInput) {
+      siteDialogInput.value = value || '';
+      siteDialogInput.placeholder = placeholder || '';
+      siteDialogInput.maxLength = maxLength;
+      siteDialogInput.required = required === true;
+    }
+    if (siteDialogConfirm) siteDialogConfirm.textContent = confirmLabel;
+    if (siteDialogCancel) {
+      siteDialogCancel.hidden = mode === 'alert';
+      siteDialogCancel.textContent = cancelLabel;
+    }
+    siteDialog.hidden = false;
+    if (mode === 'prompt') siteDialogInput?.focus();
+    else siteDialogConfirm?.focus();
+  });
+}
+
+function siteAlert(message, title = 'Notice') {
+  return openSiteDialog({ title, message, mode: 'alert', confirmLabel: 'OK' });
+}
+
+function siteConfirm(message, title = 'Confirm', confirmLabel = 'Confirm') {
+  return openSiteDialog({ title, message, mode: 'confirm', confirmLabel, cancelLabel: 'Cancel' });
+}
+
+function sitePrompt({
+  title = 'Edit',
+  message = '',
+  label = 'Details',
+  value = '',
+  placeholder = '',
+  confirmLabel = 'Save',
+  required = true,
+  maxLength = 500,
+} = {}) {
+  return openSiteDialog({
+    title,
+    message,
+    mode: 'prompt',
+    label,
+    value,
+    placeholder,
+    confirmLabel,
+    cancelLabel: 'Cancel',
+    required,
+    maxLength,
+  });
+}
+
+siteDialogCancel?.addEventListener('click', () => {
+  closeSiteDialog(siteDialogMode === 'confirm' ? false : siteDialogMode === 'prompt' ? null : undefined);
+});
+siteDialog?.addEventListener('click', (event) => {
+  if (event.target === siteDialog) {
+    closeSiteDialog(siteDialogMode === 'confirm' ? false : siteDialogMode === 'prompt' ? null : undefined);
+  }
+});
+siteDialogForm?.addEventListener('submit', (event) => {
+  event.preventDefault();
+  if (siteDialogMode === 'prompt') {
+    const text = String(siteDialogInput?.value || '').trim();
+    if (siteDialogInput?.required && !text) {
+      if (siteDialogError) siteDialogError.textContent = 'Please fill this out.';
+      return;
+    }
+    closeSiteDialog(text);
+    return;
+  }
+  closeSiteDialog(siteDialogMode === 'confirm' ? true : undefined);
+});
 
 function internetUrl(view = 'home', id = '') {
   if (view === 'home') return INTERNET_PATH;
@@ -2009,7 +2128,7 @@ async function runStaffUserAction(staffAction, postId = '') {
   const panelState = staffPanelUiState();
   const fields = panelState.fields;
   const destructive = new Set(['ban', 'ip-ban', 'wipe-posts', 'wipe-reels', 'wipe-comments', 'wipe-messages', 'delete-post', 'reset-profile', 'shadowban']);
-  if (destructive.has(staffAction) && !window.confirm(`Run "${staffAction.replace(/-/g, ' ')}" on this account? This cannot be undone.`)) return;
+  if (destructive.has(staffAction) && !(await siteConfirm(`Run "${staffAction.replace(/-/g, ' ')}" on this account? This cannot be undone.`, 'Staff action'))) return;
   staffUserBusy = true;
   const status = document.querySelector('[data-staff-user-status]');
   if (status) status.textContent = 'Saving...';
@@ -2039,7 +2158,7 @@ async function runStaffUserAction(staffAction, postId = '') {
   } catch (error) {
     const nextStatus = document.querySelector('[data-staff-user-status]');
     if (nextStatus) nextStatus.textContent = error.message || 'Could not update this user.';
-    else window.alert(error.message || 'Could not update this user.');
+    else void siteAlert(error.message || 'Could not update this user.');
   } finally {
     staffUserBusy = false;
   }
@@ -2056,7 +2175,7 @@ async function runStaffWalletAdjustment(button) {
     if (status) status.textContent = 'Enter an amount between 1 and 1,000,000.';
     return;
   }
-  if (amount < 0 && !window.confirm(`Remove C$${Math.abs(amount).toLocaleString()} from this member?`)) return;
+  if (amount < 0 && !(await siteConfirm(`Remove C$${Math.abs(amount).toLocaleString()} from this member?`, 'Remove credits'))) return;
   if (status) status.textContent = 'Saving...';
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'staff-wallet', targetId: userId, amount, note }) });
@@ -2073,7 +2192,7 @@ async function runStaffWalletAdjustment(button) {
 }
 
 async function runStaffSiteAction(staffAction, enabled) {
-  if (staffAction === 'clear-ip-bans' && !window.confirm('Clear every hashed network ban?')) return;
+  if (staffAction === 'clear-ip-bans' && !(await siteConfirm('Clear every hashed network ban?', 'Clear network bans'))) return;
   const status = document.querySelector('[data-staff-site-status]');
   if (status) status.textContent = 'Saving...';
   try {
@@ -2091,7 +2210,7 @@ async function runStaffSiteAction(staffAction, enabled) {
   } catch (error) {
     const nextStatus = document.querySelector('[data-staff-site-status]');
     if (nextStatus) nextStatus.textContent = error.message || 'Could not update site controls.';
-    else window.alert(error.message || 'Could not update site controls.');
+    else void siteAlert(error.message || 'Could not update site controls.');
   }
 }
 
@@ -2131,7 +2250,7 @@ function renderWalletPending(transfers = []) {
     const actions = transfer.actionable
       ? `<span class="wallet-pending-actions"><button type="button" data-wallet-transfer-respond="accept" data-transfer-id="${escapeHtml(transfer.id)}">Accept</button><button type="button" class="ghost" data-wallet-transfer-respond="decline" data-transfer-id="${escapeHtml(transfer.id)}">Decline</button></span>`
       : '';
-    return `<article class="wallet-pending-item"><div><b>${label} ${escapeHtml(formatCredits(transfer.amount))}</b><small>${escapeHtml(transfer.note || timeAgo(transfer.createdAt))}</small></div>${actions}</article>`;
+    return `<article class="wallet-pending-item"><div><b>${label} ${escapeHtml(formatCredits(transfer.amount))}</b><small>${escapeHtml(transfer.note || timeAgo(transfer.createdAt))} · expires in 24h</small></div>${actions}</article>`;
   }).join('')}`;
 }
 
@@ -2632,6 +2751,13 @@ function openConversation(member) {
   conversationInput?.focus();
 }
 
+function transferStatusLabel(status) {
+  if (status === 'accepted') return 'Accepted';
+  if (status === 'declined') return 'Declined';
+  if (status === 'expired') return 'Expired after 24 hours';
+  return 'Waiting for a response · 24 hours';
+}
+
 function conversationBubble(message) {
   const own = message.fromId === activeUserId();
   const gif = safeGifUrl(message.gifUrl) ? `<img src="${escapeHtml(message.gifUrl)}" alt="${escapeHtml(message.gifTitle || 'GIF')}" />` : '';
@@ -2640,7 +2766,7 @@ function conversationBubble(message) {
   const transferCard = message.transferId
     ? `<div class="transfer-card ${message.transferStatus || 'pending'}">
         <b>${message.transferType === 'request' ? 'Credit request' : 'Credit transfer'} · ${escapeHtml(formatCredits(message.transferAmount))}</b>
-        <span>${escapeHtml(message.transferStatus === 'accepted' ? 'Accepted' : message.transferStatus === 'declined' ? 'Declined' : 'Waiting for a response')}</span>
+        <span>${escapeHtml(transferStatusLabel(message.transferStatus))}</span>
         ${canAct ? `<div class="transfer-card-actions"><button type="button" data-wallet-transfer-respond="accept" data-transfer-id="${escapeHtml(message.transferId)}">Accept</button><button type="button" class="ghost" data-wallet-transfer-respond="decline" data-transfer-id="${escapeHtml(message.transferId)}">Decline</button></div>` : ''}
       </div>`
     : '';
@@ -2684,7 +2810,7 @@ async function submitReportReview({ reportId, decision, moderationAction, reason
   } catch (error) {
     const message = error.message || 'Could not review this report.';
     if (moderationError && moderationModal && !moderationModal.hidden) moderationError.textContent = message;
-    else window.alert(message);
+    else void siteAlert(message, 'Moderation');
     return false;
   }
 }
@@ -2715,22 +2841,38 @@ async function runPostAction(action, postId) {
   let content = '';
   let reason = '';
   if (action === 'edit') {
-    content = window.prompt('Edit your post:', post.content) || '';
-    if (!content.trim()) return;
+    content = await sitePrompt({
+      title: 'Edit post',
+      message: 'Update your post text.',
+      label: 'Post',
+      value: post.content || '',
+      placeholder: 'What is happening?',
+      confirmLabel: 'Save',
+      maxLength: 500,
+    });
+    if (content == null || !String(content).trim()) return;
   }
   if (action === 'report') {
-    reason = window.prompt('Why are you reporting this post?') || '';
-    if (!reason.trim()) return;
+    reason = await sitePrompt({
+      title: 'Report post',
+      message: 'Tell staff why this post should be reviewed.',
+      label: 'Reason',
+      value: '',
+      placeholder: 'Describe the issue…',
+      confirmLabel: 'Send report',
+      maxLength: 300,
+    });
+    if (reason == null || !String(reason).trim()) return;
   }
-  if (action === 'delete' && !window.confirm('Delete this post? This cannot be undone.')) return;
+  if (action === 'delete' && !(await siteConfirm('Delete this post? This cannot be undone.', 'Delete post', 'Delete'))) return;
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, postId, content, reason }) });
     const result = await readApiJson(response, 'Could not update this post.');
     if (!response.ok) throw new Error(result.error || 'Could not update this post.');
     await loadPosts();
-    if (action === 'report') window.alert('Report sent to the staff panel.');
+    if (action === 'report') void siteAlert('Report sent to the staff panel.', 'Report sent');
   } catch (error) {
-    window.alert(error.message || 'Could not update this post.');
+    void siteAlert(error.message || 'Could not update this post.');
   }
 }
 
@@ -2890,7 +3032,7 @@ document.querySelectorAll('[data-preference]').forEach((input) => input.addEvent
     applyPreferenceState(previous);
     localStorage.setItem(`clearwater-preferences-${currentUserId}`, JSON.stringify(previous));
     input.checked = original;
-    window.alert(error.message || 'Could not save this setting.');
+    void siteAlert(error.message || 'Could not save this setting.');
   }
 }));
 document.querySelectorAll('[data-view-link]').forEach((link) => link.addEventListener('click', (event) => {
@@ -3088,7 +3230,7 @@ document.querySelector('[data-profile-form]')?.addEventListener('submit', async 
 document.querySelector('[data-deactivate]')?.addEventListener('click', async () => {
   const status = document.querySelector('[data-account-status]');
   const deactivate = profileDraft?.deactivated !== true;
-  if (deactivate && !window.confirm('Deactivate your account? Your profile, posts, and Reels will be hidden until you reactivate.')) return;
+  if (deactivate && !(await siteConfirm('Deactivate your account? Your profile, posts, and Reels will be hidden until you reactivate.', 'Deactivate account'))) return;
   if (status) { status.textContent = deactivate ? 'Deactivating...' : 'Reactivating...'; status.dataset.tone = ''; }
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'account-active', deactivated: deactivate }) });
@@ -3104,7 +3246,14 @@ document.querySelector('[data-deactivate]')?.addEventListener('click', async () 
 });
 document.querySelector('[data-delete-account]')?.addEventListener('click', async () => {
   const status = document.querySelector('[data-account-status]');
-  const typed = window.prompt('This permanently erases your account, posts, Reels, and messages. Type DELETE to confirm.');
+  const typed = await sitePrompt({
+    title: 'Delete account',
+    message: 'This permanently erases your account, posts, Reels, and messages.',
+    label: 'Type DELETE to confirm',
+    placeholder: 'DELETE',
+    confirmLabel: 'Delete forever',
+    maxLength: 20,
+  });
   if (String(typed || '').trim().toLowerCase() !== 'delete') return;
   if (status) { status.textContent = 'Deleting your account...'; status.dataset.tone = ''; }
   try {
@@ -3174,7 +3323,7 @@ document.addEventListener('click', (event) => {
   const walletTransferRespond = event.target.closest('[data-wallet-transfer-respond]');
   if (walletTransferRespond) {
     void respondWalletTransfer(walletTransferRespond.dataset.transferId, walletTransferRespond.dataset.walletTransferRespond)
-      .catch((error) => window.alert(error.message || 'Could not update this transfer.'));
+      .catch((error) => void siteAlert(error.message || 'Could not update this transfer.'));
     return;
   }
   const staffUsersFilterButton = event.target.closest('[data-staff-users-filter]');
@@ -3202,7 +3351,7 @@ document.addEventListener('click', (event) => {
   const messageUser = event.target.closest('[data-message-user]');
   if (messageUser) { messageModal.hidden = true; openConversation(internetUsers.get(messageUser.dataset.messageUser)); return; }
   const bookmark = event.target.closest('[data-bookmark-post]');
-  if (bookmark) { void socialAction('bookmark', { postId: bookmark.dataset.bookmarkPost, enabled: !socialState.bookmarks.includes(bookmark.dataset.bookmarkPost) }).catch((error) => window.alert(error.message)); return; }
+  if (bookmark) { void socialAction('bookmark', { postId: bookmark.dataset.bookmarkPost, enabled: !socialState.bookmarks.includes(bookmark.dataset.bookmarkPost) }).catch((error) => void siteAlert(error.message)); return; }
   const topic = event.target.closest('[data-topic]');
   if (topic) { event.preventDefault(); showView('home'); search.value = topic.dataset.topic; renderPosts(); return; }
   if (event.target.closest('[data-open-reel-composer]')) {
@@ -3278,7 +3427,7 @@ document.addEventListener('click', (event) => {
   const repostChoice = event.target.closest('[data-repost-choice]');
   if (repostChoice && pendingPostAction?.type === 'repost') {
     repostPopup.hidden = true;
-    if (repostChoice.dataset.repostChoice === 'repost') { void postInteraction({ postId: pendingPostAction.postId, type: 'repost' }).catch((error) => window.alert(error.message || 'Could not repost.')); pendingPostAction = null; return; }
+    if (repostChoice.dataset.repostChoice === 'repost') { void postInteraction({ postId: pendingPostAction.postId, type: 'repost' }).catch((error) => void siteAlert(error.message || 'Could not repost.')); pendingPostAction = null; return; }
     attachQuote(pendingPostAction.postId);
     pendingPostAction = null;
     return;
@@ -3321,14 +3470,14 @@ async function handlePostEngagement(type, postId, control = null) {
     } catch (error) {
       applyLocalLike(post);
       refreshVisiblePosts();
-      window.alert(error.message || 'Could not like this post.');
+      void siteAlert(error.message || 'Could not like this post.');
     } finally {
       inFlightLikes.delete(post.id);
     }
     return;
   }
   if (type === 'repost-now') {
-    try { await postInteraction({ postId: post.id, type: 'repost' }); } catch (error) { window.alert(error.message || 'Could not repost.'); }
+    try { await postInteraction({ postId: post.id, type: 'repost' }); } catch (error) { void siteAlert(error.message || 'Could not repost.'); }
     return;
   }
   if (type === 'quote') {
@@ -3352,7 +3501,7 @@ async function handlePostEngagement(type, postId, control = null) {
     postModal.hidden = false;
     return;
   }
-  try { await postInteraction({ postId: post.id, type }); } catch (error) { window.alert(error.message); }
+  try { await postInteraction({ postId: post.id, type }); } catch (error) { void siteAlert(error.message); }
 }
 
 async function postInteraction({ postId, type, content = '', quote = false }, { reload = true } = {}) {
@@ -3376,7 +3525,7 @@ async function voteOnPoll(postId, optionIndex, remove = false) {
       throw new Error(result.error || 'Could not update this poll.');
     }
     await loadPosts();
-  } catch (error) { window.alert(error.message || 'Could not update this poll.'); }
+  } catch (error) { void siteAlert(error.message || 'Could not update this poll.'); }
 }
 
 function showPollVoters(postId) {
@@ -3521,15 +3670,15 @@ document.querySelector('[data-member-page-follow]')?.addEventListener('click', a
     await loadPosts();
     if (viewedMember) openMemberProfile(viewedMember.id, false);
   } catch (error) {
-    window.alert(error.message);
+    void siteAlert(error.message);
   } finally {
     if (button) button.disabled = false;
   }
 });
 document.querySelector('[data-member-page-menu]')?.addEventListener('click', () => { const menu = document.querySelector('[data-member-page-menu-list]'); menu.hidden = !menu.hidden; });
-document.querySelector('[data-mute-member]')?.addEventListener('click', async () => { if (!viewedMember) return; try { await socialAction('mute', { targetId: viewedMember.id, enabled: !socialState.muted.includes(viewedMember.id) }); showView('home'); } catch (error) { window.alert(error.message); } });
-document.querySelector('[data-block-member]')?.addEventListener('click', async () => { if (!viewedMember) return; try { await socialAction('block', { targetId: viewedMember.id, enabled: !socialState.blocked.includes(viewedMember.id) }); showView('home'); } catch (error) { window.alert(error.message); } });
-document.querySelector('[data-report-member]')?.addEventListener('click', () => { window.alert('To report a member, open one of their posts and choose Report post.'); });
+document.querySelector('[data-mute-member]')?.addEventListener('click', async () => { if (!viewedMember) return; try { await socialAction('mute', { targetId: viewedMember.id, enabled: !socialState.muted.includes(viewedMember.id) }); showView('home'); } catch (error) { void siteAlert(error.message); } });
+document.querySelector('[data-block-member]')?.addEventListener('click', async () => { if (!viewedMember) return; try { await socialAction('block', { targetId: viewedMember.id, enabled: !socialState.blocked.includes(viewedMember.id) }); showView('home'); } catch (error) { void siteAlert(error.message); } });
+document.querySelector('[data-report-member]')?.addEventListener('click', () => { void siteAlert('To report a member, open one of their posts and choose Report post.', 'Report member'); });
 document.querySelector('[data-new-message]')?.addEventListener('click', () => { messageModal.hidden = false; renderMessageUserResults(); messageUserSearch?.focus(); });
 document.querySelector('[data-member-page-message]')?.addEventListener('click', () => { openConversation(viewedMember); });
 document.querySelector('[data-close-message]')?.addEventListener('click', () => { messageModal.hidden = true; });
@@ -3577,9 +3726,9 @@ postModalForm?.addEventListener('submit', async (event) => {
 document.querySelector('[data-close-share]')?.addEventListener('click', () => { shareModal.hidden = true; pendingPostAction = null; });
 document.querySelector('[data-copy-post-link]')?.addEventListener('click', async () => {
   if (!pendingPostAction) return;
-  try { await navigator.clipboard.writeText(`${location.origin}${internetUrl('post', pendingPostAction.postId)}`); shareModal.hidden = true; window.alert('Post link copied.'); } catch { window.alert('Could not copy the link.'); }
+  try { await navigator.clipboard.writeText(`${location.origin}${internetUrl('post', pendingPostAction.postId)}`); shareModal.hidden = true; void siteAlert('Post link copied.'); } catch { void siteAlert('Could not copy the link.'); }
 });
-document.querySelector('[data-share-to-friend]')?.addEventListener('click', () => { shareModal.hidden = true; showView('messages'); window.alert('Choose a friend and paste the post link into your message.'); });
+document.querySelector('[data-share-to-friend]')?.addEventListener('click', () => { shareModal.hidden = true; showView('messages'); void siteAlert('Choose a friend and paste the post link into your message.'); });
 document.querySelector('[data-close-moderation]')?.addEventListener('click', () => { moderationModal.hidden = true; pendingReportReview = null; });
 moderationForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -3690,7 +3839,7 @@ document.querySelector('[data-reel-comment-form]')?.addEventListener('submit', a
     if (input) input.value = '';
     openReelComments(activeReelId);
   } catch (exception) {
-    window.alert(exception.message || 'Could not post this comment.');
+    void siteAlert(exception.message || 'Could not post this comment.');
   }
 });
 

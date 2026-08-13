@@ -5250,6 +5250,22 @@ body { margin: 0; }
 .search-side { padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: rgba(8,16,27,.9); }
 .search-side .search-person { padding: 8px; }
 .search-side .search-person img { width: 36px; height: 36px; flex-basis: 36px; }
+.site-dialog { position: fixed; z-index: 90; inset: 0; display: grid; padding: 20px; place-items: center; background: rgba(1,5,11,.72); }
+.site-dialog[hidden] { display: none; }
+.site-dialog form { width: min(100%, 470px); padding: 26px; border: 1px solid #274a78; border-radius: 18px; color: #f5f8ff; background: #0a1422; box-shadow: 0 24px 70px rgba(0,0,0,.55); }
+.site-dialog form > p:first-child { margin: 0; color: var(--blue); font-size: 11px; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
+.site-dialog h1 { margin: 7px 0 12px; font-size: 26px; letter-spacing: -.04em; }
+.site-dialog [data-site-dialog-message] { margin: 0 0 14px; color: #c5d2e4; font-size: 14px; line-height: 1.5; }
+.site-dialog [data-site-dialog-message][hidden] { display: none; }
+.site-dialog label { display: grid; gap: 7px; margin-top: 8px; color: #dce9fa; font-size: 12px; font-weight: 750; }
+.site-dialog textarea { width: 100%; box-sizing: border-box; min-height: 110px; padding: 11px; border: 1px solid #345b89; border-radius: 9px; outline: 0; color: #f4f8ff; background: #050b13; font: inherit; resize: vertical; }
+.site-dialog textarea:focus { border-color: #6fc4ff; box-shadow: 0 0 0 3px rgba(78,145,249,.17); }
+.site-dialog-error { min-height: 17px; margin: 10px 0 0; color: #ff9ca8; font-size: 12px; }
+.site-dialog form > div:last-child { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.site-dialog button { padding: 10px 14px; border: 0; border-radius: 9px; color: #dcecff; background: #17243a; font: inherit; font-size: 12px; font-weight: 850; cursor: pointer; }
+.site-dialog button[type="submit"] { color: #fff; background: var(--blue); }
+.site-dialog button[hidden] { display: none; }
+.transfer-card.expired { border-color: rgba(255, 180, 100, .28); }
 @media (max-width: 640px) {
   .wallet-view { padding: 12px 10px 36px; }
   .wallet-balance-card { min-height: 120px; padding: 18px; }
