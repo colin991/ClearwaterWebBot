@@ -910,25 +910,50 @@ function toggleReelSound(card) {
   });
 }
 
+function isReelAutoplayEnabled() {
+  return preferenceState.autoplayReels !== false;
+}
+
+function playReelVideo(video) {
+  if (!video) return;
+  video.muted = !reelsSoundOn;
+  void video.play().catch(() => {
+    // Autoplay with sound can be refused; fall back to muted play so the reel never stalls.
+    setReelSound(false);
+    void video.play().catch(() => {});
+  });
+}
+
+function playCenteredReel(viewport = document.querySelector('[data-reels-viewport]')) {
+  if (!viewport || !isReelAutoplayEnabled()) return;
+  const cards = [...viewport.querySelectorAll('.reel-card')];
+  if (!cards.length) return;
+  const mid = viewport.scrollTop + (viewport.clientHeight / 2);
+  const active = cards.find((card) => card.offsetTop <= mid && (card.offsetTop + card.offsetHeight) > mid) || cards[0];
+  const video = active?.querySelector('video');
+  if (!video) return;
+  cards.forEach((card) => {
+    if (card === active) return;
+    const other = card.querySelector('video');
+    if (!other) return;
+    other.pause();
+    other.muted = true;
+  });
+  playReelVideo(video);
+}
+
 function bindReelAutoplay() {
   reelObserver?.disconnect();
   const viewport = document.querySelector('[data-reels-viewport]');
   if (!viewport) return;
-  const autoplay = preferenceState.autoplayReels !== false;
+  const autoplay = isReelAutoplayEnabled();
   reelObserver = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
       const video = entry.target.querySelector('video');
       if (entry.isIntersecting && entry.intersectionRatio > 0.65) {
         const reelId = entry.target.dataset.reelId;
         if (reelId && reelId !== activeReelId) renderReelPanel(reelId);
-        if (video && autoplay) {
-          video.muted = !reelsSoundOn;
-          void video.play().catch(() => {
-            // Autoplay with sound can be refused; fall back to a muted play so the reel never stalls.
-            setReelSound(false);
-            void video.play().catch(() => {});
-          });
-        }
+        if (video && autoplay) playReelVideo(video);
       } else if (video) {
         video.pause();
         video.muted = true;
@@ -941,6 +966,11 @@ function bindReelAutoplay() {
   const stillVisible = activeReelId
     && [...viewport.querySelectorAll('.reel-card')].some((card) => card.dataset.reelId === activeReelId);
   if (firstCard?.dataset.reelId && !stillVisible) renderReelPanel(firstCard.dataset.reelId);
+  // IntersectionObserver can miss the already-centered card after a tab switch or height sync.
+  requestAnimationFrame(() => {
+    syncReelCardHeights(viewport);
+    playCenteredReel(viewport);
+  });
 }
 
 function clearReelTap() {
@@ -1281,6 +1311,8 @@ function renderReels() {
         }
       }
     }
+    // Returning to Reels after another tab pauses videos; restart the centered one.
+    bindReelAutoplay();
     return;
   }
   viewport.dataset.reelSignature = signature;
@@ -3168,7 +3200,10 @@ function applyPreferenceState(preferences = {}) {
   root.classList.toggle('pref-large-text', preferenceState.largeText === true);
   root.classList.toggle('pref-reduce-motion', preferenceState.reduceMotion === true);
   document.querySelectorAll('[data-preference]').forEach((input) => {
-    input.checked = preferenceState[input.dataset.preference] === true;
+    const key = input.dataset.preference;
+    input.checked = key === 'autoplayReels'
+      ? isReelAutoplayEnabled()
+      : preferenceState[key] === true;
   });
   if (feedTab === 'reels') bindReelAutoplay();
 }
@@ -3747,7 +3782,7 @@ document.querySelector('[data-history-search]')?.addEventListener('input', (even
 document.querySelectorAll('[data-preference]').forEach((input) => input.addEventListener('change', async () => {
   if (!currentUserId) return;
   const key = input.dataset.preference;
-  const original = preferenceState[key] === true;
+  const original = key === 'autoplayReels' ? isReelAutoplayEnabled() : preferenceState[key] === true;
   const nextValue = input.checked === true;
   const previous = { ...preferenceState };
   applyPreferenceState({ [key]: nextValue });

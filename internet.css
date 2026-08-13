@@ -5998,8 +5998,13 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
 .reel-panel-compose button:hover { background: #4e91f9; }
 @media (min-width: 901px) {
   .reels-layout .reel-meta,
-  .reels-layout .reel-actions,
-  .reels-layout .reel-mute { display: none; }
+  .reels-layout .reel-actions { display: none; }
+  /* Keep mute on desktop — like/comment/share move to the side panel, but sound does not. */
+  .reels-layout .reel-mute {
+    display: grid;
+    top: 16px;
+    left: 16px;
+  }
   .reels-layout .reel-gradient { height: 28%; }
 }
 @media (max-width: 900px) {

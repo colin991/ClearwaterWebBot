@@ -1832,7 +1832,11 @@ const preferenceKeys = new Set([
 export function internetPreferences(store, actor) {
   const user = upsertInternetUser(store, actor);
   const saved = user.preferences && typeof user.preferences === 'object' ? user.preferences : {};
-  return Object.fromEntries([...preferenceKeys].map((key) => [key, saved[key] === true]));
+  return Object.fromEntries([...preferenceKeys].map((key) => {
+    // Reels should start playing unless the member explicitly turns autoplay off.
+    if (key === 'autoplayReels') return [key, saved[key] !== false];
+    return [key, saved[key] === true];
+  }));
 }
 
 export function updateInternetPreference(store, { actor, key, enabled }) {
