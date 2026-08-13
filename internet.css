@@ -6233,3 +6233,88 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
     pointer-events: auto;
   }
 }
+
+.sidebar-ads {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid rgba(113, 158, 224, .17);
+  border-radius: 18px;
+  background: linear-gradient(150deg, rgba(13, 26, 49, .88), rgba(6, 12, 22, .9));
+}
+.sidebar-ads h2 { margin: 0; font-size: 15px; }
+.sidebar-ad-empty { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.sidebar-ad {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid rgba(148, 184, 255, .12);
+}
+.sidebar-ad em {
+  color: #8abaff;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.sidebar-ad b { font-size: 14px; line-height: 1.25; }
+.sidebar-ad span { color: var(--muted); font-size: 12px; font-weight: 700; }
+.sidebar-ad p { margin: 2px 0 0; color: #d7e3f4; font-size: 12px; line-height: 1.4; }
+.sidebar-ad-cta {
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 800;
+}
+.wallet-ad-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.wallet-ad-form label { display: grid; gap: 5px; font-size: 12px; font-weight: 700; color: #d7e3f4; }
+.wallet-ad-form input,
+.wallet-ad-form textarea,
+.wallet-ad-form select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 184, 255, .18);
+  border-radius: 12px;
+  color: #eef5ff;
+  background: rgba(4, 10, 18, .85);
+  font: inherit;
+}
+.wallet-ad-form textarea { min-height: 88px; resize: vertical; }
+.wallet-ad-form button[type="submit"] {
+  padding: 11px 14px;
+  border: 0;
+  border-radius: 999px;
+  color: #041018;
+  background: #7aadff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.wallet-ad-mine { display: grid; gap: 8px; margin-top: 14px; }
+.wallet-ad-mine h3 { margin: 0; font-size: 13px; }
+.wallet-ad-row {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .04);
+}
+.wallet-ad-row b { display: block; font-size: 13px; }
+.wallet-ad-row small { color: var(--muted); font-size: 11px; }
+.staff-ad-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #222931;
+  border-radius: 14px;
+  background: #0a0d11;
+  text-align: left;
+}
+.staff-ad-card b { display: block; font-size: 14px; }
+.staff-ad-card small { color: #7d8895; font-size: 11px; }
+.staff-ad-card p { margin: 6px 0 0; color: #d5dbe2; font-size: 13px; line-height: 1.4; }
+.staff-ad-actions { display: flex; flex-wrap: wrap; gap: 8px; }

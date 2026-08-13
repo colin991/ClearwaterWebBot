@@ -8,7 +8,7 @@ import { dropLocationNameCandidates, findPlayerDropLocation } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
 import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
-import { AutomodHoldError, adjustInternetCredits, applyStaffSiteAction, applyStaffUserAction, assertLimitedStaffBanQuota, banKnownInternetIps, claimInternetDailyCredits, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, internetProfile, moderationSnapshot, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, recordLimitedStaffBan, respondCreditTransfer, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetAccountActive, setInternetBan, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot } from './internetStore.js';
+import { AutomodHoldError, adjustInternetCredits, applyStaffSiteAction, applyStaffUserAction, assertLimitedStaffBanQuota, banKnownInternetIps, claimInternetDailyCredits, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, internetProfile, listInternetAdsForUser, moderationSnapshot, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, readInternetStore, recordInternetIpHash, recordLimitedStaffBan, respondCreditTransfer, reviewInternetAd, reviewInternetReport, saveInternetStore, sendInternetMessage, serveInternetAds, setInternetAccountActive, setInternetBan, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, AD_BASE_COST, AD_BOOST_COST, AD_MAX_BOOST } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -270,6 +270,8 @@ export function startStatusServer(client, config) {
             posts: publicPosts(store, viewerId),
             users: publicUsers(store, viewerId),
             settings: publicInternetSettings(store),
+            ads: serveInternetAds(store, { count: 2 }),
+            adPricing: { base: AD_BASE_COST, boost: AD_BOOST_COST, maxBoost: AD_MAX_BOOST, durationHours: 24 },
           });
         }
         if (request.method !== 'POST') return json(response, 405, { error: 'Method not allowed' });
@@ -288,7 +290,7 @@ export function startStatusServer(client, config) {
         const actorId = String(body.actor?.id || '');
         const wantsOfficial = body.asOfficial === true;
         const requestedOwner = body.owner === true;
-        const staffAction = ['moderation', 'staff-user', 'staff-user-detail', 'staff-wallet', 'staff-site', 'report-review', 'verify', 'ban'].includes(body.action);
+        const staffAction = ['moderation', 'staff-user', 'staff-user-detail', 'staff-wallet', 'staff-site', 'report-review', 'ad-review', 'verify', 'ban'].includes(body.action);
         const needsLivePanel = wantsOfficial
           || requestedOwner
           || staffAction
@@ -381,6 +383,27 @@ export function startStatusServer(client, config) {
           const wallet = claimInternetDailyCredits(store, body.actor);
           await saveInternetStore(store);
           return json(response, 200, { wallet });
+        }
+
+        if (body.action === 'ads') {
+          return json(response, 200, {
+            ads: serveInternetAds(store, { count: 2 }),
+            mine: listInternetAdsForUser(store, body.actor),
+            pricing: { base: AD_BASE_COST, boost: AD_BOOST_COST, maxBoost: AD_MAX_BOOST, durationHours: 24 },
+          });
+        }
+
+        if (body.action === 'ad-purchase') {
+          const result = purchaseInternetAd(store, body);
+          await saveInternetStore(store);
+          return json(response, 201, result);
+        }
+
+        if (body.action === 'ad-review') {
+          if (!['full', 'limited'].includes(body.staffPanel)) return json(response, 403, { error: 'Staff access required' });
+          const result = reviewInternetAd(store, body);
+          await saveInternetStore(store);
+          return json(response, 200, { ...result, snapshot: moderationSnapshot(store) });
         }
 
         if (body.action === 'wallet-transfer') {

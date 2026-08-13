@@ -16,10 +16,18 @@ const emptyStore = Object.freeze({
   ipBans: [],
   staffBanLog: [],
   creditTransfers: [],
+  ads: [],
   siteBanner: null,
   officialProfile: {},
   settings: { pausePosts: false, pauseReels: false, pauseMessages: false },
 });
+
+/** Sidebar ads: 24h run after staff approval, paid with Clearwater Credits. */
+export const AD_BASE_COST = 200;
+export const AD_BOOST_COST = 100;
+export const AD_MAX_BOOST = 5;
+export const AD_DURATION_MS = 24 * 60 * 60 * 1000;
+export const AD_CATEGORIES = Object.freeze(['department', 'business']);
 
 const LIMITED_STAFF_BAN_LIMIT = 3;
 const LIMITED_STAFF_BAN_WINDOW_MS = 60 * 60 * 1000;
@@ -90,6 +98,7 @@ function normalizeInternetStore(data) {
     ipBans: Array.isArray(source.ipBans) ? source.ipBans : [],
     staffBanLog: Array.isArray(source.staffBanLog) ? source.staffBanLog : [],
     creditTransfers: Array.isArray(source.creditTransfers) ? source.creditTransfers : [],
+    ads: Array.isArray(source.ads) ? source.ads : [],
     siteBanner: sanitizeSiteBanner(source.siteBanner),
     officialProfile: source.officialProfile && typeof source.officialProfile === 'object' ? source.officialProfile : {},
     settings: {
@@ -1078,6 +1087,7 @@ export const PROFILE_BANNER_PRESETS = Object.freeze([
   'assets/state-trooper-night.png',
   'assets/sheriff-station.png',
   'assets/fire-rescue-scene.png',
+  'assets/liberty-county-map.jpg',
   'assets/liberty-county-map.png',
 ]);
 
@@ -1204,11 +1214,17 @@ export function deleteInternetAccount(store, { actor }) {
 
 function sanitizeDropLocation(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  const left = Number(raw.left);
-  const top = Number(raw.top);
-  if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
   const x = Number(raw.x);
   const z = Number(raw.z);
+  // Always recompute pin placement from world coords so older posts that used
+  // the northwest-origin math land correctly on the centred official map.
+  let left = Number(raw.left);
+  let top = Number(raw.top);
+  if (Number.isFinite(x) && Number.isFinite(z)) {
+    left = 0.5 + (x / 3120);
+    top = 0.5 + (z / 3120);
+  }
+  if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
   return {
     ...(Number.isFinite(x) ? { x: Math.round(x * 10) / 10 } : {}),
     ...(Number.isFinite(z) ? { z: Math.round(z * 10) / 10 } : {}),
@@ -1216,8 +1232,8 @@ function sanitizeDropLocation(raw) {
     street: text(raw.street, 80),
     building: text(raw.building, 20),
     label: text(raw.label, 120) || 'Liberty County',
-    left: Math.min(0.97, Math.max(0.03, left)),
-    top: Math.min(0.97, Math.max(0.03, top)),
+    left: Math.min(0.995, Math.max(0.005, left)),
+    top: Math.min(0.995, Math.max(0.005, top)),
   };
 }
 
@@ -2161,9 +2177,158 @@ export function recordLimitedStaffBan(store, staffId) {
   store.staffBanLog = store.staffBanLog.slice(0, 200);
 }
 
+function expireInternetAds(store) {
+  const now = Date.now();
+  let changed = false;
+  store.ads = Array.isArray(store.ads) ? store.ads : [];
+  for (const ad of store.ads) {
+    if (ad.status === 'active' && ad.endsAt && new Date(ad.endsAt).getTime() <= now) {
+      ad.status = 'expired';
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function publicAd(ad) {
+  return {
+    id: ad.id,
+    category: ad.category,
+    businessName: ad.businessName,
+    title: ad.title,
+    body: ad.body,
+    weight: ad.weight,
+    status: ad.status,
+    startsAt: ad.startsAt || null,
+    endsAt: ad.endsAt || null,
+    createdAt: ad.createdAt,
+    advertiserName: ad.advertiserName,
+    advertiserUsername: ad.advertiserUsername,
+  };
+}
+
+function assertAdCopy({ category, businessName, title, body }) {
+  if (!AD_CATEGORIES.includes(category)) {
+    throw new Error('Choose whether this ad is for an in-game department or business');
+  }
+  const name = text(businessName, 60);
+  const headline = text(title, 80);
+  const copy = text(body, 220);
+  if (!name) throw new Error('Enter the in-game department or business name');
+  if (!headline) throw new Error('Write a short ad headline');
+  if (copy.length < 12) throw new Error('Describe the in-game department or business in a bit more detail');
+  const haystack = `${name}\n${headline}\n${copy}`;
+  const hit = scanInternetContent(haystack);
+  if (hit) throw new Error('That ad copy was blocked by automod. Soften the language and try again.');
+  // Keep ads on-theme for Clearwater RP departments / businesses.
+  if (/\b(?:discord\.gg|roblox\.com\/groups|onlyfans|crypto|nitro)\b/i.test(haystack)) {
+    throw new Error('Ads must promote in-game Clearwater departments or businesses only');
+  }
+  return { category, businessName: name, title: headline, body: copy };
+}
+
+export function purchaseInternetAd(store, { actor, category, businessName, title, body, boost = 0 }) {
+  const user = ensureInternetWallet(store, actor);
+  assertNotBanned(user);
+  const copy = assertAdCopy({ category, businessName, title, body });
+  const boostLevels = Math.min(AD_MAX_BOOST, Math.max(0, Math.trunc(Number(boost) || 0)));
+  const cost = AD_BASE_COST + (boostLevels * AD_BOOST_COST);
+  if (creditBalance(user) < cost) throw new Error(`You need C$${cost} to place this ad`);
+  user.credits = creditBalance(user) - cost;
+  addCreditTransaction(user, {
+    amount: -cost,
+    type: 'ad',
+    note: `Sidebar ad${boostLevels ? ` +${boostLevels} boost` : ''} (pending review)`,
+    actorName: 'Clearwater Ads',
+  });
+  expireInternetAds(store);
+  const ad = {
+    id: randomUUID(),
+    advertiserId: user.id,
+    advertiserName: text(user.displayName, 80) || 'Discord user',
+    advertiserUsername: text(user.username, 80),
+    ...copy,
+    weight: 1 + boostLevels,
+    boost: boostLevels,
+    cost,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    startsAt: null,
+    endsAt: null,
+    reviewedAt: null,
+    reviewerId: null,
+  };
+  store.ads.unshift(ad);
+  store.ads = store.ads.slice(0, 300);
+  addInternetLog(store, `${ad.advertiserName} submitted a ${ad.category} ad for review (C$${cost}).`);
+  return { ad: publicAd(ad), wallet: walletView(user), pricing: { base: AD_BASE_COST, boost: AD_BOOST_COST, maxBoost: AD_MAX_BOOST } };
+}
+
+export function reviewInternetAd(store, { adId, decision, actor, reason = '' }) {
+  expireInternetAds(store);
+  const ad = store.ads.find((item) => item.id === String(adId || ''));
+  if (!ad || ad.status !== 'pending') throw new Error('Pending ad not found');
+  if (!['accept', 'deny'].includes(decision)) throw new Error('Choose Approve or Deny');
+  ad.reviewedAt = new Date().toISOString();
+  ad.reviewerId = String(actor?.id || '');
+  ad.reviewNote = text(reason, 300);
+  if (decision === 'deny') {
+    ad.status = 'denied';
+    const owner = store.users[ad.advertiserId];
+    if (owner) {
+      owner.credits = creditBalance(owner) + ad.cost;
+      addCreditTransaction(owner, {
+        amount: ad.cost,
+        type: 'ad-refund',
+        note: 'Sidebar ad denied — credits refunded',
+        actorName: 'Clearwater Ads',
+      });
+      addInternetMessage(store, owner.id, `Your sidebar ad “${ad.title}” was not approved${ad.reviewNote ? `: ${ad.reviewNote}` : '.'} C$${ad.cost} was returned to your wallet.`);
+    }
+    addInternetLog(store, `Denied sidebar ad from ${ad.advertiserName}.`);
+    return { ad: publicAd(ad) };
+  }
+  const now = Date.now();
+  ad.status = 'active';
+  ad.startsAt = new Date(now).toISOString();
+  ad.endsAt = new Date(now + AD_DURATION_MS).toISOString();
+  addInternetMessage(store, ad.advertiserId, `Your sidebar ad “${ad.title}” was approved and will run for 24 hours.`);
+  addInternetLog(store, `Approved sidebar ad from ${ad.advertiserName} (${ad.weight}x weight).`);
+  return { ad: publicAd(ad) };
+}
+
+export function listInternetAdsForUser(store, actor) {
+  expireInternetAds(store);
+  const id = String(actor?.id || '');
+  return store.ads.filter((ad) => ad.advertiserId === id).slice(0, 40).map(publicAd);
+}
+
+export function serveInternetAds(store, { count = 1 } = {}) {
+  expireInternetAds(store);
+  const active = store.ads.filter((ad) => ad.status === 'active' && ad.endsAt && new Date(ad.endsAt).getTime() > Date.now());
+  if (!active.length) return [];
+  const picks = [];
+  const pool = [...active];
+  const limit = Math.min(2, Math.max(1, Math.trunc(Number(count) || 1)), pool.length);
+  for (let i = 0; i < limit; i += 1) {
+    const total = pool.reduce((sum, ad) => sum + Math.max(1, Number(ad.weight) || 1), 0);
+    let roll = Math.random() * total;
+    let chosen = pool[0];
+    for (const ad of pool) {
+      roll -= Math.max(1, Number(ad.weight) || 1);
+      if (roll <= 0) { chosen = ad; break; }
+    }
+    picks.push(publicAd(chosen));
+    pool.splice(pool.indexOf(chosen), 1);
+  }
+  return picks;
+}
+
 export function moderationSnapshot(store) {
+  expireInternetAds(store);
   const open = store.reports.filter((report) => report.status === 'open').map((report) => publicStaffReport(store, report));
   const reviewed = store.reports.filter((report) => report.status !== 'open').map((report) => publicStaffReport(store, report));
+  const pendingAds = store.ads.filter((ad) => ad.status === 'pending').map(publicAd);
   const users = Object.values(store.users).map((user) => staffUserSummary(store, user));
   const bans = users.filter((user) => user.banned).map((user) => {
     const ban = getActiveBan(store.users[user.id]);
@@ -2173,8 +2338,11 @@ export function moderationSnapshot(store) {
   return {
     reports: open.slice(0, 100),
     history: reviewed.slice(0, 100),
+    pendingAds: pendingAds.slice(0, 50),
+    adPricing: { base: AD_BASE_COST, boost: AD_BOOST_COST, maxBoost: AD_MAX_BOOST, durationHours: 24 },
     stats: {
       pending: open.length,
+      pendingAds: pendingAds.length,
       automod: open.filter((report) => report.source === 'automod').length,
       actioned: reviewed.filter((report) => report.status === 'accepted').length,
       dismissed: reviewed.filter((report) => report.status === 'denied').length,

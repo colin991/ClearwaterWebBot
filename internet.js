@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260813-home-reels';
+const INTERNET_VERSION = '20260813-ads-map';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
@@ -324,6 +324,10 @@ let staffUsersFilter = 'all';
 let selectedStaffUserId = null;
 let staffUserDetail = null;
 let staffUserBusy = false;
+let sidebarAds = [];
+let myAds = [];
+let adPricing = { base: 200, boost: 100, maxBoost: 5, durationHours: 24 };
+let adRotateTimer = 0;
 const expandedPollVoters = new Set();
 const clearwaterEmojiChoices = [
   ['🚓', 'Police'], ['🚒', 'Fire rescue'], ['🚑', 'EMS'], ['🌴', 'Clearwater'],
@@ -678,23 +682,17 @@ async function refreshDropLocation({ silent = false } = {}) {
   }
 }
 
-// Official PRC/Sonoran maps are 3120² studs with (0,0) at the northwest
-// corner of the framed landmass. +X is east, +Z is south (down on the image).
-const LIBERTY_MAP = Object.freeze({
-  world: 3120,
-  frameLeft: 0.0469,
-  frameTop: 0.0918,
-  frameWidth: 0.9023,
-  frameHeight: 0.8262,
-});
+// Official ER:LC docs: LocationX/LocationZ use the centre of the map as
+// origin. +X is right, +Z is down. Official map images are full-bleed 3121².
+const LIBERTY_WORLD = 3120;
 
 function libertyMapPoint(x, z) {
-  const nx = Number(x) / LIBERTY_MAP.world;
-  const ny = Number(z) / LIBERTY_MAP.world;
-  if (!Number.isFinite(nx) || !Number.isFinite(ny)) return null;
+  const left = 0.5 + (Number(x) / LIBERTY_WORLD);
+  const top = 0.5 + (Number(z) / LIBERTY_WORLD);
+  if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
   return {
-    left: LIBERTY_MAP.frameLeft + Math.min(1, Math.max(0, nx)) * LIBERTY_MAP.frameWidth,
-    top: LIBERTY_MAP.frameTop + Math.min(1, Math.max(0, ny)) * LIBERTY_MAP.frameHeight,
+    left: Math.min(1, Math.max(0, left)),
+    top: Math.min(1, Math.max(0, top)),
   };
 }
 
@@ -721,7 +719,7 @@ function dropMapMarkup(location) {
   const caption = location.label && location.postal && !String(location.label).includes(String(location.postal))
     ? `${location.label} · Postal ${location.postal}`
     : (location.label || (location.postal ? `Postal ${location.postal}` : ''));
-  return `<figure class="drop-map"><div class="drop-map-view"><div class="drop-map-scene" style="transform:translate(${tx.toFixed(2)}%,${ty.toFixed(2)}%) scale(${zoom})"><img src="assets/liberty-county-map.png" alt="Liberty County map" draggable="false" /></div><i class="drop-map-pin" style="left:${screenX.toFixed(2)}%;top:${screenY.toFixed(2)}%" aria-hidden="true"><span></span></i></div>${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}</figure>`;
+  return `<figure class="drop-map"><div class="drop-map-view"><div class="drop-map-scene" style="transform:translate(${tx.toFixed(2)}%,${ty.toFixed(2)}%) scale(${zoom})"><img src="assets/liberty-county-map.jpg" alt="Liberty County map" draggable="false" /></div><i class="drop-map-pin" style="left:${screenX.toFixed(2)}%;top:${screenY.toFixed(2)}%" aria-hidden="true"><span></span></i></div>${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}</figure>`;
 }
 
 function postMediaMarkup(post, displayName) {
@@ -1736,7 +1734,10 @@ function showView(view) {
   if (activeView === 'messages') void loadMessages();
   if (activeView === 'notifications') void loadNotifications();
   if (activeView === 'staff') void loadModeration();
-  if (activeView === 'wallet') void loadWallet();
+  if (activeView === 'wallet') {
+    void loadWallet();
+    void loadAds();
+  }
   if (activeView === 'profile') renderOwnProfileDetails();
   if (activeView === 'settings' && currentUserId) void loadProfileEditor();
 }
@@ -2375,12 +2376,13 @@ function renderStaffDashboard() {
       </div>
       <p data-staff-site-status role="status"></p>`;
   }
-  const metrics = `<div class="staff-metrics"><article><b>${Number(stats.pending || reports.length)}</b><span>Pending</span></article><article><b>${Number(stats.automod || 0)}</b><span>Automod</span></article><article><b>${Number(stats.banned || bans.length)}</b><span>Bans</span></article><article><b>${Number(stats.watched || 0)}</b><span>Watched</span></article><article><b>${Number(stats.muted || 0)}</b><span>Muted</span></article><article><b>${Number(stats.users || internetUsers.size)}</b><span>Users</span></article></div>`;
+  const pendingAds = Array.isArray(moderationSnapshot.pendingAds) ? moderationSnapshot.pendingAds : [];
+  const metrics = `<div class="staff-metrics"><article><b>${Number(stats.pending || reports.length)}</b><span>Pending</span></article><article><b>${Number(stats.pendingAds || pendingAds.length)}</b><span>Ads</span></article><article><b>${Number(stats.automod || 0)}</b><span>Automod</span></article><article><b>${Number(stats.banned || bans.length)}</b><span>Bans</span></article><article><b>${Number(stats.watched || 0)}</b><span>Watched</span></article><article><b>${Number(stats.users || internetUsers.size)}</b><span>Users</span></article></div>`;
   if (overview) {
     overview.innerHTML = `${metrics}<div class="staff-overview-grid"><section class="staff-column"><header><h2>Oldest pending reports</h2><span>${reports.length}</span></header>${reports.length ? reports.slice(0, 8).map((report) => {
       const author = staffMemberLookup(report.authorId, report);
       return `<button type="button" class="staff-report-card ${report.id === selectedReportId ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}">${staffAvatarMarkup(author.avatarUrl)}<div><b>${escapeHtml(author.displayName)}</b><small>${escapeHtml(reportSourceLabel(report))} · ${escapeHtml(reportKindLabel(report))}</small><p>${escapeHtml(report.content || 'No text captured')}</p></div></button>`;
-    }).join('') : '<div class="staff-empty">Nothing in this queue.</div>'}</section><section class="staff-column"><header><h2>Active bans</h2></header>${bans.length ? bans.map((ban) => `<button type="button" class="staff-compact" data-staff-open-user="${escapeHtml(ban.id)}"><b>${escapeHtml(ban.displayName)}</b><span>${escapeHtml(ban.reason)}</span><small>${ban.until ? `Ends ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(ban.until))}` : 'Permanent ban'}</small></button>`).join('') : '<div class="staff-empty">No active bans.</div>'}</section></div>`;
+    }).join('') : '<div class="staff-empty">Nothing in this queue.</div>'}</section><section class="staff-column"><header><h2>Ads awaiting approval</h2><span>${pendingAds.length}</span></header>${pendingAds.length ? pendingAds.map((ad) => `<article class="staff-ad-card"><div><b>${escapeHtml(ad.title)}</b><small>${escapeHtml(ad.category)} · ${escapeHtml(ad.businessName)} · ${escapeHtml(ad.advertiserName || 'Member')}${ad.weight > 1 ? ` · ${ad.weight}x` : ''}</small><p>${escapeHtml(ad.body)}</p></div><div class="staff-ad-actions"><button type="button" class="staff-action-btn primary" data-ad-review="accept" data-ad-id="${escapeHtml(ad.id)}">Approve 24h</button><button type="button" class="staff-action-btn" data-ad-review="deny" data-ad-id="${escapeHtml(ad.id)}">Deny & refund</button></div></article>`).join('') : '<div class="staff-empty">No ads waiting for review.</div>'}</section></div>`;
   }
 }
 
@@ -2688,6 +2690,74 @@ function renderWalletTransferResults(query = '') {
   results.innerHTML = users.length
     ? users.map((user) => `<button type="button" data-wallet-transfer-pick="${escapeHtml(user.id)}"><img src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(user.displayName || 'Member')}</b><small>@${escapeHtml(user.username || 'member')}</small></span></button>`).join('')
     : '<p>No members found.</p>';
+}
+
+function adStatusLabel(status) {
+  if (status === 'pending') return 'Awaiting staff review';
+  if (status === 'active') return 'Running';
+  if (status === 'denied') return 'Denied · refunded';
+  if (status === 'expired') return 'Ended';
+  return status || 'Unknown';
+}
+
+function renderSidebarAds(ads = sidebarAds) {
+  const list = document.querySelector('[data-sidebar-ad-list]');
+  if (!list) return;
+  const items = Array.isArray(ads) ? ads.filter(Boolean) : [];
+  if (!items.length) {
+    list.innerHTML = '<p class="sidebar-ad-empty">No live ads right now. Departments and businesses can buy a slot with credits.</p>';
+    return;
+  }
+  list.innerHTML = items.map((ad) => `<article class="sidebar-ad"><em>${escapeHtml(ad.category === 'department' ? 'Department' : 'Business')}</em><b>${escapeHtml(ad.title)}</b><span>${escapeHtml(ad.businessName)}</span><p>${escapeHtml(ad.body)}</p></article>`).join('');
+}
+
+function renderMyAds(ads = myAds) {
+  const root = document.querySelector('[data-ad-mine]');
+  if (!root) return;
+  if (!ads.length) {
+    root.innerHTML = '';
+    return;
+  }
+  root.innerHTML = `<h3>Your ads</h3>${ads.slice(0, 8).map((ad) => `<article class="wallet-ad-row"><div><b>${escapeHtml(ad.title)}</b><small>${escapeHtml(ad.businessName)} · ${escapeHtml(adStatusLabel(ad.status))}${ad.weight > 1 ? ` · ${ad.weight}x chance` : ''}</small></div></article>`).join('')}`;
+}
+
+function syncAdBoostLabels() {
+  const select = document.querySelector('[data-ad-boost]');
+  if (!select) return;
+  const base = Number(adPricing.base) || 200;
+  const boost = Number(adPricing.boost) || 100;
+  [...select.options].forEach((option) => {
+    const level = Number(option.value) || 0;
+    const cost = base + (level * boost);
+    option.textContent = level
+      ? `+${level} chance · C$${cost}`
+      : `No boost · C$${cost}`;
+  });
+}
+
+async function loadAds() {
+  try {
+    if (!currentUserId) {
+      renderSidebarAds(sidebarAds);
+      return;
+    }
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ads' }) });
+    const result = await readApiJson(response, 'Could not load ads.');
+    if (!response.ok) throw new Error(result.error || 'Could not load ads.');
+    sidebarAds = Array.isArray(result.ads) ? result.ads : [];
+    myAds = Array.isArray(result.mine) ? result.mine : [];
+    if (result.pricing) adPricing = { ...adPricing, ...result.pricing };
+    syncAdBoostLabels();
+    renderSidebarAds(sidebarAds);
+    renderMyAds(myAds);
+  } catch {
+    renderSidebarAds(sidebarAds);
+  }
+}
+
+function startAdRotation() {
+  if (adRotateTimer) window.clearInterval(adRotateTimer);
+  adRotateTimer = window.setInterval(() => { void loadAds(); }, 60_000);
 }
 
 function renderWallet(wallet) {
@@ -3291,6 +3361,10 @@ async function loadPosts() {
     allPosts = uniquePostsById(result.posts || []);
     internetUsers = new Map((result.users || []).map((user) => [user.id, user]));
     applySiteBanner(result.settings?.siteBanner || null);
+    if (Array.isArray(result.ads)) sidebarAds = result.ads;
+    if (result.adPricing) adPricing = { ...adPricing, ...result.adPricing };
+    syncAdBoostLabels();
+    renderSidebarAds(sidebarAds);
     officialAccountId = result.officialUserId || [...internetUsers.values()].find((user) => user.official)?.id || officialAccountId;
     updateAccountSwitcher();
     const official = internetUsers.get(officialAccountId);
@@ -3949,6 +4023,30 @@ document.addEventListener('click', (event) => {
   }
   const reviewButton = event.target.closest('[data-report-review]');
   if (reviewButton) { void reviewReport(reviewButton); return; }
+  const adReview = event.target.closest('[data-ad-review]');
+  if (adReview) {
+    void (async () => {
+      try {
+        const response = await fetch('/api/internet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'ad-review',
+            adId: adReview.dataset.adId,
+            decision: adReview.dataset.adReview === 'deny' ? 'deny' : 'accept',
+          }),
+        });
+        const result = await readApiJson(response, 'Could not review this ad.');
+        if (!response.ok) throw new Error(result.error || 'Could not review this ad.');
+        if (result.snapshot) moderationSnapshot = result.snapshot;
+        renderStaffDashboard();
+        void loadAds();
+      } catch (error) {
+        void siteAlert(error.message || 'Could not review this ad.');
+      }
+    })();
+    return;
+  }
   const repostChoice = event.target.closest('[data-repost-choice]');
   if (repostChoice && pendingPostAction?.type === 'repost') {
     repostPopup.hidden = true;
@@ -4582,6 +4680,50 @@ document.querySelector('[data-wallet-transfer-form]')?.addEventListener('submit'
   }
 });
 
+document.querySelector('[data-ad-form]')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const status = document.querySelector('[data-ad-status]');
+  const submit = document.querySelector('[data-ad-submit]');
+  if (submit) submit.disabled = true;
+  if (status) { status.dataset.tone = 'wait'; status.textContent = 'Submitting your ad for staff review...'; }
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'ad-purchase',
+        category: document.querySelector('[data-ad-category]')?.value || 'business',
+        businessName: document.querySelector('[data-ad-business]')?.value || '',
+        title: document.querySelector('[data-ad-title]')?.value || '',
+        body: document.querySelector('[data-ad-body]')?.value || '',
+        boost: Number(document.querySelector('[data-ad-boost]')?.value || 0),
+      }),
+    });
+    const result = await readApiJson(response, 'Could not submit this ad.');
+    if (!response.ok) throw new Error(result.error || 'Could not submit this ad.');
+    if (result.wallet) renderWallet(result.wallet);
+    else await loadWallet();
+    if (result.pricing) adPricing = { ...adPricing, ...result.pricing };
+    syncAdBoostLabels();
+    document.querySelector('[data-ad-business]').value = '';
+    document.querySelector('[data-ad-title]').value = '';
+    document.querySelector('[data-ad-body]').value = '';
+    document.querySelector('[data-ad-boost]').value = '0';
+    if (status) {
+      status.dataset.tone = 'ok';
+      status.textContent = 'Submitted. Staff will review it before it can run for 24 hours.';
+    }
+    await loadAds();
+  } catch (error) {
+    if (status) {
+      status.dataset.tone = 'error';
+      status.textContent = error.message || 'Could not submit this ad.';
+    }
+  } finally {
+    if (submit) submit.disabled = false;
+  }
+});
+
 showViewFromAddress();
 
 async function bootInternet() {
@@ -4592,6 +4734,8 @@ async function bootInternet() {
       return;
     }
     await loadPosts();
+    void loadAds();
+    startAdRotation();
   } finally {
     if (currentUserId) {
       document.body.classList.remove('internet-booting');

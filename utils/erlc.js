@@ -10,43 +10,50 @@ export async function fetchErlcServer(serverKey) {
   return response.json();
 }
 
+function firstFinite(...values) {
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return null;
+}
+
 export function parseErlcPlayer(player) {
-  const raw = String(player?.Player || '');
+  const raw = String(player?.Player || player?.player || '');
   const separator = raw.lastIndexOf(':');
-  const x = Number(player?.Location?.LocationX ?? player?.Location?.x ?? player?.x);
-  const z = Number(player?.Location?.LocationZ ?? player?.Location?.z ?? player?.z);
+  const loc = player?.Location && typeof player.Location === 'object' ? player.Location : {};
+  const position = Array.isArray(player?.position)
+    ? player.position
+    : (Array.isArray(loc.position) ? loc.position : null);
+  // Official docs: LocationX/LocationZ use the centre of the map as origin.
+  const x = firstFinite(loc.LocationX, loc.x, player?.x, player?.X, position?.[0]);
+  const z = firstFinite(loc.LocationZ, loc.z, player?.z, player?.Z, position?.[1]);
   return {
     username: separator >= 0 ? raw.slice(0, separator) : raw,
-    robloxId: separator >= 0 ? raw.slice(separator + 1) : '',
-    team: player?.Team || 'Civilian',
-    callsign: player?.Callsign || '',
+    robloxId: separator >= 0 ? raw.slice(separator + 1) : String(player?.PlayerId || player?.id || ''),
+    team: player?.Team || player?.team || 'Civilian',
+    callsign: player?.Callsign || player?.callsign || '',
     location: {
-      x: Number.isFinite(x) ? x : null,
-      z: Number.isFinite(z) ? z : null,
-      postal: String(player?.Location?.PostalCode || ''),
-      street: String(player?.Location?.StreetName || ''),
-      building: String(player?.Location?.BuildingNumber || ''),
+      x,
+      z,
+      postal: String(loc.PostalCode || player?.postal || loc.postal || ''),
+      street: String(loc.StreetName || player?.street || loc.street || ''),
+      building: String(loc.BuildingNumber || player?.building || loc.building || ''),
     },
   };
 }
 
-// Official satellite map is 1024² with a black frame around the landmass.
-// ER:LC X/Z are studs from the northwest corner of the 3120² in-game map;
-// +X is east and +Z is south, matching PRC/Sonoran live maps.
-const LIBERTY_BOUNDS = Object.freeze({
-  world: 3120,
-  frameLeft: 0.0469,
-  frameTop: 0.0918,
-  frameWidth: 0.9023,
-  frameHeight: 0.8262,
-});
+// Official map images are 3121². API X/Z are studs from the map centre:
+// +X right, +Z down, -X left, -Z up. Full span is treated as 3120 studs.
+const LIBERTY_WORLD = 3120;
 
 export function libertyMapPoint(x, z) {
-  const nx = Number(x) / LIBERTY_BOUNDS.world;
-  const ny = Number(z) / LIBERTY_BOUNDS.world;
+  const left = 0.5 + (Number(x) / LIBERTY_WORLD);
+  const top = 0.5 + (Number(z) / LIBERTY_WORLD);
+  if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
   return {
-    left: Number((LIBERTY_BOUNDS.frameLeft + Math.min(1, Math.max(0, nx)) * LIBERTY_BOUNDS.frameWidth).toFixed(4)),
-    top: Number((LIBERTY_BOUNDS.frameTop + Math.min(1, Math.max(0, ny)) * LIBERTY_BOUNDS.frameHeight).toFixed(4)),
+    left: Number(Math.min(1, Math.max(0, left)).toFixed(5)),
+    top: Number(Math.min(1, Math.max(0, top)).toFixed(5)),
   };
 }
 
@@ -68,7 +75,7 @@ export function dropLocationNameCandidates(...values) {
 
 export async function findPlayerDropLocation({ serverKey, robloxId, username, usernames = [] }) {
   const server = await fetchErlcServer(serverKey);
-  const players = (server.Players || []).map(parseErlcPlayer);
+  const players = (server.Players || server.players || []).map(parseErlcPlayer);
   const id = String(robloxId || '');
   const handles = new Set(
     dropLocationNameCandidates(username, ...usernames).map((name) => name.toLowerCase()),
@@ -80,6 +87,7 @@ export async function findPlayerDropLocation({ serverKey, robloxId, username, us
     throw new Error('Your in-game location is not available yet. Move a little in ER:LC and try again.');
   }
   const pin = libertyMapPoint(player.location.x, player.location.z);
+  if (!pin) throw new Error('Could not place your location on the Liberty County map.');
   const label = [player.location.building, player.location.street].filter(Boolean).join(' ')
     || (player.location.postal ? `Postal ${player.location.postal}` : 'Liberty County');
   return {

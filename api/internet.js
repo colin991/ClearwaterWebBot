@@ -4,7 +4,7 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260812-mobile-drop';
+const INTERNET_VERSION = '20260813-ads-map';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
@@ -315,6 +315,29 @@ export default async function handler(request, response) {
       payload = { action: 'social-status', asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
     } else if (body.action === 'wallet' || body.action === 'wallet-claim') {
       payload = { action: body.action, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
+    } else if (body.action === 'ads') {
+      payload = { action: 'ads', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
+    } else if (body.action === 'ad-purchase') {
+      payload = {
+        action: 'ad-purchase',
+        category: body.category === 'department' ? 'department' : 'business',
+        businessName: String(body.businessName || '').slice(0, 60),
+        title: String(body.title || '').slice(0, 80),
+        body: String(body.body || '').slice(0, 220),
+        boost: Math.min(5, Math.max(0, Number(body.boost) || 0)),
+        actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges },
+      };
+    } else if (body.action === 'ad-review') {
+      if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
+      payload = {
+        action: 'ad-review',
+        adId: String(body.adId || ''),
+        decision: body.decision === 'deny' ? 'deny' : 'accept',
+        reason: String(body.reason || '').slice(0, 300),
+        actor: { id: user.id, displayName: user.displayName },
+        staffPanel,
+        owner: staffPanel === 'full',
+      };
     } else if (body.action === 'wallet-transfer') {
       payload = {
         action: 'wallet-transfer',

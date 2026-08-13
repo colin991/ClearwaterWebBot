@@ -14,7 +14,7 @@
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <link rel="apple-touch-icon" href="assets/clearwater-logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260813-mobile-rail" />
+    <link rel="stylesheet" href="internet.css?v=20260813-ads-map" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260813-coming-soon"></script>
   </head>
@@ -171,6 +171,47 @@
                 <p>You receive C$75 every 24 hours.</p>
               </div>
               <p class="wallet-status" data-wallet-claim-status role="status">Loading your next daily credit…</p>
+            </article>
+            <article class="wallet-card wallet-ad-card">
+              <div class="wallet-card-copy">
+                <h2>Sidebar ads</h2>
+                <p>Promote an in-game department or business for 24 hours after staff approval. Extra boosts raise your chance of being shown.</p>
+              </div>
+              <form class="wallet-ad-form" data-ad-form>
+                <label>
+                  <span>Type</span>
+                  <select data-ad-category aria-label="Ad type">
+                    <option value="business">In-game business</option>
+                    <option value="department">In-game department</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Department / business name</span>
+                  <input data-ad-business maxlength="60" placeholder="Clearwater Fire Rescue" required />
+                </label>
+                <label>
+                  <span>Headline</span>
+                  <input data-ad-title maxlength="80" placeholder="Hiring EMTs this week" required />
+                </label>
+                <label>
+                  <span>Ad copy</span>
+                  <textarea data-ad-body maxlength="220" placeholder="Tell people what the department or business offers in Clearwater RP." required></textarea>
+                </label>
+                <label>
+                  <span>Boost chance</span>
+                  <select data-ad-boost aria-label="Ad boost level">
+                    <option value="0">No boost · C$200</option>
+                    <option value="1">+1 chance · C$300</option>
+                    <option value="2">+2 chance · C$400</option>
+                    <option value="3">+3 chance · C$500</option>
+                    <option value="4">+4 chance · C$600</option>
+                    <option value="5">+5 chance · C$700</option>
+                  </select>
+                </label>
+                <button type="submit" data-ad-submit>Submit for staff review</button>
+                <p class="wallet-status" data-ad-status role="status">Ads only run after moderation approves them. Denied ads are refunded.</p>
+              </form>
+              <div class="wallet-ad-mine" data-ad-mine></div>
             </article>
             <article class="wallet-card wallet-transfer-card">
               <div class="wallet-card-copy">
@@ -486,6 +527,11 @@
         </a>
         <label class="internet-search"><span>Search Clearwater Internet</span><input data-search type="search" placeholder="Search people and posts" autocomplete="off" /></label>
         <div class="search-side" data-search-results hidden></div>
+        <div class="sidebar-ads" data-sidebar-ads aria-label="Sponsored Clearwater ads">
+          <h2>Sponsored</h2>
+          <div data-sidebar-ad-list><p class="sidebar-ad-empty">Department and business ads appear here.</p></div>
+          <a class="sidebar-ad-cta" href="/internet/wallet" data-view-link="wallet">Advertise with credits</a>
+        </div>
         <div class="trending" data-trending-panel><h2>What's happening</h2><div data-trending-list><a href="/internet" data-topic="#ClearwaterRP">#ClearwaterRP <span>Community</span></a><a href="/internet" data-topic="#ERLC">#ERLC <span>Roleplay</span></a><a href="/internet" data-topic="#FireRescue">#FireRescue <span>Departments</span></a></div></div>
       </aside>
     </main>
@@ -520,6 +566,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260813-mobile-rail"></script>
+    <script src="internet.js?v=20260813-ads-map"></script>
   </body>
 </html>
