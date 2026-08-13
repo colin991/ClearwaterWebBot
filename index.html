@@ -18,8 +18,11 @@
     <meta name="twitter:card" content="summary_large_image" />
     <title>Clearwater Roleplay</title>
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@450;550;650;750;850&display=swap" rel="stylesheet" />
     <script>document.documentElement.classList.add('js');</script>
-    <link rel="stylesheet" href="styles.css?v=20260813-site-banner" />
+    <link rel="stylesheet" href="styles.css?v=20260813-anchor-home" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -58,7 +61,7 @@
               <span data-cash-amount>C$0</span>
             </a>
             <a class="nav-button nav-button-ghost" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord</a>
-            <a class="nav-button nav-button-primary" href="/signin" data-discord-login>Login with Discord</a>
+            <a class="nav-button nav-button-primary" href="/signin" data-discord-login>Sign up</a>
             <div class="discord-account" data-discord-account hidden>
               <button class="discord-profile" type="button" data-discord-profile aria-expanded="false" aria-controls="discord-profile-menu">
                 <img class="discord-avatar" data-discord-avatar src="assets/clearwater-logo.png" alt="" />
@@ -77,19 +80,29 @@
 
     <main id="main">
       <section class="hero" id="home">
-        <div class="hero-copy page-width">
-          <p class="hero-kicker"><span class="hero-status-dot" aria-hidden="true"></span> In-game <strong data-erlc-current>0</strong> / <strong data-erlc-max>50</strong><i aria-hidden="true"></i> Queue <strong data-erlc-queue>0</strong></p>
-          <h1>Clearwater<br />Roleplay</h1>
-          <p class="hero-lead">Experience Florida like never before — your story begins in Clearwater.</p>
-          <div class="hero-actions">
-            <a class="button button-primary" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a>
-            <a class="button button-secondary" href="https://erlc.gg/join/cwrpvc" target="_blank" rel="noopener">Play on Roblox</a>
+        <div class="hero-shell page-width">
+          <div class="hero-copy">
+            <p class="hero-kicker"><span class="hero-status-dot" aria-hidden="true"></span> In-game <strong data-erlc-current>0</strong> / <strong data-erlc-max>50</strong><i aria-hidden="true"></i> Queue <strong data-erlc-queue>0</strong></p>
+            <h1>Clearwater<br />Roleplay</h1>
+            <p class="hero-lead">Experience Florida like never before — your story begins on the Gulf Coast.</p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Get started</a>
+              <a class="button button-secondary" href="https://erlc.gg/join/cwrpvc" target="_blank" rel="noopener">Play on Roblox</a>
+            </div>
+          </div>
+          <div class="hero-visual" aria-hidden="true">
+            <div class="hero-glow"></div>
+            <figure class="hero-frame">
+              <img src="assets/clearwater-police-night.png" alt="" width="1600" height="1060" />
+            </figure>
           </div>
         </div>
+        <div class="hero-fade" aria-hidden="true"></div>
       </section>
 
-      <section class="live-strip" aria-label="Live server information">
-        <div class="page-width live-strip-inner">
+      <section class="trust-band" aria-label="Trusted by the community">
+        <div class="page-width trust-band-inner reveal">
+          <h2 class="trust-fade">Trusted by leading roleplayers</h2>
           <div class="live-metrics">
             <div><strong data-erlc-current>0</strong><span>In-game</span></div>
             <div><strong data-erlc-max>50</strong><span>Max slots</span></div>
@@ -102,10 +115,10 @@
 
       <section class="section story" id="story">
         <div class="page-width story-grid">
-          <figure class="story-media">
-            <img src="assets/clearwater-police-night.png" alt="Clearwater Police SUV on patrol at night" width="1600" height="1060" loading="lazy" />
+          <figure class="story-media reveal">
+            <img src="assets/clearwater-sunset-beach.png" alt="Clearwater sunset over the Gulf Coast" width="1600" height="1060" loading="lazy" />
           </figure>
-          <div class="story-copy">
+          <div class="story-copy reveal">
             <p class="section-kicker">The city</p>
             <h2>Gulf Coast immersion, shift after shift.</h2>
             <p>Clearwater Roleplay brings Pinellas atmosphere to Emergency Response: Liberty County — law enforcement, Fire/EMS, and civilian life with standards that keep every scene sharp.</p>
@@ -120,7 +133,7 @@
 
       <section class="section path" id="departments">
         <div class="page-width path-grid">
-          <div class="path-copy">
+          <div class="path-copy reveal">
             <p class="section-kicker">Departments</p>
             <h2>Pick a path.<br />Earn the board.</h2>
             <p>Apply in Discord, complete training, and move into LEO, Fire/EMS, or civilian roleplay built for ER:LC.</p>
@@ -131,14 +144,14 @@
             </ul>
             <a class="button button-primary" href="https://erlc.gg/join/cwrpvc" target="_blank" rel="noopener">Join the server</a>
           </div>
-          <figure class="path-media">
+          <figure class="path-media reveal">
             <img src="assets/fire-rescue-scene.png" alt="Fire and rescue crews responding to an emergency scene" width="1600" height="1060" loading="lazy" />
           </figure>
         </div>
       </section>
 
       <section class="section internet-cta" id="internet">
-        <div class="page-width internet-cta-inner">
+        <div class="page-width internet-cta-inner reveal">
           <div>
             <p class="section-kicker">Clearwater Internet</p>
             <h2>The community feed.</h2>
@@ -149,7 +162,7 @@
       </section>
 
       <section class="section join" id="join">
-        <div class="page-width join-panel">
+        <div class="page-width join-panel reveal">
           <img class="join-logo" src="assets/clearwater-logo.png" alt="" />
           <h2>Your story begins in Clearwater.</h2>
           <p>Join the Discord, then hop into the ER:LC private server when you’re ready for your first shift.</p>
@@ -172,6 +185,6 @@
       </div>
     </footer>
 
-    <script src="script.js?v=20260813-site-banner"></script>
+    <script src="script.js?v=20260813-anchor-home"></script>
   </body>
 </html>

@@ -898,15 +898,18 @@ function bindReelAutoplay() {
   reelObserver = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
       const video = entry.target.querySelector('video');
-      if (!video) return;
-      if (autoplay && entry.isIntersecting && entry.intersectionRatio > 0.65) {
-        video.muted = !reelsSoundOn;
-        void video.play().catch(() => {
-          // Autoplay with sound can be refused; fall back to a muted play so the reel never stalls.
-          setReelSound(false);
-          void video.play().catch(() => {});
-        });
-      } else {
+      if (entry.isIntersecting && entry.intersectionRatio > 0.65) {
+        const reelId = entry.target.dataset.reelId;
+        if (reelId && reelId !== activeReelId) renderReelPanel(reelId);
+        if (video && autoplay) {
+          video.muted = !reelsSoundOn;
+          void video.play().catch(() => {
+            // Autoplay with sound can be refused; fall back to a muted play so the reel never stalls.
+            setReelSound(false);
+            void video.play().catch(() => {});
+          });
+        }
+      } else if (video) {
         video.pause();
         video.muted = true;
       }
@@ -914,6 +917,10 @@ function bindReelAutoplay() {
   }, { root: viewport, threshold: [0.65] });
   viewport.querySelectorAll('.reel-card').forEach((card) => reelObserver.observe(card));
   bindReelGestures(viewport);
+  const firstCard = viewport.querySelector('.reel-card');
+  const stillVisible = activeReelId
+    && [...viewport.querySelectorAll('.reel-card')].some((card) => card.dataset.reelId === activeReelId);
+  if (firstCard?.dataset.reelId && !stillVisible) renderReelPanel(firstCard.dataset.reelId);
 }
 
 function clearReelTap() {
@@ -1029,6 +1036,101 @@ function updateReelStats(card, reel) {
   }
   const commentCount = card.querySelector('[data-reel-comments] span');
   if (commentCount) commentCount.textContent = comments || '';
+  if (activeReelId === reel.id) syncReelPanelStats(reel);
+}
+
+function reelCommentMarkup(comment) {
+  const author = internetUsers.get(comment.authorId) || {};
+  const isCreator = activeReelId && (allPosts.find((post) => post.id === activeReelId)?.authorId === comment.authorId);
+  return `<article class="reel-comment">
+    <img src="${escapeHtml(author.avatarUrl || comment.avatarUrl || 'assets/clearwater-logo.png')}" alt="" />
+    <div>
+      <header><b>@${escapeHtml(author.username || comment.username || 'member')}</b>${isCreator ? '<em>Creator</em>' : ''}<small>${timeAgo(comment.createdAt)}</small></header>
+      <p>${escapeHtml(comment.content || '')}</p>
+    </div>
+  </article>`;
+}
+
+function syncReelPanelStats(reel) {
+  if (!reel) return;
+  const likes = Array.isArray(reel.likes) ? reel.likes : [];
+  const liked = likes.includes(activeUserId());
+  const comments = allPosts.filter((item) => item.parentId === reel.id).length;
+  const likeButton = document.querySelector('[data-reel-panel-like]');
+  const likeIcon = document.querySelector('[data-reel-panel-like-icon]');
+  const likeCount = document.querySelector('[data-reel-panel-like-count]');
+  const commentCount = document.querySelector('[data-reel-panel-comment-count]');
+  const tabCount = document.querySelector('[data-reel-panel-tab-count]');
+  if (likeButton) {
+    likeButton.classList.toggle('liked', liked);
+    likeButton.dataset.reelLike = reel.id;
+  }
+  if (likeIcon) likeIcon.innerHTML = postActionIcon('like', liked);
+  if (likeCount) likeCount.textContent = String(likes.length);
+  if (commentCount) commentCount.textContent = String(comments);
+  if (tabCount) tabCount.textContent = String(comments);
+}
+
+function renderReelPanel(reelId, { focusInput = false } = {}) {
+  const empty = document.querySelector('[data-reel-panel-empty]');
+  const body = document.querySelector('[data-reel-panel-body]');
+  const reel = allPosts.find((post) => post.id === reelId && post.kind === 'reel' && !post.parentId);
+  if (!reel || !body) {
+    if (empty) empty.hidden = false;
+    if (body) body.hidden = true;
+    return;
+  }
+  activeReelId = reelId;
+  const author = internetUsers.get(reel.authorId) || {};
+  const displayName = author.displayName || reel.displayName || reel.username || 'Member';
+  const username = author.username || reel.username || 'member';
+  const avatarUrl = author.avatarUrl || reel.avatarUrl || 'assets/clearwater-logo.png';
+  const following = socialState.following.includes(reel.authorId);
+  const isSelf = reel.authorId === activeUserId();
+  if (empty) empty.hidden = true;
+  body.hidden = false;
+  const setText = (selector, value) => {
+    const node = document.querySelector(selector);
+    if (node) node.textContent = value;
+  };
+  const avatar = document.querySelector('[data-reel-panel-avatar]');
+  if (avatar) avatar.src = avatarUrl;
+  setText('[data-reel-panel-name]', displayName);
+  setText('[data-reel-panel-handle]', `@${username}`);
+  setText('[data-reel-panel-time]', timeAgo(reel.createdAt));
+  setText('[data-reel-panel-caption]', reel.content || '');
+  const caption = document.querySelector('[data-reel-panel-caption]');
+  if (caption) caption.hidden = !reel.content;
+  const authorButton = document.querySelector('[data-reel-panel-author]');
+  if (authorButton) authorButton.dataset.openMember = reel.authorId;
+  const follow = document.querySelector('[data-reel-panel-follow]');
+  if (follow) {
+    follow.hidden = isSelf || !currentUserId;
+    follow.textContent = following ? 'Following' : 'Follow';
+    follow.classList.toggle('following', following);
+    follow.dataset.reelPanelFollow = reel.authorId;
+  }
+  const share = document.querySelector('[data-reel-panel-share]');
+  if (share) share.dataset.reelShare = reel.id;
+  const selfAvatar = document.querySelector('[data-reel-panel-self-avatar]');
+  if (selfAvatar) selfAvatar.src = document.querySelector('[data-avatar]')?.src || 'assets/clearwater-logo.png';
+  syncReelPanelStats(reel);
+  const comments = allPosts
+    .filter((item) => item.parentId === reelId)
+    .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
+  const panelList = document.querySelector('[data-reel-panel-comments]');
+  if (panelList) {
+    panelList.innerHTML = comments.length
+      ? comments.map((comment) => reelCommentMarkup(comment)).join('')
+      : '<p class="reels-empty">No comments yet. Be the first.</p>';
+  }
+  if (focusInput) document.querySelector('[data-reel-panel-comment-input]')?.focus();
+}
+
+function setActiveReel(reelId, { openSheet = false, focusInput = false } = {}) {
+  if (!reelId) return;
+  renderReelPanel(reelId, { focusInput: focusInput && !openSheet });
+  if (openSheet) openReelComments(reelId);
 }
 
 function reelMediaProxyUrl(reelId, kind = 'video') {
@@ -1068,6 +1170,8 @@ function renderReels() {
   if (!reels.length) {
     viewport.dataset.reelSignature = '';
     viewport.innerHTML = '<div class="reels-empty"><p>No Reels yet.</p><p>Post a photo or short video to start the feed.</p></div>';
+    activeReelId = null;
+    renderReelPanel('');
     return;
   }
   // Patch counts in place when the line-up is unchanged so liking never restarts playback or loses scroll position.
@@ -1075,11 +1179,27 @@ function renderReels() {
   const cards = viewport.querySelectorAll('.reel-card');
   if (viewport.dataset.reelSignature === signature && cards.length === reels.length) {
     cards.forEach((card, index) => updateReelStats(card, reels[index]));
+    if (activeReelId) {
+      const active = reels.find((reel) => reel.id === activeReelId);
+      if (active) {
+        syncReelPanelStats(active);
+        const panelList = document.querySelector('[data-reel-panel-comments]');
+        const composing = document.querySelector('[data-reel-panel-comment-input]');
+        if (panelList && document.activeElement !== composing) {
+          const comments = allPosts
+            .filter((item) => item.parentId === activeReelId)
+            .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
+          panelList.innerHTML = comments.length
+            ? comments.map((comment) => reelCommentMarkup(comment)).join('')
+            : '<p class="reels-empty">No comments yet. Be the first.</p>';
+        }
+      }
+    }
     return;
   }
   viewport.dataset.reelSignature = signature;
   clearReelTap();
-  const anchorId = [...cards].find((card) => card.offsetTop + card.offsetHeight > viewport.scrollTop + 8)?.dataset.reelId || '';
+  const anchorId = [...cards].find((card) => card.offsetTop + card.offsetHeight > viewport.scrollTop + 8)?.dataset.reelId || activeReelId || '';
   viewport.innerHTML = reels.map((reel) => {
     const likes = Array.isArray(reel.likes) ? reel.likes : [];
     const liked = likes.includes(activeUserId());
@@ -1129,13 +1249,27 @@ function openReelComments(reelId) {
   const sheet = document.querySelector('[data-reel-comments]');
   const list = document.querySelector('[data-reel-comment-list]');
   if (!sheet || !list) return;
-  activeReelId = reelId;
+  renderReelPanel(reelId);
   const comments = allPosts.filter((item) => item.parentId === reelId).sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
   list.innerHTML = comments.length
-    ? comments.map((comment) => `<article class="reel-comment"><img src="${escapeHtml(comment.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><div><b>@${escapeHtml(comment.username || 'member')}</b><p>${escapeHtml(comment.content || '')}</p><small>${timeAgo(comment.createdAt)}</small></div></article>`).join('')
+    ? comments.map((comment) => reelCommentMarkup(comment)).join('')
     : '<p class="reels-empty">No comments yet. Be the first.</p>';
   sheet.hidden = false;
   document.querySelector('[data-reel-comment-input]')?.focus();
+}
+
+async function submitReelComment(input) {
+  const text = String(input?.value || '').trim();
+  if (!activeReelId || !text) return;
+  if (!currentUserId) {
+    window.location.href = SIGNIN_INTERNET;
+    return;
+  }
+  await postInteraction({ postId: activeReelId, type: 'reply', content: text });
+  if (input) input.value = '';
+  renderReelPanel(activeReelId);
+  const sheet = document.querySelector('[data-reel-comments]');
+  if (sheet && !sheet.hidden) openReelComments(activeReelId);
 }
 
 function renderTrending() {
@@ -3526,10 +3660,32 @@ document.addEventListener('click', (event) => {
   const reelLike = event.target.closest('[data-reel-like]');
   if (reelLike) { void handlePostEngagement('like', reelLike.dataset.reelLike, reelLike); return; }
   const reelComments = event.target.closest('[data-reel-comments]');
-  if (reelComments) { openReelComments(reelComments.dataset.reelComments); return; }
+  if (reelComments) {
+    const mobileSheet = window.matchMedia('(max-width: 900px)').matches;
+    setActiveReel(reelComments.dataset.reelComments, { openSheet: mobileSheet, focusInput: true });
+    return;
+  }
   if (event.target.closest('[data-close-reel-comments]')) {
     document.querySelector('[data-reel-comments]')?.setAttribute('hidden', '');
-    activeReelId = null;
+    return;
+  }
+  const reelPanelLike = event.target.closest('[data-reel-panel-like]');
+  if (reelPanelLike) {
+    void handlePostEngagement('like', reelPanelLike.dataset.reelLike || activeReelId, reelPanelLike);
+    return;
+  }
+  if (event.target.closest('[data-reel-panel-comment-focus]')) {
+    document.querySelector('[data-reel-panel-comment-input]')?.focus();
+    return;
+  }
+  const reelPanelFollow = event.target.closest('[data-reel-panel-follow]');
+  if (reelPanelFollow) {
+    const targetId = reelPanelFollow.dataset.reelPanelFollow;
+    if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
+    if (!targetId) return;
+    void socialAction('follow', { targetId, enabled: !socialState.following.includes(targetId) })
+      .then(() => { if (activeReelId) renderReelPanel(activeReelId); })
+      .catch((error) => void siteAlert(error.message || 'Could not update follow.'));
     return;
   }
   const reelShare = event.target.closest('[data-reel-share]');
@@ -4029,13 +4185,16 @@ document.querySelector('[data-reel-form]')?.addEventListener('submit', async (ev
 });
 document.querySelector('[data-reel-comment-form]')?.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const input = document.querySelector('[data-reel-comment-input]');
-  const text = String(input?.value || '').trim();
-  if (!activeReelId || !text) return;
   try {
-    await postInteraction({ postId: activeReelId, type: 'reply', content: text });
-    if (input) input.value = '';
-    openReelComments(activeReelId);
+    await submitReelComment(document.querySelector('[data-reel-comment-input]'));
+  } catch (exception) {
+    void siteAlert(exception.message || 'Could not post this comment.');
+  }
+});
+document.querySelector('[data-reel-panel-comment-form]')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  try {
+    await submitReelComment(document.querySelector('[data-reel-panel-comment-input]'));
   } catch (exception) {
     void siteAlert(exception.message || 'Could not post this comment.');
   }
