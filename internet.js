@@ -96,10 +96,11 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260813-sponsored-placements';
+const INTERNET_VERSION = '20260813-ad-logo-format';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
+let adLogo = null;
 let adPlacement = 'sidebar';
 let adVideoSeconds = 0;
 const MAX_AD_MEDIA_BYTES = 40 * 1024 * 1024;
@@ -3482,6 +3483,11 @@ function findCachedAd(adId = '') {
     || null;
 }
 
+function adBrandLogoUrl(ad) {
+  const custom = safeImageUrl(ad?.logoUrl);
+  return custom || 'assets/clearwater-logo.png';
+}
+
 function sponsoredFeedMarkup(ad) {
   if (!ad) return '';
   const media = safeVideoUrl(ad.videoUrl)
@@ -3489,12 +3495,11 @@ function sponsoredFeedMarkup(ad) {
     : (safeImageUrl(ad.imageUrl) ? `<img class="sponsored-feed-media" src="${escapeHtml(ad.imageUrl)}" alt="" />` : '');
   return `<article class="post sponsored-feed-card" data-sponsored-feed-id="${escapeHtml(ad.id)}">
     <div class="post-top">
-      <img class="post-avatar" src="assets/clearwater-logo.png" alt="" />
+      <img class="post-avatar" src="${escapeHtml(adBrandLogoUrl(ad))}" alt="" />
       <div>
         <div class="post-author sponsored-feed-author">
           <span class="post-name">${escapeHtml(ad.businessName || 'Clearwater Ads')}</span>
           <span class="sponsored-pill">Sponsored</span>
-          <span class="post-meta">${escapeHtml(ad.advertiserName || 'Advertiser')}</span>
         </div>
       </div>
     </div>
@@ -3520,8 +3525,8 @@ function sponsoredReelMarkup(ad) {
     <div class="reel-meta">
       <div class="reel-meta-user">
         <button type="button" data-open-ad-account data-ad-id="${escapeHtml(ad.id)}" data-ad-advertiser-id="${escapeHtml(ad.advertiserId || '')}" data-ad-advertiser-username="${escapeHtml(ad.advertiserUsername || '')}" data-ad-advertiser-name="${escapeHtml(ad.advertiserName || '')}">
-          <img src="assets/clearwater-logo.png" alt="" />
-          <span class="reel-author"><b>${escapeHtml(ad.businessName || 'Clearwater Ads')}</b><small>${escapeHtml(ad.advertiserName || 'Advertiser')}</small></span>
+          <img src="${escapeHtml(adBrandLogoUrl(ad))}" alt="" />
+          <span class="reel-author"><b>${escapeHtml(ad.businessName || 'Clearwater Ads')}</b><small>Sponsored</small></span>
         </button>
       </div>
       <p><b>${escapeHtml(ad.title)}</b>${ad.body ? ` — ${escapeHtml(ad.body)}` : ''}</p>
@@ -3556,7 +3561,7 @@ function renderSidebarAds(ads = sidebarAds) {
     ? `<video class="sidebar-ad-promo-media" src="${escapeHtml(ad.videoUrl)}" muted loop playsinline autoplay></video>`
     : (safeImageUrl(ad.imageUrl) ? `<img class="sidebar-ad-promo-media" src="${escapeHtml(ad.imageUrl)}" alt="" />` : '');
   list.innerHTML = `<article class="sidebar-ad-promo" data-sidebar-ad-id="${escapeHtml(ad.id)}">
-    <header class="sidebar-ad-promo-brand"><img src="assets/clearwater-logo.png" alt="" /><span>${escapeHtml(ad.businessName)}</span><i>Sponsored</i></header>
+    <header class="sidebar-ad-promo-brand"><img src="${escapeHtml(adBrandLogoUrl(ad))}" alt="" /><span>${escapeHtml(ad.businessName)}</span><i>Sponsored</i></header>
     ${media}
     <h3>${escapeHtml(ad.title)}</h3>
     <p>${escapeHtml(ad.body)}</p>
@@ -3750,6 +3755,18 @@ function renderAdMediaPreview() {
   preview.innerHTML = adMedia.isVideo
     ? `<video src="${escapeHtml(adMedia.previewUrl)}" muted loop playsinline controls></video><button type="button" data-remove-ad-media>Remove media</button>`
     : `<img src="${escapeHtml(adMedia.previewUrl)}" alt="Ad media preview" /><button type="button" data-remove-ad-media>Remove media</button>`;
+}
+
+function renderAdLogoPreview() {
+  const preview = document.querySelector('[data-ad-logo-preview]');
+  if (!preview) return;
+  if (!adLogo?.previewUrl) {
+    preview.hidden = true;
+    preview.innerHTML = '';
+    return;
+  }
+  preview.hidden = false;
+  preview.innerHTML = `<img src="${escapeHtml(adLogo.previewUrl)}" alt="Ad logo preview" /><button type="button" data-remove-ad-logo>Remove logo</button>`;
 }
 
 async function uploadAdMedia(file, isVideo) {
@@ -6178,6 +6195,39 @@ document.querySelectorAll('[data-ad-placement-option]').forEach((button) => {
   });
 });
 
+document.querySelector('[data-ad-logo]')?.addEventListener('change', async (event) => {
+  const file = event.target.files?.[0] || null;
+  if (adLogo?.previewUrl) URL.revokeObjectURL(adLogo.previewUrl);
+  adLogo = null;
+  if (!file) {
+    renderAdLogoPreview();
+    return;
+  }
+  if (!/^image\/(png|jpeg|webp|gif)$/i.test(file.type || '')) {
+    event.target.value = '';
+    await siteAlert('Choose a PNG, JPEG, WebP, or GIF logo.');
+    renderAdLogoPreview();
+    return;
+  }
+  if (file.size > MAX_AD_MEDIA_BYTES) {
+    event.target.value = '';
+    await siteAlert('Logo images must be under 40 MB.');
+    renderAdLogoPreview();
+    return;
+  }
+  adLogo = { file, previewUrl: URL.createObjectURL(file) };
+  renderAdLogoPreview();
+});
+
+document.querySelector('[data-ad-logo-preview]')?.addEventListener('click', (event) => {
+  if (!event.target.closest('[data-remove-ad-logo]')) return;
+  if (adLogo?.previewUrl) URL.revokeObjectURL(adLogo.previewUrl);
+  adLogo = null;
+  const input = document.querySelector('[data-ad-logo]');
+  if (input) input.value = '';
+  renderAdLogoPreview();
+});
+
 document.querySelector('[data-ad-media]')?.addEventListener('change', async (event) => {
   const input = event.target;
   const file = input?.files?.[0];
@@ -6236,6 +6286,12 @@ document.querySelector('[data-ad-form]')?.addEventListener('submit', async (even
     }
     let image = null;
     let video = null;
+    let logo = null;
+    if (adLogo?.file) {
+      if (status) status.textContent = 'Uploading ad logo...';
+      const uploadedLogo = await uploadAdMedia(adLogo.file, false);
+      logo = uploadedLogo.image || null;
+    }
     if (adMedia?.file) {
       if (status) status.textContent = 'Uploading ad media...';
       const media = await uploadAdMedia(adMedia.file, adMedia.isVideo);
@@ -6256,6 +6312,7 @@ document.querySelector('[data-ad-form]')?.addEventListener('submit', async (even
         videoSeconds: adPlacement === 'reel' ? adVideoSeconds : 0,
         image,
         video,
+        logo,
       }),
     });
     const result = await readApiJson(response, 'Could not submit this ad.');
@@ -6270,10 +6327,15 @@ document.querySelector('[data-ad-form]')?.addEventListener('submit', async (even
     document.querySelector('[data-ad-boost]').value = '0';
     if (adMedia?.previewUrl) URL.revokeObjectURL(adMedia.previewUrl);
     adMedia = null;
+    if (adLogo?.previewUrl) URL.revokeObjectURL(adLogo.previewUrl);
+    adLogo = null;
     adVideoSeconds = 0;
     const mediaInput = document.querySelector('[data-ad-media]');
     if (mediaInput) mediaInput.value = '';
+    const logoInput = document.querySelector('[data-ad-logo]');
+    if (logoInput) logoInput.value = '';
     renderAdMediaPreview();
+    renderAdLogoPreview();
     syncAdBoostLabels();
     if (status) {
       status.dataset.tone = 'ok';

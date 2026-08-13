@@ -4,7 +4,7 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260813-sponsored-placements';
+const INTERNET_VERSION = '20260813-ad-logo-format';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
@@ -377,6 +377,7 @@ export default async function handler(request, response) {
         videoSeconds: Number(body.videoSeconds) || 0,
         image: mediaPayload(body.image, 'image'),
         video: mediaPayload(body.video, 'video'),
+        logo: mediaPayload(body.logo, 'image'),
         actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges },
       };
     } else if (body.action === 'ad-review') {

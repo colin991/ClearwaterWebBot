@@ -14,7 +14,7 @@
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <link rel="apple-touch-icon" href="assets/clearwater-logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260813-reels-volume-hover" />
+    <link rel="stylesheet" href="internet.css?v=20260813-ad-logo-format" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260813-coming-soon"></script>
   </head>
@@ -300,6 +300,11 @@
                     <span>Ad copy</span>
                     <textarea data-ad-body maxlength="220" placeholder="Tell people what the department or business offers in Clearwater RP." required></textarea>
                   </label>
+                  <label>
+                    <span>Logo <small>(optional)</small></span>
+                    <input data-ad-logo type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                  </label>
+                  <div class="wallet-ad-media-preview" data-ad-logo-preview hidden></div>
                   <label>
                     <span data-ad-media-label>Image or short video</span>
                     <input data-ad-media type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" />
@@ -669,6 +674,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260813-reels-audio"></script>
+    <script src="internet.js?v=20260813-ad-logo-format"></script>
   </body>
 </html>

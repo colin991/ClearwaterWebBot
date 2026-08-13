@@ -2886,6 +2886,16 @@ function sanitizeAdMedia(image, video) {
   };
 }
 
+function sanitizeAdLogo(logo) {
+  if (!logo) return '';
+  const hosted = hostedMediaUrl(logo?.url);
+  if (hosted) return hosted;
+  const dataUrl = text(logo?.dataUrl, 900_000);
+  if (/^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(dataUrl)) return dataUrl;
+  if (logo?.url || logo?.dataUrl) throw new Error('Choose a supported logo image (PNG, JPEG, WebP, or GIF)');
+  return '';
+}
+
 function publicAd(ad, { owner = false } = {}) {
   const startsAt = ad.startsAt || null;
   const endsAt = ad.endsAt || null;
@@ -2901,6 +2911,7 @@ function publicAd(ad, { owner = false } = {}) {
     businessName: ad.businessName,
     title: ad.title,
     body: ad.body,
+    logoUrl: ad.logoUrl || '',
     imageUrl: ad.imageUrl || '',
     videoUrl: ad.videoUrl || '',
     placement,
@@ -2960,6 +2971,7 @@ export function purchaseInternetAd(store, {
   boost = 0,
   image = null,
   video = null,
+  logo = null,
   placement = 'sidebar',
   videoSeconds = 0,
 } = {}) {
@@ -2967,6 +2979,7 @@ export function purchaseInternetAd(store, {
   assertNotBanned(user);
   const copy = assertAdCopy({ category, businessName, title, body });
   const media = sanitizeAdMedia(image, video);
+  const logoUrl = sanitizeAdLogo(logo);
   const adPlacement = normalizeAdPlacement(placement);
   const seconds = adPlacement === 'reel' ? normalizeVideoSeconds(videoSeconds) : 0;
   if (adPlacement === 'reel' && !media.videoUrl) {
@@ -2991,6 +3004,7 @@ export function purchaseInternetAd(store, {
     advertiserUsername: text(user.username, 80),
     ...copy,
     ...media,
+    logoUrl,
     placement: adPlacement,
     videoSeconds: seconds,
     weight: 1 + boostLevels,
