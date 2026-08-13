@@ -102,9 +102,12 @@ async function syncGroupJoinRequests(client, config) {
 
   const eligible = await eligibleRobloxIds(guild, config.robloxGroupAllowedRoleIds);
   const requests = await pendingJoinRequests(config.robloxGroupId, config.robloxGroupApiKey);
-  logger.info(`Roblox group sync found ${requests.length} pending join request(s) and ${eligible.allowed.size} Melonly-linked Roblox account(s).`);
+  logger.info(`Roblox group sync reviewing ${requests.length} pending join request(s) (including any backlog) against ${eligible.allowed.size} Melonly-linked Roblox account(s).`);
   let accepted = 0;
   let declined = 0;
+  let failed = 0;
+  const declinedLines = [];
+
   for (const request of requests) {
     const robloxId = joinRequestRobloxId(request);
     const requestId = request?.id
@@ -120,48 +123,83 @@ async function syncGroupJoinRequests(client, config) {
       logger.warn(`Skipped a Roblox group join request because it did not include an ID. Fields: ${Object.keys(request || {}).join(', ') || 'none'}.`);
       continue;
     }
-    let discordId = robloxId ? eligible.allowed.get(robloxId) : null;
-    let matchSource = 'Melonly Verify';
-    if (!discordId && robloxId) {
-      const username = await robloxUsername(robloxId).catch(() => null);
-      const nicknameMatch = username && eligible.nicknameFallbacks.find((entry) => entry.nickname.includes(username.toLowerCase()));
-      if (nicknameMatch) {
-        discordId = nicknameMatch.discordId;
-        matchSource = 'Discord server nickname';
+
+    const createdAt = request?.createTime || request?.createdTime || request?.createdAt || null;
+    const pendingSince = createdAt
+      ? `\nPending since: <t:${Math.floor(new Date(createdAt).getTime() / 1000)}:R>`
+      : '';
+
+    try {
+      let discordId = robloxId ? eligible.allowed.get(robloxId) : null;
+      let matchSource = 'Melonly Verify';
+      if (!discordId && robloxId) {
+        const username = await robloxUsername(robloxId).catch(() => null);
+        const nicknameMatch = username && eligible.nicknameFallbacks.find((entry) => entry.nickname.includes(username.toLowerCase()));
+        if (nicknameMatch) {
+          discordId = nicknameMatch.discordId;
+          matchSource = 'Discord server nickname';
+        }
       }
-    }
-    if (robloxId && discordId) {
-      await groupFetch(`/${requestName}:accept`, config.robloxGroupApiKey, {
+
+      if (robloxId && discordId) {
+        await groupFetch(`/${requestName}:accept`, config.robloxGroupApiKey, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+        accepted += 1;
+        logger.info(`Accepted Roblox group join request for Discord ${discordId} / Roblox ${robloxId}.`);
+        await sendGroupLog(
+          client,
+          config,
+          'Roblox group request accepted',
+          `<@${discordId}> was accepted into the Roblox group.\nRoblox user ID: \`${robloxId}\`\nMatched through: ${matchSource}${pendingSince}`,
+          0x38d9b0,
+        );
+        continue;
+      }
+
+      // Decline anyone without an allowed Discord role — including older pending backlog.
+      await groupFetch(`/${requestName}:decline`, config.robloxGroupApiKey, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: '{}',
       });
-      accepted += 1;
-      await sendGroupLog(client, config, 'Roblox group request accepted', `<@${discordId}> was accepted into the Roblox group.\nRoblox user ID: \`${robloxId}\`\nMatched through: ${matchSource}`, 0x38d9b0);
-      continue;
+      declined += 1;
+      const username = robloxId ? await robloxUsername(robloxId).catch(() => null) : null;
+      const who = username
+        ? `Roblox user \`${username}\` (\`${robloxId}\`)`
+        : (robloxId ? `Roblox user ID \`${robloxId}\`` : 'An unknown Roblox user');
+      const line = `${who}${createdAt ? ` · pending since ${createdAt}` : ''}`;
+      declinedLines.push(line);
+      logger.info(`Declined Roblox group join request: ${who.replace(/`/g, '')} (no allowed Discord role).`);
+      await sendGroupLog(
+        client,
+        config,
+        'Roblox group request declined',
+        `${who} was declined because they are not a Discord member with an allowed group role.${pendingSince}`,
+        0xf0a84b,
+      );
+    } catch (error) {
+      failed += 1;
+      logger.error(`Failed to process Roblox group join request ${requestName}`, error);
     }
+  }
 
-    // No allowed Discord role (or no Melonly/nickname match to a member who has one).
-    await groupFetch(`/${requestName}:decline`, config.robloxGroupApiKey, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    });
-    declined += 1;
-    const username = robloxId ? await robloxUsername(robloxId).catch(() => null) : null;
-    const who = username
-      ? `Roblox user \`${username}\` (\`${robloxId}\`)`
-      : (robloxId ? `Roblox user ID \`${robloxId}\`` : 'An unknown Roblox user');
+  if (declined) {
+    const preview = declinedLines.slice(0, 15).map((line) => `• ${line}`).join('\n');
+    const extra = declinedLines.length > 15 ? `\n…and ${declinedLines.length - 15} more.` : '';
     await sendGroupLog(
       client,
       config,
-      'Roblox group request declined',
-      `${who} was declined because they are not a Discord member with an allowed group role.`,
+      'Roblox pending queue cleared',
+      `Declined **${declined}** pending join request(s) with no allowed Discord role (includes older backlog).\n\n${preview}${extra}`,
       0xf0a84b,
     );
   }
-  if (accepted || declined) {
-    logger.info(`Roblox group sync accepted ${accepted} and declined ${declined} join request(s).`);
+
+  if (accepted || declined || failed) {
+    logger.info(`Roblox group sync finished: accepted ${accepted}, declined ${declined}, failed ${failed}.`);
   }
 }
 
