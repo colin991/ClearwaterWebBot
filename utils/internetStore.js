@@ -14,11 +14,15 @@ const emptyStore = Object.freeze({
   reports: [],
   logs: [],
   ipBans: [],
+  staffBanLog: [],
   creditTransfers: [],
   siteBanner: null,
   officialProfile: {},
   settings: { pausePosts: false, pauseReels: false, pauseMessages: false },
 });
+
+const LIMITED_STAFF_BAN_LIMIT = 3;
+const LIMITED_STAFF_BAN_WINDOW_MS = 60 * 60 * 1000;
 
 let liveStore = null;
 let storeQueue = Promise.resolve();
@@ -79,6 +83,7 @@ function normalizeInternetStore(data) {
     reports: Array.isArray(source.reports) ? source.reports : [],
     logs: Array.isArray(source.logs) ? source.logs : [],
     ipBans: Array.isArray(source.ipBans) ? source.ipBans : [],
+    staffBanLog: Array.isArray(source.staffBanLog) ? source.staffBanLog : [],
     creditTransfers: Array.isArray(source.creditTransfers) ? source.creditTransfers : [],
     siteBanner: sanitizeSiteBanner(source.siteBanner),
     officialProfile: source.officialProfile && typeof source.officialProfile === 'object' ? source.officialProfile : {},
@@ -1417,6 +1422,7 @@ export function createInternetReport(store, { postId, actor, reason }) {
     authorUsername: text(post.username, 80),
     authorAvatarUrl: text(post.avatarUrl, 300) || null,
     content: post.content,
+    hasVideo: Boolean(post.videoUrl) || kind === 'reel',
     reason: reportReason,
     createdAt: new Date().toISOString(),
     status: 'open',
@@ -2022,8 +2028,13 @@ function enrichInternetReport(store, report) {
   const author = store.users[String(report.authorId || '')] || {};
   const reporter = report.reporterId && report.reporterId !== 'automod' ? store.users[String(report.reporterId)] : null;
   const target = report.targetId ? store.users[String(report.targetId)] : null;
+  const post = report.postId ? store.posts.find((item) => item.id === report.postId) : null;
+  const hasVideo = report.hasVideo === true
+    || report.kind === 'reel'
+    || Boolean(post?.videoUrl);
   return {
     ...report,
+    hasVideo,
     authorName: report.authorName || author.displayName || 'Discord user',
     authorUsername: report.authorUsername || author.username || '',
     authorAvatarUrl: author.avatarUrl || report.authorAvatarUrl || null,
@@ -2032,6 +2043,27 @@ function enrichInternetReport(store, report) {
     targetUsername: target?.username || null,
     targetAvatarUrl: target?.avatarUrl || null,
   };
+}
+
+/** Limited Management role: at most 3 bans in a rolling hour. */
+export function assertLimitedStaffBanQuota(store, staffId) {
+  const id = String(staffId || '');
+  if (!/^\d{16,22}$/.test(id)) throw new Error('Staff identity required');
+  const cutoff = Date.now() - LIMITED_STAFF_BAN_WINDOW_MS;
+  store.staffBanLog = (Array.isArray(store.staffBanLog) ? store.staffBanLog : [])
+    .filter((entry) => entry?.staffId && new Date(entry.at).getTime() >= cutoff);
+  const used = store.staffBanLog.filter((entry) => entry.staffId === id).length;
+  if (used >= LIMITED_STAFF_BAN_LIMIT) {
+    throw new Error('Limited staff can ban at most 3 people per hour.');
+  }
+}
+
+export function recordLimitedStaffBan(store, staffId) {
+  const id = String(staffId || '');
+  if (!/^\d{16,22}$/.test(id)) return;
+  store.staffBanLog = Array.isArray(store.staffBanLog) ? store.staffBanLog : [];
+  store.staffBanLog.unshift({ staffId: id, at: new Date().toISOString() });
+  store.staffBanLog = store.staffBanLog.slice(0, 200);
 }
 
 export function moderationSnapshot(store) {

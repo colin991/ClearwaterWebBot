@@ -2,11 +2,11 @@ import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
-import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges } from './staffRanks.js';
+import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess, LIMITED_STAFF_FORBIDDEN_ACTIONS } from './staffRanks.js';
 import { dropLocationNameCandidates, findPlayerDropLocation } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
-import { AutomodHoldError, adjustInternetCredits, applyStaffSiteAction, applyStaffUserAction, banKnownInternetIps, claimInternetDailyCredits, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, internetProfile, moderationSnapshot, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, respondCreditTransfer, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetAccountActive, setInternetBan, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot } from './internetStore.js';
+import { AutomodHoldError, adjustInternetCredits, applyStaffSiteAction, applyStaffUserAction, assertLimitedStaffBanQuota, banKnownInternetIps, claimInternetDailyCredits, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, internetProfile, moderationSnapshot, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, readInternetStore, recordInternetIpHash, recordLimitedStaffBan, respondCreditTransfer, reviewInternetReport, saveInternetStore, sendInternetMessage, setInternetAccountActive, setInternetBan, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot } from './internetStore.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -197,11 +197,11 @@ export function startStatusServer(client, config) {
         || await client.guilds.fetch(CLEARWATER_GUILD_ID).catch(() => null);
       const member = guild ? await guild.members.fetch(discordId).catch(() => null) : null;
       const staffRank = getHighestStaffRank(member);
-      const allowed = config.ownerDiscordIds.includes(discordId)
-        || staffRank?.owner === true
-        || Boolean(member && config.ownerRoleIds.some((roleId) => member.roles.cache.has(roleId)));
+      const panelAccess = getStaffPanelAccess(member, { ownerDiscordIds: config.ownerDiscordIds || [] });
+      const allowed = panelAccess === 'full';
       return json(response, 200, {
         allowed,
+        panelAccess,
         member: Boolean(member),
         staffRank: staffRank?.name || null,
         badges: getInternetBadges(member),
@@ -442,47 +442,64 @@ export function startStatusServer(client, config) {
           const guild = client.guilds.cache.get(CLEARWATER_GUILD_ID)
             || await client.guilds.fetch(CLEARWATER_GUILD_ID).catch(() => null);
           const reviewer = guild ? await guild.members.fetch(reviewerId).catch(() => null) : null;
-          const reviewerRank = getHighestStaffRank(reviewer);
-          const reviewerAllowed = config.ownerDiscordIds.includes(reviewerId)
-            || reviewerRank?.owner === true
-            || Boolean(reviewer && config.ownerRoleIds.some((roleId) => reviewer.roles.cache.has(roleId)));
-          if (!reviewerAllowed) return json(response, 403, { error: 'Owner access required' });
+          const panelAccess = getStaffPanelAccess(reviewer, { ownerDiscordIds: config.ownerDiscordIds || [] })
+            || (body.staffPanel === 'full' || body.staffPanel === 'limited' ? body.staffPanel : null);
+          if (!panelAccess) return json(response, 403, { error: 'Staff access required' });
+          const modAction = String(body.moderationAction || body.action || '');
+          if (panelAccess === 'limited' && modAction === 'ban' && body.decision !== 'deny') {
+            assertLimitedStaffBanQuota(store, reviewerId);
+          }
           const report = reviewInternetReport(store, {
             ...body,
             action: body.moderationAction || body.action,
           });
+          if (panelAccess === 'limited' && modAction === 'ban' && body.decision !== 'deny') {
+            recordLimitedStaffBan(store, reviewerId);
+          }
           await saveInternetStore(store);
           return json(response, 200, { report });
         }
 
         if (body.action === 'moderation') {
-          if (!body.owner) return json(response, 403, { error: 'Owner access required' });
+          if (!['full', 'limited'].includes(body.staffPanel)) return json(response, 403, { error: 'Staff access required' });
           const cleared = clearExpiredInternetBans(store);
           if (cleared) await saveInternetStore(store);
           return json(response, 200, moderationSnapshot(store));
         }
 
         if (body.action === 'staff-user-detail') {
-          if (!body.owner) return json(response, 403, { error: 'Owner access required' });
+          if (!['full', 'limited'].includes(body.staffPanel)) return json(response, 403, { error: 'Staff access required' });
           return json(response, 200, staffUserDetail(store, body.targetId));
         }
 
         if (body.action === 'staff-user') {
-          if (!body.owner) return json(response, 403, { error: 'Owner access required' });
+          if (!['full', 'limited'].includes(body.staffPanel)) return json(response, 403, { error: 'Staff access required' });
+          const staffAction = String(body.staffAction || '');
+          if (body.staffPanel === 'limited' && LIMITED_STAFF_FORBIDDEN_ACTIONS.includes(staffAction)) {
+            return json(response, 403, { error: 'Limited staff cannot use verification or network tools.' });
+          }
+          const actorId = String(body.actor?.id || '');
+          if (body.staffPanel === 'limited' && staffAction === 'ban') {
+            assertLimitedStaffBanQuota(store, actorId);
+          }
+          if (body.staffPanel === 'limited') body.ipBan = false;
           const detail = applyStaffUserAction(store, body);
+          if (body.staffPanel === 'limited' && staffAction === 'ban') {
+            recordLimitedStaffBan(store, actorId);
+          }
           await saveInternetStore(store);
           return json(response, 200, { ...detail, snapshot: moderationSnapshot(store) });
         }
 
         if (body.action === 'staff-wallet') {
-          if (!body.owner) return json(response, 403, { error: 'Owner access required' });
+          if (body.staffPanel !== 'full') return json(response, 403, { error: 'Full staff access required' });
           const result = adjustInternetCredits(store, body);
           await saveInternetStore(store);
           return json(response, 200, { ...staffUserDetail(store, body.targetId), wallet: result.wallet, applied: result.applied, snapshot: moderationSnapshot(store) });
         }
 
         if (body.action === 'staff-site') {
-          if (!body.owner) return json(response, 403, { error: 'Owner access required' });
+          if (body.staffPanel !== 'full') return json(response, 403, { error: 'Full staff access required' });
           const settings = applyStaffSiteAction(store, body);
           await saveInternetStore(store);
           return json(response, 200, { settings, snapshot: moderationSnapshot(store) });
@@ -491,8 +508,8 @@ export function startStatusServer(client, config) {
         if (!['verify', 'ban'].includes(body.action)) {
           return json(response, 400, { error: `Unsupported action: ${String(body.action || 'unknown')}` });
         }
-        if (!body.owner) {
-          return json(response, 403, { error: 'Owner access required' });
+        if (body.staffPanel !== 'full' && body.owner !== true) {
+          return json(response, 403, { error: 'Full staff access required' });
         }
 
         const targetId = String(body.targetId || '').trim();

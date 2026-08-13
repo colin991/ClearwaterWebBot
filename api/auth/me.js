@@ -23,6 +23,7 @@ export default async function handler(request, response) {
         bannerColor: user.bannerColor || null,
         bio: user.bio || '',
         owner: staffAccess.allowed,
+        staffPanel: staffAccess.panelAccess,
         staffRank: staffAccess.staffRank,
         badges: staffAccess.badges,
       },

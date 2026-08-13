@@ -279,6 +279,8 @@ const inFlightLikes = new Set();
 let accountBanned = false;
 let activeBan = null;
 let sessionIsOwner = false;
+let sessionStaffPanel = null;
+let sessionCanStaff = false;
 let activeAccount = 'personal';
 let sessionUser = null;
 let pendingReportReview = null;
@@ -1701,7 +1703,7 @@ function renderBookmarks() {
 function showView(view) {
   const availableViews = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post']);
   let activeView = availableViews.has(view) ? view : 'home';
-  if (activeView === 'staff' && !sessionIsOwner) activeView = 'home';
+  if (activeView === 'staff' && !sessionCanStaff) activeView = 'home';
   const shell = document.querySelector('.internet-shell');
   const feed = document.querySelector('.internet-feed');
   shell?.classList.toggle('staff-mode', activeView === 'staff');
@@ -1963,6 +1965,9 @@ function staffCaseMarkup(selected) {
       <section class="staff-case-panel">
         <h4>Reported content</h4>
         <blockquote class="staff-case-copy">${escapeHtml(selected.content || 'No text captured')}</blockquote>
+        ${selected.hasVideo && selected.postId
+          ? `<div class="staff-case-links"><button type="button" class="staff-action-btn primary" data-staff-view-video="${escapeHtml(selected.postId)}" data-staff-view-kind="${escapeHtml(selected.kind === 'reel' ? 'reel' : 'post')}">View video</button></div>`
+          : ''}
         <div class="staff-case-field"><span>Reason given</span><p>${escapeHtml(selected.reason || 'No reason given')}</p></div>
         ${categories.length ? `<div class="staff-chip-row">${categories.map((category) => `<span class="staff-chip warn">${escapeHtml(String(category).replace(/-/g, ' '))}</span>`).join('')}</div>` : ''}
         <div class="staff-case-parties">
@@ -2023,7 +2028,7 @@ function staffDurationSelect(field = 'duration', selected = '7') {
 function staffUserChips(user) {
   const chips = [];
   if (user.official) chips.push('<span class="staff-chip official">Official</span>');
-  if (user.verified) chips.push('<span class="staff-chip verified">Verified</span>');
+  if (user.verified) chips.push('<span class="staff-chip is-verified">Verified</span>');
   if (user.business) chips.push('<span class="staff-chip business">Business</span>');
   if (user.warningBadge) chips.push('<span class="staff-chip warn">Warning tag</span>');
   if (user.banned) chips.push('<span class="staff-chip danger">Banned</span>');
@@ -2057,12 +2062,18 @@ function staffActionGroupMarkup(title, hint, body) {
 
 function staffUserPanelMarkup(detail) {
   if (!detail?.user) return '<div class="staff-empty staff-empty-lg">Select a user to open their staff panel.</div>';
+  const fullStaff = sessionStaffPanel === 'full';
   const user = { ...detail.user, banUntil: detail.user.ban?.until || null };
   const posts = Array.isArray(detail.posts) ? detail.posts : [];
   const warnings = Array.isArray(detail.warnings) ? detail.warnings : [];
   const reports = Array.isArray(detail.reports) ? detail.reports : [];
   const restrictions = staffActiveRestrictions(user, true);
   const button = (action, label, extra = '') => `<button type="button" class="staff-action-btn${extra ? ` ${extra}` : ''}" data-staff-user-action="${action}">${label}</button>`;
+  const accountStatusToggles = [
+    fullStaff ? staffToggleMarkup({ active: user.verified === true, onAction: 'verify', offAction: 'unverify', label: 'Verified' }) : '',
+    fullStaff ? staffToggleMarkup({ active: user.business === true, onAction: 'badge-business', offAction: 'unbadge-business', label: 'Business check' }) : '',
+    staffToggleMarkup({ active: user.banned === true, onAction: 'ban', offAction: 'unban', label: 'Banned', expires: user.banUntil ? staffUntil(user.banUntil) : '', tone: 'danger' }),
+  ].filter(Boolean).join('');
   return `<article class="staff-user-dossier">
     <header class="staff-user-hero">
       <img src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" />
@@ -2085,16 +2096,16 @@ function staffUserPanelMarkup(detail) {
       <div><dt>Followers</dt><dd>${Number(user.followerCount || 0)}</dd></div>
       <div><dt>Following</dt><dd>${Number(user.followingCount || 0)}</dd></div>
       <div><dt>DMs</dt><dd>${Number(user.messageCount || 0)}</dd></div>
-      <div><dt>Networks</dt><dd>${Number(user.ipHashCount || 0)}</dd></div>
+      ${fullStaff ? `<div><dt>Networks</dt><dd>${Number(user.ipHashCount || 0)}</dd></div>` : ''}
     </dl>
     <p class="staff-user-timeline"><span>Joined ${escapeHtml(staffDateLabel(user.createdAt))}</span><span>Last seen ${escapeHtml(staffDateLabel(user.lastSeenAt))}</span></p>
-    <section class="staff-user-block staff-wallet-controls" data-staff-wallet-user="${escapeHtml(user.id)}">
+    ${fullStaff ? `<section class="staff-user-block staff-wallet-controls" data-staff-wallet-user="${escapeHtml(user.id)}">
       <h3>Clearwater credits</h3>
       <p class="staff-wallet-balance">Current balance <b>C$${Number(user.credits || 0).toLocaleString()}</b></p>
       <div class="staff-wallet-fields"><label>Amount<input data-staff-wallet-amount type="number" min="1" max="1000000" step="1" value="75" inputmode="numeric" /></label><label>Note <input data-staff-wallet-note maxlength="220" placeholder="Reason for this adjustment" /></label></div>
       <div class="staff-user-actions"><button type="button" class="staff-action-btn" data-staff-wallet-adjust="add">Add credits</button><button type="button" class="staff-action-btn danger" data-staff-wallet-adjust="remove">Remove credits</button></div>
       <p class="staff-user-status" data-staff-wallet-status role="status"></p>
-    </section>
+    </section>` : ''}
     <section class="staff-user-block staff-standing-block">
       <h3>Current standing</h3>
       ${restrictions.length
@@ -2110,16 +2121,12 @@ function staffUserPanelMarkup(detail) {
         <label>Reason or notice<textarea data-staff-field="reason" maxlength="300" placeholder="Explain the warn, ban, mute, lock, or notice"></textarea></label>
         <div class="staff-action-context-side">
           <label>Duration${staffDurationSelect('duration')}</label>
-          <label class="staff-check"><input type="checkbox" data-staff-field="ipBan" /><span>Also block known networks on ban</span></label>
+          ${fullStaff ? '<label class="staff-check"><input type="checkbox" data-staff-field="ipBan" /><span>Also block known networks on ban</span></label>' : '<p class="staff-action-hint">Limited staff can ban up to 3 people per hour.</p>'}
           <p class="staff-action-hint">The reason and duration above are applied to every action in this panel.</p>
         </div>
       </div>
       <div class="staff-action-groups">
-        ${staffActionGroupMarkup('Account status', 'Verification and account access', `<div class="staff-toggle-grid">
-          ${staffToggleMarkup({ active: user.verified === true, onAction: 'verify', offAction: 'unverify', label: 'Verified' })}
-          ${staffToggleMarkup({ active: user.business === true, onAction: 'badge-business', offAction: 'unbadge-business', label: 'Business check' })}
-          ${staffToggleMarkup({ active: user.banned === true, onAction: 'ban', offAction: 'unban', label: 'Banned', expires: user.banUntil ? staffUntil(user.banUntil) : '', tone: 'danger' })}
-        </div>`)}
+        ${staffActionGroupMarkup('Account status', fullStaff ? 'Verification and account access' : 'Account access', `<div class="staff-toggle-grid">${accountStatusToggles}</div>`)}
         ${staffActionGroupMarkup('Profile tags', 'Shown next to the display name on posts and profiles', `<div class="staff-action-grid">
           ${user.warningBadge
             ? `<p class="staff-action-hint">Warning hover text: ${escapeHtml(user.warningBadgeText || 'Account warning')}</p>${button('unbadge-warning', 'Remove warning tag')}`
@@ -2141,15 +2148,14 @@ function staffUserPanelMarkup(detail) {
         </div>`)}
       </div>
       <details class="staff-danger-zone" data-staff-group="danger">
-        <summary><b>Destructive actions</b><span>Content removal and network blocks cannot be undone</span></summary>
+        <summary><b>Destructive actions</b><span>${fullStaff ? 'Content removal and network blocks cannot be undone' : 'Content removal cannot be undone'}</span></summary>
         <div class="staff-action-grid">
           ${button('wipe-posts', 'Delete all posts', 'danger')}
           ${button('wipe-reels', 'Delete all Reels', 'danger')}
           ${button('wipe-comments', 'Delete all comments', 'danger')}
           ${button('wipe-messages', 'Wipe stored DMs', 'danger')}
           ${button('reset-profile', 'Reset public profile', 'danger')}
-          ${button('ip-ban', `Block ${Number(user.ipHashCount || 0)} network hash${Number(user.ipHashCount || 0) === 1 ? '' : 'es'}`, 'danger')}
-          ${button('clear-ip-ban', 'Lift network block')}
+          ${fullStaff ? `${button('ip-ban', `Block ${Number(user.ipHashCount || 0)} network hash${Number(user.ipHashCount || 0) === 1 ? '' : 'es'}`, 'danger')}${button('clear-ip-ban', 'Lift network block')}` : ''}
         </div>
       </details>
       <p class="staff-user-status" data-staff-user-status role="status"></p>
@@ -2181,11 +2187,16 @@ function staffHistoryLabel(report) {
 
 function syncStaffPanes() {
   if (staffTab === 'search') staffTab = 'users';
+  if (staffTab === 'controls' && sessionStaffPanel !== 'full') staffTab = 'overview';
   document.querySelectorAll('[data-staff-pane]').forEach((pane) => {
     const on = pane.dataset.staffPane === staffTab;
     pane.hidden = !on;
   });
-  document.querySelectorAll('[data-staff-tab]').forEach((button) => button.classList.toggle('selected', button.dataset.staffTab === staffTab));
+  document.querySelectorAll('[data-staff-tab]').forEach((button) => {
+    const isControls = button.dataset.staffTab === 'controls';
+    button.hidden = isControls && sessionStaffPanel !== 'full';
+    button.classList.toggle('selected', button.dataset.staffTab === staffTab);
+  });
 }
 
 function renderStaffDashboard() {
@@ -2346,7 +2357,7 @@ function renderStaffDashboard() {
 }
 
 async function loadModeration() {
-  if (!sessionIsOwner || !staffContent) return;
+  if (!sessionCanStaff || !staffContent) return;
   const overview = document.querySelector('[data-staff-overview]');
   if (overview && !moderationSnapshot) overview.innerHTML = '<p class="staff-loading">Loading the moderation desk...</p>';
   try {
@@ -2362,7 +2373,7 @@ async function loadModeration() {
 }
 
 async function loadStaffUserDetail(userId, silent = false) {
-  if (!sessionIsOwner || !userId) return;
+  if (!sessionCanStaff || !userId) return;
   const panel = document.querySelector('[data-staff-user-panel]');
   if (!silent && panel && !panel.contains(document.activeElement)) panel.innerHTML = '<p class="staff-loading">Loading this account...</p>';
   try {
@@ -3296,7 +3307,11 @@ async function loadSession() {
   rank.textContent = session.user.staffRank || '';
   currentUserId = session.user.id;
   sessionUser = session.user;
-  sessionIsOwner = session.user.owner === true && session.user.staffRank === 'Ownership';
+  sessionStaffPanel = session.user.staffPanel === 'full' || session.user.staffPanel === 'limited'
+    ? session.user.staffPanel
+    : (session.user.owner === true && session.user.staffRank === 'Ownership' ? 'full' : null);
+  sessionCanStaff = Boolean(sessionStaffPanel);
+  sessionIsOwner = sessionStaffPanel === 'full';
   if (profileTitle) profileTitle.textContent = session.user.displayName || session.user.username;
   if (profileCopy) profileCopy.textContent = session.user.bio || (session.user.staffRank ? `${session.user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
   if (profileAvatar && session.user.avatarUrl) profileAvatar.src = session.user.avatarUrl;
@@ -3305,7 +3320,10 @@ async function loadSession() {
   if (profileHandle) profileHandle.textContent = `@${session.user.username}`;
   if (profileRank) profileRank.textContent = session.user.staffRank || 'Clearwater community member';
   refreshProfileVerified();
-  if (sessionIsOwner) { admin.hidden = false; staffLink.hidden = false; officialAccountOption.hidden = false; officialProfileControls.hidden = false; } else { admin.hidden = true; staffLink.hidden = true; officialAccountOption.hidden = true; officialProfileControls.hidden = true; }
+  if (staffLink) staffLink.hidden = !sessionCanStaff;
+  if (admin) admin.hidden = !sessionIsOwner;
+  if (officialAccountOption) officialAccountOption.hidden = !sessionIsOwner;
+  if (officialProfileControls) officialProfileControls.hidden = !sessionIsOwner;
   accountSwitch.hidden = false;
   activeAccount = sessionIsOwner && localStorage.getItem(`clearwater-posting-account-${currentUserId}`) === 'official' ? 'official' : 'personal';
   document.querySelector('[data-personal-account-avatar]').src = session.user.avatarUrl || 'assets/clearwater-logo.png';
@@ -3749,6 +3767,28 @@ document.addEventListener('click', (event) => {
   if (bookmark) { void socialAction('bookmark', { postId: bookmark.dataset.bookmarkPost, enabled: !socialState.bookmarks.includes(bookmark.dataset.bookmarkPost) }).catch((error) => void siteAlert(error.message)); return; }
   const topic = event.target.closest('[data-topic]');
   if (topic) { event.preventDefault(); showView('home'); search.value = topic.dataset.topic; renderPosts(); return; }
+  const staffViewVideo = event.target.closest('[data-staff-view-video]');
+  if (staffViewVideo) {
+    const postId = staffViewVideo.dataset.staffViewVideo;
+    const kind = staffViewVideo.dataset.staffViewKind || 'reel';
+    if (kind === 'reel') {
+      if (search) search.value = '';
+      feedTab = 'reels';
+      localStorage.setItem('clearwater-feed-tab', feedTab);
+      history.pushState({}, '', internetUrl('home'));
+      showView('home');
+      renderPosts();
+      const viewport = document.querySelector('[data-reels-viewport]');
+      const card = viewport?.querySelector(`[data-reel-id="${postId}"]`);
+      if (card) {
+        card.scrollIntoView({ block: 'start' });
+        renderReelPanel(postId);
+      }
+    } else if (typeof showPostDetail === 'function') {
+      showPostDetail(postId, true);
+    }
+    return;
+  }
   const openReel = event.target.closest('[data-open-reel]');
   if (openReel) {
     if (search) search.value = '';
@@ -4511,7 +4551,7 @@ window.setInterval(() => {
   loadSocial();
   if (!document.querySelector('[data-view="messages"]')?.hidden) void loadMessages();
   if (!document.querySelector('[data-view="conversation"]')?.hidden && viewedMember) void loadConversation(viewedMember);
-  if (!document.querySelector('[data-view="staff"]')?.hidden && sessionIsOwner) void loadModeration();
+  if (!document.querySelector('[data-view="staff"]')?.hidden && sessionCanStaff) void loadModeration();
 }, 15_000);
 // A ban needs to take effect quickly for somebody who already has the page
 // open, without reloading the entire feed every few seconds.

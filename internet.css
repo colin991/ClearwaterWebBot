@@ -2866,7 +2866,23 @@ body { margin: 0; }
 .staff-chip.danger { background: rgba(255, 92, 92, .18); color: #ffb4b4; }
 .staff-chip.warn { background: rgba(255, 196, 72, .16); color: #ffd789; }
 .staff-chip.watch { background: rgba(120, 214, 255, .16); color: #9ee7ff; }
-.staff-chip.verified { background: rgba(88, 166, 255, .2); color: #d6ebff; }
+.staff-chip.is-verified {
+  background: rgba(88, 166, 255, .2);
+  color: #d6ebff;
+  width: auto;
+  height: auto;
+  min-height: 18px;
+  margin: 0;
+  padding: 0 6px;
+  border-radius: 999px;
+  clip-path: none;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  cursor: default;
+}
+.staff-chip.is-verified::before,
+.staff-chip.is-verified::after { content: none; display: none; }
 .staff-chip.official { background: var(--blue); color: #fff; }
 .staff-user-panel {
   padding: 14px 16px 20px;

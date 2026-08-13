@@ -216,6 +216,8 @@ export default async function handler(request, response) {
     // need ownership data, so skip that extra round trip and show a ban screen
     // as quickly as possible.
     const access = await getStaffAccess(user);
+    const staffPanel = access.panelAccess === 'full' || access.panelAccess === 'limited' ? access.panelAccess : null;
+    const canStaff = Boolean(staffPanel);
     const asOfficial = access.allowed && body.asOfficial === true;
     let payload;
     if (body.action === 'post') {
@@ -343,7 +345,7 @@ export default async function handler(request, response) {
     } else if (body.action === 'message-send') {
       payload = { action: 'message-send', to: String(body.to || ''), username: String(body.username || '').slice(0, 80), content: String(body.content || '').slice(0, 1000), gif: body.gif && typeof body.gif === 'object' ? { url: compatibleGiphyUrl(body.gif.url), title: String(body.gif.title || '').slice(0, 120) } : null, asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
     } else if (body.action === 'report-review') {
-      if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
+      if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
       payload = {
         action: 'report-review',
         reportId: String(body.reportId || ''),
@@ -352,18 +354,19 @@ export default async function handler(request, response) {
         reason: String(body.reason || '').slice(0, 300),
         durationDays: body.durationDays === 'forever' ? 'forever' : Number(body.durationDays),
         actor: { id: user.id },
-        owner: true,
+        staffPanel,
+        owner: staffPanel === 'full',
       };
     } else if (body.action === 'erlc-location') {
       payload = { action: 'erlc-location', actor: { id: user.id, username: user.username, displayName: user.displayName } };
     } else if (body.action === 'moderation') {
-      if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
-      payload = { action: 'moderation', owner: true };
+      if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
+      payload = { action: 'moderation', staffPanel, owner: staffPanel === 'full' };
     } else if (body.action === 'staff-user-detail') {
-      if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
-      payload = { action: 'staff-user-detail', targetId: String(body.targetId || ''), owner: true };
+      if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
+      payload = { action: 'staff-user-detail', targetId: String(body.targetId || ''), staffPanel, owner: staffPanel === 'full' };
     } else if (body.action === 'staff-user') {
-      if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
+      if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
       payload = {
         action: 'staff-user',
         staffAction: String(body.staffAction || ''),
@@ -371,23 +374,25 @@ export default async function handler(request, response) {
         reason: String(body.reason || '').slice(0, 300),
         note: String(body.note || '').slice(0, 500),
         durationDays: body.durationDays === 'forever' ? 'forever' : Number(body.durationDays),
-        ipBan: body.ipBan === true,
+        ipBan: staffPanel === 'full' && body.ipBan === true,
         postId: String(body.postId || ''),
         actor: { id: user.id, displayName: user.displayName },
-        owner: true,
+        staffPanel,
+        owner: staffPanel === 'full',
       };
     } else if (body.action === 'staff-wallet') {
-      if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
+      if (staffPanel !== 'full') return sendJson(response, 403, { error: 'Full staff access required' });
       payload = {
         action: 'staff-wallet',
         targetId: String(body.targetId || ''),
         amount: Number(body.amount),
         note: String(body.note || '').slice(0, 220),
         actor: { id: user.id, displayName: user.displayName },
+        staffPanel,
         owner: true,
       };
     } else if (body.action === 'staff-site') {
-      if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
+      if (staffPanel !== 'full') return sendJson(response, 403, { error: 'Full staff access required' });
       const banner = body.banner && typeof body.banner === 'object' ? body.banner : {};
       payload = {
         action: 'staff-site',
@@ -400,10 +405,11 @@ export default async function handler(request, response) {
           linkLabel: String(banner.linkLabel || '').slice(0, 40),
         },
         actor: { id: user.id, displayName: user.displayName },
+        staffPanel,
         owner: true,
       };
     } else if (['verify', 'ban'].includes(body.action)) {
-      if (!access.allowed) return sendJson(response, 403, { error: 'Ownership access required' });
+      if (staffPanel !== 'full') return sendJson(response, 403, { error: 'Full staff access required' });
       payload = {
         action: body.action,
         targetId: String(body.targetId || ''),
@@ -411,6 +417,7 @@ export default async function handler(request, response) {
         reason: String(body.reason || '').slice(0, 300),
         durationDays: body.durationDays === 'forever' ? 'forever' : Number(body.durationDays),
         ipBan: body.ipBan === true,
+        staffPanel,
         owner: true,
       };
     } else {
