@@ -3825,17 +3825,11 @@ function renderWallet(wallet) {
   if (!wallet) return;
   const balance = document.querySelector('[data-wallet-balance]');
   const status = document.querySelector('[data-wallet-claim-status]');
-  const lede = document.querySelector('[data-wallet-lede]');
   const dailyCopy = document.querySelector('[data-wallet-daily-copy]');
   const count = document.querySelector('[data-wallet-transaction-count]');
   const list = document.querySelector('[data-wallet-transactions]');
   if (balance) balance.textContent = formatCredits(wallet.balance);
   document.querySelectorAll('[data-internet-cash-amount]').forEach((element) => { element.textContent = formatCredits(wallet.balance); });
-  if (lede) {
-    lede.textContent = wallet.claimedNow
-      ? `${formatCredits(wallet.dailyAmount || 75)} just landed. Come back tomorrow for another drop.`
-      : 'Track your balance, daily drops, chat levels, and recent credit activity.';
-  }
   if (dailyCopy) {
     const roleExtra = Number(wallet.roleExtra || 0);
     const perk = roleExtra > 0 && wallet.roleLabel
