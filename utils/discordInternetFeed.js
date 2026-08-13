@@ -1,7 +1,18 @@
-import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
+import {
+  ActionRowBuilder,
+  AttachmentBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ContainerBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  MessageFlags,
+  TextDisplayBuilder,
+} from 'discord.js';
 import { logger } from './logger.js';
 
 const MAX_ATTACH_BYTES = 8 * 1024 * 1024;
+const ANNOUNCEMENT_EMOJI = '<:Announcement:1514458339680059422>';
 
 function isHttpsUrl(value) {
   try {
@@ -31,7 +42,7 @@ function posterHandle(post) {
 }
 
 function postBodyText(post) {
-  const body = String(post?.content || '').replace(/\s+/g, ' ').trim().slice(0, 1800);
+  const body = String(post?.content || '').trim().slice(0, 1800);
   if (body) return body;
   if (post?.kind === 'reel') return '_Posted a Reel_';
   if (post?.gifUrl) return '_Posted a GIF_';
@@ -50,6 +61,17 @@ function shouldAnnounceInternetPost(post) {
     return false;
   }
   return true;
+}
+
+function buildFeedText(post) {
+  const lines = [
+    `# ${ANNOUNCEMENT_EMOJI} Clearwater Internet`,
+    `**Poster:** @${posterHandle(post)}`,
+    postBodyText(post),
+  ];
+  if (post?.poll?.question) lines.push(`📊 ${String(post.poll.question).slice(0, 180)}`);
+  if (post?.location?.label) lines.push(`📍 ${String(post.location.label).slice(0, 120)}`);
+  return lines.join('\n').slice(0, 4000);
 }
 
 export function createInternetFeedAnnouncer(client, config = {}) {
@@ -72,48 +94,48 @@ export function createInternetFeedAnnouncer(client, config = {}) {
     }
 
     const postUrl = `${site}/internet/post/${encodeURIComponent(post.id)}`;
-    const lines = [
-      `**Poster:** \`@${posterHandle(post)}\``,
-      '',
-      postBodyText(post),
-    ];
-    if (post?.poll?.question) lines.push('', `📊 ${String(post.poll.question).slice(0, 180)}`);
-    if (post?.location?.label) lines.push('', `📍 ${String(post.location.label).slice(0, 120)}`);
-
-    const embed = new EmbedBuilder()
-      .setTitle(post.kind === 'reel' ? 'Clearwater Internet · Reel' : 'Clearwater Internet')
-      .setURL(postUrl)
-      .setColor(0x4e91f9)
-      .setDescription(lines.join('\n').slice(0, 4000))
-      .setTimestamp(post.createdAt ? new Date(post.createdAt) : new Date());
-
     const files = [];
+    let mediaUrl = '';
+
     const gifUrl = String(post.gifUrl || '');
     const imageUrl = String(post.imageUrl || '');
-
     if (gifUrl && isHttpsUrl(gifUrl)) {
-      embed.setImage(gifUrl);
+      mediaUrl = gifUrl;
     } else if (imageUrl && isHttpsUrl(imageUrl) && !imageUrl.includes('/api/media')) {
-      embed.setImage(imageUrl);
+      mediaUrl = imageUrl;
     } else {
       const data = parseDataImage(imageUrl);
       if (data) {
         files.push(new AttachmentBuilder(data.buffer, { name: data.name }));
-        embed.setImage(`attachment://${data.name}`);
+        mediaUrl = `attachment://${data.name}`;
       }
     }
 
-    const components = [
+    const container = new ContainerBuilder()
+      .setAccentColor(0x4e91f9)
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(buildFeedText(post)));
+
+    if (mediaUrl) {
+      container.addMediaGalleryComponents(
+        new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(mediaUrl)),
+      );
+    }
+
+    container.addActionRowComponents(
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setLabel('View post')
           .setStyle(ButtonStyle.Link)
           .setURL(postUrl),
       ),
-    ];
+    );
 
     try {
-      await channel.send({ embeds: [embed], components, files });
+      await channel.send({
+        components: [container],
+        files,
+        flags: MessageFlags.IsComponentsV2,
+      });
     } catch (error) {
       logger.error('Could not post Clearwater Internet feed to Discord', error);
     }
