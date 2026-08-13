@@ -1504,6 +1504,25 @@ function publicStaffReport(store, report) {
   };
 }
 
+function recentMessageSequence(sender, nextContent) {
+  const next = text(nextContent, 1000);
+  // Only join very short, rapid-fire messages. This catches a person spelling
+  // a word one letter at a time without combining ordinary conversations.
+  if (!next || next.length > 4) return '';
+  const cutoff = Date.now() - 90_000;
+  const recentParts = (Array.isArray(sender?.messages) ? sender.messages : [])
+    .filter((message) => message?.fromId === sender.id
+      && typeof message.content === 'string'
+      && message.content.trim().length > 0
+      && message.content.trim().length <= 4
+      && new Date(message.createdAt || 0).getTime() >= cutoff)
+    .slice(0, 10)
+    .reverse()
+    .map((message) => message.content.trim());
+  if (recentParts.length < 2) return '';
+  return [...recentParts, next].join(' ');
+}
+
 function enforceAutomod(store, { actor, kind, content, extra = {} }) {
   if (!actor?.id || actor.id === OFFICIAL_INTERNET_ACCOUNT_ID) return null;
   const hit = scanInternetContent(content);
@@ -1767,7 +1786,14 @@ export function sendInternetMessage(store, { actor, to, content, gif, username }
   if (recipientPrefs.friendsMessages === true && !(Array.isArray(recipient.following) && recipient.following.includes(sender.id))) {
     throw new Error('This member only accepts messages from people they follow');
   }
-  enforceAutomod(store, { actor: sender, kind: 'message', content: [body, gifTitle].filter(Boolean).join('\n'), extra: { targetId: recipient.id } });
+  const messageContent = [body, gifTitle].filter(Boolean).join('\n');
+  const sequence = recentMessageSequence(sender, body);
+  enforceAutomod(store, {
+    actor: sender,
+    kind: 'message',
+    content: sequence || messageContent,
+    extra: { targetId: recipient.id },
+  });
   const wait = 1_500 - (Date.now() - new Date(sender.lastMessageAt || 0).getTime());
   if (wait > 0) throw new Error('Please wait a moment before sending another message');
   const sentAt = new Date().toISOString();
