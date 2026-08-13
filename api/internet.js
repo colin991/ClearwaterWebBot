@@ -4,7 +4,7 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260813-ads-blue';
+const INTERNET_VERSION = '20260813-sponsored-placements';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
@@ -355,7 +355,17 @@ export default async function handler(request, response) {
       };
     } else if (body.action === 'ads') {
       payload = { action: 'ads', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
+    } else if (body.action === 'ad-click') {
+      payload = {
+        action: 'ad-click',
+        adId: String(body.adId || ''),
+        kind: body.kind === 'account' ? 'account' : 'learn',
+        actor: { id: user.id, username: user.username, displayName: user.displayName },
+      };
     } else if (body.action === 'ad-purchase') {
+      const placement = ['sidebar', 'feed', 'reel'].includes(String(body.placement || ''))
+        ? String(body.placement)
+        : 'sidebar';
       payload = {
         action: 'ad-purchase',
         category: body.category === 'department' ? 'department' : 'business',
@@ -363,6 +373,8 @@ export default async function handler(request, response) {
         title: String(body.title || '').slice(0, 80),
         body: String(body.body || '').slice(0, 220),
         boost: Math.min(5, Math.max(0, Number(body.boost) || 0)),
+        placement,
+        videoSeconds: Number(body.videoSeconds) || 0,
         image: mediaPayload(body.image, 'image'),
         video: mediaPayload(body.video, 'video'),
         actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges },
@@ -460,6 +472,16 @@ export default async function handler(request, response) {
       payload = {
         action: 'staff-user-detail',
         targetId: String(body.targetId || ''),
+        staffPanel,
+        owner: staffPanel === 'full',
+        actor: staffActor(user, access),
+      };
+    } else if (body.action === 'staff-user-search') {
+      if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
+      payload = {
+        action: 'staff-user-search',
+        query: String(body.query || '').slice(0, 80),
+        limit: Math.min(120, Math.max(1, Number(body.limit) || 80)),
         staffPanel,
         owner: staffPanel === 'full',
         actor: staffActor(user, access),

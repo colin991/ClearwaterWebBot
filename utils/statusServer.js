@@ -8,7 +8,7 @@ import { dropLocationNameCandidates, findPlayerDropLocation } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
 import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
-import { AutomodHoldError, adjustInternetCredits, applyStaffSiteAction, applyStaffUserAction, assertLimitedStaffBanQuota, banKnownInternetIps, claimInternetDailyCredits, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listInternetAdsForUser, moderationSnapshot, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, readInternetStore, recordInternetIpHash, recordLimitedStaffBan, respondCreditTransfer, reviewInternetAd, reviewInternetReport, revertInternetHistory, saveInternetStore, sendInternetMessage, serveInternetAds, setDiscordInternetNotify, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, AD_BASE_COST, AD_BOOST_COST, AD_MAX_BOOST } from './internetStore.js';
+import { AutomodHoldError, adjustInternetCredits, applyStaffSiteAction, applyStaffUserAction, assertLimitedStaffBanQuota, banKnownInternetIps, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listInternetAdsForUser, moderationSnapshot, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, respondCreditTransfer, reviewInternetAd, reviewInternetReport, revertInternetHistory, saveInternetStore, searchStaffUsers, sendInternetMessage, serveInternetAds, setDiscordInternetNotify, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
 import { createDiscordInternetNotifier } from './discordInternetNotify.js';
 import { createInternetFeedController, shouldAnnounceInteractResult } from './discordInternetFeed.js';
 
@@ -325,13 +325,18 @@ export function startStatusServer(client, config) {
           ensureOfficialInternetAccount(store);
           ensureBankInternetAccount(store);
           const rolesChanged = await syncInternetRoles(store);
-          if (createdOfficialAccount || createdBankAccount || rolesChanged) await saveInternetStore(store);
+          const sidebarServed = serveInternetAds(store, { count: 2, viewerId, placement: 'sidebar' });
+          const feedServed = serveInternetAds(store, { count: 6, viewerId, placement: 'feed' });
+          const reelServed = serveInternetAds(store, { count: 4, viewerId, placement: 'reel' });
+          if (createdOfficialAccount || createdBankAccount || rolesChanged || sidebarServed.dirty || feedServed.dirty || reelServed.dirty) await saveInternetStore(store);
           return json(response, 200, {
             posts: publicPosts(store, viewerId),
             users: publicUsers(store, viewerId),
             settings: publicInternetSettings(store),
-            ads: serveInternetAds(store, { count: 2 }),
-            adPricing: { base: AD_BASE_COST, boost: AD_BOOST_COST, maxBoost: AD_MAX_BOOST, durationHours: 24 },
+            ads: sidebarServed.ads,
+            feedAds: feedServed.ads,
+            reelAds: reelServed.ads,
+            adPricing: internetAdPricing(),
           });
         }
         if (request.method !== 'POST') return json(response, 405, { error: 'Method not allowed' });
@@ -352,7 +357,7 @@ export function startStatusServer(client, config) {
           : null;
         const wantsOfficial = body.asOfficial === true;
         const requestedOwner = body.owner === true;
-        const staffAction = ['moderation', 'staff-user', 'staff-user-detail', 'staff-wallet', 'staff-site', 'report-review', 'history-revert', 'ad-review', 'verify', 'ban'].includes(body.action);
+        const staffAction = ['moderation', 'staff-user', 'staff-user-detail', 'staff-user-search', 'staff-wallet', 'staff-site', 'report-review', 'history-revert', 'ad-review', 'verify', 'ban'].includes(body.action);
         const needsLivePanel = wantsOfficial
           || requestedOwner
           || staffAction
@@ -448,12 +453,40 @@ export function startStatusServer(client, config) {
           return json(response, 200, { wallet });
         }
 
-        if (body.action === 'ads') {
-          return json(response, 200, {
-            ads: serveInternetAds(store, { count: 2 }),
-            mine: listInternetAdsForUser(store, body.actor),
-            pricing: { base: AD_BASE_COST, boost: AD_BOOST_COST, maxBoost: AD_MAX_BOOST, durationHours: 24 },
+        if (body.action === 'wallet-roblox-claim') {
+          const result = claimRobloxCreditPacks(store, {
+            actor: body.actor,
+            robloxId: body.robloxId,
+            robloxUsername: body.robloxUsername,
+            ownedAssetIds: body.ownedAssetIds,
           });
+          await saveInternetStore(store);
+          return json(response, 200, result);
+        }
+
+        if (body.action === 'ads') {
+          const viewerId = body.actor?.id;
+          const sidebarServed = serveInternetAds(store, { count: 2, viewerId, placement: 'sidebar' });
+          const feedServed = serveInternetAds(store, { count: 6, viewerId, placement: 'feed' });
+          const reelServed = serveInternetAds(store, { count: 4, viewerId, placement: 'reel' });
+          if (sidebarServed.dirty || feedServed.dirty || reelServed.dirty) await saveInternetStore(store);
+          return json(response, 200, {
+            ads: sidebarServed.ads,
+            feedAds: feedServed.ads,
+            reelAds: reelServed.ads,
+            mine: listInternetAdsForUser(store, body.actor),
+            pricing: internetAdPricing(),
+          });
+        }
+
+        if (body.action === 'ad-click') {
+          const result = recordInternetAdClick(store, {
+            adId: body.adId,
+            actor: body.actor,
+            kind: body.kind === 'account' ? 'account' : 'learn',
+          });
+          if (result.ok) await saveInternetStore(store);
+          return json(response, 200, result);
         }
 
         if (body.action === 'ad-purchase') {
@@ -661,6 +694,13 @@ export function startStatusServer(client, config) {
         if (body.action === 'staff-user-detail') {
           if (!['full', 'limited'].includes(body.staffPanel)) return json(response, 403, { error: 'Staff access required' });
           return json(response, 200, staffUserDetail(store, body.targetId));
+        }
+
+        if (body.action === 'staff-user-search') {
+          if (!['full', 'limited'].includes(body.staffPanel)) return json(response, 403, { error: 'Staff access required' });
+          const users = searchStaffUsers(store, body.query, { limit: body.limit });
+          if (/^\d{16,22}$/.test(String(body.query || '').trim()) && users.length) await saveInternetStore(store);
+          return json(response, 200, { users, query: String(body.query || '') });
         }
 
         if (body.action === 'staff-user') {

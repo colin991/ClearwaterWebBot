@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
+import { CREDIT_STORE_PACKS } from '../lib/credit-store.js';
 import { AUTOMOD_HOLD_MESSAGE, AutomodHoldError, scanInternetContent } from './internetAutomod.js';
 import { JsonStoreCorruptError, readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
@@ -17,18 +18,73 @@ const emptyStore = Object.freeze({
   staffBanLog: [],
   creditTransfers: [],
   ads: [],
+  robloxPackClaims: {},
   discordFeedMessages: {},
   siteBanner: null,
   officialProfile: {},
   settings: { pausePosts: false, pauseReels: false, pauseMessages: false },
 });
 
-/** Sidebar ads: 24h run after staff approval, paid with Clearwater Credits. */
+/** Paid placements: 48h run after staff approval, paid with Clearwater Credits. */
 export const AD_BASE_COST = 1200;
 export const AD_BOOST_COST = 300;
 export const AD_MAX_BOOST = 5;
-export const AD_DURATION_MS = 24 * 60 * 60 * 1000;
+export const AD_DURATION_HOURS = 48;
+export const AD_DURATION_MS = AD_DURATION_HOURS * 60 * 60 * 1000;
 export const AD_CATEGORIES = Object.freeze(['department', 'business']);
+export const AD_PLACEMENTS = Object.freeze(['sidebar', 'feed', 'reel']);
+export const AD_REEL_DURATION_MULTIPLIERS = Object.freeze({
+  upTo15: 1,
+  upTo30: 1.25,
+  upTo45: 1.5,
+  upTo60: 1.75,
+  over60: 2,
+});
+const AD_IMPRESSION_COOLDOWN_MS = 3 * 60 * 1000;
+
+export function internetAdPricing() {
+  return {
+    base: AD_BASE_COST,
+    boost: AD_BOOST_COST,
+    maxBoost: AD_MAX_BOOST,
+    durationHours: AD_DURATION_HOURS,
+    reelDurationMultipliers: { ...AD_REEL_DURATION_MULTIPLIERS },
+  };
+}
+
+function normalizeAdPlacement(value) {
+  const placement = String(value || 'sidebar').toLowerCase();
+  return AD_PLACEMENTS.includes(placement) ? placement : 'sidebar';
+}
+
+function adPlacementLabel(placement) {
+  const key = normalizeAdPlacement(placement);
+  if (key === 'feed') return 'feed';
+  if (key === 'reel') return 'reel';
+  return 'sidebar';
+}
+
+function normalizeVideoSeconds(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(600, Math.round(n * 10) / 10);
+}
+
+function reelDurationMultiplier(seconds) {
+  const s = Number(seconds);
+  if (!Number.isFinite(s) || s <= 0) return AD_REEL_DURATION_MULTIPLIERS.over60;
+  if (s <= 15) return AD_REEL_DURATION_MULTIPLIERS.upTo15;
+  if (s <= 30) return AD_REEL_DURATION_MULTIPLIERS.upTo30;
+  if (s <= 45) return AD_REEL_DURATION_MULTIPLIERS.upTo45;
+  if (s <= 60) return AD_REEL_DURATION_MULTIPLIERS.upTo60;
+  return AD_REEL_DURATION_MULTIPLIERS.over60;
+}
+
+function computeAdCost(placement, boostLevels, videoSeconds = 0) {
+  const base = AD_BASE_COST + (boostLevels * AD_BOOST_COST);
+  if (normalizeAdPlacement(placement) !== 'reel') return base;
+  return Math.ceil(base * reelDurationMultiplier(videoSeconds));
+}
 
 const LIMITED_STAFF_BAN_LIMIT = 3;
 const LIMITED_STAFF_BAN_WINDOW_MS = 60 * 60 * 1000;
@@ -602,10 +658,19 @@ export function upsertInternetUser(store, user) {
   const existing = store.users[id] || { verified: false, banned: false };
   const has = (key) => Object.prototype.hasOwnProperty.call(user || {}, key);
   if (!existing.createdAt) existing.createdAt = new Date().toISOString();
+  const nextUsername = has('username')
+    ? text(user?.username, 80) || existing.username || 'Discord user'
+    : existing.username || 'Discord user';
   store.users[id] = {
     ...existing,
     id,
-    username: has('username') ? text(user?.username, 80) || existing.username || 'Discord user' : existing.username || 'Discord user',
+    discordId: id,
+    username: nextUsername,
+    // Keep the latest Discord handle separately so staff can find accounts even
+    // if profile display text drifts from Discord naming.
+    discordUsername: has('username')
+      ? text(user?.username, 80).replace(/^@/, '') || existing.discordUsername || nextUsername
+      : (existing.discordUsername || existing.username || nextUsername),
     displayName: has('displayName') ? text(user?.displayName, 80) || existing.displayName || 'Discord user' : existing.displayName || 'Discord user',
     avatarUrl: has('avatarUrl') ? text(user?.avatarUrl, 300) || null : existing.avatarUrl || null,
     staffRank: has('staffRank') ? text(user?.staffRank, 80) || null : existing.staffRank || null,
@@ -701,18 +766,30 @@ export function chatBoostState(user) {
 function resolvedDailyTier(actor, user) {
   const role = dailyCreditTierForRoles(actorRoleIds(actor, user), user?.badges || actor?.badges || []);
   const boost = chatBoostState(user);
-  if (role.amount > boost.daily) {
+  const roleAmount = role.id ? role.amount : 0;
+  const chatDaily = boost.daily;
+  const amount = Math.max(chatDaily, roleAmount || BASE_DAILY_CREDITS);
+  const roleExtra = Math.max(0, roleAmount - chatDaily);
+  if (roleAmount > chatDaily) {
     return {
-      amount: role.amount,
+      amount,
       label: role.label,
       source: 'role',
+      chatDaily,
+      roleAmount,
+      roleExtra,
+      roleLabel: role.label,
       chatBoost: boost,
     };
   }
   return {
-    amount: boost.daily,
+    amount: chatDaily,
     label: boost.label,
-    source: boost.level > 0 ? 'chat' : (role.id ? 'role' : 'base'),
+    source: boost.level > 0 ? 'chat' : 'base',
+    chatDaily,
+    roleAmount,
+    roleExtra: 0,
+    roleLabel: role.id ? role.label : null,
     chatBoost: boost,
   };
 }
@@ -751,6 +828,10 @@ function walletView(user, { claimedNow = false, actor = null } = {}) {
     dailyAmount: daily.amount,
     dailyLabel: daily.label,
     dailySource: daily.source,
+    chatDaily: daily.chatDaily,
+    roleAmount: daily.roleAmount,
+    roleExtra: daily.roleExtra,
+    roleLabel: daily.roleLabel,
     baseDailyAmount: BASE_DAILY_CREDITS,
     canClaim,
     claimedNow: claimedNow === true,
@@ -832,6 +913,96 @@ export function adjustInternetCredits(store, { actor, targetId, amount, note = '
   });
   addInternetLog(store, `${text(actor?.displayName, 80) || 'Staff'} ${applied >= 0 ? 'added' : 'removed'} C$${Math.abs(applied)} ${applied >= 0 ? 'to' : 'from'} ${text(user.displayName, 80) || 'a member'}.`);
   return { user, wallet: walletView(user), applied };
+}
+
+function robloxPackClaimKey(robloxId, assetId) {
+  return `${String(robloxId || '').trim()}:${String(assetId || '').trim()}`;
+}
+
+export function claimRobloxCreditPacks(store, {
+  actor,
+  robloxId,
+  robloxUsername = '',
+  ownedAssetIds = [],
+} = {}) {
+  const user = ensureInternetWallet(store, actor);
+  assertNotBanned(user);
+  const rbxId = String(robloxId || '').trim();
+  if (!/^\d{3,20}$/.test(rbxId)) throw new Error('Roblox account could not be verified');
+
+  const owned = new Set((Array.isArray(ownedAssetIds) ? ownedAssetIds : []).map(String));
+  store.robloxPackClaims = store.robloxPackClaims && typeof store.robloxPackClaims === 'object'
+    ? store.robloxPackClaims
+    : {};
+  user.robloxPackClaims = user.robloxPackClaims && typeof user.robloxPackClaims === 'object'
+    ? user.robloxPackClaims
+    : {};
+  user.robloxId = rbxId;
+  if (robloxUsername) user.robloxUsername = text(robloxUsername, 80);
+
+  for (const pack of CREDIT_STORE_PACKS) {
+    const assetId = String(pack.assetId);
+    if (!owned.has(assetId)) continue;
+    const claimKey = robloxPackClaimKey(rbxId, assetId);
+    const existing = store.robloxPackClaims[claimKey];
+    if (existing?.discordId && existing.discordId !== user.id) {
+      throw new Error('That Roblox pack was already claimed on another Clearwater account');
+    }
+  }
+
+  const granted = [];
+  let grantedCredits = 0;
+  for (const pack of CREDIT_STORE_PACKS) {
+    const assetId = String(pack.assetId);
+    if (!owned.has(assetId)) continue;
+    const claimKey = robloxPackClaimKey(rbxId, assetId);
+    const existing = store.robloxPackClaims[claimKey];
+    if (existing?.discordId === user.id || user.robloxPackClaims[assetId]) continue;
+
+    user.credits = creditBalance(user) + pack.credits;
+    grantedCredits += pack.credits;
+    const claim = {
+      assetId,
+      credits: pack.credits,
+      robloxId: rbxId,
+      discordId: user.id,
+      label: pack.label,
+      claimedAt: new Date().toISOString(),
+    };
+    store.robloxPackClaims[claimKey] = claim;
+    user.robloxPackClaims[assetId] = claim;
+    granted.push({
+      assetId,
+      credits: pack.credits,
+      label: pack.label,
+      robux: pack.robux,
+    });
+    addCreditTransaction(user, {
+      amount: pack.credits,
+      type: 'roblox-pack',
+      note: `Roblox ${pack.label} · R$${pack.robux} → C$${pack.credits}`,
+      actorName: 'Clearwater Store',
+    });
+  }
+
+  if (granted.length) {
+    addInternetLog(
+      store,
+      `${text(user.displayName, 80) || 'A member'} claimed C$${grantedCredits} from ${granted.length} Roblox credit pack${granted.length === 1 ? '' : 's'} (Roblox ${rbxId}).`,
+    );
+  }
+
+  return {
+    wallet: walletView(user, { actor }),
+    granted,
+    grantedPacks: granted.length,
+    grantedCredits,
+    ownedAssetIds: [...owned],
+    alreadyClaimed: CREDIT_STORE_PACKS
+      .filter((pack) => Boolean(user.robloxPackClaims[String(pack.assetId)]))
+      .map((pack) => String(pack.assetId)),
+    robloxId: rbxId,
+  };
 }
 
 const TRANSFER_TTL_MS = 24 * 60 * 60 * 1000;
@@ -2103,11 +2274,15 @@ export function takeInternetMessages(store, actor) {
 }
 
 function findInternetMember(store, { id, username } = {}) {
-  const key = String(id || '');
-  if (key && store.users[key]) return store.users[key];
+  const key = String(id || '').trim();
+  if (/^\d{16,22}$/.test(key) && store.users[key]) return store.users[key];
   const handle = String(username || '').replace(/^@/, '').toLowerCase();
   if (!handle) return null;
-  return Object.values(store.users).find((user) => String(user.username || '').toLowerCase() === handle) || null;
+  return Object.values(store.users).find((user) => {
+    const names = [user.username, user.discordUsername]
+      .map((value) => String(value || '').toLowerCase().replace(/^@/, ''));
+    return names.includes(handle);
+  }) || null;
 }
 
 export function takeInternetConversation(store, { actor, withUserId, username }) {
@@ -2262,7 +2437,9 @@ function staffUserSummary(store, user) {
   const posts = store.posts.filter((post) => post.authorId === user.id);
   return {
     id: user.id,
+    discordId: String(user.discordId || user.id || ''),
     username: user.username,
+    discordUsername: user.discordUsername || user.username || null,
     displayName: user.displayName || user.username || 'Discord user',
     avatarUrl: user.avatarUrl || null,
     staffRank: user.staffRank || null,
@@ -2275,6 +2452,50 @@ function staffUserSummary(store, user) {
     flagged: flags.banned || flags.muted || flags.watched || flags.shadowbanned || flags.lockPosts || flags.lockMessages || flags.lockReels || (Array.isArray(user.warnings) && user.warnings.length > 0),
     ...flags,
   };
+}
+
+function staffUserSearchHaystack(user) {
+  return [
+    user.id,
+    user.discordId,
+    user.username,
+    user.discordUsername,
+    user.displayName,
+  ].map((value) => String(value || '').toLowerCase().replace(/^@/, '')).filter(Boolean);
+}
+
+export function searchStaffUsers(store, query = '', { limit = 80 } = {}) {
+  const raw = String(query || '').trim();
+  const needle = raw.toLowerCase().replace(/^@/, '');
+  const max = Math.min(120, Math.max(1, Math.trunc(Number(limit) || 80)));
+  if (!needle) {
+    return Object.values(store.users)
+      .map((user) => staffUserSummary(store, user))
+      .sort((left, right) => String(left.displayName || '').localeCompare(String(right.displayName || '')))
+      .slice(0, max);
+  }
+
+  if (/^\d{16,22}$/.test(raw)) {
+    const user = store.users[raw] || upsertInternetUser(store, { id: raw });
+    return [staffUserSummary(store, user)];
+  }
+
+  const matches = Object.values(store.users)
+    .map((user) => {
+      const fields = staffUserSearchHaystack(user);
+      const exact = fields.some((field) => field === needle);
+      const partial = fields.some((field) => field.includes(needle));
+      if (!exact && !partial) return null;
+      return { summary: staffUserSummary(store, user), exact, score: exact ? 0 : 1 };
+    })
+    .filter(Boolean)
+    .sort((left, right) => {
+      if (left.score !== right.score) return left.score - right.score;
+      return String(left.summary.displayName || '').localeCompare(String(right.summary.displayName || ''));
+    })
+    .slice(0, max)
+    .map((entry) => entry.summary);
+  return matches;
 }
 
 export function staffUserDetail(store, targetId) {
@@ -2665,8 +2886,16 @@ function sanitizeAdMedia(image, video) {
   };
 }
 
-function publicAd(ad) {
-  return {
+function publicAd(ad, { owner = false } = {}) {
+  const startsAt = ad.startsAt || null;
+  const endsAt = ad.endsAt || null;
+  const impressions = Math.max(0, Math.floor(Number(ad.impressions) || 0));
+  const clicks = Math.max(0, Math.floor(Number(ad.clicks) || 0));
+  const learnClicks = Math.max(0, Math.floor(Number(ad.learnClicks) || 0));
+  const accountClicks = Math.max(0, Math.floor(Number(ad.accountClicks) || 0));
+  const placement = normalizeAdPlacement(ad.placement);
+  const videoSeconds = normalizeVideoSeconds(ad.videoSeconds);
+  const base = {
     id: ad.id,
     category: ad.category,
     businessName: ad.businessName,
@@ -2674,14 +2903,31 @@ function publicAd(ad) {
     body: ad.body,
     imageUrl: ad.imageUrl || '',
     videoUrl: ad.videoUrl || '',
+    placement,
+    videoSeconds: placement === 'reel' ? videoSeconds : 0,
     weight: ad.weight,
     status: ad.status,
-    startsAt: ad.startsAt || null,
-    endsAt: ad.endsAt || null,
+    startsAt,
+    endsAt,
     createdAt: ad.createdAt,
     advertiserId: ad.advertiserId,
     advertiserName: ad.advertiserName,
     advertiserUsername: ad.advertiserUsername,
+  };
+  if (!owner) return base;
+  const startedMs = startsAt ? new Date(startsAt).getTime() : 0;
+  const hoursLive = startedMs ? Math.max(1 / 60, (Date.now() - startedMs) / 3_600_000) : 0;
+  return {
+    ...base,
+    boost: Math.max(0, Math.floor(Number(ad.boost) || 0)),
+    cost: Math.max(0, Math.floor(Number(ad.cost) || 0)),
+    impressions,
+    clicks,
+    learnClicks,
+    accountClicks,
+    lastShownAt: ad.lastShownAt || null,
+    showsPerHour: hoursLive ? Number((impressions / hoursLive).toFixed(2)) : 0,
+    clickRate: impressions > 0 ? Number(((clicks / impressions) * 100).toFixed(1)) : 0,
   };
 }
 
@@ -2705,19 +2951,36 @@ function assertAdCopy({ category, businessName, title, body }) {
   return { category, businessName: name, title: headline, body: copy };
 }
 
-export function purchaseInternetAd(store, { actor, category, businessName, title, body, boost = 0, image = null, video = null }) {
+export function purchaseInternetAd(store, {
+  actor,
+  category,
+  businessName,
+  title,
+  body,
+  boost = 0,
+  image = null,
+  video = null,
+  placement = 'sidebar',
+  videoSeconds = 0,
+} = {}) {
   const user = ensureInternetWallet(store, actor);
   assertNotBanned(user);
   const copy = assertAdCopy({ category, businessName, title, body });
   const media = sanitizeAdMedia(image, video);
+  const adPlacement = normalizeAdPlacement(placement);
+  const seconds = adPlacement === 'reel' ? normalizeVideoSeconds(videoSeconds) : 0;
+  if (adPlacement === 'reel' && !media.videoUrl) {
+    throw new Error('Reel ads need a short video');
+  }
   const boostLevels = Math.min(AD_MAX_BOOST, Math.max(0, Math.trunc(Number(boost) || 0)));
-  const cost = AD_BASE_COST + (boostLevels * AD_BOOST_COST);
+  const cost = computeAdCost(adPlacement, boostLevels, seconds);
   if (creditBalance(user) < cost) throw new Error(`You need C$${cost} to place this ad`);
   user.credits = creditBalance(user) - cost;
+  const placeLabel = adPlacementLabel(adPlacement);
   addCreditTransaction(user, {
     amount: -cost,
     type: 'ad',
-    note: `Sidebar ad${boostLevels ? ` +${boostLevels} boost` : ''} (pending review)`,
+    note: `${placeLabel[0].toUpperCase()}${placeLabel.slice(1)} ad${boostLevels ? ` +${boostLevels} boost` : ''}${adPlacement === 'reel' && seconds ? ` · ${Math.ceil(seconds)}s` : ''} (pending review)`,
     actorName: 'Clearwater Ads',
   });
   expireInternetAds(store);
@@ -2728,6 +2991,8 @@ export function purchaseInternetAd(store, { actor, category, businessName, title
     advertiserUsername: text(user.username, 80),
     ...copy,
     ...media,
+    placement: adPlacement,
+    videoSeconds: seconds,
     weight: 1 + boostLevels,
     boost: boostLevels,
     cost,
@@ -2737,11 +3002,21 @@ export function purchaseInternetAd(store, { actor, category, businessName, title
     endsAt: null,
     reviewedAt: null,
     reviewerId: null,
+    impressions: 0,
+    clicks: 0,
+    learnClicks: 0,
+    accountClicks: 0,
+    lastShownAt: null,
+    impressionCooldown: {},
   };
   store.ads.unshift(ad);
   store.ads = store.ads.slice(0, 300);
-  addInternetLog(store, `${ad.advertiserName} submitted a ${ad.category} ad for review (C$${cost}).`);
-  return { ad: publicAd(ad), wallet: walletView(user), pricing: { base: AD_BASE_COST, boost: AD_BOOST_COST, maxBoost: AD_MAX_BOOST } };
+  addInternetLog(store, `${ad.advertiserName} submitted a ${ad.category} ${placeLabel} ad for review (C$${cost}).`);
+  return {
+    ad: publicAd(ad, { owner: true }),
+    wallet: walletView(user),
+    pricing: internetAdPricing(),
+  };
 }
 
 export function reviewInternetAd(store, { adId, decision, actor, reason = '' }) {
@@ -2752,6 +3027,7 @@ export function reviewInternetAd(store, { adId, decision, actor, reason = '' }) 
   ad.reviewedAt = new Date().toISOString();
   ad.reviewerId = String(actor?.id || '');
   ad.reviewNote = text(reason, 300);
+  const placeLabel = adPlacementLabel(ad.placement);
   if (decision === 'deny') {
     ad.status = 'denied';
     const owner = store.users[ad.advertiserId];
@@ -2760,36 +3036,86 @@ export function reviewInternetAd(store, { adId, decision, actor, reason = '' }) 
       addCreditTransaction(owner, {
         amount: ad.cost,
         type: 'ad-refund',
-        note: 'Sidebar ad denied — credits refunded',
+        note: `${placeLabel[0].toUpperCase()}${placeLabel.slice(1)} ad denied — credits refunded`,
         actorName: 'Clearwater Ads',
       });
-      addInternetMessage(store, owner.id, `Your sidebar ad “${ad.title}” was not approved${ad.reviewNote ? `: ${ad.reviewNote}` : '.'} C$${ad.cost} was returned to your wallet.`);
+      addInternetMessage(store, owner.id, `Your ${placeLabel} ad “${ad.title}” was not approved${ad.reviewNote ? `: ${ad.reviewNote}` : '.'} C$${ad.cost} was returned to your wallet.`);
     }
-    addInternetLog(store, `Denied sidebar ad from ${ad.advertiserName}.`);
-    return { ad: publicAd(ad) };
+    addInternetLog(store, `Denied ${placeLabel} ad from ${ad.advertiserName}.`);
+    return { ad: publicAd(ad, { owner: true }) };
   }
   const now = Date.now();
   ad.status = 'active';
+  ad.placement = normalizeAdPlacement(ad.placement);
   ad.startsAt = new Date(now).toISOString();
   ad.endsAt = new Date(now + AD_DURATION_MS).toISOString();
-  addInternetMessage(store, ad.advertiserId, `Your sidebar ad “${ad.title}” was approved and will run for 24 hours.`);
-  addInternetLog(store, `Approved sidebar ad from ${ad.advertiserName} (${ad.weight}x weight).`);
-  return { ad: publicAd(ad) };
+  ad.impressions = Math.max(0, Math.floor(Number(ad.impressions) || 0));
+  ad.clicks = Math.max(0, Math.floor(Number(ad.clicks) || 0));
+  ad.learnClicks = Math.max(0, Math.floor(Number(ad.learnClicks) || 0));
+  ad.accountClicks = Math.max(0, Math.floor(Number(ad.accountClicks) || 0));
+  ad.impressionCooldown = ad.impressionCooldown && typeof ad.impressionCooldown === 'object' ? ad.impressionCooldown : {};
+  addInternetMessage(store, ad.advertiserId, `Your ${placeLabel} ad “${ad.title}” was approved and will run for ${AD_DURATION_HOURS} hours.`);
+  addInternetLog(store, `Approved ${placeLabel} ad from ${ad.advertiserName} (${ad.weight}x weight).`);
+  return { ad: publicAd(ad, { owner: true }) };
 }
 
 export function listInternetAdsForUser(store, actor) {
   expireInternetAds(store);
   const id = String(actor?.id || '');
-  return store.ads.filter((ad) => ad.advertiserId === id).slice(0, 40).map(publicAd);
+  return store.ads.filter((ad) => ad.advertiserId === id).slice(0, 40).map((ad) => publicAd(ad, { owner: true }));
 }
 
-export function serveInternetAds(store, { count = 1 } = {}) {
+function pruneImpressionCooldown(ad, now = Date.now()) {
+  const cooldown = ad.impressionCooldown && typeof ad.impressionCooldown === 'object' ? ad.impressionCooldown : {};
+  const next = {};
+  for (const [viewerId, seenAt] of Object.entries(cooldown)) {
+    if (now - Number(seenAt || 0) < AD_IMPRESSION_COOLDOWN_MS * 2) next[viewerId] = Number(seenAt || 0);
+  }
+  ad.impressionCooldown = next;
+  return next;
+}
+
+function recordAdImpression(ad, viewerId = '') {
+  const now = Date.now();
+  const cooldown = pruneImpressionCooldown(ad, now);
+  const key = String(viewerId || 'anon').slice(0, 80) || 'anon';
+  const last = Number(cooldown[key] || 0);
+  if (last && now - last < AD_IMPRESSION_COOLDOWN_MS) return false;
+  cooldown[key] = now;
+  ad.impressionCooldown = cooldown;
+  ad.impressions = Math.max(0, Math.floor(Number(ad.impressions) || 0)) + 1;
+  ad.lastShownAt = new Date(now).toISOString();
+  return true;
+}
+
+export function recordInternetAdClick(store, { adId, actor = null, kind = 'learn' } = {}) {
   expireInternetAds(store);
-  const active = store.ads.filter((ad) => ad.status === 'active' && ad.endsAt && new Date(ad.endsAt).getTime() > Date.now());
-  if (!active.length) return [];
+  const ad = store.ads.find((item) => item.id === String(adId || ''));
+  if (!ad || ad.status !== 'active') return { ok: false };
+  if (ad.endsAt && new Date(ad.endsAt).getTime() <= Date.now()) return { ok: false };
+  const clickKind = kind === 'account' ? 'account' : 'learn';
+  ad.clicks = Math.max(0, Math.floor(Number(ad.clicks) || 0)) + 1;
+  if (clickKind === 'account') ad.accountClicks = Math.max(0, Math.floor(Number(ad.accountClicks) || 0)) + 1;
+  else ad.learnClicks = Math.max(0, Math.floor(Number(ad.learnClicks) || 0)) + 1;
+  void actor;
+  return { ok: true, ad: publicAd(ad) };
+}
+
+export function serveInternetAds(store, { count = 1, viewerId = null, placement = 'sidebar' } = {}) {
+  let dirty = expireInternetAds(store);
+  const wanted = normalizeAdPlacement(placement);
+  const active = store.ads.filter((ad) => (
+    ad.status === 'active'
+    && ad.endsAt
+    && new Date(ad.endsAt).getTime() > Date.now()
+    && normalizeAdPlacement(ad.placement) === wanted
+  ));
+  if (!active.length) return { ads: [], dirty };
   const picks = [];
   const pool = [...active];
-  const limit = Math.min(2, Math.max(1, Math.trunc(Number(count) || 1)), pool.length);
+  const requested = Math.max(1, Math.trunc(Number(count) || 1));
+  const cap = wanted === 'sidebar' ? 2 : 8;
+  const limit = Math.min(cap, requested, pool.length);
   for (let i = 0; i < limit; i += 1) {
     const total = pool.reduce((sum, ad) => sum + Math.max(1, Number(ad.weight) || 1), 0);
     let roll = Math.random() * total;
@@ -2798,10 +3124,11 @@ export function serveInternetAds(store, { count = 1 } = {}) {
       roll -= Math.max(1, Number(ad.weight) || 1);
       if (roll <= 0) { chosen = ad; break; }
     }
+    if (recordAdImpression(chosen, viewerId)) dirty = true;
     picks.push(publicAd(chosen));
     pool.splice(pool.indexOf(chosen), 1);
   }
-  return picks;
+  return { ads: picks, dirty };
 }
 
 function markReportLogsReverted(store, reportId, actorId) {
@@ -2949,7 +3276,7 @@ export function moderationSnapshot(store) {
   expireInternetAds(store);
   const open = store.reports.filter((report) => report.status === 'open').map((report) => publicStaffReport(store, report));
   const reviewed = store.reports.filter((report) => report.status !== 'open').map((report) => publicStaffReport(store, report));
-  const pendingAds = store.ads.filter((ad) => ad.status === 'pending').map(publicAd);
+  const pendingAds = store.ads.filter((ad) => ad.status === 'pending').map((ad) => publicAd(ad, { owner: true }));
   const users = Object.values(store.users).map((user) => staffUserSummary(store, user));
   const bans = users.filter((user) => user.banned).map((user) => {
     const ban = getActiveBan(store.users[user.id]);
@@ -2960,7 +3287,7 @@ export function moderationSnapshot(store) {
     reports: open.slice(0, 100),
     history: reviewed.slice(0, 100),
     pendingAds: pendingAds.slice(0, 50),
-    adPricing: { base: AD_BASE_COST, boost: AD_BOOST_COST, maxBoost: AD_MAX_BOOST, durationHours: 24 },
+    adPricing: internetAdPricing(),
     stats: {
       pending: open.length,
       pendingAds: pendingAds.length,

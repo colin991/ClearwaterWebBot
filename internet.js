@@ -72,6 +72,9 @@ const trendingList = document.querySelector('[data-trending-list]');
 const bookmarkList = document.querySelector('[data-bookmark-list]');
 const profileModal = document.querySelector('[data-profile-modal]');
 const messageModal = document.querySelector('[data-message-modal]');
+const connectionsModal = document.querySelector('[data-connections-modal]');
+const connectionsTitle = document.querySelector('[data-connections-title]');
+const connectionsList = document.querySelector('[data-connections-list]');
 const messageForm = document.querySelector('[data-message-form]');
 const messageUserSearch = document.querySelector('[data-message-user-search]');
 const messageUserResults = document.querySelector('[data-message-user-results]');
@@ -93,10 +96,12 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260813-ads-blue';
+const INTERNET_VERSION = '20260813-sponsored-placements';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
+let adPlacement = 'sidebar';
+let adVideoSeconds = 0;
 const MAX_AD_MEDIA_BYTES = 40 * 1024 * 1024;
 const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
 const AUTOMOD_HOLD_PREVIEW = 'This may be held for staff review when you send it.';
@@ -308,6 +313,8 @@ let socialState = { following: [], followers: [], blocked: [], muted: [], bookma
 let viewedMember = null;
 let profileTab = 'posts';
 let memberTab = 'posts';
+let connectionModalScope = null;
+let connectionModalKind = null;
 let preferenceState = {};
 let profileDraft = null;
 let profileBannerBusy = false;
@@ -336,13 +343,25 @@ let staffHistoryFilter = 'all';
 let staffHistoryQuery = '';
 let staffUserQuery = '';
 let staffUsersFilter = 'all';
+let staffSearchResults = null;
+let staffSearchBusy = false;
+let staffSearchTimer = 0;
 let selectedStaffUserId = null;
 let staffUserDetail = null;
 let staffUserBusy = false;
 let sidebarAds = [];
+let feedAds = [];
+let reelAds = [];
 let myAds = [];
-let adPricing = { base: 1200, boost: 300, maxBoost: 5, durationHours: 24 };
+let adPricing = {
+  base: 1200,
+  boost: 300,
+  maxBoost: 5,
+  durationHours: 48,
+  reelDurationMultipliers: { upTo15: 1, upTo30: 1.25, upTo45: 1.5, upTo60: 1.75, over60: 2 },
+};
 let adRotateTimer = 0;
+let adWalletTab = 'create';
 const expandedPollVoters = new Set();
 const clearwaterEmojiChoices = [
   ['🚓', 'Police'], ['🚒', 'Fire rescue'], ['🚑', 'EMS'], ['🌴', 'Clearwater'],
@@ -1343,11 +1362,24 @@ function renderReels() {
     renderReelPanel('');
     return;
   }
+  const ads = Array.isArray(reelAds) ? reelAds.filter(Boolean) : [];
+  const items = [];
+  let adIndex = 0;
+  reels.forEach((reel, index) => {
+    items.push({ type: 'reel', reel });
+    if (ads.length && (index + 1) % 4 === 0) {
+      items.push({ type: 'ad', ad: ads[adIndex % ads.length] });
+      adIndex += 1;
+    }
+  });
   // Patch counts in place when the line-up is unchanged so liking never restarts playback or loses scroll position.
-  const signature = reels.map((reel) => reel.id).join('|');
+  const signature = items.map((item) => (item.type === 'ad' ? `ad:${item.ad.id}` : item.reel.id)).join('|');
   const cards = viewport.querySelectorAll('.reel-card');
-  if (viewport.dataset.reelSignature === signature && cards.length === reels.length) {
-    cards.forEach((card, index) => updateReelStats(card, reels[index]));
+  if (viewport.dataset.reelSignature === signature && cards.length === items.length) {
+    cards.forEach((card, index) => {
+      const item = items[index];
+      if (item?.type === 'reel') updateReelStats(card, item.reel);
+    });
     syncReelCardHeights(viewport);
     if (activeReelId) {
       const active = reels.find((reel) => reel.id === activeReelId);
@@ -1369,8 +1401,13 @@ function renderReels() {
   }
   viewport.dataset.reelSignature = signature;
   clearReelTap();
-  const anchorId = [...cards].find((card) => card.offsetTop + card.offsetHeight > viewport.scrollTop + 8)?.dataset.reelId || activeReelId || '';
-  viewport.innerHTML = reels.map((reel) => {
+  const anchorId = [...cards].find((card) => card.offsetTop + card.offsetHeight > viewport.scrollTop + 8)?.dataset.reelId
+    || [...cards].find((card) => card.offsetTop + card.offsetHeight > viewport.scrollTop + 8)?.dataset.sponsoredReelId
+    || activeReelId
+    || '';
+  viewport.innerHTML = items.map((item) => {
+    if (item.type === 'ad') return sponsoredReelMarkup(item.ad);
+    const reel = item.reel;
     const likes = Array.isArray(reel.likes) ? reel.likes : [];
     const liked = likes.includes(activeUserId());
     const comments = reelCommentsFor(reel.id).length;
@@ -1405,7 +1442,9 @@ function renderReels() {
   }).join('');
   syncReelCardHeights(viewport);
   if (anchorId) {
-    const stayOn = [...viewport.querySelectorAll('.reel-card')].find((card) => card.dataset.reelId === anchorId);
+    const stayOn = [...viewport.querySelectorAll('.reel-card')].find((card) => (
+      card.dataset.reelId === anchorId || card.dataset.sponsoredReelId === anchorId
+    ));
     if (stayOn) viewport.scrollTo({ top: stayOn.offsetTop, behavior: 'instant' });
   }
   bindReelMediaFallback(viewport);
@@ -1500,7 +1539,21 @@ function showPosts(posts, emptyMessage) {
   note.hidden = Boolean(visible.length);
   note.textContent = visible.length ? '' : (emptyMessage || 'No posts yet. Be the first to share an update.');
   const heading = isSearchingFeed() && visible.length ? '<h2 class="search-posts-heading">Posts</h2>' : '';
-  list.innerHTML = `${heading}${visible.map((post) => postMarkup(post)).join('')}`;
+  const injectAds = !isSearchingFeed() && Array.isArray(feedAds) && feedAds.length > 0;
+  let markup = '';
+  if (!injectAds) {
+    markup = visible.map((post) => postMarkup(post)).join('');
+  } else {
+    let adIndex = 0;
+    visible.forEach((post, index) => {
+      markup += postMarkup(post);
+      if ((index + 1) % 5 === 0) {
+        markup += sponsoredFeedMarkup(feedAds[adIndex % feedAds.length]);
+        adIndex += 1;
+      }
+    });
+  }
+  list.innerHTML = `${heading}${markup}`;
 }
 
 function trendingTagKeys() {
@@ -1769,6 +1822,103 @@ function mutualFriendsMarkup(mutualIds) {
   return `<span class="mutual-faces">${faces}</span><button type="button" data-open-member="${escapeHtml(mutualIds[0])}">${label}</button>`;
 }
 
+function connectionListMarkup(ids, labelFor, emptyCopy) {
+  const known = ids.filter((id) => internetUsers.has(id));
+  if (!known.length) return `<p class="connections-modal-empty">${escapeHtml(emptyCopy)}</p>`;
+  return known.slice(0, 48).map((id) => {
+    const member = internetUsers.get(id);
+    return `<button type="button" data-open-member="${escapeHtml(id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(member.displayName || 'Clearwater member')}</b><small>@${escapeHtml(member.username || 'member')} · ${escapeHtml(labelFor(id, member))}</small></span></button>`;
+  }).join('');
+}
+
+function setConnectionButtonsState(scope, kind) {
+  const followingButton = document.querySelector(scope === 'member' ? '[data-member-page-following]' : '[data-profile-following]');
+  const followersButton = document.querySelector(scope === 'member' ? '[data-member-page-followers]' : '[data-profile-followers]');
+  const otherScope = scope === 'member' ? 'profile' : 'member';
+  const otherFollowing = document.querySelector(otherScope === 'member' ? '[data-member-page-following]' : '[data-profile-following]');
+  const otherFollowers = document.querySelector(otherScope === 'member' ? '[data-member-page-followers]' : '[data-profile-followers]');
+  followingButton?.setAttribute('aria-expanded', kind === 'following' ? 'true' : 'false');
+  followersButton?.setAttribute('aria-expanded', kind === 'followers' ? 'true' : 'false');
+  followingButton?.classList.toggle('active', kind === 'following');
+  followersButton?.classList.toggle('active', kind === 'followers');
+  otherFollowing?.setAttribute('aria-expanded', 'false');
+  otherFollowers?.setAttribute('aria-expanded', 'false');
+  otherFollowing?.classList.remove('active');
+  otherFollowers?.classList.remove('active');
+}
+
+function closeConnectionsModal() {
+  connectionModalScope = null;
+  connectionModalKind = null;
+  if (connectionsModal) connectionsModal.hidden = true;
+  if (connectionsList) connectionsList.innerHTML = '';
+  setConnectionButtonsState('profile', null);
+  setConnectionButtonsState('member', null);
+}
+
+function openConnectionsModal(scope, kind) {
+  if (!connectionsModal || !connectionsList || !kind) {
+    closeConnectionsModal();
+    return;
+  }
+
+  let title = kind === 'followers' ? 'Followers' : 'Following';
+  let ids = [];
+  let emptyCopy = kind === 'followers' ? 'No followers yet.' : 'Not following anyone yet.';
+  let labelFor = () => (kind === 'followers' ? 'Follower' : 'Following');
+
+  if (scope === 'profile') {
+    const me = internetUsers.get(activeUserId()) || {};
+    if (preferenceState.hideStats === true || me.hideStats === true) {
+      closeConnectionsModal();
+      return;
+    }
+    ids = kind === 'followers'
+      ? (Array.isArray(me.followers) ? me.followers : [])
+      : (Array.isArray(me.following) ? me.following : []);
+    labelFor = () => (kind === 'followers' ? 'Follows you' : 'Following');
+  } else {
+    const user = viewedMember || {};
+    if (user.hideStats === true) {
+      closeConnectionsModal();
+      return;
+    }
+    const hiddenFollowing = kind === 'following' && user.hideFollowing === true && user.id !== activeUserId();
+    ids = hiddenFollowing
+      ? []
+      : (kind === 'followers'
+        ? (Array.isArray(user.followers) ? user.followers : [])
+        : (Array.isArray(user.following) ? user.following : []));
+    emptyCopy = hiddenFollowing
+      ? 'This member hides who they follow.'
+      : emptyCopy;
+    labelFor = () => (kind === 'followers' ? 'Follows them' : 'They follow');
+  }
+
+  connectionModalScope = scope;
+  connectionModalKind = kind;
+  if (connectionsTitle) connectionsTitle.textContent = title;
+  connectionsList.innerHTML = connectionListMarkup(ids, labelFor, emptyCopy);
+  connectionsModal.hidden = false;
+  setConnectionButtonsState(scope, kind);
+}
+
+function toggleProfileConnections(kind) {
+  if (connectionModalScope === 'profile' && connectionModalKind === kind && connectionsModal && !connectionsModal.hidden) {
+    closeConnectionsModal();
+    return;
+  }
+  openConnectionsModal('profile', kind);
+}
+
+function toggleMemberConnections(kind) {
+  if (connectionModalScope === 'member' && connectionModalKind === kind && connectionsModal && !connectionsModal.hidden) {
+    closeConnectionsModal();
+    return;
+  }
+  openConnectionsModal('member', kind);
+}
+
 function renderOwnProfileDetails() {
   if (!currentUserId) return;
   const me = internetUsers.get(currentUserId);
@@ -1796,19 +1946,9 @@ function renderOwnProfileDetails() {
     followersButton.hidden = hideStats;
     followersButton.innerHTML = `<b>${Number(me.followerCount ?? followers.length).toLocaleString()}</b> Followers`;
   }
-  const connections = document.querySelector('[data-profile-connections]');
-  if (connections && hideStats) {
-    connections.hidden = true;
-    connections.innerHTML = '';
-  } else if (connections) {
-    const memberIds = [...new Set([...following, ...followers])].filter((id) => internetUsers.has(id));
-    connections.hidden = memberIds.length === 0;
-    connections.innerHTML = memberIds.slice(0, 24).map((id) => {
-      const member = internetUsers.get(id);
-      const label = followers.includes(id) ? 'Follows you' : 'Following';
-      return `<button type="button" data-open-member="${escapeHtml(id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(member.displayName || 'Clearwater member')}</b><small>${label}</small></span></button>`;
-    }).join('');
-  }
+  if (hideStats && connectionModalScope === 'profile') closeConnectionsModal();
+  else if (connectionModalScope === 'profile' && connectionModalKind) openConnectionsModal('profile', connectionModalKind);
+  else setConnectionButtonsState('profile', connectionModalScope === 'profile' ? connectionModalKind : null);
   const mutuals = document.querySelector('[data-profile-mutuals]');
   if (mutuals) {
     mutuals.hidden = true;
@@ -1860,8 +2000,12 @@ function showView(view) {
   if (activeView === 'notifications') void loadNotifications();
   if (activeView === 'staff') void loadModeration();
   if (activeView === 'wallet') {
+    renderWalletStore();
+    maybeStartRobloxClaim();
     void loadWallet();
     void loadAds();
+  } else {
+    setAdvertiseHubOpen(false);
   }
   if (activeView === 'sponsored') fillSponsoredReportForm();
   if (activeView === 'profile') renderOwnProfileDetails();
@@ -2284,13 +2428,13 @@ function staffUserPanelMarkup(detail) {
       <img src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" />
       <div>
         <b>${escapeHtml(user.displayName || 'Discord user')}</b>
-        <small>@${escapeHtml(user.username || 'member')}</small>
-        <p class="staff-user-id"><button type="button" data-staff-copy-id="${escapeHtml(user.id)}">${escapeHtml(user.id)}</button></p>
+        <small>@${escapeHtml(user.discordUsername || user.username || 'member')}${user.staffRank ? ` · ${escapeHtml(user.staffRank)}` : ''}</small>
+        <p class="staff-user-id"><span>Discord ID</span><button type="button" data-staff-copy-id="${escapeHtml(user.discordId || user.id)}">${escapeHtml(user.discordId || user.id)}</button></p>
         <div class="staff-chip-row">${staffUserChips(user)}</div>
       </div>
       <div class="staff-user-hero-actions">
         <button type="button" data-open-member="${escapeHtml(user.id)}">Public profile</button>
-        <a href="https://discord.com/users/${encodeURIComponent(user.id)}" target="_blank" rel="noopener">Discord</a>
+        <a href="https://discord.com/users/${encodeURIComponent(user.discordId || user.id)}" target="_blank" rel="noopener">Discord</a>
       </div>
     </header>
     <dl class="staff-user-stats">
@@ -2484,15 +2628,23 @@ function renderStaffDashboard() {
       : '<p class="staff-empty">No staff actions yet.</p>';
   }
   const query = staffUserQuery.trim().toLowerCase();
-  const staffMembers = (Array.isArray(moderationSnapshot.users) && moderationSnapshot.users.length
-    ? moderationSnapshot.users
-    : [...internetUsers.values()].map((member) => ({
-      ...member,
-      flagged: Boolean(member.banned),
-      warningCount: 0,
-      postCount: 0,
-    }))).filter((member) => {
-    if (query && !`${member.displayName || ''} ${member.username || ''} ${member.id || ''}`.toLowerCase().includes(query)) return false;
+  const sourceUsers = (query && Array.isArray(staffSearchResults))
+    ? staffSearchResults
+    : (Array.isArray(moderationSnapshot.users) && moderationSnapshot.users.length
+      ? moderationSnapshot.users
+      : [...internetUsers.values()].map((member) => ({
+        ...member,
+        discordId: member.id,
+        discordUsername: member.username,
+        flagged: Boolean(member.banned),
+        warningCount: 0,
+        postCount: 0,
+      })));
+  const staffMembers = sourceUsers.filter((member) => {
+    if (query && !Array.isArray(staffSearchResults)) {
+      const haystack = `${member.displayName || ''} ${member.username || ''} ${member.discordUsername || ''} ${member.discordId || ''} ${member.id || ''}`.toLowerCase();
+      if (!haystack.includes(query.replace(/^@/, ''))) return false;
+    }
     if (staffUsersFilter === 'flagged') return member.flagged === true;
     if (staffUsersFilter === 'banned') return member.banned === true;
     if (staffUsersFilter === 'watched') return member.watched === true;
@@ -2500,9 +2652,11 @@ function renderStaffDashboard() {
   });
   document.querySelectorAll('[data-staff-users-filter]').forEach((button) => button.classList.toggle('selected', button.dataset.staffUsersFilter === staffUsersFilter));
   if (usersPane) {
-    usersPane.innerHTML = staffMembers.length
-      ? staffMembers.slice(0, 80).map((member) => `<button type="button" class="staff-user-row ${member.id === selectedStaffUserId ? 'selected' : ''}" data-staff-open-user="${escapeHtml(member.id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" /><span><b>${escapeHtml(member.displayName || 'Discord user')}</b><small>@${escapeHtml(member.username || 'member')}</small><span class="staff-chip-row">${staffUserChips(member)}</span></span></button>`).join('')
-      : '<p class="staff-empty">No members match that search.</p>';
+    usersPane.innerHTML = staffSearchBusy && query
+      ? '<p class="staff-loading">Searching Discord-linked accounts...</p>'
+      : (staffMembers.length
+        ? staffMembers.slice(0, 80).map((member) => `<button type="button" class="staff-user-row ${member.id === selectedStaffUserId ? 'selected' : ''}" data-staff-open-user="${escapeHtml(member.id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" /><span><b>${escapeHtml(member.displayName || 'Discord user')}</b><small>@${escapeHtml(member.discordUsername || member.username || 'member')} · ${escapeHtml(member.discordId || member.id || '')}</small><span class="staff-chip-row">${staffUserChips(member)}</span></span></button>`).join('')
+        : `<p class="staff-empty">${query ? 'No Discord-linked Internet accounts match that search.' : 'No members match that search.'}</p>`);
   }
   const userPanel = document.querySelector('[data-staff-user-panel]');
   const keepUserPanel = Boolean(userPanel && userPanel.contains(document.activeElement));
@@ -2569,7 +2723,11 @@ function renderStaffDashboard() {
       const media = safeVideoUrl(ad.videoUrl)
         ? `<video class="staff-ad-media" src="${escapeHtml(ad.videoUrl)}" controls playsinline muted></video>`
         : (safeImageUrl(ad.imageUrl) ? `<img class="staff-ad-media" src="${escapeHtml(ad.imageUrl)}" alt="" />` : '');
-      return `<article class="staff-ad-card"><div><b>${escapeHtml(ad.title)}</b><small>${escapeHtml(ad.category)} · ${escapeHtml(ad.businessName)} · ${escapeHtml(ad.advertiserName || 'Member')}${ad.weight > 1 ? ` · ${ad.weight}x` : ''}</small><p>${escapeHtml(ad.body)}</p>${media}</div><div class="staff-ad-actions"><button type="button" class="staff-action-btn primary" data-ad-review="accept" data-ad-id="${escapeHtml(ad.id)}">Approve 24h</button><button type="button" class="staff-action-btn" data-ad-review="deny" data-ad-id="${escapeHtml(ad.id)}">Deny & refund</button></div></article>`;
+      const placement = adPlacementLabel(ad.placement);
+      const durationNote = ad.placement === 'reel' && ad.videoSeconds
+        ? ` · ${Math.ceil(Number(ad.videoSeconds) || 0)}s video`
+        : '';
+      return `<article class="staff-ad-card"><div><b>${escapeHtml(ad.title)}</b><small>${escapeHtml(placement)} · ${escapeHtml(ad.category)} · ${escapeHtml(ad.businessName)} · ${escapeHtml(ad.advertiserName || 'Member')}${ad.weight > 1 ? ` · ${ad.weight}x` : ''}${durationNote}${ad.cost ? ` · C$${Number(ad.cost)}` : ''}</small><p>${escapeHtml(ad.body)}</p>${media}</div><div class="staff-ad-actions"><button type="button" class="staff-action-btn primary" data-ad-review="accept" data-ad-id="${escapeHtml(ad.id)}">Approve 48h ${escapeHtml(placement)}</button><button type="button" class="staff-action-btn" data-ad-review="deny" data-ad-id="${escapeHtml(ad.id)}">Deny & refund</button></div></article>`;
     }).join('') : '<div class="staff-empty">No ads waiting for review.</div>'}</section></div>`;
   }
 }
@@ -2798,6 +2956,99 @@ function formatCredits(value) {
   return `C$${Math.max(0, Math.floor(Number(value) || 0)).toLocaleString()}`;
 }
 
+const CREDIT_STORE_PACKS = Object.freeze([
+  {
+    id: '109005087621617',
+    assetId: '109005087621617',
+    robux: 500,
+    credits: 1000,
+    label: 'Starter pack',
+    url: 'https://www.roblox.com/catalog/109005087621617',
+  },
+  {
+    id: '123843071072106',
+    assetId: '123843071072106',
+    robux: 1000,
+    credits: 2200,
+    label: 'Boost pack',
+    url: 'https://www.roblox.com/catalog/123843071072106',
+  },
+  {
+    id: '85562318217896',
+    assetId: '85562318217896',
+    robux: 1500,
+    credits: 2750,
+    label: 'Plus pack',
+    url: 'https://www.roblox.com/catalog/85562318217896',
+  },
+  {
+    id: '116068796281105',
+    assetId: '116068796281105',
+    robux: 2000,
+    credits: 3400,
+    label: 'City pack',
+    url: 'https://www.roblox.com/catalog/116068796281105',
+  },
+]);
+
+function renderWalletStore() {
+  const root = document.querySelector('[data-wallet-store]');
+  const status = document.querySelector('[data-wallet-store-status]');
+  if (!root) return;
+  root.innerHTML = `${CREDIT_STORE_PACKS.map((pack) => `
+    <article class="wallet-store-pack">
+      <div class="wallet-store-pack-copy">
+        <strong>${formatCredits(pack.credits)}</strong>
+        <span>${escapeHtml(pack.label)}</span>
+        <small>R$${Number(pack.robux).toLocaleString()} on Roblox</small>
+      </div>
+      <a class="wallet-store-buy" href="${escapeHtml(pack.url)}" target="_blank" rel="noopener noreferrer">Buy on Roblox</a>
+    </article>
+  `).join('')}
+  <div class="wallet-store-claim">
+    <a class="wallet-store-claim-btn" href="/api/auth/roblox?next=${encodeURIComponent('/internet/wallet')}">Claim purchases</a>
+    <p>Signs into Roblox, checks your inventory, and adds any unclaimed packs to this wallet.</p>
+  </div>`;
+  if (status) {
+    const params = new URLSearchParams(window.location.search);
+    const claim = params.get('robloxClaim');
+    if (claim === 'ok') {
+      status.dataset.tone = 'ok';
+      status.textContent = `Claimed ${formatCredits(params.get('credits') || 0)} from Roblox${params.get('packs') ? ` (${params.get('packs')} pack${params.get('packs') === '1' ? '' : 's'})` : ''}.`;
+    } else if (claim === 'none') {
+      status.dataset.tone = 'wait';
+      status.textContent = 'No new packs to claim. Buy on Roblox first, or these packs were already claimed.';
+    } else if (claim === 'inventory') {
+      status.dataset.tone = 'error';
+      status.textContent = 'Could not read your Roblox inventory. Allow inventory access and try Claim again.';
+    } else if (claim === 'config') {
+      status.dataset.tone = 'error';
+      status.textContent = 'Roblox claim is not configured on the website yet.';
+    } else if (claim === 'error' || claim === 'denied') {
+      status.dataset.tone = 'error';
+      status.textContent = 'Roblox verification failed. Try Claim purchases again.';
+    } else {
+      status.dataset.tone = 'wait';
+      status.textContent = 'Purchase on Roblox, then use Claim purchases to verify inventory and receive credits.';
+    }
+    if (claim) {
+      const clean = new URL(window.location.href);
+      ['robloxClaim', 'credits', 'packs'].forEach((key) => clean.searchParams.delete(key));
+      history.replaceState({}, '', `${clean.pathname}${clean.search}${clean.hash}`);
+    }
+  }
+}
+
+function maybeStartRobloxClaim() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('claimRoblox') !== '1') return;
+  if (!currentUserId) return;
+  const clean = new URL(window.location.href);
+  clean.searchParams.delete('claimRoblox');
+  history.replaceState({}, '', `${clean.pathname}${clean.search}${clean.hash}`);
+  window.location.href = `/api/auth/roblox?next=${encodeURIComponent('/internet/wallet')}`;
+}
+
 function walletClaimCopy(wallet) {
   if (wallet?.claimedNow) {
     const label = wallet.dailyLabel && wallet.dailyLabel !== 'Member' ? ` · ${wallet.dailyLabel}` : '';
@@ -2823,31 +3074,47 @@ function renderWalletBoost(wallet) {
   const next = document.querySelector('[data-wallet-boost-next]');
   const copy = document.querySelector('[data-wallet-boost-copy]');
   const perks = document.querySelector('[data-wallet-boost-perks]');
+  const earnings = document.querySelector('[data-wallet-earnings]');
   const percent = Math.round(Math.max(0, Math.min(1, Number(boost.progress) || 0)) * 100);
-  if (level) level.textContent = `Level ${Number(boost.level) || 0} · ${boost.label || 'Starter'}`;
-  if (rate) rate.textContent = `${formatCredits(boost.daily || wallet?.dailyAmount || 75)} / day`;
+  const chatDaily = Number(wallet?.chatDaily ?? boost.daily ?? 75);
+  const totalDaily = Number(wallet?.dailyAmount || chatDaily);
+  const roleExtra = Number(wallet?.roleExtra || 0);
+  const roleLabel = wallet?.roleLabel || '';
+  if (level) {
+    level.textContent = Number(boost.level) > 0
+      ? `Level ${Number(boost.level)} · ${boost.label || 'Talker'}`
+      : 'Level 0 · Starter';
+  }
+  if (rate) rate.textContent = `${formatCredits(totalDaily)} / day`;
   if (fill) fill.style.width = `${percent}%`;
   if (track) {
     track.setAttribute('aria-valuenow', String(percent));
     track.setAttribute('aria-label', `Daily chat level progress ${percent}%`);
   }
   if (copy) {
-    copy.textContent = wallet?.dailySource === 'role'
-      ? `Your Discord role currently pays ${formatCredits(wallet.dailyAmount || 75)}/day. Keep chatting to raise your own level too.`
-      : 'Send messages and posts on Clearwater Internet to raise your daily credit drop.';
+    copy.textContent = 'Send messages and posts to climb Level 1–5 and raise your daily drop.';
   }
   if (next) {
     next.textContent = boost.maxLevel
-      ? `Max chat level · ${Number(boost.messages || 0).toLocaleString()} chats counted.`
-      : `${Number(boost.messages || 0).toLocaleString()} / ${Number(boost.nextMessages || 0).toLocaleString()} chats to Level ${boost.nextLevel} · ${boost.nextLabel} (${formatCredits(boost.nextDaily || 0)}/day).`;
+      ? `Max level · ${Number(boost.messages || 0).toLocaleString()} chats counted.`
+      : `${Number(boost.messages || 0).toLocaleString()} / ${Number(boost.nextMessages || 0).toLocaleString()} chats to Level ${boost.nextLevel} (${formatCredits(boost.nextDaily || 0)}/day).`;
+  }
+  if (earnings) {
+    earnings.hidden = false;
+    if (roleExtra > 0 && roleLabel) {
+      earnings.textContent = `You'll make ${formatCredits(totalDaily)}/day — ${formatCredits(chatDaily)} from chat + ${formatCredits(roleExtra)} extra from ${roleLabel}.`;
+    } else if (roleLabel && Number(wallet?.roleAmount || 0) > 0) {
+      earnings.textContent = `You'll make ${formatCredits(totalDaily)}/day from your chat level. Your ${roleLabel} role is at or below that.`;
+    } else {
+      earnings.textContent = `You'll make ${formatCredits(totalDaily)}/day from your current chat level.`;
+    }
   }
   if (perks) {
-    const levels = Array.isArray(boost.levels) ? boost.levels : [];
+    const levels = (Array.isArray(boost.levels) ? boost.levels : []).filter((entry) => Number(entry.level) >= 1);
     perks.innerHTML = levels.length
       ? levels.map((entry) => {
-        const active = Number(entry.level) === Number(boost.level);
-        const unlocked = Number(boost.messages || 0) >= Number(entry.messages || 0);
-        return `<li class="${active ? 'active' : ''} ${unlocked ? 'unlocked' : ''}"><b>Lv ${entry.level} · ${escapeHtml(entry.label)}</b><span>${Number(entry.messages || 0).toLocaleString()} chats · ${formatCredits(entry.daily)}/day</span></li>`;
+        const current = Number(entry.level) === Number(boost.level);
+        return `<span class="${current ? 'current' : ''}">Level ${entry.level} · ${escapeHtml(entry.label)} — ${Number(entry.messages || 0).toLocaleString()} chats · ${formatCredits(entry.daily)}/day</span>`;
       }).join('')
       : '';
   }
@@ -2985,6 +3252,73 @@ function renderWhoToFollow() {
   }).join('');
 }
 
+function adPlacementLabel(placement) {
+  if (placement === 'feed') return 'Feed';
+  if (placement === 'reel') return 'Reels';
+  return 'Sidebar';
+}
+
+function findCachedAd(adId = '') {
+  const id = String(adId || '');
+  if (!id) return null;
+  return sidebarAds.find((item) => item.id === id)
+    || feedAds.find((item) => item.id === id)
+    || reelAds.find((item) => item.id === id)
+    || myAds.find((item) => item.id === id)
+    || null;
+}
+
+function sponsoredFeedMarkup(ad) {
+  if (!ad) return '';
+  const media = safeVideoUrl(ad.videoUrl)
+    ? `<video class="sponsored-feed-media" src="${escapeHtml(ad.videoUrl)}" muted loop playsinline autoplay></video>`
+    : (safeImageUrl(ad.imageUrl) ? `<img class="sponsored-feed-media" src="${escapeHtml(ad.imageUrl)}" alt="" />` : '');
+  return `<article class="post sponsored-feed-card" data-sponsored-feed-id="${escapeHtml(ad.id)}">
+    <div class="post-top">
+      <img class="post-avatar" src="assets/clearwater-logo.png" alt="" />
+      <div>
+        <div class="post-author sponsored-feed-author">
+          <span class="post-name">${escapeHtml(ad.businessName || 'Clearwater Ads')}</span>
+          <span class="sponsored-pill">Sponsored</span>
+          <span class="post-meta">${escapeHtml(ad.advertiserName || 'Advertiser')}</span>
+        </div>
+      </div>
+    </div>
+    ${media}
+    <h3 class="sponsored-feed-title">${escapeHtml(ad.title)}</h3>
+    <p class="post-content">${escapeHtml(ad.body)}</p>
+    <div class="sponsored-feed-actions">
+      <a class="sidebar-ad-promo-btn" href="${escapeHtml(internetUrl('sponsored', ad.id))}" data-open-sponsored="${escapeHtml(ad.id)}">Learn</a>
+      <button type="button" class="sidebar-ad-promo-btn sidebar-ad-promo-btn-secondary" data-open-ad-account data-ad-id="${escapeHtml(ad.id)}" data-ad-advertiser-id="${escapeHtml(ad.advertiserId || '')}" data-ad-advertiser-username="${escapeHtml(ad.advertiserUsername || '')}" data-ad-advertiser-name="${escapeHtml(ad.advertiserName || '')}">Account</button>
+    </div>
+  </article>`;
+}
+
+function sponsoredReelMarkup(ad) {
+  if (!ad) return '';
+  const media = safeVideoUrl(ad.videoUrl)
+    ? `<video src="${escapeHtml(ad.videoUrl)}" loop muted playsinline webkit-playsinline preload="auto" autoplay></video>`
+    : (safeImageUrl(ad.imageUrl) ? `<img src="${escapeHtml(ad.imageUrl)}" alt="" />` : '<p class="reel-missing">This sponsored Reel could not be loaded.</p>');
+  return `<article class="reel-card reel-sponsored-card" data-sponsored-reel-id="${escapeHtml(ad.id)}">
+    ${media}
+    <div class="reel-gradient" aria-hidden="true"></div>
+    <span class="sponsored-pill sponsored-reel-pill">Sponsored</span>
+    <div class="reel-meta">
+      <div class="reel-meta-user">
+        <button type="button" data-open-ad-account data-ad-id="${escapeHtml(ad.id)}" data-ad-advertiser-id="${escapeHtml(ad.advertiserId || '')}" data-ad-advertiser-username="${escapeHtml(ad.advertiserUsername || '')}" data-ad-advertiser-name="${escapeHtml(ad.advertiserName || '')}">
+          <img src="assets/clearwater-logo.png" alt="" />
+          <span class="reel-author"><b>${escapeHtml(ad.businessName || 'Clearwater Ads')}</b><small>${escapeHtml(ad.advertiserName || 'Advertiser')}</small></span>
+        </button>
+      </div>
+      <p><b>${escapeHtml(ad.title)}</b>${ad.body ? ` — ${escapeHtml(ad.body)}` : ''}</p>
+    </div>
+    <div class="reel-actions sponsored-reel-actions">
+      <a class="sidebar-ad-promo-btn" href="${escapeHtml(internetUrl('sponsored', ad.id))}" data-open-sponsored="${escapeHtml(ad.id)}">Learn</a>
+      <button type="button" class="sidebar-ad-promo-btn sidebar-ad-promo-btn-secondary" data-open-ad-account data-ad-id="${escapeHtml(ad.id)}" data-ad-advertiser-id="${escapeHtml(ad.advertiserId || '')}" data-ad-advertiser-username="${escapeHtml(ad.advertiserUsername || '')}" data-ad-advertiser-name="${escapeHtml(ad.advertiserName || '')}">Account</button>
+    </div>
+  </article>`;
+}
+
 function renderSidebarAds(ads = sidebarAds) {
   const list = document.querySelector('[data-sidebar-ad-list]');
   const panel = document.querySelector('[data-sidebar-ads]');
@@ -2996,7 +3330,7 @@ function renderSidebarAds(ads = sidebarAds) {
     list.innerHTML = `<article class="sidebar-ad-promo sidebar-ad-empty-card">
       <header class="sidebar-ad-promo-brand"><img src="assets/clearwater-logo.png" alt="" /><span>Clearwater Ads</span><i>Sponsored</i></header>
       <h3>Promote your department or business</h3>
-      <p>Buy a 24-hour sidebar slot with Clearwater Credits.</p>
+      <p>Buy a 48-hour sidebar slot with Clearwater Credits.</p>
       <div class="sidebar-ad-promo-actions">
         <a class="sidebar-ad-promo-btn" href="/internet/sponsored" data-view-link="sponsored">Learn</a>
         <a class="sidebar-ad-promo-btn sidebar-ad-promo-btn-secondary" href="/internet/wallet" data-view-link="wallet">Advertise</a>
@@ -3014,7 +3348,7 @@ function renderSidebarAds(ads = sidebarAds) {
     <p>${escapeHtml(ad.body)}</p>
     <div class="sidebar-ad-promo-actions">
       <a class="sidebar-ad-promo-btn" href="${escapeHtml(internetUrl('sponsored', ad.id))}" data-open-sponsored="${escapeHtml(ad.id)}">Learn</a>
-      <button type="button" class="sidebar-ad-promo-btn sidebar-ad-promo-btn-secondary" data-open-ad-account data-ad-advertiser-id="${escapeHtml(ad.advertiserId || '')}" data-ad-advertiser-username="${escapeHtml(ad.advertiserUsername || '')}" data-ad-advertiser-name="${escapeHtml(ad.advertiserName || '')}">Account</button>
+      <button type="button" class="sidebar-ad-promo-btn sidebar-ad-promo-btn-secondary" data-open-ad-account data-ad-id="${escapeHtml(ad.id)}" data-ad-advertiser-id="${escapeHtml(ad.advertiserId || '')}" data-ad-advertiser-username="${escapeHtml(ad.advertiserUsername || '')}" data-ad-advertiser-name="${escapeHtml(ad.advertiserName || '')}">Account</button>
     </div>
   </article>`;
 }
@@ -3065,7 +3399,7 @@ function fillSponsoredReportForm(adId = '') {
   const input = document.querySelector('[data-sponsored-ad-id]');
   const target = document.querySelector('[data-sponsored-report-target]');
   const status = document.querySelector('[data-sponsored-report-status]');
-  const ad = sidebarAds.find((item) => item.id === id) || null;
+  const ad = findCachedAd(id);
   if (input && id) input.value = id;
   if (target) {
     target.textContent = ad
@@ -3081,6 +3415,91 @@ function showSponsoredPage(adId = '', updateRoute = true) {
   if (updateRoute) setInternetRoute('sponsored', adId || '');
   showView('sponsored');
   fillSponsoredReportForm(adId);
+}
+
+function reelMultiplierForSeconds(seconds) {
+  const multipliers = adPricing.reelDurationMultipliers || {};
+  const s = Number(seconds);
+  if (!Number.isFinite(s) || s <= 0) return Number(multipliers.over60) || 2;
+  if (s <= 15) return Number(multipliers.upTo15) || 1;
+  if (s <= 30) return Number(multipliers.upTo30) || 1.25;
+  if (s <= 45) return Number(multipliers.upTo45) || 1.5;
+  if (s <= 60) return Number(multipliers.upTo60) || 1.75;
+  return Number(multipliers.over60) || 2;
+}
+
+function estimateAdCost(boostLevel = 0, placement = adPlacement, videoSeconds = adVideoSeconds) {
+  const base = Number(adPricing.base) || 1200;
+  const boost = Number(adPricing.boost) || 300;
+  const level = Math.min(Number(adPricing.maxBoost) || 5, Math.max(0, Number(boostLevel) || 0));
+  const subtotal = base + (level * boost);
+  if (placement !== 'reel') return subtotal;
+  return Math.ceil(subtotal * reelMultiplierForSeconds(videoSeconds));
+}
+
+function setAdvertiseHubOpen(open = false) {
+  const stack = document.querySelector('.wallet-stack');
+  const hub = document.querySelector('[data-advertise-hub]');
+  if (!stack || !hub) return;
+  const show = Boolean(open);
+  stack.classList.toggle('advertise-open', show);
+  hub.hidden = !show;
+  if (show) {
+    syncAdPlacementUi();
+    syncAdBoostLabels();
+    renderMyAds(myAds);
+  }
+}
+
+function syncAdPlacementUi() {
+  const placement = ['sidebar', 'feed', 'reel'].includes(adPlacement) ? adPlacement : 'sidebar';
+  adPlacement = placement;
+  document.querySelectorAll('[data-ad-placement-option]').forEach((button) => {
+    const selected = button.dataset.adPlacementOption === placement;
+    button.classList.toggle('selected', selected);
+    button.setAttribute('aria-checked', selected ? 'true' : 'false');
+  });
+  const mediaLabel = document.querySelector('[data-ad-media-label]');
+  const mediaHint = document.querySelector('[data-ad-media-hint]');
+  const mediaInput = document.querySelector('[data-ad-media]');
+  if (mediaLabel) mediaLabel.textContent = placement === 'reel' ? 'Reel video (required)' : 'Image or short video';
+  if (mediaHint) mediaHint.hidden = placement !== 'reel';
+  if (mediaInput) {
+    mediaInput.accept = placement === 'reel'
+      ? 'video/mp4,video/webm,video/quicktime'
+      : 'image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime';
+    mediaInput.required = placement === 'reel';
+  }
+  const copy = document.querySelector('[data-ad-card-copy]');
+  if (copy) {
+    const hours = Number(adPricing.durationHours) || 48;
+    if (placement === 'reel') {
+      copy.textContent = `Reel ads run ${hours} hours after approval. Base matches sidebar, then scales by video length (≤15s 1x · ≤30s 1.25x · ≤45s 1.5x · ≤60s 1.75x · longer 2x).`;
+    } else if (placement === 'feed') {
+      copy.textContent = `C$1,200 for ${hours} hours after staff approval. Sponsored cards appear while people scroll the feed.`;
+    } else {
+      copy.textContent = `C$1,200 for ${hours} hours after staff approval. Add an image or short video, and boost for more show chance.`;
+    }
+  }
+}
+
+function readVideoDurationSeconds(file) {
+  return new Promise((resolve) => {
+    if (!file) {
+      resolve(0);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    const finish = (seconds) => {
+      URL.revokeObjectURL(url);
+      resolve(Number.isFinite(seconds) && seconds > 0 ? seconds : 0);
+    };
+    video.onloadedmetadata = () => finish(Number(video.duration) || 0);
+    video.onerror = () => finish(0);
+    video.src = url;
+  });
 }
 
 function renderAdMediaPreview() {
@@ -3127,27 +3546,117 @@ async function uploadAdMedia(file, isVideo) {
   return { image: { dataUrl } };
 }
 
-function renderMyAds(ads = myAds) {
-  const root = document.querySelector('[data-ad-mine]');
+function adRemainingCopy(ad) {
+  const endsAt = ad?.endsAt ? new Date(ad.endsAt).getTime() : 0;
+  if (!endsAt) return 'Running';
+  const remaining = Math.max(0, endsAt - Date.now());
+  if (!remaining) return 'Ending soon';
+  const hours = Math.floor(remaining / 3_600_000);
+  const minutes = Math.max(1, Math.ceil((remaining % 3_600_000) / 60_000));
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    const left = hours % 24;
+    return `${days}d ${left}h left`;
+  }
+  return hours >= 1 ? `${hours}h ${minutes}m left` : `${minutes}m left`;
+}
+
+function activeMyAds(ads = myAds) {
+  return (Array.isArray(ads) ? ads : []).filter((ad) => ad.status === 'active' && ad.endsAt && new Date(ad.endsAt).getTime() > Date.now());
+}
+
+function setAdWalletTab(tab = 'create') {
+  const next = tab === 'analytics' ? 'analytics' : 'create';
+  const hasAnalytics = activeMyAds().length > 0;
+  adWalletTab = next === 'analytics' && hasAnalytics ? 'analytics' : 'create';
+  const tabs = document.querySelector('[data-ad-tabs]');
+  if (tabs) tabs.hidden = !hasAnalytics;
+  document.querySelectorAll('[data-ad-tab]').forEach((button) => {
+    const selected = button.dataset.adTab === adWalletTab;
+    button.classList.toggle('selected', selected);
+    button.setAttribute('aria-selected', selected ? 'true' : 'false');
+  });
+  document.querySelectorAll('[data-ad-panel]').forEach((panel) => {
+    panel.hidden = panel.dataset.adPanel !== adWalletTab;
+  });
+}
+
+function renderAdAnalytics(ads = myAds) {
+  const root = document.querySelector('[data-ad-analytics]');
   if (!root) return;
-  if (!ads.length) {
-    root.innerHTML = '';
+  const active = activeMyAds(ads);
+  if (!active.length) {
+    root.innerHTML = '<p class="wallet-empty">Analytics appear while your ad is running.</p>';
     return;
   }
-  root.innerHTML = `<h3>Your ads</h3>${ads.slice(0, 8).map((ad) => `<article class="wallet-ad-row"><div><b>${escapeHtml(ad.title)}</b><small>${escapeHtml(ad.businessName)} · ${escapeHtml(adStatusLabel(ad.status))}${ad.weight > 1 ? ` · ${ad.weight}x chance` : ''}</small></div></article>`).join('')}`;
+  root.innerHTML = active.map((ad) => {
+    const impressions = Number(ad.impressions) || 0;
+    const clicks = Number(ad.clicks) || 0;
+    const learn = Number(ad.learnClicks) || 0;
+    const account = Number(ad.accountClicks) || 0;
+    const rate = Number(ad.clickRate) || (impressions ? Number(((clicks / impressions) * 100).toFixed(1)) : 0);
+    const perHour = Number(ad.showsPerHour) || 0;
+    return `<article class="wallet-ad-analytics-card">
+      <header>
+        <div>
+          <b>${escapeHtml(ad.title)}</b>
+          <small>${escapeHtml(adPlacementLabel(ad.placement))} · ${escapeHtml(ad.businessName)} · ${escapeHtml(adRemainingCopy(ad))}${ad.weight > 1 ? ` · ${ad.weight}x chance` : ''}</small>
+        </div>
+      </header>
+      <div class="wallet-ad-analytics-grid">
+        <div><strong>${impressions.toLocaleString()}</strong><span>Impressions</span></div>
+        <div><strong>${clicks.toLocaleString()}</strong><span>Clicks</span></div>
+        <div><strong>${rate}%</strong><span>Click rate</span></div>
+        <div><strong>${perHour.toLocaleString()}</strong><span>Shows / hour</span></div>
+        <div><strong>${learn.toLocaleString()}</strong><span>Learn taps</span></div>
+        <div><strong>${account.toLocaleString()}</strong><span>Account taps</span></div>
+      </div>
+      <p class="wallet-ad-analytics-note">${ad.lastShownAt ? `Last shown ${escapeHtml(timeAgo(ad.lastShownAt))}.` : `Waiting for the first ${escapeHtml(adPlacementLabel(ad.placement).toLowerCase())} show.`} Runs for ${Number(adPricing.durationHours) || 48} hours total.</p>
+    </article>`;
+  }).join('');
+}
+
+function renderMyAds(ads = myAds) {
+  const root = document.querySelector('[data-ad-mine]');
+  syncAdPlacementUi();
+  if (root) {
+    if (!ads.length) root.innerHTML = '';
+    else {
+      root.innerHTML = `<h3>Your ads</h3>${ads.slice(0, 8).map((ad) => `<article class="wallet-ad-row"><div><b>${escapeHtml(ad.title)}</b><small>${escapeHtml(adPlacementLabel(ad.placement))} · ${escapeHtml(ad.businessName)} · ${escapeHtml(adStatusLabel(ad.status))}${ad.weight > 1 ? ` · ${ad.weight}x chance` : ''}${ad.status === 'active' ? ` · ${escapeHtml(adRemainingCopy(ad))}` : ''}${ad.cost ? ` · C$${Number(ad.cost)}` : ''}</small></div></article>`).join('')}`;
+    }
+  }
+  renderAdAnalytics(ads);
+  const hadAnalytics = !document.querySelector('[data-ad-tabs]')?.hidden;
+  setAdWalletTab(adWalletTab);
+  if (!hadAnalytics && activeMyAds(ads).length) setAdWalletTab('analytics');
+}
+
+function trackAdClick(adId, kind = 'learn') {
+  const id = String(adId || '');
+  if (!id || !currentUserId) return;
+  void fetch('/api/internet', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'ad-click', adId: id, kind: kind === 'account' ? 'account' : 'learn' }),
+  }).then(async (response) => {
+    if (!response.ok) return;
+    const result = await readApiJson(response, '');
+    if (result?.ok) void loadAds();
+  }).catch(() => {});
 }
 
 function syncAdBoostLabels() {
   const select = document.querySelector('[data-ad-boost]');
   if (!select) return;
-  const base = Number(adPricing.base) || 200;
-  const boost = Number(adPricing.boost) || 100;
   [...select.options].forEach((option) => {
     const level = Number(option.value) || 0;
-    const cost = base + (level * boost);
+    const cost = estimateAdCost(level);
+    const reelNote = adPlacement === 'reel' && adVideoSeconds
+      ? ` · ${Math.ceil(adVideoSeconds)}s`
+      : (adPlacement === 'reel' ? ' · duration TBD' : '');
     option.textContent = level
-      ? `+${level} chance · C$${cost}`
-      : `No boost · C$${cost}`;
+      ? `+${level} chance · C$${cost}${reelNote}`
+      : `No boost · C$${cost}${reelNote}`;
   });
 }
 
@@ -3155,17 +3664,21 @@ async function loadAds() {
   try {
     if (!currentUserId) {
       renderSidebarAds(sidebarAds);
+      renderPosts();
       return;
     }
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ads' }) });
     const result = await readApiJson(response, 'Could not load ads.');
     if (!response.ok) throw new Error(result.error || 'Could not load ads.');
     sidebarAds = Array.isArray(result.ads) ? result.ads : [];
+    feedAds = Array.isArray(result.feedAds) ? result.feedAds : [];
+    reelAds = Array.isArray(result.reelAds) ? result.reelAds : [];
     myAds = Array.isArray(result.mine) ? result.mine : [];
     if (result.pricing) adPricing = { ...adPricing, ...result.pricing };
     syncAdBoostLabels();
     renderSidebarAds(sidebarAds);
     renderMyAds(myAds);
+    if (!document.querySelector('[data-view="home"]')?.hidden) renderPosts();
   } catch {
     renderSidebarAds(sidebarAds);
   }
@@ -3192,8 +3705,9 @@ function renderWallet(wallet) {
       : 'Track your balance, daily drops, chat levels, and recent credit activity.';
   }
   if (dailyCopy) {
-    const perk = wallet.dailySource === 'role'
-      ? ` Your ${wallet.dailyLabel} role currently pays ${formatCredits(wallet.dailyAmount || 75)}.`
+    const roleExtra = Number(wallet.roleExtra || 0);
+    const perk = roleExtra > 0 && wallet.roleLabel
+      ? ` Chat pays ${formatCredits(wallet.chatDaily || 75)}; ${wallet.roleLabel} adds ${formatCredits(roleExtra)} extra (${formatCredits(wallet.dailyAmount || 75)} total).`
       : wallet.dailySource === 'chat'
         ? ` Your chat level pays ${formatCredits(wallet.dailyAmount || 75)}.`
         : ` Start at ${formatCredits(wallet.baseDailyAmount || 75)}; chat levels and Discord roles can raise it.`;
@@ -3203,6 +3717,7 @@ function renderWallet(wallet) {
     status.dataset.tone = wallet.claimedNow ? 'ok' : 'wait';
     status.textContent = walletClaimCopy(wallet);
   }
+  renderWalletStore();
   renderWalletBoost(wallet);
   renderWalletPending(wallet.pendingTransfers || []);
   const transactions = Array.isArray(wallet.transactions) ? wallet.transactions : [];
@@ -3233,6 +3748,7 @@ async function respondWalletTransfer(transferId, decision) {
 async function loadWallet() {
   const status = document.querySelector('[data-wallet-claim-status]');
   const list = document.querySelector('[data-wallet-transactions]');
+  renderWalletStore();
   if (!currentUserId) {
     if (status) {
       status.dataset.tone = 'wait';
@@ -3584,7 +4100,10 @@ async function socialAction(type, { targetId = '', postId = '', enabled = true }
 function openMemberProfile(memberId, updateHash = true) {
   const user = findInternetMember(memberId) || internetUsers.get(memberId);
   if (!user) return;
-  if (viewedMember?.id !== user.id) memberTab = 'posts';
+  if (viewedMember?.id !== user.id) {
+    memberTab = 'posts';
+    if (connectionModalScope === 'member') closeConnectionsModal();
+  }
   viewedMember = user;
   document.querySelectorAll('[data-member-tab]').forEach((tab) => tab.classList.toggle('selected', tab.dataset.memberTab === memberTab));
   const posts = profileTabPosts(user.id, memberTab);
@@ -3617,7 +4136,6 @@ function openMemberProfile(memberId, updateHash = true) {
   const memberFollowers = Array.isArray(user.followers) ? user.followers : [];
   const followingButton = document.querySelector('[data-member-page-following]');
   const followersButton = document.querySelector('[data-member-page-followers]');
-  const connections = document.querySelector('[data-member-page-connections]');
   const memberHidesStats = user.hideStats === true;
   if (followingButton) {
     followingButton.hidden = memberHidesStats;
@@ -3627,18 +4145,9 @@ function openMemberProfile(memberId, updateHash = true) {
     followersButton.hidden = memberHidesStats;
     followersButton.innerHTML = `<b>${Number(user.followerCount ?? memberFollowers.length).toLocaleString()}</b> Followers`;
   }
-  if (connections && memberHidesStats) {
-    connections.hidden = true;
-    connections.innerHTML = '';
-  } else if (connections) {
-    const memberIds = [...new Set([...memberFollowing, ...memberFollowers])].filter((id) => internetUsers.has(id));
-    connections.hidden = memberIds.length === 0;
-    connections.innerHTML = memberIds.slice(0, 24).map((id) => {
-      const member = internetUsers.get(id);
-      const label = memberFollowers.includes(id) ? 'Follows them' : 'They follow';
-      return `<button type="button" data-open-member="${escapeHtml(id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(member.displayName || 'Clearwater member')}</b><small>${label}</small></span></button>`;
-    }).join('');
-  }
+  if (memberHidesStats && connectionModalScope === 'member') closeConnectionsModal();
+  else if (connectionModalScope === 'member' && connectionModalKind) openConnectionsModal('member', connectionModalKind);
+  else setConnectionButtonsState('member', connectionModalScope === 'member' ? connectionModalKind : null);
   const mutuals = document.querySelector('[data-member-page-mutuals]');
   if (mutuals) {
     const mutualIds = mutualFriendIds(user);
@@ -3831,6 +4340,8 @@ async function loadPosts() {
     internetUsers = new Map((result.users || []).map((user) => [user.id, user]));
     applySiteBanner(result.settings?.siteBanner || null);
     if (Array.isArray(result.ads)) sidebarAds = result.ads;
+    if (Array.isArray(result.feedAds)) feedAds = result.feedAds;
+    if (Array.isArray(result.reelAds)) reelAds = result.reelAds;
     if (result.adPricing) adPricing = { ...adPricing, ...result.adPricing };
     syncAdBoostLabels();
     renderSidebarAds(sidebarAds);
@@ -3966,8 +4477,52 @@ document.querySelectorAll('[data-staff-tab]').forEach((button) => button.addEven
 document.querySelector('[data-staff-user-search]')?.addEventListener('input', (event) => {
   staffUserQuery = event.target.value || '';
   staffTab = 'users';
+  if (staffSearchTimer) window.clearTimeout(staffSearchTimer);
+  const query = staffUserQuery.trim();
+  if (!query) {
+    staffSearchResults = null;
+    staffSearchBusy = false;
+    renderStaffDashboard();
+    return;
+  }
+  staffSearchBusy = true;
   renderStaffDashboard();
+  staffSearchTimer = window.setTimeout(() => {
+    void runStaffUserSearch(query);
+  }, /^\d{16,22}$/.test(query) ? 120 : 280);
 });
+
+async function runStaffUserSearch(query) {
+  if (!sessionCanStaff) return;
+  const needle = String(query || '').trim();
+  if (!needle) {
+    staffSearchResults = null;
+    staffSearchBusy = false;
+    renderStaffDashboard();
+    return;
+  }
+  staffSearchBusy = true;
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'staff-user-search', query: needle, limit: 80 }),
+    });
+    const result = await readApiJson(response, 'Could not search users.');
+    if (!response.ok) throw new Error(result.error || 'Could not search users.');
+    if (staffUserQuery.trim() !== needle) return;
+    staffSearchResults = Array.isArray(result.users) ? result.users : [];
+    if (/^\d{16,22}$/.test(needle) && staffSearchResults[0]?.id === needle) {
+      selectedStaffUserId = needle;
+      void loadStaffUserDetail(needle);
+    }
+  } catch {
+    if (staffUserQuery.trim() === needle) staffSearchResults = [];
+  } finally {
+    if (staffUserQuery.trim() === needle) staffSearchBusy = false;
+    renderStaffDashboard();
+  }
+}
 document.querySelector('[data-history-search]')?.addEventListener('input', (event) => {
   staffHistoryQuery = event.target.value || '';
   renderStaffDashboard();
@@ -4019,6 +4574,7 @@ document.addEventListener('click', (event) => {
   const sponsored = event.target.closest('[data-open-sponsored]');
   if (sponsored) {
     event.preventDefault();
+    trackAdClick(sponsored.dataset.openSponsored || '', 'learn');
     showSponsoredPage(sponsored.dataset.openSponsored || '');
     return;
   }
@@ -4066,12 +4622,25 @@ document.querySelector('[data-edit-profile]')?.addEventListener('click', () => {
   showSettingsTab('profile');
 });
 document.querySelector('[data-profile-following]')?.addEventListener('click', () => {
-  const connections = document.querySelector('[data-profile-connections]');
-  if (connections) connections.hidden = !connections.hidden;
+  toggleProfileConnections('following');
 });
 document.querySelector('[data-profile-followers]')?.addEventListener('click', () => {
-  const connections = document.querySelector('[data-profile-connections]');
-  if (connections) connections.hidden = !connections.hidden;
+  toggleProfileConnections('followers');
+});
+document.querySelector('[data-member-page-following]')?.addEventListener('click', () => {
+  toggleMemberConnections('following');
+});
+document.querySelector('[data-member-page-followers]')?.addEventListener('click', () => {
+  toggleMemberConnections('followers');
+});
+document.querySelector('[data-close-connections]')?.addEventListener('click', () => {
+  closeConnectionsModal();
+});
+connectionsModal?.addEventListener('click', (event) => {
+  if (event.target === connectionsModal) closeConnectionsModal();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && connectionsModal && !connectionsModal.hidden) closeConnectionsModal();
 });
 document.querySelectorAll('[data-settings-tab]').forEach((button) => button.addEventListener('click', () => {
   showSettingsTab(button.dataset.settingsTab || 'profile');
@@ -4409,12 +4978,14 @@ document.addEventListener('click', (event) => {
   const adAccount = event.target.closest('[data-open-ad-account]');
   if (adAccount) {
     event.preventDefault();
+    trackAdClick(adAccount.dataset.adId || '', 'account');
     openAdAdvertiserAccount(adAccount);
     return;
   }
   const authorButton = event.target.closest('[data-open-member]');
   if (authorButton) {
     event.preventDefault();
+    closeConnectionsModal();
     openMemberProfile(authorButton.dataset.openMember);
     return;
   }
@@ -5307,6 +5878,37 @@ document.querySelector('[data-wallet-transfer-form]')?.addEventListener('submit'
   }
 });
 
+document.querySelectorAll('[data-ad-tab]').forEach((button) => {
+  button.addEventListener('click', () => {
+    setAdWalletTab(button.dataset.adTab || 'create');
+  });
+});
+
+document.querySelector('[data-open-advertise]')?.addEventListener('click', () => {
+  setAdvertiseHubOpen(true);
+});
+
+document.querySelector('[data-advertise-back]')?.addEventListener('click', () => {
+  setAdvertiseHubOpen(false);
+});
+
+document.querySelectorAll('[data-ad-placement-option]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const next = button.dataset.adPlacementOption || 'sidebar';
+    adPlacement = ['sidebar', 'feed', 'reel'].includes(next) ? next : 'sidebar';
+    if (adPlacement !== 'reel') adVideoSeconds = 0;
+    if (adPlacement === 'reel' && adMedia && !adMedia.isVideo) {
+      if (adMedia.previewUrl) URL.revokeObjectURL(adMedia.previewUrl);
+      adMedia = null;
+      const input = document.querySelector('[data-ad-media]');
+      if (input) input.value = '';
+      renderAdMediaPreview();
+    }
+    syncAdPlacementUi();
+    syncAdBoostLabels();
+  });
+});
+
 document.querySelector('[data-ad-media]')?.addEventListener('change', async (event) => {
   const input = event.target;
   const file = input?.files?.[0];
@@ -5319,23 +5921,38 @@ document.querySelector('[data-ad-media]')?.addEventListener('change', async (eve
   }
   const isVideo = /^video\//i.test(file.type);
   const isImage = /^image\//i.test(file.type);
+  if (adPlacement === 'reel' && !isVideo) {
+    if (status) { status.dataset.tone = 'error'; status.textContent = 'Reel placements need a short video.'; }
+    input.value = '';
+    return;
+  }
   if (!isVideo && !isImage) {
     if (status) { status.dataset.tone = 'error'; status.textContent = 'Choose an image or a short MP4/WebM video.'; }
     input.value = '';
     return;
   }
+  if (adMedia?.previewUrl) URL.revokeObjectURL(adMedia.previewUrl);
   adMedia = { file, isVideo, previewUrl: URL.createObjectURL(file) };
+  adVideoSeconds = isVideo ? await readVideoDurationSeconds(file) : 0;
   renderAdMediaPreview();
-  if (status) { status.dataset.tone = 'wait'; status.textContent = isVideo ? 'Short video ready to upload with your ad.' : 'Image ready to upload with your ad.'; }
+  syncAdBoostLabels();
+  if (status) {
+    status.dataset.tone = 'wait';
+    status.textContent = isVideo
+      ? `Video ready${adVideoSeconds ? ` · ${Math.ceil(adVideoSeconds)}s` : ''}.`
+      : 'Image ready to upload with your ad.';
+  }
 });
 
 document.addEventListener('click', (event) => {
   if (!event.target.closest('[data-remove-ad-media]')) return;
   if (adMedia?.previewUrl) URL.revokeObjectURL(adMedia.previewUrl);
   adMedia = null;
+  adVideoSeconds = 0;
   const input = document.querySelector('[data-ad-media]');
   if (input) input.value = '';
   renderAdMediaPreview();
+  syncAdBoostLabels();
 });
 
 document.querySelector('[data-ad-form]')?.addEventListener('submit', async (event) => {
@@ -5345,6 +5962,9 @@ document.querySelector('[data-ad-form]')?.addEventListener('submit', async (even
   if (submit) submit.disabled = true;
   if (status) { status.dataset.tone = 'wait'; status.textContent = 'Submitting your ad for staff review...'; }
   try {
+    if (adPlacement === 'reel' && !adMedia?.isVideo) {
+      throw new Error('Reel placements need a short video.');
+    }
     let image = null;
     let video = null;
     if (adMedia?.file) {
@@ -5363,6 +5983,8 @@ document.querySelector('[data-ad-form]')?.addEventListener('submit', async (even
         title: document.querySelector('[data-ad-title]')?.value || '',
         body: document.querySelector('[data-ad-body]')?.value || '',
         boost: Number(document.querySelector('[data-ad-boost]')?.value || 0),
+        placement: adPlacement,
+        videoSeconds: adPlacement === 'reel' ? adVideoSeconds : 0,
         image,
         video,
       }),
@@ -5379,12 +6001,14 @@ document.querySelector('[data-ad-form]')?.addEventListener('submit', async (even
     document.querySelector('[data-ad-boost]').value = '0';
     if (adMedia?.previewUrl) URL.revokeObjectURL(adMedia.previewUrl);
     adMedia = null;
+    adVideoSeconds = 0;
     const mediaInput = document.querySelector('[data-ad-media]');
     if (mediaInput) mediaInput.value = '';
     renderAdMediaPreview();
+    syncAdBoostLabels();
     if (status) {
       status.dataset.tone = 'ok';
-      status.textContent = 'Submitted. Staff will review it before it can run for 24 hours.';
+      status.textContent = `Submitted ${adPlacementLabel(adPlacement).toLowerCase()} placement. Staff will review it before it can run for ${Number(adPricing.durationHours) || 48} hours.`;
     }
     await loadAds();
   } catch (error) {
