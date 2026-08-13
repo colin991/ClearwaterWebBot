@@ -2799,16 +2799,58 @@ function formatCredits(value) {
 }
 
 function walletClaimCopy(wallet) {
-  if (wallet?.claimedNow) return `Collected ${formatCredits(wallet.dailyAmount || 75)} for this drop.`;
+  if (wallet?.claimedNow) {
+    const label = wallet.dailyLabel && wallet.dailyLabel !== 'Member' ? ` · ${wallet.dailyLabel}` : '';
+    return `Collected ${formatCredits(wallet.dailyAmount || 75)}${label} for this drop.`;
+  }
   const next = wallet?.nextClaimAt || wallet?.nextDailyAt;
   const nextAt = next ? new Date(next).getTime() : 0;
-  if (!nextAt) return 'Your next daily credit will be added automatically.';
+  if (!nextAt) return `Your next ${formatCredits(wallet?.dailyAmount || 75)} daily credit will be added automatically.`;
   const remaining = Math.max(0, nextAt - Date.now());
   const hours = Math.floor(remaining / 3_600_000);
   const minutes = Math.max(1, Math.ceil((remaining % 3_600_000) / 60_000));
   return hours >= 1
-    ? `Next drop in ${hours}h ${minutes}m.`
-    : `Next drop in ${minutes}m.`;
+    ? `Next ${formatCredits(wallet?.dailyAmount || 75)} drop in ${hours}h ${minutes}m.`
+    : `Next ${formatCredits(wallet?.dailyAmount || 75)} drop in ${minutes}m.`;
+}
+
+function renderWalletBoost(wallet) {
+  const boost = wallet?.chatBoost || {};
+  const level = document.querySelector('[data-wallet-boost-level]');
+  const rate = document.querySelector('[data-wallet-boost-rate]');
+  const fill = document.querySelector('[data-wallet-boost-fill]');
+  const track = document.querySelector('[data-wallet-boost-track]');
+  const next = document.querySelector('[data-wallet-boost-next]');
+  const copy = document.querySelector('[data-wallet-boost-copy]');
+  const perks = document.querySelector('[data-wallet-boost-perks]');
+  const percent = Math.round(Math.max(0, Math.min(1, Number(boost.progress) || 0)) * 100);
+  if (level) level.textContent = `Level ${Number(boost.level) || 0} · ${boost.label || 'Starter'}`;
+  if (rate) rate.textContent = `${formatCredits(boost.hourly || 5)} / hour`;
+  if (fill) fill.style.width = `${percent}%`;
+  if (track) {
+    track.setAttribute('aria-valuenow', String(percent));
+    track.setAttribute('aria-label', `Chat boost progress ${percent}%`);
+  }
+  if (copy) {
+    copy.textContent = wallet?.hourlyGranted
+      ? `${formatCredits(wallet.hourlyGranted)} in hourly chat boost just landed.`
+      : 'Send messages and posts on Clearwater Internet to raise your hourly credits.';
+  }
+  if (next) {
+    next.textContent = boost.maxLevel
+      ? `Max level · ${Number(boost.messages || 0).toLocaleString()} chats counted.`
+      : `${Number(boost.messages || 0).toLocaleString()} / ${Number(boost.nextMessages || 0).toLocaleString()} chats to Level ${boost.nextLevel} · ${boost.nextLabel} (${formatCredits(boost.nextHourly || 0)}/hr).`;
+  }
+  if (perks) {
+    const levels = Array.isArray(boost.levels) ? boost.levels : [];
+    perks.innerHTML = levels.length
+      ? levels.map((entry) => {
+        const active = Number(entry.level) === Number(boost.level);
+        const unlocked = Number(boost.messages || 0) >= Number(entry.messages || 0);
+        return `<li class="${active ? 'active' : ''} ${unlocked ? 'unlocked' : ''}"><b>Lv ${entry.level} · ${escapeHtml(entry.label)}</b><span>${Number(entry.messages || 0).toLocaleString()} chats · ${formatCredits(entry.hourly)}/hr</span></li>`;
+      }).join('')
+      : '';
+  }
 }
 
 function renderWalletPending(transfers = []) {
@@ -3139,6 +3181,7 @@ function renderWallet(wallet) {
   const balance = document.querySelector('[data-wallet-balance]');
   const status = document.querySelector('[data-wallet-claim-status]');
   const lede = document.querySelector('[data-wallet-lede]');
+  const dailyCopy = document.querySelector('[data-wallet-daily-copy]');
   const count = document.querySelector('[data-wallet-transaction-count]');
   const list = document.querySelector('[data-wallet-transactions]');
   if (balance) balance.textContent = formatCredits(wallet.balance);
@@ -3146,12 +3189,21 @@ function renderWallet(wallet) {
   if (lede) {
     lede.textContent = wallet.claimedNow
       ? `${formatCredits(wallet.dailyAmount || 75)} just landed. Come back tomorrow for another drop.`
-      : 'Track your balance, daily drops, and recent credit activity.';
+      : wallet.hourlyGranted
+        ? `${formatCredits(wallet.hourlyGranted)} hourly chat boost collected. Keep chatting to climb levels.`
+        : 'Track your balance, daily drops, chat boosts, and recent credit activity.';
+  }
+  if (dailyCopy) {
+    const perk = wallet.dailyLabel && wallet.dailyLabel !== 'Member'
+      ? ` Your ${wallet.dailyLabel} role raises this to ${formatCredits(wallet.dailyAmount || 75)}.`
+      : ` Members get ${formatCredits(wallet.baseDailyAmount || 75)}; Discord roles can raise it to C$200–C$300.`;
+    dailyCopy.textContent = `You receive credits every 24 hours.${perk}`;
   }
   if (status) {
     status.dataset.tone = wallet.claimedNow ? 'ok' : 'wait';
     status.textContent = walletClaimCopy(wallet);
   }
+  renderWalletBoost(wallet);
   renderWalletPending(wallet.pendingTransfers || []);
   const transactions = Array.isArray(wallet.transactions) ? wallet.transactions : [];
   if (count) count.textContent = String(transactions.length);

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { AUTOMOD_HOLD_MESSAGE, AutomodHoldError, scanInternetContent } from './internetAutomod.js';
 import { JsonStoreCorruptError, readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
-import { mergeInternetBadges, sanitizeInternetBadges, withSiteBadges } from './staffRanks.js';
+import { mergeInternetBadges, sanitizeInternetBadges, withSiteBadges, dailyCreditTierForRoles } from './staffRanks.js';
 
 export { AutomodHoldError };
 
@@ -625,12 +625,30 @@ export function upsertInternetUser(store, user) {
   return store.users[id];
 }
 
-const DAILY_CREDITS = 75;
+const BASE_DAILY_CREDITS = 75;
 const WELCOME_CREDITS = 100;
 const DAILY_CREDIT_DELAY = 24 * 60 * 60 * 1000;
+const HOURLY_BANK_CAP_HOURS = 12;
+
+/** Chat more on Clearwater Internet to raise the hourly credit drip. */
+export const CHAT_BOOST_LEVELS = Object.freeze([
+  { level: 0, messages: 0, hourly: 5, label: 'Starter' },
+  { level: 1, messages: 25, hourly: 10, label: 'Talker' },
+  { level: 2, messages: 75, hourly: 18, label: 'Regular' },
+  { level: 3, messages: 150, hourly: 28, label: 'Active' },
+  { level: 4, messages: 300, hourly: 40, label: 'Chatter' },
+  { level: 5, messages: 500, hourly: 55, label: 'City Voice' },
+]);
 
 function creditBalance(user) {
   return Math.max(0, Math.floor(Number(user?.credits) || 0));
+}
+
+function isSystemInternetAccount(user) {
+  return user?.id === OFFICIAL_INTERNET_ACCOUNT_ID
+    || user?.id === BANK_INTERNET_ACCOUNT_ID
+    || user?.official === true
+    || user?.bank === true;
 }
 
 function addCreditTransaction(user, { amount, type, note = '', actorName = 'Clearwater' }) {
@@ -647,31 +665,119 @@ function addCreditTransaction(user, { amount, type, note = '', actorName = 'Clea
   user.creditTransactions = user.creditTransactions.slice(0, 100);
 }
 
+function actorRoleIds(actor, user) {
+  const fromActor = Array.isArray(actor?.guildRoles) ? actor.guildRoles : [];
+  const fromUser = Array.isArray(user?.guildRoles) ? user.guildRoles : [];
+  return [...new Set([...fromActor, ...fromUser].map(String).filter((id) => /^\d{16,22}$/.test(id)))];
+}
+
+function dailyTierFor(actor, user) {
+  return dailyCreditTierForRoles(actorRoleIds(actor, user), user?.badges || actor?.badges || []);
+}
+
+export function chatBoostState(user) {
+  const messages = Math.max(0, Math.floor(Number(user?.chatSentCount) || 0));
+  let current = CHAT_BOOST_LEVELS[0];
+  let next = CHAT_BOOST_LEVELS[1] || null;
+  for (let index = 0; index < CHAT_BOOST_LEVELS.length; index += 1) {
+    if (messages >= CHAT_BOOST_LEVELS[index].messages) {
+      current = CHAT_BOOST_LEVELS[index];
+      next = CHAT_BOOST_LEVELS[index + 1] || null;
+    }
+  }
+  const span = next ? Math.max(1, next.messages - current.messages) : 1;
+  const progress = next ? Math.min(1, Math.max(0, (messages - current.messages) / span)) : 1;
+  return {
+    messages,
+    level: current.level,
+    label: current.label,
+    hourly: current.hourly,
+    progress,
+    nextLevel: next?.level ?? null,
+    nextLabel: next?.label || null,
+    nextHourly: next?.hourly ?? null,
+    nextMessages: next?.messages ?? null,
+    messagesToNext: next ? Math.max(0, next.messages - messages) : 0,
+    maxLevel: !next,
+    levels: CHAT_BOOST_LEVELS.map((level) => ({ ...level })),
+  };
+}
+
+function recordChatActivity(user) {
+  if (!user || isSystemInternetAccount(user)) return;
+  user.chatSentCount = Math.max(0, Math.floor(Number(user.chatSentCount) || 0)) + 1;
+}
+
+function settleHourlyCredits(user) {
+  const boost = chatBoostState(user);
+  if (!user || isSystemInternetAccount(user)) return { granted: 0, boost };
+  const now = Date.now();
+  if (!user.hourlyCreditAt) {
+    user.hourlyCreditAt = new Date(now).toISOString();
+    return { granted: 0, boost };
+  }
+  const last = new Date(user.hourlyCreditAt).getTime();
+  if (!Number.isFinite(last) || last > now) {
+    user.hourlyCreditAt = new Date(now).toISOString();
+    return { granted: 0, boost };
+  }
+  const hours = Math.min(HOURLY_BANK_CAP_HOURS, Math.floor((now - last) / 3_600_000));
+  if (hours < 1) return { granted: 0, boost };
+  const granted = hours * boost.hourly;
+  user.credits = creditBalance(user) + granted;
+  user.hourlyCreditAt = new Date(last + (hours * 3_600_000)).toISOString();
+  addCreditTransaction(user, {
+    amount: granted,
+    type: 'hourly',
+    note: hours === 1
+      ? `Hourly chat boost · ${boost.label} (C$${boost.hourly}/hr)`
+      : `${hours}h chat boost · ${boost.label} (C$${boost.hourly}/hr)`,
+    actorName: 'Clearwater',
+  });
+  return { granted, boost: chatBoostState(user) };
+}
+
 function ensureInternetWallet(store, actor) {
   const user = upsertInternetUser(store, actor);
+  if (Array.isArray(actor?.guildRoles) && actor.guildRoles.length) {
+    user.guildRoles = [...new Set(actor.guildRoles.map(String).filter((id) => /^\d{16,22}$/.test(id)))].slice(0, 100);
+  }
   if (!user.walletStartedAt) {
     user.walletStartedAt = new Date().toISOString();
     user.dailyCreditClaimedAt = user.walletStartedAt;
+    user.hourlyCreditAt = user.walletStartedAt;
+    user.chatSentCount = Math.max(0, Math.floor(Number(user.chatSentCount) || 0));
     user.credits = creditBalance(user) + WELCOME_CREDITS;
     addCreditTransaction(user, { amount: WELCOME_CREDITS, type: 'welcome', note: 'Welcome to Clearwater Internet', actorName: 'Clearwater' });
     addInternetLog(store, `Clearwater gave ${text(user.displayName, 80) || 'a member'} their C$${WELCOME_CREDITS} welcome credit.`);
   } else {
     user.credits = creditBalance(user);
+    if (!user.hourlyCreditAt) user.hourlyCreditAt = new Date().toISOString();
+    user.chatSentCount = Math.max(0, Math.floor(Number(user.chatSentCount) || 0));
   }
   return user;
 }
 
-function walletView(user, { claimedNow = false } = {}) {
+function walletView(user, { claimedNow = false, hourlyGranted = 0, actor = null } = {}) {
   const lastClaim = user.dailyCreditClaimedAt ? new Date(user.dailyCreditClaimedAt).getTime() : 0;
   const nextClaimAt = lastClaim ? lastClaim + DAILY_CREDIT_DELAY : 0;
   const canClaim = !lastClaim || Date.now() >= nextClaimAt;
+  const daily = dailyTierFor(actor, user);
+  const boost = chatBoostState(user);
+  const lastHourly = user.hourlyCreditAt ? new Date(user.hourlyCreditAt).getTime() : Date.now();
+  const nextHourlyAt = new Date(lastHourly + 3_600_000).toISOString();
   return {
     balance: creditBalance(user),
-    dailyAmount: DAILY_CREDITS,
+    dailyAmount: daily.amount,
+    dailyLabel: daily.label,
+    baseDailyAmount: BASE_DAILY_CREDITS,
     canClaim,
     claimedNow: claimedNow === true,
+    hourlyGranted: Math.max(0, Math.floor(Number(hourlyGranted) || 0)),
     nextClaimAt: canClaim ? null : new Date(nextClaimAt).toISOString(),
     nextDailyAt: canClaim ? null : new Date(nextClaimAt).toISOString(),
+    nextHourlyAt,
+    chatBoost: boost,
     transactions: (Array.isArray(user.creditTransactions) ? user.creditTransactions : []).slice(0, 50).map((entry) => ({
       ...entry,
       balance: entry.balanceAfter ?? entry.balance ?? creditBalance(user),
@@ -683,17 +789,26 @@ export function walletSnapshot(store, actor) {
   expireStaleCreditTransfers(store);
   const user = ensureInternetWallet(store, actor);
   assertNotBanned(user);
+  const hourly = settleHourlyCredits(user);
+  const daily = dailyTierFor(actor, user);
   const lastClaim = user.dailyCreditClaimedAt ? new Date(user.dailyCreditClaimedAt).getTime() : 0;
   let claimedNow = false;
   if (lastClaim && Date.now() - lastClaim >= DAILY_CREDIT_DELAY) {
-    user.credits = creditBalance(user) + DAILY_CREDITS;
+    user.credits = creditBalance(user) + daily.amount;
     user.dailyCreditClaimedAt = new Date().toISOString();
-    addCreditTransaction(user, { amount: DAILY_CREDITS, type: 'daily', note: '24-hour daily credit', actorName: 'Clearwater' });
-    addInternetLog(store, `${text(user.displayName, 80) || 'A member'} received C$${DAILY_CREDITS} daily credits.`);
+    addCreditTransaction(user, {
+      amount: daily.amount,
+      type: 'daily',
+      note: daily.id
+        ? `24-hour daily credit · ${daily.label}`
+        : '24-hour daily credit',
+      actorName: 'Clearwater',
+    });
+    addInternetLog(store, `${text(user.displayName, 80) || 'A member'} received C$${daily.amount} daily credits.`);
     claimedNow = true;
   }
   return {
-    ...walletView(user, { claimedNow }),
+    ...walletView(user, { claimedNow, hourlyGranted: hourly.granted, actor }),
     pendingTransfers: pendingTransfersFor(store, user.id),
   };
 }
@@ -701,13 +816,20 @@ export function walletSnapshot(store, actor) {
 export function claimInternetDailyCredits(store, actor) {
   const user = ensureInternetWallet(store, actor);
   assertNotBanned(user);
-  const snapshot = walletView(user);
-  if (!snapshot.canClaim) throw new Error('Your next C$75 daily credit is not ready yet.');
-  user.credits = creditBalance(user) + DAILY_CREDITS;
+  settleHourlyCredits(user);
+  const daily = dailyTierFor(actor, user);
+  const snapshot = walletView(user, { actor });
+  if (!snapshot.canClaim) throw new Error(`Your next C$${daily.amount} daily credit is not ready yet.`);
+  user.credits = creditBalance(user) + daily.amount;
   user.dailyCreditClaimedAt = new Date().toISOString();
-  addCreditTransaction(user, { amount: DAILY_CREDITS, type: 'daily', note: '24-hour daily credit', actorName: 'Clearwater' });
-  addInternetLog(store, `${text(user.displayName, 80) || 'A member'} claimed C$${DAILY_CREDITS} daily credits.`);
-  return walletView(user);
+  addCreditTransaction(user, {
+    amount: daily.amount,
+    type: 'daily',
+    note: daily.id ? `24-hour daily credit · ${daily.label}` : '24-hour daily credit',
+    actorName: 'Clearwater',
+  });
+  addInternetLog(store, `${text(user.displayName, 80) || 'A member'} claimed C$${daily.amount} daily credits.`);
+  return walletView(user, { claimedNow: true, actor });
 }
 
 export function adjustInternetCredits(store, { actor, targetId, amount, note = '' }) {
@@ -1398,6 +1520,8 @@ export function createInternetPost(store, user, content, media = {}) {
     }
   }
   if (!parentId) user.lastPostAt = post.createdAt;
+  recordChatActivity(user);
+  settleHourlyCredits(user);
   return post;
 }
 
@@ -2122,6 +2246,8 @@ export function sendInternetMessage(store, { actor, to, content, gif, username }
   sender.messages = sender.messages.slice(0, 120);
   recipient.messages = recipient.messages.slice(0, 120);
   sender.lastMessageAt = sentAt;
+  recordChatActivity(sender);
+  settleHourlyCredits(sender);
   addInternetNotification(store, { recipientId: recipient.id, actor: sender, type: 'message' });
   return { sent: true, message };
 }

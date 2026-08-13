@@ -5448,6 +5448,90 @@ html.pref-reduce-motion *::after {
   color: #8fa3bd;
   font-size: 13px;
 }
+.wallet-boost-card {
+  display: grid;
+  gap: 14px;
+}
+.wallet-boost-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.wallet-boost-meta strong {
+  color: #f4f8ff;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
+.wallet-boost-meta span {
+  color: #8ec2ff;
+  font-size: 13px;
+  font-weight: 750;
+}
+.wallet-boost-track {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 184, 255, .18);
+  border-radius: 999px;
+  background: rgba(4, 10, 20, .72);
+}
+.wallet-boost-track > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2f6ef0, #64a4ff);
+  box-shadow: 0 0 18px rgba(78, 145, 249, .35);
+  transition: width .35s ease;
+}
+.wallet-boost-next {
+  margin: 0;
+  color: #9eb2cb;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.wallet-boost-perks {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.wallet-boost-perks li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 184, 255, .12);
+  border-radius: 12px;
+  color: #8fa3bd;
+  background: rgba(6, 12, 22, .45);
+}
+.wallet-boost-perks li b {
+  color: #d7e4f7;
+  font-size: 12px;
+  font-weight: 750;
+}
+.wallet-boost-perks li span {
+  font-size: 11px;
+  font-weight: 650;
+}
+.wallet-boost-perks li.unlocked {
+  border-color: rgba(96, 165, 250, .28);
+  color: #b7c9e0;
+}
+.wallet-boost-perks li.active {
+  border-color: rgba(110, 168, 255, .5);
+  background: rgba(36, 84, 168, .22);
+  box-shadow: inset 0 0 0 1px rgba(120, 180, 255, .12);
+}
+.wallet-boost-perks li.active b { color: #fff; }
+.wallet-boost-perks li.active span { color: #9ec4ff; }
 .wallet-balance-icon {
   display: grid;
   place-items: center;

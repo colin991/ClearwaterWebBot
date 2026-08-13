@@ -278,6 +278,7 @@ export function startStatusServer(client, config) {
         member: Boolean(member),
         staffRank: staffRank?.name || null,
         badges: getInternetBadges(member),
+        roles: member ? [...member.roles.cache.keys()].map(String) : [],
       });
     }
 

@@ -55,6 +55,7 @@ export const LIMITED_STAFF_FORBIDDEN_ACTIONS = Object.freeze([
   'unbadge-business',
 ]);
 
+export const CLEARWATER_SUPPORTER_ROLE_ID = '1514033599417159750';
 export const CLEARWATER_PREMIUM_ROLE_ID = '1514033571160133733';
 export const CLEARWATER_STAFF_BADGE_ROLE_ID = '1514744040778760252';
 export const DISCORD_INTERNET_BADGES = Object.freeze(['clearwater-role', 'staff']);
@@ -65,6 +66,29 @@ export const ALLOWED_INTERNET_BADGES = Object.freeze([
   ...STAFF_ASSIGNABLE_BADGES,
   ...SITE_FIXED_BADGES,
 ]);
+
+/** Highest matching Discord role wins. Default members still get the base daily. */
+export const DAILY_CREDIT_ROLE_TIERS = Object.freeze([
+  { id: CLEARWATER_STAFF_BADGE_ROLE_ID, amount: 300, label: 'Staff' },
+  { id: CLEARWATER_PREMIUM_ROLE_ID, amount: 250, label: 'Clearwater+' },
+  { id: CLEARWATER_SUPPORTER_ROLE_ID, amount: 200, label: 'Supporter' },
+]);
+export const BASE_DAILY_CREDITS = 75;
+
+export function dailyCreditTierForRoles(roles = [], badges = []) {
+  const roleSet = new Set((Array.isArray(roles) ? roles : []).map(String));
+  for (const tier of DAILY_CREDIT_ROLE_TIERS) {
+    if (roleSet.has(tier.id)) return { ...tier };
+  }
+  const badgeSet = new Set((Array.isArray(badges) ? badges : []).map(String));
+  if (badgeSet.has('staff')) {
+    return { ...DAILY_CREDIT_ROLE_TIERS.find((tier) => tier.id === CLEARWATER_STAFF_BADGE_ROLE_ID) };
+  }
+  if (badgeSet.has('clearwater-role')) {
+    return { ...DAILY_CREDIT_ROLE_TIERS.find((tier) => tier.id === CLEARWATER_PREMIUM_ROLE_ID) };
+  }
+  return { id: null, amount: BASE_DAILY_CREDITS, label: 'Member' };
+}
 
 /** Colin (owner) + Pixel — hardcoded developer badge accounts. */
 export const DEVELOPER_DISCORD_IDS = Object.freeze([

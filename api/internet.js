@@ -341,7 +341,18 @@ export default async function handler(request, response) {
     } else if (body.action === 'social-status') {
       payload = { action: 'social-status', asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
     } else if (body.action === 'wallet' || body.action === 'wallet-claim') {
-      payload = { action: body.action, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
+      payload = {
+        action: body.action,
+        actor: {
+          id: user.id,
+          username: user.username,
+          displayName: user.displayName,
+          avatarUrl: avatarUrl(user),
+          staffRank: access.staffRank,
+          badges: access.badges,
+          guildRoles: Array.isArray(access.roles) ? access.roles : (user.guildRoles || []),
+        },
+      };
     } else if (body.action === 'ads') {
       payload = { action: 'ads', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
     } else if (body.action === 'ad-purchase') {
