@@ -293,6 +293,23 @@ export default async function handler(request, response) {
       payload = { action: 'social-status', asOfficial, owner: access.allowed, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
     } else if (body.action === 'wallet' || body.action === 'wallet-claim') {
       payload = { action: body.action, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
+    } else if (body.action === 'wallet-transfer') {
+      payload = {
+        action: 'wallet-transfer',
+        type: body.type === 'request' ? 'request' : 'send',
+        targetId: String(body.targetId || ''),
+        username: String(body.username || '').slice(0, 80),
+        amount: Number(body.amount),
+        note: String(body.note || '').slice(0, 120),
+        actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges },
+      };
+    } else if (body.action === 'wallet-transfer-respond') {
+      payload = {
+        action: 'wallet-transfer-respond',
+        transferId: String(body.transferId || ''),
+        decision: body.decision === 'decline' ? 'decline' : 'accept',
+        actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges },
+      };
     } else if (body.action === 'preferences') {
       payload = { action: 'preferences', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
     } else if (body.action === 'preference-save') {

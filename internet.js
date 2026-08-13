@@ -93,7 +93,9 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260813-wallet-ui';
+const INTERNET_VERSION = '20260813-wallet-pay';
+let walletTransferType = 'send';
+let walletTransferTarget = null;
 const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const INTERNET_PATH = '/internet';
@@ -2033,6 +2035,75 @@ function walletClaimCopy(wallet) {
     : `Next drop in ${minutes}m.`;
 }
 
+function renderWalletPending(transfers = []) {
+  const pending = document.querySelector('[data-wallet-pending]');
+  if (!pending) return;
+  if (!transfers.length) {
+    pending.hidden = true;
+    pending.innerHTML = '';
+    return;
+  }
+  pending.hidden = false;
+  pending.innerHTML = `<h3>Pending</h3>${transfers.map((transfer) => {
+    const otherId = transfer.fromId === activeUserId() ? transfer.toId : transfer.fromId;
+    const other = internetUsers.get(otherId);
+    const name = other?.displayName || other?.username || 'member';
+    const label = transfer.type === 'send'
+      ? (transfer.actionable ? `${escapeHtml(name)} is sending you` : `Waiting on ${escapeHtml(name)} for`)
+      : (transfer.actionable ? `${escapeHtml(name)} requested` : `Requested from ${escapeHtml(name)}`);
+    const actions = transfer.actionable
+      ? `<span class="wallet-pending-actions"><button type="button" data-wallet-transfer-respond="accept" data-transfer-id="${escapeHtml(transfer.id)}">Accept</button><button type="button" class="ghost" data-wallet-transfer-respond="decline" data-transfer-id="${escapeHtml(transfer.id)}">Decline</button></span>`
+      : '';
+    return `<article class="wallet-pending-item"><div><b>${label} ${escapeHtml(formatCredits(transfer.amount))}</b><small>${escapeHtml(transfer.note || timeAgo(transfer.createdAt))}</small></div>${actions}</article>`;
+  }).join('')}`;
+}
+
+function setWalletTransferTab(type) {
+  walletTransferType = type === 'request' ? 'request' : 'send';
+  document.querySelectorAll('[data-wallet-transfer-tab]').forEach((button) => {
+    const selected = button.dataset.walletTransferTab === walletTransferType;
+    button.classList.toggle('selected', selected);
+    button.setAttribute('aria-selected', selected ? 'true' : 'false');
+  });
+  const submit = document.querySelector('[data-wallet-transfer-submit]');
+  if (submit) submit.textContent = walletTransferType === 'request' ? 'Request credits' : 'Send credits';
+}
+
+function selectWalletTransferTarget(user) {
+  walletTransferTarget = user || null;
+  const selected = document.querySelector('[data-wallet-transfer-selected]');
+  const hidden = document.querySelector('[data-wallet-transfer-target]');
+  const results = document.querySelector('[data-wallet-transfer-results]');
+  if (hidden) hidden.value = user?.id || '';
+  if (results) { results.hidden = true; results.innerHTML = ''; }
+  if (!selected) return;
+  if (!user) {
+    selected.hidden = true;
+    selected.innerHTML = '';
+    return;
+  }
+  selected.hidden = false;
+  selected.innerHTML = `To <b>${escapeHtml(user.displayName || 'member')}</b> <small>@${escapeHtml(user.username || 'member')}</small> <button type="button" data-wallet-transfer-clear>Change</button>`;
+}
+
+function renderWalletTransferResults(query = '') {
+  const results = document.querySelector('[data-wallet-transfer-results]');
+  if (!results) return;
+  const needle = String(query || '').trim().toLowerCase().replace(/^@/, '');
+  if (!needle) {
+    results.hidden = true;
+    results.innerHTML = '';
+    return;
+  }
+  const users = [...internetUsers.values()]
+    .filter((user) => user.id !== activeUserId() && !user.official && `${user.displayName || ''} ${user.username || ''}`.toLowerCase().includes(needle))
+    .slice(0, 8);
+  results.hidden = false;
+  results.innerHTML = users.length
+    ? users.map((user) => `<button type="button" data-wallet-transfer-pick="${escapeHtml(user.id)}"><img src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(user.displayName || 'Member')}</b><small>@${escapeHtml(user.username || 'member')}</small></span></button>`).join('')
+    : '<p>No members found.</p>';
+}
+
 function renderWallet(wallet) {
   if (!wallet) return;
   const balance = document.querySelector('[data-wallet-balance]');
@@ -2051,6 +2122,7 @@ function renderWallet(wallet) {
     status.dataset.tone = wallet.claimedNow ? 'ok' : 'wait';
     status.textContent = walletClaimCopy(wallet);
   }
+  renderWalletPending(wallet.pendingTransfers || []);
   const transactions = Array.isArray(wallet.transactions) ? wallet.transactions : [];
   if (count) count.textContent = String(transactions.length);
   if (list) {
@@ -2060,6 +2132,20 @@ function renderWallet(wallet) {
       return `<article class="wallet-transaction ${plus ? 'credit' : 'debit'}"><div><b>${escapeHtml(transaction.note || (plus ? 'Credits added' : 'Credits removed'))}</b><small>${escapeHtml(timeAgo(transaction.createdAt))} · ${escapeHtml(transaction.actorName || 'Clearwater')}</small></div><strong>${plus ? '+' : '−'}${formatCredits(Math.abs(value))}</strong></article>`;
     }).join('') : '<p class="wallet-empty">No transactions yet. Your daily credits will show up here.</p>';
   }
+}
+
+async function respondWalletTransfer(transferId, decision) {
+  const response = await fetch('/api/internet', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'wallet-transfer-respond', transferId, decision }),
+  });
+  const result = await readApiJson(response, 'Could not update this transfer.');
+  if (!response.ok) throw new Error(result.error || 'Could not update this transfer.');
+  if (result.wallet) renderWallet(result.wallet);
+  else await loadWallet();
+  if (!document.querySelector('[data-view="conversation"]')?.hidden && viewedMember) void loadConversation(viewedMember);
+  void loadMessages();
 }
 
 async function loadWallet() {
@@ -2472,7 +2558,16 @@ function openConversation(member) {
 function conversationBubble(message) {
   const own = message.fromId === activeUserId();
   const gif = safeGifUrl(message.gifUrl) ? `<img src="${escapeHtml(message.gifUrl)}" alt="${escapeHtml(message.gifTitle || 'GIF')}" />` : '';
-  return `<p class="conversation-bubble ${own ? 'own' : 'theirs'}">${message.content ? escapeHtml(message.content) : ''}${gif}<small>${timeAgo(message.createdAt)}</small></p>`;
+  const pendingTransfer = message.transferId && message.transferStatus === 'pending';
+  const canAct = pendingTransfer && message.transferActionable === true;
+  const transferCard = message.transferId
+    ? `<div class="transfer-card ${message.transferStatus || 'pending'}">
+        <b>${message.transferType === 'request' ? 'Credit request' : 'Credit transfer'} · ${escapeHtml(formatCredits(message.transferAmount))}</b>
+        <span>${escapeHtml(message.transferStatus === 'accepted' ? 'Accepted' : message.transferStatus === 'declined' ? 'Declined' : 'Waiting for a response')}</span>
+        ${canAct ? `<div class="transfer-card-actions"><button type="button" data-wallet-transfer-respond="accept" data-transfer-id="${escapeHtml(message.transferId)}">Accept</button><button type="button" class="ghost" data-wallet-transfer-respond="decline" data-transfer-id="${escapeHtml(message.transferId)}">Decline</button></div>` : ''}
+      </div>`
+    : '';
+  return `<div class="conversation-bubble ${own ? 'own' : 'theirs'}">${message.content ? `<p>${escapeHtml(message.content)}</p>` : ''}${gif}${transferCard}<small>${timeAgo(message.createdAt)}</small></div>`;
 }
 
 async function loadConversation(member) {
@@ -2982,6 +3077,29 @@ document.addEventListener('click', (event) => {
   if (staffUserAction) { void runStaffUserAction(staffUserAction.dataset.staffUserAction, staffUserAction.dataset.staffPostId || ''); return; }
   const staffWalletAdjust = event.target.closest('[data-staff-wallet-adjust]');
   if (staffWalletAdjust) { void runStaffWalletAdjustment(staffWalletAdjust); return; }
+  const walletTransferTab = event.target.closest('[data-wallet-transfer-tab]');
+  if (walletTransferTab) { setWalletTransferTab(walletTransferTab.dataset.walletTransferTab); return; }
+  const walletTransferPick = event.target.closest('[data-wallet-transfer-pick]');
+  if (walletTransferPick) {
+    const member = internetUsers.get(walletTransferPick.dataset.walletTransferPick);
+    if (member) {
+      selectWalletTransferTarget(member);
+      const search = document.querySelector('[data-wallet-transfer-search]');
+      if (search) search.value = '';
+    }
+    return;
+  }
+  if (event.target.closest('[data-wallet-transfer-clear]')) {
+    selectWalletTransferTarget(null);
+    document.querySelector('[data-wallet-transfer-search]')?.focus();
+    return;
+  }
+  const walletTransferRespond = event.target.closest('[data-wallet-transfer-respond]');
+  if (walletTransferRespond) {
+    void respondWalletTransfer(walletTransferRespond.dataset.transferId, walletTransferRespond.dataset.walletTransferRespond)
+      .catch((error) => window.alert(error.message || 'Could not update this transfer.'));
+    return;
+  }
   const staffUsersFilterButton = event.target.closest('[data-staff-users-filter]');
   if (staffUsersFilterButton) {
     staffUsersFilter = staffUsersFilterButton.dataset.staffUsersFilter || 'all';
@@ -3567,6 +3685,67 @@ document.querySelector('[data-save-official-profile]')?.addEventListener('click'
     message.textContent = 'Official account saved.';
     await loadPosts();
   } catch (error) { message.textContent = error.message || 'Could not save the official account.'; }
+});
+
+document.querySelectorAll('[data-wallet-transfer-tab]').forEach((button) => {
+  button.addEventListener('click', () => setWalletTransferTab(button.dataset.walletTransferTab));
+});
+document.querySelector('[data-wallet-transfer-search]')?.addEventListener('input', (event) => {
+  if (walletTransferTarget) selectWalletTransferTarget(null);
+  renderWalletTransferResults(event.target.value);
+});
+document.querySelector('[data-wallet-transfer-form]')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const status = document.querySelector('[data-wallet-transfer-status]');
+  const submit = document.querySelector('[data-wallet-transfer-submit]');
+  const amount = Number(document.querySelector('[data-wallet-transfer-amount]')?.value);
+  const note = document.querySelector('[data-wallet-transfer-note]')?.value || '';
+  const searchValue = String(document.querySelector('[data-wallet-transfer-search]')?.value || '').trim();
+  if (!walletTransferTarget && !searchValue) {
+    if (status) { status.dataset.tone = 'error'; status.textContent = 'Choose a member first.'; }
+    return;
+  }
+  if (submit) submit.disabled = true;
+  if (status) { status.dataset.tone = 'wait'; status.textContent = walletTransferType === 'request' ? 'Sending request...' : 'Sending transfer...'; }
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'wallet-transfer',
+        type: walletTransferType,
+        targetId: walletTransferTarget?.id || '',
+        username: walletTransferTarget?.username || searchValue.replace(/^@/, ''),
+        amount,
+        note,
+      }),
+    });
+    const result = await readApiJson(response, 'Could not create this transfer.');
+    if (!response.ok) throw new Error(result.error || 'Could not create this transfer.');
+    if (result.wallet) renderWallet(result.wallet);
+    else await loadWallet();
+    selectWalletTransferTarget(null);
+    const amountInput = document.querySelector('[data-wallet-transfer-amount]');
+    const noteInput = document.querySelector('[data-wallet-transfer-note]');
+    const searchInput = document.querySelector('[data-wallet-transfer-search]');
+    if (amountInput) amountInput.value = '';
+    if (noteInput) noteInput.value = '';
+    if (searchInput) searchInput.value = '';
+    if (status) {
+      status.dataset.tone = 'ok';
+      status.textContent = walletTransferType === 'request'
+        ? 'Request sent. They will get an official Clearwater message to accept.'
+        : 'Transfer sent. They will get an official Clearwater message to accept.';
+    }
+    void loadMessages();
+  } catch (error) {
+    if (status) {
+      status.dataset.tone = 'error';
+      status.textContent = error.message || 'Could not create this transfer.';
+    }
+  } finally {
+    if (submit) submit.disabled = false;
+  }
 });
 
 showViewFromAddress();

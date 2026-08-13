@@ -422,7 +422,10 @@ export function walletSnapshot(store, actor) {
     addInternetLog(store, `${text(user.displayName, 80) || 'A member'} received C$${DAILY_CREDITS} daily credits.`);
     claimedNow = true;
   }
-  return walletView(user, { claimedNow });
+  return {
+    ...walletView(user, { claimedNow }),
+    pendingTransfers: pendingTransfersFor(store, user.id),
+  };
 }
 
 export function claimInternetDailyCredits(store, actor) {
@@ -453,6 +456,241 @@ export function adjustInternetCredits(store, { actor, targetId, amount, note = '
   });
   addInternetLog(store, `${text(actor?.displayName, 80) || 'Staff'} ${applied >= 0 ? 'added' : 'removed'} C$${Math.abs(applied)} ${applied >= 0 ? 'to' : 'from'} ${text(user.displayName, 80) || 'a member'}.`);
   return { user, wallet: walletView(user), applied };
+}
+
+function creditTransfers(store) {
+  if (!Array.isArray(store.creditTransfers)) store.creditTransfers = [];
+  return store.creditTransfers;
+}
+
+function moneyLabel(amount) {
+  return `C$${Math.trunc(Number(amount) || 0).toLocaleString()}`;
+}
+
+function syncTransferMessages(store, transfer) {
+  for (const user of Object.values(store.users)) {
+    if (!Array.isArray(user.messages)) continue;
+    for (const message of user.messages) {
+      if (message.transferId === transfer.id) message.transferStatus = transfer.status;
+    }
+  }
+}
+
+function deliverOfficialDirectMessage(store, { toId, content, transfer = null, actionable = false }) {
+  const official = ensureOfficialInternetAccount(store);
+  const recipient = upsertInternetUser(store, { id: toId });
+  const sentAt = new Date().toISOString();
+  const message = {
+    id: randomUUID(),
+    kind: 'direct',
+    fromId: OFFICIAL_INTERNET_ACCOUNT_ID,
+    toId: recipient.id,
+    content: text(content, 1000),
+    createdAt: sentAt,
+    readAt: null,
+    ...(transfer ? {
+      transferId: transfer.id,
+      transferType: transfer.type,
+      transferAmount: transfer.amount,
+      transferStatus: transfer.status,
+      transferFromId: transfer.fromId,
+      transferToId: transfer.toId,
+      transferActionable: actionable === true,
+    } : {}),
+  };
+  official.messages = Array.isArray(official.messages) ? official.messages : [];
+  recipient.messages = Array.isArray(recipient.messages) ? recipient.messages : [];
+  official.messages.unshift({ ...message, readAt: sentAt });
+  recipient.messages.unshift({ ...message, readAt: null });
+  official.messages = official.messages.slice(0, 200);
+  recipient.messages = recipient.messages.slice(0, 120);
+  addInternetNotification(store, { recipientId: recipient.id, actor: official, type: 'message' });
+  return message;
+}
+
+function pendingTransfersFor(store, userId) {
+  return creditTransfers(store)
+    .filter((transfer) => transfer.status === 'pending' && (transfer.fromId === userId || transfer.toId === userId))
+    .slice(0, 20)
+    .map((transfer) => ({
+      id: transfer.id,
+      type: transfer.type,
+      amount: transfer.amount,
+      fromId: transfer.fromId,
+      toId: transfer.toId,
+      note: transfer.note || '',
+      status: transfer.status,
+      createdAt: transfer.createdAt,
+      actionable: transfer.toId === userId,
+    }));
+}
+
+export function createCreditTransfer(store, { actor, type, targetId, username, amount, note = '' }) {
+  const kind = type === 'request' ? 'request' : 'send';
+  const value = Math.trunc(Number(amount));
+  if (!Number.isSafeInteger(value) || value < 1 || value > 100_000) {
+    throw new Error('Enter an amount from C$1 to C$100,000');
+  }
+  const initiator = ensureInternetWallet(store, actor);
+  if (initiator.id === OFFICIAL_INTERNET_ACCOUNT_ID || initiator.official === true) {
+    throw new Error('The official account cannot start member transfers this way');
+  }
+  if (getActiveBan(initiator)) throw new Error('This account is banned from Clearwater Internet');
+  const target = findInternetMember(store, { id: targetId, username });
+  if (!target) throw new Error('That member has not joined Clearwater Internet yet');
+  if (target.id === initiator.id) throw new Error('Choose another member');
+  if (target.id === OFFICIAL_INTERNET_ACCOUNT_ID || target.official === true) {
+    throw new Error('You cannot transfer credits with the official account');
+  }
+  ensureInternetWallet(store, target);
+  if ((target.blocked || []).includes(initiator.id) || (initiator.blocked || []).includes(target.id)) {
+    throw new Error('This transfer is unavailable');
+  }
+  const noteText = text(note, 120);
+  if (kind === 'send') {
+    if (creditBalance(initiator) < value) throw new Error('You do not have enough Clearwater credits');
+    initiator.credits = creditBalance(initiator) - value;
+    addCreditTransaction(initiator, {
+      amount: -value,
+      type: 'transfer-hold',
+      note: noteText || `Pending send to @${target.username}`,
+      actorName: initiator.displayName || 'Clearwater member',
+    });
+  }
+
+  const transfer = {
+    id: randomUUID(),
+    type: kind,
+    amount: value,
+    fromId: initiator.id,
+    toId: target.id,
+    note: noteText,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    resolvedAt: null,
+  };
+  creditTransfers(store).unshift(transfer);
+  store.creditTransfers = creditTransfers(store).slice(0, 500);
+
+  const actorLabel = `${text(initiator.displayName, 80) || 'A member'} (@${initiator.username})`;
+  const targetLabel = `${text(target.displayName, 80) || 'a member'} (@${target.username})`;
+  const money = moneyLabel(value);
+  const noteLine = noteText ? `\nNote: ${noteText}` : '';
+
+  if (kind === 'send') {
+    deliverOfficialDirectMessage(store, {
+      toId: target.id,
+      content: `${actorLabel} wants to send you ${money}.${noteLine}\n\nAccept to add it to your wallet.`,
+      transfer,
+      actionable: true,
+    });
+    deliverOfficialDirectMessage(store, {
+      toId: initiator.id,
+      content: `Your transfer of ${money} to ${targetLabel} is waiting for them to accept.`,
+      transfer,
+      actionable: false,
+    });
+  } else {
+    deliverOfficialDirectMessage(store, {
+      toId: target.id,
+      content: `${actorLabel} requested ${money} from you.${noteLine}\n\nAccept to pay from your Clearwater credits.`,
+      transfer,
+      actionable: true,
+    });
+    deliverOfficialDirectMessage(store, {
+      toId: initiator.id,
+      content: `Your request for ${money} from ${targetLabel} was sent.`,
+      transfer,
+      actionable: false,
+    });
+  }
+
+  addInternetLog(store, `${text(initiator.displayName, 80) || 'A member'} ${kind === 'send' ? 'sent' : 'requested'} ${money} ${kind === 'send' ? 'to' : 'from'} ${text(target.displayName, 80) || 'a member'}.`);
+  return { transfer, wallet: { ...walletView(initiator), pendingTransfers: pendingTransfersFor(store, initiator.id) } };
+}
+
+export function respondCreditTransfer(store, { actor, transferId, decision }) {
+  const user = ensureInternetWallet(store, actor);
+  const transfer = creditTransfers(store).find((item) => item.id === String(transferId || ''));
+  if (!transfer || transfer.status !== 'pending') throw new Error('That transfer is no longer available');
+  if (transfer.toId !== user.id) throw new Error('Only the recipient can respond to this transfer');
+  const accept = decision === 'accept';
+  if (!accept && decision !== 'decline') throw new Error('Choose Accept or Decline');
+
+  const from = ensureInternetWallet(store, { id: transfer.fromId });
+  const to = ensureInternetWallet(store, { id: transfer.toId });
+  const money = moneyLabel(transfer.amount);
+
+  if (accept) {
+    if (transfer.type === 'send') {
+      to.credits = creditBalance(to) + transfer.amount;
+      addCreditTransaction(to, {
+        amount: transfer.amount,
+        type: 'transfer-in',
+        note: transfer.note || `Received from @${from.username}`,
+        actorName: from.displayName || 'Clearwater member',
+      });
+    } else {
+      if (creditBalance(to) < transfer.amount) throw new Error('You do not have enough Clearwater credits');
+      to.credits = creditBalance(to) - transfer.amount;
+      from.credits = creditBalance(from) + transfer.amount;
+      addCreditTransaction(to, {
+        amount: -transfer.amount,
+        type: 'transfer-out',
+        note: transfer.note || `Paid @${from.username}`,
+        actorName: to.displayName || 'Clearwater member',
+      });
+      addCreditTransaction(from, {
+        amount: transfer.amount,
+        type: 'transfer-in',
+        note: transfer.note || `Received from @${to.username}`,
+        actorName: to.displayName || 'Clearwater member',
+      });
+    }
+    transfer.status = 'accepted';
+  } else {
+    if (transfer.type === 'send') {
+      from.credits = creditBalance(from) + transfer.amount;
+      addCreditTransaction(from, {
+        amount: transfer.amount,
+        type: 'transfer-refund',
+        note: `Declined by @${to.username}`,
+        actorName: 'Clearwater',
+      });
+    }
+    transfer.status = 'declined';
+  }
+  transfer.resolvedAt = new Date().toISOString();
+  syncTransferMessages(store, transfer);
+
+  if (accept) {
+    deliverOfficialDirectMessage(store, {
+      toId: from.id,
+      content: transfer.type === 'send'
+        ? `${text(to.displayName, 80) || 'A member'} accepted your ${money} transfer.`
+        : `${text(to.displayName, 80) || 'A member'} paid your ${money} request.`,
+    });
+    deliverOfficialDirectMessage(store, {
+      toId: to.id,
+      content: transfer.type === 'send'
+        ? `You accepted ${money} from ${text(from.displayName, 80) || 'a member'}.`
+        : `You paid ${money} to ${text(from.displayName, 80) || 'a member'}.`,
+    });
+  } else {
+    deliverOfficialDirectMessage(store, {
+      toId: from.id,
+      content: transfer.type === 'send'
+        ? `${text(to.displayName, 80) || 'A member'} declined your ${money} transfer. The credits were returned.`
+        : `${text(to.displayName, 80) || 'A member'} declined your ${money} request.`,
+    });
+    deliverOfficialDirectMessage(store, {
+      toId: to.id,
+      content: `You declined the ${money} ${transfer.type === 'send' ? 'transfer' : 'request'} from ${text(from.displayName, 80) || 'a member'}.`,
+    });
+  }
+
+  addInternetLog(store, `${text(to.displayName, 80) || 'A member'} ${accept ? 'accepted' : 'declined'} a ${money} credit ${transfer.type}.`);
+  return { transfer, wallet: { ...walletView(user), pendingTransfers: pendingTransfersFor(store, user.id) } };
 }
 
 function safeProfileUrl(value, fallback) {

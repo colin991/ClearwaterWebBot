@@ -14,7 +14,7 @@
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <link rel="apple-touch-icon" href="assets/clearwater-logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260813-wallet-ui" />
+    <link rel="stylesheet" href="internet.css?v=20260813-wallet-pay" />
   </head>
   <body class="internet-booting">
     <div class="internet-boot" data-internet-boot aria-live="polite">
@@ -116,6 +116,36 @@
                 <p>You receive C$75 every 24 hours.</p>
               </div>
               <p class="wallet-status" data-wallet-claim-status role="status">Loading your next daily credit…</p>
+            </article>
+            <article class="wallet-card wallet-transfer-card">
+              <div class="wallet-card-copy">
+                <h2>Send & request</h2>
+                <p>Move Clearwater credits between members. They get an official message with Accept.</p>
+              </div>
+              <div class="wallet-transfer-tabs" role="tablist" aria-label="Transfer type">
+                <button type="button" class="selected" data-wallet-transfer-tab="send" role="tab" aria-selected="true">Send</button>
+                <button type="button" data-wallet-transfer-tab="request" role="tab" aria-selected="false">Request</button>
+              </div>
+              <form class="wallet-transfer-form" data-wallet-transfer-form>
+                <label>
+                  <span>Member</span>
+                  <input data-wallet-transfer-search maxlength="80" placeholder="Search by name or @username" autocomplete="off" />
+                </label>
+                <div class="wallet-transfer-results" data-wallet-transfer-results hidden></div>
+                <input type="hidden" data-wallet-transfer-target />
+                <p class="wallet-transfer-selected" data-wallet-transfer-selected hidden></p>
+                <label>
+                  <span>Amount</span>
+                  <input data-wallet-transfer-amount type="number" min="1" max="100000" step="1" inputmode="numeric" placeholder="C$" required />
+                </label>
+                <label>
+                  <span>Note <small>(optional)</small></span>
+                  <input data-wallet-transfer-note maxlength="120" placeholder="What's this for?" />
+                </label>
+                <button type="submit" data-wallet-transfer-submit>Send credits</button>
+                <p class="wallet-status" data-wallet-transfer-status role="status"></p>
+              </form>
+              <div class="wallet-pending" data-wallet-pending hidden></div>
             </article>
             <article class="wallet-card">
               <header>
@@ -418,6 +448,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260813-wallet-ui"></script>
+    <script src="internet.js?v=20260813-wallet-pay"></script>
   </body>
 </html>
