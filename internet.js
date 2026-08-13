@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260813-ads-media';
+const INTERNET_VERSION = '20260813-ads-promo';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -2714,18 +2714,30 @@ function adStatusLabel(status) {
 
 function renderSidebarAds(ads = sidebarAds) {
   const list = document.querySelector('[data-sidebar-ad-list]');
+  const panel = document.querySelector('[data-sidebar-ads]');
   if (!list) return;
   const items = Array.isArray(ads) ? ads.filter(Boolean) : [];
-  if (!items.length) {
-    list.innerHTML = '<p class="sidebar-ad-empty">No live ads right now. Departments and businesses can buy a slot with credits.</p>';
+  const ad = items[0] || null;
+  if (panel) panel.hidden = false;
+  if (!ad) {
+    list.innerHTML = `<article class="sidebar-ad-promo sidebar-ad-empty-card">
+      <header class="sidebar-ad-promo-brand"><img src="assets/clearwater-logo.png" alt="" /><span>Clearwater Ads</span><i>Sponsored</i></header>
+      <h3>Promote your department or business</h3>
+      <p>Buy a 24-hour sidebar slot with Clearwater Credits.</p>
+      <a class="sidebar-ad-promo-btn" href="/internet/wallet" data-view-link="wallet">Advertise here</a>
+    </article>`;
     return;
   }
-  list.innerHTML = items.map((ad) => {
-    const media = safeVideoUrl(ad.videoUrl)
-      ? `<video class="sidebar-ad-media" src="${escapeHtml(ad.videoUrl)}" muted loop playsinline autoplay></video>`
-      : (safeImageUrl(ad.imageUrl) ? `<img class="sidebar-ad-media" src="${escapeHtml(ad.imageUrl)}" alt="" />` : '');
-    return `<article class="sidebar-ad"><em>${escapeHtml(ad.category === 'department' ? 'Department' : 'Business')}</em><b>${escapeHtml(ad.title)}</b><span>${escapeHtml(ad.businessName)}</span><p>${escapeHtml(ad.body)}</p>${media}</article>`;
-  }).join('');
+  const media = safeVideoUrl(ad.videoUrl)
+    ? `<video class="sidebar-ad-promo-media" src="${escapeHtml(ad.videoUrl)}" muted loop playsinline autoplay></video>`
+    : (safeImageUrl(ad.imageUrl) ? `<img class="sidebar-ad-promo-media" src="${escapeHtml(ad.imageUrl)}" alt="" />` : '');
+  list.innerHTML = `<article class="sidebar-ad-promo">
+    <header class="sidebar-ad-promo-brand"><img src="assets/clearwater-logo.png" alt="" /><span>${escapeHtml(ad.businessName)}</span><i>Sponsored</i></header>
+    ${media}
+    <h3>${escapeHtml(ad.title)}</h3>
+    <p>${escapeHtml(ad.body)}</p>
+    <a class="sidebar-ad-promo-btn" href="/internet/wallet" data-view-link="wallet">${escapeHtml(ad.category === 'department' ? 'Join department' : 'Visit business')}</a>
+  </article>`;
 }
 
 function renderAdMediaPreview() {
