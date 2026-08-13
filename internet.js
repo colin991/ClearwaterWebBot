@@ -103,7 +103,17 @@ const AUTOMOD_HOLD_PREVIEW = 'This may be held for staff review when you send it
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const SMALL_REEL_BYTES = 3_200_000;
 const INTERNET_PATH = '/internet';
-const SIGNIN_INTERNET = '/signin?next=/internet';
+
+function signInUrl(nextPath = '') {
+  let path = String(nextPath || '').trim();
+  if (!path) {
+    path = String(location.pathname || INTERNET_PATH).replace(/\/+$/, '').replace(/\.html$/i, '') || INTERNET_PATH;
+  }
+  path = (path.split('?')[0].split('#')[0] || INTERNET_PATH).replace(/\/+$/, '') || INTERNET_PATH;
+  if (!(path === '/' || path === INTERNET_PATH || path.startsWith(`${INTERNET_PATH}/`))) path = INTERNET_PATH;
+  return `/signin?next=${encodeURIComponent(path)}`;
+}
+
 const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post', 'sponsored']);
 
 const siteDialog = document.querySelector('[data-site-dialog]');
@@ -767,7 +777,7 @@ function renderQuotePreview() {
 }
 
 function attachQuote(postId) {
-  if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
+  if (!currentUserId) { window.location.href = signInUrl(); return; }
   const post = sourcePost(allPosts.find((item) => item.id === postId));
   if (!post?.id) return;
   selectedQuoteId = post.id;
@@ -1442,7 +1452,7 @@ async function submitReelComment(input) {
   const text = String(input?.value || '').trim();
   if (!activeReelId || !text) return;
   if (!currentUserId) {
-    window.location.href = SIGNIN_INTERNET;
+    window.location.href = signInUrl();
     return;
   }
   reelCommentBusy = true;
@@ -1876,7 +1886,7 @@ function showViewFromAddress() {
 
 function detailReplyComposerMarkup(postId) {
   if (!currentUserId) {
-    return `<section class="detail-reply-composer signed-out"><p>Sign in to reply.</p><a href="${SIGNIN_INTERNET}">Continue with Discord</a></section>`;
+    return `<section class="detail-reply-composer signed-out"><p>Sign in to reply.</p><a href="${signInUrl()}">Continue with Discord</a></section>`;
   }
   const me = activeAuthor() || internetUsers.get(currentUserId) || sessionUser || {};
   const avatar = me.avatarUrl || sessionUser?.avatarUrl || 'assets/clearwater-logo.png';
@@ -1899,13 +1909,58 @@ function focusDetailReplyComposer() {
   input.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
+function openReelFromDeepLink(reelId) {
+  if (search) search.value = '';
+  feedTab = 'reels';
+  localStorage.setItem('clearwater-feed-tab', feedTab);
+  showView('home');
+  renderPosts();
+  const reveal = () => {
+    const viewport = document.querySelector('[data-reels-viewport]');
+    if (!viewport) return false;
+    const card = [...viewport.querySelectorAll('.reel-card')].find((item) => item.dataset.reelId === reelId);
+    if (!card) return false;
+    card.scrollIntoView({ block: 'start' });
+    renderReelPanel(reelId);
+    if (typeof syncActiveReelPlayback === 'function') syncActiveReelPlayback(viewport);
+    return true;
+  };
+  if (!reveal()) {
+    requestAnimationFrame(() => {
+      if (!reveal()) window.setTimeout(reveal, 160);
+    });
+  }
+}
+
 function showPostDetail(postId, updateHash = true, { focusReply = false } = {}) {
-  const post = allPosts.find((item) => item.id === postId);
-  if (!post || !postDetail) return showView('home');
-  openPostId = postId;
-  if (updateHash) setInternetRoute('post', postId);
+  const id = String(postId || '');
+  if (!id) return showView('home');
+  openPostId = id;
+  if (updateHash) setInternetRoute('post', id);
+
+  // Posts may not be loaded yet (Discord "View post" deep link). Keep the URL
+  // and wait for loadPosts() instead of bouncing to the home feed.
+  if (!allPosts.length) {
+    showView('post');
+    if (postDetail) postDetail.innerHTML = '<p class="feed-note">Loading post…</p>';
+    return;
+  }
+
+  const post = allPosts.find((item) => item.id === id);
+  if (!post) {
+    showView('post');
+    if (postDetail) postDetail.innerHTML = '<p class="feed-note">This post is unavailable or was removed.</p>';
+    return;
+  }
+
+  if (post.kind === 'reel' && !post.parentId) {
+    openReelFromDeepLink(id);
+    return;
+  }
+
+  if (!postDetail) return showView('home');
   showView('post');
-  const replies = allPosts.filter((item) => item.parentId === postId);
+  const replies = allPosts.filter((item) => item.parentId === id);
   postDetail.innerHTML = `${postMarkup(post)}${detailReplyComposerMarkup(post.id)}<section class="detail-replies">${replies.length ? replies.map((reply) => postMarkup(reply)).join('') : '<p>There are no replies yet.</p>'}</section>`;
   if (focusReply) queueMicrotask(focusDetailReplyComposer);
 }
@@ -3796,7 +3851,7 @@ content?.addEventListener('input', () => {
   if (postMessage) postMessage.textContent = scanClientContent(content.value) ? AUTOMOD_HOLD_PREVIEW : '';
 });
 document.querySelector('[data-drop-location]')?.addEventListener('click', async () => {
-  if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
+  if (!currentUserId) { window.location.href = signInUrl(); return; }
   await refreshDropLocation();
 });
 search?.addEventListener('input', () => { showView('home'); renderPosts(); });
@@ -3883,7 +3938,7 @@ document.addEventListener('click', (event) => {
   }
 });
 document.querySelector('[data-compose-link]')?.addEventListener('click', () => {
-  if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
+  if (!currentUserId) { window.location.href = signInUrl(); return; }
   history.pushState({}, '', internetUrl('home'));
   showView('home');
   content?.focus();
@@ -4217,7 +4272,7 @@ document.addEventListener('click', (event) => {
     event.preventDefault();
     const targetId = whoFollow.dataset.whoFollow;
     if (!targetId) return;
-    if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
+    if (!currentUserId) { window.location.href = signInUrl(); return; }
     const enabled = !socialState.following.includes(targetId);
     void socialAction('follow', { targetId, enabled }).catch((error) => void siteAlert(error.message || 'Could not update follow.'));
     return;
@@ -4279,7 +4334,7 @@ document.addEventListener('click', (event) => {
     return;
   }
   if (event.target.closest('[data-open-reel-composer]')) {
-    if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
+    if (!currentUserId) { window.location.href = signInUrl(); return; }
     const modal = document.querySelector('[data-reel-composer]');
     if (modal) modal.hidden = false;
     return;
@@ -4312,7 +4367,7 @@ document.addEventListener('click', (event) => {
   const reelFollow = event.target.closest('[data-reel-panel-follow], [data-reel-follow]');
   if (reelFollow) {
     const targetId = reelFollow.dataset.reelPanelFollow || reelFollow.dataset.reelFollow;
-    if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
+    if (!currentUserId) { window.location.href = signInUrl(); return; }
     if (!targetId) return;
     void socialAction('follow', { targetId, enabled: !socialState.following.includes(targetId) })
       .then(() => {
@@ -4490,7 +4545,7 @@ function refreshVisiblePosts() {
 }
 
 async function handlePostEngagement(type, postId, control = null) {
-  if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
+  if (!currentUserId) { window.location.href = signInUrl(); return; }
   const requested = allPosts.find((item) => item.id === postId);
   if (!requested) return;
   const post = sourcePost(requested);
@@ -4900,7 +4955,7 @@ document.querySelector('[data-sponsored-report-form]')?.addEventListener('submit
   const status = document.querySelector('[data-sponsored-report-status]');
   const adId = String(document.querySelector('[data-sponsored-ad-id]')?.value || '').trim();
   const reason = String(document.querySelector('[data-sponsored-report-reason]')?.value || '').trim();
-  if (!currentUserId) { window.location.href = SIGNIN_INTERNET; return; }
+  if (!currentUserId) { window.location.href = signInUrl(); return; }
   if (!adId) {
     if (status) status.textContent = 'Open Learn on a sponsored card first, or paste the ad ID.';
     return;
@@ -5219,7 +5274,7 @@ async function bootInternet() {
   try {
     const signedIn = await loadSession().catch(() => Boolean(currentUserId));
     if (!signedIn) {
-      window.location.replace(SIGNIN_INTERNET);
+      window.location.replace(signInUrl());
       return;
     }
     await loadPosts();
