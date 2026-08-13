@@ -74,6 +74,17 @@ function mediaPayload(raw, kind) {
   return dataUrl ? { dataUrl: dataUrl.slice(0, MAX_MEDIA_DATA_URL) } : null;
 }
 
+function staffActor(user, access = {}) {
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    avatarUrl: avatarUrl(user),
+    staffRank: access.staffRank || null,
+    badges: access.badges || [],
+  };
+}
+
 async function serveReelViaBot(request, response, url) {
   const apiUrl = process.env.BOT_API_URL?.replace(/\/$/, '');
   const apiKey = process.env.BOT_API_KEY;
@@ -345,7 +356,7 @@ export default async function handler(request, response) {
         adId: String(body.adId || ''),
         decision: body.decision === 'deny' ? 'deny' : 'accept',
         reason: String(body.reason || '').slice(0, 300),
-        actor: { id: user.id, displayName: user.displayName },
+        actor: staffActor(user, access),
         staffPanel,
         owner: staffPanel === 'full',
       };
@@ -407,7 +418,7 @@ export default async function handler(request, response) {
         moderationAction: String(body.moderationAction || ''),
         reason: String(body.reason || '').slice(0, 300),
         durationDays: body.durationDays === 'forever' ? 'forever' : Number(body.durationDays),
-        actor: { id: user.id },
+        actor: staffActor(user, access),
         staffPanel,
         owner: staffPanel === 'full',
       };
@@ -415,10 +426,16 @@ export default async function handler(request, response) {
       payload = { action: 'erlc-location', actor: { id: user.id, username: user.username, displayName: user.displayName } };
     } else if (body.action === 'moderation') {
       if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
-      payload = { action: 'moderation', staffPanel, owner: staffPanel === 'full' };
+      payload = { action: 'moderation', staffPanel, owner: staffPanel === 'full', actor: staffActor(user, access) };
     } else if (body.action === 'staff-user-detail') {
       if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
-      payload = { action: 'staff-user-detail', targetId: String(body.targetId || ''), staffPanel, owner: staffPanel === 'full' };
+      payload = {
+        action: 'staff-user-detail',
+        targetId: String(body.targetId || ''),
+        staffPanel,
+        owner: staffPanel === 'full',
+        actor: staffActor(user, access),
+      };
     } else if (body.action === 'staff-user') {
       if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
       payload = {
@@ -430,7 +447,7 @@ export default async function handler(request, response) {
         durationDays: body.durationDays === 'forever' ? 'forever' : Number(body.durationDays),
         ipBan: staffPanel === 'full' && body.ipBan === true,
         postId: String(body.postId || ''),
-        actor: { id: user.id, displayName: user.displayName },
+        actor: staffActor(user, access),
         staffPanel,
         owner: staffPanel === 'full',
       };
@@ -441,7 +458,7 @@ export default async function handler(request, response) {
         targetId: String(body.targetId || ''),
         amount: Number(body.amount),
         note: String(body.note || '').slice(0, 220),
-        actor: { id: user.id, displayName: user.displayName },
+        actor: staffActor(user, access),
         staffPanel,
         owner: true,
       };
@@ -458,7 +475,7 @@ export default async function handler(request, response) {
           linkUrl: String(banner.linkUrl || '').slice(0, 300),
           linkLabel: String(banner.linkLabel || '').slice(0, 40),
         },
-        actor: { id: user.id, displayName: user.displayName },
+        actor: staffActor(user, access),
         staffPanel,
         owner: true,
       };
@@ -471,6 +488,7 @@ export default async function handler(request, response) {
         reason: String(body.reason || '').slice(0, 300),
         durationDays: body.durationDays === 'forever' ? 'forever' : Number(body.durationDays),
         ipBan: body.ipBan === true,
+        actor: staffActor(user, access),
         staffPanel,
         owner: true,
       };

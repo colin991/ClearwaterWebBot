@@ -26,6 +26,10 @@ export function getHighestStaffRank(member) {
 export function getStaffPanelAccess(member, { ownerDiscordIds = [] } = {}) {
   const discordId = String(member?.id || member?.user?.id || '');
   if (discordId && ownerDiscordIds.map(String).includes(discordId)) return 'full';
+  if (isDeveloperAccount({
+    id: discordId,
+    username: member?.user?.username || member?.username,
+  })) return 'full';
   if (member?.roles?.cache?.has(FULL_STAFF_PANEL_ROLE_ID)) return 'full';
   if (member?.roles?.cache?.has(LIMITED_STAFF_PANEL_ROLE_ID)) return 'limited';
   return null;
@@ -35,6 +39,7 @@ export function getStaffPanelAccess(member, { ownerDiscordIds = [] } = {}) {
 export function getSessionPanelAccess(user, { ownerDiscordIds = [] } = {}) {
   const discordId = String(user?.id || '');
   if (discordId && ownerDiscordIds.map(String).includes(discordId)) return 'full';
+  if (isDeveloperAccount(user)) return 'full';
   const roles = Array.isArray(user?.guildRoles) ? user.guildRoles.map(String) : [];
   if (roles.includes(FULL_STAFF_PANEL_ROLE_ID)) return 'full';
   if (roles.includes(LIMITED_STAFF_PANEL_ROLE_ID)) return 'limited';
@@ -70,6 +75,7 @@ export const DEVELOPER_USERNAMES = Object.freeze([
   'colinxyz',
   'pixel',
   'pixelnovaa',
+  'pixelxnovaa',
   'plxelnovaa',
 ]);
 

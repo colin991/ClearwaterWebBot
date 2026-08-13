@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { memberHasSiteAccess } from '../lib/site-access.js';
-import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess, LIMITED_STAFF_FORBIDDEN_ACTIONS } from './staffRanks.js';
+import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess, isDeveloperAccount, LIMITED_STAFF_FORBIDDEN_ACTIONS } from './staffRanks.js';
 import { dropLocationNameCandidates, findPlayerDropLocation } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
@@ -84,14 +84,28 @@ async function discordDropUsernames(client, actor) {
 export function startStatusServer(client, config) {
   let lastInternetRoleSync = 0;
 
-  const resolveLiveStaffPanel = async (actorId) => {
-    const discordId = String(actorId || '');
+  const resolveLiveStaffPanel = async (actor, proxyPanel = null) => {
+    const discordId = String(actor?.id || '');
     if (!/^\d{16,22}$/.test(discordId)) return null;
+    if (isDeveloperAccount(actor)) return 'full';
+    const ownerDiscordIds = config.ownerDiscordIds || [];
+    if (ownerDiscordIds.map(String).includes(discordId)) return 'full';
+
     const guild = client.guilds.cache.get(CLEARWATER_GUILD_ID)
       || await client.guilds.fetch(CLEARWATER_GUILD_ID).catch(() => null);
-    if (!guild) return null;
-    const member = await guild.members.fetch(discordId).catch(() => null);
-    return getStaffPanelAccess(member, { ownerDiscordIds: config.ownerDiscordIds || [] });
+    if (!guild) {
+      // Bot cannot see the guild — trust the website proxy's already-checked panel.
+      return proxyPanel === 'full' || proxyPanel === 'limited' ? proxyPanel : null;
+    }
+
+    try {
+      const member = await guild.members.fetch(discordId);
+      return getStaffPanelAccess(member, { ownerDiscordIds });
+    } catch (error) {
+      // Confirmed not in guild: no panel. Temporary Discord failures: keep proxy panel.
+      if (Number(error?.code) === 10007) return null;
+      return proxyPanel === 'full' || proxyPanel === 'limited' ? proxyPanel : null;
+    }
   };
 
   const enforceInternetMembership = async (store, actor) => {
@@ -285,9 +299,11 @@ export function startStatusServer(client, config) {
         if (membership === false) return json(response, 403, { error: 'You must be a member of the Clearwater Roleplay Discord server to use Clearwater Internet.' });
         if (membership === null) return json(response, 503, { error: 'Clearwater Internet could not verify Discord membership right now. Please try again shortly.' });
 
-        // Privilege flags from the website proxy are never trusted. Re-resolve
-        // staff/owner access from live Discord membership on every request.
-        const actorId = String(body.actor?.id || '');
+        // Re-resolve staff/owner access from live Discord membership. The website
+        // proxy panel is only used when Discord membership cannot be confirmed.
+        const proxyPanel = body.staffPanel === 'full' || body.staffPanel === 'limited'
+          ? body.staffPanel
+          : null;
         const wantsOfficial = body.asOfficial === true;
         const requestedOwner = body.owner === true;
         const staffAction = ['moderation', 'staff-user', 'staff-user-detail', 'staff-wallet', 'staff-site', 'report-review', 'ad-review', 'verify', 'ban'].includes(body.action);
@@ -297,7 +313,7 @@ export function startStatusServer(client, config) {
           || body.action === 'official-profile-save';
         let livePanel = null;
         if (needsLivePanel) {
-          livePanel = await resolveLiveStaffPanel(actorId);
+          livePanel = await resolveLiveStaffPanel(body.actor, proxyPanel);
         }
         body.asOfficial = false;
         body.owner = false;
