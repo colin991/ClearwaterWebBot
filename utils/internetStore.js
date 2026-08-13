@@ -1949,7 +1949,51 @@ export function takeInternetMessages(store, actor) {
   expireStaleCreditTransfers(store);
   const user = upsertInternetUser(store, actor);
   const messages = (Array.isArray(user.messages) ? user.messages : []).filter((message) => message.kind === 'direct');
-  return messages.slice(0, 120);
+  const conversations = new Map();
+  messages.forEach((message) => {
+    const otherId = message.fromId === user.id ? message.toId : message.fromId;
+    if (!otherId) return;
+    const previous = conversations.get(otherId);
+    const unread = message.toId === user.id && !message.readAt ? 1 : 0;
+    if (!previous || new Date(message.createdAt).getTime() > new Date(previous.createdAt).getTime()) {
+      conversations.set(otherId, {
+        id: message.id,
+        kind: 'direct',
+        fromId: message.fromId,
+        toId: message.toId,
+        content: text(message.content, 1000),
+        gifUrl: message.gifUrl || '',
+        gifTitle: message.gifTitle || '',
+        createdAt: message.createdAt,
+        readAt: message.readAt || null,
+        transferId: message.transferId || null,
+        transferStatus: message.transferStatus || null,
+        otherId,
+        unread: (previous?.unread || 0) + unread,
+      });
+    } else {
+      previous.unread = (previous.unread || 0) + unread;
+    }
+  });
+
+  return [...conversations.values()]
+    .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt))
+    .slice(0, 80)
+    .map((item) => {
+      const peer = store.users[item.otherId] || {};
+      const isBank = item.otherId === BANK_INTERNET_ACCOUNT_ID || peer.bank === true;
+      const isOfficial = item.otherId === OFFICIAL_INTERNET_ACCOUNT_ID || peer.official === true;
+      return {
+        ...item,
+        otherDisplayName: text(peer.displayName, 80)
+          || text(peer.username, 80)
+          || (isBank ? 'Clearwater Bank' : isOfficial ? 'Clearwater Roleplay' : 'Clearwater member'),
+        otherUsername: text(peer.username, 80)
+          || (isBank ? 'clearwaterbank' : isOfficial ? 'clearwater' : 'member'),
+        otherAvatarUrl: peer.avatarUrl || null,
+        otherStaffRank: peer.staffRank || (isBank ? 'Bank' : isOfficial ? 'Official' : null),
+      };
+    });
 }
 
 function findInternetMember(store, { id, username } = {}) {

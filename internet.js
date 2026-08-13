@@ -3230,30 +3230,55 @@ async function loadMessages() {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'messages', ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Could not load messages.');
     if (!response.ok) throw new Error(result.error || 'Could not load messages.');
-    const conversations = new Map();
-    (result.messages || []).forEach((message) => {
-      if (message.kind !== 'direct') return;
-      const otherId = message.fromId === activeUserId() ? message.toId : message.fromId;
+    // Prefer server-built conversation summaries (include peer name/avatar). Fall
+    // back to grouping raw messages for older bot hosts.
+    let items = Array.isArray(result.conversations) ? result.conversations : null;
+    if (!items) {
+      const conversations = new Map();
+      (result.messages || []).forEach((message) => {
+        if (message.kind !== 'direct') return;
+        const otherId = message.otherId || (message.fromId === activeUserId() ? message.toId : message.fromId);
+        if (!otherId) return;
+        const previous = conversations.get(otherId);
+        const unread = Number(message.unread || 0) || (message.toId === activeUserId() && !message.readAt ? 1 : 0);
+        if (!previous || new Date(message.createdAt).getTime() > new Date(previous.createdAt).getTime()) {
+          conversations.set(otherId, { ...message, otherId, unread: (previous?.unread || 0) + unread });
+        } else {
+          previous.unread = (previous.unread || 0) + unread;
+        }
+      });
+      items = [...conversations.values()].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+    } else {
+      items = items.slice().sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+    }
+
+    // Seed the member cache so inbox rows stay openable even before the feed loads.
+    items.forEach((item) => {
+      const otherId = String(item.otherId || '');
       if (!otherId) return;
-      const previous = conversations.get(otherId);
-      const unread = message.toId === activeUserId() && !message.readAt ? 1 : 0;
-      if (!previous || new Date(message.createdAt).getTime() > new Date(previous.createdAt).getTime()) {
-        conversations.set(otherId, { ...message, unread: (previous?.unread || 0) + unread });
-      } else {
-        previous.unread = (previous.unread || 0) + unread;
-      }
+      const existing = internetUsers.get(otherId) || {};
+      internetUsers.set(otherId, {
+        ...existing,
+        id: otherId,
+        displayName: item.otherDisplayName || existing.displayName || 'Clearwater member',
+        username: item.otherUsername || existing.username || 'member',
+        avatarUrl: item.otherAvatarUrl || existing.avatarUrl || null,
+        staffRank: item.otherStaffRank || existing.staffRank || null,
+      });
     });
-    const items = [...conversations.entries()].sort(([, left], [, right]) => new Date(right.createdAt) - new Date(left.createdAt));
-    const unreadTotal = items.reduce((total, [, message]) => total + Number(message.unread || 0), 0);
+
+    const unreadTotal = items.reduce((total, message) => total + Number(message.unread || 0), 0);
     socialState.unreadMessages = unreadTotal;
     updateNotificationIndicators();
     messagesList.innerHTML = items.length
-      ? items.map(([otherId, message]) => {
+      ? items.map((message) => {
+        const otherId = String(message.otherId || '');
         const member = internetUsers.get(otherId) || {};
-        const name = member.displayName || 'Clearwater member';
+        const name = message.otherDisplayName || member.displayName || 'Clearwater member';
+        const avatar = message.otherAvatarUrl || member.avatarUrl || 'assets/clearwater-logo.png';
         const preview = message.content || (message.gifUrl ? 'GIF' : 'New message');
         const unread = Number(message.unread || 0) > 0;
-        return `<button type="button" class="internet-message ${unread ? 'unread' : ''}" data-open-conversation="${escapeHtml(otherId)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(name)}</b><p>${escapeHtml(preview)}</p><small>${timeAgo(message.createdAt)}</small></span>${unread ? `<em>${message.unread > 9 ? '9+' : message.unread}</em>` : ''}</button>`;
+        return `<button type="button" class="internet-message ${unread ? 'unread' : ''}" data-open-conversation="${escapeHtml(otherId)}"><img src="${escapeHtml(avatar)}" alt="" /><span><b>${escapeHtml(name)}</b><p>${escapeHtml(preview)}</p><small>${timeAgo(message.createdAt)}</small></span>${unread ? `<em>${message.unread > 9 ? '9+' : message.unread}</em>` : ''}</button>`;
       }).join('')
       : '<p class="message-empty">No messages yet.<span>Start a conversation with another Clearwater member.</span></p>';
   } catch (error) {
@@ -3767,6 +3792,8 @@ async function loadPosts() {
     const route = readInternetRoute();
     if (route.view === 'post' && route.id) showPostDetail(route.id, false);
     if (route.view === 'member' && route.id) openMemberProfile(route.id, false);
+    if (!document.querySelector('[data-view="messages"]')?.hidden) void loadMessages();
+    if (!document.querySelector('[data-view="conversation"]')?.hidden && viewedMember) void loadConversation(viewedMember);
   } catch {
     note.hidden = false;
     note.textContent = 'Clearwater Internet is offline right now. Restart the Clearwater Discord bot host to restore posting.';
@@ -4156,8 +4183,17 @@ document.addEventListener('click', (event) => {
   if (notificationPost) { showPostDetail(notificationPost.dataset.notificationPost); return; }
   const notificationMessage = event.target.closest('[data-notification-message]');
   if (notificationMessage) {
-    const member = internetUsers.get(notificationMessage.dataset.notificationMessage);
-    if (member) openConversation(member);
+    const id = notificationMessage.dataset.notificationMessage;
+    const cached = internetUsers.get(id);
+    const nameEl = notificationMessage.querySelector('b');
+    const imgEl = notificationMessage.querySelector('img');
+    openConversation(cached || {
+      id,
+      displayName: nameEl?.textContent?.trim() || 'Clearwater member',
+      username: '',
+      avatarUrl: imgEl?.getAttribute('src') || 'assets/clearwater-logo.png',
+      staffRank: null
+    });
     return;
   }
   const notificationMember = event.target.closest('[data-notification-member]');
@@ -4181,7 +4217,20 @@ document.addEventListener('click', (event) => {
   const pollVoters = event.target.closest('[data-poll-voters]');
   if (pollVoters) { showPollVoters(pollVoters.dataset.pollVoters); return; }
   const conversation = event.target.closest('[data-open-conversation]');
-  if (conversation) { const member = internetUsers.get(conversation.dataset.openConversation); if (member) openConversation(member); return; }
+  if (conversation) {
+    const otherId = conversation.dataset.openConversation || '';
+    const member = internetUsers.get(otherId) || {
+      id: otherId,
+      displayName: conversation.querySelector('b')?.textContent || 'Clearwater member',
+      username: 'member',
+      avatarUrl: conversation.querySelector('img')?.getAttribute('src') || null,
+    };
+    if (otherId) {
+      internetUsers.set(otherId, { ...(internetUsers.get(otherId) || {}), ...member, id: otherId });
+      openConversation(internetUsers.get(otherId));
+    }
+    return;
+  }
   const staffOpenUser = event.target.closest('[data-staff-open-user]');
   if (staffOpenUser) { void openStaffUser(staffOpenUser.dataset.staffOpenUser); return; }
   const staffUserAction = event.target.closest('[data-staff-user-action]');

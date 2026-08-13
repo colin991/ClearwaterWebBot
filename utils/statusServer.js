@@ -520,9 +520,9 @@ export function startStatusServer(client, config) {
         }
 
         if (body.action === 'messages') {
-          const messages = takeInternetMessages(store, body.actor);
+          const conversations = takeInternetMessages(store, body.actor);
           await saveInternetStore(store);
-          return json(response, 200, { messages });
+          return json(response, 200, { conversations, messages: conversations });
         }
 
         if (body.action === 'conversation') {
