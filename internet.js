@@ -1525,18 +1525,15 @@ function renderSearchResults(query, postCount) {
     return;
   }
 
+  // People stay in the main search column only — never duplicate them in the sidebar.
+  if (sideResults) { sideResults.hidden = true; sideResults.innerHTML = ''; }
+
   const peopleMarkup = people.length
     ? `<h2>People</h2><div class="search-people-list">${people.map(searchPersonButton).join('')}</div>`
     : '<h2>People</h2><p class="search-empty">No people match that search.</p>';
   if (feedPeople) {
     feedPeople.hidden = false;
     feedPeople.innerHTML = peopleMarkup;
-  }
-  if (sideResults) {
-    sideResults.hidden = false;
-    sideResults.innerHTML = people.length
-      ? `<h2>People</h2><div class="search-people-list">${people.slice(0, 6).map(searchPersonButton).join('')}</div>`
-      : '<h2>People</h2><p class="search-empty">No people found.</p>';
   }
 }
 
