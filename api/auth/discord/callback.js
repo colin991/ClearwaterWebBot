@@ -12,7 +12,7 @@ import {
   safeNextPath,
   sendJson,
 } from '../../../lib/discord-auth.js';
-import { SITE_TEST_ROLE_ID } from '../../../lib/site-access.js';
+import { rolesGrantSiteAccess } from '../../../lib/site-access.js';
 
 export default async function handler(request, response) {
   if (request.method !== 'GET') return sendJson(response, 405, { error: 'Method not allowed' });
@@ -71,7 +71,7 @@ export default async function handler(request, response) {
     }
 
     const guildRoles = Array.isArray(guildMember.roles) ? guildMember.roles.map(String) : [];
-    if (!guildRoles.includes(SITE_TEST_ROLE_ID)) {
+    if (!rolesGrantSiteAccess(guildRoles)) {
       return redirect(response, '/coming-soon?denied=1', [
         clearCookie(STATE_COOKIE),
         clearCookie(NEXT_COOKIE),
@@ -90,7 +90,7 @@ export default async function handler(request, response) {
     return redirect(response, destination, [
       clearCookie(STATE_COOKIE),
       clearCookie(NEXT_COOKIE),
-      makeCookie(SESSION_COOKIE, session, 60 * 60 * 24),
+      makeCookie(SESSION_COOKIE, session, 60 * 60 * 24 * 7),
     ]);
   } catch {
     return redirect(response, siteRedirect, [clearCookie(STATE_COOKIE)]);

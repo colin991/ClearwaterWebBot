@@ -25,9 +25,19 @@ export function getHighestStaffRank(member) {
 /** Internet staff desk access. Ownership = full, Management = limited. */
 export function getStaffPanelAccess(member, { ownerDiscordIds = [] } = {}) {
   const discordId = String(member?.id || member?.user?.id || '');
-  if (discordId && ownerDiscordIds.includes(discordId)) return 'full';
+  if (discordId && ownerDiscordIds.map(String).includes(discordId)) return 'full';
   if (member?.roles?.cache?.has(FULL_STAFF_PANEL_ROLE_ID)) return 'full';
   if (member?.roles?.cache?.has(LIMITED_STAFF_PANEL_ROLE_ID)) return 'limited';
+  return null;
+}
+
+/** Panel access from signed session guild roles (Discord OAuth at login). */
+export function getSessionPanelAccess(user, { ownerDiscordIds = [] } = {}) {
+  const discordId = String(user?.id || '');
+  if (discordId && ownerDiscordIds.map(String).includes(discordId)) return 'full';
+  const roles = Array.isArray(user?.guildRoles) ? user.guildRoles.map(String) : [];
+  if (roles.includes(FULL_STAFF_PANEL_ROLE_ID)) return 'full';
+  if (roles.includes(LIMITED_STAFF_PANEL_ROLE_ID)) return 'limited';
   return null;
 }
 
