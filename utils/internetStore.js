@@ -1546,9 +1546,127 @@ export function createInternetAdReport(store, { adId, actor, reason }) {
   return report;
 }
 
-function addInternetLog(store, message) {
-  store.logs.unshift({ id: randomUUID(), message: text(message, 400), createdAt: new Date().toISOString() });
+function addInternetLog(store, message, revert = null) {
+  const entry = {
+    id: randomUUID(),
+    message: text(message, 400),
+    createdAt: new Date().toISOString(),
+  };
+  if (revert && typeof revert === 'object' && revert.type) {
+    entry.revert = revert;
+  }
+  store.logs.unshift(entry);
   store.logs = store.logs.slice(0, 300);
+  return entry;
+}
+
+const STAFF_USER_INVERSE = Object.freeze({
+  verify: 'unverify',
+  unverify: 'verify',
+  'badge-business': 'unbadge-business',
+  'unbadge-business': 'badge-business',
+  'badge-warning': 'unbadge-warning',
+  'unbadge-warning': 'badge-warning',
+  ban: 'unban',
+  unban: 'ban',
+  'ip-ban': 'clear-ip-ban',
+  mute: 'unmute',
+  unmute: 'mute',
+  'lock-posts': 'unlock-posts',
+  'unlock-posts': 'lock-posts',
+  'lock-messages': 'unlock-messages',
+  'unlock-messages': 'lock-messages',
+  'lock-reels': 'unlock-reels',
+  'unlock-reels': 'lock-reels',
+  'lock-profile': 'unlock-profile',
+  'unlock-profile': 'lock-profile',
+  shadowban: 'unshadowban',
+  unshadowban: 'shadowban',
+  watch: 'unwatch',
+  unwatch: 'watch',
+});
+
+function staffUserRevertMeta(targetId, staffAction, extra = {}) {
+  const inverse = STAFF_USER_INVERSE[staffAction];
+  if (!inverse || !/^\d{16,22}$/.test(String(targetId || ''))) return null;
+  return {
+    type: 'staff-user',
+    targetId: String(targetId),
+    staffAction: String(staffAction),
+    inverse,
+    reason: text(extra.reason, 300),
+    note: text(extra.note, 500),
+    durationDays: extra.durationDays === 'forever' || extra.durationDays == null
+      ? 'forever'
+      : (Number(extra.durationDays) || 'forever'),
+    warningBadgeText: text(extra.warningBadgeText, 120),
+  };
+}
+
+function publicHistoryLog(log) {
+  const revert = log?.revert && typeof log.revert === 'object' ? log.revert : null;
+  const canRevert = Boolean(revert?.type && !log.revertedAt);
+  return {
+    id: log.id,
+    message: text(log.message, 400),
+    createdAt: log.createdAt,
+    revertedAt: log.revertedAt || null,
+    canRevert,
+    revertBlockedReason: log.revertedAt
+      ? 'Already reverted'
+      : (canRevert ? '' : 'This action cannot be restored'),
+  };
+}
+
+function canRevertReport(report) {
+  if (!report || report.revertedAt || report.status === 'open') return false;
+  if (report.status === 'denied') return true;
+  if (report.status !== 'accepted') return false;
+  if (report.action === 'ban' || report.action === 'warning') return true;
+  if (report.action === 'delete') {
+    if (report.kind === 'ad') return Boolean(report.adId);
+    return Boolean(report.deletedSnapshot || report.postId);
+  }
+  return false;
+}
+
+function snapshotDeletedPost(post) {
+  if (!post || typeof post !== 'object') return null;
+  // Keep enough to restore the post; media may still be data URLs or hosted paths.
+  return {
+    id: post.id,
+    kind: post.kind === 'reel' ? 'reel' : 'post',
+    authorId: post.authorId,
+    displayName: post.displayName,
+    username: post.username,
+    avatarUrl: post.avatarUrl,
+    staffRank: post.staffRank,
+    verified: post.verified === true,
+    badges: Array.isArray(post.badges) ? post.badges : [],
+    content: text(post.content, 500),
+    parentId: post.parentId || null,
+    quoteId: post.quoteId || null,
+    likes: Array.isArray(post.likes) ? post.likes : [],
+    gifUrl: post.gifUrl || undefined,
+    gifTitle: post.gifTitle || undefined,
+    imageUrl: post.imageUrl || undefined,
+    videoUrl: post.videoUrl || undefined,
+    location: post.location || undefined,
+    poll: post.poll || undefined,
+    createdAt: post.createdAt,
+    editedAt: post.editedAt || undefined,
+  };
+}
+
+function restoreDeletedPost(store, snapshot) {
+  if (!snapshot?.id) return false;
+  if (store.posts.some((post) => post.id === snapshot.id)) return true;
+  store.posts.unshift({
+    ...snapshot,
+    restoredAt: new Date().toISOString(),
+  });
+  store.posts = store.posts.slice(0, 10_000);
+  return true;
 }
 
 function sanitizeHeldPayload(payload) {
@@ -1577,10 +1695,15 @@ function sanitizeHeldPayload(payload) {
 function publicStaffReport(store, report) {
   const enriched = enrichInternetReport(store, report);
   const held = enriched.heldPayload && typeof enriched.heldPayload === 'object' ? enriched.heldPayload : null;
-  const { heldPayload, ...rest } = enriched;
+  const { heldPayload, deletedSnapshot, ...rest } = enriched;
   return {
     ...rest,
     hasHeldMedia: Boolean(held && (held.imageUrl || held.gifUrl || held.hasImage)),
+    canRevert: canRevertReport(report),
+    revertedAt: report.revertedAt || null,
+    revertBlockedReason: report.revertedAt
+      ? 'Already reverted'
+      : (canRevertReport(report) ? '' : 'This action cannot be restored'),
   };
 }
 
@@ -1707,6 +1830,7 @@ export function reviewInternetReport(store, { reportId, decision, action, reason
         : report.kind === 'ad'
           ? 'sponsored ad'
           : 'post';
+  const reportRevert = { type: 'report', reportId: report.id };
   if (decision === 'deny') {
     let released = null;
     if (report.source === 'automod' && report.kind === 'post' && !report.postId) {
@@ -1716,7 +1840,7 @@ export function reviewInternetReport(store, { reportId, decision, action, reason
       ? (released
         ? `Marked automod hold on ${report.authorName}'s ${kindLabel} as false and published it.`
         : `Dismissed automod hold on ${report.authorName}'s ${kindLabel}.`)
-      : `Denied report against ${report.authorName}.`);
+      : `Denied report against ${report.authorName}.`, reportRevert);
     if (notifyReporter) addInternetMessage(store, report.reporterId, `Your report about ${report.authorName}'s ${kindLabel} was reviewed. No action was taken.`);
     if (released) addInternetMessage(store, report.authorId, 'Staff reviewed your held post and published it.');
     return report;
@@ -1730,30 +1854,40 @@ export function reviewInternetReport(store, { reportId, decision, action, reason
     if (report.kind === 'ad' && report.adId) {
       const ad = store.ads.find((item) => item.id === report.adId);
       if (ad) {
+        report.adSnapshot = {
+          status: ad.status,
+          endsAt: ad.endsAt || null,
+          reviewNote: ad.reviewNote || '',
+        };
         ad.status = 'denied';
         ad.endsAt = new Date().toISOString();
         ad.reviewNote = note;
       }
-      addInternetLog(store, `Removed ${report.authorName}'s sponsored ad after a report. Reason: ${note}`);
+      addInternetLog(store, `Removed ${report.authorName}'s sponsored ad after a report. Reason: ${note}`, reportRevert);
     } else {
       const index = store.posts.findIndex((post) => post.id === report.postId);
-      if (index >= 0) store.posts.splice(index, 1);
+      if (index >= 0) {
+        report.deletedSnapshot = snapshotDeletedPost(store.posts[index]);
+        store.posts.splice(index, 1);
+      }
       addInternetLog(store, report.source === 'automod'
         ? `Confirmed automod hold on ${report.authorName}'s ${kindLabel}. Reason: ${note}`
-        : `Deleted ${report.authorName}'s reported post. Reason: ${note}`);
+        : `Deleted ${report.authorName}'s reported post. Reason: ${note}`, reportRevert);
     }
   }
   if (action === 'ban') {
     const user = upsertInternetUser(store, { id: report.authorId, displayName: report.authorName });
     setInternetBan(user, { enabled: true, reason: note, durationDays });
-    addInternetLog(store, `Banned ${report.authorName}. Reason: ${note}`);
+    addInternetLog(store, `Banned ${report.authorName}. Reason: ${note}`, reportRevert);
   }
   if (action === 'warning') {
     const user = upsertInternetUser(store, { id: report.authorId, displayName: report.authorName });
     user.warnings = Array.isArray(user.warnings) ? user.warnings : [];
-    user.warnings.unshift({ id: randomUUID(), reason: note, createdAt: new Date().toISOString(), readAt: null });
+    const warning = { id: randomUUID(), reason: note, createdAt: new Date().toISOString(), readAt: null };
+    report.warningId = warning.id;
+    user.warnings.unshift(warning);
     user.warnings = user.warnings.slice(0, 30);
-    addInternetLog(store, `Warned ${report.authorName}. Reason: ${note}`);
+    addInternetLog(store, `Warned ${report.authorName}. Reason: ${note}`, reportRevert);
     addInternetMessage(store, report.authorId, `You received a warning from Clearwater Internet. Reason: ${note}`);
   }
   if (notifyReporter) {
@@ -2037,104 +2171,128 @@ export function applyStaffUserAction(store, {
   const destructive = new Set(['ban', 'ip-ban', 'mute', 'lock-posts', 'lock-messages', 'lock-reels', 'lock-profile', 'shadowban', 'wipe-posts', 'wipe-reels', 'wipe-comments', 'wipe-messages', 'reset-profile', 'delete-post']);
   if (destructive.has(action)) assertNotOfficial(user, 'moderated that way');
 
+  const logUser = (message, extra = {}) => addInternetLog(
+    store,
+    message,
+    staffUserRevertMeta(user.id, action, { reason: noteText, note: noteText, durationDays, ...extra }),
+  );
+
   if (action === 'verify') {
     user.verified = true;
-    addInternetLog(store, `${actorName} verified ${label}.`);
+    logUser(`${actorName} verified ${label}.`);
   } else if (action === 'unverify') {
     user.verified = false;
-    addInternetLog(store, `${actorName} removed verification from ${label}.`);
+    logUser(`${actorName} removed verification from ${label}.`);
   } else if (action === 'badge-business') {
     user.badges = sanitizeInternetBadges([...(Array.isArray(user.badges) ? user.badges : []), 'business']);
-    addInternetLog(store, `${actorName} marked ${label} as a business account.`);
+    logUser(`${actorName} marked ${label} as a business account.`);
   } else if (action === 'unbadge-business') {
     user.badges = sanitizeInternetBadges(user.badges).filter((badge) => badge !== 'business');
-    addInternetLog(store, `${actorName} removed the business badge from ${label}.`);
+    logUser(`${actorName} removed the business badge from ${label}.`);
   } else if (action === 'badge-warning') {
     if (!noteText) throw new Error('Enter the warning tooltip text');
     user.badges = sanitizeInternetBadges([...(Array.isArray(user.badges) ? user.badges : []), 'warning']);
     user.warningBadgeText = noteText.slice(0, 120);
-    addInternetLog(store, `${actorName} added a warning badge to ${label}.`);
+    logUser(`${actorName} added a warning badge to ${label}.`, { warningBadgeText: user.warningBadgeText });
   } else if (action === 'unbadge-warning') {
+    const previousBadgeText = text(user.warningBadgeText, 120);
     user.badges = sanitizeInternetBadges(user.badges).filter((badge) => badge !== 'warning');
     user.warningBadgeText = '';
-    addInternetLog(store, `${actorName} removed the warning badge from ${label}.`);
+    logUser(`${actorName} removed the warning badge from ${label}.`, { warningBadgeText: previousBadgeText, note: previousBadgeText });
   } else if (action === 'ban') {
     setInternetBan(user, { enabled: true, reason: noteText, durationDays });
     if (ipBan === true) banKnownInternetIps(store, user, { enabled: true, reason: noteText, durationDays });
-    addInternetLog(store, `${actorName} banned ${label}. Reason: ${noteText || 'No reason was provided.'}`);
+    logUser(`${actorName} banned ${label}. Reason: ${noteText || 'No reason was provided.'}`);
     addInternetMessage(store, user.id, `Your Clearwater Internet account was banned. Reason: ${noteText || 'No reason was provided.'}`);
   } else if (action === 'unban') {
+    const previousReason = text(user.banReason, 300) || noteText;
     setInternetBan(user, { enabled: false });
     clearKnownInternetIpBans(store, user);
-    addInternetLog(store, `${actorName} unbanned ${label}.`);
+    logUser(`${actorName} unbanned ${label}.`, { reason: previousReason });
   } else if (action === 'ip-ban') {
     const count = banKnownInternetIps(store, user, { enabled: true, reason: noteText, durationDays });
     if (!count) throw new Error('This account has no known network hashes to block');
-    addInternetLog(store, `${actorName} blocked ${count} known network hash(es) for ${label}.`);
+    logUser(`${actorName} blocked ${count} known network hash(es) for ${label}.`);
   } else if (action === 'clear-ip-ban') {
     const count = clearKnownInternetIpBans(store, user);
-    addInternetLog(store, `${actorName} cleared network blocks for ${label}${count ? ` (${count})` : ''}.`);
+    addInternetLog(store, `${actorName} cleared network blocks for ${label}${count ? ` (${count})` : ''}`);
   } else if (action === 'warn') {
     if (!noteText) throw new Error('Enter a warning reason');
     user.warnings = Array.isArray(user.warnings) ? user.warnings : [];
-    user.warnings.unshift({ id: randomUUID(), reason: noteText, createdAt: new Date().toISOString(), readAt: null });
+    const warning = { id: randomUUID(), reason: noteText, createdAt: new Date().toISOString(), readAt: null };
+    user.warnings.unshift(warning);
     user.warnings = user.warnings.slice(0, 30);
-    addInternetLog(store, `${actorName} warned ${label}. Reason: ${noteText}`);
+    addInternetLog(store, `${actorName} warned ${label}. Reason: ${noteText}`, {
+      type: 'remove-warning',
+      targetId: user.id,
+      warningId: warning.id,
+    });
     addInternetMessage(store, user.id, `You received a warning from Clearwater Internet. Reason: ${noteText}`);
   } else if (action === 'clear-warnings') {
-    const count = Array.isArray(user.warnings) ? user.warnings.length : 0;
+    const previous = Array.isArray(user.warnings) ? user.warnings.slice(0, 30) : [];
+    const count = previous.length;
     user.warnings = [];
-    addInternetLog(store, `${actorName} cleared ${count} warning(s) for ${label}.`);
+    addInternetLog(store, `${actorName} cleared ${count} warning(s) for ${label}.`, previous.length ? {
+      type: 'restore-warnings',
+      targetId: user.id,
+      warnings: previous,
+    } : null);
   } else if (action === 'mute') {
     user.muted = true;
     user.muteReason = noteText || 'No reason was provided.';
     user.mutedUntil = durationUntil(durationDays);
-    addInternetLog(store, `${actorName} muted ${label}. Reason: ${user.muteReason}`);
+    logUser(`${actorName} muted ${label}. Reason: ${user.muteReason}`);
     addInternetMessage(store, user.id, `You were muted on Clearwater Internet. Reason: ${user.muteReason}`);
   } else if (action === 'unmute') {
+    const previousReason = text(user.muteReason, 300) || noteText;
     user.muted = false;
     user.muteReason = null;
     user.mutedUntil = null;
-    addInternetLog(store, `${actorName} unmuted ${label}.`);
+    logUser(`${actorName} unmuted ${label}.`, { reason: previousReason });
   } else if (action === 'lock-posts') {
     setTimedFlag(user, 'lockPosts', 'lockPostsUntil', true, durationDays);
-    addInternetLog(store, `${actorName} locked posting for ${label}.`);
+    logUser(`${actorName} locked posting for ${label}.`);
   } else if (action === 'unlock-posts') {
     setTimedFlag(user, 'lockPosts', 'lockPostsUntil', false);
-    addInternetLog(store, `${actorName} unlocked posting for ${label}.`);
+    logUser(`${actorName} unlocked posting for ${label}.`);
   } else if (action === 'lock-messages') {
     setTimedFlag(user, 'lockMessages', 'lockMessagesUntil', true, durationDays);
-    addInternetLog(store, `${actorName} locked messages for ${label}.`);
+    logUser(`${actorName} locked messages for ${label}.`);
   } else if (action === 'unlock-messages') {
     setTimedFlag(user, 'lockMessages', 'lockMessagesUntil', false);
-    addInternetLog(store, `${actorName} unlocked messages for ${label}.`);
+    logUser(`${actorName} unlocked messages for ${label}.`);
   } else if (action === 'lock-reels') {
     setTimedFlag(user, 'lockReels', 'lockReelsUntil', true, durationDays);
-    addInternetLog(store, `${actorName} locked Reels for ${label}.`);
+    logUser(`${actorName} locked Reels for ${label}.`);
   } else if (action === 'unlock-reels') {
     setTimedFlag(user, 'lockReels', 'lockReelsUntil', false);
-    addInternetLog(store, `${actorName} unlocked Reels for ${label}.`);
+    logUser(`${actorName} unlocked Reels for ${label}.`);
   } else if (action === 'lock-profile') {
     setTimedFlag(user, 'lockProfile', 'lockProfileUntil', true, durationDays);
-    addInternetLog(store, `${actorName} locked profile editing for ${label}.`);
+    logUser(`${actorName} locked profile editing for ${label}.`);
   } else if (action === 'unlock-profile') {
     setTimedFlag(user, 'lockProfile', 'lockProfileUntil', false);
-    addInternetLog(store, `${actorName} unlocked profile editing for ${label}.`);
+    logUser(`${actorName} unlocked profile editing for ${label}.`);
   } else if (action === 'shadowban') {
     user.shadowbanned = true;
-    addInternetLog(store, `${actorName} shadowbanned ${label}.`);
+    logUser(`${actorName} shadowbanned ${label}.`);
   } else if (action === 'unshadowban') {
     user.shadowbanned = false;
-    addInternetLog(store, `${actorName} removed the shadowban on ${label}.`);
+    logUser(`${actorName} removed the shadowban on ${label}.`);
   } else if (action === 'watch') {
     user.watched = true;
-    addInternetLog(store, `${actorName} added ${label} to the watchlist.`);
+    logUser(`${actorName} added ${label} to the watchlist.`);
   } else if (action === 'unwatch') {
     user.watched = false;
-    addInternetLog(store, `${actorName} removed ${label} from the watchlist.`);
+    logUser(`${actorName} removed ${label} from the watchlist.`);
   } else if (action === 'note') {
+    const previousNote = text(user.staffNote, 500);
     user.staffNote = text(note, 500);
-    addInternetLog(store, `${actorName} updated the staff note for ${label}.`);
+    addInternetLog(store, `${actorName} updated the staff note for ${label}.`, {
+      type: 'restore-note',
+      targetId: user.id,
+      note: previousNote,
+    });
   } else if (action === 'wipe-posts') {
     const count = wipeAuthorPosts(store, user.id, (post) => post.kind !== 'reel' && !post.parentId);
     addInternetLog(store, `${actorName} deleted ${count} post(s) from ${label}.`);
@@ -2161,8 +2319,13 @@ export function applyStaffUserAction(store, {
     user.pinnedPostId = '';
     addInternetLog(store, `${actorName} reset ${label}'s public profile.`);
   } else if (action === 'delete-post') {
+    const existing = store.posts.find((post) => post.id === String(postId || ''));
+    const snapshot = snapshotDeletedPost(existing);
     deleteInternetPost(store, { postId, actorId: actor?.id, owner: true });
-    addInternetLog(store, `${actorName} deleted a post from ${label}.`);
+    addInternetLog(store, `${actorName} deleted a post from ${label}.`, snapshot ? {
+      type: 'restore-post',
+      snapshot,
+    } : null);
   } else if (action === 'send-notice') {
     if (!noteText) throw new Error('Write a staff notice first');
     addInternetMessage(store, user.id, `Staff notice: ${noteText}`);
@@ -2182,13 +2345,25 @@ export function applyStaffSiteAction(store, { actor, staffAction, enabled, banne
     : { pausePosts: false, pauseReels: false, pauseMessages: false };
   if (action === 'pause-posts') {
     store.settings.pausePosts = enabled === true;
-    addInternetLog(store, `${actorName} ${enabled ? 'paused' : 'resumed'} community posts.`);
+    addInternetLog(store, `${actorName} ${enabled ? 'paused' : 'resumed'} community posts.`, {
+      type: 'site-toggle',
+      staffAction: 'pause-posts',
+      enabled: enabled !== true,
+    });
   } else if (action === 'pause-reels') {
     store.settings.pauseReels = enabled === true;
-    addInternetLog(store, `${actorName} ${enabled ? 'paused' : 'resumed'} Reels.`);
+    addInternetLog(store, `${actorName} ${enabled ? 'paused' : 'resumed'} Reels.`, {
+      type: 'site-toggle',
+      staffAction: 'pause-reels',
+      enabled: enabled !== true,
+    });
   } else if (action === 'pause-messages') {
     store.settings.pauseMessages = enabled === true;
-    addInternetLog(store, `${actorName} ${enabled ? 'paused' : 'resumed'} direct messages.`);
+    addInternetLog(store, `${actorName} ${enabled ? 'paused' : 'resumed'} direct messages.`, {
+      type: 'site-toggle',
+      staffAction: 'pause-messages',
+      enabled: enabled !== true,
+    });
   } else if (action === 'clear-dismissed-reports') {
     const before = store.reports.length;
     store.reports = store.reports.filter((report) => report.status === 'open' || report.status === 'accepted');
@@ -2198,6 +2373,7 @@ export function applyStaffSiteAction(store, { actor, staffAction, enabled, banne
     store.ipBans = [];
     addInternetLog(store, `${actorName} cleared ${count} network ban(s).`);
   } else if (action === 'set-site-banner') {
+    const previous = store.siteBanner || null;
     const next = sanitizeSiteBanner({
       ...(banner && typeof banner === 'object' ? banner : {}),
       id: randomUUID(),
@@ -2206,10 +2382,19 @@ export function applyStaffSiteAction(store, { actor, staffAction, enabled, banne
     });
     if (!next) throw new Error('Enter a banner message');
     store.siteBanner = next;
-    addInternetLog(store, `${actorName} published a site banner: ${next.message}`);
+    addInternetLog(store, `${actorName} published a site banner: ${next.message}`, {
+      type: 'site-banner',
+      previous,
+      clear: true,
+    });
   } else if (action === 'clear-site-banner') {
+    const previous = store.siteBanner || null;
     store.siteBanner = null;
-    addInternetLog(store, `${actorName} took down the site banner.`);
+    addInternetLog(store, `${actorName} took down the site banner.`, previous ? {
+      type: 'site-banner',
+      previous,
+      clear: false,
+    } : null);
   } else {
     throw new Error('Unsupported site action');
   }
@@ -2426,6 +2611,147 @@ export function serveInternetAds(store, { count = 1 } = {}) {
   return picks;
 }
 
+function markReportLogsReverted(store, reportId, actorId) {
+  const id = String(reportId || '');
+  const when = new Date().toISOString();
+  const who = String(actorId || '');
+  (Array.isArray(store.logs) ? store.logs : []).forEach((log) => {
+    if (log?.revert?.type === 'report' && log.revert.reportId === id && !log.revertedAt) {
+      log.revertedAt = when;
+      log.revertedBy = who;
+    }
+  });
+}
+
+function revertReviewedReport(store, { actor, reportId }) {
+  const report = store.reports.find((item) => item.id === String(reportId || ''));
+  if (!report || report.status === 'open') throw new Error('History entry not found');
+  if (report.revertedAt) throw new Error('Already reverted');
+  if (!canRevertReport(report)) throw new Error('This action cannot be restored');
+
+  const actorName = text(actor?.displayName, 80) || 'Staff';
+  if (report.status === 'accepted') {
+    if (report.action === 'ban') {
+      const user = upsertInternetUser(store, { id: report.authorId, displayName: report.authorName });
+      setInternetBan(user, { enabled: false });
+      clearKnownInternetIpBans(store, user);
+      addInternetMessage(store, user.id, 'Staff reversed your Clearwater Internet ban.');
+    } else if (report.action === 'warning') {
+      const user = upsertInternetUser(store, { id: report.authorId, displayName: report.authorName });
+      user.warnings = Array.isArray(user.warnings) ? user.warnings : [];
+      const before = user.warnings.length;
+      user.warnings = report.warningId
+        ? user.warnings.filter((warning) => warning.id !== report.warningId)
+        : user.warnings.filter((warning) => warning.reason !== (report.actionReason || report.reason));
+      if (user.warnings.length === before && user.warnings.length) user.warnings.shift();
+    } else if (report.action === 'delete') {
+      if (report.kind === 'ad' && report.adId) {
+        const ad = store.ads.find((item) => item.id === report.adId);
+        if (!ad) throw new Error('That sponsored ad is no longer on file');
+        ad.status = report.adSnapshot?.status === 'pending' ? 'pending' : 'active';
+        ad.endsAt = report.adSnapshot?.endsAt || ad.endsAt || null;
+        ad.reviewNote = report.adSnapshot?.reviewNote || '';
+      } else if (!restoreDeletedPost(store, report.deletedSnapshot)
+        && !(report.postId && restoreDeletedPost(store, {
+          id: report.postId,
+          kind: report.kind === 'reel' ? 'reel' : 'post',
+          authorId: report.authorId,
+          displayName: report.authorName,
+          username: report.authorUsername,
+          avatarUrl: report.authorAvatarUrl,
+          content: report.content || '',
+          parentId: null,
+          likes: [],
+          createdAt: report.createdAt,
+        }))) {
+        throw new Error('That deleted content cannot be restored');
+      }
+    }
+  } else if (report.status === 'denied') {
+    if (report.released && report.postId) {
+      store.posts = store.posts.filter((post) => post.id !== report.postId);
+      report.released = false;
+      report.postId = null;
+    }
+    report.status = 'open';
+    report.reviewedAt = null;
+    report.action = null;
+    report.actionReason = null;
+    markReportLogsReverted(store, report.id, actor?.id);
+    addInternetLog(store, `${actorName} reopened a dismissed report against ${report.authorName || 'a member'}.`);
+    return publicStaffReport(store, report);
+  }
+
+  report.revertedAt = new Date().toISOString();
+  report.revertedBy = String(actor?.id || '');
+  markReportLogsReverted(store, report.id, actor?.id);
+  addInternetLog(store, `${actorName} reverted a moderation history action against ${report.authorName || 'a member'}.`);
+  return publicStaffReport(store, report);
+}
+
+function revertHistoryLog(store, { actor, logId }) {
+  const log = (Array.isArray(store.logs) ? store.logs : []).find((item) => item.id === String(logId || ''));
+  if (!log) throw new Error('History entry not found');
+  if (log.revertedAt) throw new Error('Already reverted');
+  const revert = log.revert && typeof log.revert === 'object' ? log.revert : null;
+  if (!revert?.type) throw new Error('This action cannot be restored');
+
+  const actorName = text(actor?.displayName, 80) || 'Staff';
+  if (revert.type === 'report') {
+    const report = revertReviewedReport(store, { actor, reportId: revert.reportId });
+    log.revertedAt = new Date().toISOString();
+    log.revertedBy = String(actor?.id || '');
+    return report;
+  }
+  if (revert.type === 'staff-user') {
+    applyStaffUserAction(store, {
+      actor,
+      targetId: revert.targetId,
+      staffAction: revert.inverse,
+      reason: revert.reason || revert.note || 'Reverted from moderation history',
+      note: revert.note || revert.warningBadgeText || revert.reason || '',
+      durationDays: revert.durationDays || 'forever',
+    });
+  } else if (revert.type === 'remove-warning') {
+    const user = upsertInternetUser(store, { id: revert.targetId });
+    user.warnings = (Array.isArray(user.warnings) ? user.warnings : []).filter((warning) => warning.id !== revert.warningId);
+  } else if (revert.type === 'restore-warnings') {
+    const user = upsertInternetUser(store, { id: revert.targetId });
+    user.warnings = Array.isArray(revert.warnings) ? revert.warnings.slice(0, 30) : [];
+  } else if (revert.type === 'restore-note') {
+    const user = upsertInternetUser(store, { id: revert.targetId });
+    user.staffNote = text(revert.note, 500);
+  } else if (revert.type === 'restore-post') {
+    if (!restoreDeletedPost(store, revert.snapshot)) throw new Error('That deleted content cannot be restored');
+  } else if (revert.type === 'site-toggle') {
+    applyStaffSiteAction(store, {
+      actor,
+      staffAction: revert.staffAction,
+      enabled: revert.enabled === true,
+    });
+  } else if (revert.type === 'site-banner') {
+    if (revert.clear) {
+      store.siteBanner = revert.previous || null;
+    } else {
+      store.siteBanner = revert.previous || null;
+    }
+  } else {
+    throw new Error('This action cannot be restored');
+  }
+
+  log.revertedAt = new Date().toISOString();
+  log.revertedBy = String(actor?.id || '');
+  addInternetLog(store, `${actorName} reverted: ${text(log.message, 180)}`);
+  return publicHistoryLog(log);
+}
+
+export function revertInternetHistory(store, { actor, source, id }) {
+  const kind = String(source || '');
+  if (kind === 'report') return { source: 'report', entry: revertReviewedReport(store, { actor, reportId: id }) };
+  if (kind === 'log') return { source: 'log', entry: revertHistoryLog(store, { actor, logId: id }) };
+  throw new Error('Unknown history entry');
+}
+
 export function moderationSnapshot(store) {
   expireInternetAds(store);
   const open = store.reports.filter((report) => report.status === 'open').map((report) => publicStaffReport(store, report));
@@ -2461,6 +2787,6 @@ export function moderationSnapshot(store) {
     ipBans: ipBans.map((ban) => ({ id: ban.id, until: ban.until || null, reason: text(ban.reason, 300), createdAt: ban.createdAt })),
     users: users.slice(0, 500),
     settings: publicInternetSettings(store),
-    logs: store.logs.slice(0, 100),
+    logs: store.logs.slice(0, 100).map(publicHistoryLog),
   };
 }

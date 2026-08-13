@@ -8,7 +8,7 @@ import { dropLocationNameCandidates, findPlayerDropLocation } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
 import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
-import { AutomodHoldError, adjustInternetCredits, applyStaffSiteAction, applyStaffUserAction, assertLimitedStaffBanQuota, banKnownInternetIps, claimInternetDailyCredits, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, internetProfile, listInternetAdsForUser, moderationSnapshot, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, readInternetStore, recordInternetIpHash, recordLimitedStaffBan, respondCreditTransfer, reviewInternetAd, reviewInternetReport, saveInternetStore, sendInternetMessage, serveInternetAds, setDiscordInternetNotify, setInternetAccountActive, setInternetBan, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, AD_BASE_COST, AD_BOOST_COST, AD_MAX_BOOST } from './internetStore.js';
+import { AutomodHoldError, adjustInternetCredits, applyStaffSiteAction, applyStaffUserAction, assertLimitedStaffBanQuota, banKnownInternetIps, claimInternetDailyCredits, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, internetProfile, listInternetAdsForUser, moderationSnapshot, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, readInternetStore, recordInternetIpHash, recordLimitedStaffBan, respondCreditTransfer, reviewInternetAd, reviewInternetReport, revertInternetHistory, saveInternetStore, sendInternetMessage, serveInternetAds, setDiscordInternetNotify, setInternetAccountActive, setInternetBan, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, AD_BASE_COST, AD_BOOST_COST, AD_MAX_BOOST } from './internetStore.js';
 import { createDiscordInternetNotifier } from './discordInternetNotify.js';
 import { createInternetFeedAnnouncer, shouldAnnounceInteractResult } from './discordInternetFeed.js';
 
@@ -310,7 +310,7 @@ export function startStatusServer(client, config) {
           : null;
         const wantsOfficial = body.asOfficial === true;
         const requestedOwner = body.owner === true;
-        const staffAction = ['moderation', 'staff-user', 'staff-user-detail', 'staff-wallet', 'staff-site', 'report-review', 'ad-review', 'verify', 'ban'].includes(body.action);
+        const staffAction = ['moderation', 'staff-user', 'staff-user-detail', 'staff-wallet', 'staff-site', 'report-review', 'history-revert', 'ad-review', 'verify', 'ban'].includes(body.action);
         const needsLivePanel = wantsOfficial
           || requestedOwner
           || staffAction
@@ -570,6 +570,17 @@ export function startStatusServer(client, config) {
             if (published) void announceInternetFeedPost(published);
           }
           return json(response, 200, { report });
+        }
+
+        if (body.action === 'history-revert') {
+          if (!['full', 'limited'].includes(body.staffPanel)) return json(response, 403, { error: 'Staff access required' });
+          const result = revertInternetHistory(store, {
+            actor: body.actor,
+            source: body.source,
+            id: body.id,
+          });
+          await saveInternetStore(store);
+          return json(response, 200, { ...result, snapshot: moderationSnapshot(store) });
         }
 
         if (body.action === 'moderation') {

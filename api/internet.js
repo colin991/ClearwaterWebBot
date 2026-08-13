@@ -429,6 +429,16 @@ export default async function handler(request, response) {
         staffPanel,
         owner: staffPanel === 'full',
       };
+    } else if (body.action === 'history-revert') {
+      if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
+      payload = {
+        action: 'history-revert',
+        source: body.source === 'log' ? 'log' : 'report',
+        id: String(body.id || ''),
+        actor: staffActor(user, access),
+        staffPanel,
+        owner: staffPanel === 'full',
+      };
     } else if (body.action === 'erlc-location') {
       payload = { action: 'erlc-location', actor: { id: user.id, username: user.username, displayName: user.displayName } };
     } else if (body.action === 'moderation') {

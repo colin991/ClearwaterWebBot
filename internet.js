@@ -2391,6 +2391,13 @@ function renderStaffDashboard() {
   }
   if (casePane) casePane.innerHTML = selected ? staffCaseMarkup(selected) : '<div class="staff-empty staff-empty-lg">Pick a case from the queue to review it here.</div>';
   const historyQuery = staffHistoryQuery.trim().toLowerCase();
+  const historyRevertButton = (source, id, canRevert, blockedReason, revertedAt) => {
+    if (revertedAt) return '<small class="staff-history-reverted">Reverted</small>';
+    if (canRevert) {
+      return `<button type="button" class="staff-history-revert" data-history-revert="${escapeHtml(id)}" data-history-source="${escapeHtml(source)}">Revert</button>`;
+    }
+    return `<button type="button" class="staff-history-revert is-disabled" disabled title="${escapeHtml(blockedReason || 'This action cannot be restored')}">Revert</button>`;
+  };
   const historyCards = history.filter((report) => {
     const haystack = `${report.authorName || ''} ${report.action || ''} ${report.content || ''} ${report.reviewerName || ''} ${report.reason || ''}`.toLowerCase();
     if (historyQuery && !haystack.includes(historyQuery)) return false;
@@ -2400,7 +2407,7 @@ function renderStaffDashboard() {
   }).map((report) => ({
     kind: 'report',
     at: report.reviewedAt || report.createdAt || '',
-    markup: `<article class="staff-history-item ${report.status === 'accepted' ? 'actioned' : 'dismissed'}"><b>${escapeHtml(staffHistoryLabel(report))}</b><span>@${escapeHtml((report.authorName || 'member').replace(/\s+/g, '').toLowerCase())}</span><small>${timeAgo(report.reviewedAt || report.createdAt)}</small></article>`,
+    markup: `<article class="staff-history-item ${report.status === 'accepted' ? 'actioned' : 'dismissed'}${report.revertedAt ? ' is-reverted' : ''}"><div class="staff-history-copy"><b>${escapeHtml(staffHistoryLabel(report))}</b><span>@${escapeHtml((report.authorName || 'member').replace(/\s+/g, '').toLowerCase())}</span><small>${timeAgo(report.reviewedAt || report.createdAt)}</small></div>${historyRevertButton('report', report.id, report.canRevert === true, report.revertBlockedReason, report.revertedAt)}</article>`,
   }));
   const logCards = logs.filter((log) => {
     const message = String(log.message || '').toLowerCase();
@@ -2411,7 +2418,7 @@ function renderStaffDashboard() {
   }).map((log) => ({
     kind: 'log',
     at: log.createdAt || '',
-    markup: `<article class="staff-history-item"><b>${escapeHtml(log.message)}</b><small>${timeAgo(log.createdAt)}</small></article>`,
+    markup: `<article class="staff-history-item${log.revertedAt ? ' is-reverted' : ''}"><div class="staff-history-copy"><b>${escapeHtml(log.message)}</b><small>${timeAgo(log.createdAt)}</small></div>${historyRevertButton('log', log.id, log.canRevert === true, log.revertBlockedReason, log.revertedAt)}</article>`,
   }));
   const historyItems = [...historyCards, ...logCards].sort((left, right) => new Date(right.at || 0) - new Date(left.at || 0));
   if (historyList) {
@@ -4381,6 +4388,35 @@ document.addEventListener('click', (event) => {
   if (historyFilter) {
     staffHistoryFilter = historyFilter.dataset.historyFilter || 'all';
     renderStaffDashboard();
+    return;
+  }
+  const historyRevert = event.target.closest('[data-history-revert]');
+  if (historyRevert) {
+    void (async () => {
+      const button = historyRevert;
+      if (button.disabled) return;
+      button.disabled = true;
+      try {
+        const response = await fetch('/api/internet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'history-revert',
+            source: button.dataset.historySource === 'log' ? 'log' : 'report',
+            id: button.dataset.historyRevert || '',
+          }),
+        });
+        const result = await readApiJson(response, 'Could not revert that action.');
+        if (!response.ok) throw new Error(result.error || 'Could not revert that action.');
+        if (result.snapshot) moderationSnapshot = result.snapshot;
+        else await loadModeration();
+        renderStaffDashboard();
+        void siteAlert('History action reverted.', 'Reverted');
+      } catch (error) {
+        button.disabled = false;
+        void siteAlert(error.message || 'Could not revert that action.');
+      }
+    })();
     return;
   }
   const reviewButton = event.target.closest('[data-report-review]');
