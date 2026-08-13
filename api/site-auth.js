@@ -1,4 +1,4 @@
-import { sendJson } from '../../lib/discord-auth.js';
+import { sendJson } from '../lib/discord-auth.js';
 import {
   handleDiscordCallback,
   handleDiscordStart,
@@ -6,11 +6,12 @@ import {
   handleMe,
   handleRobloxCallback,
   handleRobloxStart,
-} from '../../lib/auth-handlers.js';
+} from '../lib/auth-handlers.js';
 
 function routeKey(request) {
-  const segments = [].concat(request.query?.path || []).filter(Boolean).map(String);
-  if (segments.length) return segments.join('/');
+  const fromQuery = request.query?.route;
+  if (typeof fromQuery === 'string' && fromQuery) return fromQuery.replace(/^\/+|\/+$/g, '');
+  if (Array.isArray(fromQuery) && fromQuery[0]) return String(fromQuery[0]).replace(/^\/+|\/+$/g, '');
 
   try {
     const pathname = new URL(request.url, `https://${request.headers.host || 'cwrpvc.lol'}`).pathname;
