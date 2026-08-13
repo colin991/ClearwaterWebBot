@@ -9,7 +9,8 @@
     { "source": "/owner", "destination": "/owner.html" },
     { "source": "/terms", "destination": "/terms.html" },
     { "source": "/privacy", "destination": "/privacy.html" },
-    { "source": "/signin", "destination": "/signin.html" }
+    { "source": "/signin", "destination": "/signin.html" },
+    { "source": "/wallet", "destination": "/wallet.html" }
   ],
   "headers": [
     {

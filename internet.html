@@ -14,7 +14,7 @@
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <link rel="apple-touch-icon" href="assets/clearwater-logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260813-profile-fix" />
+    <link rel="stylesheet" href="internet.css?v=20260813-wallet-ui" />
   </head>
   <body class="internet-booting">
     <div class="internet-boot" data-internet-boot aria-live="polite">
@@ -94,10 +94,40 @@
         </section>
         <section class="internet-view post-detail-view" data-view="post" hidden><header class="post-detail-header"><button type="button" data-back-home aria-label="Back to feed">←</button><h1>Post</h1></header><div data-post-detail><p class="feed-note">Loading post...</p></div></section>
         <section class="internet-view wallet-view" data-view="wallet" hidden>
-          <header class="page-heading"><div><p>Clearwater credits</p><h1>Your wallet</h1></div></header>
-          <section class="wallet-balance-card"><div><span>Balance</span><strong data-wallet-balance>C$0</strong><small>Clearwater credits</small></div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg></section>
-          <section class="wallet-card"><header><div><h2>Daily credits</h2><p>You receive C$75 every 24 hours.</p></div></header><p class="wallet-status" data-wallet-claim-status role="status">Loading your next daily credit…</p></section>
-          <section class="wallet-card"><header><div><h2>Transactions</h2><p>Your recent Clearwater credit activity.</p></div><span class="wallet-count" data-wallet-transaction-count>0</span></header><div class="wallet-transactions" data-wallet-transactions><p>Loading transactions…</p></div></section>
+          <div class="wallet-stack">
+            <article class="wallet-intro-card">
+              <p class="wallet-kicker">Clearwater Credits</p>
+              <h1>Your wallet</h1>
+              <p class="wallet-lede" data-wallet-lede>Track your balance, daily drops, and recent credit activity.</p>
+            </article>
+            <article class="wallet-balance-card">
+              <div>
+                <p class="wallet-kicker">Balance</p>
+                <strong data-wallet-balance>C$0</strong>
+                <small>Clearwater credits</small>
+              </div>
+              <span class="wallet-balance-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg>
+              </span>
+            </article>
+            <article class="wallet-card">
+              <div class="wallet-card-copy">
+                <h2>Daily credits</h2>
+                <p>You receive C$75 every 24 hours.</p>
+              </div>
+              <p class="wallet-status" data-wallet-claim-status role="status">Loading your next daily credit…</p>
+            </article>
+            <article class="wallet-card">
+              <header>
+                <div>
+                  <h2>Transactions</h2>
+                  <p>Your recent Clearwater credit activity.</p>
+                </div>
+                <span class="wallet-count" data-wallet-transaction-count>0</span>
+              </header>
+              <div class="wallet-transactions" data-wallet-transactions><p class="wallet-empty">Loading transactions…</p></div>
+            </article>
+          </div>
         </section>
 
         <section class="internet-view empty-view notifications-view" data-view="notifications" hidden><header class="page-heading"><div><p>Notifications</p><h1>Your activity</h1></div><span class="unread-count" data-notification-count hidden></span></header><div class="notification-list" data-notification-list><p>Sign in to see your notifications.</p></div></section>
@@ -388,6 +418,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260813-profile-fix"></script>
+    <script src="internet.js?v=20260813-wallet-ui"></script>
   </body>
 </html>

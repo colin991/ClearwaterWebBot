@@ -119,8 +119,36 @@ const loadDiscordSession = async () => {
     if (ownerLink && session.user.owner) {
       ownerLink.hidden = false;
     }
+    void loadWalletBalance();
   } catch {
     // Keep the login button available if the session endpoint is unavailable.
+  }
+};
+
+const cashAmount = document.querySelector('[data-cash-amount]');
+const cashBalance = document.querySelector('[data-cash-balance]');
+
+const setCashBalance = (balance) => {
+  const amount = Math.trunc(Number(balance) || 0);
+  const label = `C$${amount.toLocaleString()}`;
+  if (cashAmount) cashAmount.textContent = label;
+  if (cashBalance) cashBalance.setAttribute('aria-label', `Clearwater credits balance: ${label}`);
+};
+
+const loadWalletBalance = async () => {
+  if (!cashAmount) return;
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'wallet' }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Wallet unavailable');
+    setCashBalance(result.wallet?.balance);
+  } catch {
+    // Keep the chip visible even if the bot host is briefly unavailable.
   }
 };
 

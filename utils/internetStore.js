@@ -393,7 +393,7 @@ function ensureInternetWallet(store, actor) {
   return user;
 }
 
-function walletView(user) {
+function walletView(user, { claimedNow = false } = {}) {
   const lastClaim = user.dailyCreditClaimedAt ? new Date(user.dailyCreditClaimedAt).getTime() : 0;
   const nextClaimAt = lastClaim ? lastClaim + DAILY_CREDIT_DELAY : 0;
   const canClaim = !lastClaim || Date.now() >= nextClaimAt;
@@ -401,21 +401,28 @@ function walletView(user) {
     balance: creditBalance(user),
     dailyAmount: DAILY_CREDITS,
     canClaim,
+    claimedNow: claimedNow === true,
     nextClaimAt: canClaim ? null : new Date(nextClaimAt).toISOString(),
-    transactions: (Array.isArray(user.creditTransactions) ? user.creditTransactions : []).slice(0, 50),
+    nextDailyAt: canClaim ? null : new Date(nextClaimAt).toISOString(),
+    transactions: (Array.isArray(user.creditTransactions) ? user.creditTransactions : []).slice(0, 50).map((entry) => ({
+      ...entry,
+      balance: entry.balanceAfter ?? entry.balance ?? creditBalance(user),
+    })),
   };
 }
 
 export function walletSnapshot(store, actor) {
   const user = ensureInternetWallet(store, actor);
   const lastClaim = user.dailyCreditClaimedAt ? new Date(user.dailyCreditClaimedAt).getTime() : 0;
+  let claimedNow = false;
   if (lastClaim && Date.now() - lastClaim >= DAILY_CREDIT_DELAY) {
     user.credits = creditBalance(user) + DAILY_CREDITS;
     user.dailyCreditClaimedAt = new Date().toISOString();
     addCreditTransaction(user, { amount: DAILY_CREDITS, type: 'daily', note: '24-hour daily credit', actorName: 'Clearwater' });
     addInternetLog(store, `${text(user.displayName, 80) || 'A member'} received C$${DAILY_CREDITS} daily credits.`);
+    claimedNow = true;
   }
-  return walletView(user);
+  return walletView(user, { claimedNow });
 }
 
 export function claimInternetDailyCredits(store, actor) {

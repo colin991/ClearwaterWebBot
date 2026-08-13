@@ -19,7 +19,7 @@
     <title>Clearwater Roleplay</title>
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <script>document.documentElement.classList.add('js');</script>
-    <link rel="stylesheet" href="styles.css?v=20260811-account-blue" />
+    <link rel="stylesheet" href="styles.css?v=20260813-wallet" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -42,6 +42,10 @@
             <a href="/internet">Internet</a>
           </div>
           <div class="nav-actions">
+            <a class="cash-balance" href="/internet/wallet" data-cash-balance aria-label="Clearwater credits balance: C$0" title="Open Clearwater Credits wallet">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg>
+              <span data-cash-amount>C$0</span>
+            </a>
             <a class="nav-button nav-button-ghost" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord</a>
             <a class="nav-button nav-button-primary" href="/signin" data-discord-login>Login with Discord</a>
             <div class="discord-account" data-discord-account hidden>
@@ -175,6 +179,6 @@
       </div>
     </footer>
 
-    <script src="script.js?v=20260811-urls"></script>
+    <script src="script.js?v=20260813-wallet"></script>
   </body>
 </html>

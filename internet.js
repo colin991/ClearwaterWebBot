@@ -93,7 +93,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260813-profile-fix';
+const INTERNET_VERSION = '20260813-wallet-ui';
 const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const INTERNET_PATH = '/internet';
@@ -2021,22 +2021,36 @@ function formatCredits(value) {
 }
 
 function walletClaimCopy(wallet) {
-  const next = wallet?.nextClaimAt ? new Date(wallet.nextClaimAt).getTime() : 0;
-  const remaining = Math.max(0, next - Date.now());
+  if (wallet?.claimedNow) return `Collected ${formatCredits(wallet.dailyAmount || 75)} for this drop.`;
+  const next = wallet?.nextClaimAt || wallet?.nextDailyAt;
+  const nextAt = next ? new Date(next).getTime() : 0;
+  if (!nextAt) return 'Your next daily credit will be added automatically.';
+  const remaining = Math.max(0, nextAt - Date.now());
   const hours = Math.floor(remaining / 3_600_000);
-  const minutes = Math.ceil((remaining % 3_600_000) / 60_000);
-  return next ? `Your next C$75 is added automatically in ${hours}h ${minutes}m.` : 'Your C$75 daily credit is being added.';
+  const minutes = Math.max(1, Math.ceil((remaining % 3_600_000) / 60_000));
+  return hours >= 1
+    ? `Next drop in ${hours}h ${minutes}m.`
+    : `Next drop in ${minutes}m.`;
 }
 
 function renderWallet(wallet) {
   if (!wallet) return;
   const balance = document.querySelector('[data-wallet-balance]');
   const status = document.querySelector('[data-wallet-claim-status]');
+  const lede = document.querySelector('[data-wallet-lede]');
   const count = document.querySelector('[data-wallet-transaction-count]');
   const list = document.querySelector('[data-wallet-transactions]');
   if (balance) balance.textContent = formatCredits(wallet.balance);
   document.querySelectorAll('[data-internet-cash-amount]').forEach((element) => { element.textContent = formatCredits(wallet.balance); });
-  if (status) status.textContent = walletClaimCopy(wallet);
+  if (lede) {
+    lede.textContent = wallet.claimedNow
+      ? `${formatCredits(wallet.dailyAmount || 75)} just landed. Come back tomorrow for another drop.`
+      : 'Track your balance, daily drops, and recent credit activity.';
+  }
+  if (status) {
+    status.dataset.tone = wallet.claimedNow ? 'ok' : 'wait';
+    status.textContent = walletClaimCopy(wallet);
+  }
   const transactions = Array.isArray(wallet.transactions) ? wallet.transactions : [];
   if (count) count.textContent = String(transactions.length);
   if (list) {
@@ -2044,24 +2058,42 @@ function renderWallet(wallet) {
       const value = Number(transaction.amount) || 0;
       const plus = value >= 0;
       return `<article class="wallet-transaction ${plus ? 'credit' : 'debit'}"><div><b>${escapeHtml(transaction.note || (plus ? 'Credits added' : 'Credits removed'))}</b><small>${escapeHtml(timeAgo(transaction.createdAt))} · ${escapeHtml(transaction.actorName || 'Clearwater')}</small></div><strong>${plus ? '+' : '−'}${formatCredits(Math.abs(value))}</strong></article>`;
-    }).join('') : '<p class="wallet-empty">No transactions yet.</p>';
+    }).join('') : '<p class="wallet-empty">No transactions yet. Your daily credits will show up here.</p>';
   }
 }
 
 async function loadWallet() {
+  const status = document.querySelector('[data-wallet-claim-status]');
+  const list = document.querySelector('[data-wallet-transactions]');
   if (!currentUserId) {
-    const status = document.querySelector('[data-wallet-claim-status]');
-    if (status) status.textContent = 'Sign in with Discord to use Clearwater credits.';
+    if (status) {
+      status.dataset.tone = 'wait';
+      status.textContent = 'Sign in with Discord to use Clearwater credits.';
+    }
     return;
   }
+  if (status) {
+    status.dataset.tone = 'wait';
+    status.textContent = 'Loading your wallet...';
+  }
+  if (list) list.innerHTML = '<p class="wallet-empty">Loading transactions...</p>';
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'wallet' }) });
     const result = await readApiJson(response, 'Could not load your wallet.');
-    if (!response.ok) throw new Error(result.error || 'Could not load your wallet.');
+    if (!response.ok) {
+      const detail = String(result.error || '');
+      if (/unsupported action:\s*wallet/i.test(detail)) {
+        throw new Error('Wallet is ready on the website, but the bot host still needs the latest GitHub files and a restart.');
+      }
+      throw new Error(detail || 'Could not load your wallet.');
+    }
     renderWallet(result.wallet);
   } catch (error) {
-    const status = document.querySelector('[data-wallet-claim-status]');
-    if (status) status.textContent = error.message || 'Could not load your wallet.';
+    if (status) {
+      status.dataset.tone = 'error';
+      status.textContent = error.message || 'Could not load your wallet.';
+    }
+    if (list) list.innerHTML = `<p class="wallet-empty">${escapeHtml(error.message || 'Could not load transactions.')}</p>`;
   }
 }
 
