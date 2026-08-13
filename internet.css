@@ -3367,6 +3367,9 @@ body { margin: 0; }
   --profile-accent-rgb: 18, 87, 163;
 }
 .profile-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 38px;
   padding: 0 16px;
   border: 1px solid var(--cw-border);
@@ -3376,6 +3379,7 @@ body { margin: 0; }
   font: inherit;
   font-size: 13px;
   font-weight: 800;
+  text-decoration: none;
   cursor: pointer;
   transition: background .18s var(--cw-ease), border-color .18s var(--cw-ease);
 }
@@ -6285,7 +6289,8 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
     background: rgba(78, 145, 249, .2) !important;
     box-shadow: none !important;
   }
-  .internet-shell:not(.staff-mode) .internet-nav a[data-view-link="settings"],
+  /* Keep Staff out of the bottom dock; Settings must stay reachable on mobile
+     (rail-account / account menu are also hidden below). */
   .internet-shell:not(.staff-mode) .internet-nav a[data-view-link="staff"] {
     display: none !important;
   }
