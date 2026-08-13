@@ -1,6 +1,9 @@
+const header = document.querySelector('[data-header]');
+const menuButton = document.querySelector('.menu-button');
+const navigation = document.querySelector('.site-nav');
 const year = document.querySelector('[data-year]');
 const updatedTime = document.querySelector('[data-time]');
-const discordLoginButtons = document.querySelectorAll('[data-discord-login]');
+const discordLogin = document.querySelector('[data-discord-login]');
 const discordAccount = document.querySelector('[data-discord-account]');
 const discordAvatar = document.querySelector('[data-discord-avatar]');
 const discordName = document.querySelector('[data-discord-name]');
@@ -8,15 +11,13 @@ const discordRank = document.querySelector('[data-discord-rank]');
 const discordProfileMenuRank = document.querySelector('[data-discord-profile-menu-rank]');
 const discordProfile = document.querySelector('[data-discord-profile]');
 const discordProfileMenu = document.querySelector('[data-discord-profile-menu]');
-const discordLogoutButtons = document.querySelectorAll('[data-discord-logout]');
-const discordCounts = document.querySelectorAll('[data-discord-count]');
-const botConnections = document.querySelectorAll('[data-bot-connection]');
-const ownerLinks = document.querySelectorAll('[data-owner-link]');
+const discordLogout = document.querySelector('[data-discord-logout]');
+const discordCount = document.querySelectorAll('[data-discord-count]');
+const botConnection = document.querySelectorAll('[data-bot-connection]');
+const ownerLink = document.querySelector('[data-owner-link]');
 const erlcCurrent = document.querySelectorAll('[data-erlc-current]');
 const erlcMax = document.querySelectorAll('[data-erlc-max]');
 const erlcQueue = document.querySelectorAll('[data-erlc-queue]');
-const homeMenu = document.querySelector('[data-home-menu]');
-const homeMobileNav = document.querySelector('[data-home-mobile-nav]');
 let homepageInternetReady = false;
 let homepageSignedIn = false;
 
@@ -27,11 +28,9 @@ const setErlcNumbers = (status) => {
     erlcQueue.forEach((element) => { element.textContent = '—'; });
     return;
   }
-
   const currentPlayers = Number.isInteger(status?.currentPlayers) ? status.currentPlayers : 0;
   const maxPlayers = Number.isInteger(status?.maxPlayers) ? status.maxPlayers : 50;
   const queue = Number.isInteger(status?.queue) ? status.queue : 0;
-
   erlcCurrent.forEach((element) => { element.textContent = currentPlayers.toLocaleString(); });
   erlcMax.forEach((element) => { element.textContent = maxPlayers.toLocaleString(); });
   erlcQueue.forEach((element) => { element.textContent = queue.toLocaleString(); });
@@ -49,16 +48,23 @@ const loadDirectErlcStatus = async () => {
   }
 };
 
-homeMenu?.addEventListener('click', () => {
-  const isOpen = homeMenu.getAttribute('aria-expanded') === 'true';
-  homeMenu.setAttribute('aria-expanded', String(!isOpen));
-  if (homeMobileNav) homeMobileNav.hidden = isOpen;
+const updateHeader = () => {
+  header?.classList.toggle('scrolled', window.scrollY > 18);
+};
+
+updateHeader();
+window.addEventListener('scroll', updateHeader, { passive: true });
+
+menuButton?.addEventListener('click', () => {
+  const isOpen = menuButton.getAttribute('aria-expanded') === 'true';
+  menuButton.setAttribute('aria-expanded', String(!isOpen));
+  navigation?.classList.toggle('open', !isOpen);
 });
 
-homeMobileNav?.querySelectorAll('a').forEach((link) => {
+navigation?.querySelectorAll('a').forEach((link) => {
   link.addEventListener('click', () => {
-    homeMenu?.setAttribute('aria-expanded', 'false');
-    if (homeMobileNav) homeMobileNav.hidden = true;
+    menuButton?.setAttribute('aria-expanded', 'false');
+    navigation.classList.remove('open');
   });
 });
 
@@ -66,19 +72,16 @@ if (year) year.textContent = new Date().getFullYear();
 if (updatedTime) updatedTime.textContent = 'Checking ER:LC…';
 
 const loadDiscordSession = async () => {
-  if (!discordLoginButtons.length || !discordAccount) return;
-
+  if (!discordLogin || !discordAccount) return;
   try {
     const response = await fetch('/api/auth/me', { credentials: 'same-origin' });
     if (!response.ok) return;
-
     const session = await response.json();
     if (!session.authenticated || !session.user) {
       homepageSignedIn = false;
       homepageInternetReady = true;
       return;
     }
-
     if (discordName) discordName.textContent = session.user.displayName || session.user.username;
     if (discordAvatar && session.user.avatarUrl) discordAvatar.src = session.user.avatarUrl;
     if (discordRank && session.user.staffRank) {
@@ -89,17 +92,14 @@ const loadDiscordSession = async () => {
       discordProfileMenuRank.textContent = session.user.staffRank;
       discordProfileMenuRank.hidden = false;
     }
-    discordLoginButtons.forEach((button) => { button.hidden = true; });
-    discordLogoutButtons.forEach((button) => { button.hidden = false; });
+    discordLogin.hidden = true;
     discordAccount.hidden = false;
     homepageSignedIn = true;
     homepageInternetReady = true;
-    if (session.user.owner) {
-      ownerLinks.forEach((link) => { link.hidden = false; });
-    }
+    if (ownerLink && session.user.owner) ownerLink.hidden = false;
     void loadWalletBalance();
   } catch {
-    // Keep the login button available if the session endpoint is unavailable.
+    // Keep login available if session check fails.
   }
 };
 
@@ -126,19 +126,17 @@ const loadWalletBalance = async () => {
     if (!response.ok) throw new Error(result.error || 'Wallet unavailable');
     setCashBalance(result.wallet?.balance);
   } catch {
-    // Keep the chip visible even if the bot host is briefly unavailable.
+    // Keep the chip visible if the bot host is briefly unavailable.
   }
 };
 
-discordLogoutButtons.forEach((button) => {
-  button.addEventListener('click', async () => {
-    discordLogoutButtons.forEach((item) => { item.disabled = true; });
-    try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
-    } finally {
-      window.location.href = '/';
-    }
-  });
+discordLogout?.addEventListener('click', async () => {
+  discordLogout.disabled = true;
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+  } finally {
+    window.location.href = '/';
+  }
 });
 
 loadDiscordSession();
@@ -148,6 +146,7 @@ if (window.history.replaceState && /[?&]login=/.test(window.location.search)) {
 }
 
 discordProfile?.addEventListener('click', () => {
+  if (ownerLink?.hidden && discordProfileMenuRank?.hidden) return;
   const isOpen = discordProfile.getAttribute('aria-expanded') === 'true';
   discordProfile.setAttribute('aria-expanded', String(!isOpen));
   if (discordProfileMenu) discordProfileMenu.hidden = isOpen;
@@ -161,27 +160,24 @@ document.addEventListener('click', (event) => {
 });
 
 const setBotConnection = (text) => {
-  botConnections.forEach((element) => { element.textContent = text; });
+  botConnection.forEach((element) => { element.textContent = text; });
 };
 
 const setDiscordCount = (count) => {
-  discordCounts.forEach((element) => { element.textContent = count; });
+  discordCount.forEach((element) => { element.textContent = count; });
 };
 
 const loadBotStatus = async () => {
-  if (!discordCounts.length || !botConnections.length) return;
-
+  if (!discordCount.length || !botConnection.length) return;
   try {
     const response = await fetch('/api/bot/status');
     if (!response.ok) throw new Error('Status unavailable');
     const status = await response.json();
-
     if (!status.online) {
       setBotConnection('Live data unavailable');
       await loadDirectErlcStatus();
       return;
     }
-
     setBotConnection(Number.isFinite(status.latencyMs)
       ? `Discord bot online · ${status.latencyMs}ms`
       : 'Discord bot online');
@@ -209,15 +205,14 @@ const loadBotStatus = async () => {
 };
 
 const loadDiscordMemberCount = async () => {
-  if (!discordCounts.length) return;
-
+  if (!discordCount.length) return;
   try {
     const response = await fetch('/api/discord/count');
     if (!response.ok) throw new Error('Member count unavailable');
     const result = await response.json();
     if (Number.isInteger(result.memberCount)) setDiscordCount(result.memberCount.toLocaleString());
   } catch {
-    // The bot status endpoint remains the fallback when the public invite is unavailable.
+    // Bot status remains the fallback.
   }
 };
 

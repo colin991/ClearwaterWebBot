@@ -4317,14 +4317,14 @@ body { margin: 0; }
 }
 .internet-feed:has([data-reels-stage]:not([hidden])) .internet-view[data-view="home"] > .reels-stage {
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: min(780px, calc(100dvh - 110px));
 }
 .reels-stage {
   position: relative;
   flex: 1 1 auto;
   width: 100%;
-  min-height: 0;
-  height: auto !important;
+  min-height: min(780px, calc(100dvh - 110px));
+  height: min(780px, calc(100dvh - 110px)) !important;
   overflow: hidden;
   border: 1px solid rgba(148, 184, 255, .14);
   border-radius: 18px;
@@ -4333,6 +4333,7 @@ body { margin: 0; }
 }
 .reels-viewport {
   height: 100%;
+  min-height: inherit;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
@@ -4341,6 +4342,16 @@ body { margin: 0; }
   scrollbar-width: none;
 }
 .reels-viewport::-webkit-scrollbar { display: none; }
+.reels-empty {
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  min-height: 100%;
+  padding: 40px 24px;
+  color: var(--muted);
+  text-align: center;
+}
+.reels-empty p { margin: 0; }
 .reel-card {
   position: relative;
   height: 100%;

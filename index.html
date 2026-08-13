@@ -19,92 +19,102 @@
     <title>Clearwater Roleplay</title>
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <script>document.documentElement.classList.add('js');</script>
-    <link rel="stylesheet" href="styles.css?v=20260813-home-match" />
+    <link rel="stylesheet" href="styles.css?v=20260813-home-bar" />
   </head>
-  <body class="home-page">
+  <body>
     <a class="skip-link" href="#main">Skip to content</a>
 
-    <main class="home-shell" id="main">
-      <aside class="home-rail">
-        <a class="home-brand" href="/">
-          <img src="assets/clearwater-logo.png" alt="" draggable="false" />
-          <span>Clearwater<br /><b>Roleplay</b></span>
+    <header class="site-header" data-header>
+      <div class="nav-shell">
+        <a class="brand" href="#home" aria-label="Clearwater home">
+          <span class="brand-badge" aria-hidden="true"><img src="assets/clearwater-logo.png" alt="" /></span>
+          <span>Clearwater</span>
         </a>
-        <nav class="home-nav" aria-label="Site navigation">
-          <a class="selected" href="/"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>Home</a>
-          <a href="/internet"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z" /><path d="M8 10h8M8 14h5" /></svg>Internet</a>
-          <a href="/internet/wallet"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg>Wallet</a>
-          <a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 10.5h.01M16 10.5h.01M7.5 15c1.2 1 2.7 1.5 4.5 1.5s3.3-.5 4.5-1.5" /><path d="M7 6.5 5.8 4.2C8 3.4 10 3 12 3s4 .4 6.2 1.2L17 6.5" /><path d="M6 18.5 4.5 21c2.2.8 4.3 1.2 7.5 1.2s5.3-.4 7.5-1.2L18 18.5" /></svg>Discord</a>
-        </nav>
-        <a class="rail-primary" href="https://erlc.gg/join/cwrpvc" target="_blank" rel="noopener">Play on Roblox</a>
-        <a class="rail-signin" href="/signin" data-discord-login>Login with Discord</a>
-        <div class="home-user" data-discord-account hidden>
-          <button class="home-profile" type="button" data-discord-profile aria-expanded="false" aria-controls="discord-profile-menu">
-            <img data-discord-avatar src="assets/clearwater-logo.png" alt="" />
-            <span><b data-discord-name>Discord user</b><small data-discord-rank hidden></small></span>
-          </button>
-          <div class="home-profile-menu" id="discord-profile-menu" data-discord-profile-menu hidden>
-            <span data-discord-profile-menu-rank hidden></span>
-            <a href="/owner" data-owner-link hidden>Owner Panel</a>
-            <a href="/internet/wallet" data-cash-balance aria-label="Clearwater credits balance: C$0"><span data-cash-amount>C$0</span> wallet</a>
-            <button type="button" data-discord-logout>Log out</button>
-          </div>
-        </div>
-      </aside>
 
-      <section class="home-feed">
-        <article class="home-hero" id="home">
-          <div class="home-hero-banner" aria-hidden="true"></div>
-          <div class="home-hero-copy">
-            <p class="home-kicker"><span class="home-live-dot" aria-hidden="true"></span> In-game <strong data-erlc-current>0</strong> / <strong data-erlc-max>50</strong> · Queue <strong data-erlc-queue>0</strong></p>
-            <h1>Clearwater<br />Roleplay</h1>
-            <p class="home-lead">Experience Florida like never before — your story begins in Clearwater.</p>
-            <p class="home-detail">Serious ER:LC roleplay on the Gulf Coast. Departments, training, and a community that shows up for every shift.</p>
-            <div class="home-actions">
-              <a class="button button-primary" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a>
-              <a class="button button-secondary" href="/internet">Open Internet</a>
+        <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav">
+          <span></span><span></span><span></span>
+          <span class="sr-only">Open navigation</span>
+        </button>
+
+        <nav class="site-nav" id="site-nav" aria-label="Main navigation">
+          <div class="nav-links">
+            <a class="active" href="#home">Home</a>
+            <a href="/internet">Internet</a>
+            <a href="#story">Story</a>
+            <a href="#join">Join</a>
+          </div>
+          <div class="nav-actions">
+            <a class="cash-balance" href="/internet/wallet" data-cash-balance aria-label="Clearwater credits balance: C$0" title="Open Clearwater Credits wallet">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg>
+              <span data-cash-amount>C$0</span>
+            </a>
+            <a class="nav-button nav-button-ghost" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord</a>
+            <a class="nav-button nav-button-primary" href="/signin" data-discord-login>Login with Discord</a>
+            <div class="discord-account" data-discord-account hidden>
+              <button class="discord-profile" type="button" data-discord-profile aria-expanded="false" aria-controls="discord-profile-menu">
+                <img class="discord-avatar" data-discord-avatar src="assets/clearwater-logo.png" alt="" />
+                <span class="discord-profile-copy"><span class="discord-name" data-discord-name>Discord user</span><span class="discord-rank" data-discord-rank hidden></span></span>
+              </button>
+              <button class="discord-logout" type="button" data-discord-logout>Logout</button>
+              <div class="discord-profile-menu" id="discord-profile-menu" data-discord-profile-menu hidden>
+                <span class="discord-profile-menu-rank" data-discord-profile-menu-rank hidden></span>
+                <a href="/owner" data-owner-link hidden>Owner Panel</a>
+              </div>
             </div>
           </div>
-        </article>
+        </nav>
+      </div>
+    </header>
 
-        <article class="home-block" id="status" aria-label="Live server information">
-          <header class="home-block-head">
-            <p>Live status</p>
-            <h2>On shift right now</h2>
-          </header>
-          <div class="home-metrics">
+    <main id="main">
+      <section class="hero" id="home">
+        <div class="hero-copy page-width">
+          <p class="hero-kicker"><span class="hero-status-dot" aria-hidden="true"></span> In-game <strong data-erlc-current>0</strong> / <strong data-erlc-max>50</strong><i aria-hidden="true"></i> Queue <strong data-erlc-queue>0</strong></p>
+          <h1>Clearwater<br />Roleplay</h1>
+          <p class="hero-lead">Experience Florida like never before — your story begins in Clearwater.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a>
+            <a class="button button-secondary" href="https://erlc.gg/join/cwrpvc" target="_blank" rel="noopener">Play on Roblox</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="live-strip" aria-label="Live server information">
+        <div class="page-width live-strip-inner">
+          <div class="live-metrics">
             <div><strong data-erlc-current>0</strong><span>In-game</span></div>
             <div><strong data-erlc-max>50</strong><span>Max slots</span></div>
             <div><strong data-erlc-queue>0</strong><span>Queue</span></div>
             <div><strong data-discord-count>—</strong><span>Discord</span></div>
           </div>
-          <p class="home-status-line"><span data-bot-connection>Loading live server data</span> · <span data-time>Updated now</span></p>
-        </article>
+          <p><span data-bot-connection>Loading live server data</span> · <span data-time>Updated now</span></p>
+        </div>
+      </section>
 
-        <article class="home-block home-story" id="story">
-          <div class="home-story-copy">
-            <p class="home-kicker">The city</p>
-            <h2>Experience Florida like never before.</h2>
-            <p>Clearwater Roleplay brings Gulf Coast immersion to Emergency Response: Liberty County — law enforcement, Fire/EMS, and civilian life with standards that keep every scene sharp.</p>
-            <dl class="home-stats">
+      <section class="section story" id="story">
+        <div class="page-width story-grid">
+          <figure class="story-media">
+            <img src="assets/clearwater-police-night.png" alt="Clearwater Police SUV on patrol at night" width="1600" height="1060" loading="lazy" />
+          </figure>
+          <div class="story-copy">
+            <p class="section-kicker">The city</p>
+            <h2>Gulf Coast immersion, shift after shift.</h2>
+            <p>Clearwater Roleplay brings Pinellas atmosphere to Emergency Response: Liberty County — law enforcement, Fire/EMS, and civilian life with standards that keep every scene sharp.</p>
+            <dl class="story-stats">
               <div><dt>50</dt><dd>Player slots</dd></div>
               <div><dt>3</dt><dd>Core departments</dd></div>
               <div><dt>24/7</dt><dd>Community access</dd></div>
             </dl>
           </div>
-          <figure class="home-media">
-            <img src="assets/clearwater-police-night.png" alt="Clearwater Police SUV on patrol at night" width="1400" height="900" loading="lazy" />
-          </figure>
-        </article>
+        </div>
+      </section>
 
-        <article class="home-block home-path" id="departments">
-          <figure class="home-media">
-            <img src="assets/fire-rescue-scene.png" alt="Fire and rescue crews responding to an emergency scene" width="1400" height="900" loading="lazy" />
-          </figure>
-          <div class="home-path-copy">
-            <p class="home-kicker">Departments</p>
-            <h2>Pick a path. Earn the board.</h2>
-            <p>Apply in Discord, complete training, and move into LEO, Fire/EMS, or civilian roleplay built for Emergency Response: Liberty County.</p>
+      <section class="section path" id="departments">
+        <div class="page-width path-grid">
+          <div class="path-copy">
+            <p class="section-kicker">Departments</p>
+            <h2>Pick a path.<br />Earn the board.</h2>
+            <p>Apply in Discord, complete training, and move into LEO, Fire/EMS, or civilian roleplay built for ER:LC.</p>
             <ul>
               <li>Pinellas / Clearwater setting</li>
               <li>Structured promotions &amp; standards</li>
@@ -112,62 +122,47 @@
             </ul>
             <a class="button button-primary" href="https://erlc.gg/join/cwrpvc" target="_blank" rel="noopener">Join the server</a>
           </div>
-        </article>
+          <figure class="path-media">
+            <img src="assets/fire-rescue-scene.png" alt="Fire and rescue crews responding to an emergency scene" width="1600" height="1060" loading="lazy" />
+          </figure>
+        </div>
+      </section>
 
-        <article class="home-block home-join" id="join">
-          <img class="home-join-logo" src="assets/clearwater-logo.png" alt="" />
+      <section class="section internet-cta" id="internet">
+        <div class="page-width internet-cta-inner">
+          <div>
+            <p class="section-kicker">Clearwater Internet</p>
+            <h2>The community feed.</h2>
+            <p>Posts, messages, Reels, and Clearwater Credits — built for the people who run this city.</p>
+          </div>
+          <a class="button button-primary" href="/internet">Open Internet</a>
+        </div>
+      </section>
+
+      <section class="section join" id="join">
+        <div class="page-width join-panel">
+          <img class="join-logo" src="assets/clearwater-logo.png" alt="" />
           <h2>Your story begins in Clearwater.</h2>
           <p>Join the Discord, then hop into the ER:LC private server when you’re ready for your first shift.</p>
-          <div class="home-actions">
+          <div class="hero-actions">
             <a class="button button-primary" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a>
             <a class="button button-secondary" href="https://erlc.gg/join/cwrpvc" target="_blank" rel="noopener">Play on Roblox</a>
           </div>
-        </article>
-
-        <footer class="home-footer">
-          <p>© <span data-year></span> Clearwater Roleplay</p>
-          <p><a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></p>
-        </footer>
+        </div>
       </section>
-
-      <aside class="home-side">
-        <div class="home-side-card">
-          <h2>Clearwater Internet</h2>
-          <p>The community social feed — posts, messages, reels, and Clearwater Credits.</p>
-          <a href="/internet">Open the feed</a>
-        </div>
-        <div class="home-side-card home-side-live">
-          <h2>Live right now</h2>
-          <div class="home-side-metrics">
-            <div><strong data-erlc-current>0</strong><span>In-game</span></div>
-            <div><strong data-erlc-queue>0</strong><span>Queue</span></div>
-            <div><strong data-discord-count>—</strong><span>Discord</span></div>
-          </div>
-          <p><span data-bot-connection>Checking status…</span></p>
-        </div>
-        <div class="home-side-card">
-          <h2>Jump in</h2>
-          <a class="home-side-link" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord <span>Community</span></a>
-          <a class="home-side-link" href="https://erlc.gg/join/cwrpvc" target="_blank" rel="noopener">Play on Roblox <span>ER:LC</span></a>
-          <a class="home-side-link" href="/internet/wallet">Credits wallet <span>C$</span></a>
-        </div>
-      </aside>
     </main>
 
-    <button class="home-menu-button" type="button" data-home-menu aria-expanded="false" aria-controls="home-mobile-nav">
-      <span></span><span></span><span></span>
-      <span class="sr-only">Open navigation</span>
-    </button>
-    <nav class="home-mobile-nav" id="home-mobile-nav" data-home-mobile-nav hidden aria-label="Mobile navigation">
-      <a href="/">Home</a>
-      <a href="/internet">Internet</a>
-      <a href="/internet/wallet">Wallet</a>
-      <a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord</a>
-      <a href="/signin" data-discord-login>Login with Discord</a>
-      <a href="/owner" data-owner-link hidden>Owner Panel</a>
-      <button type="button" data-discord-logout data-mobile-logout hidden>Log out</button>
-    </nav>
+    <footer class="site-footer">
+      <div class="page-width footer-row">
+        <a class="brand" href="#home" aria-label="Clearwater home">
+          <span class="brand-badge" aria-hidden="true"><img src="assets/clearwater-logo.png" alt="" /></span>
+          <span>Clearwater</span>
+        </a>
+        <p>Serious roleplay. Real community.</p>
+        <p>&copy; <span data-year></span> Clearwater Roleplay · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></p>
+      </div>
+    </footer>
 
-    <script src="script.js?v=20260813-home-match"></script>
+    <script src="script.js?v=20260813-home-bar"></script>
   </body>
 </html>

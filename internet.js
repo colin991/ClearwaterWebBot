@@ -93,11 +93,12 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260813-transfer-ui';
+const INTERNET_VERSION = '20260813-home-reels';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not delivered.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
+const SMALL_REEL_BYTES = 3_200_000;
 const INTERNET_PATH = '/internet';
 const SIGNIN_INTERNET = '/signin?next=/internet';
 const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post']);
@@ -1030,13 +1031,43 @@ function updateReelStats(card, reel) {
   if (commentCount) commentCount.textContent = comments || '';
 }
 
+function reelMediaProxyUrl(reelId, kind = 'video') {
+  return `/api/media?reel=${encodeURIComponent(reelId)}&kind=${encodeURIComponent(kind)}`;
+}
+
+function bindReelMediaFallback(viewport) {
+  viewport.querySelectorAll('.reel-card > video').forEach((video) => {
+    if (video.dataset.fallbackBound === '1') return;
+    video.dataset.fallbackBound = '1';
+    video.addEventListener('error', () => {
+      const card = video.closest('.reel-card');
+      const reelId = card?.dataset.reelId;
+      if (!reelId || video.dataset.fallbackTried === '1') return;
+      video.dataset.fallbackTried = '1';
+      video.src = reelMediaProxyUrl(reelId, 'video');
+      video.load();
+    });
+  });
+  viewport.querySelectorAll('.reel-card > img').forEach((image) => {
+    if (image.dataset.fallbackBound === '1') return;
+    image.dataset.fallbackBound = '1';
+    image.addEventListener('error', () => {
+      const card = image.closest('.reel-card');
+      const reelId = card?.dataset.reelId;
+      if (!reelId || image.dataset.fallbackTried === '1') return;
+      image.dataset.fallbackTried = '1';
+      image.src = reelMediaProxyUrl(reelId, 'image');
+    });
+  });
+}
+
 function renderReels() {
   const viewport = document.querySelector('[data-reels-viewport]');
   if (!viewport) return;
   const reels = allPosts.filter((post) => post.kind === 'reel' && !post.parentId && !socialState.muted.includes(post.authorId) && !socialState.blocked.includes(post.authorId));
   if (!reels.length) {
     viewport.dataset.reelSignature = '';
-    viewport.innerHTML = '<p class="reels-empty">No Reels yet. Post a photo or short video to start the feed.</p>';
+    viewport.innerHTML = '<div class="reels-empty"><p>No Reels yet.</p><p>Post a photo or short video to start the feed.</p></div>';
     return;
   }
   // Patch counts in place when the line-up is unchanged so liking never restarts playback or loses scroll position.
@@ -1057,10 +1088,12 @@ function renderReels() {
     const displayName = author.displayName || reel.displayName || reel.username || 'member';
     const username = author.username || reel.username || 'member';
     const avatarUrl = author.avatarUrl || reel.avatarUrl || 'assets/clearwater-logo.png';
-    const media = safeVideoUrl(reel.videoUrl)
-      ? `<video src="${escapeHtml(reel.videoUrl)}" loop muted playsinline preload="auto"></video>`
-      : (safeImageUrl(reel.imageUrl) ? `<img src="${escapeHtml(reel.imageUrl)}" alt="" />` : '<p class="reel-missing">This Reel could not be loaded.</p>');
-    const sound = safeVideoUrl(reel.videoUrl)
+    const videoSrc = safeVideoUrl(reel.videoUrl) ? reel.videoUrl : (reel.videoUrl ? reelMediaProxyUrl(reel.id, 'video') : '');
+    const imageSrc = safeImageUrl(reel.imageUrl) ? reel.imageUrl : (reel.imageUrl ? reelMediaProxyUrl(reel.id, 'image') : '');
+    const media = videoSrc
+      ? `<video src="${escapeHtml(videoSrc)}" loop muted playsinline preload="auto"></video>`
+      : (imageSrc ? `<img src="${escapeHtml(imageSrc)}" alt="" />` : '<p class="reel-missing">This Reel could not be loaded.</p>');
+    const sound = videoSrc
       ? `<button type="button" class="reel-mute${reelsSoundOn ? ' is-on' : ''}" data-reel-sound="${escapeHtml(reel.id)}" aria-pressed="${reelsSoundOn ? 'true' : 'false'}" aria-label="${reelsSoundOn ? 'Turn off sound' : 'Turn on sound'}">${soundIcon(reelsSoundOn)}<span class="sr-only">${reelsSoundOn ? 'Sound on' : 'Muted'}</span></button>`
       : '';
     return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient" aria-hidden="true"></div>${sound}<div class="reel-meta"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(avatarUrl)}" alt="" /><span class="reel-author"><b>${escapeHtml(displayName)}</b><small>@${escapeHtml(username)}</small></span></button>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}" aria-label="Like">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}" aria-label="Comments">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}" aria-label="Share">${postActionIcon('share')}</button></div></article>`;
@@ -1069,6 +1102,7 @@ function renderReels() {
     const stayOn = [...viewport.querySelectorAll('.reel-card')].find((card) => card.dataset.reelId === anchorId);
     if (stayOn) viewport.scrollTo({ top: stayOn.offsetTop, behavior: 'instant' });
   }
+  bindReelMediaFallback(viewport);
   bindReelAutoplay();
 }
 
@@ -3757,6 +3791,48 @@ function resetReelComposer() {
   if (error) error.textContent = '';
 }
 
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Could not read that file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadReelMedia(file, isVideo, onProgress) {
+  const upload = globalThis.VercelBlob?.upload;
+  let blobError = '';
+  if (typeof upload === 'function') {
+    try {
+      const safeName = String(file.name || (isVideo ? 'reel.mp4' : 'reel.jpg')).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || (isVideo ? 'reel.mp4' : 'reel.jpg');
+      const blob = await upload(`reels/${safeName}`, file, {
+        access: 'public',
+        handleUploadUrl: '/api/internet',
+        multipart: file.size > 80_000_000,
+        contentType: file.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+        onUploadProgress: (progress) => onProgress?.(progress),
+      });
+      if (blob?.url) return isVideo ? { video: { url: blob.url } } : { image: { url: blob.url } };
+    } catch (error) {
+      blobError = String(error?.message || error || '');
+      if (file.size > SMALL_REEL_BYTES) {
+        throw new Error(/token|blob store|No token|Failed to retrieve/i.test(blobError)
+          ? 'Large Reels need Vercel Blob storage configured. Photos/videos under 3 MB still upload without it.'
+          : (blobError || 'Could not upload this Reel.'));
+      }
+    }
+  } else if (file.size > SMALL_REEL_BYTES) {
+    throw new Error('Reel uploads are unavailable for large files. Refresh, or use a photo/video under 3 MB.');
+  }
+
+  onProgress?.({ percentage: 100 });
+  const dataUrl = await readFileAsDataUrl(file);
+  if (isVideo && !safeVideoUrl(dataUrl)) throw new Error('Choose a supported MP4 or WebM video.');
+  if (!isVideo && !safeImageUrl(dataUrl)) throw new Error('Choose a supported image.');
+  return isVideo ? { video: { dataUrl } } : { image: { dataUrl } };
+}
+
 document.querySelector('[data-reel-file]')?.addEventListener('change', () => {
   const file = document.querySelector('[data-reel-file]')?.files?.[0];
   const error = document.querySelector('[data-reel-error]');
@@ -3796,35 +3872,32 @@ document.querySelector('[data-reel-form]')?.addEventListener('submit', async (ev
   if (submit) submit.disabled = true;
   if (error) error.textContent = 'Uploading Reel...';
   try {
-    const upload = globalThis.VercelBlob?.upload;
-    if (typeof upload !== 'function') throw new Error('Reel uploads are unavailable. Refresh and try again.');
-    const safeName = String(reelMedia.file.name || (reelMedia.isVideo ? 'reel.mp4' : 'reel.jpg')).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || (reelMedia.isVideo ? 'reel.mp4' : 'reel.jpg');
-    const blob = await upload(`reels/${safeName}`, reelMedia.file, {
-      access: 'public',
-      handleUploadUrl: '/api/internet',
-      multipart: reelMedia.file.size > 80_000_000,
-      contentType: reelMedia.type,
-      onUploadProgress: (progress) => {
-        if (error) error.textContent = `Uploading Reel... ${Math.round(progress.percentage || 0)}%`;
-      },
+    const media = await uploadReelMedia(reelMedia.file, reelMedia.isVideo, (progress) => {
+      if (error) error.textContent = `Uploading Reel... ${Math.round(progress.percentage || 0)}%`;
     });
     if (error) error.textContent = 'Posting Reel...';
-    const media = reelMedia.isVideo ? { video: { url: blob.url } } : { image: { url: blob.url } };
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: caption, reel: true, image: media.image || null, video: media.video || null, ...activeAccountRequest() }) });
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'post',
+        content: caption,
+        reel: true,
+        image: media.image || null,
+        video: media.video || null,
+        ...activeAccountRequest(),
+      }),
+    });
     const result = await readApiJson(response, 'Could not post this Reel.');
     if (!response.ok) throw new Error(result.error || 'Could not post this Reel.');
     resetReelComposer();
     document.querySelector('[data-reel-composer]')?.setAttribute('hidden', '');
     feedTab = 'reels';
     localStorage.setItem('clearwater-feed-tab', 'reels');
+    showView('home');
     await loadPosts();
   } catch (exception) {
-    const message = String(exception.message || '');
-    if (error) {
-      error.textContent = /token|blob store|No token/i.test(message)
-        ? 'Reels need a Vercel Blob store. Create one under Vercel → Storage, then try again.'
-        : (message || 'Could not post this Reel.');
-    }
+    if (error) error.textContent = exception.message || 'Could not post this Reel.';
   } finally {
     if (submit) submit.disabled = !reelMedia;
   }
