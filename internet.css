@@ -5426,6 +5426,64 @@ html.pref-reduce-motion *::after {
   stroke-linejoin: round;
   stroke-width: 1.5;
 }
+.live-server-card {
+  padding: 16px 16px 14px;
+  border: 1px solid rgba(132, 174, 244, .22);
+  border-radius: 16px;
+  background: linear-gradient(150deg, rgba(13, 26, 49, .92), rgba(6, 12, 22, .9));
+}
+.live-server-card > p {
+  margin: 0;
+  color: #75aaff;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.live-server-card h2 {
+  margin: 4px 0 0;
+  font-size: 16px;
+  letter-spacing: -.03em;
+}
+.live-server-stats {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  color: #c5d3e6;
+  font-size: 12px;
+  font-weight: 650;
+}
+.live-server-stats strong {
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.live-server-meta {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.live-server-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.live-server-actions a {
+  flex: 1;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  color: #fff;
+  background: var(--blue);
+  font-size: 11px;
+  font-weight: 800;
+}
+.live-server-actions a:last-child {
+  color: #dce9ff;
+  background: rgba(8, 18, 34, .72);
+  border: 1px solid rgba(148, 184, 255, .28);
+}
 .wallet-balance-card {
   min-height: 140px;
   display: flex;

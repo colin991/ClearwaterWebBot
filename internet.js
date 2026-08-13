@@ -5399,6 +5399,62 @@ document.querySelector('[data-ad-form]')?.addEventListener('submit', async (even
 
 showViewFromAddress();
 
+async function loadLiveServerCard() {
+  const current = document.querySelectorAll('[data-erlc-current]');
+  const queue = document.querySelectorAll('[data-erlc-queue]');
+  const connection = document.querySelectorAll('[data-bot-connection]');
+  const members = document.querySelectorAll('[data-discord-count]');
+  if (!current.length && !connection.length) return;
+
+  const setText = (nodes, value) => {
+    nodes.forEach((element) => { element.textContent = value; });
+  };
+
+  try {
+    const response = await fetch('/api/bot/status');
+    const status = response.ok ? await response.json() : { online: false };
+    let erlcOnline = Boolean(status.erlc?.online);
+    if (erlcOnline) {
+      setText(current, Number(status.erlc.currentPlayers || 0).toLocaleString());
+      setText(queue, Number(status.erlc.queue || 0).toLocaleString());
+    } else {
+      const erlcResponse = await fetch('/api/erlc/status');
+      const erlc = erlcResponse.ok ? await erlcResponse.json() : { online: false };
+      erlcOnline = Boolean(erlc.online);
+      if (erlcOnline) {
+        setText(current, Number(erlc.currentPlayers || 0).toLocaleString());
+        setText(queue, Number(erlc.queue || 0).toLocaleString());
+      }
+    }
+    if (Number.isInteger(status.memberCount)) {
+      setText(members, status.memberCount.toLocaleString());
+    } else {
+      const countResponse = await fetch('/api/discord/count');
+      const countResult = countResponse.ok ? await countResponse.json() : {};
+      if (Number.isInteger(countResult.memberCount)) {
+        setText(members, countResult.memberCount.toLocaleString());
+      }
+    }
+    setText(connection, status.online
+      ? (Number.isFinite(status.latencyMs) ? `Discord bot online · ${status.latencyMs}ms` : 'Discord bot online')
+      : (erlcOnline ? 'Live ER:LC data connected' : 'Live data unavailable'));
+  } catch {
+    try {
+      const erlcResponse = await fetch('/api/erlc/status');
+      const erlc = erlcResponse.ok ? await erlcResponse.json() : { online: false };
+      if (erlc.online) {
+        setText(current, Number(erlc.currentPlayers || 0).toLocaleString());
+        setText(queue, Number(erlc.queue || 0).toLocaleString());
+        setText(connection, 'Live ER:LC data connected');
+      } else {
+        setText(connection, 'Live data unavailable');
+      }
+    } catch {
+      setText(connection, 'Live data unavailable');
+    }
+  }
+}
+
 async function bootInternet() {
   try {
     const signedIn = await loadSession().catch(() => Boolean(currentUserId));
@@ -5408,6 +5464,7 @@ async function bootInternet() {
     }
     await loadPosts();
     void loadAds();
+    void loadLiveServerCard();
     startAdRotation();
   } finally {
     if (currentUserId) {

@@ -173,7 +173,7 @@ const setDiscordCount = (count) => {
 };
 
 const loadBotStatus = async () => {
-  if (!discordCount.length || !botConnection.length) return;
+  if (!botConnection.length && !erlcCurrent.length && !discordCount.length) return;
   try {
     const response = await fetch('/api/bot/status');
     if (!response.ok) throw new Error('Status unavailable');
@@ -181,6 +181,7 @@ const loadBotStatus = async () => {
     if (!status.online) {
       setBotConnection('Live data unavailable');
       await loadDirectErlcStatus();
+      await loadDiscordMemberCount();
       return;
     }
     setBotConnection(Number.isFinite(status.latencyMs)
@@ -206,6 +207,7 @@ const loadBotStatus = async () => {
       setErlcNumbers({ online: false });
       if (updatedTime) updatedTime.textContent = 'ER:LC status unavailable';
     }
+    await loadDiscordMemberCount();
   }
 };
 

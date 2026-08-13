@@ -722,6 +722,15 @@ body.home-stage {
   text-wrap: balance;
   text-shadow: 0 12px 40px rgba(0, 0, 0, .45);
 }
+.stage-kicker {
+  margin: 14px 0 0;
+  color: rgba(186, 210, 255, .84);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  text-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+}
 .stage-stats {
   display: inline-flex;
   flex-wrap: wrap;
