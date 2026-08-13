@@ -152,10 +152,10 @@ function openSiteDialog({
     if (siteDialogField) siteDialogField.hidden = mode !== 'prompt';
     if (siteDialogLabel) siteDialogLabel.textContent = label;
     if (siteDialogInput) {
-      siteDialogInput.value = value || '';
+      siteDialogInput.value = mode === 'prompt' ? (value || '') : '';
       siteDialogInput.placeholder = placeholder || '';
       siteDialogInput.maxLength = maxLength;
-      siteDialogInput.required = required === true;
+      siteDialogInput.required = mode === 'prompt' && required === true;
     }
     if (siteDialogConfirm) siteDialogConfirm.textContent = confirmLabel;
     if (siteDialogCancel) {

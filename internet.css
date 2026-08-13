@@ -5269,6 +5269,7 @@ body { margin: 0; }
 .site-dialog [data-site-dialog-message] { margin: 0 0 14px; color: #c5d2e4; font-size: 14px; line-height: 1.5; }
 .site-dialog [data-site-dialog-message][hidden] { display: none; }
 .site-dialog label { display: grid; gap: 7px; margin-top: 8px; color: #dce9fa; font-size: 12px; font-weight: 750; }
+.site-dialog label[hidden] { display: none !important; }
 .site-dialog textarea { width: 100%; box-sizing: border-box; min-height: 110px; padding: 11px; border: 1px solid #345b89; border-radius: 9px; outline: 0; color: #f4f8ff; background: #050b13; font: inherit; resize: vertical; }
 .site-dialog textarea:focus { border-color: #6fc4ff; box-shadow: 0 0 0 3px rgba(78,145,249,.17); }
 .site-dialog-error { min-height: 17px; margin: 10px 0 0; color: #ff9ca8; font-size: 12px; }

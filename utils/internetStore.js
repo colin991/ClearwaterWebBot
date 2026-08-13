@@ -13,6 +13,7 @@ const emptyStore = Object.freeze({
   reports: [],
   logs: [],
   ipBans: [],
+  creditTransfers: [],
   officialProfile: {},
   settings: { pausePosts: false, pauseReels: false, pauseMessages: false },
 });
@@ -53,6 +54,7 @@ export async function readInternetStore() {
     reports: Array.isArray(data?.reports) ? data.reports : [],
     logs: Array.isArray(data?.logs) ? data.logs : [],
     ipBans: Array.isArray(data?.ipBans) ? data.ipBans : [],
+    creditTransfers: Array.isArray(data?.creditTransfers) ? data.creditTransfers : [],
     officialProfile: data?.officialProfile && typeof data.officialProfile === 'object' ? data.officialProfile : {},
     settings: {
       pausePosts: data?.settings?.pausePosts === true,
