@@ -10,6 +10,7 @@ import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
 import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
 import { AutomodHoldError, adjustInternetCredits, applyStaffSiteAction, applyStaffUserAction, assertLimitedStaffBanQuota, banKnownInternetIps, claimInternetDailyCredits, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, internetProfile, listInternetAdsForUser, moderationSnapshot, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, readInternetStore, recordInternetIpHash, recordLimitedStaffBan, respondCreditTransfer, reviewInternetAd, reviewInternetReport, saveInternetStore, sendInternetMessage, serveInternetAds, setDiscordInternetNotify, setInternetAccountActive, setInternetBan, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, AD_BASE_COST, AD_BOOST_COST, AD_MAX_BOOST } from './internetStore.js';
 import { createDiscordInternetNotifier } from './discordInternetNotify.js';
+import { createInternetFeedAnnouncer, shouldAnnounceInteractResult } from './discordInternetFeed.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -85,6 +86,7 @@ async function discordDropUsernames(client, actor) {
 export function startStatusServer(client, config) {
   let lastInternetRoleSync = 0;
   setDiscordInternetNotify(createDiscordInternetNotifier(client, { websiteUrl: config.websiteUrl }));
+  const announceInternetFeedPost = createInternetFeedAnnouncer(client, config);
 
   const resolveLiveStaffPanel = async (actor, proxyPanel = null) => {
     const discordId = String(actor?.id || '');
@@ -372,6 +374,7 @@ export function startStatusServer(client, config) {
             : upsertInternetUser(store, body.actor);
           const post = createInternetPost(store, user, body.content, { gif: body.gif, image: body.image, poll: body.poll, video: body.video, reel: body.reel === true, location: body.location, quoteId: body.quoteId });
           await saveInternetStore(store);
+          void announceInternetFeedPost(post);
           return json(response, 201, { post });
         }
 
@@ -488,6 +491,7 @@ export function startStatusServer(client, config) {
         if (body.action === 'post-interaction') {
           const result = interactInternetPost(store, body);
           await saveInternetStore(store);
+          if (shouldAnnounceInteractResult(body, result)) void announceInternetFeedPost(result.post);
           return json(response, 200, result);
         }
 
@@ -561,6 +565,10 @@ export function startStatusServer(client, config) {
             recordLimitedStaffBan(store, reviewerId);
           }
           await saveInternetStore(store);
+          if (report?.released && report.postId) {
+            const published = store.posts.find((item) => item.id === report.postId);
+            if (published) void announceInternetFeedPost(published);
+          }
           return json(response, 200, { report });
         }
 
