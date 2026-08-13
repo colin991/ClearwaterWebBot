@@ -13,6 +13,8 @@ import { logger } from './logger.js';
 
 const MAX_ATTACH_BYTES = 8 * 1024 * 1024;
 const ANNOUNCEMENT_EMOJI = '<:Announcement:1514458339680059422>';
+const ACCENT_LIVE = 0x4e91f9;
+const ACCENT_DELETED = 0x6b7280;
 
 function isHttpsUrl(value) {
   try {
@@ -74,72 +76,155 @@ function buildFeedText(post) {
   return lines.join('\n').slice(0, 4000);
 }
 
-export function createInternetFeedAnnouncer(client, config = {}) {
+function buildDeletedFeedText(post) {
+  return [
+    `# ${ANNOUNCEMENT_EMOJI} Clearwater Internet`,
+    `**Poster:** @${posterHandle(post)}`,
+    '_This post was deleted._',
+  ].join('\n').slice(0, 4000);
+}
+
+function resolveFeedMessageId(post) {
+  const id = String(post?.discordFeedMessageId || '').trim();
+  return /^\d{16,22}$/.test(id) ? id : '';
+}
+
+function buildLivePayload(post, site) {
+  const postUrl = `${site}/internet/post/${encodeURIComponent(post.id)}`;
+  const files = [];
+  let mediaUrl = '';
+
+  const gifUrl = String(post.gifUrl || '');
+  const imageUrl = String(post.imageUrl || '');
+  if (gifUrl && isHttpsUrl(gifUrl)) {
+    mediaUrl = gifUrl;
+  } else if (imageUrl && isHttpsUrl(imageUrl) && !imageUrl.includes('/api/media')) {
+    mediaUrl = imageUrl;
+  } else {
+    const data = parseDataImage(imageUrl);
+    if (data) {
+      files.push(new AttachmentBuilder(data.buffer, { name: data.name }));
+      mediaUrl = `attachment://${data.name}`;
+    }
+  }
+
+  const container = new ContainerBuilder()
+    .setAccentColor(ACCENT_LIVE)
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(buildFeedText(post)));
+
+  if (mediaUrl) {
+    container.addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(mediaUrl)),
+    );
+  }
+
+  container.addActionRowComponents(
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setLabel('View post')
+        .setStyle(ButtonStyle.Link)
+        .setURL(postUrl),
+    ),
+  );
+
+  return {
+    components: [container],
+    files,
+    flags: MessageFlags.IsComponentsV2,
+  };
+}
+
+function buildDeletedPayload(post) {
+  const container = new ContainerBuilder()
+    .setAccentColor(ACCENT_DELETED)
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(buildDeletedFeedText(post)));
+
+  return {
+    components: [container],
+    files: [],
+    flags: MessageFlags.IsComponentsV2,
+  };
+}
+
+async function fetchFeedChannel(client, channelId) {
+  if (!channelId || !client?.isReady?.()) return null;
+  let channel;
+  try {
+    channel = await client.channels.fetch(channelId);
+  } catch (error) {
+    logger.error(`Internet feed channel fetch failed (${channelId})`, error);
+    return null;
+  }
+  if (!channel?.isTextBased?.()) {
+    logger.error(`Internet feed channel is not text-based (${channelId})`);
+    return null;
+  }
+  return channel;
+}
+
+/**
+ * Discord Components V2 cross-post for Clearwater Internet.
+ * announce → returns Discord message id (or null)
+ * update → edits live message to match post
+ * markDeleted → edits to a deleted notice (falls back to delete)
+ */
+export function createInternetFeedController(client, config = {}) {
   const channelId = String(config.internetFeedChannelId || '').trim();
   const site = String(config.websiteUrl || 'https://cwrpvc.lol').replace(/\/$/, '');
 
-  return async function announceInternetFeedPost(post) {
-    if (!channelId || !client?.isReady?.() || !shouldAnnounceInternetPost(post)) return;
-
-    let channel;
-    try {
-      channel = await client.channels.fetch(channelId);
-    } catch (error) {
-      logger.error(`Internet feed channel fetch failed (${channelId})`, error);
-      return;
-    }
-    if (!channel?.isTextBased?.()) {
-      logger.error(`Internet feed channel is not text-based (${channelId})`);
-      return;
-    }
-
-    const postUrl = `${site}/internet/post/${encodeURIComponent(post.id)}`;
-    const files = [];
-    let mediaUrl = '';
-
-    const gifUrl = String(post.gifUrl || '');
-    const imageUrl = String(post.imageUrl || '');
-    if (gifUrl && isHttpsUrl(gifUrl)) {
-      mediaUrl = gifUrl;
-    } else if (imageUrl && isHttpsUrl(imageUrl) && !imageUrl.includes('/api/media')) {
-      mediaUrl = imageUrl;
-    } else {
-      const data = parseDataImage(imageUrl);
-      if (data) {
-        files.push(new AttachmentBuilder(data.buffer, { name: data.name }));
-        mediaUrl = `attachment://${data.name}`;
-      }
-    }
-
-    const container = new ContainerBuilder()
-      .setAccentColor(0x4e91f9)
-      .addTextDisplayComponents(new TextDisplayBuilder().setContent(buildFeedText(post)));
-
-    if (mediaUrl) {
-      container.addMediaGalleryComponents(
-        new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(mediaUrl)),
-      );
-    }
-
-    container.addActionRowComponents(
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setLabel('View post')
-          .setStyle(ButtonStyle.Link)
-          .setURL(postUrl),
-      ),
-    );
+  async function announce(post) {
+    if (!shouldAnnounceInternetPost(post)) return null;
+    const channel = await fetchFeedChannel(client, channelId);
+    if (!channel) return null;
 
     try {
-      await channel.send({
-        components: [container],
-        files,
-        flags: MessageFlags.IsComponentsV2,
-      });
+      const message = await channel.send(buildLivePayload(post, site));
+      return message?.id || null;
     } catch (error) {
       logger.error('Could not post Clearwater Internet feed to Discord', error);
+      return null;
     }
-  };
+  }
+
+  async function update(post) {
+    const messageId = resolveFeedMessageId(post);
+    if (!messageId || !shouldAnnounceInternetPost(post)) return;
+    const channel = await fetchFeedChannel(client, channelId);
+    if (!channel?.messages?.edit) return;
+
+    try {
+      await channel.messages.edit(messageId, buildLivePayload(post, site));
+    } catch (error) {
+      logger.error(`Could not update Clearwater Internet feed message ${messageId}`, error);
+    }
+  }
+
+  async function markDeleted(post) {
+    const messageId = resolveFeedMessageId(post);
+    if (!messageId) return;
+    const channel = await fetchFeedChannel(client, channelId);
+    if (!channel?.messages) return;
+
+    try {
+      await channel.messages.edit(messageId, buildDeletedPayload(post));
+      return;
+    } catch (editError) {
+      logger.error(`Could not mark Clearwater Internet feed message deleted ${messageId}`, editError);
+    }
+
+    try {
+      await channel.messages.delete(messageId);
+    } catch (deleteError) {
+      logger.error(`Could not delete Clearwater Internet feed message ${messageId}`, deleteError);
+    }
+  }
+
+  return { announce, update, markDeleted };
+}
+
+/** @deprecated Prefer createInternetFeedController().announce */
+export function createInternetFeedAnnouncer(client, config = {}) {
+  return createInternetFeedController(client, config).announce;
 }
 
 export function shouldAnnounceInteractResult(body, result) {

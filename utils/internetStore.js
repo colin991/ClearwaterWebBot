@@ -17,6 +17,7 @@ const emptyStore = Object.freeze({
   staffBanLog: [],
   creditTransfers: [],
   ads: [],
+  discordFeedMessages: {},
   siteBanner: null,
   officialProfile: {},
   settings: { pausePosts: false, pauseReels: false, pauseMessages: false },
@@ -99,6 +100,9 @@ function normalizeInternetStore(data) {
     staffBanLog: Array.isArray(source.staffBanLog) ? source.staffBanLog : [],
     creditTransfers: Array.isArray(source.creditTransfers) ? source.creditTransfers : [],
     ads: Array.isArray(source.ads) ? source.ads : [],
+    discordFeedMessages: source.discordFeedMessages && typeof source.discordFeedMessages === 'object'
+      ? source.discordFeedMessages
+      : {},
     siteBanner: sanitizeSiteBanner(source.siteBanner),
     officialProfile: source.officialProfile && typeof source.officialProfile === 'object' ? source.officialProfile : {},
     settings: {
@@ -245,6 +249,7 @@ function addInternetNotification(store, { recipientId, actor, type, post = null 
       actorName,
       type: String(type || ''),
       postContent,
+      postId: post?.id || null,
     });
   }
 }
@@ -283,6 +288,7 @@ function hostedMediaUrl(value) {
 
 function publicPost(post, maskedAuthors) {
   const next = { ...post };
+  delete next.discordFeedMessageId;
   // Reels always use the same-origin media proxy. Direct blob URLs flake in the
   // vertical player (CORS/range/codec), which made newly uploaded Reels look broken.
   if (next.kind === 'reel') {
@@ -294,6 +300,41 @@ function publicPost(post, maskedAuthors) {
   }
   if (maskedAuthors?.has(next.authorId)) next.avatarUrl = null;
   return next;
+}
+
+/** Persist Discord #internet-feed message id for later edit/delete sync. */
+export function setInternetPostDiscordFeedMessage(store, postId, messageId) {
+  const id = String(postId || '');
+  const mid = String(messageId || '').trim();
+  if (!id || !/^\d{16,22}$/.test(mid)) return false;
+  store.discordFeedMessages = store.discordFeedMessages && typeof store.discordFeedMessages === 'object'
+    ? store.discordFeedMessages
+    : {};
+  store.discordFeedMessages[id] = mid;
+  const post = store.posts.find((item) => item.id === id);
+  if (post) post.discordFeedMessageId = mid;
+  return true;
+}
+
+export function resolveInternetPostDiscordFeedMessage(store, post) {
+  if (!post) return '';
+  const fromPost = String(post.discordFeedMessageId || '').trim();
+  if (/^\d{16,22}$/.test(fromPost)) return fromPost;
+  const fromMap = String(store?.discordFeedMessages?.[post.id] || '').trim();
+  return /^\d{16,22}$/.test(fromMap) ? fromMap : '';
+}
+
+/** Build a small ref for Discord feed sync before a post is removed from the store. */
+export function internetFeedDiscordRef(store, post) {
+  if (!post?.id || post.parentId) return null;
+  const discordFeedMessageId = resolveInternetPostDiscordFeedMessage(store, post);
+  if (!discordFeedMessageId) return null;
+  return {
+    id: post.id,
+    discordFeedMessageId,
+    username: post.username,
+    displayName: post.displayName,
+  };
 }
 
 export function publicInternetSettings(store) {
@@ -1653,6 +1694,7 @@ function snapshotDeletedPost(post) {
     videoUrl: post.videoUrl || undefined,
     location: post.location || undefined,
     poll: post.poll || undefined,
+    discordFeedMessageId: post.discordFeedMessageId || undefined,
     createdAt: post.createdAt,
     editedAt: post.editedAt || undefined,
   };

@@ -8,9 +8,9 @@ import { dropLocationNameCandidates, findPlayerDropLocation } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
 import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
-import { AutomodHoldError, adjustInternetCredits, applyStaffSiteAction, applyStaffUserAction, assertLimitedStaffBanQuota, banKnownInternetIps, claimInternetDailyCredits, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetPreferences, internetProfile, listInternetAdsForUser, moderationSnapshot, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, readInternetStore, recordInternetIpHash, recordLimitedStaffBan, respondCreditTransfer, reviewInternetAd, reviewInternetReport, revertInternetHistory, saveInternetStore, sendInternetMessage, serveInternetAds, setDiscordInternetNotify, setInternetAccountActive, setInternetBan, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, AD_BASE_COST, AD_BOOST_COST, AD_MAX_BOOST } from './internetStore.js';
+import { AutomodHoldError, adjustInternetCredits, applyStaffSiteAction, applyStaffUserAction, assertLimitedStaffBanQuota, banKnownInternetIps, claimInternetDailyCredits, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listInternetAdsForUser, moderationSnapshot, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, readInternetStore, recordInternetIpHash, recordLimitedStaffBan, respondCreditTransfer, reviewInternetAd, reviewInternetReport, revertInternetHistory, saveInternetStore, sendInternetMessage, serveInternetAds, setDiscordInternetNotify, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, AD_BASE_COST, AD_BOOST_COST, AD_MAX_BOOST } from './internetStore.js';
 import { createDiscordInternetNotifier } from './discordInternetNotify.js';
-import { createInternetFeedAnnouncer, shouldAnnounceInteractResult } from './discordInternetFeed.js';
+import { createInternetFeedController, shouldAnnounceInteractResult } from './discordInternetFeed.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -86,7 +86,48 @@ async function discordDropUsernames(client, actor) {
 export function startStatusServer(client, config) {
   let lastInternetRoleSync = 0;
   setDiscordInternetNotify(createDiscordInternetNotifier(client, { websiteUrl: config.websiteUrl }));
-  const announceInternetFeedPost = createInternetFeedAnnouncer(client, config);
+  const internetFeed = createInternetFeedController(client, config);
+
+  const persistInternetFeedMessageId = (postId, messageId) => {
+    if (!postId || !messageId) return;
+    void (async () => {
+      try {
+        const store = await readInternetStore();
+        if (setInternetPostDiscordFeedMessage(store, postId, messageId)) {
+          await saveInternetStore(store);
+        }
+      } catch (error) {
+        logger.error('Could not persist Discord internet feed message id', error);
+      }
+    })();
+  };
+
+  const syncAnnounceInternetFeed = (post) => {
+    void (async () => {
+      try {
+        const messageId = await internetFeed.announce(post);
+        persistInternetFeedMessageId(post?.id, messageId);
+      } catch (error) {
+        logger.error('Internet feed announce failed', error);
+      }
+    })();
+  };
+
+  const syncUpdateInternetFeed = (post) => {
+    if (!post) return;
+    void internetFeed.update(post).catch((error) => {
+      logger.error('Internet feed update failed', error);
+    });
+  };
+
+  const syncDeletedInternetFeed = (refs) => {
+    const list = (Array.isArray(refs) ? refs : [refs]).filter(Boolean);
+    for (const ref of list) {
+      void internetFeed.markDeleted(ref).catch((error) => {
+        logger.error('Internet feed delete sync failed', error);
+      });
+    }
+  };
 
   const resolveLiveStaffPanel = async (actor, proxyPanel = null) => {
     const discordId = String(actor?.id || '');
@@ -374,7 +415,7 @@ export function startStatusServer(client, config) {
             : upsertInternetUser(store, body.actor);
           const post = createInternetPost(store, user, body.content, { gif: body.gif, image: body.image, poll: body.poll, video: body.video, reel: body.reel === true, location: body.location, quoteId: body.quoteId });
           await saveInternetStore(store);
-          void announceInternetFeedPost(post);
+          syncAnnounceInternetFeed(post);
           return json(response, 201, { post });
         }
 
@@ -440,10 +481,24 @@ export function startStatusServer(client, config) {
         }
 
         if (body.action === 'edit' || body.action === 'delete') {
+          const feedDeleteRef = body.action === 'delete'
+            ? internetFeedDiscordRef(store, store.posts.find((item) => item.id === String(body.postId || '')))
+            : null;
           const result = body.action === 'edit'
             ? editInternetPost(store, { postId: body.postId, actorId: body.actor?.id, content: body.content, owner: body.owner === true })
             : deleteInternetPost(store, { postId: body.postId, actorId: body.actor?.id, owner: body.owner === true });
           await saveInternetStore(store);
+          if (body.action === 'edit') {
+            const feedPost = {
+              ...result,
+              discordFeedMessageId: result?.discordFeedMessageId
+                || store.discordFeedMessages?.[result?.id]
+                || '',
+            };
+            syncUpdateInternetFeed(feedPost);
+          } else {
+            syncDeletedInternetFeed(feedDeleteRef || internetFeedDiscordRef(store, result) || result);
+          }
           return json(response, 200, { post: result });
         }
 
@@ -491,7 +546,7 @@ export function startStatusServer(client, config) {
         if (body.action === 'post-interaction') {
           const result = interactInternetPost(store, body);
           await saveInternetStore(store);
-          if (shouldAnnounceInteractResult(body, result)) void announceInternetFeedPost(result.post);
+          if (shouldAnnounceInteractResult(body, result)) syncAnnounceInternetFeed(result.post);
           return json(response, 200, result);
         }
 
@@ -538,8 +593,14 @@ export function startStatusServer(client, config) {
         }
 
         if (body.action === 'account-delete') {
+          const actorId = String(body.actor?.id || '');
+          const feedDeletes = store.posts
+            .filter((post) => post.authorId === actorId)
+            .map((post) => internetFeedDiscordRef(store, post))
+            .filter(Boolean);
           const result = deleteInternetAccount(store, body);
           await saveInternetStore(store);
+          syncDeletedInternetFeed(feedDeletes);
           return json(response, 200, result);
         }
 
@@ -557,6 +618,9 @@ export function startStatusServer(client, config) {
           if (panelAccess === 'limited' && modAction === 'ban' && body.decision !== 'deny') {
             assertLimitedStaffBanQuota(store, reviewerId);
           }
+          const feedDeleteRef = body.decision !== 'deny' && modAction === 'delete'
+            ? internetFeedDiscordRef(store, store.posts.find((item) => item.id === String(body.postId || '')))
+            : null;
           const report = reviewInternetReport(store, {
             ...body,
             action: body.moderationAction || body.action,
@@ -567,7 +631,10 @@ export function startStatusServer(client, config) {
           await saveInternetStore(store);
           if (report?.released && report.postId) {
             const published = store.posts.find((item) => item.id === report.postId);
-            if (published) void announceInternetFeedPost(published);
+            if (published) syncAnnounceInternetFeed(published);
+          }
+          if (feedDeleteRef || (report?.action === 'delete' && report?.deletedSnapshot)) {
+            syncDeletedInternetFeed(feedDeleteRef || internetFeedDiscordRef(store, report.deletedSnapshot));
           }
           return json(response, 200, { report });
         }
@@ -606,11 +673,29 @@ export function startStatusServer(client, config) {
             assertLimitedStaffBanQuota(store, staffActorId);
           }
           if (body.staffPanel === 'limited') body.ipBan = false;
+          const targetId = String(body.targetId || '');
+          let feedDeletes = [];
+          if (staffAction === 'delete-post') {
+            const existing = store.posts.find((post) => post.id === String(body.postId || ''));
+            const ref = internetFeedDiscordRef(store, existing);
+            if (ref) feedDeletes = [ref];
+          } else if (staffAction === 'wipe-posts') {
+            feedDeletes = store.posts
+              .filter((post) => post.authorId === targetId && post.kind !== 'reel' && !post.parentId)
+              .map((post) => internetFeedDiscordRef(store, post))
+              .filter(Boolean);
+          } else if (staffAction === 'wipe-reels') {
+            feedDeletes = store.posts
+              .filter((post) => post.authorId === targetId && post.kind === 'reel' && !post.parentId)
+              .map((post) => internetFeedDiscordRef(store, post))
+              .filter(Boolean);
+          }
           const detail = applyStaffUserAction(store, body);
           if (body.staffPanel === 'limited' && staffAction === 'ban') {
             recordLimitedStaffBan(store, staffActorId);
           }
           await saveInternetStore(store);
+          syncDeletedInternetFeed(feedDeletes);
           return json(response, 200, { ...detail, snapshot: moderationSnapshot(store) });
         }
 
