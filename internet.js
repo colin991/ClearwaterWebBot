@@ -6607,7 +6607,7 @@ async function handlePostEngagement(type, postId, control = null) {
     refreshVisiblePosts();
     try {
       const collectionId = enabled
-        && activeView === 'bookmarks'
+        && feed?.dataset.activeView === 'bookmarks'
         && activeBookmarkCollectionId
         && (socialState.bookmarkCollections || []).some((item) => item.id === activeBookmarkCollectionId)
         ? activeBookmarkCollectionId
