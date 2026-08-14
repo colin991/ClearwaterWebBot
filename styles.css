@@ -626,6 +626,9 @@ body.home-stage {
     0
     max(14px, env(safe-area-inset-left, 0px));
 }
+.stage-chrome-center {
+  justify-content: center;
+}
 .stage-chrome-bar::before {
   content: '';
   position: absolute;
@@ -643,17 +646,18 @@ body.home-stage {
 .stage-nav {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 2px;
   min-width: 0;
-  padding: 4px;
+  padding: 5px;
   border: 1px solid rgba(170, 198, 240, .16);
   border-radius: 999px;
-  background: rgba(5, 10, 18, .48);
+  background: rgba(5, 10, 18, .52);
   backdrop-filter: blur(14px) saturate(130%);
   box-shadow: 0 12px 28px rgba(0, 0, 0, .22);
 }
 .stage-nav-link {
-  padding: 8px 14px;
+  padding: 9px 16px;
   border-radius: 999px;
   color: rgba(186, 202, 224, .82);
   font-size: 13px;
@@ -849,11 +853,9 @@ body.home-stage {
   .stage-chrome .discord-name,
   .stage-chrome .discord-rank { max-width: 88px; }
   .stage-chrome-bar {
-    flex-wrap: wrap;
-    gap: 10px;
+    justify-content: center;
   }
-  .stage-nav-link { padding: 7px 11px; font-size: 12px; }
-  .stage-chrome-actions .stage-link:not(.stage-link-strong) { display: none; }
+  .stage-nav-link { padding: 8px 12px; font-size: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
