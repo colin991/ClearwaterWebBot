@@ -53,4 +53,4 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-await client.login(config.token); //dhgfsdfasf
+await client.login(config.token); //dhgfsdfas
