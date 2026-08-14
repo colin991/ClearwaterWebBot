@@ -1262,38 +1262,37 @@ function burstReelHeart(card) {
 }
 
 function toggleReelPlayback(card) {
-  const video = card?.querySelector('video');
-  const audio = card?.querySelector('audio[data-reel-track]');
-  const media = video || audio;
-  if (!media && !card?.querySelector('[data-reel-slideshow]')) return;
-  unlockReelAudio();
-  if (media) {
-    if (media.paused) {
-      flashReelGlyph(card, false);
-      applyReelVolume(media);
-      void media.play().then(() => {
-        applyReelVolume(media);
-      }).catch(() => {
+  if (!card) return;
+  // Photo slideshows: tap advances to the next image instead of pausing.
+  if (card.querySelector('[data-reel-slideshow="1"]')) {
+    unlockReelAudio();
+    const audio = card.querySelector('audio[data-reel-track]');
+    if (audio && audio.paused) {
+      applyReelVolume(audio);
+      void audio.play().then(() => applyReelVolume(audio)).catch(() => {
         setReelSound(false);
-        void media.play().catch(() => {});
+        void audio.play().catch(() => {});
       });
-      if (!video) startReelSlideshow(card);
-      return;
     }
-    media.pause();
-    if (!video) stopReelSlideshow(card);
-    flashReelGlyph(card, true);
+    advanceReelSlideshow(card);
     return;
   }
-  const root = card.querySelector('[data-reel-slideshow="1"]');
-  if (!root) return;
-  if (reelSlideTimers.has(card.dataset.reelId || '')) {
-    stopReelSlideshow(card);
-    flashReelGlyph(card, true);
-  } else {
-    startReelSlideshow(card);
+  const video = card.querySelector('video');
+  if (!video) return;
+  unlockReelAudio();
+  if (video.paused) {
     flashReelGlyph(card, false);
+    applyReelVolume(video);
+    void video.play().then(() => {
+      applyReelVolume(video);
+    }).catch(() => {
+      setReelSound(false);
+      void video.play().catch(() => {});
+    });
+    return;
   }
+  video.pause();
+  flashReelGlyph(card, true);
 }
 
 function likeReelFromTap(card) {
