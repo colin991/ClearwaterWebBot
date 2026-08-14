@@ -14,7 +14,7 @@
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <link rel="apple-touch-icon" href="assets/clearwater-logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260814-hide-profile-rank" />
+    <link rel="stylesheet" href="internet.css?v=20260814-settings-completed" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260813-coming-soon"></script>
   </head>
@@ -512,8 +512,8 @@
                   </div>
                 </section>
                 <section class="settings-card" data-verify-card>
-                  <h2>Apply to be verified</h2>
-                  <p class="settings-hint">Verified accounts get a checkmark. Staff reviews every request.</p>
+                  <h2 data-verify-title>Apply to be verified</h2>
+                  <p class="settings-hint" data-verify-hint>Verified accounts get a checkmark. Staff reviews every request.</p>
                   <p class="settings-status" data-verify-status role="status"></p>
                   <form class="settings-stack-form" data-verify-form>
                     <label class="settings-field"><span>Why do you want verification?</span><textarea data-verify-reason maxlength="500" rows="4" placeholder="Tell staff about your Clearwater RP presence, department role, or community work." required></textarea></label>
@@ -523,8 +523,9 @@
                   </form>
                 </section>
                 <section class="settings-card" data-business-card>
-                  <h2>Business accounts</h2>
-                  <p class="settings-hint">Create a linked business or department account. Staff must approve it before it can run ads. Only the handler can advertise, using the handler’s wallet credits.</p>
+                  <h2 data-business-title>Business accounts</h2>
+                  <p class="settings-hint" data-business-hint>Create a linked business or department account. Staff must approve it before it can run ads. Only the handler can advertise, using the handler’s wallet credits.</p>
+                  <p class="settings-status" data-business-complete-status role="status" hidden></p>
                   <form class="settings-stack-form" data-business-form>
                     <div class="settings-grid">
                       <label class="settings-field"><span>Name</span><input data-business-name maxlength="80" placeholder="Clearwater Fire Rescue" required /></label>

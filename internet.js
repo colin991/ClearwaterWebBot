@@ -4749,17 +4749,23 @@ function renderVerificationPane() {
   const form = document.querySelector('[data-verify-form]');
   const status = document.querySelector('[data-verify-status]');
   const submit = document.querySelector('[data-verify-submit]');
+  const title = document.querySelector('[data-verify-title]');
+  const hint = document.querySelector('[data-verify-hint]');
   if (!form || !status) return;
   const member = internetUsers.get(currentUserId);
-  const verified = accountVerified || member?.verified === true;
+  const verified = accountVerified || member?.verified === true || myVerificationApp?.status === 'approved';
   if (verified) {
     form.hidden = true;
+    if (hint) hint.hidden = true;
+    if (title) title.textContent = 'Verification';
     status.dataset.tone = 'ok';
-    status.textContent = 'Your account is verified.';
+    status.textContent = 'Completed';
     if (submit) submit.disabled = true;
     return;
   }
   form.hidden = false;
+  if (hint) hint.hidden = false;
+  if (title) title.textContent = 'Apply to be verified';
   if (submit) submit.disabled = false;
   if (myVerificationApp?.status === 'pending') {
     form.hidden = true;
@@ -4770,10 +4776,6 @@ function renderVerificationPane() {
     status.textContent = myVerificationApp.reviewNote
       ? `Last request was denied: ${myVerificationApp.reviewNote}`
       : 'Last request was denied. You can apply again after a short wait.';
-  } else if (myVerificationApp?.status === 'approved') {
-    status.dataset.tone = 'ok';
-    status.textContent = 'Your verification was approved.';
-    form.hidden = true;
   } else {
     status.dataset.tone = '';
     status.textContent = 'Share why your Clearwater presence should be verified.';
@@ -4793,11 +4795,35 @@ function businessStatusLabel(status) {
   return status || 'Unknown';
 }
 
+function hasCompletedBusinessAccount() {
+  return (Array.isArray(myBusinessAccounts) ? myBusinessAccounts : []).some((biz) => (
+    biz.status === 'active' && (biz.isHandler === true || biz.role === 'handler')
+  ));
+}
+
 function renderBusinessAccountsPane() {
   const list = document.querySelector('[data-business-list]');
+  const form = document.querySelector('[data-business-form]');
+  const hint = document.querySelector('[data-business-hint]');
+  const title = document.querySelector('[data-business-title]');
+  const completeStatus = document.querySelector('[data-business-complete-status]');
+  const completed = hasCompletedBusinessAccount();
+  if (title) title.textContent = 'Business accounts';
+  if (form) form.hidden = completed;
+  if (hint) hint.hidden = completed;
+  if (completeStatus) {
+    completeStatus.hidden = !completed;
+    if (completed) {
+      completeStatus.dataset.tone = 'ok';
+      completeStatus.textContent = 'Completed';
+    } else {
+      completeStatus.textContent = '';
+      completeStatus.dataset.tone = '';
+    }
+  }
   if (!list) return;
   if (!myBusinessAccounts.length) {
-    list.innerHTML = '<p class="settings-hint">No business accounts yet.</p>';
+    list.innerHTML = completed ? '' : '<p class="settings-hint">No business accounts yet.</p>';
     return;
   }
   list.innerHTML = myBusinessAccounts.map((biz) => {
