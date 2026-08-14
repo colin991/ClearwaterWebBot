@@ -1112,21 +1112,32 @@ function stopReelSlideshow(card) {
   reelSlideTimers.delete(reelId);
 }
 
+function advanceReelSlideshow(card, { restart = true } = {}) {
+  if (!card) return false;
+  const root = card.querySelector('[data-reel-slideshow="1"]');
+  if (!root) return false;
+  const slides = [...root.querySelectorAll('img[data-slide-index]')];
+  const dots = [...root.querySelectorAll('[data-reel-slide-dot]')];
+  if (slides.length < 2) return false;
+  let index = Math.max(0, slides.findIndex((slide) => slide.classList.contains('is-active')));
+  slides[index]?.classList.remove('is-active');
+  dots[index]?.classList.remove('is-active');
+  index = (index + 1) % slides.length;
+  slides[index]?.classList.add('is-active');
+  dots[index]?.classList.add('is-active');
+  if (restart) startReelSlideshow(card);
+  return true;
+}
+
 function startReelSlideshow(card) {
   if (!card) return;
   stopReelSlideshow(card);
   const root = card.querySelector('[data-reel-slideshow="1"]');
   if (!root) return;
   const slides = [...root.querySelectorAll('img[data-slide-index]')];
-  const dots = [...root.querySelectorAll('[data-reel-slide-dot]')];
   if (slides.length < 2) return;
-  let index = Math.max(0, slides.findIndex((slide) => slide.classList.contains('is-active')));
   const timer = window.setInterval(() => {
-    slides[index]?.classList.remove('is-active');
-    dots[index]?.classList.remove('is-active');
-    index = (index + 1) % slides.length;
-    slides[index]?.classList.add('is-active');
-    dots[index]?.classList.add('is-active');
+    advanceReelSlideshow(card, { restart: false });
   }, REEL_SLIDE_MS);
   if (card.dataset.reelId) reelSlideTimers.set(card.dataset.reelId, timer);
 }
