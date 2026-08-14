@@ -224,6 +224,25 @@ function buildErlcModCommand(action, player, reason) {
   return null;
 }
 
+/** Run a single raw in-game command (must start with ':'). */
+export async function runErlcRawCommand({ serverKey, command } = {}) {
+  if (!serverKey) throw new Error('ER:LC is not configured on the bot host yet.');
+  let text = String(command || '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!text) throw new Error('Enter a command to run in-game');
+  if (!text.startsWith(':')) text = `:${text}`;
+  if (text.length > 200) throw new Error('Command is too long');
+  if (!/^:[A-Za-z]/.test(text)) throw new Error('Command must look like :h Hello or :kick Player');
+
+  const response = await executeErlcCommand(serverKey, text);
+  return {
+    action: 'command',
+    ok: true,
+    command: text,
+    message: response.message || 'Success',
+    commandId: response.commandId || null,
+  };
+}
+
 /**
  * Run kick / jail / unjail / ban against one or more in-game players.
  * Commands are sent sequentially to stay within ER:LC rate limits.

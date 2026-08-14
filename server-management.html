@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@450;550;650;750;850&display=swap" rel="stylesheet" />
     <script>document.documentElement.classList.add('js');</script>
-    <link rel="stylesheet" href="styles.css?v=20260814-roblox-avatars" />
+    <link rel="stylesheet" href="styles.css?v=20260814-run-command" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260813-coming-soon"></script>
   </head>
@@ -76,6 +76,27 @@
           </div>
         </div>
 
+        <form class="server-mgmt-command" data-mgmt-command-form>
+          <div class="server-mgmt-command-copy">
+            <h2>Run in-game command</h2>
+            <p>Sends a server command through ER:LC (example: <code>:h Hello Clearwater</code>).</p>
+          </div>
+          <div class="server-mgmt-command-row">
+            <label class="server-mgmt-command-field">
+              <span>Command</span>
+              <input type="text" maxlength="200" spellcheck="false" autocomplete="off" placeholder=":h Hello Clearwater" data-mgmt-command />
+            </label>
+            <button type="submit" class="button button-primary" data-mgmt-command-run>Send</button>
+          </div>
+          <div class="server-mgmt-command-presets" aria-label="Command shortcuts">
+            <button type="button" class="server-mgmt-preset" data-mgmt-preset=":h ">Announce (:h)</button>
+            <button type="button" class="server-mgmt-preset" data-mgmt-preset=":m ">Message all (:m)</button>
+            <button type="button" class="server-mgmt-preset" data-mgmt-preset=":hint ">Hint (:hint)</button>
+            <button type="button" class="server-mgmt-preset" data-mgmt-preset=":reload">Reload (:reload)</button>
+          </div>
+          <p class="server-mgmt-command-status" data-mgmt-command-status hidden></p>
+        </form>
+
         <div class="server-mgmt-layout">
           <figure class="server-map" data-server-map aria-label="Liberty County player map">
             <div class="server-map-view" data-server-map-view>
@@ -96,7 +117,7 @@
       </section>
     </main>
 
-    <script src="script.js?v=20260814-roblox-avatars"></script>
-    <script src="server-management.js?v=20260814-roblox-avatars"></script>
+    <script src="script.js?v=20260814-run-command"></script>
+    <script src="server-management.js?v=20260814-run-command"></script>
   </body>
 </html>

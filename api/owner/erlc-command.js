@@ -43,6 +43,7 @@ export default async function handler(request, response) {
       body: JSON.stringify({
         action: body.action,
         reason: body.reason,
+        command: body.command,
         players: Array.isArray(body.players) ? body.players : [],
         actorDiscordId: session.id || session.userId || '',
         actorTag: session.username || session.globalName || '',

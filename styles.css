@@ -1161,6 +1161,93 @@ body.server-mgmt-page {
 .button-ghost:hover:not(:disabled) {
   background: rgba(255, 255, 255, .04);
 }
+.server-mgmt-command {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(170, 198, 240, .16);
+  border-radius: 16px;
+  background: rgba(8, 14, 24, .72);
+}
+.server-mgmt-command-copy h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 780;
+}
+.server-mgmt-command-copy p {
+  margin: 4px 0 0;
+  color: rgba(186, 202, 224, .82);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.server-mgmt-command-copy code {
+  color: #d7e8ff;
+  font-size: 12px;
+}
+.server-mgmt-command-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+}
+.server-mgmt-command-field {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.server-mgmt-command-field span {
+  color: rgba(158, 182, 216, .9);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.server-mgmt-command-field input {
+  width: 100%;
+  border: 1px solid rgba(170, 198, 240, .18);
+  border-radius: 10px;
+  background: rgba(3, 8, 16, .85);
+  color: #f3f7ff;
+  padding: 10px 12px;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.server-mgmt-command-field input:focus {
+  outline: 2px solid rgba(125, 211, 252, .4);
+  outline-offset: 1px;
+}
+.server-mgmt-command-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.server-mgmt-preset {
+  border: 1px solid rgba(170, 198, 240, .18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .03);
+  color: #c7d7ee;
+  padding: 6px 11px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.server-mgmt-preset:hover {
+  border-color: rgba(160, 195, 255, .4);
+  background: rgba(255, 255, 255, .06);
+  color: #fff;
+}
+.server-mgmt-command-status {
+  margin: 0;
+  color: #9ed0ff;
+  font-size: 13px;
+  font-weight: 650;
+}
+.server-mgmt-command-status.is-error { color: #ffd0d0; }
+.server-mgmt-command-status[hidden] { display: none !important; }
 .server-mgmt-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(260px, .7fr);

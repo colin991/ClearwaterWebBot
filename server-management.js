@@ -15,6 +15,11 @@ const selectionEl = document.querySelector('[data-mgmt-selection]');
 const reasonInput = document.querySelector('[data-mgmt-reason]');
 const clearBtn = document.querySelector('[data-mgmt-clear]');
 const actionButtons = [...document.querySelectorAll('[data-mgmt-action]')];
+const commandForm = document.querySelector('[data-mgmt-command-form]');
+const commandInput = document.querySelector('[data-mgmt-command]');
+const commandRunBtn = document.querySelector('[data-mgmt-command-run]');
+const commandStatus = document.querySelector('[data-mgmt-command-status]');
+const commandPresets = [...document.querySelectorAll('[data-mgmt-preset]')];
 
 const TEAM_TONES = [
   ['sheriff', '#8b7355'],
@@ -444,6 +449,70 @@ actionButtons.forEach((button) => {
   button.addEventListener('click', () => {
     void runAction(button.dataset.mgmtAction);
   });
+});
+
+function setCommandStatus(message, isError = false) {
+  if (!commandStatus) return;
+  commandStatus.hidden = !message;
+  commandStatus.textContent = message || '';
+  commandStatus.classList.toggle('is-error', isError);
+}
+
+commandPresets.forEach((button) => {
+  button.addEventListener('click', () => {
+    if (!commandInput || busy) return;
+    const preset = button.dataset.mgmtPreset || '';
+    commandInput.value = preset;
+    commandInput.focus();
+    const end = commandInput.value.length;
+    commandInput.setSelectionRange(end, end);
+  });
+});
+
+commandForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (busy) return;
+  let command = commandInput?.value?.trim() || '';
+  if (!command) {
+    setCommandStatus('Enter a command to send in-game.', true);
+    commandInput?.focus();
+    return;
+  }
+  if (!command.startsWith(':')) command = `:${command}`;
+
+  busy = true;
+  updateSelectionUi();
+  updateCountdown();
+  if (commandRunBtn) commandRunBtn.disabled = true;
+  if (refreshBtn) refreshBtn.disabled = true;
+  setCommandStatus(`Sending ${command}…`);
+  setNotice(`Sending in-game command ${command}…`);
+
+  try {
+    const response = await fetch('/api/owner/erlc-command', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'command', command }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Could not send the in-game command');
+    const sent = result.command || command;
+    setCommandStatus(`Sent ${sent}${result.message ? ` · ${result.message}` : ''}`);
+    setNotice(`In-game command sent: ${sent}`);
+    if (commandInput) commandInput.value = '';
+  } catch (error) {
+    const message = error.message || 'Could not send the in-game command.';
+    setCommandStatus(message, true);
+    setNotice(message, true);
+  } finally {
+    busy = false;
+    updateSelectionUi();
+    if (commandRunBtn) commandRunBtn.disabled = false;
+    if (refreshBtn) refreshBtn.disabled = false;
+    schedulePoll();
+    updateCountdown();
+  }
 });
 
 (async () => {
