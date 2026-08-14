@@ -95,7 +95,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260814-bookmark-fix';
+const INTERNET_VERSION = '20260814-settings-ui';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -506,13 +506,6 @@ const joinedLabel = (value) => {
 };
 const profileMetaMarkup = (user = {}) => {
   const items = [];
-  if (user.pronouns) items.push(`<span><span aria-hidden="true">◈</span> ${escapeHtml(user.pronouns)}</span>`);
-  if (user.location) items.push(`<span><span aria-hidden="true">⌖</span> ${escapeHtml(user.location)}</span>`);
-  const link = safeLinkUrl(user.website);
-  if (link) {
-    const label = link.replace(/^https:\/\//i, '').replace(/\/$/, '');
-    items.push(`<a href="${escapeHtml(link)}" target="_blank" rel="noopener nofollow ugc"><span aria-hidden="true">⧉</span> ${escapeHtml(label)}</a>`);
-  }
   const joined = joinedLabel(user.createdAt);
   if (joined) items.push(`<span><span aria-hidden="true">◷</span> Joined ${escapeHtml(joined)}</span>`);
   return items.join('');
@@ -4877,6 +4870,267 @@ async function loadPreferences() {
 }
 
 const ACCENT_SWATCHES = ['#1257a3', '#0f8b8d', '#2f8f5b', '#c9a227', '#d4622e', '#c23b5a', '#7a4fd0', '#5a6b7d'];
+const DEFAULT_ACCENT_HEX = '#1257a3';
+let accentHue = 210;
+let accentSat = 0.79;
+let accentVal = 0.64;
+let openCustomSelect = null;
+
+function clamp01(value) {
+  return Math.min(1, Math.max(0, Number(value) || 0));
+}
+
+function hexToRgbChannels(value) {
+  const hex = safeBannerColor(value).slice(1);
+  if (!hex) return null;
+  const full = hex.length === 3 ? hex.split('').map((part) => part + part).join('') : hex.slice(0, 6);
+  if (full.length !== 6) return null;
+  const channels = [0, 2, 4].map((offset) => parseInt(full.slice(offset, offset + 2), 16));
+  return channels.some((channel) => Number.isNaN(channel)) ? null : channels;
+}
+
+function rgbToHex(r, g, b) {
+  return `#${[r, g, b].map((channel) => Math.round(channel).toString(16).padStart(2, '0')).join('')}`;
+}
+
+function hsvToHex(h, s, v) {
+  const hue = ((Number(h) % 360) + 360) % 360;
+  const sat = clamp01(s);
+  const val = clamp01(v);
+  const c = val * sat;
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = val - c;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (hue < 60) [r, g, b] = [c, x, 0];
+  else if (hue < 120) [r, g, b] = [x, c, 0];
+  else if (hue < 180) [r, g, b] = [0, c, x];
+  else if (hue < 240) [r, g, b] = [0, x, c];
+  else if (hue < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  return rgbToHex((r + m) * 255, (g + m) * 255, (b + m) * 255);
+}
+
+function hexToHsv(value) {
+  const rgb = hexToRgbChannels(value);
+  if (!rgb) return { h: 210, s: 0.79, v: 0.64 };
+  const [r0, g0, b0] = rgb.map((channel) => channel / 255);
+  const max = Math.max(r0, g0, b0);
+  const min = Math.min(r0, g0, b0);
+  const delta = max - min;
+  let h = 0;
+  if (delta) {
+    if (max === r0) h = 60 * (((g0 - b0) / delta) % 6);
+    else if (max === g0) h = 60 * ((b0 - r0) / delta + 2);
+    else h = 60 * ((r0 - g0) / delta + 4);
+  }
+  if (h < 0) h += 360;
+  return { h, s: max === 0 ? 0 : delta / max, v: max };
+}
+
+function closeCustomSelect(wrap = openCustomSelect) {
+  if (!wrap) return;
+  wrap.classList.remove('is-open');
+  const trigger = wrap.querySelector('.cw-select-trigger');
+  const menu = wrap.querySelector('.cw-select-menu');
+  if (trigger) trigger.setAttribute('aria-expanded', 'false');
+  if (menu) menu.hidden = true;
+  if (openCustomSelect === wrap) openCustomSelect = null;
+}
+
+function syncCustomSelect(wrap) {
+  if (!wrap) return;
+  const select = wrap.querySelector('select');
+  const label = wrap.querySelector('.cw-select-label');
+  const menu = wrap.querySelector('.cw-select-menu');
+  if (!select || !label || !menu) return;
+  const options = [...select.options];
+  menu.innerHTML = options.map((option) => {
+    const selected = option.value === select.value;
+    return `<button type="button" role="option" class="cw-select-option${selected ? ' selected' : ''}" data-value="${escapeHtml(option.value)}" ${option.disabled ? 'disabled' : ''} aria-selected="${selected ? 'true' : 'false'}">${escapeHtml(option.textContent)}</button>`;
+  }).join('');
+  const selected = options.find((option) => option.value === select.value) || options[0];
+  label.textContent = selected?.textContent || 'Select';
+  wrap.classList.toggle('is-empty', !String(select.value || '').trim());
+  wrap.classList.toggle('is-disabled', select.disabled);
+  const trigger = wrap.querySelector('.cw-select-trigger');
+  if (trigger) trigger.disabled = select.disabled;
+}
+
+function enhanceSelect(select) {
+  if (!(select instanceof HTMLSelectElement)) return;
+  let wrap = select.closest('[data-cw-select]');
+  if (wrap && wrap.querySelector('select') !== select) wrap = null;
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.className = 'cw-select';
+    wrap.dataset.cwSelect = '';
+    select.parentNode?.insertBefore(wrap, select);
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'cw-select-trigger';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.innerHTML = '<span class="cw-select-label"></span><span class="cw-select-chevron" aria-hidden="true"></span>';
+    const menu = document.createElement('div');
+    menu.className = 'cw-select-menu';
+    menu.hidden = true;
+    menu.setAttribute('role', 'listbox');
+    wrap.appendChild(trigger);
+    wrap.appendChild(menu);
+    wrap.appendChild(select);
+    select.classList.add('cw-select-native');
+    select.tabIndex = -1;
+    select.dataset.cwEnhanced = '1';
+    select.addEventListener('change', () => syncCustomSelect(wrap));
+
+    trigger.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (select.disabled) return;
+      const opening = openCustomSelect !== wrap;
+      closeCustomSelect();
+      if (!opening) return;
+      syncCustomSelect(wrap);
+      wrap.classList.add('is-open');
+      menu.hidden = false;
+      trigger.setAttribute('aria-expanded', 'true');
+      openCustomSelect = wrap;
+    });
+
+    menu.addEventListener('click', (event) => {
+      const option = event.target.closest('[data-value]');
+      if (!option || option.disabled) return;
+      select.value = option.dataset.value || '';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      syncCustomSelect(wrap);
+      closeCustomSelect(wrap);
+      trigger.focus();
+    });
+  }
+  syncCustomSelect(wrap);
+}
+
+function refreshCustomSelect(select) {
+  if (!(select instanceof HTMLSelectElement)) return;
+  enhanceSelect(select);
+}
+
+function refreshCustomSelects(root = document) {
+  root.querySelectorAll?.('select')?.forEach(refreshCustomSelect);
+}
+
+function bindCustomSelectChrome() {
+  document.addEventListener('click', (event) => {
+    if (!openCustomSelect) return;
+    if (openCustomSelect.contains(event.target)) return;
+    closeCustomSelect();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeCustomSelect();
+  });
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      mutation.addedNodes.forEach((node) => {
+        if (!(node instanceof Element)) return;
+        if (node.matches?.('select')) refreshCustomSelect(node);
+        node.querySelectorAll?.('select').forEach(refreshCustomSelect);
+      });
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  refreshCustomSelects();
+}
+
+function currentAccentHex() {
+  return hsvToHex(accentHue, accentSat, accentVal);
+}
+
+function setAccentHsvFromHex(hex, { draft = true, preview = true } = {}) {
+  const hasColour = Boolean(safeBannerColor(hex));
+  const safe = hasColour ? safeBannerColor(hex).toLowerCase() : DEFAULT_ACCENT_HEX;
+  const hsv = hexToHsv(safe);
+  accentHue = hsv.h;
+  accentSat = hsv.s;
+  accentVal = hsv.v;
+  if (draft) {
+    if (!profileDraft) profileDraft = { ...DEFAULT_PROFILE_DRAFT };
+    profileDraft.accentColor = hasColour ? safe : '';
+  }
+  renderAccentPicker();
+  if (preview) renderProfilePreview();
+}
+
+function renderAccentPicker() {
+  const picker = document.querySelector('[data-accent-picker]');
+  if (!picker) return;
+  const hex = profileDraft?.accentColor ? currentAccentHex() : DEFAULT_ACCENT_HEX;
+  const preview = picker.querySelector('[data-accent-preview]');
+  const shade = picker.querySelector('[data-accent-shade]');
+  const shadeThumb = picker.querySelector('[data-accent-shade-thumb]');
+  const hueThumb = picker.querySelector('[data-accent-hue-thumb]');
+  if (preview) preview.style.background = hex;
+  if (shade) shade.style.background = hsvToHex(accentHue, 1, 1);
+  if (shadeThumb) {
+    shadeThumb.style.left = `${accentSat * 100}%`;
+    shadeThumb.style.top = `${(1 - accentVal) * 100}%`;
+  }
+  if (hueThumb) hueThumb.style.left = `${(accentHue / 360) * 100}%`;
+  picker.querySelectorAll('[data-accent-swatch]').forEach((button) => {
+    button.classList.toggle('selected', Boolean(profileDraft?.accentColor) && button.dataset.accentSwatch === profileDraft.accentColor);
+  });
+}
+
+function bindAccentPointer(target, handler) {
+  if (!target) return;
+  const move = (event) => {
+    if (event.cancelable) event.preventDefault();
+    const point = event.touches?.[0] || event;
+    const rect = target.getBoundingClientRect();
+    handler({
+      x: clamp01((point.clientX - rect.left) / Math.max(rect.width, 1)),
+      y: clamp01((point.clientY - rect.top) / Math.max(rect.height, 1)),
+    });
+  };
+  const stop = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', stop);
+    window.removeEventListener('touchmove', move);
+    window.removeEventListener('touchend', stop);
+  };
+  const start = (event) => {
+    if (event.cancelable) event.preventDefault();
+    move(event);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('touchend', stop);
+  };
+  target.addEventListener('pointerdown', start);
+  target.addEventListener('touchstart', start, { passive: false });
+}
+
+function initAccentPicker() {
+  const picker = document.querySelector('[data-accent-picker]');
+  if (!picker || picker.dataset.bound === '1') return;
+  picker.dataset.bound = '1';
+  bindAccentPointer(picker.querySelector('[data-accent-shade]'), ({ x, y }) => {
+    accentSat = x;
+    accentVal = 1 - y;
+    if (!profileDraft) profileDraft = { ...DEFAULT_PROFILE_DRAFT };
+    profileDraft.accentColor = currentAccentHex();
+    renderAccentPicker();
+    renderProfilePreview();
+  });
+  bindAccentPointer(picker.querySelector('[data-accent-hue]'), ({ x }) => {
+    accentHue = x * 360;
+    if (!profileDraft) profileDraft = { ...DEFAULT_PROFILE_DRAFT };
+    profileDraft.accentColor = currentAccentHex();
+    renderAccentPicker();
+    renderProfilePreview();
+  });
+}
+
 const BANNER_PRESETS = [
   'assets/clearwater-police-night.png',
   'assets/clearwater-sunset-beach.png',
@@ -4917,9 +5171,7 @@ function renderProfilePreview() {
   document.querySelectorAll('[data-banner-preset]').forEach((button) => {
     button.classList.toggle('selected', button.dataset.bannerPreset === profileDraft.bannerUrl);
   });
-  document.querySelectorAll('[data-accent-swatch]').forEach((button) => {
-    button.classList.toggle('selected', button.dataset.accentSwatch === profileDraft.accentColor);
-  });
+  renderAccentPicker();
   const counter = document.querySelector('[data-bio-count]');
   if (counter) counter.textContent = `${profileDraft.bio.length} / 300`;
 }
@@ -4949,17 +5201,14 @@ function renderPinnedPostOptions() {
     }),
   ].join('');
   select.value = chosen;
+  refreshCustomSelect(select);
 }
 
 function fillProfileEditor() {
   if (!profileDraft) return;
   const set = (selector, value) => { const field = document.querySelector(selector); if (field) field.value = value; };
   set('[data-profile-bio]', profileDraft.bio);
-  set('[data-profile-pronouns]', profileDraft.pronouns);
-  set('[data-profile-location]', profileDraft.location);
-  set('[data-profile-website]', profileDraft.website);
-  const accent = document.querySelector('[data-accent-input]');
-  if (accent) accent.value = profileDraft.accentColor || '#1257a3';
+  setAccentHsvFromHex(profileDraft.accentColor || '', { draft: false, preview: false });
   renderProfileEditorChoices();
   renderPinnedPostOptions();
   renderProfilePreview();
@@ -5221,6 +5470,7 @@ function renderAdBusinessOptions() {
   select.innerHTML = `<option value="">Select an approved business account</option>${options}`;
   if (current && adBusinessAccounts.some((biz) => biz.id === current)) select.value = current;
   else if (adBusinessAccounts.length === 1) select.value = adBusinessAccounts[0].id;
+  refreshCustomSelect(select);
   syncAdBusinessAutofill();
 }
 
@@ -6138,24 +6388,15 @@ const profileDraftField = (key, selector, transform = (value) => value) => {
   });
 };
 profileDraftField('bio', '[data-profile-bio]');
-profileDraftField('pronouns', '[data-profile-pronouns]');
-profileDraftField('location', '[data-profile-location]');
-profileDraftField('website', '[data-profile-website]');
 document.querySelector('[data-profile-pinned]')?.addEventListener('change', (event) => {
   if (!profileDraft) profileDraft = { ...DEFAULT_PROFILE_DRAFT };
   profileDraft.pinnedPostId = event.target.value || '';
-});
-document.querySelector('[data-accent-input]')?.addEventListener('input', (event) => {
-  if (!profileDraft) profileDraft = { ...DEFAULT_PROFILE_DRAFT };
-  profileDraft.accentColor = String(event.target.value || '').toLowerCase();
-  renderProfilePreview();
+  refreshCustomSelect(event.target);
 });
 document.querySelector('[data-accent-clear]')?.addEventListener('click', () => {
   if (!profileDraft) return;
   profileDraft.accentColor = '';
-  const accent = document.querySelector('[data-accent-input]');
-  if (accent) accent.value = '#1257a3';
-  renderProfilePreview();
+  setAccentHsvFromHex('', { draft: false, preview: true });
 });
 document.querySelector('[data-banner-clear]')?.addEventListener('click', () => {
   if (!profileDraft) return;
@@ -6174,10 +6415,7 @@ document.querySelector('[data-banner-presets]')?.addEventListener('click', (even
 document.querySelector('[data-accent-swatches]')?.addEventListener('click', (event) => {
   const swatch = event.target.closest('[data-accent-swatch]');
   if (!swatch || !profileDraft) return;
-  profileDraft.accentColor = swatch.dataset.accentSwatch || '';
-  const accent = document.querySelector('[data-accent-input]');
-  if (accent && profileDraft.accentColor) accent.value = profileDraft.accentColor;
-  renderProfilePreview();
+  setAccentHsvFromHex(swatch.dataset.accentSwatch || '', { draft: true, preview: true });
 });
 document.querySelector('[data-banner-file]')?.addEventListener('change', async (event) => {
   const input = event.target;
@@ -6228,9 +6466,9 @@ document.querySelector('[data-profile-form]')?.addEventListener('submit', async 
         action: 'profile-save',
         profile: {
           bio: profileDraft.bio || '',
-          pronouns: profileDraft.pronouns || '',
-          location: profileDraft.location || '',
-          website: profileDraft.website || '',
+          pronouns: '',
+          location: '',
+          website: '',
           bannerUrl: profileDraft.bannerUrl || '',
           accentColor: profileDraft.accentColor || '',
           pinnedPostId: profileDraft.pinnedPostId || '',
@@ -6251,9 +6489,9 @@ document.querySelector('[data-profile-form]')?.addEventListener('submit', async 
     if (me) {
       me.bannerUrl = profileDraft.bannerUrl || '';
       me.bio = profileDraft.bio || '';
-      me.pronouns = profileDraft.pronouns || '';
-      me.location = profileDraft.location || '';
-      me.website = profileDraft.website || '';
+      me.pronouns = '';
+      me.location = '';
+      me.website = '';
       me.accentColor = profileDraft.accentColor || '';
       me.pinnedPostId = profileDraft.pinnedPostId || '';
       internetUsers.set(currentUserId, me);
@@ -8044,6 +8282,8 @@ async function bootInternet() {
   }
 }
 
+bindCustomSelectChrome();
+initAccentPicker();
 bootInternet();
 
 let mobileRailScrollY = window.scrollY || 0;

@@ -14,7 +14,7 @@
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <link rel="apple-touch-icon" href="assets/clearwater-logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260814-staff-pin" />
+    <link rel="stylesheet" href="internet.css?v=20260814-settings-ui" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260813-coming-soon"></script>
   </head>
@@ -453,19 +453,26 @@
 
                   <h2>Accent colour</h2>
                   <p class="settings-hint">Tints your banner, links, and highlights on your profile.</p>
-                  <div class="accent-tools">
-                    <input type="color" data-accent-input value="#1257a3" aria-label="Accent colour" />
+                  <div class="accent-picker" data-accent-picker>
+                    <div class="accent-picker-top">
+                      <button type="button" class="accent-preview" data-accent-preview aria-label="Current accent colour"></button>
+                      <div class="accent-picker-controls">
+                        <div class="accent-shade" data-accent-shade aria-label="Accent shade">
+                          <div class="accent-shade-surface" data-accent-shade-surface>
+                            <span class="accent-shade-thumb" data-accent-shade-thumb></span>
+                          </div>
+                        </div>
+                        <div class="accent-hue" data-accent-hue aria-label="Accent hue">
+                          <span class="accent-hue-thumb" data-accent-hue-thumb></span>
+                        </div>
+                      </div>
+                      <button type="button" class="settings-button ghost" data-accent-clear>Reset</button>
+                    </div>
                     <div class="accent-swatches" data-accent-swatches></div>
-                    <button type="button" class="settings-button ghost" data-accent-clear>Reset</button>
                   </div>
 
                   <h2>About you</h2>
                   <label class="settings-field"><span>Bio</span><textarea data-profile-bio maxlength="300" rows="3" placeholder="Tell the community about yourself."></textarea><small class="settings-counter" data-bio-count>0 / 300</small></label>
-                  <div class="settings-grid">
-                    <label class="settings-field"><span>Pronouns</span><input data-profile-pronouns maxlength="40" placeholder="they/them" /></label>
-                    <label class="settings-field"><span>Location</span><input data-profile-location maxlength="60" placeholder="Clearwater, LC" /></label>
-                  </div>
-                  <label class="settings-field"><span>Website</span><input data-profile-website maxlength="200" placeholder="https://example.com" /></label>
                   <label class="settings-field"><span>Pinned post</span><select data-profile-pinned><option value="">No pinned post</option></select></label>
 
                   <div class="settings-actions">
@@ -766,6 +773,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260814-staff-pin"></script>
+    <script src="internet.js?v=20260814-settings-ui"></script>
   </body>
 </html>

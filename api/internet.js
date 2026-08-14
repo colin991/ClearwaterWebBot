@@ -13,7 +13,7 @@ import {
 } from '../lib/staff-pin.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260814-staff-pin';
+const INTERNET_VERSION = '20260814-settings-ui';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
