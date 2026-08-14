@@ -6014,11 +6014,15 @@ function revokeReelPreviewUrls(media) {
   if (Array.isArray(media.previewUrls)) media.previewUrls.forEach((url) => URL.revokeObjectURL(url));
 }
 
+function reelHasPhotos() {
+  return Boolean(reelMedia && !reelMedia.isVideo && Array.isArray(reelMedia.files) && reelMedia.files.length);
+}
+
 function syncReelAudioComposerUi() {
   const wrap = document.querySelector('[data-reel-audio-wrap]');
   const preview = document.querySelector('[data-reel-audio-preview]');
   const label = document.querySelector('[data-reel-audio-label]');
-  const showAudio = Boolean(reelMedia && !reelMedia.isVideo);
+  const showAudio = reelHasPhotos();
   if (wrap) wrap.hidden = !showAudio;
   if (!showAudio) {
     if (reelAudio?.previewUrl) URL.revokeObjectURL(reelAudio.previewUrl);
@@ -6038,29 +6042,57 @@ function syncReelAudioComposerUi() {
   }
 }
 
+function syncReelMediaPickLabels() {
+  const photosLabel = document.querySelector('[data-reel-photos-label]');
+  const videoLabel = document.querySelector('[data-reel-video-label]');
+  const videoWrap = videoLabel?.closest('label');
+  if (!reelMedia) {
+    if (photosLabel) photosLabel.textContent = 'Add photos for a slideshow';
+    if (videoLabel) videoLabel.textContent = 'Or add one video (up to 2 GB)';
+    if (videoWrap) videoWrap.hidden = false;
+    return;
+  }
+  if (reelMedia.isVideo) {
+    if (photosLabel) photosLabel.textContent = 'Switch to a photo slideshow';
+    if (videoLabel) videoLabel.textContent = 'Replace video';
+    if (videoWrap) videoWrap.hidden = false;
+    return;
+  }
+  const count = reelMedia.files?.length || 0;
+  if (photosLabel) {
+    photosLabel.textContent = count >= MAX_REEL_SLIDES
+      ? `Slideshow full (${MAX_REEL_SLIDES} photos)`
+      : `Add more photos (${count}/${MAX_REEL_SLIDES})`;
+  }
+  if (videoLabel) videoLabel.textContent = 'Switch to a video instead';
+  if (videoWrap) videoWrap.hidden = false;
+}
+
 function renderReelComposerPreview() {
   const preview = document.querySelector('[data-reel-preview]');
-  const label = document.querySelector('[data-reel-file-label]');
   const submit = document.querySelector('[data-reel-submit]');
   if (!preview) return;
   if (!reelMedia) {
     preview.hidden = true;
     preview.innerHTML = '';
-    if (label) label.textContent = 'Tap to add photos for a slideshow, or one video (up to 2 GB)';
     if (submit) submit.disabled = true;
+    syncReelMediaPickLabels();
     syncReelAudioComposerUi();
     return;
   }
   preview.hidden = false;
   if (reelMedia.isVideo) {
     preview.innerHTML = `<video src="${escapeHtml(reelMedia.previewUrl)}" muted loop playsinline controls></video>`;
-    if (label) label.textContent = 'Replace video';
   } else {
-    const urls = Array.isArray(reelMedia.previewUrls) ? reelMedia.previewUrls : [reelMedia.previewUrl];
-    preview.innerHTML = `<div class="reel-preview-grid">${urls.map((url) => `<img src="${escapeHtml(url)}" alt="" />`).join('')}</div>`;
-    if (label) label.textContent = urls.length > 1 ? `Replace slideshow (${urls.length} photos)` : 'Replace photo';
+    const urls = Array.isArray(reelMedia.previewUrls) ? reelMedia.previewUrls : [];
+    preview.innerHTML = `<div class="reel-preview-grid">${urls.map((url, index) => `
+      <figure>
+        <img src="${escapeHtml(url)}" alt="" />
+        <button type="button" data-remove-reel-slide="${index}" aria-label="Remove photo ${index + 1}">×</button>
+      </figure>`).join('')}</div>`;
   }
   if (submit) submit.disabled = false;
+  syncReelMediaPickLabels();
   syncReelAudioComposerUi();
 }
 
@@ -6071,9 +6103,113 @@ function resetReelComposer() {
   reelAudio = null;
   const caption = document.querySelector('[data-reel-caption]');
   const error = document.querySelector('[data-reel-error]');
+  const photosInput = document.querySelector('[data-reel-photos]');
+  const videoInput = document.querySelector('[data-reel-video]');
+  const audioInput = document.querySelector('[data-reel-audio]');
   if (caption) caption.value = '';
   if (error) error.textContent = '';
+  if (photosInput) photosInput.value = '';
+  if (videoInput) videoInput.value = '';
+  if (audioInput) audioInput.value = '';
   renderReelComposerPreview();
+}
+
+function classifyReelImageFile(file) {
+  const type = file.type || (
+    /\.(?:png)$/i.test(file.name) ? 'image/png'
+      : (/\.(?:jpe?g)$/i.test(file.name) ? 'image/jpeg'
+        : (/\.(?:webp)$/i.test(file.name) ? 'image/webp'
+          : (/\.(?:gif)$/i.test(file.name) ? 'image/gif' : '')))
+  );
+  return /^image\/(?:png|jpeg|jpg|webp|gif)$/i.test(type) ? (type === 'image/jpg' ? 'image/jpeg' : type) : '';
+}
+
+function classifyReelVideoFile(file) {
+  const type = file.type || (
+    /\.(?:mp4)$/i.test(file.name) ? 'video/mp4'
+      : (/\.(?:webm)$/i.test(file.name) ? 'video/webm'
+        : (/\.(?:mov)$/i.test(file.name) ? 'video/quicktime' : ''))
+  );
+  if (type === 'video/quicktime' || /\.mov$/i.test(file.name || '')) return 'mov';
+  return /^video\/(?:mp4|webm)$/i.test(type) ? type : '';
+}
+
+function setReelPhotoFiles(nextFiles, { append = false } = {}) {
+  const error = document.querySelector('[data-reel-error]');
+  const incoming = nextFiles
+    .map((file) => ({ file, type: classifyReelImageFile(file) }))
+    .filter((item) => item.type);
+  if (!incoming.length) {
+    if (error) error.textContent = 'Choose PNG, JPG, WEBP, or GIF photos.';
+    return false;
+  }
+  if (incoming.some((item) => item.file.size > MAX_REEL_BYTES)) {
+    if (error) error.textContent = 'Keep each photo under 2 GB.';
+    return false;
+  }
+  const existing = (append && reelHasPhotos())
+    ? reelMedia.files.map((file, index) => ({
+      file,
+      type: reelMedia.types?.[index] || classifyReelImageFile(file) || 'image/jpeg',
+      previewUrl: reelMedia.previewUrls?.[index] || '',
+    }))
+    : [];
+  const room = Math.max(0, MAX_REEL_SLIDES - existing.length);
+  if (!room) {
+    if (error) error.textContent = `Slideshows can include up to ${MAX_REEL_SLIDES} photos.`;
+    return false;
+  }
+  const added = incoming.slice(0, room).map((item) => ({
+    ...item,
+    previewUrl: URL.createObjectURL(item.file),
+  }));
+  if (!append) revokeReelPreviewUrls(reelMedia);
+  const merged = [...existing, ...added];
+  reelMedia = {
+    isVideo: false,
+    files: merged.map((item) => item.file),
+    types: merged.map((item) => item.type),
+    previewUrls: merged.map((item) => item.previewUrl),
+    previewUrl: merged[0]?.previewUrl || '',
+  };
+  if (incoming.length > room) {
+    if (error) error.textContent = `Added ${added.length} photo${added.length === 1 ? '' : 's'}. Slideshows max out at ${MAX_REEL_SLIDES}.`;
+  } else if (error) {
+    error.textContent = merged.length > 1
+      ? `${merged.length} photos ready for this slideshow.`
+      : '';
+  }
+  renderReelComposerPreview();
+  return true;
+}
+
+function setReelVideoFile(file) {
+  const error = document.querySelector('[data-reel-error]');
+  const type = classifyReelVideoFile(file);
+  if (type === 'mov') {
+    if (error) error.textContent = 'MOV files often will not play for everyone. Export as MP4 (H.264) or WebM and try again.';
+    return false;
+  }
+  if (!type) {
+    if (error) error.textContent = 'Choose an MP4 or WebM video.';
+    return false;
+  }
+  if (file.size > MAX_REEL_BYTES) {
+    if (error) error.textContent = 'Keep Reels under 2 GB.';
+    return false;
+  }
+  revokeReelPreviewUrls(reelMedia);
+  if (reelAudio?.previewUrl) URL.revokeObjectURL(reelAudio.previewUrl);
+  reelAudio = null;
+  reelMedia = {
+    isVideo: true,
+    file,
+    type,
+    previewUrl: URL.createObjectURL(file),
+  };
+  if (error) error.textContent = '';
+  renderReelComposerPreview();
+  return true;
 }
 
 function readFileAsDataUrl(file) {
@@ -6126,68 +6262,20 @@ async function uploadReelFile(file, kind, onProgress, options = {}) {
   return { dataUrl };
 }
 
-document.querySelector('[data-reel-file]')?.addEventListener('change', () => {
-  const input = document.querySelector('[data-reel-file]');
+document.querySelector('[data-reel-photos]')?.addEventListener('change', () => {
+  const input = document.querySelector('[data-reel-photos]');
   const files = [...(input?.files || [])];
-  const error = document.querySelector('[data-reel-error]');
   if (input) input.value = '';
   if (!files.length) return;
+  setReelPhotoFiles(files, { append: reelHasPhotos() });
+});
 
-  const images = [];
-  let video = null;
-  for (const file of files) {
-    const type = file.type || (/\.(?:png|jpe?g|webp|gif)$/i.test(file.name) ? 'image/jpeg' : (/\.(?:mp4|webm)$/i.test(file.name) ? 'video/mp4' : (/\.mov$/i.test(file.name) ? 'video/quicktime' : '')));
-    if (type === 'video/quicktime' || /\.mov$/i.test(file.name || '')) {
-      if (error) error.textContent = 'MOV files often will not play for everyone. Export as MP4 (H.264) or WebM and try again.';
-      return;
-    }
-    if (/^image\/(?:png|jpeg|webp|gif)$/.test(type)) images.push({ file, type });
-    else if (/^video\/(?:mp4|webm)$/.test(type) && !video) video = { file, type };
-  }
-
-  if (video && images.length) {
-    if (error) error.textContent = 'Choose either one video or multiple photos for a slideshow.';
-    return;
-  }
-  if (!video && !images.length) {
-    if (error) error.textContent = 'Choose photos or an MP4/WebM video.';
-    return;
-  }
-  if (video) {
-    if (video.file.size > MAX_REEL_BYTES) {
-      if (error) error.textContent = 'Keep Reels under 2 GB.';
-      return;
-    }
-    revokeReelPreviewUrls(reelMedia);
-    reelMedia = {
-      isVideo: true,
-      file: video.file,
-      type: video.type,
-      previewUrl: URL.createObjectURL(video.file),
-    };
-  } else {
-    const selected = images.slice(0, MAX_REEL_SLIDES);
-    if (images.length > MAX_REEL_SLIDES && error) {
-      error.textContent = `Using the first ${MAX_REEL_SLIDES} photos for this slideshow.`;
-    } else if (error) error.textContent = '';
-    if (selected.some((item) => item.file.size > MAX_REEL_BYTES)) {
-      if (error) error.textContent = 'Keep each photo under 2 GB.';
-      return;
-    }
-    revokeReelPreviewUrls(reelMedia);
-    const previewUrls = selected.map((item) => URL.createObjectURL(item.file));
-    reelMedia = {
-      isVideo: false,
-      files: selected.map((item) => item.file),
-      types: selected.map((item) => item.type),
-      previewUrls,
-      previewUrl: previewUrls[0],
-    };
-  }
-  if (!images.length || images.length <= MAX_REEL_SLIDES) {
-    if (error && !video) error.textContent = '';
-  }
-  renderReelComposerPreview();
+document.querySelector('[data-reel-video]')?.addEventListener('change', () => {
+  const input = document.querySelector('[data-reel-video]');
+  const file = input?.files?.[0];
+  if (input) input.value = '';
+  if (!file) return;
+  setReelVideoFile(file);
 });
 
 document.querySelector('[data-reel-audio]')?.addEventListener('change', () => {
@@ -6196,8 +6284,9 @@ document.querySelector('[data-reel-audio]')?.addEventListener('change', () => {
   const error = document.querySelector('[data-reel-error]');
   if (input) input.value = '';
   if (!file) return;
-  if (!reelMedia || reelMedia.isVideo) {
+  if (!reelHasPhotos()) {
     if (error) error.textContent = 'Add photos first, then attach slideshow audio.';
+    syncReelAudioComposerUi();
     return;
   }
   const type = file.type || (/\.mp3$/i.test(file.name) ? 'audio/mpeg' : (/\.m4a$/i.test(file.name) ? 'audio/mp4' : (/\.wav$/i.test(file.name) ? 'audio/wav' : (/\.ogg$/i.test(file.name) ? 'audio/ogg' : ''))));
@@ -6216,6 +6305,31 @@ document.querySelector('[data-reel-audio]')?.addEventListener('change', () => {
 });
 
 document.addEventListener('click', (event) => {
+  const removeSlide = event.target.closest('[data-remove-reel-slide]');
+  if (removeSlide) {
+    event.preventDefault();
+    if (!reelHasPhotos()) return;
+    const index = Number(removeSlide.dataset.removeReelSlide);
+    if (!Number.isInteger(index) || index < 0 || index >= reelMedia.files.length) return;
+    const nextFiles = reelMedia.files.filter((_, i) => i !== index);
+    const nextTypes = (reelMedia.types || []).filter((_, i) => i !== index);
+    const nextUrls = (reelMedia.previewUrls || []).filter((_, i) => i !== index);
+    URL.revokeObjectURL(reelMedia.previewUrls?.[index] || '');
+    if (!nextFiles.length) {
+      revokeReelPreviewUrls({ previewUrls: nextUrls });
+      reelMedia = null;
+    } else {
+      reelMedia = {
+        isVideo: false,
+        files: nextFiles,
+        types: nextTypes,
+        previewUrls: nextUrls,
+        previewUrl: nextUrls[0] || '',
+      };
+    }
+    renderReelComposerPreview();
+    return;
+  }
   if (!event.target.closest('[data-remove-reel-audio]')) return;
   if (reelAudio?.previewUrl) URL.revokeObjectURL(reelAudio.previewUrl);
   reelAudio = null;
