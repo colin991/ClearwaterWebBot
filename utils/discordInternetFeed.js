@@ -43,19 +43,6 @@ function posterHandle(post) {
   return raw || 'user';
 }
 
-function postBodyText(post) {
-  const body = String(post?.content || '').trim().slice(0, 1800);
-  if (body) return body;
-  if (post?.kind === 'reel') return '_Posted a Reel_';
-  if (post?.gifUrl) return '_Posted a GIF_';
-  if (post?.imageUrl) return '_Posted a photo_';
-  if (post?.videoUrl) return '_Posted a video_';
-  if (post?.poll?.question) return '_Created a poll_';
-  if (post?.location?.label) return '_Dropped a location_';
-  if (post?.quoteId) return '_Quoted a post_';
-  return '_New post_';
-}
-
 function shouldAnnounceInternetPost(post) {
   if (!post?.id || post.parentId) return false;
   // Bare native reposts have no composition of their own.
@@ -66,14 +53,10 @@ function shouldAnnounceInternetPost(post) {
 }
 
 function buildFeedText(post) {
-  const lines = [
+  return [
     `# ${ANNOUNCEMENT_EMOJI} Clearwater Internet`,
     `**Poster:** @${posterHandle(post)}`,
-    postBodyText(post),
-  ];
-  if (post?.poll?.question) lines.push(`📊 ${String(post.poll.question).slice(0, 180)}`);
-  if (post?.location?.label) lines.push(`📍 ${String(post.location.label).slice(0, 120)}`);
-  return lines.join('\n').slice(0, 4000);
+  ].join('\n').slice(0, 4000);
 }
 
 function buildDeletedFeedText(post) {
