@@ -539,7 +539,7 @@ const warningBadge = (tooltip) => {
   const label = String(tooltip || 'Account warning').trim() || 'Account warning';
   return `<span class="role-badge warning-badge" role="img" aria-label="${escapeHtml(label)}" data-tooltip="${escapeHtml(label)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.4 22 20.6H2L12 3.4Zm0 5.2c-.7 0-1.2.5-1.1 1.2l.4 5.2h1.4l.4-5.2c.1-.7-.4-1.2-1.1-1.2Zm0 9.3a1.15 1.15 0 1 0 0-2.3 1.15 1.15 0 0 0 0 2.3Z"/></svg></span>`;
 };
-const isBusinessAccountUser = (user) => /^biz_/i.test(String(user?.id || ''));
+const isBusinessAccountUser = (user) => /^biz_/i.test(String(user?.id || user?.authorId || ''));
 const roleBadges = (user, { skipBusiness = false } = {}) => {
   const badges = Array.isArray(user?.badges) ? user.badges : [];
   const premium = badges.includes('clearwater-role')
@@ -551,20 +551,30 @@ const roleBadges = (user, { skipBusiness = false } = {}) => {
   const developer = badges.includes('developer')
     ? '<span class="role-badge developer-badge" role="img" aria-label="Developer" data-tooltip="Developer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 7.2 3.8 12l4.4 4.8 1.5-1.4L6.7 12l3-3.4-1.5-1.4Zm7.6 0-1.5 1.4 3 3.4-3 3.4 1.5 1.4L20.2 12l-4.4-4.8Z"/></svg></span>'
     : '';
-  const business = !skipBusiness && badges.includes('business') ? businessBadge() : '';
+  // Business checkmark is only for biz_* accounts — never personal handlers.
+  const business = !skipBusiness && isBusinessAccountUser(user) && badges.includes('business')
+    ? businessBadge()
+    : '';
   const warning = badges.includes('warning') ? warningBadge(user?.warningBadgeText) : '';
   return `${premium}${staff}${developer}${business}${warning}`;
 };
 const identityBadges = (user) => {
-  const business = isBusinessAccountUser(user);
-  const verified = user?.verified === true || business;
-  return `${verified ? verifiedBadge(business) : ''}${roleBadges(user, { skipBusiness: business })}`;
+  const accountId = String(user?.id || user?.authorId || '');
+  const business = /^biz_/i.test(accountId);
+  const verified = business || user?.verified === true;
+  // Gold business-verified is exclusive to business accounts.
+  return `${verified ? verifiedBadge(business) : ''}${roleBadges({ ...user, id: accountId || user?.id }, { skipBusiness: true })}`;
 };
 const currentAuthor = (post) => internetUsers.get(post.authorId) || null;
-const isVerified = (post) => currentAuthor(post)?.verified === true;
+const isVerified = (post) => {
+  const author = currentAuthor(post);
+  if (author) return author.verified === true || isBusinessAccountUser(author);
+  return post?.verified === true || isBusinessAccountUser({ id: post?.authorId });
+};
 
 function refreshProfileVerified() {
-  const me = internetUsers.get(activeUserId()) || internetUsers.get(currentUserId);
+  // Own profile is always the personal Discord account, even if posting as a business.
+  const me = internetUsers.get(currentUserId);
   const business = isBusinessAccountUser(me);
   if (profileVerified) {
     profileVerified.hidden = !(me?.verified === true || business);
@@ -887,7 +897,7 @@ function quoteCardMarkup(quoted, { interactive = true } = {}) {
   const open = interactive ? ` data-open-post="${escapeHtml(quoted.id)}"` : '';
   const start = interactive ? `<button type="button" class="quote-card"${open}>` : '<div class="quote-card">';
   const end = interactive ? '</button>' : '</div>';
-  return `${start}<span class="quote-card-head"><img src="${escapeHtml(author?.avatarUrl || quoted.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><b>${escapeHtml(displayName)}</b>${identityBadges(author || quoted)}<small>@${escapeHtml(author?.username || quoted.username || 'member')} · ${timeAgo(quoted.createdAt)}</small></span>${quoted.content ? `<p>${escapeHtml(quoted.content)}</p>` : ''}${postMediaMarkup(quoted, displayName)}${end}`;
+  return `${start}<span class="quote-card-head"><img src="${escapeHtml(author?.avatarUrl || quoted.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><b>${escapeHtml(displayName)}</b>${identityBadges(author?.id ? author : { ...quoted, id: quoted.authorId })}<small>@${escapeHtml(author?.username || quoted.username || 'member')} · ${timeAgo(quoted.createdAt)}</small></span>${quoted.content ? `<p>${escapeHtml(quoted.content)}</p>` : ''}${postMediaMarkup(quoted, displayName)}${end}`;
 }
 
 function renderQuotePreview() {
@@ -966,7 +976,7 @@ function postMarkup(post, profile = false) {
   const reelChip = display.kind === 'reel'
     ? `<button type="button" class="search-reel-chip" data-open-reel="${escapeHtml(display.id)}">Open Reel</button>`
     : '';
-  return `<article class="post" data-post-card="${escapeHtml(display.id)}">${repostLabel}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(display.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || display)}${boostChip}${display.kind === 'reel' ? '<span class="post-reel-tag">Reel</span>' : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(display.createdAt)}${display.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? `<span class="post-rank"> &middot; ${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(display)}</div>${display.content ? `<p class="post-content">${body}</p>` : ''}${quoteMarkup}${media}${poll}${reelChip}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(display.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options" class="${alreadyReposted ? 'reposted' : ''}">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(display.id)}">${alreadyReposted ? 'Undo repost' : 'Repost'}</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(display.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(display.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-engage="bookmark" data-post-id="${escapeHtml(display.id)}" class="${bookmarked ? 'bookmarked' : ''}" aria-label="${bookmarked ? 'Remove bookmark' : 'Bookmark'}" aria-pressed="${bookmarked ? 'true' : 'false'}">${postActionIcon('bookmark', bookmarked)}</button><button type="button" data-engage="share" data-post-id="${escapeHtml(display.id)}">${postActionIcon('share')}</button></div></article>`;
+  return `<article class="post" data-post-card="${escapeHtml(display.id)}">${repostLabel}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(display.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || { ...display, id: display.authorId })}${boostChip}${display.kind === 'reel' ? '<span class="post-reel-tag">Reel</span>' : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(display.createdAt)}${display.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? `<span class="post-rank"> &middot; ${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(display)}</div>${display.content ? `<p class="post-content">${body}</p>` : ''}${quoteMarkup}${media}${poll}${reelChip}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(display.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options" class="${alreadyReposted ? 'reposted' : ''}">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(display.id)}">${alreadyReposted ? 'Undo repost' : 'Repost'}</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(display.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(display.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-engage="bookmark" data-post-id="${escapeHtml(display.id)}" class="${bookmarked ? 'bookmarked' : ''}" aria-label="${bookmarked ? 'Remove bookmark' : 'Bookmark'}" aria-pressed="${bookmarked ? 'true' : 'false'}">${postActionIcon('bookmark', bookmarked)}</button><button type="button" data-engage="share" data-post-id="${escapeHtml(display.id)}">${postActionIcon('share')}</button></div></article>`;
 }
 
 function safeGifUrl(value) {
@@ -3913,7 +3923,7 @@ function renderWhoToWatch() {
         ${reelWatchThumbMarkup(reel)}
       </button>
       <button type="button" class="who-to-watch-copy" data-open-reel="${escapeHtml(reel.id)}">
-        <b>${escapeHtml(displayName)}${identityBadges(author.id ? author : reel)}</b>
+        <b>${escapeHtml(displayName)}${identityBadges(author.id ? author : { ...reel, id: reel.authorId })}</b>
         <small>${escapeHtml(subtitle)}${isVideo ? ' · Video' : ''}</small>
       </button>
       <button type="button" class="who-to-watch-action" data-open-reel="${escapeHtml(reel.id)}">Watch</button>
@@ -5103,6 +5113,12 @@ function openMemberProfile(memberId, updateHash = true) {
   document.querySelector('[data-member-page-copy]').textContent = user.bio || (user.staffRank ? `${user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
   document.querySelector('[data-member-page-verified]').hidden = !(user.verified === true || isBusinessAccountUser(user));
   document.querySelector('[data-member-page-verified]')?.classList.toggle('verified-gold', isBusinessAccountUser(user));
+  const memberVerified = document.querySelector('[data-member-page-verified]');
+  if (memberVerified) {
+    const business = isBusinessAccountUser(user);
+    memberVerified.setAttribute('aria-label', business ? 'Business verified' : 'Verified');
+    memberVerified.dataset.tooltip = business ? 'Business verified' : 'Verified';
+  }
   const memberStaffBadge = document.querySelector('[data-member-page-staff-badge]');
   if (memberStaffBadge) memberStaffBadge.hidden = !Array.isArray(user.badges) || !user.badges.includes('staff');
   const memberBusiness = document.querySelector('[data-member-page-business-badge]');

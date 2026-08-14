@@ -390,7 +390,7 @@ function hostedMediaUrl(value) {
   }
 }
 
-function publicPost(post, maskedAuthors) {
+function publicPost(post, maskedAuthors, store = null) {
   const next = { ...post };
   delete next.discordFeedMessageId;
   // Reels always use the same-origin media proxy. Direct blob URLs flake in the
@@ -410,6 +410,19 @@ function publicPost(post, maskedAuthors) {
     if (String(next.videoUrl || '').startsWith('data:')) next.videoUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=video`;
   }
   if (maskedAuthors?.has(next.authorId)) next.avatarUrl = null;
+  const author = store?.users?.[next.authorId];
+  if (author) {
+    scrubPersonalBusinessCheck(author);
+    const isBiz = isBusinessAccountId(author.id);
+    next.verified = isBiz ? true : author.verified === true;
+    next.badges = withSiteBadges(author.badges, author);
+    next.displayName = author.displayName || next.displayName;
+    next.username = author.username || next.username;
+    if (!maskedAuthors?.has(next.authorId)) next.avatarUrl = author.avatarUrl || next.avatarUrl;
+  } else if (!isBusinessAccountId(next.authorId)) {
+    // Drop stale business badges frozen onto personal posts.
+    next.badges = withSiteBadges(next.badges, { id: next.authorId });
+  }
   const boostEnds = next.boostEndsAt ? new Date(next.boostEndsAt).getTime() : 0;
   if (!boostEnds || boostEnds <= Date.now()) {
     next.boostActive = false;
@@ -500,7 +513,7 @@ export function publicPosts(store, viewerId) {
   // dedicated comments list, so every Reel reply rendered twice in the UI.
   const reelComments = visible.filter((post) => post.parentId && reelIds.has(post.parentId));
   const feed = visible.filter((post) => post.kind !== 'reel' && !reelIds.has(post.parentId));
-  return [...reels, ...feed, ...reelComments].map((post) => publicPost(post, maskedAuthors));
+  return [...reels, ...feed, ...reelComments].map((post) => publicPost(post, maskedAuthors, store));
 }
 
 export function publicUsers(store, viewerId) {
@@ -2576,7 +2589,7 @@ export function purchasePostBoost(store, { actor, postId } = {}) {
   }
   addInternetLog(store, `${text(user.displayName, 80) || 'A member'} tipped a post into For You (C$${POST_BOOST_COST}).`);
   return {
-    post: publicPost(post),
+    post: publicPost(post, null, store),
     wallet: walletView(user),
     pricing: {
       cost: POST_BOOST_COST,
