@@ -4,7 +4,7 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260814-reel-slideshow-audio';
+const INTERNET_VERSION = '20260814-biz-verify-ads';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
@@ -93,6 +93,17 @@ function mediaListPayload(raw, kind, limit = MAX_REEL_SLIDES) {
 }
 
 function staffActor(user, access = {}) {
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    avatarUrl: avatarUrl(user),
+    staffRank: access.staffRank || null,
+    badges: access.badges || [],
+  };
+}
+
+function memberActor(user, access = {}) {
   return {
     id: user.id,
     username: user.username,
@@ -393,6 +404,7 @@ export default async function handler(request, response) {
         : 'sidebar';
       payload = {
         action: 'ad-purchase',
+        businessId: String(body.businessId || '').slice(0, 80),
         category: body.category === 'department' ? 'department' : 'business',
         businessName: String(body.businessName || '').slice(0, 60),
         title: String(body.title || '').slice(0, 80),
@@ -403,7 +415,87 @@ export default async function handler(request, response) {
         image: mediaPayload(body.image, 'image'),
         video: mediaPayload(body.video, 'video'),
         logo: mediaPayload(body.logo, 'image'),
-        actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges },
+        actor: memberActor(user, access),
+      };
+    } else if (body.action === 'verify-apply') {
+      payload = {
+        action: 'verify-apply',
+        reason: String(body.reason || '').slice(0, 500),
+        actor: memberActor(user, access),
+      };
+    } else if (body.action === 'verify-status') {
+      payload = { action: 'verify-status', actor: memberActor(user, access) };
+    } else if (body.action === 'verify-review') {
+      if (!canStaff && !access.allowed) return sendJson(response, 403, { error: 'Staff access required' });
+      const panel = staffPanel || (access.allowed ? 'full' : null);
+      if (!panel) return sendJson(response, 403, { error: 'Staff access required' });
+      payload = {
+        action: 'verify-review',
+        applicationId: String(body.applicationId || ''),
+        decision: body.decision === 'deny' ? 'deny' : 'accept',
+        reason: String(body.reason || '').slice(0, 300),
+        actor: staffActor(user, access),
+        staffPanel: panel,
+        owner: access.allowed || panel === 'full',
+      };
+    } else if (body.action === 'business-apply') {
+      payload = {
+        action: 'business-apply',
+        displayName: String(body.displayName || '').slice(0, 80),
+        username: String(body.username || '').slice(0, 40),
+        avatarUrl: safeHttpsUrl(body.avatarUrl) || safeBlobMediaUrl(body.avatarUrl) || '',
+        bio: String(body.bio || '').slice(0, 300),
+        category: body.category === 'department' ? 'department' : 'business',
+        actor: memberActor(user, access),
+      };
+    } else if (body.action === 'business-list') {
+      payload = { action: 'business-list', actor: memberActor(user, access) };
+    } else if (body.action === 'business-update') {
+      payload = {
+        action: 'business-update',
+        businessId: String(body.businessId || '').slice(0, 80),
+        displayName: body.displayName != null ? String(body.displayName || '').slice(0, 80) : undefined,
+        avatarUrl: body.avatarUrl != null ? (safeHttpsUrl(body.avatarUrl) || safeBlobMediaUrl(body.avatarUrl) || '') : undefined,
+        bio: body.bio != null ? String(body.bio || '').slice(0, 300) : undefined,
+        category: body.category != null ? (body.category === 'department' ? 'department' : 'business') : undefined,
+        actor: memberActor(user, access),
+      };
+    } else if (body.action === 'business-member-add') {
+      payload = {
+        action: 'business-member-add',
+        businessId: String(body.businessId || '').slice(0, 80),
+        targetId: String(body.targetId || ''),
+        username: String(body.username || '').slice(0, 80),
+        role: body.role === 'manager' ? 'manager' : 'poster',
+        actor: memberActor(user, access),
+      };
+    } else if (body.action === 'business-member-remove') {
+      payload = {
+        action: 'business-member-remove',
+        businessId: String(body.businessId || '').slice(0, 80),
+        targetId: String(body.targetId || ''),
+        actor: memberActor(user, access),
+      };
+    } else if (body.action === 'business-member-role') {
+      payload = {
+        action: 'business-member-role',
+        businessId: String(body.businessId || '').slice(0, 80),
+        targetId: String(body.targetId || ''),
+        role: body.role === 'manager' ? 'manager' : 'poster',
+        actor: memberActor(user, access),
+      };
+    } else if (body.action === 'business-review') {
+      if (!canStaff && !access.allowed) return sendJson(response, 403, { error: 'Staff access required' });
+      const panel = staffPanel || (access.allowed ? 'full' : null);
+      if (!panel) return sendJson(response, 403, { error: 'Staff access required' });
+      payload = {
+        action: 'business-review',
+        businessId: String(body.businessId || '').slice(0, 80),
+        decision: body.decision === 'deny' ? 'deny' : 'accept',
+        reason: String(body.reason || '').slice(0, 300),
+        actor: staffActor(user, access),
+        staffPanel: panel,
+        owner: access.allowed || panel === 'full',
       };
     } else if (body.action === 'ad-review') {
       if (!canStaff && !access.allowed) return sendJson(response, 403, { error: 'Staff access required' });

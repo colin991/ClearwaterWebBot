@@ -3945,6 +3945,79 @@ body { margin: 0; }
 }
 .settings-status[data-tone="ok"] { color: #5ddba0; }
 .settings-status[data-tone="error"] { color: #ff8f8f; }
+.settings-status[data-tone="wait"] { color: #9ec0ff; }
+.settings-stack-form { display: grid; gap: 12px; }
+.business-account-list { display: grid; gap: 14px; margin-top: 8px; }
+.business-account-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 14px;
+  background: rgba(4, 10, 18, .35);
+}
+.business-account-card > header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.business-account-card > header img {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #0b1522;
+}
+.business-account-card > header div { display: grid; gap: 2px; }
+.business-account-card > header b { font-size: 15px; }
+.business-account-card > header small,
+.business-account-card > p,
+.business-member-list small { color: #8f9aaa; }
+.business-member-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.business-member-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid rgba(255,255,255,.08);
+}
+.business-member-list li:first-child { border-top: 0; }
+.business-member-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.business-member-actions button,
+.business-member-form button {
+  padding: 6px 10px;
+  border: 1px solid rgba(148, 184, 255, .22);
+  border-radius: 999px;
+  color: #d7e3f4;
+  background: rgba(18, 87, 163, .22);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.business-member-form {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+}
+.business-member-form input,
+.business-member-form select {
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 184, 255, .18);
+  border-radius: 10px;
+  color: #eef5ff;
+  background: rgba(4, 10, 18, .85);
+  font: inherit;
+}
+@media (max-width: 720px) {
+  .business-member-form { grid-template-columns: 1fr; }
+}
 .settings-identity {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr) auto;

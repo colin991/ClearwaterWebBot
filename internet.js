@@ -96,7 +96,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260813-wallet-tabs-staff-ads';
+const INTERNET_VERSION = '20260814-biz-verify-ads';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -374,6 +374,11 @@ let sidebarAds = [];
 let feedAds = [];
 let reelAds = [];
 let myAds = [];
+let adBusinessAccounts = [];
+let myBusinessAccounts = [];
+let myVerificationApp = null;
+let accountVerified = false;
+let businessAvatarDraft = null;
 let adPricing = {
   base: 1200,
   boost: 300,
@@ -1803,7 +1808,7 @@ function renderTrending() {
   allPosts.forEach((post) => String(post.content || '').match(/#[a-z0-9_]{1,60}/gi)?.forEach((tag) => {
     const key = tag.toLowerCase(); counts.set(key, (counts.get(key) || 0) + 1);
   }));
-  const tags = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const tags = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
   if (!tags.length) return;
   trendingList.innerHTML = tags.map(([tag, amount]) => `<a href="/internet" data-topic="${escapeHtml(tag)}">${escapeHtml(tag)} <span>${amount} post${amount === 1 ? '' : 's'}</span></a>`).join('');
 }
@@ -2996,8 +3001,24 @@ function renderStaffDashboard() {
   }
   const pendingAds = Array.isArray(moderationSnapshot.pendingAds) ? moderationSnapshot.pendingAds : [];
   const activeAds = Array.isArray(moderationSnapshot.activeAds) ? moderationSnapshot.activeAds : [];
+  const pendingVerifications = Array.isArray(moderationSnapshot.pendingVerifications) ? moderationSnapshot.pendingVerifications : [];
+  const pendingBusinesses = Array.isArray(moderationSnapshot.pendingBusinesses) ? moderationSnapshot.pendingBusinesses : [];
   const adCount = document.querySelector('[data-staff-ad-count]');
   if (adCount) adCount.textContent = String(Number(stats.pendingAds || pendingAds.length) + Number(stats.activeAds || activeAds.length));
+  const appCount = document.querySelector('[data-staff-app-count]');
+  if (appCount) appCount.textContent = String(Number(stats.pendingVerifications || pendingVerifications.length) + Number(stats.pendingBusinesses || pendingBusinesses.length));
+  const appsPane = document.querySelector('[data-staff-applications]');
+  if (appsPane) {
+    const verifyCards = pendingVerifications.length
+      ? pendingVerifications.map((item) => `<article class="staff-ad-card"><div><b>${escapeHtml(item.applicantName || 'Member')}</b><small>@${escapeHtml(item.applicantUsername || '')} · ${timeAgo(item.createdAt)}</small><p>${escapeHtml(item.reason || '')}</p></div><div class="staff-ad-actions"><button type="button" class="staff-action-btn primary" data-verify-review="accept" data-application-id="${escapeHtml(item.id)}">Approve</button><button type="button" class="staff-action-btn danger" data-verify-review="deny" data-application-id="${escapeHtml(item.id)}">Deny</button></div></article>`).join('')
+      : '<div class="staff-empty">No verification requests waiting.</div>';
+    const businessCards = pendingBusinesses.length
+      ? pendingBusinesses.map((biz) => `<article class="staff-ad-card"><div><b>${escapeHtml(biz.displayName)}</b><small>@${escapeHtml(biz.username)} · ${escapeHtml(biz.category)} · ${timeAgo(biz.createdAt)}</small>${biz.avatarUrl ? `<img class="staff-ad-media" src="${escapeHtml(biz.avatarUrl)}" alt="" style="max-height:64px;width:auto" />` : ''}${biz.bio ? `<p>${escapeHtml(biz.bio)}</p>` : ''}<small>Handler ID ${escapeHtml(biz.ownerId)}</small></div><div class="staff-ad-actions"><button type="button" class="staff-action-btn primary" data-business-review="accept" data-business-id="${escapeHtml(biz.id)}">Approve</button><button type="button" class="staff-action-btn danger" data-business-review="deny" data-business-id="${escapeHtml(biz.id)}">Deny</button></div></article>`).join('')
+      : '<div class="staff-empty">No business account requests waiting.</div>';
+    appsPane.innerHTML = `
+      <section class="staff-ads-section"><header><h2>Verification requests</h2><span>${pendingVerifications.length}</span></header>${verifyCards}</section>
+      <section class="staff-ads-section"><header><h2>Business accounts</h2><span>${pendingBusinesses.length}</span></header>${businessCards}</section>`;
+  }
   const adsPane = document.querySelector('[data-staff-ads]');
   if (adsPane) {
     const adCard = (ad, mode) => {
@@ -3018,15 +3039,19 @@ function renderStaffDashboard() {
       <section class="staff-ads-section"><header><h2>Awaiting approval</h2><span>${pendingAds.length}</span></header>${pendingAds.length ? pendingAds.map((ad) => adCard(ad, 'pending')).join('') : '<div class="staff-empty">No ads waiting for review.</div>'}</section>
       <section class="staff-ads-section"><header><h2>Live placements</h2><span>${activeAds.length}</span></header>${activeAds.length ? activeAds.map((ad) => adCard(ad, 'active')).join('') : '<div class="staff-empty">No live sponsored ads right now.</div>'}</section>`;
   }
-  const metrics = `<div class="staff-metrics"><article><b>${Number(stats.pending || reports.length)}</b><span>Pending</span></article><article><b>${Number(stats.pendingAds || pendingAds.length)}</b><span>Ads</span></article><article><b>${Number(stats.automod || 0)}</b><span>Automod</span></article><article><b>${Number(stats.banned || bans.length)}</b><span>Bans</span></article><article><b>${Number(stats.watched || 0)}</b><span>Watched</span></article><article><b>${Number(stats.users || internetUsers.size)}</b><span>Users</span></article></div>`;
+  const metrics = `<div class="staff-metrics"><article><b>${Number(stats.pending || reports.length)}</b><span>Pending</span></article><article><b>${Number(stats.pendingVerifications || pendingVerifications.length) + Number(stats.pendingBusinesses || pendingBusinesses.length)}</b><span>Apps</span></article><article><b>${Number(stats.pendingAds || pendingAds.length)}</b><span>Ads</span></article><article><b>${Number(stats.automod || 0)}</b><span>Automod</span></article><article><b>${Number(stats.banned || bans.length)}</b><span>Bans</span></article><article><b>${Number(stats.users || internetUsers.size)}</b><span>Users</span></article></div>`;
   if (overview) {
     overview.innerHTML = `${metrics}<div class="staff-overview-grid"><section class="staff-column"><header><h2>Oldest pending reports</h2><span>${reports.length}</span></header>${reports.length ? reports.slice(0, 8).map((report) => {
       const author = staffMemberLookup(report.authorId, report);
       return `<button type="button" class="staff-report-card ${report.id === selectedReportId ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}">${staffAvatarMarkup(author.avatarUrl)}<div><b>${escapeHtml(author.displayName)}</b><small>${escapeHtml(reportSourceLabel(report))} · ${escapeHtml(reportKindLabel(report))}</small><p>${escapeHtml(report.content || 'No text captured')}</p></div></button>`;
-    }).join('') : '<div class="staff-empty">Nothing in this queue.</div>'}</section><section class="staff-column"><header><h2>Ads awaiting approval</h2><span>${pendingAds.length}</span></header>${pendingAds.length ? pendingAds.slice(0, 6).map((ad) => {
+    }).join('') : '<div class="staff-empty">Nothing in this queue.</div>'}</section><section class="staff-column"><header><h2>Applications & ads</h2><span>${pendingVerifications.length + pendingBusinesses.length + pendingAds.length}</span></header>
+      ${pendingVerifications.length ? `<article class="staff-ad-card"><div><b>${pendingVerifications.length} verification request${pendingVerifications.length === 1 ? '' : 's'}</b><small>Awaiting review</small></div><div class="staff-ad-actions"><button type="button" class="staff-action-btn primary" data-staff-tab-jump="applications">Open Applications</button></div></article>` : ''}
+      ${pendingBusinesses.length ? `<article class="staff-ad-card"><div><b>${pendingBusinesses.length} business account${pendingBusinesses.length === 1 ? '' : 's'}</b><small>Awaiting review</small></div><div class="staff-ad-actions"><button type="button" class="staff-action-btn primary" data-staff-tab-jump="applications">Open Applications</button></div></article>` : ''}
+      ${pendingAds.length ? pendingAds.slice(0, 4).map((ad) => {
       const placement = adPlacementLabel(ad.placement);
       return `<article class="staff-ad-card"><div><b>${escapeHtml(ad.title)}</b><small>${escapeHtml(placement)} · ${escapeHtml(ad.businessName)}</small><p>${escapeHtml(ad.body)}</p></div><div class="staff-ad-actions"><button type="button" class="staff-action-btn primary" data-staff-tab-jump="ads">Open Ads desk</button></div></article>`;
-    }).join('') : '<div class="staff-empty">No ads waiting for review.</div>'}</section></div>`;
+    }).join('') : (!pendingVerifications.length && !pendingBusinesses.length ? '<div class="staff-empty">No applications or ads waiting.</div>' : '')}
+    </section></div>`;
   }
 }
 
@@ -4204,8 +4229,10 @@ async function loadAds() {
     feedAds = Array.isArray(result.feedAds) ? result.feedAds : [];
     reelAds = Array.isArray(result.reelAds) ? result.reelAds : [];
     myAds = Array.isArray(result.mine) ? result.mine : [];
+    adBusinessAccounts = Array.isArray(result.businesses) ? result.businesses : [];
     if (result.pricing) adPricing = { ...adPricing, ...result.pricing };
     syncAdBoostLabels();
+    renderAdBusinessOptions();
     renderSidebarAds(sidebarAds);
     renderMyAds(myAds);
     if (!document.querySelector('[data-view="home"]')?.hidden) renderPosts();
@@ -4564,6 +4591,139 @@ function fillAccountPane() {
       ? 'Your profile, posts, and Reels are hidden from everyone else. Reactivate to bring them back.'
       : 'Hides your profile, posts, and Reels from everyone. Reactivate any time from this page.';
   }
+  renderVerificationPane();
+  renderBusinessAccountsPane();
+}
+
+function renderVerificationPane() {
+  const form = document.querySelector('[data-verify-form]');
+  const status = document.querySelector('[data-verify-status]');
+  const submit = document.querySelector('[data-verify-submit]');
+  if (!form || !status) return;
+  const member = internetUsers.get(currentUserId);
+  const verified = accountVerified || member?.verified === true;
+  if (verified) {
+    form.hidden = true;
+    status.dataset.tone = 'ok';
+    status.textContent = 'Your account is verified.';
+    if (submit) submit.disabled = true;
+    return;
+  }
+  form.hidden = false;
+  if (submit) submit.disabled = false;
+  if (myVerificationApp?.status === 'pending') {
+    form.hidden = true;
+    status.dataset.tone = 'wait';
+    status.textContent = `Application pending since ${timeAgo(myVerificationApp.createdAt)}. Staff will review it soon.`;
+  } else if (myVerificationApp?.status === 'denied') {
+    status.dataset.tone = 'error';
+    status.textContent = myVerificationApp.reviewNote
+      ? `Last request was denied: ${myVerificationApp.reviewNote}`
+      : 'Last request was denied. You can apply again after a short wait.';
+  } else if (myVerificationApp?.status === 'approved') {
+    status.dataset.tone = 'ok';
+    status.textContent = 'Your verification was approved.';
+    form.hidden = true;
+  } else {
+    status.dataset.tone = '';
+    status.textContent = 'Share why your Clearwater presence should be verified.';
+  }
+}
+
+function businessRoleLabel(role) {
+  if (role === 'handler') return 'Handler';
+  if (role === 'manager') return 'Manager';
+  return 'Poster';
+}
+
+function businessStatusLabel(status) {
+  if (status === 'active') return 'Active';
+  if (status === 'pending') return 'Awaiting staff approval';
+  if (status === 'denied') return 'Denied';
+  return status || 'Unknown';
+}
+
+function renderBusinessAccountsPane() {
+  const list = document.querySelector('[data-business-list]');
+  if (!list) return;
+  if (!myBusinessAccounts.length) {
+    list.innerHTML = '<p class="settings-hint">No business accounts yet.</p>';
+    return;
+  }
+  list.innerHTML = myBusinessAccounts.map((biz) => {
+    const members = Array.isArray(biz.members) ? biz.members : [];
+    const canManage = biz.canManageMembers && biz.status === 'active';
+    const memberRows = members.length
+      ? members.map((member) => `<li><span><b>${escapeHtml(member.displayName || member.username || 'Member')}</b> <small>@${escapeHtml(member.username || '')} · ${escapeHtml(businessRoleLabel(member.role))}</small></span>${canManage ? `<span class="business-member-actions"><button type="button" data-biz-role="${escapeHtml(biz.id)}" data-member-id="${escapeHtml(member.id)}" data-role="${member.role === 'manager' ? 'poster' : 'manager'}">${member.role === 'manager' ? 'Make poster' : 'Make manager'}</button><button type="button" data-biz-remove="${escapeHtml(biz.id)}" data-member-id="${escapeHtml(member.id)}">Remove</button></span>` : ''}</li>`).join('')
+      : '<li class="settings-hint">No extra members yet.</li>';
+    const handlerRow = biz.isHandler
+      ? '<li><span><b>You (handler)</b><small>Full access · ads · funds</small></span></li>'
+      : '';
+    return `<article class="business-account-card" data-business-id="${escapeHtml(biz.id)}">
+      <header><img src="${escapeHtml(biz.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><div><b>${escapeHtml(biz.displayName)}</b><small>@${escapeHtml(biz.username)} · ${escapeHtml(biz.category)} · ${escapeHtml(businessStatusLabel(biz.status))}</small><small>Your role: ${escapeHtml(businessRoleLabel(biz.role || (biz.isHandler ? 'handler' : 'poster')))}</small></div></header>
+      ${biz.bio ? `<p>${escapeHtml(biz.bio)}</p>` : ''}
+      ${biz.reviewNote && biz.status === 'denied' ? `<p class="settings-status" data-tone="error">${escapeHtml(biz.reviewNote)}</p>` : ''}
+      ${canManage ? `<form class="business-member-form" data-biz-member-form="${escapeHtml(biz.id)}"><input data-member-username maxlength="80" placeholder="@username" required /><select data-member-role><option value="poster">Poster</option><option value="manager">Manager</option></select><button type="submit">Add member</button></form>` : ''}
+      <ul class="business-member-list">${handlerRow}${memberRows}</ul>
+    </article>`;
+  }).join('');
+}
+
+async function loadAccountExtras() {
+  if (!currentUserId) return;
+  try {
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'business-list' }) });
+    const result = await readApiJson(response, 'Could not load account tools.');
+    if (!response.ok) throw new Error(result.error || 'Could not load account tools.');
+    myBusinessAccounts = Array.isArray(result.businesses) ? result.businesses : [];
+    myVerificationApp = result.verification || null;
+    accountVerified = result.verified === true;
+    renderVerificationPane();
+    renderBusinessAccountsPane();
+  } catch {
+    /* Account extras are optional while the feed still works. */
+  }
+}
+
+function renderAdBusinessOptions() {
+  const select = document.querySelector('[data-ad-business-id]');
+  if (!select) return;
+  const current = select.value;
+  const options = adBusinessAccounts.length
+    ? adBusinessAccounts.map((biz) => `<option value="${escapeHtml(biz.id)}">${escapeHtml(biz.displayName)} (@${escapeHtml(biz.username)})</option>`).join('')
+    : '';
+  select.innerHTML = `<option value="">Select an approved business account</option>${options}`;
+  if (current && adBusinessAccounts.some((biz) => biz.id === current)) select.value = current;
+  else if (adBusinessAccounts.length === 1) select.value = adBusinessAccounts[0].id;
+  syncAdBusinessAutofill();
+}
+
+function syncAdBusinessAutofill() {
+  const select = document.querySelector('[data-ad-business-id]');
+  const biz = adBusinessAccounts.find((item) => item.id === select?.value) || null;
+  const name = document.querySelector('[data-ad-business]');
+  const category = document.querySelector('[data-ad-category]');
+  const categoryDisplay = document.querySelector('[data-ad-category-display]');
+  const submit = document.querySelector('[data-ad-submit]');
+  const hint = document.querySelector('[data-ad-business-hint]');
+  if (name) name.value = biz?.displayName || '';
+  if (category) category.value = biz?.category === 'department' ? 'department' : 'business';
+  if (categoryDisplay) categoryDisplay.value = biz ? (biz.category === 'department' ? 'In-game department' : 'In-game business') : '';
+  if (submit) submit.disabled = !biz;
+  if (hint) {
+    hint.textContent = biz
+      ? `Advertising as ${biz.displayName}. Logo autofills from the business account. Paid from your personal wallet.`
+      : 'Ads require an approved business account you handle. Create one in Settings → Account. Only the handler can run ads, paid from the handler’s wallet.';
+  }
+  if (biz?.avatarUrl && !adLogo) {
+    const preview = document.querySelector('[data-ad-logo-preview]');
+    if (preview) {
+      preview.hidden = false;
+      preview.innerHTML = `<img src="${escapeHtml(biz.avatarUrl)}" alt="Business logo" /><small>Using business logo</small>`;
+    }
+  } else if (!adLogo) {
+    renderAdLogoPreview();
+  }
 }
 
 async function loadProfileEditor() {
@@ -4575,6 +4735,7 @@ async function loadProfileEditor() {
     profileDraft = { ...DEFAULT_PROFILE_DRAFT, ...(result.profile || {}) };
     fillProfileEditor();
     fillAccountPane();
+    void loadAccountExtras();
   } catch (error) {
     profileDraft = { ...DEFAULT_PROFILE_DRAFT };
     fillProfileEditor();
@@ -4588,7 +4749,10 @@ function showSettingsTab(tab) {
   const active = available.has(tab) ? tab : 'profile';
   document.querySelectorAll('[data-settings-tab]').forEach((button) => button.classList.toggle('selected', button.dataset.settingsTab === active));
   document.querySelectorAll('[data-settings-pane]').forEach((pane) => { pane.hidden = pane.dataset.settingsPane !== active; });
-  if (active === 'account') fillAccountPane();
+  if (active === 'account') {
+    fillAccountPane();
+    void loadAccountExtras();
+  }
 }
 
 function patchFollowGraphs(targetId, enabled) {
@@ -5183,6 +5347,176 @@ document.querySelector('[data-settings-logout]')?.addEventListener('click', asyn
   window.location.href = '/internet';
 });
 
+document.querySelector('[data-verify-form]')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const status = document.querySelector('[data-verify-status]');
+  const submit = document.querySelector('[data-verify-submit]');
+  if (submit) submit.disabled = true;
+  if (status) { status.dataset.tone = 'wait'; status.textContent = 'Submitting verification request...'; }
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'verify-apply',
+        reason: document.querySelector('[data-verify-reason]')?.value || '',
+      }),
+    });
+    const result = await readApiJson(response, 'Could not submit verification request.');
+    if (!response.ok) throw new Error(result.error || 'Could not submit verification request.');
+    myVerificationApp = result.verification || result.application || null;
+    const reason = document.querySelector('[data-verify-reason]');
+    if (reason) reason.value = '';
+    renderVerificationPane();
+  } catch (error) {
+    if (status) {
+      status.dataset.tone = 'error';
+      status.textContent = error.message || 'Could not submit verification request.';
+    }
+  } finally {
+    if (submit) submit.disabled = false;
+  }
+});
+
+document.querySelector('[data-business-avatar]')?.addEventListener('change', (event) => {
+  const file = event.target.files?.[0];
+  const preview = document.querySelector('[data-business-avatar-preview]');
+  if (businessAvatarDraft?.previewUrl) URL.revokeObjectURL(businessAvatarDraft.previewUrl);
+  businessAvatarDraft = null;
+  if (!file) {
+    if (preview) { preview.hidden = true; preview.innerHTML = ''; }
+    return;
+  }
+  businessAvatarDraft = { file, previewUrl: URL.createObjectURL(file) };
+  if (preview) {
+    preview.hidden = false;
+    preview.innerHTML = `<img src="${escapeHtml(businessAvatarDraft.previewUrl)}" alt="Business logo preview" />`;
+  }
+});
+
+document.querySelector('[data-business-form]')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const status = document.querySelector('[data-business-status]');
+  const submit = document.querySelector('[data-business-submit]');
+  if (submit) submit.disabled = true;
+  if (status) { status.dataset.tone = 'wait'; status.textContent = 'Submitting business account...'; }
+  try {
+    let avatarUrl = '';
+    if (businessAvatarDraft?.file) {
+      if (status) status.textContent = 'Uploading logo...';
+      const uploaded = await uploadAdMedia(businessAvatarDraft.file, false);
+      avatarUrl = uploaded.image?.url || '';
+    }
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'business-apply',
+        displayName: document.querySelector('[data-business-name]')?.value || '',
+        username: document.querySelector('[data-business-username]')?.value || '',
+        category: document.querySelector('[data-business-category]')?.value || 'business',
+        bio: document.querySelector('[data-business-bio]')?.value || '',
+        avatarUrl,
+      }),
+    });
+    const result = await readApiJson(response, 'Could not submit business account.');
+    if (!response.ok) throw new Error(result.error || 'Could not submit business account.');
+    myBusinessAccounts = Array.isArray(result.businesses) ? result.businesses : (result.business ? [result.business, ...myBusinessAccounts] : myBusinessAccounts);
+    document.querySelector('[data-business-name]').value = '';
+    document.querySelector('[data-business-username]').value = '';
+    document.querySelector('[data-business-bio]').value = '';
+    document.querySelector('[data-business-category]').value = 'business';
+    const avatarInput = document.querySelector('[data-business-avatar]');
+    if (avatarInput) avatarInput.value = '';
+    if (businessAvatarDraft?.previewUrl) URL.revokeObjectURL(businessAvatarDraft.previewUrl);
+    businessAvatarDraft = null;
+    const preview = document.querySelector('[data-business-avatar-preview]');
+    if (preview) { preview.hidden = true; preview.innerHTML = ''; }
+    renderBusinessAccountsPane();
+    if (status) {
+      status.dataset.tone = 'ok';
+      status.textContent = 'Business account submitted for staff approval.';
+    }
+  } catch (error) {
+    if (status) {
+      status.dataset.tone = 'error';
+      status.textContent = error.message || 'Could not submit business account.';
+    }
+  } finally {
+    if (submit) submit.disabled = false;
+  }
+});
+
+document.addEventListener('submit', async (event) => {
+  const form = event.target.closest('[data-biz-member-form]');
+  if (!form) return;
+  event.preventDefault();
+  const businessId = form.dataset.bizMemberForm;
+  const status = document.querySelector('[data-business-status]');
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'business-member-add',
+        businessId,
+        username: form.querySelector('[data-member-username]')?.value || '',
+        role: form.querySelector('[data-member-role]')?.value || 'poster',
+      }),
+    });
+    const result = await readApiJson(response, 'Could not add that member.');
+    if (!response.ok) throw new Error(result.error || 'Could not add that member.');
+    myBusinessAccounts = Array.isArray(result.businesses) ? result.businesses : myBusinessAccounts;
+    renderBusinessAccountsPane();
+    if (status) { status.dataset.tone = 'ok'; status.textContent = 'Member added.'; }
+  } catch (error) {
+    if (status) {
+      status.dataset.tone = 'error';
+      status.textContent = error.message || 'Could not add that member.';
+    } else {
+      void siteAlert(error.message || 'Could not add that member.');
+    }
+  }
+});
+
+document.addEventListener('click', async (event) => {
+  const remove = event.target.closest('[data-biz-remove]');
+  const roleBtn = event.target.closest('[data-biz-role]');
+  if (!remove && !roleBtn) return;
+  const status = document.querySelector('[data-business-status]');
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(remove ? {
+        action: 'business-member-remove',
+        businessId: remove.dataset.bizRemove,
+        targetId: remove.dataset.memberId,
+      } : {
+        action: 'business-member-role',
+        businessId: roleBtn.dataset.bizRole,
+        targetId: roleBtn.dataset.memberId,
+        role: roleBtn.dataset.role === 'manager' ? 'manager' : 'poster',
+      }),
+    });
+    const result = await readApiJson(response, 'Could not update members.');
+    if (!response.ok) throw new Error(result.error || 'Could not update members.');
+    myBusinessAccounts = Array.isArray(result.businesses) ? result.businesses : myBusinessAccounts;
+    renderBusinessAccountsPane();
+  } catch (error) {
+    if (status) {
+      status.dataset.tone = 'error';
+      status.textContent = error.message || 'Could not update members.';
+    } else {
+      void siteAlert(error.message || 'Could not update members.');
+    }
+  }
+});
+
+document.querySelector('[data-ad-business-id]')?.addEventListener('change', () => {
+  syncAdBusinessAutofill();
+});
+
 const profileDraftField = (key, selector, transform = (value) => value) => {
   document.querySelector(selector)?.addEventListener('input', (event) => {
     if (!profileDraft) profileDraft = { ...DEFAULT_PROFILE_DRAFT };
@@ -5731,6 +6065,52 @@ document.addEventListener('click', (event) => {
   }
   const reviewButton = event.target.closest('[data-report-review]');
   if (reviewButton) { void reviewReport(reviewButton); return; }
+  const verifyReview = event.target.closest('[data-verify-review]');
+  if (verifyReview) {
+    void (async () => {
+      try {
+        const response = await fetch('/api/internet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'verify-review',
+            applicationId: verifyReview.dataset.applicationId,
+            decision: verifyReview.dataset.verifyReview === 'deny' ? 'deny' : 'accept',
+          }),
+        });
+        const result = await readApiJson(response, 'Could not review this verification request.');
+        if (!response.ok) throw new Error(result.error || 'Could not review this verification request.');
+        if (result.snapshot) moderationSnapshot = result.snapshot;
+        renderStaffDashboard();
+      } catch (error) {
+        void siteAlert(error.message || 'Could not review this verification request.');
+      }
+    })();
+    return;
+  }
+  const businessReview = event.target.closest('[data-business-review]');
+  if (businessReview) {
+    void (async () => {
+      try {
+        const response = await fetch('/api/internet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'business-review',
+            businessId: businessReview.dataset.businessId,
+            decision: businessReview.dataset.businessReview === 'deny' ? 'deny' : 'accept',
+          }),
+        });
+        const result = await readApiJson(response, 'Could not review this business account.');
+        if (!response.ok) throw new Error(result.error || 'Could not review this business account.');
+        if (result.snapshot) moderationSnapshot = result.snapshot;
+        renderStaffDashboard();
+      } catch (error) {
+        void siteAlert(error.message || 'Could not review this business account.');
+      }
+    })();
+    return;
+  }
   const adReview = event.target.closest('[data-ad-review]');
   if (adReview) {
     void (async () => {
@@ -6850,6 +7230,8 @@ document.querySelector('[data-ad-form]')?.addEventListener('submit', async (even
     if (adPlacement === 'reel' && !adMedia?.isVideo) {
       throw new Error('Reel placements need a short video.');
     }
+    const businessId = document.querySelector('[data-ad-business-id]')?.value || '';
+    if (!businessId) throw new Error('Select an approved business account you handle.');
     let image = null;
     let video = null;
     let logo = null;
@@ -6869,6 +7251,7 @@ document.querySelector('[data-ad-form]')?.addEventListener('submit', async (even
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'ad-purchase',
+        businessId,
         category: document.querySelector('[data-ad-category]')?.value || 'business',
         businessName: document.querySelector('[data-ad-business]')?.value || '',
         title: document.querySelector('[data-ad-title]')?.value || '',
@@ -6887,7 +7270,6 @@ document.querySelector('[data-ad-form]')?.addEventListener('submit', async (even
     else await loadWallet();
     if (result.pricing) adPricing = { ...adPricing, ...result.pricing };
     syncAdBoostLabels();
-    document.querySelector('[data-ad-business]').value = '';
     document.querySelector('[data-ad-title]').value = '';
     document.querySelector('[data-ad-body]').value = '';
     document.querySelector('[data-ad-boost]').value = '0';
@@ -6902,6 +7284,7 @@ document.querySelector('[data-ad-form]')?.addEventListener('submit', async (even
     if (logoInput) logoInput.value = '';
     renderAdMediaPreview();
     renderAdLogoPreview();
+    syncAdBusinessAutofill();
     syncAdBoostLabels();
     if (status) {
       status.dataset.tone = 'ok';

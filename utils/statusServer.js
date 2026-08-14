@@ -8,7 +8,7 @@ import { dropLocationNameCandidates, fetchErlcPlayersOnMap, findPlayerDropLocati
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
 import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
-import { AutomodHoldError, adjustInternetCredits, applyStaffSiteAction, applyStaffUserAction, assertLimitedStaffBanQuota, banKnownInternetIps, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listInternetAdsForUser, manageInternetAd, moderationSnapshot, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, respondCreditTransfer, reviewInternetAd, reviewInternetReport, revertInternetHistory, saveInternetStore, searchStaffUsers, sendInternetMessage, serveInternetAds, setDiscordInternetNotify, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserDetail, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
+import { AutomodHoldError, adjustInternetCredits, addBusinessMember, applyStaffSiteAction, applyStaffUserAction, assertLimitedStaffBanQuota, banKnownInternetIps, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listInternetAdsForUser, listMyBusinessAccounts, manageInternetAd, moderationSnapshot, myVerificationApplication, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, removeBusinessMember, respondCreditTransfer, reviewBusinessApplication, reviewInternetAd, reviewInternetReport, reviewVerificationApplication, revertInternetHistory, saveInternetStore, searchStaffUsers, sendInternetMessage, serveInternetAds, setBusinessMemberRole, setDiscordInternetNotify, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserDetail, submitBusinessApplication, submitVerificationApplication, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateBusinessProfile, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
 import { createDiscordInternetNotifier } from './discordInternetNotify.js';
 import { createInternetFeedController, shouldAnnounceInteractResult } from './discordInternetFeed.js';
 
@@ -550,17 +550,20 @@ export function startStatusServer(client, config) {
         }
 
         if (body.action === 'ads') {
-          const viewerId = body.actor?.id;
+          const viewerId = String(body.actor?.id || '');
           const sidebarServed = serveInternetAds(store, { count: 2, viewerId, placement: 'sidebar' });
           const feedServed = serveInternetAds(store, { count: 6, viewerId, placement: 'feed' });
           const reelServed = serveInternetAds(store, { count: 4, viewerId, placement: 'reel' });
           if (sidebarServed.dirty || feedServed.dirty || reelServed.dirty) await saveInternetStore(store);
+          const businesses = listMyBusinessAccounts(store, viewerId)
+            .filter((biz) => biz.status === 'active' && biz.canAds);
           return json(response, 200, {
             ads: sidebarServed.ads,
             feedAds: feedServed.ads,
             reelAds: reelServed.ads,
             mine: listInternetAdsForUser(store, body.actor),
             pricing: internetAdPricing(),
+            businesses,
           });
         }
 
@@ -578,6 +581,93 @@ export function startStatusServer(client, config) {
           const result = purchaseInternetAd(store, body);
           await saveInternetStore(store);
           return json(response, 201, result);
+        }
+
+        if (body.action === 'verify-apply') {
+          upsertInternetUser(store, body.actor);
+          const result = submitVerificationApplication(store, body);
+          await saveInternetStore(store);
+          return json(response, 201, {
+            ...result,
+            verification: myVerificationApplication(store, body.actor?.id),
+          });
+        }
+
+        if (body.action === 'verify-status') {
+          upsertInternetUser(store, body.actor);
+          return json(response, 200, {
+            verification: myVerificationApplication(store, body.actor?.id),
+            verified: store.users[String(body.actor?.id || '')]?.verified === true,
+          });
+        }
+
+        if (body.action === 'verify-review') {
+          if (!['full', 'limited'].includes(body.staffPanel)) return json(response, 403, { error: 'Staff access required' });
+          const result = reviewVerificationApplication(store, body);
+          await saveInternetStore(store);
+          return json(response, 200, { ...result, snapshot: moderationSnapshot(store) });
+        }
+
+        if (body.action === 'business-apply') {
+          upsertInternetUser(store, body.actor);
+          const result = submitBusinessApplication(store, body);
+          await saveInternetStore(store);
+          return json(response, 201, {
+            ...result,
+            businesses: listMyBusinessAccounts(store, body.actor?.id),
+          });
+        }
+
+        if (body.action === 'business-list') {
+          upsertInternetUser(store, body.actor);
+          return json(response, 200, {
+            businesses: listMyBusinessAccounts(store, body.actor?.id),
+            verification: myVerificationApplication(store, body.actor?.id),
+            verified: store.users[String(body.actor?.id || '')]?.verified === true,
+          });
+        }
+
+        if (body.action === 'business-update') {
+          const result = updateBusinessProfile(store, body);
+          await saveInternetStore(store);
+          return json(response, 200, {
+            ...result,
+            businesses: listMyBusinessAccounts(store, body.actor?.id),
+          });
+        }
+
+        if (body.action === 'business-member-add') {
+          const result = addBusinessMember(store, body);
+          await saveInternetStore(store);
+          return json(response, 200, {
+            ...result,
+            businesses: listMyBusinessAccounts(store, body.actor?.id),
+          });
+        }
+
+        if (body.action === 'business-member-remove') {
+          const result = removeBusinessMember(store, body);
+          await saveInternetStore(store);
+          return json(response, 200, {
+            ...result,
+            businesses: listMyBusinessAccounts(store, body.actor?.id),
+          });
+        }
+
+        if (body.action === 'business-member-role') {
+          const result = setBusinessMemberRole(store, body);
+          await saveInternetStore(store);
+          return json(response, 200, {
+            ...result,
+            businesses: listMyBusinessAccounts(store, body.actor?.id),
+          });
+        }
+
+        if (body.action === 'business-review') {
+          if (!['full', 'limited'].includes(body.staffPanel)) return json(response, 403, { error: 'Staff access required' });
+          const result = reviewBusinessApplication(store, body);
+          await saveInternetStore(store);
+          return json(response, 200, { ...result, snapshot: moderationSnapshot(store) });
         }
 
         if (body.action === 'ad-review') {

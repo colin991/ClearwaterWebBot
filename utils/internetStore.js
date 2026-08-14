@@ -5,8 +5,42 @@ import { AUTOMOD_HOLD_MESSAGE, AutomodHoldError, scanInternetContent } from './i
 import { JsonStoreCorruptError, readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
 import { mergeInternetBadges, sanitizeInternetBadges, withSiteBadges, dailyCreditTierForRoles } from './staffRanks.js';
+import {
+  addBusinessMember,
+  assertBusinessAccess,
+  businessActorFromAccount,
+  businessAsPublicUser,
+  getBusinessAccount,
+  listBusinessPublicUsers,
+  listMyBusinessAccounts,
+  myVerificationApplication,
+  pendingBusinessApplications,
+  pendingVerificationApplications,
+  removeBusinessMember,
+  reviewBusinessApplication,
+  reviewVerificationApplication,
+  setBusinessMemberRole,
+  submitBusinessApplication,
+  submitVerificationApplication,
+  updateBusinessProfile,
+} from './businessInternet.js';
 
 export { AutomodHoldError };
+export {
+  addBusinessMember,
+  assertBusinessAccess,
+  businessActorFromAccount,
+  getBusinessAccount,
+  listMyBusinessAccounts,
+  myVerificationApplication,
+  removeBusinessMember,
+  reviewBusinessApplication,
+  reviewVerificationApplication,
+  setBusinessMemberRole,
+  submitBusinessApplication,
+  submitVerificationApplication,
+  updateBusinessProfile,
+};
 
 const storePath = join(process.cwd(), 'data', 'clearwater-internet.json');
 const emptyStore = Object.freeze({
@@ -18,6 +52,8 @@ const emptyStore = Object.freeze({
   staffBanLog: [],
   creditTransfers: [],
   ads: [],
+  verificationApplications: [],
+  businessAccounts: {},
   robloxPackClaims: {},
   discordFeedMessages: {},
   siteBanner: null,
@@ -158,6 +194,8 @@ function normalizeInternetStore(data) {
     staffBanLog: Array.isArray(source.staffBanLog) ? source.staffBanLog : [],
     creditTransfers: Array.isArray(source.creditTransfers) ? source.creditTransfers : [],
     ads: Array.isArray(source.ads) ? source.ads : [],
+    verificationApplications: Array.isArray(source.verificationApplications) ? source.verificationApplications : [],
+    businessAccounts: source.businessAccounts && typeof source.businessAccounts === 'object' ? source.businessAccounts : {},
     discordFeedMessages: source.discordFeedMessages && typeof source.discordFeedMessages === 'object'
       ? source.discordFeedMessages
       : {},
@@ -448,7 +486,7 @@ export function publicPosts(store, viewerId) {
 export function publicUsers(store, viewerId) {
   const { viewer, maskedAuthors } = viewerPrivacy(store, viewerId);
   const users = Object.values(store.users);
-  return users.map((user) => {
+  const people = users.map((user) => {
     const masked = maskedAuthors.has(user.id);
     return {
       id: user.id,
@@ -473,12 +511,16 @@ export function publicUsers(store, viewerId) {
       banned: Boolean(getActiveBan(user)),
       official: user.official === true,
       bank: user.bank === true,
+      business: user.business === true || /^biz_/i.test(String(user.id || '')),
+      businessOwnerId: user.businessOwnerId || null,
       following: user.preferences?.hideFollowing === true && user.id !== viewer ? [] : (Array.isArray(user.following) ? user.following : []),
       followingCount: Array.isArray(user.following) ? user.following.length : 0,
       followers: users.filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).map((member) => member.id),
       followerCount: users.filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).length,
     };
   });
+  const peopleIds = new Set(people.map((user) => user.id));
+  return [...people, ...listBusinessPublicUsers(store).filter((biz) => !peopleIds.has(biz.id))];
 }
 
 export function getActiveBan(user) {
@@ -662,9 +704,10 @@ export function clearExpiredInternetPosts() {
 }
 
 export function upsertInternetUser(store, user) {
-  const id = text(user?.id, 24);
-  if (!/^\d{16,22}$/.test(id)) throw new Error('Invalid user');
-  const existing = store.users[id] || { verified: false, banned: false };
+  const id = text(user?.id, 80);
+  const isBusiness = /^biz_[a-z0-9-]{8,80}$/i.test(id);
+  if (!isBusiness && !/^\d{16,22}$/.test(id)) throw new Error('Invalid user');
+  const existing = store.users[id] || { verified: isBusiness, banned: false };
   const has = (key) => Object.prototype.hasOwnProperty.call(user || {}, key);
   if (!existing.createdAt) existing.createdAt = new Date().toISOString();
   const nextUsername = has('username')
@@ -673,23 +716,30 @@ export function upsertInternetUser(store, user) {
   store.users[id] = {
     ...existing,
     id,
-    discordId: id,
+    discordId: isBusiness ? (existing.discordId || null) : id,
     username: nextUsername,
     // Keep the latest Discord handle separately so staff can find accounts even
     // if profile display text drifts from Discord naming.
-    discordUsername: has('username')
-      ? text(user?.username, 80).replace(/^@/, '') || existing.discordUsername || nextUsername
-      : (existing.discordUsername || existing.username || nextUsername),
+    discordUsername: isBusiness
+      ? (existing.discordUsername || nextUsername)
+      : (has('username')
+        ? text(user?.username, 80).replace(/^@/, '') || existing.discordUsername || nextUsername
+        : (existing.discordUsername || existing.username || nextUsername)),
     displayName: has('displayName') ? text(user?.displayName, 80) || existing.displayName || 'Discord user' : existing.displayName || 'Discord user',
     avatarUrl: has('avatarUrl') ? text(user?.avatarUrl, 300) || null : existing.avatarUrl || null,
-    staffRank: has('staffRank') ? text(user?.staffRank, 80) || null : existing.staffRank || null,
+    staffRank: isBusiness ? null : (has('staffRank') ? text(user?.staffRank, 80) || null : existing.staffRank || null),
+    business: isBusiness || existing.business === true,
+    businessOwnerId: isBusiness
+      ? (text(user?.businessOwnerId, 24) || existing.businessOwnerId || null)
+      : existing.businessOwnerId || null,
+    verified: isBusiness ? true : existing.verified === true,
     badges: withSiteBadges(
       has('badges') && Array.isArray(user?.badges)
         ? mergeInternetBadges(existing.badges, user.badges, {
           id,
           username: has('username') ? user?.username : existing.username,
         })
-        : existing.badges,
+        : (isBusiness ? mergeInternetBadges(existing.badges, ['business'], { id, username: nextUsername }) : existing.badges),
       {
         id,
         username: has('username') ? text(user?.username, 80) || existing.username : existing.username,
@@ -2951,6 +3001,7 @@ function publicAd(ad, { owner = false } = {}) {
     id: ad.id,
     category: ad.category,
     businessName: ad.businessName,
+    businessId: ad.businessId || null,
     title: ad.title,
     body: ad.body,
     logoUrl: ad.logoUrl || '',
@@ -3006,6 +3057,7 @@ function assertAdCopy({ category, businessName, title, body }) {
 
 export function purchaseInternetAd(store, {
   actor,
+  businessId,
   category,
   businessName,
   title,
@@ -3017,11 +3069,20 @@ export function purchaseInternetAd(store, {
   placement = 'sidebar',
   videoSeconds = 0,
 } = {}) {
-  const user = ensureInternetWallet(store, actor);
-  assertNotBanned(user);
-  const copy = assertAdCopy({ category, businessName, title, body });
+  const handler = ensureInternetWallet(store, actor);
+  assertNotBanned(handler);
+  const { biz } = assertBusinessAccess(store, { actor: handler, businessId, need: 'ads' });
+  const copy = assertAdCopy({
+    category: category || biz.category,
+    businessName: businessName || biz.displayName,
+    title,
+    body,
+  });
+  // Ads always use the approved business identity for name + logo.
+  copy.category = biz.category === 'department' ? 'department' : 'business';
+  copy.businessName = text(biz.displayName, 60);
   const media = sanitizeAdMedia(image, video);
-  const logoUrl = sanitizeAdLogo(logo);
+  const logoUrl = sanitizeAdLogo(logo) || text(biz.avatarUrl, 500) || '';
   const adPlacement = normalizeAdPlacement(placement);
   const seconds = adPlacement === 'reel' ? normalizeVideoSeconds(videoSeconds) : 0;
   if (adPlacement === 'reel' && !media.videoUrl) {
@@ -3029,21 +3090,22 @@ export function purchaseInternetAd(store, {
   }
   const boostLevels = Math.min(AD_MAX_BOOST, Math.max(0, Math.trunc(Number(boost) || 0)));
   const cost = computeAdCost(adPlacement, boostLevels, seconds);
-  if (creditBalance(user) < cost) throw new Error(`You need C$${cost} to place this ad`);
-  user.credits = creditBalance(user) - cost;
+  if (creditBalance(handler) < cost) throw new Error(`You need C$${cost} to place this ad`);
+  handler.credits = creditBalance(handler) - cost;
   const placeLabel = adPlacementLabel(adPlacement);
-  addCreditTransaction(user, {
+  addCreditTransaction(handler, {
     amount: -cost,
     type: 'ad',
-    note: `${placeLabel[0].toUpperCase()}${placeLabel.slice(1)} ad${boostLevels ? ` +${boostLevels} boost` : ''}${adPlacement === 'reel' && seconds ? ` · ${Math.ceil(seconds)}s` : ''} (pending review)`,
+    note: `${biz.displayName} · ${placeLabel} ad${boostLevels ? ` +${boostLevels} boost` : ''}${adPlacement === 'reel' && seconds ? ` · ${Math.ceil(seconds)}s` : ''} (pending review)`,
     actorName: 'Clearwater Ads',
   });
   expireInternetAds(store);
   const ad = {
     id: randomUUID(),
-    advertiserId: user.id,
-    advertiserName: text(user.displayName, 80) || 'Discord user',
-    advertiserUsername: text(user.username, 80),
+    advertiserId: handler.id,
+    businessId: biz.id,
+    advertiserName: text(handler.displayName, 80) || 'Discord user',
+    advertiserUsername: text(handler.username, 80),
     ...copy,
     ...media,
     logoUrl,
@@ -3067,10 +3129,10 @@ export function purchaseInternetAd(store, {
   };
   store.ads.unshift(ad);
   store.ads = store.ads.slice(0, 300);
-  addInternetLog(store, `${ad.advertiserName} submitted a ${ad.category} ${placeLabel} ad for review (C$${cost}).`);
+  addInternetLog(store, `${ad.advertiserName} submitted a ${ad.category} ${placeLabel} ad for ${biz.displayName} (C$${cost}).`);
   return {
     ad: publicAd(ad, { owner: true }),
-    wallet: walletView(user),
+    wallet: walletView(handler),
     pricing: internetAdPricing(),
   };
 }
@@ -3377,6 +3439,8 @@ export function moderationSnapshot(store) {
   const activeAds = store.ads
     .filter((ad) => ad.status === 'active' && ad.endsAt && new Date(ad.endsAt).getTime() > Date.now())
     .map((ad) => publicAd(ad, { owner: true }));
+  const pendingVerifications = pendingVerificationApplications(store);
+  const pendingBusinesses = pendingBusinessApplications(store);
   const users = Object.values(store.users).map((user) => staffUserSummary(store, user));
   const bans = users.filter((user) => user.banned).map((user) => {
     const ban = getActiveBan(store.users[user.id]);
@@ -3388,11 +3452,15 @@ export function moderationSnapshot(store) {
     history: reviewed.slice(0, 100),
     pendingAds: pendingAds.slice(0, 50),
     activeAds: activeAds.slice(0, 80),
+    pendingVerifications,
+    pendingBusinesses,
     adPricing: internetAdPricing(),
     stats: {
       pending: open.length,
       pendingAds: pendingAds.length,
       activeAds: activeAds.length,
+      pendingVerifications: pendingVerifications.length,
+      pendingBusinesses: pendingBusinesses.length,
       automod: open.filter((report) => report.source === 'automod').length,
       actioned: reviewed.filter((report) => report.status === 'accepted').length,
       dismissed: reviewed.filter((report) => report.status === 'denied').length,
