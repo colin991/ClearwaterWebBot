@@ -4868,22 +4868,7 @@ html.pref-reduce-motion *::after {
   align-items: center;
   gap: 8px;
   max-width: calc(100% - 24px);
-  opacity: 0;
   pointer-events: none;
-  transition: opacity .18s ease;
-}
-.reel-audio > * { pointer-events: auto; }
-.reel-card:hover .reel-audio,
-.reel-card:focus-within .reel-audio,
-.reel-audio:focus-within {
-  opacity: 1;
-  pointer-events: auto;
-}
-@media (hover: none) {
-  .reel-audio {
-    opacity: 1;
-    pointer-events: auto;
-  }
 }
 .reel-mute {
   position: relative;
@@ -4903,6 +4888,7 @@ html.pref-reduce-motion *::after {
   box-shadow: 0 8px 22px rgba(0, 0, 0, .35);
   backdrop-filter: blur(10px);
   cursor: pointer;
+  pointer-events: auto;
 }
 .reel-mute.is-on {
   color: #fff;
@@ -4923,13 +4909,43 @@ html.pref-reduce-motion *::after {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 8px 12px;
-  border: 1px solid rgba(255, 255, 255, .45);
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  padding: 8px 0;
+  border: 1px solid transparent;
   border-radius: 999px;
   color: #fff;
   background: rgba(0, 0, 0, .55);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, .28);
+  box-shadow: none;
   backdrop-filter: blur(10px);
+  pointer-events: none;
+  transform: translateX(-4px);
+  transition: opacity .18s ease, max-width .18s ease, padding .18s ease, border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.reel-mute:hover + .reel-volume,
+.reel-mute:focus-visible + .reel-volume,
+.reel-volume:hover,
+.reel-volume:focus-within,
+.reel-audio:focus-within .reel-volume {
+  max-width: 220px;
+  opacity: 1;
+  padding: 8px 12px;
+  border-color: rgba(255, 255, 255, .45);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .28);
+  pointer-events: auto;
+  transform: none;
+}
+@media (hover: none) {
+  .reel-volume {
+    max-width: 220px;
+    opacity: 1;
+    padding: 8px 12px;
+    border-color: rgba(255, 255, 255, .45);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, .28);
+    pointer-events: auto;
+    transform: none;
+  }
 }
 .reel-volume.is-muted {
   opacity: .72;
