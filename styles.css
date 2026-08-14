@@ -629,6 +629,14 @@ body.home-stage {
 .stage-chrome-center {
   justify-content: center;
 }
+.stage-chrome-split {
+  justify-content: flex-end;
+}
+.stage-chrome-split .stage-nav {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
 .stage-chrome-bar::before {
   content: '';
   position: absolute;
@@ -853,9 +861,15 @@ body.home-stage {
   .stage-chrome .discord-name,
   .stage-chrome .discord-rank { max-width: 88px; }
   .stage-chrome-bar {
-    justify-content: center;
+    justify-content: flex-end;
+  }
+  .stage-chrome-split .stage-nav {
+    left: 50%;
+    transform: translateX(-50%);
   }
   .stage-nav-link { padding: 8px 12px; font-size: 12px; }
+  .stage-chrome .discord-name,
+  .stage-chrome .discord-rank { max-width: 72px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
