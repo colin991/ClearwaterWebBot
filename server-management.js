@@ -349,6 +349,17 @@ mapView?.addEventListener('pointermove', (event) => {
 mapView?.addEventListener('pointerup', endDrag);
 mapView?.addEventListener('pointercancel', endDrag);
 
+pinsLayer?.addEventListener('error', (event) => {
+  const img = event.target;
+  if (!(img instanceof HTMLImageElement) || !img.hasAttribute('data-pin-avatar')) return;
+  const pin = img.closest('.server-map-pin');
+  const initials = pin?.dataset?.initials || '?';
+  img.replaceWith(Object.assign(document.createElement('span'), {
+    className: 'server-map-pin-fallback',
+    textContent: initials,
+  }));
+}, true);
+
 roster?.addEventListener('click', (event) => {
   const row = event.target.closest('[data-player-id]');
   if (!row || busy) return;
