@@ -173,7 +173,7 @@ const setDiscordCount = (count) => {
 };
 
 const loadBotStatus = async () => {
-  if (!discordCount.length || !botConnection.length) return;
+  if (!botConnection.length && !discordCount.length && !erlcCurrent.length) return;
   try {
     const response = await fetch('/api/bot/status');
     if (!response.ok) throw new Error('Status unavailable');

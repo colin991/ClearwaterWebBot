@@ -262,7 +262,7 @@ export default async function handler(request, response) {
               };
             }
             if (!/^reels\/[a-z0-9._-]+$/i.test(path)) throw new Error('Invalid upload path');
-            const isAudio = /\.(?:mp3|m4a|wav|ogg|aac|webm)$/i.test(path) || /audio/i.test(path);
+            const isAudio = /\.(?:mp3|m4a|wav|ogg|aac)$/i.test(path) || /(^|\/|-)audio(-|\.|$)/i.test(path);
             return {
               allowedContentTypes: [
                 'image/png', 'image/jpeg', 'image/webp', 'image/gif',

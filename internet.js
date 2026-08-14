@@ -1125,7 +1125,7 @@ function advanceReelSlideshow(card, { restart = true } = {}) {
   index = (index + 1) % slides.length;
   slides[index]?.classList.add('is-active');
   dots[index]?.classList.add('is-active');
-  if (restart) startReelSlideshow(card);
+  if (restart && isReelAutoplayEnabled()) startReelSlideshow(card);
   return true;
 }
 
@@ -1263,7 +1263,7 @@ function burstReelHeart(card) {
 
 function toggleReelPlayback(card) {
   if (!card) return;
-  // Photo slideshows: tap advances to the next image instead of pausing.
+  // Multi-photo slideshows: tap advances to the next image instead of pausing.
   if (card.querySelector('[data-reel-slideshow="1"]')) {
     unlockReelAudio();
     const audio = card.querySelector('audio[data-reel-track]');
@@ -1274,24 +1274,26 @@ function toggleReelPlayback(card) {
         void audio.play().catch(() => {});
       });
     }
-    advanceReelSlideshow(card);
+    advanceReelSlideshow(card, { restart: isReelAutoplayEnabled() });
     return;
   }
   const video = card.querySelector('video');
-  if (!video) return;
+  const audio = card.querySelector('audio[data-reel-track]');
+  const media = video || audio;
+  if (!media) return;
   unlockReelAudio();
-  if (video.paused) {
+  if (media.paused) {
     flashReelGlyph(card, false);
-    applyReelVolume(video);
-    void video.play().then(() => {
-      applyReelVolume(video);
+    applyReelVolume(media);
+    void media.play().then(() => {
+      applyReelVolume(media);
     }).catch(() => {
       setReelSound(false);
-      void video.play().catch(() => {});
+      void media.play().catch(() => {});
     });
     return;
   }
-  video.pause();
+  media.pause();
   flashReelGlyph(card, true);
 }
 
@@ -1520,6 +1522,42 @@ function markReelMediaBroken(card, message) {
   card.prepend(note);
 }
 
+function markReelSlideBroken(image) {
+  if (!image) return;
+  const root = image.closest('.reel-slideshow');
+  const card = image.closest('.reel-card');
+  if (!root || !card) {
+    markReelMediaBroken(card, 'This Reel photo could not be loaded.');
+    return;
+  }
+  const slidesBefore = [...root.querySelectorAll('img[data-slide-index]')];
+  const brokenIndex = slidesBefore.indexOf(image);
+  const wasActive = image.classList.contains('is-active');
+  const dotsBefore = [...root.querySelectorAll('[data-reel-slide-dot]')];
+  image.remove();
+  if (brokenIndex >= 0) dotsBefore[brokenIndex]?.remove();
+  const slides = [...root.querySelectorAll('img[data-slide-index]')];
+  if (!slides.length) {
+    markReelMediaBroken(card, 'This Reel photo could not be loaded.');
+    return;
+  }
+  slides.forEach((slide, slideIndex) => {
+    slide.dataset.slideIndex = String(slideIndex);
+  });
+  const dots = [...root.querySelectorAll('[data-reel-slide-dot]')];
+  if (wasActive || !root.querySelector('img.is-active')) {
+    slides.forEach((slide) => slide.classList.remove('is-active'));
+    slides[0].classList.add('is-active');
+    dots.forEach((dot, dotIndex) => dot.classList.toggle('is-active', dotIndex === 0));
+  }
+  root.dataset.reelSlideshow = slides.length > 1 ? '1' : '0';
+  if (slides.length > 1 && isReelAutoplayEnabled() && card === centeredReelCard()) {
+    startReelSlideshow(card);
+  } else {
+    stopReelSlideshow(card);
+  }
+}
+
 function syncReelCardHeights(viewport = document.querySelector('[data-reels-viewport]')) {
   if (!viewport) return;
   const height = Math.max(240, Math.round(viewport.clientHeight || 0));
@@ -1560,7 +1598,7 @@ function bindReelMediaFallback(viewport) {
         image.src = reelMediaProxyUrl(reelId, 'image', slideIndex ?? null);
         return;
       }
-      markReelMediaBroken(card, 'This Reel photo could not be loaded.');
+      markReelSlideBroken(image);
     });
   });
   viewport.querySelectorAll('audio[data-reel-track]').forEach((audio) => {
@@ -2236,6 +2274,7 @@ function showView(view) {
     document.querySelector('[data-reels-stage]')?.setAttribute('hidden', '');
     pauseReelVideos();
   }
+  renderSideSuggestions();
   if (activeView === 'home') renderPosts();
   if (activeView === 'messages') void loadMessages();
   if (activeView === 'notifications') void loadNotifications();
