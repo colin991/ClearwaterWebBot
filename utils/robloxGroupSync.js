@@ -28,6 +28,30 @@ async function sendGroupLog(client, config, title, description, color) {
   }).catch(() => null);
 }
 
+async function sendGroupApprovalDm(client, discordId, { robloxId, groupId } = {}) {
+  if (!discordId) return;
+  try {
+    const user = await client.users.fetch(discordId);
+    const groupLink = groupId
+      ? `\n\nOpen the group: https://www.roblox.com/groups/${encodeURIComponent(groupId)}`
+      : '';
+    await user.send({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle('Roblox group request approved')
+          .setDescription(
+            `Your join request for the Clearwater Roblox group was **accepted**.${groupLink}\n\n`
+            + `Roblox user ID: \`${robloxId || 'unknown'}\``,
+          )
+          .setColor(0x38d9b0)
+          .setTimestamp(),
+      ],
+    });
+  } catch {
+    // User may have DMs closed or the bot blocked — keep the accept/log path moving.
+  }
+}
+
 function joinRequestRobloxId(request) {
   const possible = [request?.user, request?.userId, request?.user?.id, request?.user?.userId, request?.user?.name, request?.user?.path, request?.requester, request?.requester?.id, request?.requester?.userId];
   for (const value of possible) {
