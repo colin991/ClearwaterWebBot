@@ -96,7 +96,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260813-ad-logo-format';
+const INTERNET_VERSION = '20260813-wallet-tabs-staff-ads';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -2116,8 +2116,7 @@ function showView(view) {
     void loadWallet();
     void loadAds();
   } else {
-    setAdvertiseHubOpen(false);
-    setMarketHubOpen(false);
+    setWalletTab('home');
   }
   if (activeView === 'sponsored') fillSponsoredReportForm();
   if (activeView === 'profile') renderOwnProfileDetails();
@@ -2826,20 +2825,37 @@ function renderStaffDashboard() {
       <p data-staff-site-status role="status"></p>`;
   }
   const pendingAds = Array.isArray(moderationSnapshot.pendingAds) ? moderationSnapshot.pendingAds : [];
+  const activeAds = Array.isArray(moderationSnapshot.activeAds) ? moderationSnapshot.activeAds : [];
+  const adCount = document.querySelector('[data-staff-ad-count]');
+  if (adCount) adCount.textContent = String(Number(stats.pendingAds || pendingAds.length) + Number(stats.activeAds || activeAds.length));
+  const adsPane = document.querySelector('[data-staff-ads]');
+  if (adsPane) {
+    const adCard = (ad, mode) => {
+      const media = safeVideoUrl(ad.videoUrl)
+        ? `<video class="staff-ad-media" src="${escapeHtml(ad.videoUrl)}" controls playsinline muted></video>`
+        : (safeImageUrl(ad.imageUrl) ? `<img class="staff-ad-media" src="${escapeHtml(ad.imageUrl)}" alt="" />` : '');
+      const logo = safeImageUrl(ad.logoUrl) ? `<img class="staff-ad-media" src="${escapeHtml(ad.logoUrl)}" alt="" style="max-height:64px;width:auto" />` : '';
+      const placement = adPlacementLabel(ad.placement);
+      const durationNote = ad.placement === 'reel' && ad.videoSeconds
+        ? ` · ${Math.ceil(Number(ad.videoSeconds) || 0)}s video`
+        : '';
+      const actions = mode === 'pending'
+        ? `<div class="staff-ad-actions"><button type="button" class="staff-action-btn primary" data-ad-review="accept" data-ad-id="${escapeHtml(ad.id)}">Approve 48h</button><button type="button" class="staff-action-btn" data-ad-review="deny" data-ad-id="${escapeHtml(ad.id)}">Deny & refund</button><button type="button" class="staff-action-btn danger" data-ad-manage="remove" data-ad-id="${escapeHtml(ad.id)}">Remove</button></div>`
+        : `<div class="staff-ad-actions"><button type="button" class="staff-action-btn" data-ad-manage="extend" data-ad-hours="12" data-ad-id="${escapeHtml(ad.id)}">+12h</button><button type="button" class="staff-action-btn" data-ad-manage="extend" data-ad-hours="24" data-ad-id="${escapeHtml(ad.id)}">+24h</button><button type="button" class="staff-action-btn" data-ad-manage="extend" data-ad-hours="48" data-ad-id="${escapeHtml(ad.id)}">+48h</button><button type="button" class="staff-action-btn danger" data-ad-manage="remove" data-ad-id="${escapeHtml(ad.id)}">End now</button></div>`;
+      return `<article class="staff-ad-card"><div><b>${escapeHtml(ad.title)}</b><small>${escapeHtml(placement)} · ${escapeHtml(ad.category)} · ${escapeHtml(ad.businessName)} · ${escapeHtml(ad.advertiserName || 'Member')}${ad.weight > 1 ? ` · ${ad.weight}x` : ''}${durationNote}${ad.cost ? ` · C$${Number(ad.cost)}` : ''}${mode === 'active' ? ` · ${escapeHtml(adRemainingCopy(ad))}` : ''}</small><p>${escapeHtml(ad.body)}</p>${logo}${media}</div>${actions}</article>`;
+    };
+    adsPane.innerHTML = `
+      <section class="staff-ads-section"><header><h2>Awaiting approval</h2><span>${pendingAds.length}</span></header>${pendingAds.length ? pendingAds.map((ad) => adCard(ad, 'pending')).join('') : '<div class="staff-empty">No ads waiting for review.</div>'}</section>
+      <section class="staff-ads-section"><header><h2>Live placements</h2><span>${activeAds.length}</span></header>${activeAds.length ? activeAds.map((ad) => adCard(ad, 'active')).join('') : '<div class="staff-empty">No live sponsored ads right now.</div>'}</section>`;
+  }
   const metrics = `<div class="staff-metrics"><article><b>${Number(stats.pending || reports.length)}</b><span>Pending</span></article><article><b>${Number(stats.pendingAds || pendingAds.length)}</b><span>Ads</span></article><article><b>${Number(stats.automod || 0)}</b><span>Automod</span></article><article><b>${Number(stats.banned || bans.length)}</b><span>Bans</span></article><article><b>${Number(stats.watched || 0)}</b><span>Watched</span></article><article><b>${Number(stats.users || internetUsers.size)}</b><span>Users</span></article></div>`;
   if (overview) {
     overview.innerHTML = `${metrics}<div class="staff-overview-grid"><section class="staff-column"><header><h2>Oldest pending reports</h2><span>${reports.length}</span></header>${reports.length ? reports.slice(0, 8).map((report) => {
       const author = staffMemberLookup(report.authorId, report);
       return `<button type="button" class="staff-report-card ${report.id === selectedReportId ? 'selected' : ''}" data-staff-select="${escapeHtml(report.id)}">${staffAvatarMarkup(author.avatarUrl)}<div><b>${escapeHtml(author.displayName)}</b><small>${escapeHtml(reportSourceLabel(report))} · ${escapeHtml(reportKindLabel(report))}</small><p>${escapeHtml(report.content || 'No text captured')}</p></div></button>`;
-    }).join('') : '<div class="staff-empty">Nothing in this queue.</div>'}</section><section class="staff-column"><header><h2>Ads awaiting approval</h2><span>${pendingAds.length}</span></header>${pendingAds.length ? pendingAds.map((ad) => {
-      const media = safeVideoUrl(ad.videoUrl)
-        ? `<video class="staff-ad-media" src="${escapeHtml(ad.videoUrl)}" controls playsinline muted></video>`
-        : (safeImageUrl(ad.imageUrl) ? `<img class="staff-ad-media" src="${escapeHtml(ad.imageUrl)}" alt="" />` : '');
+    }).join('') : '<div class="staff-empty">Nothing in this queue.</div>'}</section><section class="staff-column"><header><h2>Ads awaiting approval</h2><span>${pendingAds.length}</span></header>${pendingAds.length ? pendingAds.slice(0, 6).map((ad) => {
       const placement = adPlacementLabel(ad.placement);
-      const durationNote = ad.placement === 'reel' && ad.videoSeconds
-        ? ` · ${Math.ceil(Number(ad.videoSeconds) || 0)}s video`
-        : '';
-      return `<article class="staff-ad-card"><div><b>${escapeHtml(ad.title)}</b><small>${escapeHtml(placement)} · ${escapeHtml(ad.category)} · ${escapeHtml(ad.businessName)} · ${escapeHtml(ad.advertiserName || 'Member')}${ad.weight > 1 ? ` · ${ad.weight}x` : ''}${durationNote}${ad.cost ? ` · C$${Number(ad.cost)}` : ''}</small><p>${escapeHtml(ad.body)}</p>${media}</div><div class="staff-ad-actions"><button type="button" class="staff-action-btn primary" data-ad-review="accept" data-ad-id="${escapeHtml(ad.id)}">Approve 48h ${escapeHtml(placement)}</button><button type="button" class="staff-action-btn" data-ad-review="deny" data-ad-id="${escapeHtml(ad.id)}">Deny & refund</button></div></article>`;
+      return `<article class="staff-ad-card"><div><b>${escapeHtml(ad.title)}</b><small>${escapeHtml(placement)} · ${escapeHtml(ad.businessName)}</small><p>${escapeHtml(ad.body)}</p></div><div class="staff-ad-actions"><button type="button" class="staff-action-btn primary" data-staff-tab-jump="ads">Open Ads desk</button></div></article>`;
     }).join('') : '<div class="staff-empty">No ads waiting for review.</div>'}</section></div>`;
   }
 }
@@ -3252,7 +3268,7 @@ function maybeStartRobloxClaim() {
 function maybeOpenWalletHubs() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('robloxClaim') || params.get('market') === '1') {
-    setMarketHubOpen(true);
+    setWalletTab('market');
     if (params.get('market') === '1') {
       const clean = new URL(window.location.href);
       clean.searchParams.delete('market');
@@ -3261,6 +3277,29 @@ function maybeOpenWalletHubs() {
     if (params.get('robloxClaim') === 'ok' || params.get('robloxClaim') === 'none') {
       robloxStoreLinked = true;
     }
+  }
+}
+
+function setWalletTab(tab = 'home') {
+  const allowed = new Set(['home', 'advertise', 'market', 'levels', 'transfer']);
+  const next = allowed.has(tab) ? tab : 'home';
+  document.querySelectorAll('[data-wallet-tab]').forEach((button) => {
+    button.classList.toggle('selected', button.dataset.walletTab === next);
+  });
+  document.querySelectorAll('[data-wallet-panel]').forEach((panel) => {
+    panel.hidden = panel.dataset.walletPanel !== next;
+  });
+  if (next === 'advertise') {
+    syncAdPlacementUi();
+    syncAdBoostLabels();
+    renderMyAds(myAds);
+  }
+  if (next === 'market') {
+    renderWalletStore();
+    void syncRobloxPurchases({ silent: true }).then((result) => {
+      if (!result) return;
+      if (result.needsAuth) renderWalletStore({ linked: false });
+    });
   }
 }
 
@@ -3657,39 +3696,11 @@ function estimateAdCost(boostLevel = 0, placement = adPlacement, videoSeconds = 
 }
 
 function setAdvertiseHubOpen(open = false) {
-  const stack = document.querySelector('.wallet-stack');
-  const hub = document.querySelector('[data-advertise-hub]');
-  if (!stack || !hub) return;
-  const show = Boolean(open);
-  if (show) setMarketHubOpen(false);
-  stack.classList.toggle('advertise-open', show);
-  hub.hidden = !show;
-  if (show) {
-    syncAdPlacementUi();
-    syncAdBoostLabels();
-    renderMyAds(myAds);
-  }
+  setWalletTab(open ? 'advertise' : 'home');
 }
 
 function setMarketHubOpen(open = false) {
-  const stack = document.querySelector('.wallet-stack');
-  const hub = document.querySelector('[data-market-hub]');
-  if (!stack || !hub) return;
-  const show = Boolean(open);
-  if (show) {
-    stack.classList.remove('advertise-open');
-    const adsHub = document.querySelector('[data-advertise-hub]');
-    if (adsHub) adsHub.hidden = true;
-  }
-  stack.classList.toggle('market-open', show);
-  hub.hidden = !show;
-  if (show) {
-    renderWalletStore();
-    void syncRobloxPurchases({ silent: true }).then((result) => {
-      if (!result) return;
-      if (result.needsAuth) renderWalletStore({ linked: false });
-    });
-  }
+  setWalletTab(open ? 'market' : 'home');
 }
 
 function syncAdPlacementUi() {
@@ -5478,6 +5489,38 @@ document.addEventListener('click', (event) => {
     })();
     return;
   }
+  const adManage = event.target.closest('[data-ad-manage]');
+  if (adManage) {
+    void (async () => {
+      try {
+        const manageAction = adManage.dataset.adManage === 'extend' ? 'extend' : 'remove';
+        const response = await fetch('/api/internet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'ad-manage',
+            adId: adManage.dataset.adId,
+            manageAction,
+            hours: Number(adManage.dataset.adHours) || 24,
+          }),
+        });
+        const result = await readApiJson(response, 'Could not update this ad.');
+        if (!response.ok) throw new Error(result.error || 'Could not update this ad.');
+        if (result.snapshot) moderationSnapshot = result.snapshot;
+        renderStaffDashboard();
+        void loadAds();
+      } catch (error) {
+        void siteAlert(error.message || 'Could not update this ad.');
+      }
+    })();
+    return;
+  }
+  const staffTabJump = event.target.closest('[data-staff-tab-jump]');
+  if (staffTabJump) {
+    staffTab = staffTabJump.dataset.staffTabJump || 'ads';
+    renderStaffDashboard();
+    return;
+  }
   const repostChoice = event.target.closest('[data-repost-choice]');
   if (repostChoice && pendingPostAction?.type === 'repost') {
     repostPopup.hidden = true;
@@ -6156,26 +6199,14 @@ document.querySelector('[data-wallet-transfer-form]')?.addEventListener('submit'
   }
 });
 
+document.querySelectorAll('[data-wallet-tab]').forEach((button) => {
+  button.addEventListener('click', () => setWalletTab(button.dataset.walletTab || 'home'));
+});
+
 document.querySelectorAll('[data-ad-tab]').forEach((button) => {
   button.addEventListener('click', () => {
     setAdWalletTab(button.dataset.adTab || 'create');
   });
-});
-
-document.querySelector('[data-open-advertise]')?.addEventListener('click', () => {
-  setAdvertiseHubOpen(true);
-});
-
-document.querySelector('[data-advertise-back]')?.addEventListener('click', () => {
-  setAdvertiseHubOpen(false);
-});
-
-document.querySelector('[data-open-market]')?.addEventListener('click', () => {
-  setMarketHubOpen(true);
-});
-
-document.querySelector('[data-market-back]')?.addEventListener('click', () => {
-  setMarketHubOpen(false);
 });
 
 document.querySelectorAll('[data-ad-placement-option]').forEach((button) => {

@@ -14,7 +14,7 @@
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <link rel="apple-touch-icon" href="assets/clearwater-logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260813-ad-logo-format" />
+    <link rel="stylesheet" href="internet.css?v=20260813-wallet-tabs-staff-ads" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260813-coming-soon"></script>
   </head>
@@ -177,43 +177,144 @@
           </article>
         </section>
         <section class="internet-view wallet-view" data-view="wallet" hidden>
+          <nav class="wallet-tabs" data-wallet-tabs aria-label="Wallet sections">
+            <button type="button" class="selected" data-wallet-tab="home">Overview</button>
+            <button type="button" data-wallet-tab="advertise">Advertise</button>
+            <button type="button" data-wallet-tab="market">Market</button>
+            <button type="button" data-wallet-tab="levels">Levels</button>
+            <button type="button" data-wallet-tab="transfer">Send</button>
+          </nav>
           <div class="wallet-stack">
-            <article class="wallet-balance-card">
-              <div>
-                <p class="wallet-kicker">Balance</p>
-                <strong data-wallet-balance>C$0</strong>
-                <small>Clearwater credits</small>
-              </div>
-              <span class="wallet-balance-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg>
-              </span>
-            </article>
-            <article class="wallet-card">
-              <div class="wallet-card-copy">
-                <h2>Daily credits</h2>
-                <p data-wallet-daily-copy>You receive credits every 24 hours. Role perks raise the drop.</p>
-              </div>
-              <p class="wallet-status" data-wallet-claim-status role="status">Loading your next daily credit…</p>
-            </article>
-            <div class="wallet-pair">
-              <button type="button" class="wallet-card wallet-hub-entry" data-open-advertise>
-                <div class="wallet-card-copy">
-                  <p class="wallet-kicker">Clearwater Ads</p>
-                  <h2>Advertise</h2>
-                  <p>Sponsored sidebar, feed posts, and Reels — create, track, and manage placements.</p>
+            <div class="wallet-panel" data-wallet-panel="home">
+              <article class="wallet-balance-card">
+                <div>
+                  <p class="wallet-kicker">Balance</p>
+                  <strong data-wallet-balance>C$0</strong>
+                  <small>Clearwater credits</small>
                 </div>
-                <span class="wallet-hub-entry-chevron" aria-hidden="true">→</span>
-              </button>
-              <button type="button" class="wallet-card wallet-hub-entry" data-open-market>
+                <span class="wallet-balance-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg>
+                </span>
+              </article>
+              <article class="wallet-card">
+                <div class="wallet-card-copy">
+                  <h2>Daily credits</h2>
+                  <p data-wallet-daily-copy>You receive credits every 24 hours. Role perks raise the drop.</p>
+                </div>
+                <p class="wallet-status" data-wallet-claim-status role="status">Loading your next daily credit…</p>
+              </article>
+              <article class="wallet-card">
+                <header>
+                  <div>
+                    <h2>Transactions</h2>
+                    <p>Your recent Clearwater credit activity.</p>
+                  </div>
+                  <span class="wallet-count" data-wallet-transaction-count>0</span>
+                </header>
+                <div class="wallet-transactions" data-wallet-transactions><p class="wallet-empty">Loading transactions…</p></div>
+              </article>
+            </div>
+            <div class="wallet-panel" data-wallet-panel="advertise" hidden>
+              <article class="wallet-card wallet-advertise-hub" data-advertise-hub>
+                <header class="wallet-advertise-hub-head" data-advertise-hub-intro>
+                  <div class="wallet-card-copy">
+                    <p class="wallet-kicker">Clearwater Ads</p>
+                    <h2>Sponsored placements</h2>
+                    <p data-ad-card-copy>C$1,200 for 48 hours after staff approval. Choose sidebar, feed, or Reels.</p>
+                  </div>
+                </header>
+                <div class="wallet-ad-placement" data-ad-placement role="radiogroup" aria-label="Ad placement">
+                  <button type="button" class="selected" data-ad-placement-option="sidebar" role="radio" aria-checked="true">Sidebar</button>
+                  <button type="button" data-ad-placement-option="feed" role="radio" aria-checked="false">Feed posts</button>
+                  <button type="button" data-ad-placement-option="reel" role="radio" aria-checked="false">Reels</button>
+                </div>
+                <div class="wallet-ad-tabs" data-ad-tabs hidden role="tablist" aria-label="Ad tools">
+                  <button type="button" class="selected" data-ad-tab="create" role="tab" aria-selected="true">Create</button>
+                  <button type="button" data-ad-tab="analytics" role="tab" aria-selected="false">Analytics</button>
+                </div>
+                <div data-ad-panel="create">
+                  <form class="wallet-ad-form" data-ad-form>
+                    <label>
+                      <span>Type</span>
+                      <select data-ad-category aria-label="Ad type">
+                        <option value="business">In-game business</option>
+                        <option value="department">In-game department</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Department / business name</span>
+                      <input data-ad-business maxlength="60" placeholder="Clearwater Fire Rescue" required />
+                    </label>
+                    <label>
+                      <span>Headline</span>
+                      <input data-ad-title maxlength="80" placeholder="Hiring EMTs this week" required />
+                    </label>
+                    <label>
+                      <span>Ad copy</span>
+                      <textarea data-ad-body maxlength="500" placeholder="Tell people what the department or business offers in Clearwater RP." required></textarea>
+                    </label>
+                    <label>
+                      <span>Logo <small>(optional)</small></span>
+                      <input data-ad-logo type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                    </label>
+                    <div class="wallet-ad-media-preview" data-ad-logo-preview hidden></div>
+                    <label>
+                      <span data-ad-media-label>Image or short video</span>
+                      <input data-ad-media type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" />
+                    </label>
+                    <div class="wallet-ad-media-preview" data-ad-media-preview hidden></div>
+                    <p class="wallet-ad-media-hint" data-ad-media-hint hidden>Reel placements require a video. Duration sets the price tier.</p>
+                    <label>
+                      <span>Boost chance</span>
+                      <select data-ad-boost aria-label="Ad boost level">
+                        <option value="0">No boost · C$1200</option>
+                        <option value="1">+1 chance · C$1500</option>
+                        <option value="2">+2 chance · C$1800</option>
+                        <option value="3">+3 chance · C$2100</option>
+                        <option value="4">+4 chance · C$2400</option>
+                        <option value="5">+5 chance · C$2700</option>
+                      </select>
+                    </label>
+                    <button type="submit" data-ad-submit>Submit for staff review</button>
+                    <p class="wallet-status" data-ad-status role="status">Ads only run after moderation approves them. Denied ads are refunded.</p>
+                  </form>
+                  <div class="wallet-ad-mine" data-ad-mine></div>
+                </div>
+                <div class="wallet-ad-analytics" data-ad-panel="analytics" hidden>
+                  <div data-ad-analytics><p class="wallet-empty">Analytics appear while your ad is running.</p></div>
+                </div>
+              </article>
+            </div>
+            <div class="wallet-panel" data-wallet-panel="market" hidden>
+              <article class="wallet-card wallet-store-card wallet-market-hub" data-market-hub>
                 <div class="wallet-card-copy">
                   <p class="wallet-kicker">Credit market</p>
-                  <h2>Market</h2>
-                  <p>Buy Roblox packs and claim Clearwater credits on this wallet.</p>
+                  <h2>Credit store</h2>
+                  <p>Buy a Roblox pack, then claim the matching Clearwater credits on your wallet.</p>
                 </div>
-                <span class="wallet-hub-entry-chevron" aria-hidden="true">→</span>
-              </button>
+                <div class="wallet-store-grid" data-wallet-store></div>
+                <p class="wallet-status" data-wallet-store-status role="status">Link Roblox once. After that, purchases credit this wallet automatically.</p>
+              </article>
             </div>
-            <div class="wallet-pair">
+            <div class="wallet-panel" data-wallet-panel="levels" hidden>
+              <article class="wallet-card wallet-boost-card">
+                <div class="wallet-card-copy">
+                  <h2>Daily chat levels</h2>
+                  <p data-wallet-boost-copy>Send messages and posts to climb Level 1–5 and raise your daily drop.</p>
+                </div>
+                <div class="wallet-boost-meta">
+                  <strong data-wallet-boost-level>Level 0 · Starter</strong>
+                  <span data-wallet-boost-rate>C$75 / day</span>
+                </div>
+                <p class="wallet-earnings" data-wallet-earnings hidden></p>
+                <div class="wallet-boost-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-wallet-boost-track>
+                  <span data-wallet-boost-fill></span>
+                </div>
+                <p class="wallet-boost-next" data-wallet-boost-next>Chat to unlock Level 1.</p>
+                <div class="wallet-boost-perks" data-wallet-boost-perks></div>
+              </article>
+            </div>
+            <div class="wallet-panel" data-wallet-panel="transfer" hidden>
               <article class="wallet-card wallet-transfer-card">
                 <div class="wallet-card-copy">
                   <h2>Send & request</h2>
@@ -244,113 +345,7 @@
                 </form>
                 <div class="wallet-pending" data-wallet-pending hidden></div>
               </article>
-              <article class="wallet-card wallet-boost-card">
-                <div class="wallet-card-copy">
-                  <h2>Daily chat levels</h2>
-                  <p data-wallet-boost-copy>Send messages and posts to climb Level 1–5 and raise your daily drop.</p>
-                </div>
-                <div class="wallet-boost-meta">
-                  <strong data-wallet-boost-level>Level 0 · Starter</strong>
-                  <span data-wallet-boost-rate>C$75 / day</span>
-                </div>
-                <p class="wallet-earnings" data-wallet-earnings hidden></p>
-                <div class="wallet-boost-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-wallet-boost-track>
-                  <span data-wallet-boost-fill></span>
-                </div>
-                <p class="wallet-boost-next" data-wallet-boost-next>Chat to unlock Level 1.</p>
-                <div class="wallet-boost-perks" data-wallet-boost-perks></div>
-              </article>
             </div>
-            <article class="wallet-card wallet-advertise-hub" data-advertise-hub hidden>
-              <button type="button" class="wallet-advertise-back" data-advertise-back aria-label="Back to wallet">← Back</button>
-              <header class="wallet-advertise-hub-head" data-advertise-hub-intro>
-                <div class="wallet-card-copy">
-                  <p class="wallet-kicker">Clearwater Ads</p>
-                  <h2>Sponsored placements</h2>
-                  <p data-ad-card-copy>C$1,200 for 48 hours after staff approval. Choose sidebar, feed, or Reels.</p>
-                </div>
-              </header>
-              <div class="wallet-ad-placement" data-ad-placement role="radiogroup" aria-label="Ad placement">
-                <button type="button" class="selected" data-ad-placement-option="sidebar" role="radio" aria-checked="true">Sidebar</button>
-                <button type="button" data-ad-placement-option="feed" role="radio" aria-checked="false">Feed posts</button>
-                <button type="button" data-ad-placement-option="reel" role="radio" aria-checked="false">Reels</button>
-              </div>
-              <div class="wallet-ad-tabs" data-ad-tabs hidden role="tablist" aria-label="Ad tools">
-                <button type="button" class="selected" data-ad-tab="create" role="tab" aria-selected="true">Create</button>
-                <button type="button" data-ad-tab="analytics" role="tab" aria-selected="false">Analytics</button>
-              </div>
-              <div data-ad-panel="create">
-                <form class="wallet-ad-form" data-ad-form>
-                  <label>
-                    <span>Type</span>
-                    <select data-ad-category aria-label="Ad type">
-                      <option value="business">In-game business</option>
-                      <option value="department">In-game department</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>Department / business name</span>
-                    <input data-ad-business maxlength="60" placeholder="Clearwater Fire Rescue" required />
-                  </label>
-                  <label>
-                    <span>Headline</span>
-                    <input data-ad-title maxlength="80" placeholder="Hiring EMTs this week" required />
-                  </label>
-                  <label>
-                    <span>Ad copy</span>
-                    <textarea data-ad-body maxlength="220" placeholder="Tell people what the department or business offers in Clearwater RP." required></textarea>
-                  </label>
-                  <label>
-                    <span>Logo <small>(optional)</small></span>
-                    <input data-ad-logo type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
-                  </label>
-                  <div class="wallet-ad-media-preview" data-ad-logo-preview hidden></div>
-                  <label>
-                    <span data-ad-media-label>Image or short video</span>
-                    <input data-ad-media type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" />
-                  </label>
-                  <div class="wallet-ad-media-preview" data-ad-media-preview hidden></div>
-                  <p class="wallet-ad-media-hint" data-ad-media-hint hidden>Reel placements require a video. Duration sets the price tier.</p>
-                  <label>
-                    <span>Boost chance</span>
-                    <select data-ad-boost aria-label="Ad boost level">
-                      <option value="0">No boost · C$1200</option>
-                      <option value="1">+1 chance · C$1500</option>
-                      <option value="2">+2 chance · C$1800</option>
-                      <option value="3">+3 chance · C$2100</option>
-                      <option value="4">+4 chance · C$2400</option>
-                      <option value="5">+5 chance · C$2700</option>
-                    </select>
-                  </label>
-                  <button type="submit" data-ad-submit>Submit for staff review</button>
-                  <p class="wallet-status" data-ad-status role="status">Ads only run after moderation approves them. Denied ads are refunded.</p>
-                </form>
-                <div class="wallet-ad-mine" data-ad-mine></div>
-              </div>
-              <div class="wallet-ad-analytics" data-ad-panel="analytics" hidden>
-                <div data-ad-analytics><p class="wallet-empty">Analytics appear while your ad is running.</p></div>
-              </div>
-            </article>
-            <article class="wallet-card wallet-store-card wallet-market-hub" data-market-hub hidden>
-              <button type="button" class="wallet-advertise-back" data-market-back aria-label="Back to wallet">← Back</button>
-              <div class="wallet-card-copy">
-                <p class="wallet-kicker">Credit market</p>
-                <h2>Credit store</h2>
-                <p>Buy a Roblox pack, then claim the matching Clearwater credits on your wallet.</p>
-              </div>
-              <div class="wallet-store-grid" data-wallet-store></div>
-              <p class="wallet-status" data-wallet-store-status role="status">Link Roblox once. After that, purchases credit this wallet automatically.</p>
-            </article>
-            <article class="wallet-card">
-              <header>
-                <div>
-                  <h2>Transactions</h2>
-                  <p>Your recent Clearwater credit activity.</p>
-                </div>
-                <span class="wallet-count" data-wallet-transaction-count>0</span>
-              </header>
-              <div class="wallet-transactions" data-wallet-transactions><p class="wallet-empty">Loading transactions…</p></div>
-            </article>
           </div>
         </section>
 
@@ -529,6 +524,7 @@
             <nav class="staff-tabs" aria-label="Staff sections">
               <button type="button" class="selected" data-staff-tab="overview">Overview</button>
               <button type="button" data-staff-tab="reports">Reports <span data-staff-report-count>0</span></button>
+              <button type="button" data-staff-tab="ads">Ads <span data-staff-ad-count>0</span></button>
               <button type="button" data-staff-tab="history">History</button>
               <button type="button" data-staff-tab="users">Users</button>
               <button type="button" data-staff-tab="controls">Controls</button>
@@ -552,6 +548,9 @@
                   </div>
                   <div class="staff-split-detail" data-staff-case></div>
                 </div>
+              </section>
+              <section class="staff-pane" data-staff-pane="ads" hidden>
+                <div class="staff-desk staff-ads-desk" data-staff-ads><p class="staff-empty">Loading advertisements...</p></div>
               </section>
               <section class="staff-pane" data-staff-pane="history" hidden>
                 <header class="staff-history-toolbar">
@@ -674,6 +673,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260813-ad-logo-format"></script>
+    <script src="internet.js?v=20260813-wallet-tabs-staff-ads"></script>
   </body>
 </html>

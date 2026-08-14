@@ -31,6 +31,8 @@ export const AD_BOOST_COST = 300;
 export const AD_MAX_BOOST = 5;
 export const AD_DURATION_HOURS = 48;
 export const AD_DURATION_MS = AD_DURATION_HOURS * 60 * 60 * 1000;
+export const AD_BODY_MAX = 500;
+export const AD_TITLE_MAX = 80;
 export const AD_CATEGORIES = Object.freeze(['department', 'business']);
 export const AD_PLACEMENTS = Object.freeze(['sidebar', 'feed', 'reel']);
 export const AD_REEL_DURATION_MULTIPLIERS = Object.freeze({
@@ -2947,8 +2949,8 @@ function assertAdCopy({ category, businessName, title, body }) {
     throw new Error('Choose whether this ad is for an in-game department or business');
   }
   const name = text(businessName, 60);
-  const headline = text(title, 80);
-  const copy = text(body, 220);
+  const headline = text(title, AD_TITLE_MAX);
+  const copy = text(body, AD_BODY_MAX);
   if (!name) throw new Error('Enter the in-game department or business name');
   if (!headline) throw new Error('Write a short ad headline');
   if (copy.length < 12) throw new Error('Describe the in-game department or business in a bit more detail');
@@ -3071,6 +3073,47 @@ export function reviewInternetAd(store, { adId, decision, actor, reason = '' }) 
   addInternetMessage(store, ad.advertiserId, `Your ${placeLabel} ad “${ad.title}” was approved and will run for ${AD_DURATION_HOURS} hours.`);
   addInternetLog(store, `Approved ${placeLabel} ad from ${ad.advertiserName} (${ad.weight}x weight).`);
   return { ad: publicAd(ad, { owner: true }) };
+}
+
+export function manageInternetAd(store, {
+  adId,
+  action,
+  hours = 24,
+  actor,
+} = {}) {
+  expireInternetAds(store);
+  const ad = store.ads.find((item) => item.id === String(adId || ''));
+  if (!ad) throw new Error('Ad not found');
+  const placeLabel = adPlacementLabel(ad.placement);
+  const actorName = text(actor?.displayName, 80) || 'Staff';
+
+  if (action === 'remove') {
+    if (ad.status === 'pending') {
+      return reviewInternetAd(store, { adId: ad.id, decision: 'deny', actor, reason: 'Removed by staff' });
+    }
+    if (ad.status !== 'active') throw new Error('Only active or pending ads can be removed');
+    ad.status = 'ended';
+    ad.endsAt = new Date().toISOString();
+    ad.reviewedAt = ad.reviewedAt || new Date().toISOString();
+    ad.reviewerId = String(actor?.id || ad.reviewerId || '');
+    ad.reviewNote = 'Removed early by staff';
+    addInternetMessage(store, ad.advertiserId, `Staff ended your ${placeLabel} ad “${ad.title}” early.`);
+    addInternetLog(store, `${actorName} removed ${placeLabel} ad “${ad.title}” from ${ad.advertiserName}.`);
+    return { ad: publicAd(ad, { owner: true }) };
+  }
+
+  if (action === 'extend') {
+    if (ad.status !== 'active') throw new Error('Only active ads can get more time');
+    const addHours = Math.min(168, Math.max(1, Math.trunc(Number(hours) || 24)));
+    const currentEnd = ad.endsAt ? new Date(ad.endsAt).getTime() : 0;
+    const base = Math.max(Date.now(), Number.isFinite(currentEnd) ? currentEnd : Date.now());
+    ad.endsAt = new Date(base + (addHours * 60 * 60 * 1000)).toISOString();
+    addInternetMessage(store, ad.advertiserId, `Staff extended your ${placeLabel} ad “${ad.title}” by ${addHours} hour${addHours === 1 ? '' : 's'}.`);
+    addInternetLog(store, `${actorName} extended ${placeLabel} ad “${ad.title}” by ${addHours}h.`);
+    return { ad: publicAd(ad, { owner: true }), extendedHours: addHours };
+  }
+
+  throw new Error('Choose Remove or Extend');
 }
 
 export function listInternetAdsForUser(store, actor) {
@@ -3291,6 +3334,9 @@ export function moderationSnapshot(store) {
   const open = store.reports.filter((report) => report.status === 'open').map((report) => publicStaffReport(store, report));
   const reviewed = store.reports.filter((report) => report.status !== 'open').map((report) => publicStaffReport(store, report));
   const pendingAds = store.ads.filter((ad) => ad.status === 'pending').map((ad) => publicAd(ad, { owner: true }));
+  const activeAds = store.ads
+    .filter((ad) => ad.status === 'active' && ad.endsAt && new Date(ad.endsAt).getTime() > Date.now())
+    .map((ad) => publicAd(ad, { owner: true }));
   const users = Object.values(store.users).map((user) => staffUserSummary(store, user));
   const bans = users.filter((user) => user.banned).map((user) => {
     const ban = getActiveBan(store.users[user.id]);
@@ -3301,10 +3347,12 @@ export function moderationSnapshot(store) {
     reports: open.slice(0, 100),
     history: reviewed.slice(0, 100),
     pendingAds: pendingAds.slice(0, 50),
+    activeAds: activeAds.slice(0, 80),
     adPricing: internetAdPricing(),
     stats: {
       pending: open.length,
       pendingAds: pendingAds.length,
+      activeAds: activeAds.length,
       automod: open.filter((report) => report.source === 'automod').length,
       actioned: reviewed.filter((report) => report.status === 'accepted').length,
       dismissed: reviewed.filter((report) => report.status === 'denied').length,

@@ -2941,7 +2941,7 @@ body { margin: 0; }
 }
 .staff-tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   flex: 0 0 auto;
   border-bottom: 1px solid rgba(148, 184, 255, .14);
   background: rgba(7, 14, 26, .55);
@@ -5485,10 +5485,38 @@ html.pref-reduce-motion *::after {
 /* Clearwater credit wallet */
 .wallet-view { padding: 18px 16px 48px; }
 .wallet-stack { display: grid; gap: 14px; max-width: 1100px; }
-.wallet-stack.advertise-open > :not([data-advertise-hub]) { display: none !important; }
-.wallet-stack.advertise-open > [data-advertise-hub] { display: grid; }
-.wallet-stack.market-open > :not([data-market-hub]) { display: none !important; }
-.wallet-stack.market-open > [data-market-hub] { display: grid; }
+.wallet-panel { display: grid; gap: 14px; }
+.wallet-panel[hidden] { display: none !important; }
+.wallet-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0 0 14px;
+  border: 1px solid rgba(148, 184, 255, .14);
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(3, 7, 13, .86);
+  backdrop-filter: blur(18px);
+}
+.wallet-tabs button {
+  padding: 14px 8px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  color: #8ea0b8;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.wallet-tabs button:hover { background: rgba(255, 255, 255, .04); }
+.wallet-tabs button.selected { color: #fff; border-color: #1d9bf0; }
+@media (max-width: 720px) {
+  .wallet-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .wallet-tabs button { font-size: 12px; padding: 12px 6px; }
+}
 .wallet-pair {
   display: grid;
   gap: 14px;
@@ -5591,7 +5619,6 @@ html.pref-reduce-motion *::after {
   gap: 14px;
   padding: 20px 22px 24px;
 }
-.wallet-market-hub[hidden] { display: none !important; }
 .wallet-store-grid {
   display: grid;
   gap: 10px;
@@ -7248,24 +7275,13 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
   gap: 14px;
   padding: 20px 22px 24px;
 }
-.wallet-advertise-hub[hidden] { display: none !important; }
 .wallet-advertise-hub-head {
   display: grid;
   gap: 10px;
 }
-.wallet-advertise-back {
-  justify-self: start;
-  padding: 7px 12px;
-  border: 1px solid rgba(120, 158, 214, .22);
-  border-radius: 999px;
-  color: #d7e3f4;
-  background: rgba(255, 255, 255, .04);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
+.wallet-market-hub {
+  display: grid;
 }
-.wallet-advertise-back:hover { filter: brightness(1.08); }
 .wallet-ad-placement {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -7384,6 +7400,35 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
   width: 100%;
   text-align: center;
 }
+.staff-ads-desk {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+}
+.staff-ads-section {
+  display: grid;
+  gap: 12px;
+}
+.staff-ads-section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.staff-ads-section > header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.staff-ads-section > header span {
+  color: #8ea0b8;
+  font-size: 12px;
+  font-weight: 700;
+}
+.staff-ad-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .staff-ad-card {
   display: grid;
   gap: 10px;
@@ -7396,4 +7441,3 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
 .staff-ad-card b { display: block; font-size: 14px; }
 .staff-ad-card small { color: #7d8895; font-size: 11px; }
 .staff-ad-card p { margin: 6px 0 0; color: #d5dbe2; font-size: 13px; line-height: 1.4; }
-.staff-ad-actions { display: flex; flex-wrap: wrap; gap: 8px; }

@@ -4,7 +4,7 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260813-ad-logo-format';
+const INTERNET_VERSION = '20260813-wallet-tabs-staff-ads';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
@@ -371,7 +371,7 @@ export default async function handler(request, response) {
         category: body.category === 'department' ? 'department' : 'business',
         businessName: String(body.businessName || '').slice(0, 60),
         title: String(body.title || '').slice(0, 80),
-        body: String(body.body || '').slice(0, 220),
+        body: String(body.body || '').slice(0, 500),
         boost: Math.min(5, Math.max(0, Number(body.boost) || 0)),
         placement,
         videoSeconds: Number(body.videoSeconds) || 0,
@@ -387,6 +387,17 @@ export default async function handler(request, response) {
         adId: String(body.adId || ''),
         decision: body.decision === 'deny' ? 'deny' : 'accept',
         reason: String(body.reason || '').slice(0, 300),
+        actor: staffActor(user, access),
+        staffPanel,
+        owner: staffPanel === 'full',
+      };
+    } else if (body.action === 'ad-manage') {
+      if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
+      payload = {
+        action: 'ad-manage',
+        adId: String(body.adId || ''),
+        manageAction: body.manageAction === 'extend' ? 'extend' : 'remove',
+        hours: Math.min(168, Math.max(1, Number(body.hours) || 24)),
         actor: staffActor(user, access),
         staffPanel,
         owner: staffPanel === 'full',
