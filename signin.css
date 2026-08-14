@@ -65,7 +65,7 @@ body.signin-body {
   width: 78px;
   height: 78px;
   object-fit: contain;
-  filter: drop-shadow(0 16px 36px rgba(78, 145, 249, .32));
+  filter: drop-shadow(0 16px 36px rgba(232, 237, 245, .32));
 }
 .signin-mark span {
   padding-bottom: 6px;
@@ -90,7 +90,7 @@ body.signin-body {
   gap: 18px;
   width: min(100%, 420px);
   padding: 22px 22px 20px;
-  border: 1px solid rgba(148, 184, 255, .16);
+  border: 1px solid rgba(180, 190, 205, .16);
   border-radius: 22px;
   background: rgba(8, 16, 28, .62);
   box-shadow: 0 24px 80px rgba(0, 0, 0, .35);
@@ -132,12 +132,12 @@ body.signin-body {
   content: '';
   transition: transform .16s ease;
 }
-.signin-agree:hover i { border-color: #7eb0ff; }
+.signin-agree:hover i { border-color: #f4f7fb; }
 .signin-agree input:focus-visible + i {
-  box-shadow: 0 0 0 3px rgba(78, 145, 249, .28);
+  box-shadow: 0 0 0 3px rgba(232, 237, 245, .28);
 }
 .signin-agree input:checked + i {
-  border-color: #4e91f9;
+  border-color: #1c2433;
   background: #357dec;
 }
 .signin-agree input:checked + i::after { transform: rotate(45deg) scale(1); }
