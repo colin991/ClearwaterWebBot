@@ -173,6 +173,10 @@ async function syncGroupJoinRequests(client, config) {
         });
         accepted += 1;
         logger.info(`Accepted Roblox group join request for Discord ${discordId} / Roblox ${robloxId}.`);
+        await sendGroupApprovalDm(client, discordId, {
+          robloxId,
+          groupId: config.robloxGroupId,
+        });
         await sendGroupLog(
           client,
           config,
