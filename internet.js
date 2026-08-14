@@ -30,7 +30,6 @@ const profileBanner = document.querySelector('[data-profile-banner]');
 const profileDiscord = document.querySelector('[data-profile-discord]');
 const profileAvatar = document.querySelector('[data-profile-avatar]');
 const profileHandle = document.querySelector('[data-profile-handle]');
-const profileRank = document.querySelector('[data-profile-rank]');
 const profileVerified = document.querySelector('[data-profile-verified]');
 const profilePostCount = document.querySelector('[data-profile-post-count]');
 const profileList = document.querySelector('[data-profile-list]');
@@ -5075,7 +5074,6 @@ function openMemberProfile(memberId, updateHash = true) {
   document.querySelector('[data-member-page-avatar]').src = user.avatarUrl || 'assets/clearwater-logo.png';
   document.querySelector('[data-member-page-name]').textContent = user.displayName;
   document.querySelector('[data-member-page-handle]').textContent = `@${user.username}`;
-  document.querySelector('[data-member-page-rank]').textContent = user.staffRank || 'Clearwater community member';
   document.querySelector('[data-member-page-copy]').textContent = user.bio || (user.staffRank ? `${user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
   document.querySelector('[data-member-page-verified]').hidden = !(user.verified === true || isBusinessAccountUser(user));
   document.querySelector('[data-member-page-verified]')?.classList.toggle('verified-gold', isBusinessAccountUser(user));
@@ -5143,7 +5141,6 @@ function openConversation(member) {
   document.querySelector('[data-conversation-card-avatar]').src = member.avatarUrl || 'assets/clearwater-logo.png';
   document.querySelector('[data-conversation-card-name]').textContent = member.displayName;
   document.querySelector('[data-conversation-card-handle]').textContent = `@${member.username}`;
-  document.querySelector('[data-conversation-card-rank]').textContent = member.staffRank || 'Clearwater community member';
   conversationMessages.innerHTML = '<p>Loading conversation...</p>';
   setInternetRoute('messages');
   showView('conversation');
@@ -5382,7 +5379,6 @@ async function loadSession() {
   setBannerImage(profileBanner, session.user.bannerUrl, session.user.bannerColor);
   if (profileDiscord) profileDiscord.href = 'https://discord.gg/839teFCwB';
   if (profileHandle) profileHandle.textContent = `@${session.user.username}`;
-  if (profileRank) profileRank.textContent = session.user.staffRank || 'Clearwater community member';
   refreshProfileVerified();
   if (staffLink) staffLink.hidden = !sessionCanStaff;
   if (admin) admin.hidden = !sessionIsOwner;
