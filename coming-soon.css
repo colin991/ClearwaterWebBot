@@ -1,6 +1,6 @@
 .coming-soon-kicker {
   margin: 0 0 10px;
-  color: #7eb0ff;
+  color: #f4f7fb;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: .18em;
@@ -37,13 +37,13 @@
 }
 .coming-soon-discord {
   color: #dce9ff;
-  border: 1px solid rgba(148, 184, 255, .28);
+  border: 1px solid rgba(180, 190, 205, .28);
   background: rgba(8, 18, 34, .72);
 }
 .coming-soon-signin {
   color: #fff;
-  background: linear-gradient(135deg, #68a6ff, #357dec);
-  box-shadow: 0 14px 34px rgba(40, 96, 210, .28);
+  background: linear-gradient(135deg, #2a3548, #1c2433);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .42);
 }
 .coming-soon-signin:hover,
 .coming-soon-discord:hover { filter: brightness(1.06); }

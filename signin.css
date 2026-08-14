@@ -138,7 +138,7 @@ body.signin-body {
 }
 .signin-agree input:checked + i {
   border-color: #1c2433;
-  background: #357dec;
+  background: #1c2433;
 }
 .signin-agree input:checked + i::after { transform: rotate(45deg) scale(1); }
 .signin-agree a {

@@ -488,7 +488,7 @@ html.leaving-for-internet body {
 .owner-card-small { grid-template-columns: minmax(260px, 1.15fr) minmax(210px, .85fr) minmax(210px, .85fr); }
 .owner-savebar { position: sticky; bottom: 16px; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 10px; padding: 15px 16px 15px 22px; border: 1px solid rgba(116,166,255,.22); border-radius: 16px; background: rgba(6,12,20,.94); box-shadow: 0 18px 55px rgba(0,0,0,.42); backdrop-filter: blur(18px); }
 .owner-savebar p { margin: 0; color: var(--muted); font-size: 11px; }
-.owner-savebar .button { border: 0; cursor: pointer; color: #fff; background: linear-gradient(135deg, #e8edf5, #357dec); }
+.owner-savebar .button { border: 0; cursor: pointer; color: #fff; background: linear-gradient(135deg, #2a3548, #1c2433); }
 .owner-savebar .button:disabled { opacity: .55; cursor: wait; }
 .owner-heading .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 780; }
 .owner-heading .brand-badge { width: 31px; height: 31px; display: grid; place-items: center; }
