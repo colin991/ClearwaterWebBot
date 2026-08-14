@@ -2631,8 +2631,9 @@ function staffUserFlags(user) {
   const ban = getActiveBan(user);
   const mute = getActiveMute(user);
   const badges = withSiteBadges(user.badges, user);
+  const isBiz = isBusinessAccountId(user.id) || user.business === true || badges.includes('business');
   return {
-    verified: user.verified === true,
+    verified: user.verified === true || isBiz,
     official: user.official === true,
     banned: Boolean(ban),
     muted: Boolean(mute),
@@ -2643,7 +2644,8 @@ function staffUserFlags(user) {
     lockReels: flagActive(user, 'lockReels', 'lockReelsUntil'),
     lockProfile: flagActive(user, 'lockProfile', 'lockProfileUntil'),
     deactivated: user.deactivated === true,
-    business: badges.includes('business'),
+    business: isBiz || badges.includes('business'),
+    isBusinessAccount: isBiz,
     warningBadge: badges.includes('warning'),
     developer: badges.includes('developer'),
     warningBadgeText: text(user.warningBadgeText, 120) || '',
@@ -2651,12 +2653,34 @@ function staffUserFlags(user) {
   };
 }
 
+function businessOwnerInfo(store, user) {
+  const fromUser = text(user?.businessOwnerId, 80);
+  const fromBiz = getBusinessAccount(store, user?.id)?.ownerId || '';
+  const ownerId = fromUser || fromBiz;
+  if (!ownerId) return null;
+  const owner = store.users[ownerId] || null;
+  return {
+    businessOwnerId: ownerId,
+    businessOwnerName: text(owner?.displayName, 80) || text(owner?.username, 80) || 'Handler',
+    businessOwnerUsername: text(owner?.username, 80) || '',
+    businessOwnerAvatarUrl: owner?.avatarUrl || null,
+    businessOwnerCredits: owner ? creditBalance(owner) : 0,
+  };
+}
+
+function isStaffTargetId(id) {
+  return /^\d{16,22}$/.test(String(id || '')) || isBusinessAccountId(id);
+}
+
 function staffUserSummary(store, user) {
   const flags = staffUserFlags(user);
   const posts = store.posts.filter((post) => post.authorId === user.id);
+  const owner = flags.isBusinessAccount ? businessOwnerInfo(store, user) : null;
   return {
     id: user.id,
-    discordId: String(user.discordId || user.id || ''),
+    discordId: flags.isBusinessAccount
+      ? (owner?.businessOwnerId || '')
+      : String(user.discordId || user.id || ''),
     username: user.username,
     discordUsername: user.discordUsername || user.username || null,
     displayName: user.displayName || user.username || 'Discord user',
@@ -2670,6 +2694,7 @@ function staffUserSummary(store, user) {
     reportCount: store.reports.filter((report) => report.authorId === user.id).length,
     flagged: flags.banned || flags.muted || flags.watched || flags.shadowbanned || flags.lockPosts || flags.lockMessages || flags.lockReels || (Array.isArray(user.warnings) && user.warnings.length > 0),
     ...flags,
+    ...(owner || {}),
   };
 }
 
@@ -2680,6 +2705,7 @@ function staffUserSearchHaystack(user) {
     user.username,
     user.discordUsername,
     user.displayName,
+    user.businessOwnerId,
   ].map((value) => String(value || '').toLowerCase().replace(/^@/, '')).filter(Boolean);
 }
 
@@ -2719,9 +2745,11 @@ export function searchStaffUsers(store, query = '', { limit = 80 } = {}) {
 
 export function staffUserDetail(store, targetId) {
   const id = String(targetId || '').trim();
-  if (!/^\d{16,22}$/.test(id)) throw new Error('Enter a valid Discord user ID');
-  const user = store.users[id] || upsertInternetUser(store, { id });
+  if (!isStaffTargetId(id)) throw new Error('Enter a valid Discord user ID or business account');
+  const user = store.users[id] || (isBusinessAccountId(id) ? null : upsertInternetUser(store, { id }));
+  if (!user) throw new Error('Business account not found');
   const flags = staffUserFlags(user);
+  const owner = flags.isBusinessAccount ? businessOwnerInfo(store, user) : null;
   const posts = store.posts.filter((post) => post.authorId === user.id);
   const followers = Object.values(store.users).filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).length;
   return {
@@ -2746,6 +2774,7 @@ export function staffUserDetail(store, targetId) {
       lockMessagesUntil: flags.lockMessages ? user.lockMessagesUntil || null : null,
       lockReelsUntil: flags.lockReels ? user.lockReelsUntil || null : null,
       lockProfileUntil: flags.lockProfile ? user.lockProfileUntil || null : null,
+      ...(owner || {}),
     },
     warnings: (Array.isArray(user.warnings) ? user.warnings : []).slice(0, 30).map((warning) => ({
       id: warning.id,
@@ -2795,14 +2824,19 @@ export function applyStaffUserAction(store, {
   postId = '',
 }) {
   const id = String(targetId || '').trim();
-  if (!/^\d{16,22}$/.test(id)) throw new Error('Enter a valid Discord user ID');
+  if (!isStaffTargetId(id)) throw new Error('Enter a valid Discord user ID or business account');
   const action = String(staffAction || '').trim();
-  const user = upsertInternetUser(store, { id });
+  const user = store.users[id] || (isBusinessAccountId(id) ? null : upsertInternetUser(store, { id }));
+  if (!user) throw new Error('Business account not found');
+  if (!isBusinessAccountId(id)) upsertInternetUser(store, { id });
   const actorName = text(actor?.displayName, 80) || 'Staff';
   const label = text(user.displayName, 80) || user.username || 'a member';
   const noteText = text(reason, 300) || text(note, 300);
   const destructive = new Set(['ban', 'ip-ban', 'mute', 'lock-posts', 'lock-messages', 'lock-reels', 'lock-profile', 'shadowban', 'wipe-posts', 'wipe-reels', 'wipe-comments', 'wipe-messages', 'reset-profile', 'delete-post']);
   if (destructive.has(action)) assertNotOfficial(user, 'moderated that way');
+  if (isBusinessAccountId(id) && ['ip-ban', 'badge-business', 'unbadge-business'].includes(action)) {
+    throw new Error('That action is only for personal Discord accounts');
+  }
 
   const logUser = (message, extra = {}) => addInternetLog(
     store,

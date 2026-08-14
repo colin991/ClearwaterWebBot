@@ -2803,34 +2803,63 @@ function staffActionGroupMarkup(title, hint, body) {
   </section>`;
 }
 
+function staffMemberRowMeta(member) {
+  const handle = `@${member.discordUsername || member.username || 'member'}`;
+  if (member.isBusinessAccount || member.business) {
+    const ownerHandle = member.businessOwnerUsername
+      ? `@${member.businessOwnerUsername}`
+      : (member.businessOwnerName || member.businessOwnerId || 'handler');
+    return `${handle} · linked to ${ownerHandle}`;
+  }
+  return `${handle} · ${member.discordId || member.id || ''}`;
+}
+
 function staffUserPanelMarkup(detail) {
   if (!detail?.user) return '<div class="staff-empty staff-empty-lg">Select a user to open their staff panel.</div>';
   const fullStaff = sessionStaffPanel === 'full';
   const user = { ...detail.user, banUntil: detail.user.ban?.until || null };
+  const isBiz = Boolean(user.isBusinessAccount || user.business || /^biz_/i.test(String(user.id || '')));
   const posts = Array.isArray(detail.posts) ? detail.posts : [];
   const warnings = Array.isArray(detail.warnings) ? detail.warnings : [];
   const reports = Array.isArray(detail.reports) ? detail.reports : [];
   const restrictions = staffActiveRestrictions(user, true);
   const button = (action, label, extra = '') => `<button type="button" class="staff-action-btn${extra ? ` ${extra}` : ''}" data-staff-user-action="${action}">${label}</button>`;
   const accountStatusToggles = [
-    fullStaff ? staffToggleMarkup({ active: user.verified === true, onAction: 'verify', offAction: 'unverify', label: 'Verified' }) : '',
-    fullStaff ? staffToggleMarkup({ active: user.business === true, onAction: 'badge-business', offAction: 'unbadge-business', label: 'Business check' }) : '',
+    fullStaff && !isBiz ? staffToggleMarkup({ active: user.verified === true, onAction: 'verify', offAction: 'unverify', label: 'Verified' }) : '',
+    fullStaff && !isBiz ? staffToggleMarkup({ active: user.business === true, onAction: 'badge-business', offAction: 'unbadge-business', label: 'Business check' }) : '',
     staffToggleMarkup({ active: user.banned === true, onAction: 'ban', offAction: 'unban', label: 'Banned', expires: user.banUntil ? staffUntil(user.banUntil) : '', tone: 'danger' }),
   ].filter(Boolean).join('');
+  const idLabel = isBiz ? 'Business ID' : 'Discord ID';
+  const idValue = isBiz ? user.id : (user.discordId || user.id);
+  const discordHrefId = isBiz ? (user.businessOwnerId || '') : (user.discordId || user.id);
+  const linkedBlock = isBiz && user.businessOwnerId
+    ? `<section class="staff-user-block staff-linked-handler">
+        <h3>Linked handler</h3>
+        <button type="button" class="staff-linked-handler-btn" data-staff-open-user="${escapeHtml(user.businessOwnerId)}">
+          <img src="${escapeHtml(user.businessOwnerAvatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" />
+          <span>
+            <b>${escapeHtml(user.businessOwnerName || 'Handler')}</b>
+            <small>${user.businessOwnerUsername ? `@${escapeHtml(user.businessOwnerUsername)}` : 'Personal account'} · ${escapeHtml(user.businessOwnerId)}</small>
+          </span>
+        </button>
+        <p class="staff-action-hint">Ads and tips for this business spend the handler’s Clearwater credits wallet.</p>
+      </section>`
+    : (isBiz ? '<section class="staff-user-block staff-linked-handler"><h3>Linked handler</h3><p class="staff-empty">No personal account is linked to this business.</p></section>' : '');
   return `<article class="staff-user-dossier">
     <header class="staff-user-hero">
       <img src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" />
       <div>
-        <b>${escapeHtml(user.displayName || 'Discord user')}</b>
-        <small>@${escapeHtml(user.discordUsername || user.username || 'member')}${user.staffRank ? ` · ${escapeHtml(user.staffRank)}` : ''}</small>
-        <p class="staff-user-id"><span>Discord ID</span><button type="button" data-staff-copy-id="${escapeHtml(user.discordId || user.id)}">${escapeHtml(user.discordId || user.id)}</button></p>
+        <b>${escapeHtml(user.displayName || (isBiz ? 'Business account' : 'Discord user'))}</b>
+        <small>@${escapeHtml(user.discordUsername || user.username || 'member')}${user.staffRank ? ` · ${escapeHtml(user.staffRank)}` : ''}${isBiz ? ' · Business' : ''}</small>
+        <p class="staff-user-id"><span>${escapeHtml(idLabel)}</span><button type="button" data-staff-copy-id="${escapeHtml(idValue)}">${escapeHtml(idValue)}</button></p>
         <div class="staff-chip-row">${staffUserChips(user)}</div>
       </div>
       <div class="staff-user-hero-actions">
         <button type="button" data-open-member="${escapeHtml(user.id)}">Public profile</button>
-        <a href="https://discord.com/users/${encodeURIComponent(user.discordId || user.id)}" target="_blank" rel="noopener">Discord</a>
+        ${discordHrefId ? `<a href="https://discord.com/users/${encodeURIComponent(discordHrefId)}" target="_blank" rel="noopener">${isBiz ? 'Handler Discord' : 'Discord'}</a>` : ''}
       </div>
     </header>
+    ${linkedBlock}
     <dl class="staff-user-stats">
       <div><dt>Posts</dt><dd>${Number(user.postCount || 0)}</dd></div>
       <div><dt>Reels</dt><dd>${Number(user.reelCount || 0)}</dd></div>
@@ -2842,9 +2871,10 @@ function staffUserPanelMarkup(detail) {
       ${fullStaff ? `<div><dt>Networks</dt><dd>${Number(user.ipHashCount || 0)}</dd></div>` : ''}
     </dl>
     <p class="staff-user-timeline"><span>Joined ${escapeHtml(staffDateLabel(user.createdAt))}</span><span>Last seen ${escapeHtml(staffDateLabel(user.lastSeenAt))}</span></p>
-    ${fullStaff ? `<section class="staff-user-block staff-wallet-controls" data-staff-wallet-user="${escapeHtml(user.id)}">
+    ${fullStaff ? `<section class="staff-user-block staff-wallet-controls" data-staff-wallet-user="${escapeHtml(isBiz && user.businessOwnerId ? user.businessOwnerId : user.id)}">
       <h3>Clearwater credits</h3>
-      <p class="staff-wallet-balance">Current balance <b>C$${Number(user.credits || 0).toLocaleString()}</b></p>
+      <p class="staff-wallet-balance">${isBiz ? 'Handler balance' : 'Current balance'} <b>C$${Number(isBiz ? (user.businessOwnerCredits ?? 0) : (user.credits || 0)).toLocaleString()}</b></p>
+      ${isBiz ? '<p class="staff-action-hint">Business ads spend this linked personal wallet. Adjustments here update the handler.</p>' : ''}
       <div class="staff-wallet-fields"><label>Amount<input data-staff-wallet-amount type="number" min="1" max="1000000" step="1" value="75" inputmode="numeric" /></label><label>Note <input data-staff-wallet-note maxlength="220" placeholder="Reason for this adjustment" /></label></div>
       <div class="staff-user-actions"><button type="button" class="staff-action-btn" data-staff-wallet-adjust="add">Add credits</button><button type="button" class="staff-action-btn danger" data-staff-wallet-adjust="remove">Remove credits</button></div>
       <p class="staff-user-status" data-staff-wallet-status role="status"></p>
@@ -2898,7 +2928,7 @@ function staffUserPanelMarkup(detail) {
           ${button('wipe-comments', 'Delete all comments', 'danger')}
           ${button('wipe-messages', 'Wipe stored DMs', 'danger')}
           ${button('reset-profile', 'Reset public profile', 'danger')}
-          ${fullStaff ? `${button('ip-ban', `Block ${Number(user.ipHashCount || 0)} network hash${Number(user.ipHashCount || 0) === 1 ? '' : 'es'}`, 'danger')}${button('clear-ip-ban', 'Lift network block')}` : ''}
+          ${fullStaff && !isBiz ? `${button('ip-ban', `Block ${Number(user.ipHashCount || 0)} network hash${Number(user.ipHashCount || 0) === 1 ? '' : 'es'}`, 'danger')}${button('clear-ip-ban', 'Lift network block')}` : ''}
         </div>
       </details>
       <p class="staff-user-status" data-staff-user-status role="status"></p>
@@ -3049,7 +3079,7 @@ function renderStaffDashboard() {
     usersPane.innerHTML = staffSearchBusy && query
       ? '<p class="staff-loading">Searching Discord-linked accounts...</p>'
       : (staffMembers.length
-        ? staffMembers.slice(0, 80).map((member) => `<button type="button" class="staff-user-row ${member.id === selectedStaffUserId ? 'selected' : ''}" data-staff-open-user="${escapeHtml(member.id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" /><span><b>${escapeHtml(member.displayName || 'Discord user')}</b><small>@${escapeHtml(member.discordUsername || member.username || 'member')} · ${escapeHtml(member.discordId || member.id || '')}</small><span class="staff-chip-row">${staffUserChips(member)}</span></span></button>`).join('')
+        ? staffMembers.slice(0, 80).map((member) => `<button type="button" class="staff-user-row ${member.id === selectedStaffUserId ? 'selected' : ''}" data-staff-open-user="${escapeHtml(member.id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" /><span><b>${escapeHtml(member.displayName || 'Discord user')}</b><small>${escapeHtml(staffMemberRowMeta(member))}</small><span class="staff-chip-row">${staffUserChips(member)}</span></span></button>`).join('')
         : `<p class="staff-empty">${query ? 'No Discord-linked Internet accounts match that search.' : 'No members match that search.'}</p>`);
   }
   const userPanel = document.querySelector('[data-staff-user-panel]');

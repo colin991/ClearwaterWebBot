@@ -3421,6 +3421,42 @@ body { margin: 0; }
   justify-content: center;
   text-decoration: none;
 }
+.staff-linked-handler {
+  margin: 0 0 14px;
+}
+.staff-linked-handler-btn {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 184, 255, .16);
+  border-radius: 14px;
+  background: rgba(7, 14, 26, .55);
+  color: inherit;
+  cursor: pointer;
+}
+.staff-linked-handler-btn img {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+.staff-linked-handler-btn b {
+  display: block;
+  font-size: 14px;
+}
+.staff-linked-handler-btn small {
+  display: block;
+  color: #8ea0b8;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+.staff-linked-handler .staff-action-hint {
+  margin-top: 8px;
+}
 .staff-user-stats {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
