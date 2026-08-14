@@ -53,7 +53,8 @@ function avatarUrlFor(player) {
   if (player?.avatarUrl) return String(player.avatarUrl);
   const id = String(player?.robloxId || '').replace(/[^\d]/g, '');
   if (!id) return '';
-  return `https://www.roblox.com/headshot-thumbnail/image?userId=${id}&width=48&height=48&format=png`;
+  // Same-origin proxy resolves the live Roblox CDN headshot (old roblox.com thumbnail URL is dead).
+  return `/api/roblox-avatar?userId=${encodeURIComponent(id)}`;
 }
 
 function initialsFor(player) {

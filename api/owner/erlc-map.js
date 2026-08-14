@@ -6,6 +6,7 @@ import {
   sendJson,
 } from '../../lib/discord-auth.js';
 import { hasOwnerAccess } from '../../lib/owner-access.js';
+import { attachPlayerAvatars } from '../../lib/roblox-avatars.js';
 
 export default async function handler(request, response) {
   if (request.method !== 'GET') return sendJson(response, 405, { error: 'Method not allowed' });
@@ -32,7 +33,9 @@ export default async function handler(request, response) {
         players: [],
       });
     }
-    return sendJson(response, 200, result);
+
+    const players = await attachPlayerAvatars(Array.isArray(result.players) ? result.players : []);
+    return sendJson(response, 200, { ...result, players });
   } catch {
     return sendJson(response, 502, { error: 'The bot is unavailable', online: false, players: [] });
   }

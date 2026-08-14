@@ -1,3 +1,5 @@
+import { attachPlayerAvatars, robloxAvatarProxyPath } from '../lib/roblox-avatars.js';
+
 export async function fetchErlcServer(serverKey) {
   if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
   const url = new URL('https://api.erlc.gg/v2/server');
@@ -128,9 +130,7 @@ export function playersOnLibertyMap(players = []) {
       return {
         username: entry.username,
         robloxId,
-        avatarUrl: robloxId
-          ? `https://www.roblox.com/headshot-thumbnail/image?userId=${robloxId}&width=48&height=48&format=png`
-          : '',
+        avatarUrl: robloxAvatarProxyPath(robloxId),
         team: entry.team || 'Civilian',
         callsign: entry.callsign || '',
         postal: entry.location.postal || '',
@@ -145,50 +145,18 @@ export function playersOnLibertyMap(players = []) {
     .sort((left, right) => left.username.localeCompare(right.username));
 }
 
-/** Resolve CDN headshot URLs for a batch of Roblox user IDs. */
-export async function fetchRobloxHeadshots(userIds = []) {
-  const ids = [...new Set(
-    (Array.isArray(userIds) ? userIds : [])
-      .map((id) => String(id || '').replace(/[^\d]/g, ''))
-      .filter(Boolean),
-  )].slice(0, 100);
-  const map = new Map();
-  if (!ids.length) return map;
-  try {
-    const url = new URL('https://thumbnails.roblox.com/v1/users/avatar-headshot');
-    url.searchParams.set('userIds', ids.join(','));
-    url.searchParams.set('size', '48x48');
-    url.searchParams.set('format', 'Png');
-    url.searchParams.set('isCircular', 'false');
-    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!response.ok) return map;
-    const payload = await response.json().catch(() => ({}));
-    for (const entry of payload.data || []) {
-      const id = String(entry.targetId || entry.targetID || '');
-      const imageUrl = String(entry.imageUrl || entry.imageURL || '');
-      if (id && imageUrl && entry.state === 'Completed') map.set(id, imageUrl);
-    }
-  } catch {
-    // Fall back to the public headshot redirect URL already set on each player.
-  }
-  return map;
-}
-
+/** Attach Roblox headshots onto mapped players. */
 export async function fetchErlcPlayersOnMap(serverKey) {
   const server = await fetchErlcServer(serverKey);
   const players = (server.Players || server.players || []).map(parseErlcPlayer);
-  const mapped = playersOnLibertyMap(players);
-  const headshots = await fetchRobloxHeadshots(mapped.map((player) => player.robloxId));
+  const mapped = await attachPlayerAvatars(playersOnLibertyMap(players));
   return {
     online: true,
     name: server.Name || server.name || 'Clearwater',
     currentPlayers: Number.isInteger(server.CurrentPlayers) ? server.CurrentPlayers : players.length,
     maxPlayers: Number.isInteger(server.MaxPlayers) ? server.MaxPlayers : 40,
     queue: Array.isArray(server.Queue) ? server.Queue.length : (Number(server.Queue) || 0),
-    players: mapped.map((player) => ({
-      ...player,
-      avatarUrl: headshots.get(player.robloxId) || player.avatarUrl || '',
-    })),
+    players: mapped,
     updatedAt: new Date().toISOString(),
   };
 }
