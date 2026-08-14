@@ -302,8 +302,9 @@ export function reviewBusinessApplication(store, { businessId, decision, actor, 
     syncBusinessUserRecord(store, biz);
     const owner = store.users[biz.ownerId];
     if (owner) {
-      const badges = Array.isArray(owner.badges) ? owner.badges : [];
-      if (!badges.includes('business')) owner.badges = [...badges, 'business'];
+      // Business check stays on the biz_* account only — never the handler.
+      owner.business = false;
+      owner.badges = (Array.isArray(owner.badges) ? owner.badges : []).filter((badge) => badge !== 'business');
     }
   } else {
     biz.status = 'denied';

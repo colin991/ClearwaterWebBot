@@ -506,6 +506,7 @@ export function publicPosts(store, viewerId) {
 export function publicUsers(store, viewerId) {
   const { viewer, maskedAuthors } = viewerPrivacy(store, viewerId);
   const users = Object.values(store.users);
+  users.forEach((user) => scrubPersonalBusinessCheck(user));
   const people = users.map((user) => {
     const masked = maskedAuthors.has(user.id);
     return {
@@ -531,8 +532,8 @@ export function publicUsers(store, viewerId) {
       banned: Boolean(getActiveBan(user)),
       official: user.official === true,
       bank: user.bank === true,
-      business: user.business === true || /^biz_/i.test(String(user.id || '')),
-      businessOwnerId: user.businessOwnerId || null,
+      business: /^biz_/i.test(String(user.id || '')),
+      businessOwnerId: /^biz_/i.test(String(user.id || '')) ? (user.businessOwnerId || null) : null,
       following: user.preferences?.hideFollowing === true && user.id !== viewer ? [] : (Array.isArray(user.following) ? user.following : []),
       followingCount: Array.isArray(user.following) ? user.following.length : 0,
       followers: users.filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).map((member) => member.id),
@@ -748,10 +749,10 @@ export function upsertInternetUser(store, user) {
     displayName: has('displayName') ? text(user?.displayName, 80) || existing.displayName || 'Discord user' : existing.displayName || 'Discord user',
     avatarUrl: has('avatarUrl') ? text(user?.avatarUrl, 300) || null : existing.avatarUrl || null,
     staffRank: isBusiness ? null : (has('staffRank') ? text(user?.staffRank, 80) || null : existing.staffRank || null),
-    business: isBusiness || existing.business === true,
+    business: isBusiness,
     businessOwnerId: isBusiness
       ? (text(user?.businessOwnerId, 24) || existing.businessOwnerId || null)
-      : existing.businessOwnerId || null,
+      : null,
     verified: isBusiness ? true : existing.verified === true,
     badges: withSiteBadges(
       has('badges') && Array.isArray(user?.badges)
@@ -2631,7 +2632,7 @@ function staffUserFlags(user) {
   const ban = getActiveBan(user);
   const mute = getActiveMute(user);
   const badges = withSiteBadges(user.badges, user);
-  const isBiz = isBusinessAccountId(user.id) || user.business === true || badges.includes('business');
+  const isBiz = isBusinessAccountId(user.id);
   return {
     verified: user.verified === true || isBiz,
     official: user.official === true,
@@ -2644,7 +2645,7 @@ function staffUserFlags(user) {
     lockReels: flagActive(user, 'lockReels', 'lockReelsUntil'),
     lockProfile: flagActive(user, 'lockProfile', 'lockProfileUntil'),
     deactivated: user.deactivated === true,
-    business: isBiz || badges.includes('business'),
+    business: isBiz,
     isBusinessAccount: isBiz,
     warningBadge: badges.includes('warning'),
     developer: badges.includes('developer'),
@@ -2834,8 +2835,11 @@ export function applyStaffUserAction(store, {
   const noteText = text(reason, 300) || text(note, 300);
   const destructive = new Set(['ban', 'ip-ban', 'mute', 'lock-posts', 'lock-messages', 'lock-reels', 'lock-profile', 'shadowban', 'wipe-posts', 'wipe-reels', 'wipe-comments', 'wipe-messages', 'reset-profile', 'delete-post']);
   if (destructive.has(action)) assertNotOfficial(user, 'moderated that way');
-  if (isBusinessAccountId(id) && ['ip-ban', 'badge-business', 'unbadge-business'].includes(action)) {
+  if (isBusinessAccountId(id) && action === 'ip-ban') {
     throw new Error('That action is only for personal Discord accounts');
+  }
+  if (['badge-business', 'unbadge-business'].includes(action)) {
+    throw new Error('Business check only appears on approved business accounts, not personal handlers');
   }
 
   const logUser = (message, extra = {}) => addInternetLog(
@@ -2850,12 +2854,8 @@ export function applyStaffUserAction(store, {
   } else if (action === 'unverify') {
     user.verified = false;
     logUser(`${actorName} removed verification from ${label}.`);
-  } else if (action === 'badge-business') {
-    user.badges = sanitizeInternetBadges([...(Array.isArray(user.badges) ? user.badges : []), 'business']);
-    logUser(`${actorName} marked ${label} as a business account.`);
-  } else if (action === 'unbadge-business') {
-    user.badges = sanitizeInternetBadges(user.badges).filter((badge) => badge !== 'business');
-    logUser(`${actorName} removed the business badge from ${label}.`);
+  } else if (action === 'badge-business' || action === 'unbadge-business') {
+    throw new Error('Business check only appears on approved business accounts, not personal handlers');
   } else if (action === 'badge-warning') {
     if (!noteText) throw new Error('Enter the warning tooltip text');
     user.badges = sanitizeInternetBadges([...(Array.isArray(user.badges) ? user.badges : []), 'warning']);
@@ -3599,8 +3599,19 @@ export function revertInternetHistory(store, { actor, source, id }) {
   throw new Error('Unknown history entry');
 }
 
+function scrubPersonalBusinessCheck(user) {
+  if (!user || isBusinessAccountId(user.id)) return user;
+  if (user.business === true) user.business = false;
+  if (user.businessOwnerId) user.businessOwnerId = null;
+  if (Array.isArray(user.badges) && user.badges.includes('business')) {
+    user.badges = user.badges.filter((badge) => badge !== 'business');
+  }
+  return user;
+}
+
 export function moderationSnapshot(store) {
   expireInternetAds(store);
+  Object.values(store.users).forEach((user) => scrubPersonalBusinessCheck(user));
   const open = store.reports.filter((report) => report.status === 'open').map((report) => publicStaffReport(store, report));
   const reviewed = store.reports.filter((report) => report.status !== 'open').map((report) => publicStaffReport(store, report));
   const pendingAds = store.ads.filter((ad) => ad.status === 'pending').map((ad) => publicAd(ad, { owner: true }));

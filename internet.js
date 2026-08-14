@@ -539,11 +539,7 @@ const warningBadge = (tooltip) => {
   const label = String(tooltip || 'Account warning').trim() || 'Account warning';
   return `<span class="role-badge warning-badge" role="img" aria-label="${escapeHtml(label)}" data-tooltip="${escapeHtml(label)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.4 22 20.6H2L12 3.4Zm0 5.2c-.7 0-1.2.5-1.1 1.2l.4 5.2h1.4l.4-5.2c.1-.7-.4-1.2-1.1-1.2Zm0 9.3a1.15 1.15 0 1 0 0-2.3 1.15 1.15 0 0 0 0 2.3Z"/></svg></span>`;
 };
-const isBusinessAccountUser = (user) => Boolean(
-  user?.business === true
-  || /^biz_/i.test(String(user?.id || ''))
-  || (Array.isArray(user?.badges) && user.badges.includes('business')),
-);
+const isBusinessAccountUser = (user) => /^biz_/i.test(String(user?.id || ''));
 const roleBadges = (user, { skipBusiness = false } = {}) => {
   const badges = Array.isArray(user?.badges) ? user.badges : [];
   const premium = badges.includes('clearwater-role')
@@ -2826,7 +2822,6 @@ function staffUserPanelMarkup(detail) {
   const button = (action, label, extra = '') => `<button type="button" class="staff-action-btn${extra ? ` ${extra}` : ''}" data-staff-user-action="${action}">${label}</button>`;
   const accountStatusToggles = [
     fullStaff && !isBiz ? staffToggleMarkup({ active: user.verified === true, onAction: 'verify', offAction: 'unverify', label: 'Verified' }) : '',
-    fullStaff && !isBiz ? staffToggleMarkup({ active: user.business === true, onAction: 'badge-business', offAction: 'unbadge-business', label: 'Business check' }) : '',
     staffToggleMarkup({ active: user.banned === true, onAction: 'ban', offAction: 'unban', label: 'Banned', expires: user.banUntil ? staffUntil(user.banUntil) : '', tone: 'danger' }),
   ].filter(Boolean).join('');
   const idLabel = isBiz ? 'Business ID' : 'Discord ID';

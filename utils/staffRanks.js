@@ -161,6 +161,10 @@ export function isDeveloperAccount(user = {}) {
 export function withSiteBadges(badges, user = {}) {
   const next = sanitizeInternetBadges(badges);
   if (isDeveloperAccount(user) && !next.includes('developer')) next.push('developer');
+  const isBusinessAccount = /^biz_[a-z0-9-]{8,80}$/i.test(String(user?.id || ''));
+  // Business check is only for actual business accounts, never personal handlers.
+  if (!isBusinessAccount) return next.filter((badge) => badge !== 'business');
+  if (!next.includes('business')) next.push('business');
   return next;
 }
 
