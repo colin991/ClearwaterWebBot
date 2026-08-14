@@ -15,6 +15,7 @@ const discordLogout = document.querySelector('[data-discord-logout]');
 const discordCount = document.querySelectorAll('[data-discord-count]');
 const botConnection = document.querySelectorAll('[data-bot-connection]');
 const ownerLink = document.querySelector('[data-owner-link]');
+const serverManagementLinks = document.querySelectorAll('[data-server-management]');
 const erlcCurrent = document.querySelectorAll('[data-erlc-current]');
 const erlcMax = document.querySelectorAll('[data-erlc-max]');
 const erlcQueue = document.querySelectorAll('[data-erlc-queue]');
@@ -97,6 +98,9 @@ const loadDiscordSession = async () => {
     homepageSignedIn = true;
     homepageInternetReady = true;
     if (ownerLink && session.user.owner) ownerLink.hidden = false;
+    if (session.user.owner) {
+      serverManagementLinks.forEach((link) => { link.hidden = false; });
+    }
     void loadWalletBalance();
   } catch {
     // Keep login available if session check fails.
