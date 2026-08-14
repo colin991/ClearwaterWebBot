@@ -420,17 +420,21 @@ async function runAction(action) {
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok && response.status !== 207) {
-      throw new Error(result.error || `Could not ${action} the selected players`);
+      throw new Error(result.error || result.message || `Could not ${action} the selected players`);
     }
     const succeeded = Number(result.succeeded) || 0;
     const failed = Number(result.failed) || 0;
+    const firstError = result.results?.find((entry) => !entry.ok)?.error
+      || result.error
+      || result.message;
     if (failed && succeeded) {
-      setNotice(`${label}: ${succeeded} succeeded, ${failed} failed.`, true);
+      setNotice(`${label}: ${succeeded} succeeded, ${failed} failed${firstError ? ` · ${firstError}` : ''}.`, true);
     } else if (failed) {
-      const firstError = result.results?.find((entry) => !entry.ok)?.error;
       setNotice(firstError || `${label} failed.`, true);
+    } else if (!succeeded && Array.isArray(result.results)) {
+      setNotice(firstError || `${label} did not reach any players.`, true);
     } else {
-      setNotice(`${label} sent for ${succeeded} player${succeeded === 1 ? '' : 's'}.`);
+      setNotice(`${label} sent for ${succeeded || targets.length} player${(succeeded || targets.length) === 1 ? '' : 's'}.`);
     }
     clearSelection();
     await loadMap(true);
