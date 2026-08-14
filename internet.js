@@ -374,6 +374,7 @@ let staffSearchBusy = false;
 let staffSearchTimer = 0;
 let selectedStaffUserId = null;
 let staffUserDetail = null;
+let staffMessagesState = null;
 let staffUserBusy = false;
 let sidebarAds = [];
 let feedAds = [];
@@ -2861,6 +2862,7 @@ function staffUserPanelMarkup(detail) {
       </div>
       <div class="staff-user-hero-actions">
         <button type="button" data-open-member="${escapeHtml(user.id)}">Public profile</button>
+        <button type="button" data-staff-view-messages="${escapeHtml(user.id)}">View messages</button>
         ${discordHrefId ? `<a href="https://discord.com/users/${encodeURIComponent(discordHrefId)}" target="_blank" rel="noopener">${isBiz ? 'Handler Discord' : 'Discord'}</a>` : ''}
       </div>
     </header>
@@ -2872,7 +2874,7 @@ function staffUserPanelMarkup(detail) {
       <div><dt>Reports</dt><dd>${Number(user.reportCount || 0)}</dd></div>
       <div><dt>Followers</dt><dd>${Number(user.followerCount || 0)}</dd></div>
       <div><dt>Following</dt><dd>${Number(user.followingCount || 0)}</dd></div>
-      <div><dt>DMs</dt><dd>${Number(user.messageCount || 0)}</dd></div>
+      <div><dt>DMs</dt><dd><button type="button" class="staff-stat-link" data-staff-view-messages="${escapeHtml(user.id)}">${Number(user.messageCount || 0)}</button></dd></div>
       ${fullStaff ? `<div><dt>Networks</dt><dd>${Number(user.ipHashCount || 0)}</dd></div>` : ''}
     </dl>
     <p class="staff-user-timeline"><span>Joined ${escapeHtml(staffDateLabel(user.createdAt))}</span><span>Last seen ${escapeHtml(staffDateLabel(user.lastSeenAt))}</span></p>
@@ -2937,6 +2939,11 @@ function staffUserPanelMarkup(detail) {
         </div>
       </details>
       <p class="staff-user-status" data-staff-user-status role="status"></p>
+    </section>
+    <section class="staff-user-block" data-staff-messages-panel>
+      <h3>Direct messages</h3>
+      <p class="staff-action-hint">Inspect this account’s DMs with other members. Opening a thread does not mark messages as read.</p>
+      ${staffMessagesPanelMarkup(user)}
     </section>
     <section class="staff-user-block">
       <h3>Staff note</h3>
@@ -3215,6 +3222,151 @@ async function loadModeration() {
   }
 }
 
+function staffMessagesPanelMarkup(user = {}) {
+  if (!staffMessagesState || staffMessagesState.targetId !== selectedStaffUserId) {
+    return `<div class="staff-messages-idle">
+      <button type="button" class="staff-action-btn" data-staff-view-messages="${escapeHtml(user.id || selectedStaffUserId || '')}">Load conversations</button>
+    </div>`;
+  }
+  if (staffMessagesState.loading) {
+    return '<p class="staff-loading">Loading messages…</p>';
+  }
+  if (staffMessagesState.error) {
+    return `<p class="staff-loading">${escapeHtml(staffMessagesState.error)}</p>
+      <button type="button" class="staff-action-btn" data-staff-view-messages="${escapeHtml(selectedStaffUserId || '')}">Try again</button>`;
+  }
+  if (staffMessagesState.mode === 'thread') {
+    const peer = staffMessagesState.peer || {};
+    const messages = Array.isArray(staffMessagesState.messages) ? staffMessagesState.messages : [];
+    const targetName = staffMessagesState.target?.displayName || 'This member';
+    return `<div class="staff-messages-thread">
+      <div class="staff-messages-thread-head">
+        <button type="button" data-staff-messages-back>← All conversations</button>
+        <div>
+          <b>${escapeHtml(peer.displayName || 'Member')}</b>
+          <small>@${escapeHtml(peer.username || 'member')} · thread with ${escapeHtml(targetName)}</small>
+        </div>
+        ${peer.id ? `<button type="button" class="staff-action-btn" data-staff-open-user="${escapeHtml(peer.id)}">Open peer</button>` : ''}
+      </div>
+      <div class="staff-messages-thread-list">
+        ${messages.length
+          ? messages.map((message) => {
+            const gif = safeGifUrl(message.gifUrl) ? `<img src="${escapeHtml(message.gifUrl)}" alt="${escapeHtml(message.gifTitle || 'GIF')}" />` : '';
+            const transfer = message.transferId
+              ? `<div class="staff-message-transfer">${escapeHtml(message.transferType === 'request' ? 'Credit request' : 'Credit transfer')}${message.transferAmount != null ? ` · C$${Number(message.transferAmount).toLocaleString()}` : ''} · ${escapeHtml(message.transferStatus || 'pending')}</div>`
+              : '';
+            return `<article class="staff-message-bubble ${message.fromTarget ? 'from-target' : 'from-peer'}">
+              <header><b>${message.fromTarget ? escapeHtml(targetName) : escapeHtml(peer.displayName || 'Peer')}</b><small>${escapeHtml(timeAgo(message.createdAt))}${message.fromTarget ? ' · sent' : ' · received'}${message.readAt ? '' : (message.fromTarget ? '' : ' · unread')}</small></header>
+              ${message.content ? `<p>${escapeHtml(message.content)}</p>` : ''}
+              ${gif}
+              ${transfer}
+            </article>`;
+          }).join('')
+          : '<p class="staff-empty">No messages in this thread.</p>'}
+      </div>
+    </div>`;
+  }
+
+  const conversations = Array.isArray(staffMessagesState.conversations) ? staffMessagesState.conversations : [];
+  if (!conversations.length) {
+    return '<p class="staff-empty">This account has no stored direct messages.</p>';
+  }
+  return `<div class="staff-messages-list">
+    ${conversations.map((item) => `<button type="button" class="staff-message-row" data-staff-open-thread="${escapeHtml(item.otherId)}" data-staff-open-thread-username="${escapeHtml(item.otherUsername || '')}">
+      <img src="${escapeHtml(item.otherAvatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" />
+      <span>
+        <b>${escapeHtml(item.otherDisplayName || 'Member')}${item.otherStaffRank ? ` · ${escapeHtml(item.otherStaffRank)}` : ''}</b>
+        <small>@${escapeHtml(item.otherUsername || 'member')} · ${Number(item.messageCount || 0)} message${Number(item.messageCount || 0) === 1 ? '' : 's'} · ${Number(item.outboundCount || 0)} sent</small>
+        <em>${escapeHtml(item.preview || 'Message')} · ${escapeHtml(timeAgo(item.createdAt))}${item.lastFromTarget ? ' · last from them' : ' · last from peer'}</em>
+      </span>
+    </button>`).join('')}
+  </div>`;
+}
+
+async function loadStaffUserMessages(userId) {
+  if (!sessionCanStaff || !userId) return;
+  selectedStaffUserId = userId;
+  staffMessagesState = { targetId: userId, loading: true, mode: 'list' };
+  const panel = document.querySelector('[data-staff-user-panel]');
+  if (staffUserDetail?.user?.id === userId && panel) {
+    panel.innerHTML = staffUserPanelMarkup(staffUserDetail);
+  } else {
+    await loadStaffUserDetail(userId);
+  }
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'staff-user-messages', targetId: userId }),
+    });
+    const result = await readApiJson(response, 'Could not load messages.');
+    if (!response.ok) throw new Error(result.error || 'Could not load messages.');
+    if (selectedStaffUserId !== userId) return;
+    staffMessagesState = {
+      targetId: userId,
+      mode: 'list',
+      target: result.target || null,
+      conversations: Array.isArray(result.conversations) ? result.conversations : [],
+    };
+  } catch (error) {
+    if (selectedStaffUserId !== userId) return;
+    staffMessagesState = { targetId: userId, mode: 'list', error: error.message || 'Could not load messages.' };
+  }
+  if (staffUserDetail?.user?.id === userId) {
+    const next = document.querySelector('[data-staff-user-panel]');
+    if (next) next.innerHTML = staffUserPanelMarkup(staffUserDetail);
+  }
+}
+
+async function loadStaffUserConversation(peerId, username = '') {
+  if (!sessionCanStaff || !selectedStaffUserId || !peerId) return;
+  const targetId = selectedStaffUserId;
+  staffMessagesState = {
+    ...(staffMessagesState || {}),
+    targetId,
+    loading: true,
+    mode: 'thread',
+    peer: { id: peerId, username },
+  };
+  const panel = document.querySelector('[data-staff-user-panel]');
+  if (staffUserDetail?.user?.id === targetId && panel) panel.innerHTML = staffUserPanelMarkup(staffUserDetail);
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'staff-user-conversation',
+        targetId,
+        withUserId: peerId,
+        username,
+      }),
+    });
+    const result = await readApiJson(response, 'Could not load this conversation.');
+    if (!response.ok) throw new Error(result.error || 'Could not load this conversation.');
+    if (selectedStaffUserId !== targetId) return;
+    staffMessagesState = {
+      targetId,
+      mode: 'thread',
+      target: result.target || null,
+      peer: result.peer || { id: peerId, username },
+      messages: Array.isArray(result.messages) ? result.messages : [],
+      conversations: staffMessagesState?.conversations || [],
+    };
+  } catch (error) {
+    if (selectedStaffUserId !== targetId) return;
+    staffMessagesState = {
+      targetId,
+      mode: 'list',
+      conversations: staffMessagesState?.conversations || [],
+      error: error.message || 'Could not load this conversation.',
+    };
+  }
+  if (staffUserDetail?.user?.id === targetId) {
+    const next = document.querySelector('[data-staff-user-panel]');
+    if (next) next.innerHTML = staffUserPanelMarkup(staffUserDetail);
+  }
+}
+
 async function loadStaffUserDetail(userId, silent = false) {
   if (!sessionCanStaff || !userId) return;
   const panel = document.querySelector('[data-staff-user-panel]');
@@ -3225,6 +3377,7 @@ async function loadStaffUserDetail(userId, silent = false) {
     if (!response.ok) throw new Error(result.error || 'Could not load this user.');
     if (selectedStaffUserId !== userId) return;
     staffUserDetail = result;
+    if (staffMessagesState?.targetId && staffMessagesState.targetId !== userId) staffMessagesState = null;
     if (panel && !panel.contains(document.activeElement)) panel.innerHTML = staffUserPanelMarkup(result);
   } catch (error) {
     if (panel && selectedStaffUserId === userId) panel.innerHTML = `<p class="staff-loading">${escapeHtml(error.message || 'Could not load this user.')}</p>`;
@@ -3270,7 +3423,9 @@ function redrawStaffUserPanel(detail, state) {
 }
 
 async function openStaffUser(userId) {
-  selectedStaffUserId = String(userId || '');
+  const nextId = String(userId || '');
+  if (staffMessagesState?.targetId !== nextId) staffMessagesState = null;
+  selectedStaffUserId = nextId;
   staffTab = 'users';
   staffUserDetail = staffUserDetail?.user?.id === selectedStaffUserId ? staffUserDetail : null;
   renderStaffDashboard();
@@ -6103,6 +6258,24 @@ document.addEventListener('click', (event) => {
   }
   const staffOpenUser = event.target.closest('[data-staff-open-user]');
   if (staffOpenUser) { void openStaffUser(staffOpenUser.dataset.staffOpenUser); return; }
+  const staffViewMessages = event.target.closest('[data-staff-view-messages]');
+  if (staffViewMessages) {
+    const targetId = staffViewMessages.dataset.staffViewMessages || selectedStaffUserId;
+    if (targetId) void loadStaffUserMessages(targetId);
+    return;
+  }
+  const staffOpenThread = event.target.closest('[data-staff-open-thread]');
+  if (staffOpenThread) {
+    void loadStaffUserConversation(
+      staffOpenThread.dataset.staffOpenThread,
+      staffOpenThread.dataset.staffOpenThreadUsername || '',
+    );
+    return;
+  }
+  if (event.target.closest('[data-staff-messages-back]')) {
+    if (selectedStaffUserId) void loadStaffUserMessages(selectedStaffUserId);
+    return;
+  }
   const staffUserAction = event.target.closest('[data-staff-user-action]');
   if (staffUserAction) { void runStaffUserAction(staffUserAction.dataset.staffUserAction, staffUserAction.dataset.staffPostId || ''); return; }
   const staffWalletAdjust = event.target.closest('[data-staff-wallet-adjust]');

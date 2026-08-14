@@ -632,6 +632,26 @@ export default async function handler(request, response) {
         owner: staffPanel === 'full',
         actor: staffActor(user, access),
       };
+    } else if (body.action === 'staff-user-messages') {
+      if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
+      payload = {
+        action: 'staff-user-messages',
+        targetId: String(body.targetId || ''),
+        staffPanel,
+        owner: staffPanel === 'full',
+        actor: staffActor(user, access),
+      };
+    } else if (body.action === 'staff-user-conversation') {
+      if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
+      payload = {
+        action: 'staff-user-conversation',
+        targetId: String(body.targetId || ''),
+        withUserId: String(body.withUserId || ''),
+        username: String(body.username || '').slice(0, 80),
+        staffPanel,
+        owner: staffPanel === 'full',
+        actor: staffActor(user, access),
+      };
     } else if (body.action === 'staff-user-search') {
       if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
       payload = {

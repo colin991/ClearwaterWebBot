@@ -2401,6 +2401,7 @@ export function takeInternetMessages(store, actor) {
 
 function findInternetMember(store, { id, username } = {}) {
   const key = String(id || '').trim();
+  if (key && store.users[key]) return store.users[key];
   if (/^\d{16,22}$/.test(key) && store.users[key]) return store.users[key];
   const handle = String(username || '').replace(/^@/, '').toLowerCase();
   if (!handle) return null;
@@ -2420,6 +2421,116 @@ export function takeInternetConversation(store, { actor, withUserId, username })
   const messages = (Array.isArray(user.messages) ? user.messages : []).filter((message) => message.kind === 'direct' && (message.fromId === otherId || message.toId === otherId));
   messages.forEach((message) => { if (message.toId === user.id && !message.readAt) message.readAt = new Date().toISOString(); });
   return messages.sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt)).slice(-100);
+}
+
+function staffPeerLabel(store, peerId, peer = {}) {
+  const isBank = peerId === BANK_INTERNET_ACCOUNT_ID || peer.bank === true;
+  const isOfficial = peerId === OFFICIAL_INTERNET_ACCOUNT_ID || peer.official === true;
+  return {
+    id: peerId,
+    displayName: text(peer.displayName, 80)
+      || text(peer.username, 80)
+      || (isBank ? 'Clearwater Bank' : isOfficial ? 'Clearwater Roleplay' : 'Clearwater member'),
+    username: text(peer.username, 80)
+      || (isBank ? 'clearwaterbank' : isOfficial ? 'clearwater' : 'member'),
+    avatarUrl: peer.avatarUrl || null,
+    staffRank: peer.staffRank || (isBank ? 'Bank' : isOfficial ? 'Official' : null),
+  };
+}
+
+/** Staff-only: list a member's DM threads without marking anything read. */
+export function staffUserMessages(store, targetId) {
+  expireStaleCreditTransfers(store);
+  const id = String(targetId || '').trim();
+  if (!isStaffTargetId(id)) throw new Error('Enter a valid Discord user ID or business account');
+  const user = store.users[id];
+  if (!user) throw new Error('That account has no Clearwater Internet profile yet');
+
+  const messages = (Array.isArray(user.messages) ? user.messages : []).filter((message) => message.kind === 'direct');
+  const conversations = new Map();
+  messages.forEach((message) => {
+    const otherId = message.fromId === user.id ? message.toId : message.fromId;
+    if (!otherId) return;
+    const previous = conversations.get(otherId);
+    const unread = message.toId === user.id && !message.readAt ? 1 : 0;
+    const outbound = message.fromId === user.id ? 1 : 0;
+    if (!previous || new Date(message.createdAt).getTime() > new Date(previous.createdAt).getTime()) {
+      conversations.set(otherId, {
+        id: message.id,
+        otherId,
+        fromId: message.fromId,
+        toId: message.toId,
+        content: text(message.content, 1000),
+        gifUrl: message.gifUrl || '',
+        gifTitle: message.gifTitle || '',
+        createdAt: message.createdAt,
+        unread: (previous?.unread || 0) + unread,
+        outboundCount: (previous?.outboundCount || 0) + outbound,
+        messageCount: (previous?.messageCount || 0) + 1,
+        lastFromTarget: message.fromId === user.id,
+      });
+    } else {
+      previous.unread = (previous.unread || 0) + unread;
+      previous.outboundCount = (previous.outboundCount || 0) + outbound;
+      previous.messageCount = (previous.messageCount || 0) + 1;
+    }
+  });
+
+  return {
+    target: staffPeerLabel(store, user.id, user),
+    conversations: [...conversations.values()]
+      .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt))
+      .slice(0, 80)
+      .map((item) => {
+        const peer = store.users[item.otherId] || {};
+        const peerInfo = staffPeerLabel(store, item.otherId, peer);
+        return {
+          ...item,
+          otherDisplayName: peerInfo.displayName,
+          otherUsername: peerInfo.username,
+          otherAvatarUrl: peerInfo.avatarUrl,
+          otherStaffRank: peerInfo.staffRank,
+          preview: item.gifUrl && !item.content ? 'Sent a GIF' : (item.content || 'Message'),
+        };
+      }),
+  };
+}
+
+/** Staff-only: read one DM thread from the target's mailbox without marking read. */
+export function staffUserConversation(store, { targetId, withUserId, username } = {}) {
+  expireStaleCreditTransfers(store);
+  const id = String(targetId || '').trim();
+  if (!isStaffTargetId(id)) throw new Error('Enter a valid Discord user ID or business account');
+  const user = store.users[id];
+  if (!user) throw new Error('That account has no Clearwater Internet profile yet');
+  const other = findInternetMember(store, { id: withUserId, username });
+  if (!other) throw new Error('Conversation partner not found');
+  const otherId = other.id;
+  const messages = (Array.isArray(user.messages) ? user.messages : [])
+    .filter((message) => message.kind === 'direct' && (message.fromId === otherId || message.toId === otherId))
+    .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt))
+    .slice(-150)
+    .map((message) => ({
+      id: message.id,
+      fromId: message.fromId,
+      toId: message.toId,
+      content: text(message.content, 1000),
+      gifUrl: message.gifUrl || '',
+      gifTitle: message.gifTitle || '',
+      createdAt: message.createdAt,
+      readAt: message.readAt || null,
+      transferId: message.transferId || null,
+      transferStatus: message.transferStatus || null,
+      transferAmount: message.transferAmount || null,
+      transferType: message.transferType || null,
+      fromTarget: message.fromId === user.id,
+    }));
+
+  return {
+    target: staffPeerLabel(store, user.id, user),
+    peer: staffPeerLabel(store, other.id, other),
+    messages,
+  };
 }
 
 export function takeInternetNotifications(store, actor) {

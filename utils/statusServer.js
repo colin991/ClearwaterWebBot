@@ -428,7 +428,7 @@ export function startStatusServer(client, config) {
         const asBusinessId = String(body.asBusinessId || '').trim();
         const wantsBusiness = Boolean(asBusinessId);
         const requestedOwner = body.owner === true;
-        const staffAction = ['moderation', 'staff-user', 'staff-user-detail', 'staff-user-search', 'staff-wallet', 'staff-site', 'report-review', 'history-revert', 'ad-review', 'ad-manage', 'verify', 'ban', 'verify-review', 'business-review'].includes(body.action);
+        const staffAction = ['moderation', 'staff-user', 'staff-user-detail', 'staff-user-search', 'staff-user-messages', 'staff-user-conversation', 'staff-wallet', 'staff-site', 'report-review', 'history-revert', 'ad-review', 'ad-manage', 'verify', 'ban', 'verify-review', 'business-review'].includes(body.action);
         const needsLivePanel = wantsOfficial
           || requestedOwner
           || staffAction
@@ -923,6 +923,20 @@ export function startStatusServer(client, config) {
         if (body.action === 'staff-user-detail') {
           if (!['full', 'limited'].includes(body.staffPanel)) return json(response, 403, { error: 'Staff access required' });
           return json(response, 200, staffUserDetail(store, body.targetId));
+        }
+
+        if (body.action === 'staff-user-messages') {
+          if (!['full', 'limited'].includes(body.staffPanel)) return json(response, 403, { error: 'Staff access required' });
+          return json(response, 200, staffUserMessages(store, body.targetId));
+        }
+
+        if (body.action === 'staff-user-conversation') {
+          if (!['full', 'limited'].includes(body.staffPanel)) return json(response, 403, { error: 'Staff access required' });
+          return json(response, 200, staffUserConversation(store, {
+            targetId: body.targetId,
+            withUserId: body.withUserId,
+            username: body.username,
+          }));
         }
 
         if (body.action === 'staff-user-search') {
