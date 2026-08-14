@@ -1202,38 +1202,45 @@ body.server-mgmt-page {
 }
 .server-map-pin {
   position: absolute;
-  width: 18px;
-  height: 18px;
+  width: 30px;
+  height: 30px;
   margin: 0;
   padding: 0;
-  border: 0;
-  background: transparent;
-  transform: translate(-50%, -100%);
+  border: 2.5px solid var(--pin, #c5d0de);
+  border-radius: 50%;
+  overflow: hidden;
+  background: #0b121c;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, .55),
+    0 6px 14px rgba(0, 0, 0, .42);
+  transform: translate(-50%, -50%);
   cursor: pointer;
   z-index: 2;
 }
-.server-map-pin span {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 18px;
-  height: 18px;
-  border-radius: 50% 50% 50% 0;
-  background: var(--pin, #7dd3fc);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pin, #7dd3fc) 28%, transparent), 0 6px 14px rgba(0, 0, 0, .45);
-  transform: rotate(-45deg);
+.server-map-pin img,
+.server-map-pin-fallback {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
 }
-.server-map-pin span::after {
-  position: absolute;
-  inset: 5px;
-  border-radius: 50%;
-  background: #fff;
-  content: '';
+.server-map-pin-fallback {
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: color-mix(in srgb, var(--pin, #c5d0de) 42%, #101820);
+  font-size: 11px;
+  font-weight: 780;
 }
 .server-map-pin.is-selected {
   z-index: 5;
-  filter: drop-shadow(0 0 10px rgba(255, 255, 255, .35));
-  transform: translate(-50%, -100%) scale(1.18);
+  border-width: 3px;
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px rgba(0, 0, 0, .7),
+    0 8px 18px rgba(0, 0, 0, .5);
+  transform: translate(-50%, -50%) scale(1.16);
 }
 .server-roster {
   min-height: 280px;
@@ -1305,6 +1312,17 @@ body.server-mgmt-page {
   flex: 0 0 10px;
   border-radius: 50%;
   box-shadow: 0 0 0 3px rgba(255, 255, 255, .08);
+}
+.server-roster-avatar {
+  width: 28px;
+  height: 28px;
+  margin-top: 1px;
+  flex: 0 0 28px;
+  border: 2px solid var(--pin, #c5d0de);
+  border-radius: 50%;
+  object-fit: cover;
+  background: #0b121c;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .35);
 }
 .server-roster-copy {
   min-width: 0;

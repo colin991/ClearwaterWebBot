@@ -17,14 +17,17 @@ const clearBtn = document.querySelector('[data-mgmt-clear]');
 const actionButtons = [...document.querySelectorAll('[data-mgmt-action]')];
 
 const TEAM_TONES = [
-  ['sheriff', '#f0c14a'],
-  ['police', '#5b9dff'],
-  ['trooper', '#6ea3ff'],
-  ['highway', '#6ea3ff'],
-  ['fire', '#ff6b4a'],
-  ['ems', '#ff7a9a'],
-  ['dot', '#f0c14a'],
-  ['civilian', '#9eb2cc'],
+  ['sheriff', '#8b7355'],
+  ['fire', '#e23b2f'],
+  ['ems', '#e23b2f'],
+  ['dot', '#f0c014'],
+  ['transit', '#f0c014'],
+  ['police', '#3d7eff'],
+  ['trooper', '#3d7eff'],
+  ['highway', '#3d7eff'],
+  ['fhp', '#3d7eff'],
+  ['civilian', '#f4f6f8'],
+  ['civ', '#f4f6f8'],
 ];
 
 const REFRESH_MS = 8000;
@@ -43,7 +46,19 @@ function teamTone(team = '') {
   for (const [needle, color] of TEAM_TONES) {
     if (value.includes(needle)) return color;
   }
-  return '#7dd3fc';
+  return '#c5d0de';
+}
+
+function avatarUrlFor(player) {
+  if (player?.avatarUrl) return String(player.avatarUrl);
+  const id = String(player?.robloxId || '').replace(/[^\d]/g, '');
+  if (!id) return '';
+  return `https://www.roblox.com/headshot-thumbnail/image?userId=${id}&width=48&height=48&format=png`;
+}
+
+function initialsFor(player) {
+  const name = String(player?.username || '?').trim();
+  return (name.slice(0, 1) || '?').toUpperCase();
 }
 
 function setNotice(message, isError = false) {
@@ -95,7 +110,11 @@ function renderMap(players) {
     const id = playerKey(player);
     const selected = selectedIds.has(id) ? ' is-selected' : '';
     const title = `${player.username}${player.callsign ? ` · ${player.callsign}` : ''} · ${player.team}`;
-    return `<button type="button" class="server-map-pin${selected}" data-player-id="${escapeAttr(id)}" style="left:${(player.left * 100).toFixed(3)}%;top:${(player.top * 100).toFixed(3)}%;--pin:${teamTone(player.team)}" title="${escapeAttr(title)}" aria-label="${escapeAttr(title)}"><span></span></button>`;
+    const avatar = avatarUrlFor(player);
+    const media = avatar
+      ? `<img src="${escapeAttr(avatar)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-pin-avatar />`
+      : `<span class="server-map-pin-fallback">${escapeHtml(initialsFor(player))}</span>`;
+    return `<button type="button" class="server-map-pin${selected}" data-player-id="${escapeAttr(id)}" data-initials="${escapeAttr(initialsFor(player))}" style="left:${(player.left * 100).toFixed(3)}%;top:${(player.top * 100).toFixed(3)}%;--pin:${teamTone(player.team)}" title="${escapeAttr(title)}" aria-label="${escapeAttr(title)}">${media}</button>`;
   }).join('');
 }
 
@@ -110,7 +129,11 @@ function renderRoster(players) {
     const id = playerKey(player);
     const selected = selectedIds.has(id) ? ' is-selected' : '';
     const place = player.label || player.postal || 'Liberty County';
-    return `<li><button type="button" class="server-roster-row${selected}" data-player-id="${escapeAttr(id)}"><span class="server-roster-dot" style="background:${teamTone(player.team)}"></span><span class="server-roster-copy"><b>${escapeHtml(player.username)}</b><small>${escapeHtml(player.team)}${player.callsign ? ` · ${escapeHtml(player.callsign)}` : ''}</small><em>${escapeHtml(place)}</em></span></button></li>`;
+    const avatar = avatarUrlFor(player);
+    const media = avatar
+      ? `<img class="server-roster-avatar" src="${escapeAttr(avatar)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" style="--pin:${teamTone(player.team)}" />`
+      : `<span class="server-roster-dot" style="background:${teamTone(player.team)}"></span>`;
+    return `<li><button type="button" class="server-roster-row${selected}" data-player-id="${escapeAttr(id)}">${media}<span class="server-roster-copy"><b>${escapeHtml(player.username)}</b><small>${escapeHtml(player.team)}${player.callsign ? ` · ${escapeHtml(player.callsign)}` : ''}</small><em>${escapeHtml(place)}</em></span></button></li>`;
   }).join('');
 }
 
