@@ -5483,9 +5483,9 @@ html.pref-reduce-motion *::after {
 }
 
 /* Clearwater credit wallet */
-.wallet-view { padding: 18px 16px 48px; }
-.wallet-stack { display: grid; gap: 14px; max-width: 1100px; }
-.wallet-panel { display: grid; gap: 14px; }
+.wallet-view { padding: 12px 4px 40px; width: 100%; box-sizing: border-box; }
+.wallet-stack { display: grid; gap: 14px; width: 100%; max-width: none; }
+.wallet-panel { display: grid; gap: 14px; width: 100%; }
 .wallet-panel[hidden] { display: none !important; }
 .wallet-tabs {
   position: sticky;
@@ -5493,6 +5493,7 @@ html.pref-reduce-motion *::after {
   z-index: 12;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100%;
   margin: 0 0 14px;
   border: 1px solid rgba(148, 184, 255, .14);
   border-radius: 16px;
