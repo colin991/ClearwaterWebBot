@@ -94,6 +94,9 @@ a { color: inherit; text-decoration: none; }
 .post-action-row button.bookmarked {
   color: #7aadff;
 }
+.post-action-row button.bookmarked svg.filled {
+  fill: currentColor;
+}
 .composer-draft-note {
   margin: 0 0 8px;
   padding: 0 4px;

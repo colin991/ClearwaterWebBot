@@ -4,7 +4,7 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260814-biz-switcher-boost';
+const INTERNET_VERSION = '20260814-bookmark-fix';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
@@ -579,7 +579,7 @@ export default async function handler(request, response) {
       payload = {
         action: 'social',
         type: String(body.type || ''),
-        enabled: body.enabled === true,
+        enabled: body.enabled !== false && body.enabled !== 'false',
         targetId: String(body.targetId || ''),
         postId: String(body.postId || ''),
         collectionId: String(body.collectionId || ''),

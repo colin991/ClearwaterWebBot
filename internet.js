@@ -96,7 +96,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260814-biz-switcher-boost';
+const INTERNET_VERSION = '20260814-bookmark-fix';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -300,6 +300,7 @@ let internetUsers = new Map();
 let loadingPosts = false;
 let loadPostsQueued = false;
 const inFlightLikes = new Set();
+const inFlightBookmarks = new Set();
 let accountBanned = false;
 let activeBan = null;
 let sessionIsOwner = false;
@@ -722,7 +723,7 @@ function postActionIcon(type, filled = false) {
     reply: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.4 8.7 8.7 0 0 1-3.7-.8L3.5 21l1.3-3.8A7.7 7.7 0 0 1 3.5 11.5 8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4Z" /></svg>',
     repost: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10m0 0-3-3m3 3-3 3M17 17H7m0 0 3 3m-3-3 3-3" /></svg>',
     like: `<svg viewBox="0 0 24 24" aria-hidden="true"${filled ? ' class="filled"' : ''}><path d="M20.8 8.6c0 5-8.8 10.4-8.8 10.4S3.2 13.6 3.2 8.6A4.6 4.6 0 0 1 12 6.8a4.6 4.6 0 0 1 8.8 1.8Z" /></svg>`,
-    bookmark: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21l-6-3.6L6 21V4.5Z" /></svg>',
+    bookmark: `<svg viewBox="0 0 24 24" aria-hidden="true"${filled ? ' class="filled"' : ''}><path d="M6 4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21l-6-3.6L6 21V4.5Z" /></svg>`,
     share: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13" /></svg>',
   };
   return icons[type] || '';
@@ -966,7 +967,7 @@ function postMarkup(post, profile = false) {
   const reelChip = display.kind === 'reel'
     ? `<button type="button" class="search-reel-chip" data-open-reel="${escapeHtml(display.id)}">Open Reel</button>`
     : '';
-  return `<article class="post" data-post-card="${escapeHtml(display.id)}">${repostLabel}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(display.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || display)}${boostChip}${display.kind === 'reel' ? '<span class="post-reel-tag">Reel</span>' : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(display.createdAt)}${display.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? `<span class="post-rank"> &middot; ${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(display)}</div>${display.content ? `<p class="post-content">${body}</p>` : ''}${quoteMarkup}${media}${poll}${reelChip}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(display.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options" class="${alreadyReposted ? 'reposted' : ''}">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(display.id)}">${alreadyReposted ? 'Undo repost' : 'Repost'}</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(display.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(display.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-bookmark-post="${escapeHtml(display.id)}" class="${bookmarked ? 'bookmarked' : ''}" aria-label="Bookmark">${postActionIcon('bookmark')}</button><button type="button" data-engage="share" data-post-id="${escapeHtml(display.id)}">${postActionIcon('share')}</button></div></article>`;
+  return `<article class="post" data-post-card="${escapeHtml(display.id)}">${repostLabel}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(display.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || display)}${boostChip}${display.kind === 'reel' ? '<span class="post-reel-tag">Reel</span>' : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(display.createdAt)}${display.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? `<span class="post-rank"> &middot; ${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(display)}</div>${display.content ? `<p class="post-content">${body}</p>` : ''}${quoteMarkup}${media}${poll}${reelChip}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(display.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options" class="${alreadyReposted ? 'reposted' : ''}">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(display.id)}">${alreadyReposted ? 'Undo repost' : 'Repost'}</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(display.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(display.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-engage="bookmark" data-post-id="${escapeHtml(display.id)}" class="${bookmarked ? 'bookmarked' : ''}" aria-label="${bookmarked ? 'Remove bookmark' : 'Bookmark'}" aria-pressed="${bookmarked ? 'true' : 'false'}">${postActionIcon('bookmark', bookmarked)}</button><button type="button" data-engage="share" data-post-id="${escapeHtml(display.id)}">${postActionIcon('share')}</button></div></article>`;
 }
 
 function safeGifUrl(value) {
@@ -4572,12 +4573,23 @@ async function loadSocial() {
       socialState = { ...socialState, ...result.social };
       if (!Array.isArray(socialState.bookmarkCollections)) socialState.bookmarkCollections = [];
       if (!Array.isArray(socialState.bookmarks)) socialState.bookmarks = [];
-      updateNotificationIndicators();
-      renderPosts();
-      renderBookmarks();
-      renderSideSuggestions();
-      renderOnboardingChecklist();
     }
+    // Bookmarks always live on the personal account, even while posting as a business.
+    if (activeAccount !== 'personal' && activeAccount) {
+      const personalResponse = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'social-status' }) });
+      const personalResult = await readApiJson(personalResponse, 'Could not load bookmarks.');
+      if (personalResponse.ok && personalResult.social) {
+        socialState.bookmarks = Array.isArray(personalResult.social.bookmarks) ? personalResult.social.bookmarks : [];
+        socialState.bookmarkCollections = Array.isArray(personalResult.social.bookmarkCollections)
+          ? personalResult.social.bookmarkCollections
+          : [];
+      }
+    }
+    updateNotificationIndicators();
+    renderPosts();
+    renderBookmarks();
+    renderSideSuggestions();
+    renderOnboardingChecklist();
   } catch { /* Feed stays usable during a temporary connection issue. */ }
 }
 
@@ -5021,11 +5033,22 @@ function patchFollowGraphs(targetId, enabled) {
 }
 
 async function socialAction(type, { targetId = '', postId = '', enabled = true, collectionId = '', collectionName = '' } = {}) {
-  const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'social', type, targetId, postId, enabled, collectionId, collectionName, ...activeAccountRequest() }) });
+  const bookmarkAction = String(type || '').startsWith('bookmark');
+  // Bookmarks/collections always save to the signed-in personal account.
+  const account = bookmarkAction ? {} : activeAccountRequest();
+  const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'social', type, targetId, postId, enabled, collectionId, collectionName, ...account }) });
   const result = await readApiJson(response, 'Could not save this change.');
   if (!response.ok) throw new Error(result.error || 'Could not save this change.');
-  socialState = { ...socialState, ...result.social };
-  if (!Array.isArray(socialState.bookmarkCollections)) socialState.bookmarkCollections = [];
+  if (bookmarkAction && result.social) {
+    socialState = {
+      ...socialState,
+      bookmarks: Array.isArray(result.social.bookmarks) ? result.social.bookmarks : (socialState.bookmarks || []),
+      bookmarkCollections: Array.isArray(result.social.bookmarkCollections) ? result.social.bookmarkCollections : (socialState.bookmarkCollections || []),
+    };
+  } else {
+    socialState = { ...socialState, ...result.social };
+    if (!Array.isArray(socialState.bookmarkCollections)) socialState.bookmarkCollections = [];
+  }
   if (type === 'follow' && targetId) patchFollowGraphs(targetId, enabled === true);
   renderPosts();
   renderSideSuggestions();
@@ -6151,24 +6174,6 @@ document.addEventListener('click', (event) => {
   }
   const messageUser = event.target.closest('[data-message-user]');
   if (messageUser) { messageModal.hidden = true; openConversation(internetUsers.get(messageUser.dataset.messageUser)); return; }
-  const bookmark = event.target.closest('[data-bookmark-post]');
-  if (bookmark) {
-    void (async () => {
-      try {
-        const postId = bookmark.dataset.bookmarkPost;
-        const enabled = !(Array.isArray(socialState.bookmarks) && socialState.bookmarks.includes(postId));
-        await socialAction('bookmark', {
-          postId,
-          enabled,
-          collectionId: enabled && activeBookmarkCollectionId ? activeBookmarkCollectionId : '',
-        });
-        renderPosts();
-      } catch (error) {
-        void siteAlert(error.message || 'Could not save that post.');
-      }
-    })();
-    return;
-  }
   const boostBtn = event.target.closest('[data-post-boost]');
   if (boostBtn) {
     void (async () => {
@@ -6582,6 +6587,40 @@ async function handlePostEngagement(type, postId, control = null) {
       void siteAlert(error.message || 'Could not like this post.');
     } finally {
       inFlightLikes.delete(post.id);
+    }
+    return;
+  }
+  if (type === 'bookmark') {
+    if (inFlightBookmarks.has(post.id)) return;
+    inFlightBookmarks.add(post.id);
+    const already = Array.isArray(socialState.bookmarks) && socialState.bookmarks.includes(post.id);
+    const enabled = !already;
+    socialState.bookmarks = enabled
+      ? [...new Set([...(socialState.bookmarks || []), post.id])]
+      : (socialState.bookmarks || []).filter((id) => id !== post.id);
+    if (!enabled) {
+      socialState.bookmarkCollections = (socialState.bookmarkCollections || []).map((collection) => ({
+        ...collection,
+        postIds: (collection.postIds || []).filter((id) => id !== post.id),
+      }));
+    }
+    refreshVisiblePosts();
+    try {
+      const collectionId = enabled
+        && activeView === 'bookmarks'
+        && activeBookmarkCollectionId
+        && (socialState.bookmarkCollections || []).some((item) => item.id === activeBookmarkCollectionId)
+        ? activeBookmarkCollectionId
+        : '';
+      await socialAction('bookmark', { postId: post.id, enabled, collectionId });
+    } catch (error) {
+      socialState.bookmarks = already
+        ? [...new Set([...(socialState.bookmarks || []), post.id])]
+        : (socialState.bookmarks || []).filter((id) => id !== post.id);
+      refreshVisiblePosts();
+      void siteAlert(error.message || 'Could not save that post.');
+    } finally {
+      inFlightBookmarks.delete(post.id);
     }
     return;
   }
