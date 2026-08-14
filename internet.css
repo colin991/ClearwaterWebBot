@@ -6241,11 +6241,69 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
 .staff-banner-live a { color: var(--blue); text-decoration: underline; }
 .staff-action-btn.ghost { color: #d7e4f7; background: #152132; }
 
-/* Reels desktop side panel (comments + creator) */
+/* Reels desktop: keep the right rail so the page isn’t empty beside the player */
 .internet-shell:has([data-reels-stage]:not([hidden])) {
-  grid-template-columns: 210px minmax(0, 1fr);
+  width: min(1440px, calc(100% - 40px));
+  grid-template-columns: 210px minmax(0, 1fr) minmax(260px, 300px);
 }
-.internet-shell:has([data-reels-stage]:not([hidden])) .internet-side { display: none; }
+.internet-shell:has([data-reels-stage]:not([hidden])) .internet-side {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+.internet-shell:has([data-reels-stage]:not([hidden])) .internet-side > .internet-search,
+.internet-shell:has([data-reels-stage]:not([hidden])) .internet-side > .search-side,
+.internet-shell:has([data-reels-stage]:not([hidden])) .internet-side > .trending {
+  display: none !important;
+}
+.reels-side-card {
+  display: none;
+  gap: 10px;
+  padding: 16px 16px 18px;
+  border: 1px solid rgba(148, 184, 255, .16);
+  border-radius: 18px;
+  color: #dce9ff;
+  background:
+    linear-gradient(180deg, rgba(52, 120, 220, .12), transparent 48%),
+    linear-gradient(165deg, rgba(10, 20, 38, .94), rgba(5, 11, 20, .96));
+}
+.internet-shell:has([data-reels-stage]:not([hidden])) .reels-side-card {
+  display: grid;
+}
+.reels-side-card .wallet-kicker {
+  margin: 0;
+  color: #6aa8ff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.reels-side-card h2 {
+  margin: 0;
+  color: #f4f8ff;
+  font-size: 18px;
+  letter-spacing: -.02em;
+}
+.reels-side-card p {
+  margin: 0;
+  color: #8fa3bd;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.reels-side-card ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #b7c9e2;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.reels-side-card a {
+  color: #9fc6ff;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+.reels-side-card a:hover { text-decoration: underline; }
 .reels-stage {
   position: relative;
   display: flex;
