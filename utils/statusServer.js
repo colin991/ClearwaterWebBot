@@ -370,7 +370,7 @@ export function startStatusServer(client, config) {
           : null;
         const wantsOfficial = body.asOfficial === true;
         const requestedOwner = body.owner === true;
-        const staffAction = ['moderation', 'staff-user', 'staff-user-detail', 'staff-user-search', 'staff-wallet', 'staff-site', 'report-review', 'history-revert', 'ad-review', 'verify', 'ban'].includes(body.action);
+        const staffAction = ['moderation', 'staff-user', 'staff-user-detail', 'staff-user-search', 'staff-wallet', 'staff-site', 'report-review', 'history-revert', 'ad-review', 'ad-manage', 'verify', 'ban'].includes(body.action);
         const needsLivePanel = wantsOfficial
           || requestedOwner
           || staffAction
