@@ -769,29 +769,14 @@ body { min-width: 320px; min-height: 100dvh; overflow-x: clip; background: #2a2a
   .feed-cover { height: 128px; border-radius: 16px; }
 }
 
-/* Clearwater aurora theme shared with the main site. The thin blue arcs are
-   generated here instead of using a copied image, keeping Internet distinct. */
+/* Flat charcoal page chrome — no aurora wash behind the columns. */
 body {
   position: relative;
-  background:
-    radial-gradient(72% 40% at 50% -8%, rgba(47, 107, 255, .2), transparent 72%),
-    radial-gradient(40% 30% at 5% 64%, rgba(15, 99, 210, .1), transparent 70%),
-    #02050c;
+  background: #2a2a2a;
 }
 body::before {
-  position: fixed;
-  z-index: -1;
-  top: -31vh;
-  left: -15vw;
-  width: 130vw;
-  height: 72vh;
-  opacity: .42;
-  background:
-    radial-gradient(ellipse 54% 24% at 50% 58%, transparent 62%, rgba(62, 132, 255, .36) 63% 64%, transparent 66%),
-    radial-gradient(ellipse 42% 19% at 50% 59%, transparent 60%, rgba(80, 218, 255, .2) 61% 62%, transparent 65%);
-  filter: blur(18px);
-  content: '';
-  pointer-events: none;
+  display: none;
+  content: none;
 }
 @media (min-width: 941px) {
   .internet-shell { width: min(1320px, calc(100% - 48px)); gap: 24px 28px; padding-top: 26px; }
