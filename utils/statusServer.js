@@ -8,7 +8,7 @@ import { dropLocationNameCandidates, fetchErlcPlayersOnMap, findPlayerDropLocati
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
 import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
-import { AutomodHoldError, adjustInternetCredits, addBusinessMember, applyStaffSiteAction, applyStaffUserAction, assertLimitedStaffBanQuota, banKnownInternetIps, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listInternetAdsForUser, listMyBusinessAccounts, manageInternetAd, moderationSnapshot, myVerificationApplication, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, removeBusinessMember, respondCreditTransfer, reviewBusinessApplication, reviewInternetAd, reviewInternetReport, reviewVerificationApplication, revertInternetHistory, saveInternetStore, searchStaffUsers, sendInternetMessage, serveInternetAds, setBusinessMemberRole, setDiscordInternetNotify, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserDetail, submitBusinessApplication, submitVerificationApplication, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateBusinessProfile, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
+import { AutomodHoldError, adjustInternetCredits, addBusinessMember, applyStaffSiteAction, applyStaffUserAction, assertBusinessAccess, assertLimitedStaffBanQuota, banKnownInternetIps, businessActorFromAccount, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listInternetAdsForUser, listMyBusinessAccounts, manageInternetAd, moderationSnapshot, myVerificationApplication, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, purchasePostBoost, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, removeBusinessMember, respondCreditTransfer, reviewBusinessApplication, reviewInternetAd, reviewInternetReport, reviewVerificationApplication, revertInternetHistory, saveInternetStore, searchStaffUsers, sendInternetMessage, serveInternetAds, setBusinessMemberRole, setDiscordInternetNotify, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserDetail, submitBusinessApplication, submitVerificationApplication, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateBusinessProfile, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
 import { createDiscordInternetNotifier } from './discordInternetNotify.js';
 import { createInternetFeedController, shouldAnnounceInteractResult } from './discordInternetFeed.js';
 
@@ -425,8 +425,10 @@ export function startStatusServer(client, config) {
           ? body.staffPanel
           : null;
         const wantsOfficial = body.asOfficial === true;
+        const asBusinessId = String(body.asBusinessId || '').trim();
+        const wantsBusiness = Boolean(asBusinessId);
         const requestedOwner = body.owner === true;
-        const staffAction = ['moderation', 'staff-user', 'staff-user-detail', 'staff-user-search', 'staff-wallet', 'staff-site', 'report-review', 'history-revert', 'ad-review', 'ad-manage', 'verify', 'ban'].includes(body.action);
+        const staffAction = ['moderation', 'staff-user', 'staff-user-detail', 'staff-user-search', 'staff-wallet', 'staff-site', 'report-review', 'history-revert', 'ad-review', 'ad-manage', 'verify', 'ban', 'verify-review', 'business-review'].includes(body.action);
         const needsLivePanel = wantsOfficial
           || requestedOwner
           || staffAction
@@ -436,13 +438,41 @@ export function startStatusServer(client, config) {
           livePanel = await resolveLiveStaffPanel(body.actor, proxyPanel);
         }
         body.asOfficial = false;
+        body.asBusinessId = '';
         body.owner = false;
         body.staffPanel = null;
+        if (wantsOfficial && wantsBusiness) {
+          return json(response, 400, { error: 'Choose personal, official, or one business account' });
+        }
         if (wantsOfficial) {
           if (livePanel !== 'full') return json(response, 403, { error: 'Ownership access required' });
           body.actor = ensureOfficialInternetAccount(store);
           body.asOfficial = true;
           body.owner = true;
+        } else if (wantsBusiness) {
+          const businessActions = new Set([
+            'post', 'post-interaction', 'poll-vote', 'social', 'social-status',
+            'messages', 'conversation', 'notifications', 'message-send', 'edit', 'delete',
+          ]);
+          if (!businessActions.has(body.action)) {
+            return json(response, 400, { error: 'Switch back to your personal account for wallet and ads actions' });
+          }
+          const realActor = body.actor;
+          const { biz } = assertBusinessAccess(store, {
+            actor: realActor,
+            businessId: asBusinessId,
+            need: 'post',
+          });
+          upsertInternetUser(store, {
+            id: biz.id,
+            username: biz.username,
+            displayName: biz.displayName,
+            avatarUrl: biz.avatarUrl,
+            businessOwnerId: biz.ownerId,
+            badges: ['business'],
+          });
+          body.actor = businessActorFromAccount(biz);
+          body.asBusinessId = biz.id;
         } else if (livePanel === 'full' && (
           body.action === 'official-profile-save'
           || ((body.action === 'edit' || body.action === 'delete') && requestedOwner)
@@ -579,6 +609,12 @@ export function startStatusServer(client, config) {
 
         if (body.action === 'ad-purchase') {
           const result = purchaseInternetAd(store, body);
+          await saveInternetStore(store);
+          return json(response, 201, result);
+        }
+
+        if (body.action === 'post-boost') {
+          const result = purchasePostBoost(store, body);
           await saveInternetStore(store);
           return json(response, 201, result);
         }

@@ -96,7 +96,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260814-biz-verify-ads';
+const INTERNET_VERSION = '20260814-biz-switcher-boost';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -123,7 +123,7 @@ function signInUrl(nextPath = '') {
   return `/signin?next=${encodeURIComponent(path)}`;
 }
 
-const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post', 'sponsored']);
+const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post', 'sponsored', 'bookmarks']);
 
 const siteDialog = document.querySelector('[data-site-dialog]');
 const siteDialogForm = document.querySelector('[data-site-dialog-form]');
@@ -328,7 +328,12 @@ let reelsVolume = (() => {
 })();
 let reelsAudioUnlocked = false;
 let pickerTarget = 'post';
-let socialState = { following: [], followers: [], blocked: [], muted: [], bookmarks: [], unreadNotifications: 0, unreadMessages: 0 };
+let socialState = { following: [], followers: [], blocked: [], muted: [], bookmarks: [], bookmarkCollections: [], unreadNotifications: 0, unreadMessages: 0 };
+let activeBookmarkCollectionId = '';
+let postBoostPricing = { cost: 250, hours: 12, dailyCap: 5, paused: false };
+const POST_BOOST_COST_FALLBACK = 250;
+let onboardingWalletVisited = false;
+let composerDraftTimer = 0;
 let viewedMember = null;
 let profileTab = 'posts';
 let memberTab = 'posts';
@@ -528,13 +533,18 @@ const timeAgo = (value) => {
   const days = Math.floor(hours / 24);
   return `${days} day${days === 1 ? '' : 's'} ago`;
 };
-const verifiedBadge = () => '<span class="verified" role="img" aria-label="Verified" data-tooltip="Verified"><img src="assets/verified-badge.png" alt="" /></span>';
+const verifiedBadge = (gold = false) => `<span class="verified${gold ? ' verified-gold' : ''}" role="img" aria-label="${gold ? 'Business verified' : 'Verified'}" data-tooltip="${gold ? 'Business verified' : 'Verified'}"><img src="assets/verified-badge.png" alt="" /></span>`;
 const businessBadge = () => '<span class="role-badge business-badge" role="img" aria-label="Business" data-tooltip="Business account"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 16.7 4.8 12.3l1.7-1.7 2.7 2.7 8.3-8.3 1.7 1.7z"/></svg></span>';
 const warningBadge = (tooltip) => {
   const label = String(tooltip || 'Account warning').trim() || 'Account warning';
   return `<span class="role-badge warning-badge" role="img" aria-label="${escapeHtml(label)}" data-tooltip="${escapeHtml(label)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.4 22 20.6H2L12 3.4Zm0 5.2c-.7 0-1.2.5-1.1 1.2l.4 5.2h1.4l.4-5.2c.1-.7-.4-1.2-1.1-1.2Zm0 9.3a1.15 1.15 0 1 0 0-2.3 1.15 1.15 0 0 0 0 2.3Z"/></svg></span>`;
 };
-const roleBadges = (user) => {
+const isBusinessAccountUser = (user) => Boolean(
+  user?.business === true
+  || /^biz_/i.test(String(user?.id || ''))
+  || (Array.isArray(user?.badges) && user.badges.includes('business')),
+);
+const roleBadges = (user, { skipBusiness = false } = {}) => {
   const badges = Array.isArray(user?.badges) ? user.badges : [];
   const premium = badges.includes('clearwater-role')
     ? '<span class="role-badge" role="img" aria-label="Premium" data-tooltip="Premium"><img src="assets/clearwater-role-badge.webp" alt="" /></span>'
@@ -545,21 +555,31 @@ const roleBadges = (user) => {
   const developer = badges.includes('developer')
     ? '<span class="role-badge developer-badge" role="img" aria-label="Developer" data-tooltip="Developer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 7.2 3.8 12l4.4 4.8 1.5-1.4L6.7 12l3-3.4-1.5-1.4Zm7.6 0-1.5 1.4 3 3.4-3 3.4 1.5 1.4L20.2 12l-4.4-4.8Z"/></svg></span>'
     : '';
-  const business = badges.includes('business') ? businessBadge() : '';
+  const business = !skipBusiness && badges.includes('business') ? businessBadge() : '';
   const warning = badges.includes('warning') ? warningBadge(user?.warningBadgeText) : '';
   return `${premium}${staff}${developer}${business}${warning}`;
 };
-const identityBadges = (user) => `${user?.verified === true ? verifiedBadge() : ''}${roleBadges(user)}`;
+const identityBadges = (user) => {
+  const business = isBusinessAccountUser(user);
+  const verified = user?.verified === true || business;
+  return `${verified ? verifiedBadge(business) : ''}${roleBadges(user, { skipBusiness: business })}`;
+};
 const currentAuthor = (post) => internetUsers.get(post.authorId) || null;
 const isVerified = (post) => currentAuthor(post)?.verified === true;
 
 function refreshProfileVerified() {
-  const me = internetUsers.get(currentUserId);
-  if (profileVerified) profileVerified.hidden = me?.verified !== true;
+  const me = internetUsers.get(activeUserId()) || internetUsers.get(currentUserId);
+  const business = isBusinessAccountUser(me);
+  if (profileVerified) {
+    profileVerified.hidden = !(me?.verified === true || business);
+    profileVerified.classList.toggle('verified-gold', business);
+    profileVerified.setAttribute('aria-label', business ? 'Business verified' : 'Verified');
+    profileVerified.dataset.tooltip = business ? 'Business verified' : 'Verified';
+  }
   const staffBadge = document.querySelector('[data-profile-staff-badge]');
   if (staffBadge) staffBadge.hidden = !Array.isArray(me?.badges) || !me.badges.includes('staff');
-  const business = document.querySelector('[data-profile-business-badge]');
-  if (business) business.hidden = !Array.isArray(me?.badges) || !me.badges.includes('business');
+  const businessBadgeEl = document.querySelector('[data-profile-business-badge]');
+  if (businessBadgeEl) businessBadgeEl.hidden = true;
   const warning = document.querySelector('[data-profile-warning-badge]');
   if (warning) {
     const on = Array.isArray(me?.badges) && me.badges.includes('warning');
@@ -572,22 +592,62 @@ function refreshProfileVerified() {
   }
 }
 
+function activeBusinessAccount() {
+  if (!String(activeAccount || '').startsWith('business:')) return null;
+  const id = activeAccount.slice('business:'.length);
+  return myBusinessAccounts.find((biz) => biz.id === id && biz.status === 'active' && biz.canPost) || null;
+}
+
 function activeAuthor() {
-  return activeAccount === 'official' ? (internetUsers.get(officialAccountId) || OFFICIAL_ACCOUNT_FALLBACK) : null;
+  if (activeAccount === 'official') return internetUsers.get(officialAccountId) || OFFICIAL_ACCOUNT_FALLBACK;
+  const biz = activeBusinessAccount();
+  if (biz) {
+    return internetUsers.get(biz.id) || {
+      id: biz.id,
+      username: biz.username,
+      displayName: biz.displayName,
+      avatarUrl: biz.avatarUrl || 'assets/clearwater-logo.png',
+      verified: true,
+      business: true,
+      badges: ['business'],
+    };
+  }
+  return null;
 }
 
 function activeUserId() {
-  return activeAccount === 'official' ? officialAccountId : currentUserId;
+  if (activeAccount === 'official') return officialAccountId;
+  const biz = activeBusinessAccount();
+  if (biz) return biz.id;
+  return currentUserId;
 }
 
 function activeAccountRequest() {
-  return activeAccount === 'official' ? { asOfficial: true } : {};
+  if (activeAccount === 'official') return { asOfficial: true };
+  const biz = activeBusinessAccount();
+  if (biz) return { asBusinessId: biz.id };
+  return {};
+}
+
+function postingBusinessAccounts() {
+  return (Array.isArray(myBusinessAccounts) ? myBusinessAccounts : [])
+    .filter((biz) => biz.status === 'active' && biz.canPost);
+}
+
+function renderBusinessAccountOptions() {
+  const host = document.querySelector('[data-business-account-options]');
+  if (!host) return;
+  const accounts = postingBusinessAccounts();
+  host.innerHTML = accounts.map((biz) => {
+    const selected = activeAccount === `business:${biz.id}`;
+    return `<button type="button" data-select-account="business:${escapeHtml(biz.id)}"><img src="${escapeHtml(biz.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(biz.displayName)}</b><small>@${escapeHtml(biz.username)} · Business</small></span><em ${selected ? '' : 'hidden'}>✓</em></button>`;
+  }).join('');
 }
 
 function updateAccountSwitcher() {
   if (!sessionUser || !accountSwitch) return;
-  const official = activeAuthor();
-  const selected = official || sessionUser;
+  renderBusinessAccountOptions();
+  const selected = activeAuthor() || sessionUser;
   accountSwitchAvatar.src = selected.avatarUrl || 'assets/clearwater-logo.png';
   accountSwitchName.textContent = selected.displayName || selected.username || 'Clearwater account';
   accountSwitchHandle.textContent = `@${selected.username || 'clearwater'}`;
@@ -596,12 +656,34 @@ function updateAccountSwitcher() {
   if (composerAvatar) composerAvatar.src = selected.avatarUrl || 'assets/clearwater-logo.png';
   if (avatar) avatar.src = selected.avatarUrl || 'assets/clearwater-logo.png';
   if (name) name.textContent = selected.displayName || selected.username || 'Clearwater account';
-  if (rank) rank.textContent = activeAccount === 'official' ? 'Official' : (sessionUser.staffRank || '');
+  if (rank) {
+    if (activeAccount === 'official') rank.textContent = 'Official';
+    else if (activeBusinessAccount()) rank.textContent = 'Business';
+    else rank.textContent = sessionUser.staffRank || '';
+  }
 }
 
 function selectPostingAccount(account) {
   if (account === 'official' && !sessionIsOwner) return;
-  activeAccount = account === 'official' ? 'official' : 'personal';
+  if (String(account || '').startsWith('business:')) {
+    const id = account.slice('business:'.length);
+    const biz = postingBusinessAccounts().find((item) => item.id === id);
+    if (!biz) return;
+    activeAccount = `business:${biz.id}`;
+    if (!internetUsers.has(biz.id)) {
+      internetUsers.set(biz.id, {
+        id: biz.id,
+        username: biz.username,
+        displayName: biz.displayName,
+        avatarUrl: biz.avatarUrl || 'assets/clearwater-logo.png',
+        verified: true,
+        business: true,
+        badges: ['business'],
+      });
+    }
+  } else {
+    activeAccount = account === 'official' ? 'official' : 'personal';
+  }
   if (activeAccount === 'official' && officialAccountId && !internetUsers.has(officialAccountId)) {
     internetUsers.set(officialAccountId, { ...OFFICIAL_ACCOUNT_FALLBACK, id: officialAccountId });
   }
@@ -613,6 +695,7 @@ function selectPostingAccount(account) {
   void loadMessages();
   void loadNotifications();
   if (activeAccount === 'official') openMemberProfile(officialAccountId);
+  else if (activeBusinessAccount()) openMemberProfile(activeBusinessAccount().id);
 }
 
 async function readApiJson(response, fallbackMessage) {
@@ -628,10 +711,14 @@ async function readApiJson(response, fallbackMessage) {
 function postMenu(post) {
   if (!currentUserId) return '';
   const ownPost = post.authorId === activeUserId();
+  const boostable = !post.parentId && post.kind !== 'reel' && !post.boostActive;
   const buttons = ownPost
     ? '<button type="button" data-post-action="edit">Edit post</button><button type="button" data-post-action="delete">Delete post</button>'
     : `<button type="button" data-post-action="report">Report post</button>${sessionIsOwner ? '<button type="button" class="danger" data-post-action="delete">Delete post</button>' : ''}`;
-  return `<details class="post-menu"><summary aria-label="Post actions">•••</summary><div data-post-id="${escapeHtml(post.id)}">${buttons}</div></details>`;
+  const tip = boostable && !postBoostPricing.paused
+    ? `<button type="button" data-post-boost="${escapeHtml(post.id)}">Tip into For You · C$${Number(postBoostPricing.cost) || 250}</button>`
+    : (post.boostActive ? '<button type="button" disabled>Boosted in For You</button>' : '');
+  return `<details class="post-menu"><summary aria-label="Post actions">•••</summary><div data-post-id="${escapeHtml(post.id)}">${tip}${buttons}</div></details>`;
 }
 
 function postActionIcon(type, filled = false) {
@@ -872,16 +959,18 @@ function postMarkup(post, profile = false) {
   const likes = Array.isArray(display.likes) ? display.likes : [];
   const liked = likes.includes(activeUserId());
   const alreadyReposted = allPosts.some((item) => item.authorId === activeUserId() && isNativeRepost(item) && item.repostOf === display.id);
+  const bookmarked = Array.isArray(socialState.bookmarks) && socialState.bookmarks.includes(display.id);
   const quoted = display.quoteId ? allPosts.find((item) => item.id === display.quoteId) : null;
   const quoteMarkup = display.quoteId ? quoteCardMarkup(quoted) : '';
   const repostLabel = wrapper
     ? `<small class="reposted-label">↻ ${escapeHtml(wrapper.displayName || 'A member')} reposted</small>`
     : '';
+  const boostChip = display.boostActive ? '<span class="post-boost-chip">Tipped</span>' : '';
   const media = postMediaMarkup(display, displayName);
   const reelChip = display.kind === 'reel'
     ? `<button type="button" class="search-reel-chip" data-open-reel="${escapeHtml(display.id)}">Open Reel</button>`
     : '';
-  return `<article class="post" data-post-card="${escapeHtml(display.id)}">${repostLabel}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(display.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || display)}${display.kind === 'reel' ? '<span class="post-reel-tag">Reel</span>' : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(display.createdAt)}${display.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? `<span class="post-rank"> &middot; ${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(display)}</div>${display.content ? `<p class="post-content">${body}</p>` : ''}${quoteMarkup}${media}${poll}${reelChip}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(display.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options" class="${alreadyReposted ? 'reposted' : ''}">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(display.id)}">${alreadyReposted ? 'Undo repost' : 'Repost'}</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(display.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(display.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-engage="share" data-post-id="${escapeHtml(display.id)}">${postActionIcon('share')}</button></div></article>`;
+  return `<article class="post" data-post-card="${escapeHtml(display.id)}">${repostLabel}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(display.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || display)}${boostChip}${display.kind === 'reel' ? '<span class="post-reel-tag">Reel</span>' : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(display.createdAt)}${display.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? `<span class="post-rank"> &middot; ${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(display)}</div>${display.content ? `<p class="post-content">${body}</p>` : ''}${quoteMarkup}${media}${poll}${reelChip}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(display.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options" class="${alreadyReposted ? 'reposted' : ''}">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(display.id)}">${alreadyReposted ? 'Undo repost' : 'Repost'}</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(display.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(display.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-bookmark-post="${escapeHtml(display.id)}" class="${bookmarked ? 'bookmarked' : ''}" aria-label="Bookmark">${postActionIcon('bookmark')}</button><button type="button" data-engage="share" data-post-id="${escapeHtml(display.id)}">${postActionIcon('share')}</button></div></article>`;
 }
 
 function safeGifUrl(value) {
@@ -1878,6 +1967,7 @@ function scoreForYouPost(post, trending) {
   if (isLowEffortPost(post)) score -= 26;
   if (text.length > 80) score += 3;
   if (likes <= 2 && recency > 0.35) score += 8;
+  if (post.boostActive) score += Number(post.boostScore) || 42;
   score += (stableJitter(post.id) - 0.5) * 5;
   return score;
 }
@@ -2242,12 +2332,26 @@ function renderOwnProfileDetails() {
 
 function renderBookmarks() {
   if (!bookmarkList) return;
-  const posts = allPosts.filter((post) => socialState.bookmarks.includes(post.id));
+  const collections = Array.isArray(socialState.bookmarkCollections) ? socialState.bookmarkCollections : [];
+  const collectionHost = document.querySelector('[data-bookmark-collections]');
+  if (collectionHost) {
+    const allSelected = !activeBookmarkCollectionId;
+    collectionHost.innerHTML = [
+      `<button type="button" class="${allSelected ? 'selected' : ''}" data-bookmark-collection="">All saved</button>`,
+      ...collections.map((item) => `<button type="button" class="${activeBookmarkCollectionId === item.id ? 'selected' : ''}" data-bookmark-collection="${escapeHtml(item.id)}">${escapeHtml(item.name)} <small>${item.postIds.length}</small></button>`),
+    ].join('');
+  }
+  let ids = Array.isArray(socialState.bookmarks) ? socialState.bookmarks : [];
+  if (activeBookmarkCollectionId) {
+    const collection = collections.find((item) => item.id === activeBookmarkCollectionId);
+    ids = collection?.postIds || [];
+  }
+  const posts = allPosts.filter((post) => ids.includes(post.id));
   bookmarkList.innerHTML = posts.length ? posts.map((post) => postMarkup(post)).join('') : '<p class="feed-note">Your saved posts will appear here.</p>';
 }
 
 function showView(view) {
-  const availableViews = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post', 'sponsored']);
+  const availableViews = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post', 'sponsored', 'bookmarks']);
   let activeView = availableViews.has(view) ? view : 'home';
   if (activeView === 'staff' && !sessionCanStaff) activeView = 'home';
   const shell = document.querySelector('.internet-shell');
@@ -2281,15 +2385,19 @@ function showView(view) {
   }
   renderSideSuggestions();
   if (activeView === 'home') renderPosts();
+  if (activeView === 'bookmarks') renderBookmarks();
   if (activeView === 'messages') void loadMessages();
   if (activeView === 'notifications') void loadNotifications();
   if (activeView === 'staff') void loadModeration();
   if (activeView === 'wallet') {
+    onboardingWalletVisited = true;
+    if (currentUserId) localStorage.setItem(`clearwater-onboarding-wallet-${currentUserId}`, '1');
     renderWalletStore();
     maybeStartRobloxClaim();
     maybeOpenWalletHubs();
     void loadWallet();
     void loadAds();
+    renderOnboardingChecklist();
   } else {
     setWalletTab('home');
   }
@@ -2984,6 +3092,7 @@ function renderStaffDashboard() {
           ${siteToggle('pause-posts', settings.pausePosts === true, 'Posting', 'Paused for members', 'Open to members')}
           ${siteToggle('pause-reels', settings.pauseReels === true, 'Reels', 'Paused for members', 'Open to members')}
           ${siteToggle('pause-messages', settings.pauseMessages === true, 'Direct messages', 'Paused for members', 'Open to members')}
+          ${siteToggle('pause-post-boosts', settings.pausePostBoosts === true, 'Post tips / For You boosts', 'Paused for members', 'Open to members')}
         </div>`)}
         ${staffActionGroupMarkup('Queue maintenance', 'Housekeeping for the reports queue', `<div class="staff-action-grid">
           <button type="button" class="staff-action-btn" data-staff-site-action="clear-dismissed-reports">Clear dismissed reports</button>
@@ -4420,7 +4529,7 @@ async function loadNotifications() {
     const result = await readApiJson(response, 'Could not load notifications.');
     if (!response.ok) throw new Error(result.error || 'Could not load notifications.');
     const notifications = result.notifications || [];
-    const names = { follow: 'started following you', like: 'liked your post', reply: 'replied to your post', mention: 'mentioned you in a post', repost: 'reposted your post', quote: 'quoted your post', message: 'sent you a message' };
+    const names = { follow: 'started following you', like: 'liked your post', reply: 'replied to your post', mention: 'mentioned you in a post', repost: 'reposted your post', quote: 'quoted your post', message: 'sent you a message', boost: 'tipped your post into For You' };
     notificationList.innerHTML = notifications.length ? notifications.map((notification) => `<button type="button" class="notification-item" ${notification.type === 'message' ? `data-notification-message="${escapeHtml(notification.actorId)}"` : notification.postId ? `data-notification-post="${escapeHtml(notification.postId)}"` : `data-notification-member="${escapeHtml(notification.actorId)}"`}><img src="${escapeHtml(notification.actorAvatarUrl || internetUsers.get(notification.actorId)?.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(notification.actorName || internetUsers.get(notification.actorId)?.displayName || 'Clearwater member')}</b> ${escapeHtml(names[notification.type] || 'interacted with you')}<small>${escapeHtml(notification.type === 'message' ? 'Open conversation' : notification.postContent || (notification.postId ? 'View post' : 'View profile'))} &middot; ${timeAgo(notification.createdAt)}</small></span></button>`).join('') : '<p class="feed-note">Nothing new yet.</p>';
     const unread = Number(result.unreadCount || 0);
     if (notificationCount) { notificationCount.hidden = unread < 1; notificationCount.textContent = `${unread} unread`; }
@@ -4436,9 +4545,13 @@ async function loadSocial() {
     const result = await readApiJson(response, 'Could not load your social settings.');
     if (response.ok && result.social) {
       socialState = { ...socialState, ...result.social };
+      if (!Array.isArray(socialState.bookmarkCollections)) socialState.bookmarkCollections = [];
+      if (!Array.isArray(socialState.bookmarks)) socialState.bookmarks = [];
       updateNotificationIndicators();
       renderPosts();
+      renderBookmarks();
       renderSideSuggestions();
+      renderOnboardingChecklist();
     }
   } catch { /* Feed stays usable during a temporary connection issue. */ }
 }
@@ -4478,6 +4591,7 @@ async function loadPreferences() {
     }
     applyPreferenceState(merged);
     localStorage.setItem(storageKey, JSON.stringify(preferenceState));
+    renderOnboardingChecklist();
   } catch { /* Settings remain usable if the bot host is briefly unavailable. */ }
 }
 
@@ -4680,9 +4794,114 @@ async function loadAccountExtras() {
     accountVerified = result.verified === true;
     renderVerificationPane();
     renderBusinessAccountsPane();
+    updateAccountSwitcher();
   } catch {
     /* Account extras are optional while the feed still works. */
   }
+}
+
+function draftStorageKey(kind = 'post') {
+  return `clearwater-draft-${kind}-${currentUserId || 'anon'}`;
+}
+
+function saveComposerDraft() {
+  if (!currentUserId || !content) return;
+  const note = document.querySelector('[data-composer-draft-note]');
+  const payload = {
+    content: content.value || '',
+    savedAt: Date.now(),
+  };
+  if (!payload.content.trim()) {
+    localStorage.removeItem(draftStorageKey('post'));
+    if (note) note.hidden = true;
+    return;
+  }
+  localStorage.setItem(draftStorageKey('post'), JSON.stringify(payload));
+  if (note) {
+    note.hidden = false;
+    note.textContent = 'Draft saved';
+  }
+}
+
+function restoreComposerDraft() {
+  if (!currentUserId || !content) return;
+  try {
+    const raw = localStorage.getItem(draftStorageKey('post'));
+    if (!raw) return;
+    const draft = JSON.parse(raw);
+    if (!draft?.content || content.value) return;
+    content.value = String(draft.content).slice(0, 500);
+    if (count) count.textContent = `${content.value.length} / 500`;
+    updateComposerHighlight();
+    if (postButton) postButton.disabled = !canComposePost();
+    const note = document.querySelector('[data-composer-draft-note]');
+    if (note) {
+      note.hidden = false;
+      note.textContent = 'Draft restored';
+    }
+  } catch {
+    /* Ignore corrupt drafts. */
+  }
+}
+
+function clearComposerDraft() {
+  localStorage.removeItem(draftStorageKey('post'));
+  const note = document.querySelector('[data-composer-draft-note]');
+  if (note) note.hidden = true;
+}
+
+function saveReelDraft() {
+  if (!currentUserId) return;
+  const caption = document.querySelector('[data-reel-caption]');
+  const payload = { caption: caption?.value || '', savedAt: Date.now() };
+  if (!payload.caption.trim()) {
+    localStorage.removeItem(draftStorageKey('reel'));
+    return;
+  }
+  localStorage.setItem(draftStorageKey('reel'), JSON.stringify(payload));
+}
+
+function restoreReelDraft() {
+  if (!currentUserId) return;
+  const caption = document.querySelector('[data-reel-caption]');
+  if (!caption || caption.value) return;
+  try {
+    const raw = localStorage.getItem(draftStorageKey('reel'));
+    if (!raw) return;
+    const draft = JSON.parse(raw);
+    if (draft?.caption) caption.value = String(draft.caption).slice(0, 220);
+  } catch {
+    /* Ignore corrupt drafts. */
+  }
+}
+
+function clearReelDraft() {
+  localStorage.removeItem(draftStorageKey('reel'));
+}
+
+function renderOnboardingChecklist() {
+  const card = document.querySelector('[data-onboarding-card]');
+  const list = document.querySelector('[data-onboarding-list]');
+  if (!card || !list || !currentUserId) return;
+  if (preferenceState?.onboardingDismissed === true) {
+    card.hidden = true;
+    return;
+  }
+  const me = internetUsers.get(currentUserId) || {};
+  const bio = String(profileDraft?.bio || me.bio || '').trim();
+  const follows = Array.isArray(socialState.following) ? socialState.following.length : 0;
+  const walletDone = onboardingWalletVisited || localStorage.getItem(`clearwater-onboarding-wallet-${currentUserId}`) === '1';
+  const steps = [
+    { id: 'bio', done: bio.length >= 8, label: 'Set a bio', href: '/internet/settings' },
+    { id: 'follow', done: follows >= 3, label: `Follow 3 accounts (${Math.min(follows, 3)}/3)`, href: '/internet' },
+    { id: 'wallet', done: walletDone, label: 'Open Wallet & claim daily credits', href: '/internet/wallet' },
+  ];
+  if (steps.every((step) => step.done)) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+  list.innerHTML = steps.map((step) => `<li class="${step.done ? 'done' : ''}"><a href="${escapeHtml(step.href)}" data-view-link="${step.href.includes('wallet') ? 'wallet' : step.href.includes('settings') ? 'settings' : 'home'}">${step.done ? '✓' : '○'} ${escapeHtml(step.label)}</a></li>`).join('');
 }
 
 function renderAdBusinessOptions() {
@@ -4776,15 +4995,19 @@ function patchFollowGraphs(targetId, enabled) {
   }
 }
 
-async function socialAction(type, { targetId = '', postId = '', enabled = true } = {}) {
-  const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'social', type, targetId, postId, enabled, ...activeAccountRequest() }) });
+async function socialAction(type, { targetId = '', postId = '', enabled = true, collectionId = '', collectionName = '' } = {}) {
+  const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'social', type, targetId, postId, enabled, collectionId, collectionName, ...activeAccountRequest() }) });
   const result = await readApiJson(response, 'Could not save this change.');
   if (!response.ok) throw new Error(result.error || 'Could not save this change.');
   socialState = { ...socialState, ...result.social };
+  if (!Array.isArray(socialState.bookmarkCollections)) socialState.bookmarkCollections = [];
   if (type === 'follow' && targetId) patchFollowGraphs(targetId, enabled === true);
   renderPosts();
   renderSideSuggestions();
   renderOwnProfileDetails();
+  renderBookmarks();
+  renderOnboardingChecklist();
+  return result;
 }
 
 function openMemberProfile(memberId, updateHash = true) {
@@ -4806,11 +5029,12 @@ function openMemberProfile(memberId, updateHash = true) {
   document.querySelector('[data-member-page-handle]').textContent = `@${user.username}`;
   document.querySelector('[data-member-page-rank]').textContent = user.staffRank || 'Clearwater community member';
   document.querySelector('[data-member-page-copy]').textContent = user.bio || (user.staffRank ? `${user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
-  document.querySelector('[data-member-page-verified]').hidden = user.verified !== true;
+  document.querySelector('[data-member-page-verified]').hidden = !(user.verified === true || isBusinessAccountUser(user));
+  document.querySelector('[data-member-page-verified]')?.classList.toggle('verified-gold', isBusinessAccountUser(user));
   const memberStaffBadge = document.querySelector('[data-member-page-staff-badge]');
   if (memberStaffBadge) memberStaffBadge.hidden = !Array.isArray(user.badges) || !user.badges.includes('staff');
   const memberBusiness = document.querySelector('[data-member-page-business-badge]');
-  if (memberBusiness) memberBusiness.hidden = !Array.isArray(user.badges) || !user.badges.includes('business');
+  if (memberBusiness) memberBusiness.hidden = true;
   const memberWarning = document.querySelector('[data-member-page-warning-badge]');
   if (memberWarning) {
     const on = Array.isArray(user.badges) && user.badges.includes('warning');
@@ -5029,6 +5253,14 @@ async function loadPosts() {
     allPosts = uniquePostsById(result.posts || []);
     internetUsers = new Map((result.users || []).map((user) => [user.id, user]));
     applySiteBanner(result.settings?.siteBanner || null);
+    if (result.settings) {
+      postBoostPricing = {
+        cost: Number(result.settings.postBoostCost) || POST_BOOST_COST_FALLBACK,
+        hours: Number(result.settings.postBoostHours) || 12,
+        dailyCap: Number(result.settings.postBoostDailyCap) || 5,
+        paused: result.settings.pausePostBoosts === true,
+      };
+    }
     if (Array.isArray(result.ads)) sidebarAds = result.ads;
     if (Array.isArray(result.feedAds)) feedAds = result.feedAds;
     if (Array.isArray(result.reelAds)) reelAds = result.reelAds;
@@ -5109,10 +5341,15 @@ async function loadSession() {
   if (officialAccountOption) officialAccountOption.hidden = !sessionIsOwner;
   if (officialProfileControls) officialProfileControls.hidden = !sessionIsOwner;
   accountSwitch.hidden = false;
-  activeAccount = sessionIsOwner && localStorage.getItem(`clearwater-posting-account-${currentUserId}`) === 'official' ? 'official' : 'personal';
+  const savedAccount = localStorage.getItem(`clearwater-posting-account-${currentUserId}`) || 'personal';
+  if (savedAccount === 'official' && sessionIsOwner) activeAccount = 'official';
+  else if (String(savedAccount).startsWith('business:')) activeAccount = savedAccount;
+  else activeAccount = 'personal';
+  onboardingWalletVisited = localStorage.getItem(`clearwater-onboarding-wallet-${currentUserId}`) === '1';
   document.querySelector('[data-personal-account-avatar]').src = session.user.avatarUrl || 'assets/clearwater-logo.png';
   document.querySelector('[data-personal-account-name]').textContent = session.user.displayName || session.user.username;
   updateAccountSwitcher();
+  restoreComposerDraft();
   renderProfilePosts();
   renderPosts();
   try {
@@ -5121,8 +5358,12 @@ async function loadSession() {
     await loadMessages();
     await loadSocial();
     await loadPreferences();
+    await loadAccountExtras();
+    if (String(activeAccount).startsWith('business:') && !activeBusinessAccount()) activeAccount = 'personal';
+    updateAccountSwitcher();
     void loadWallet();
     renderOwnProfileDetails();
+    renderOnboardingChecklist();
     // Landing straight on /internet/settings renders the view before the
     // session exists, so the editor has to be filled once sign-in resolves.
     if (!document.querySelector('[data-view="settings"]')?.hidden) await loadProfileEditor();
@@ -5139,6 +5380,23 @@ content?.addEventListener('input', () => {
   // Preview only — nothing is held until the server accepts the post and
   // writes an automod report for the staff queue.
   if (postMessage) postMessage.textContent = scanClientContent(content.value) ? AUTOMOD_HOLD_PREVIEW : '';
+  window.clearTimeout(composerDraftTimer);
+  composerDraftTimer = window.setTimeout(() => saveComposerDraft(), 400);
+});
+document.querySelector('[data-reel-caption]')?.addEventListener('input', () => {
+  window.clearTimeout(composerDraftTimer);
+  composerDraftTimer = window.setTimeout(() => saveReelDraft(), 400);
+});
+document.querySelector('[data-bookmark-collection-form]')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const input = document.querySelector('[data-bookmark-collection-name]');
+  try {
+    await socialAction('bookmark-collection-create', { collectionName: input?.value || '' });
+    if (input) input.value = '';
+    renderBookmarks();
+  } catch (error) {
+    void siteAlert(error.message || 'Could not create that collection.');
+  }
 });
 document.querySelector('[data-drop-location]')?.addEventListener('click', async () => {
   if (!currentUserId) { window.location.href = signInUrl(); return; }
@@ -5280,6 +5538,7 @@ document.addEventListener('click', (event) => {
   event.preventDefault();
   const view = link.dataset.viewLink || 'home';
   if (view === 'profile' && activeAccount === 'official') { openMemberProfile(officialAccountId); return; }
+  if (view === 'profile' && activeBusinessAccount()) { openMemberProfile(activeBusinessAccount().id); return; }
   if (view === 'sponsored') {
     showSponsoredPage('');
     return;
@@ -5649,6 +5908,7 @@ document.querySelector('[data-profile-form]')?.addEventListener('submit', async 
     setProfileStatus('Profile saved.', 'ok');
     await loadPosts();
     renderOwnProfileDetails();
+    renderOnboardingChecklist();
   } catch (error) {
     setProfileStatus(error.message || 'Could not save your profile.', 'error');
   } finally {
@@ -5867,7 +6127,73 @@ document.addEventListener('click', (event) => {
   const messageUser = event.target.closest('[data-message-user]');
   if (messageUser) { messageModal.hidden = true; openConversation(internetUsers.get(messageUser.dataset.messageUser)); return; }
   const bookmark = event.target.closest('[data-bookmark-post]');
-  if (bookmark) { void socialAction('bookmark', { postId: bookmark.dataset.bookmarkPost, enabled: !socialState.bookmarks.includes(bookmark.dataset.bookmarkPost) }).catch((error) => void siteAlert(error.message)); return; }
+  if (bookmark) {
+    void (async () => {
+      try {
+        const postId = bookmark.dataset.bookmarkPost;
+        const enabled = !(Array.isArray(socialState.bookmarks) && socialState.bookmarks.includes(postId));
+        await socialAction('bookmark', {
+          postId,
+          enabled,
+          collectionId: enabled && activeBookmarkCollectionId ? activeBookmarkCollectionId : '',
+        });
+        renderPosts();
+      } catch (error) {
+        void siteAlert(error.message || 'Could not save that post.');
+      }
+    })();
+    return;
+  }
+  const boostBtn = event.target.closest('[data-post-boost]');
+  if (boostBtn) {
+    void (async () => {
+      try {
+        const cost = Number(postBoostPricing.cost) || 250;
+        const hours = Number(postBoostPricing.hours) || 12;
+        const ok = window.confirm(`Tip this post into For You for ${hours} hours? Cost: C$${cost} (max ${Number(postBoostPricing.dailyCap) || 5}/day).`);
+        if (!ok) return;
+        const response = await fetch('/api/internet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'post-boost', postId: boostBtn.dataset.postBoost }),
+        });
+        const result = await readApiJson(response, 'Could not tip this post.');
+        if (!response.ok) throw new Error(result.error || 'Could not tip this post.');
+        if (result.wallet) renderWallet(result.wallet);
+        if (result.post) {
+          const index = allPosts.findIndex((post) => post.id === result.post.id);
+          if (index >= 0) allPosts[index] = { ...allPosts[index], ...result.post };
+        }
+        renderPosts();
+        void siteAlert('Post tipped into For You.', 'Boosted');
+      } catch (error) {
+        void siteAlert(error.message || 'Could not tip this post.');
+      }
+    })();
+    return;
+  }
+  const collectionBtn = event.target.closest('[data-bookmark-collection]');
+  if (collectionBtn) {
+    activeBookmarkCollectionId = collectionBtn.dataset.bookmarkCollection || '';
+    renderBookmarks();
+    return;
+  }
+  if (event.target.closest('[data-onboarding-dismiss]')) {
+    void (async () => {
+      try {
+        await fetch('/api/internet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'preference-save', key: 'onboardingDismissed', enabled: true }),
+        });
+        preferenceState = { ...preferenceState, onboardingDismissed: true };
+      } catch {
+        preferenceState = { ...preferenceState, onboardingDismissed: true };
+      }
+      renderOnboardingChecklist();
+    })();
+    return;
+  }
   const topic = event.target.closest('[data-topic]');
   if (topic) { event.preventDefault(); showView('home'); search.value = topic.dataset.topic; renderPosts(); return; }
   const staffViewVideo = event.target.closest('[data-staff-view-video]');
@@ -5912,6 +6238,7 @@ document.addEventListener('click', (event) => {
     if (!currentUserId) { window.location.href = signInUrl(); return; }
     const modal = document.querySelector('[data-reel-composer]');
     if (modal) modal.hidden = false;
+    restoreReelDraft();
     return;
   }
   if (event.target.closest('[data-close-reel-composer]')) {
@@ -6912,6 +7239,7 @@ document.querySelector('[data-reel-form]')?.addEventListener('submit', async (ev
     });
     const result = await readApiJson(response, 'Could not post this Reel.');
     if (!response.ok) throw new Error(result.error || 'Could not post this Reel.');
+    clearReelDraft();
     resetReelComposer();
     document.querySelector('[data-reel-composer]')?.setAttribute('hidden', '');
     feedTab = 'reels';
@@ -6991,10 +7319,11 @@ postButton?.addEventListener('click', async () => {
   postButton.disabled = true;
   postMessage.textContent = 'Posting...';
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, image: selectedImage, poll, location: selectedLocation, quoteId: selectedQuoteId, asOfficial: activeAccount === 'official' }) });
+    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post', content: content.value, gif: selectedGif, image: selectedImage, poll, location: selectedLocation, quoteId: selectedQuoteId, ...activeAccountRequest() }) });
     const result = await readApiJson(response, 'Posting is unavailable because the website service is not connected.');
     if (!response.ok) throw new Error(automodHoldError(result, result.error || 'Could not post.'));
-    content.value = ''; count.textContent = '0 / 500'; postButton.disabled = true; updateComposerHighlight(); selectedGif = null; selectedImage = null; stopDropLocationRefresh(); selectedLocation = null; selectedQuoteId = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; renderDropPreview(); renderQuotePreview(); if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } postMessage.textContent = 'Posted.'; await loadPosts();
+    content.value = ''; count.textContent = '0 / 500'; postButton.disabled = true; updateComposerHighlight(); selectedGif = null; selectedImage = null; stopDropLocationRefresh(); selectedLocation = null; selectedQuoteId = null; gifPreview.hidden = true; gifPreview.innerHTML = ''; renderDropPreview(); renderQuotePreview(); if (pollBuilder) { pollBuilder.hidden = true; composer?.classList.remove('composer-expanded'); pollBuilder.querySelectorAll('input').forEach((input) => { input.value = ''; }); } clearComposerDraft(); postMessage.textContent = 'Posted.'; await loadPosts();
+    renderOnboardingChecklist();
   } catch (error) {
     const message = automodHoldError({ error: error.message }, error.message || 'Could not post.');
     postMessage.textContent = message;
@@ -7033,6 +7362,11 @@ document.addEventListener('click', (event) => {
     accountSwitchMenu.hidden = true;
     accountSwitchButton?.setAttribute('aria-expanded', 'false');
   }
+});
+accountSwitchMenu?.addEventListener('click', (event) => {
+  const option = event.target.closest('[data-select-account]');
+  if (!option || !accountSwitchMenu.contains(option)) return;
+  selectPostingAccount(option.dataset.selectAccount);
 });
 document.querySelector('[data-save-official-profile]')?.addEventListener('click', async () => {
   const message = document.querySelector('[data-official-profile-message]');

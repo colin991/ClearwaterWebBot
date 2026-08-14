@@ -11,6 +11,7 @@ import {
   businessActorFromAccount,
   businessAsPublicUser,
   getBusinessAccount,
+  isBusinessAccountId,
   listBusinessPublicUsers,
   listMyBusinessAccounts,
   myVerificationApplication,
@@ -31,6 +32,7 @@ export {
   assertBusinessAccess,
   businessActorFromAccount,
   getBusinessAccount,
+  isBusinessAccountId,
   listMyBusinessAccounts,
   myVerificationApplication,
   removeBusinessMember,
@@ -58,7 +60,7 @@ const emptyStore = Object.freeze({
   discordFeedMessages: {},
   siteBanner: null,
   officialProfile: {},
-  settings: { pausePosts: false, pauseReels: false, pauseMessages: false },
+  settings: { pausePosts: false, pauseReels: false, pauseMessages: false, pausePostBoosts: false },
 });
 
 /** Paid placements: 48h run after staff approval, paid with Clearwater Credits. */
@@ -71,6 +73,11 @@ export const AD_BODY_MAX = 500;
 export const AD_TITLE_MAX = 80;
 export const AD_CATEGORIES = Object.freeze(['department', 'business']);
 export const AD_PLACEMENTS = Object.freeze(['sidebar', 'feed', 'reel']);
+/** Tip a post into For You for a short window. Staff can pause this site-wide. */
+export const POST_BOOST_COST = 250;
+export const POST_BOOST_HOURS = 12;
+export const POST_BOOST_SCORE = 42;
+export const POST_BOOST_DAILY_CAP = 5;
 export const AD_REEL_DURATION_MULTIPLIERS = Object.freeze({
   upTo15: 1,
   upTo30: 1.25,
@@ -205,6 +212,7 @@ function normalizeInternetStore(data) {
       pausePosts: source.settings?.pausePosts === true,
       pauseReels: source.settings?.pauseReels === true,
       pauseMessages: source.settings?.pauseMessages === true,
+      pausePostBoosts: source.settings?.pausePostBoosts === true,
     },
   };
 }
@@ -402,6 +410,14 @@ function publicPost(post, maskedAuthors) {
     if (String(next.videoUrl || '').startsWith('data:')) next.videoUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=video`;
   }
   if (maskedAuthors?.has(next.authorId)) next.avatarUrl = null;
+  const boostEnds = next.boostEndsAt ? new Date(next.boostEndsAt).getTime() : 0;
+  if (!boostEnds || boostEnds <= Date.now()) {
+    next.boostActive = false;
+    next.boostWeight = 0;
+  } else {
+    next.boostActive = true;
+    next.boostWeight = Math.max(1, Number(next.boostWeight) || 1);
+  }
   return next;
 }
 
@@ -445,6 +461,10 @@ export function publicInternetSettings(store) {
     pausePosts: store.settings?.pausePosts === true,
     pauseReels: store.settings?.pauseReels === true,
     pauseMessages: store.settings?.pauseMessages === true,
+    pausePostBoosts: store.settings?.pausePostBoosts === true,
+    postBoostCost: POST_BOOST_COST,
+    postBoostHours: POST_BOOST_HOURS,
+    postBoostDailyCap: POST_BOOST_DAILY_CAP,
     siteBanner: sanitizeSiteBanner(store.siteBanner),
   };
 }
@@ -2406,7 +2426,17 @@ export function socialSnapshot(store, actor) {
     blocked: Array.isArray(user.blocked) ? user.blocked : [],
     muted: Array.isArray(user.muted) ? user.muted : [],
     bookmarks: Array.isArray(user.bookmarks) ? user.bookmarks : [],
+    bookmarkCollections: publicBookmarkCollections(user),
   };
+}
+
+function publicBookmarkCollections(user) {
+  const collections = Array.isArray(user?.bookmarkCollections) ? user.bookmarkCollections : [];
+  return collections.slice(0, 30).map((item) => ({
+    id: String(item.id || ''),
+    name: text(item.name, 40) || 'Collection',
+    postIds: Array.isArray(item.postIds) ? item.postIds.map(String).slice(0, 200) : [],
+  })).filter((item) => item.id);
 }
 
 const preferenceKeys = new Set([
@@ -2420,6 +2450,7 @@ const preferenceKeys = new Set([
   'autoplayReels',
   'largeText',
   'discordDmNotifications',
+  'onboardingDismissed',
 ]);
 
 export function internetPreferences(store, actor) {
@@ -2439,24 +2470,120 @@ export function updateInternetPreference(store, { actor, key, enabled }) {
   return internetPreferences(store, user);
 }
 
-export function updateInternetSocial(store, { actor, targetId, type, enabled, postId }) {
+export function updateInternetSocial(store, { actor, targetId, type, enabled, postId, collectionId, collectionName }) {
   const user = upsertInternetUser(store, actor);
   assertNotBanned(user);
   if (type === 'bookmark') {
     if (!store.posts.some((post) => post.id === String(postId))) throw new Error('Post not found');
     user.bookmarks = Array.isArray(user.bookmarks) ? user.bookmarks : [];
     user.bookmarks = enabled ? [...new Set([...user.bookmarks, String(postId)])].slice(-200) : user.bookmarks.filter((id) => id !== String(postId));
+    if (!enabled) {
+      user.bookmarkCollections = publicBookmarkCollections(user).map((collection) => ({
+        ...collection,
+        postIds: collection.postIds.filter((id) => id !== String(postId)),
+      }));
+    } else if (collectionId) {
+      const collections = publicBookmarkCollections(user);
+      const target = collections.find((item) => item.id === String(collectionId));
+      if (!target) throw new Error('Collection not found');
+      target.postIds = [...new Set([...target.postIds, String(postId)])].slice(-200);
+      user.bookmarkCollections = collections;
+    }
+    return socialSnapshot(store, user);
+  }
+  if (type === 'bookmark-collection-create') {
+    const name = text(collectionName, 40);
+    if (name.length < 2) throw new Error('Name your collection');
+    user.bookmarkCollections = publicBookmarkCollections(user);
+    if (user.bookmarkCollections.length >= 30) throw new Error('You can have up to 30 collections');
+    user.bookmarkCollections.unshift({ id: randomUUID(), name, postIds: [] });
+    return socialSnapshot(store, user);
+  }
+  if (type === 'bookmark-collection-rename') {
+    const collections = publicBookmarkCollections(user);
+    const target = collections.find((item) => item.id === String(collectionId));
+    if (!target) throw new Error('Collection not found');
+    const name = text(collectionName, 40);
+    if (name.length < 2) throw new Error('Name your collection');
+    target.name = name;
+    user.bookmarkCollections = collections;
+    return socialSnapshot(store, user);
+  }
+  if (type === 'bookmark-collection-delete') {
+    user.bookmarkCollections = publicBookmarkCollections(user).filter((item) => item.id !== String(collectionId));
+    return socialSnapshot(store, user);
+  }
+  if (type === 'bookmark-collection-add' || type === 'bookmark-collection-remove') {
+    const collections = publicBookmarkCollections(user);
+    const target = collections.find((item) => item.id === String(collectionId));
+    if (!target) throw new Error('Collection not found');
+    if (!store.posts.some((post) => post.id === String(postId))) throw new Error('Post not found');
+    if (type === 'bookmark-collection-add') {
+      user.bookmarks = Array.isArray(user.bookmarks) ? user.bookmarks : [];
+      user.bookmarks = [...new Set([...user.bookmarks, String(postId)])].slice(-200);
+      target.postIds = [...new Set([...target.postIds, String(postId)])].slice(-200);
+    } else {
+      target.postIds = target.postIds.filter((id) => id !== String(postId));
+    }
+    user.bookmarkCollections = collections;
     return socialSnapshot(store, user);
   }
   if (!['follow', 'block', 'mute'].includes(type)) throw new Error('Unsupported social action');
   const target = String(targetId || '');
-  if (!/^\d{16,22}$/.test(target) || target === user.id) throw new Error('Choose another member');
+  const validTarget = /^\d{16,22}$/.test(target) || isBusinessAccountId(target);
+  if (!validTarget || target === user.id) throw new Error('Choose another member');
   const key = `${type === 'follow' ? 'following' : `${type}ed`}`;
   user[key] = Array.isArray(user[key]) ? user[key] : [];
   user[key] = enabled ? [...new Set([...user[key], target])].slice(-500) : user[key].filter((id) => id !== target);
   if (type === 'block' && enabled) user.following = (user.following || []).filter((id) => id !== target);
   if (type === 'follow' && enabled) addInternetNotification(store, { recipientId: target, actor: user, type: 'follow' });
   return socialSnapshot(store, user);
+}
+
+export function purchasePostBoost(store, { actor, postId } = {}) {
+  if (store.settings?.pausePostBoosts === true) throw new Error('Post tips are paused by staff right now');
+  const user = ensureInternetWallet(store, actor);
+  assertNotBanned(user);
+  const post = store.posts.find((item) => item.id === String(postId || '') && !item.parentId);
+  if (!post) throw new Error('Post not found');
+  if (post.kind === 'reel') throw new Error('Tip a feed post — Reels use their own discovery');
+  const endsAt = post.boostEndsAt ? new Date(post.boostEndsAt).getTime() : 0;
+  if (endsAt > Date.now()) throw new Error('This post is already boosted');
+  const dayKey = new Date().toISOString().slice(0, 10);
+  user.postBoostDays = user.postBoostDays && typeof user.postBoostDays === 'object' ? user.postBoostDays : {};
+  const usedToday = Math.max(0, Math.floor(Number(user.postBoostDays[dayKey]) || 0));
+  if (usedToday >= POST_BOOST_DAILY_CAP) {
+    throw new Error(`You can tip up to ${POST_BOOST_DAILY_CAP} posts per day`);
+  }
+  if (creditBalance(user) < POST_BOOST_COST) throw new Error(`You need C$${POST_BOOST_COST} to tip this post`);
+  user.credits = creditBalance(user) - POST_BOOST_COST;
+  user.postBoostDays[dayKey] = usedToday + 1;
+  addCreditTransaction(user, {
+    amount: -POST_BOOST_COST,
+    type: 'post-boost',
+    note: `Tipped a post into For You for ${POST_BOOST_HOURS}h`,
+    actorName: 'Clearwater',
+  });
+  post.boostWeight = 1;
+  post.boostScore = POST_BOOST_SCORE;
+  post.boostCost = POST_BOOST_COST;
+  post.boostedBy = user.id;
+  post.boostedAt = new Date().toISOString();
+  post.boostEndsAt = new Date(Date.now() + POST_BOOST_HOURS * 60 * 60 * 1000).toISOString();
+  if (post.authorId !== user.id) {
+    addInternetNotification(store, { recipientId: post.authorId, actor: user, type: 'boost', post });
+  }
+  addInternetLog(store, `${text(user.displayName, 80) || 'A member'} tipped a post into For You (C$${POST_BOOST_COST}).`);
+  return {
+    post: publicPost(post),
+    wallet: walletView(user),
+    pricing: {
+      cost: POST_BOOST_COST,
+      hours: POST_BOOST_HOURS,
+      dailyCap: POST_BOOST_DAILY_CAP,
+      usedToday: usedToday + 1,
+    },
+  };
 }
 
 export function sendInternetMessage(store, { actor, to, content, gif, username }) {
@@ -2868,6 +2995,13 @@ export function applyStaffSiteAction(store, { actor, staffAction, enabled, banne
     addInternetLog(store, `${actorName} ${enabled ? 'paused' : 'resumed'} direct messages.`, {
       type: 'site-toggle',
       staffAction: 'pause-messages',
+      enabled: enabled !== true,
+    });
+  } else if (action === 'pause-post-boosts') {
+    store.settings.pausePostBoosts = enabled === true;
+    addInternetLog(store, `${actorName} ${enabled ? 'paused' : 'resumed'} post tips / For You boosts.`, {
+      type: 'site-toggle',
+      staffAction: 'pause-post-boosts',
       enabled: enabled !== true,
     });
   } else if (action === 'clear-dismissed-reports') {

@@ -14,7 +14,7 @@
     <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
     <link rel="apple-touch-icon" href="assets/clearwater-logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260814-biz-verify-ads" />
+    <link rel="stylesheet" href="internet.css?v=20260814-biz-switcher-boost" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260813-coming-soon"></script>
   </head>
@@ -45,6 +45,7 @@
           <a href="/internet/wallet" data-view-link="wallet"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg>Wallet</a>
           <a href="/internet/notifications" data-view-link="notifications" class="notification-nav"><span class="notification-nav-icon"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 22h4" /></svg><i class="notification-dot" data-notification-dot hidden></i></span>Notifications</a>
           <a href="/internet/messages" data-view-link="messages" class="notification-nav"><span class="notification-nav-icon"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg><i class="notification-dot" data-message-dot hidden></i></span>Messages</a>
+          <a href="/internet/bookmarks" data-view-link="bookmarks"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21l-6-3.6L6 21V4.5Z" /></svg>Bookmarks</a>
           <a href="/internet/profile" data-view-link="profile"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>Profile</a>
           <a href="/internet/settings" data-view-link="settings"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56v.09h-3v-.09A1.7 1.7 0 0 0 10.69 18.65a1.7 1.7 0 0 0-1.87.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7.04 15a1.7 1.7 0 0 0-1.56-1.03h-.09v-3h.09A1.7 1.7 0 0 0 7.04 9.94a1.7 1.7 0 0 0-.34-1.87l-.06-.06 2.12-2.12.06.06a1.7 1.7 0 0 0 1.87.34 1.7 1.7 0 0 0 1.03-1.56v-.09h3v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06 2.12 2.12-.06.06a1.7 1.7 0 0 0-.34 1.87 1.7 1.7 0 0 0 1.56 1.03h.09v3h-.09A1.7 1.7 0 0 0 19.4 15z" /></svg>Settings</a>
           <a href="/internet/staff" data-view-link="staff" data-staff-link hidden><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.4 8.2 8 9 4.6-.8 8-4 8-9V7z" /><path d="m9 12 2 2 4-4" /></svg>Staff</a>
@@ -56,6 +57,7 @@
           <button type="button" data-account-switch-button aria-expanded="false"><img data-account-switch-avatar src="assets/clearwater-logo.png" alt="" /><span><b data-account-switch-name>Account</b><small data-account-switch-handle>@clearwater</small></span><i>•••</i></button>
           <div class="account-switch-menu" data-account-switch-menu hidden>
             <button type="button" data-select-account="personal"><img data-personal-account-avatar src="assets/clearwater-logo.png" alt="" /><span><b data-personal-account-name>Personal</b><small>Personal</small></span><em data-personal-account-selected>✓</em></button>
+            <div data-business-account-options></div>
             <button type="button" data-select-account="official" data-official-account-option hidden><img src="assets/clearwater-logo.png" alt="" /><span><b>Clearwater Roleplay</b><small>Official</small></span><em data-official-account-selected hidden>✓</em></button>
             <hr />
             <a href="/internet/settings" data-view-link="settings">Settings</a>
@@ -83,6 +85,7 @@
               <img src="assets/clearwater-logo.png" alt="" data-composer-avatar draggable="false" />
               <div class="composer-entry"><div class="composer-highlight" data-composer-highlight aria-hidden="true"></div><textarea data-post-content maxlength="500" placeholder="What's happening?" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" data-lt-active="false"></textarea></div>
             </div>
+            <p class="composer-draft-note" data-composer-draft-note hidden>Draft saved</p>
             <div class="composer-main">
               <div class="poll-builder" data-poll-builder hidden><div class="poll-builder-heading"><span>Poll</span><button type="button" data-close-poll aria-label="Remove poll">×</button></div><input data-poll-question maxlength="180" placeholder="Poll question" /><input data-poll-option placeholder="Option 1" maxlength="80" /><input data-poll-option placeholder="Option 2" maxlength="80" /><div class="poll-builder-footer"><button type="button" data-add-poll-option>Add option</button><select data-poll-duration aria-label="Poll duration"><option value="1">1 day</option><option value="3">3 days</option><option value="7">7 days</option></select></div></div>
               <div class="gif-preview" data-gif-preview hidden></div>
@@ -356,6 +359,15 @@
         </section>
 
         <section class="internet-view empty-view notifications-view" data-view="notifications" hidden><header class="page-heading"><div><p>Notifications</p><h1>Your activity</h1></div><span class="unread-count" data-notification-count hidden></span></header><div class="notification-list" data-notification-list><p>Sign in to see your notifications.</p></div></section>
+        <section class="internet-view bookmarks-view" data-view="bookmarks" hidden>
+          <header class="page-heading"><div><p>Bookmarks</p><h1>Saved posts</h1></div></header>
+          <div class="bookmark-collections" data-bookmark-collections></div>
+          <form class="bookmark-collection-create" data-bookmark-collection-form>
+            <input data-bookmark-collection-name maxlength="40" placeholder="New collection name" required />
+            <button type="submit">Create</button>
+          </form>
+          <div class="posts" data-bookmark-list><p class="feed-note">Your saved posts will appear here.</p></div>
+        </section>
         <section class="internet-view messages-view" data-view="messages" hidden>
           <header class="page-heading messages-heading">
             <div><p>Messages</p><h1>Inbox</h1></div>
@@ -693,6 +705,14 @@
         </section>
       </aside>
     </main>
+    <aside class="onboarding-card" data-onboarding-card hidden>
+      <header>
+        <b>Welcome to Clearwater Internet</b>
+        <button type="button" data-onboarding-dismiss aria-label="Dismiss">×</button>
+      </header>
+      <p>Finish these quick steps to get set up.</p>
+      <ul data-onboarding-list></ul>
+    </aside>
     <section class="ban-screen" data-ban-screen hidden aria-live="assertive"><div class="ban-card"><span class="ban-emoji" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" /><path d="m6 6 12 12" /></svg></span><p>Clearwater Internet</p><h1>Banned</h1><strong>Account access has been suspended.</strong><dl><div><dt>Reason</dt><dd data-ban-reason-display>No reason was provided.</dd></div><div><dt>Duration</dt><dd data-ban-duration-display>Forever</dd></div></dl><p>Please contact support if there are any issues.</p><a href="https://discord.com/channels/1514026810348671026/1514122689566998559" target="_blank" rel="noopener">Contact support</a></div></section>
     <section class="join-required-screen" data-join-required-screen hidden aria-live="assertive"><div class="join-required-card"><img src="assets/clearwater-logo.png" alt="Clearwater Roleplay" /><p>Clearwater Internet</p><h1>Join Clearwater Roleplay</h1><strong>You need to be in our Discord server before using Clearwater Internet.</strong><div><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a><a class="join-required-secondary" href="https://erlc.gg/join/cwrpvc" target="_blank" rel="noopener">Join cwrpvc</a></div><small>After joining Discord, return here and refresh the page.</small></div></section>
     <section class="warning-notice" data-warning-notice hidden role="dialog" aria-modal="true" aria-labelledby="warning-title"><div><span aria-hidden="true">⚠</span><p>Clearwater Internet</p><h1 id="warning-title">You received a warning</h1><div data-warning-reasons></div><button type="button" data-close-warning>Okay</button></div></section>
@@ -733,6 +753,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260814-biz-verify-ads"></script>
+    <script src="internet.js?v=20260814-biz-switcher-boost"></script>
   </body>
 </html>
