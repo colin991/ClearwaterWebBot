@@ -13,6 +13,7 @@ import { logger } from './logger.js';
 
 const MAX_ATTACH_BYTES = 8 * 1024 * 1024;
 const ANNOUNCEMENT_EMOJI = '<:Announcement:1514458339680059422>';
+const BELL_EMOJI = '<:bellring:1518378682912211195>';
 const ACCENT_LIVE = 0x4e91f9;
 const ACCENT_DELETED = 0x6b7280;
 
@@ -55,6 +56,7 @@ function shouldAnnounceInternetPost(post) {
 function buildFeedText(post) {
   return [
     `# ${ANNOUNCEMENT_EMOJI} Clearwater Internet`,
+    `${BELL_EMOJI} **New post notification!**`,
     `**Poster:** @${posterHandle(post)}`,
   ].join('\n').slice(0, 4000);
 }
