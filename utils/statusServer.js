@@ -4,7 +4,7 @@ import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { memberHasSiteAccess } from '../lib/site-access.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess, isDeveloperAccount, LIMITED_STAFF_FORBIDDEN_ACTIONS } from './staffRanks.js';
-import { dropLocationNameCandidates, fetchErlcPlayersOnMap, findPlayerDropLocation, playersOnLibertyMap } from './erlc.js';
+import { dropLocationNameCandidates, fetchErlcPlayersOnMap, findPlayerDropLocation, playersOnLibertyMap, runErlcModeration } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
 import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
@@ -261,7 +261,7 @@ export function startStatusServer(client, config) {
       return json(response, 200, { ok: true, botOnline: client.isReady() });
     }
 
-    if (!['/api/status', '/api/actions', '/api/config', '/api/access', '/api/internet', '/api/erlc-map'].includes(url.pathname)) {
+    if (!['/api/status', '/api/actions', '/api/config', '/api/access', '/api/internet', '/api/erlc-map', '/api/erlc-command'].includes(url.pathname)) {
       return json(response, 404, { error: 'Not found' });
     }
 
@@ -296,6 +296,27 @@ export function startStatusServer(client, config) {
       } catch (error) {
         logger.warn(`ER:LC map snapshot failed: ${error?.message || error}`);
         return json(response, 502, { error: 'Could not load in-game players right now.', online: false, players: [] });
+      }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/erlc-command') {
+      try {
+        const body = await readJson(request);
+        if (!config.erlcServerKey) {
+          return json(response, 503, { error: 'ER:LC is not configured on the bot host yet.' });
+        }
+        const result = await runErlcModeration({
+          serverKey: config.erlcServerKey,
+          action: body.action,
+          players: body.players,
+          reason: body.reason,
+        });
+        const actor = [body.actorTag, body.actorDiscordId].filter(Boolean).join(' / ') || 'owner';
+        logger.info(`ER:LC ${body.action} by ${actor}: ${result.succeeded}/${result.total} ok`);
+        return json(response, result.ok ? 200 : 207, result);
+      } catch (error) {
+        logger.warn(`ER:LC command failed: ${error?.message || error}`);
+        return json(response, 400, { error: error?.message || 'Could not run the in-game command' });
       }
     }
 

@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@450;550;650;750;850&display=swap" rel="stylesheet" />
     <script>document.documentElement.classList.add('js');</script>
-    <link rel="stylesheet" href="styles.css?v=20260814-erlc-map" />
+    <link rel="stylesheet" href="styles.css?v=20260814-map-actions" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260813-coming-soon"></script>
   </head>
@@ -50,21 +50,38 @@
           <div>
             <p class="server-mgmt-kicker">Ownership</p>
             <h1>Server Management</h1>
-            <p class="server-mgmt-lead">Live Liberty County map of everyone currently in Clearwater ER:LC.</p>
+            <p class="server-mgmt-lead">Live Liberty County map. Drag across an area to select players, then kick, jail, or ban them.</p>
           </div>
           <div class="server-mgmt-meta">
             <p><strong data-mgmt-count>0</strong> / <strong data-mgmt-max>40</strong> in-game</p>
             <p>Queue <strong data-mgmt-queue>0</strong></p>
             <p data-mgmt-updated>Waiting for live data…</p>
-            <button type="button" class="button button-secondary" data-mgmt-refresh>Refresh</button>
+            <p class="server-mgmt-refresh-line" data-mgmt-refresh-line>Auto-refresh on</p>
+            <button type="button" class="button button-secondary" data-mgmt-refresh>Refresh now</button>
           </div>
         </header>
 
+        <div class="server-mgmt-toolbar" data-mgmt-toolbar>
+          <p class="server-mgmt-selection" data-mgmt-selection>Drag on the map to select players.</p>
+          <label class="server-mgmt-reason">
+            <span>Reason</span>
+            <input type="text" maxlength="120" placeholder="Optional for kick / ban" data-mgmt-reason />
+          </label>
+          <div class="server-mgmt-action-row">
+            <button type="button" class="button button-secondary" data-mgmt-action="kick" disabled>Kick</button>
+            <button type="button" class="button button-secondary" data-mgmt-action="jail" disabled>Jail</button>
+            <button type="button" class="button button-secondary" data-mgmt-action="unjail" disabled>Unjail</button>
+            <button type="button" class="button button-danger" data-mgmt-action="ban" disabled>Ban</button>
+            <button type="button" class="button button-ghost" data-mgmt-clear disabled>Clear</button>
+          </div>
+        </div>
+
         <div class="server-mgmt-layout">
           <figure class="server-map" data-server-map aria-label="Liberty County player map">
-            <div class="server-map-view">
-              <img src="assets/liberty-county-map.jpg" alt="Liberty County map" width="1024" height="1024" />
+            <div class="server-map-view" data-server-map-view>
+              <img src="assets/liberty-county-map.jpg" alt="Liberty County map" width="1024" height="1024" draggable="false" />
               <div class="server-map-pins" data-server-map-pins></div>
+              <div class="server-map-marquee" data-server-map-marquee hidden></div>
             </div>
           </figure>
 
@@ -79,7 +96,7 @@
       </section>
     </main>
 
-    <script src="script.js?v=20260814-erlc-map"></script>
-    <script src="server-management.js?v=20260814-erlc-map"></script>
+    <script src="script.js?v=20260814-map-actions"></script>
+    <script src="server-management.js?v=20260814-map-actions"></script>
   </body>
 </html>
