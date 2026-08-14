@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#03070d" />
+    <title>Server Management · Clearwater Roleplay</title>
+    <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@450;550;650;750;850&display=swap" rel="stylesheet" />
+    <script>document.documentElement.classList.add('js');</script>
+    <link rel="stylesheet" href="styles.css?v=20260814-erlc-map" />
+    <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
+    <script src="site-gate.js?v=20260813-coming-soon"></script>
+  </head>
+  <body class="server-mgmt-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="stage-chrome stage-chrome-bar stage-chrome-split" data-header>
+      <nav class="stage-nav" aria-label="Primary">
+        <a class="stage-nav-link" href="/">Home</a>
+        <a class="stage-nav-link" href="/departments">Departments</a>
+        <a class="stage-nav-link" href="/internet">Internet</a>
+        <a class="stage-nav-link is-active" href="/server-management" data-server-management hidden aria-current="page">Server Management</a>
+      </nav>
+      <div class="stage-chrome-actions">
+        <a class="stage-link stage-link-strong" href="/signin" data-discord-login>Sign in</a>
+        <div class="discord-account" data-discord-account hidden>
+          <button class="discord-profile" type="button" data-discord-profile aria-expanded="false" aria-controls="discord-profile-menu-mgmt">
+            <img class="discord-avatar" data-discord-avatar src="assets/clearwater-logo.png" alt="" />
+            <span class="discord-profile-copy"><span class="discord-name" data-discord-name>Discord user</span><span class="discord-rank" data-discord-rank hidden></span></span>
+          </button>
+          <button class="discord-logout" type="button" data-discord-logout>Logout</button>
+          <div class="discord-profile-menu" id="discord-profile-menu-mgmt" data-discord-profile-menu hidden>
+            <span class="discord-profile-menu-rank" data-discord-profile-menu-rank hidden></span>
+            <a href="/owner" data-owner-link hidden>Owner Panel</a>
+            <a href="/internet/wallet" data-cash-balance>Wallet <span data-cash-amount>C$0</span></a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main id="main" class="server-mgmt-main">
+      <div class="server-mgmt-notice" data-mgmt-notice role="status">Checking ownership access…</div>
+
+      <section class="server-mgmt-shell" data-mgmt-shell hidden>
+        <header class="server-mgmt-heading">
+          <div>
+            <p class="server-mgmt-kicker">Ownership</p>
+            <h1>Server Management</h1>
+            <p class="server-mgmt-lead">Live Liberty County map of everyone currently in Clearwater ER:LC.</p>
+          </div>
+          <div class="server-mgmt-meta">
+            <p><strong data-mgmt-count>0</strong> / <strong data-mgmt-max>40</strong> in-game</p>
+            <p>Queue <strong data-mgmt-queue>0</strong></p>
+            <p data-mgmt-updated>Waiting for live data…</p>
+            <button type="button" class="button button-secondary" data-mgmt-refresh>Refresh</button>
+          </div>
+        </header>
+
+        <div class="server-mgmt-layout">
+          <figure class="server-map" data-server-map aria-label="Liberty County player map">
+            <div class="server-map-view">
+              <img src="assets/liberty-county-map.jpg" alt="Liberty County map" width="1024" height="1024" />
+              <div class="server-map-pins" data-server-map-pins></div>
+            </div>
+          </figure>
+
+          <aside class="server-roster" aria-label="Players in game">
+            <header>
+              <h2>Players</h2>
+              <span data-mgmt-roster-count>0</span>
+            </header>
+            <ul data-mgmt-roster></ul>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <script src="script.js?v=20260814-erlc-map"></script>
+    <script src="server-management.js?v=20260814-erlc-map"></script>
+  </body>
+</html>

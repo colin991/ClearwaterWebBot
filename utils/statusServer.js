@@ -4,7 +4,7 @@ import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { memberHasSiteAccess } from '../lib/site-access.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess, isDeveloperAccount, LIMITED_STAFF_FORBIDDEN_ACTIONS } from './staffRanks.js';
-import { dropLocationNameCandidates, findPlayerDropLocation } from './erlc.js';
+import { dropLocationNameCandidates, fetchErlcPlayersOnMap, findPlayerDropLocation, playersOnLibertyMap } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
 import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
@@ -261,7 +261,7 @@ export function startStatusServer(client, config) {
       return json(response, 200, { ok: true, botOnline: client.isReady() });
     }
 
-    if (!['/api/status', '/api/actions', '/api/config', '/api/access', '/api/internet'].includes(url.pathname)) {
+    if (!['/api/status', '/api/actions', '/api/config', '/api/access', '/api/internet', '/api/erlc-map'].includes(url.pathname)) {
       return json(response, 404, { error: 'Not found' });
     }
 
@@ -272,6 +272,31 @@ export function startStatusServer(client, config) {
     const authorization = request.headers.authorization || '';
     if (!authorization.startsWith('Bearer ') || !safeEqual(authorization.slice(7), config.apiKey)) {
       return json(response, 401, { error: 'Unauthorized' });
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/erlc-map') {
+      try {
+        if (config.erlcServerKey) {
+          const snapshot = await fetchErlcPlayersOnMap(config.erlcServerKey);
+          return json(response, 200, snapshot);
+        }
+        const cached = client.erlcStatus;
+        if (!cached?.online) {
+          return json(response, 503, { error: 'ER:LC is not configured on the bot host yet.', online: false, players: [] });
+        }
+        return json(response, 200, {
+          online: true,
+          name: cached.name || 'Clearwater',
+          currentPlayers: Number(cached.currentPlayers) || 0,
+          maxPlayers: Number(cached.maxPlayers) || 40,
+          queue: Number(cached.queue) || 0,
+          players: playersOnLibertyMap(cached.players || []),
+          updatedAt: cached.updatedAt || new Date().toISOString(),
+        });
+      } catch (error) {
+        logger.warn(`ER:LC map snapshot failed: ${error?.message || error}`);
+        return json(response, 502, { error: 'Could not load in-game players right now.', online: false, players: [] });
+      }
     }
 
     if (request.method === 'GET' && url.pathname === '/api/access') {

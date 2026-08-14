@@ -114,3 +114,43 @@ export async function findPlayerDropLocation({ serverKey, robloxId, username, us
     top: pin.top,
   };
 }
+
+/** Ownership map payload: every in-game player that has a placeable location. */
+export function playersOnLibertyMap(players = []) {
+  return (Array.isArray(players) ? players : [])
+    .map((player) => {
+      const entry = player?.location ? player : parseErlcPlayer(player);
+      const pin = libertyMapPoint(entry.location?.x, entry.location?.z);
+      if (!pin) return null;
+      const label = [entry.location.building, entry.location.street].filter(Boolean).join(' ')
+        || (entry.location.postal ? `Postal ${entry.location.postal}` : 'Liberty County');
+      return {
+        username: entry.username,
+        robloxId: entry.robloxId,
+        team: entry.team || 'Civilian',
+        callsign: entry.callsign || '',
+        postal: entry.location.postal || '',
+        street: entry.location.street || '',
+        building: entry.location.building || '',
+        label,
+        left: pin.left,
+        top: pin.top,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.username.localeCompare(right.username));
+}
+
+export async function fetchErlcPlayersOnMap(serverKey) {
+  const server = await fetchErlcServer(serverKey);
+  const players = (server.Players || server.players || []).map(parseErlcPlayer);
+  return {
+    online: true,
+    name: server.Name || server.name || 'Clearwater',
+    currentPlayers: Number.isInteger(server.CurrentPlayers) ? server.CurrentPlayers : players.length,
+    maxPlayers: Number.isInteger(server.MaxPlayers) ? server.MaxPlayers : 40,
+    queue: Array.isArray(server.Queue) ? server.Queue.length : (Number(server.Queue) || 0),
+    players: playersOnLibertyMap(players),
+    updatedAt: new Date().toISOString(),
+  };
+}

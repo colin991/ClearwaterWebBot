@@ -8,6 +8,7 @@
     { "source": "/internet", "destination": "/internet.html" },
     { "source": "/internet/(.*)", "destination": "/internet.html" },
     { "source": "/owner", "destination": "/owner.html" },
+    { "source": "/server-management", "destination": "/server-management.html" },
     { "source": "/departments", "destination": "/departments.html" },
     { "source": "/terms", "destination": "/terms.html" },
     { "source": "/privacy", "destination": "/privacy.html" },
