@@ -1688,7 +1688,7 @@ function renderReels() {
   }
   bindReelMediaFallback(viewport);
   bindReelAutoplay();
-  renderWhoToWatch();
+  renderSideSuggestions();
 }
 
 function canShowComposer() {
@@ -1709,6 +1709,7 @@ function syncHomeSurfaces() {
     pauseReelVideos();
     document.querySelector('[data-reel-comments]')?.setAttribute('hidden', '');
   }
+  renderSideSuggestions();
 }
 
 function openReelComments(reelId) {
@@ -3581,6 +3582,65 @@ function adStatusLabel(status) {
   return status || 'Unknown';
 }
 
+function whoToFollowCandidates(limit = 3) {
+  const me = activeUserId();
+  const following = new Set(socialState.following || []);
+  const blocked = new Set([...(socialState.blocked || []), ...(socialState.muted || [])]);
+  return [...internetUsers.values()]
+    .filter((user) => {
+      if (!user?.id || user.id === me) return false;
+      if (user.banned || user.deactivated || user.bank) return false;
+      if (following.has(user.id) || blocked.has(user.id)) return false;
+      return Boolean(user.username || user.displayName);
+    })
+    .sort((left, right) => {
+      const score = (user) => (
+        (user.official ? 1000 : 0)
+        + (user.verified ? 200 : 0)
+        + (user.staffRank ? 120 : 0)
+        + (Number(user.followerCount) || 0)
+        + (Array.isArray(user.badges) && user.badges.includes('business') ? 40 : 0)
+      );
+      return score(right) - score(left)
+        || String(left.displayName || '').localeCompare(String(right.displayName || ''));
+    })
+    .slice(0, limit);
+}
+
+function renderWhoToFollow() {
+  const panel = document.querySelector('[data-who-to-follow]');
+  const list = document.querySelector('[data-who-to-follow-list]');
+  if (!panel || !list) return;
+  if (isVisibleReelsTab()) {
+    panel.hidden = true;
+    return;
+  }
+  if (!currentUserId) {
+    panel.hidden = true;
+    return;
+  }
+  const people = whoToFollowCandidates(3);
+  panel.hidden = false;
+  if (!people.length) {
+    list.innerHTML = '<p class="who-to-follow-empty">You’re caught up. Follow people from search or profiles.</p>';
+    return;
+  }
+  list.innerHTML = people.map((user) => {
+    const following = socialState.following.includes(user.id);
+    const handle = user.username ? `@${user.username}` : 'Clearwater member';
+    return `<div class="who-to-follow-row">
+      <button type="button" class="who-to-follow-avatar" data-open-member="${escapeHtml(user.id)}" aria-label="Open ${escapeHtml(user.displayName || 'member')}">
+        <img src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" />
+      </button>
+      <button type="button" class="who-to-follow-copy" data-open-member="${escapeHtml(user.id)}">
+        <b>${escapeHtml(user.displayName || 'Clearwater member')}${identityBadges(user)}</b>
+        <small>${escapeHtml(handle)}${user.staffRank ? ` · ${escapeHtml(user.staffRank)}` : ''}</small>
+      </button>
+      <button type="button" class="who-to-follow-action${following ? ' following' : ''}" data-who-follow="${escapeHtml(user.id)}" aria-pressed="${following ? 'true' : 'false'}">${following ? 'Following' : 'Follow'}</button>
+    </div>`;
+  }).join('');
+}
+
 function whoToWatchCandidates(limit = 3) {
   const me = activeUserId();
   const blocked = new Set([...(socialState.blocked || []), ...(socialState.muted || [])]);
@@ -3588,25 +3648,34 @@ function whoToWatchCandidates(limit = 3) {
     post.kind === 'reel'
     && !post.parentId
     && post.authorId
-    && post.authorId !== me
     && !blocked.has(post.authorId)
     && (post.videoUrl || post.imageUrl || (Array.isArray(post.slideshowUrls) && post.slideshowUrls.length))
   ));
+  if (!reels.length) return [];
+  const others = [];
+  const mine = [];
+  for (const reel of reels) {
+    if (reel.authorId === me) mine.push(reel);
+    else others.push(reel);
+  }
+  const ordered = [...others, ...mine];
   const picked = [];
   const seenAuthors = new Set();
-  for (const reel of reels) {
-    if (activeReelId && reel.id === activeReelId) continue;
+  const skipActive = ordered.length > 1;
+  for (const reel of ordered) {
+    if (picked.length >= limit) break;
+    if (skipActive && activeReelId && reel.id === activeReelId) continue;
     if (seenAuthors.has(reel.authorId)) continue;
     seenAuthors.add(reel.authorId);
     picked.push(reel);
-    if (picked.length >= limit) return picked;
   }
-  for (const reel of reels) {
-    if (picked.some((item) => item.id === reel.id)) continue;
-    if (activeReelId && reel.id === activeReelId) continue;
-    picked.push(reel);
+  for (const reel of ordered) {
     if (picked.length >= limit) break;
+    if (picked.some((item) => item.id === reel.id)) continue;
+    if (skipActive && activeReelId && reel.id === activeReelId && picked.length) continue;
+    picked.push(reel);
   }
+  if (!picked.length && ordered.length) return ordered.slice(0, limit);
   return picked;
 }
 
@@ -3615,7 +3684,7 @@ function reelWatchThumbMarkup(reel) {
     return `<video src="${escapeHtml(reelMediaProxyUrl(reel.id, 'video'))}" muted playsinline preload="metadata"></video>`;
   }
   const slides = Array.isArray(reel.slideshowUrls) ? reel.slideshowUrls.filter(Boolean) : [];
-  const imageSrc = slides[0] || (reel.imageUrl ? reelMediaProxyUrl(reel.id, 'image') : '');
+  const imageSrc = slides[0] || (reel.imageUrl ? (String(reel.imageUrl).startsWith('/api/media') ? reel.imageUrl : reelMediaProxyUrl(reel.id, 'image')) : '');
   if (imageSrc) return `<img src="${escapeHtml(imageSrc)}" alt="" />`;
   return `<img src="assets/clearwater-logo.png" alt="" />`;
 }
@@ -3624,6 +3693,10 @@ function renderWhoToWatch() {
   const panel = document.querySelector('[data-who-to-watch]');
   const list = document.querySelector('[data-who-to-watch-list]');
   if (!panel || !list) return;
+  if (!isVisibleReelsTab()) {
+    panel.hidden = true;
+    return;
+  }
   const reels = whoToWatchCandidates(3);
   panel.hidden = false;
   if (!reels.length) {
@@ -3636,17 +3709,23 @@ function renderWhoToWatch() {
     const username = author.username || reel.username || 'member';
     const caption = String(reel.content || '').trim();
     const subtitle = caption || `@${username}`;
+    const isVideo = Boolean(reel.videoUrl);
     return `<div class="who-to-watch-row">
       <button type="button" class="who-to-watch-thumb" data-open-reel="${escapeHtml(reel.id)}" aria-label="Watch Reel by ${escapeHtml(displayName)}">
         ${reelWatchThumbMarkup(reel)}
       </button>
       <button type="button" class="who-to-watch-copy" data-open-reel="${escapeHtml(reel.id)}">
         <b>${escapeHtml(displayName)}${identityBadges(author.id ? author : reel)}</b>
-        <small>${escapeHtml(subtitle)}</small>
+        <small>${escapeHtml(subtitle)}${isVideo ? ' · Video' : ''}</small>
       </button>
       <button type="button" class="who-to-watch-action" data-open-reel="${escapeHtml(reel.id)}">Watch</button>
     </div>`;
   }).join('');
+}
+
+function renderSideSuggestions() {
+  renderWhoToFollow();
+  renderWhoToWatch();
 }
 
 function adPlacementLabel(placement) {
@@ -4293,7 +4372,7 @@ async function loadSocial() {
       socialState = { ...socialState, ...result.social };
       updateNotificationIndicators();
       renderPosts();
-      renderWhoToWatch();
+      renderSideSuggestions();
     }
   } catch { /* Feed stays usable during a temporary connection issue. */ }
 }
@@ -4501,7 +4580,7 @@ async function socialAction(type, { targetId = '', postId = '', enabled = true }
   socialState = { ...socialState, ...result.social };
   if (type === 'follow' && targetId) patchFollowGraphs(targetId, enabled === true);
   renderPosts();
-  renderWhoToWatch();
+  renderSideSuggestions();
   renderOwnProfileDetails();
 }
 
@@ -4753,7 +4832,7 @@ async function loadPosts() {
     if (result.adPricing) adPricing = { ...adPricing, ...result.adPricing };
     syncAdBoostLabels();
     renderSidebarAds(sidebarAds);
-    renderWhoToWatch();
+    renderSideSuggestions();
     officialAccountId = result.officialUserId || [...internetUsers.values()].find((user) => user.official)?.id || officialAccountId;
     updateAccountSwitcher();
     const official = internetUsers.get(officialAccountId);
@@ -5386,6 +5465,16 @@ document.addEventListener('click', (event) => {
       copyStaffId.textContent = 'Copied ID';
       window.setTimeout(() => { copyStaffId.textContent = copyStaffId.dataset.staffCopyId; }, 1200);
     }).catch(() => {});
+    return;
+  }
+  const whoFollow = event.target.closest('[data-who-follow]');
+  if (whoFollow) {
+    event.preventDefault();
+    const targetId = whoFollow.dataset.whoFollow;
+    if (!targetId) return;
+    if (!currentUserId) { window.location.href = signInUrl(); return; }
+    const enabled = !socialState.following.includes(targetId);
+    void socialAction('follow', { targetId, enabled }).catch((error) => void siteAlert(error.message || 'Could not update follow.'));
     return;
   }
   const adAccount = event.target.closest('[data-open-ad-account]');

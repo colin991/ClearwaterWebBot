@@ -7137,7 +7137,7 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
 .sidebar-ad-promo-btn:hover { filter: brightness(1.08); }
 .sidebar-ad-empty-card h3 { font-size: 18px; }
 
-.who-to-watch {
+.who-to-follow {
   display: grid;
   gap: 10px;
   margin-top: 14px;
@@ -7145,13 +7145,112 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
   border: 1px solid rgba(148, 184, 255, .16);
   border-radius: 18px;
   background: linear-gradient(165deg, rgba(10, 20, 38, .94), rgba(5, 11, 20, .96));
-  max-height: 236px;
+}
+.who-to-follow[hidden] { display: none !important; }
+.internet-shell:has([data-reels-stage]:not([hidden])) .who-to-follow {
+  display: none !important;
+}
+.who-to-follow h2 {
+  margin: 0 2px 2px;
+  color: #eef5ff;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -.02em;
+}
+.who-to-follow-list {
+  display: grid;
+  gap: 4px;
+}
+.who-to-follow-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 6px;
+  border-radius: 12px;
+}
+.who-to-follow-row:hover { background: rgba(255, 255, 255, .04); }
+.who-to-follow-avatar {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.who-to-follow-avatar img {
+  display: block;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #0c1522;
+}
+.who-to-follow-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.who-to-follow-copy b {
+  overflow: hidden;
+  color: #f3f7ff;
+  font-size: 14px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.who-to-follow-copy small {
+  overflow: hidden;
+  color: #8ea0b8;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.who-to-follow-action {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  color: #081018;
+  background: #f4f8ff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+.who-to-follow-action.following {
+  color: #dce9ff;
+  background: transparent;
+  border: 1px solid rgba(148, 184, 255, .28);
+}
+.who-to-follow-empty {
+  margin: 0;
+  padding: 6px 4px 2px;
+  color: #8ea0b8;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.who-to-watch {
+  display: none;
+  gap: 10px;
+  margin-top: 0;
+  padding: 16px 14px 14px;
+  border: 1px solid rgba(148, 184, 255, .16);
+  border-radius: 18px;
+  background: linear-gradient(165deg, rgba(10, 20, 38, .94), rgba(5, 11, 20, .96));
+  max-height: 220px;
   overflow: hidden;
 }
 .who-to-watch[hidden] { display: none !important; }
-.internet-shell:has([data-reels-stage]:not([hidden])) .who-to-watch {
-  margin-top: 0;
-  max-height: 220px;
+.internet-shell:has([data-reels-stage]:not([hidden])) .who-to-watch:not([hidden]) {
+  display: grid;
 }
 .who-to-watch h2 {
   margin: 0 2px 2px;
