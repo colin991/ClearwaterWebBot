@@ -8369,3 +8369,72 @@ body {
   border: 0 !important;
   box-shadow: none !important;
 }
+
+/* ==========================================================================
+   Readable muted / accent text on flat charcoal.
+   --blue is a fill color (#1c1c1c); never use it for text.
+   ========================================================================== */
+:root {
+  --muted: #b9c3d1;
+  --blue-light: #f2f5f8;
+}
+
+.internet-brand b,
+.internet-header p,
+.page-heading p,
+.internet-user small,
+.community-card a,
+.composer .composer-tools button,
+.poll-builder button,
+.moderation-modal form > p:first-child,
+.site-dialog form > p:first-child,
+.staff-banner-live a,
+.profile-stats button.active b,
+.post-rank,
+.wallet-kicker,
+.reels-side-card .wallet-kicker {
+  color: #e8edf5 !important;
+}
+
+.post-mention,
+.post-hashtag,
+a.post-hashtag,
+.trending a,
+.topic-grid a {
+  color: #dce4ef !important;
+}
+
+.post-author .post-meta,
+.trending a span,
+.topic-grid span,
+.composer-footer,
+[data-character-count],
+.internet-side p,
+.feed-note,
+.wallet-lede,
+.profile-handle,
+.profile-copy,
+.back-button,
+.internet-message small,
+.message-list > p,
+.post-menu summary,
+.privacy-settings small,
+.settings-hint,
+.settings-counter,
+.settings-identity small {
+  color: #b9c3d1 !important;
+}
+
+.internet-nav a {
+  color: #c5ced9 !important;
+}
+.internet-nav a:hover,
+.internet-nav a.selected {
+  color: #fff !important;
+}
+
+.internet-wallet-link,
+.internet-wallet-link span,
+[data-internet-cash-amount] {
+  color: #f2f5f8 !important;
+}
