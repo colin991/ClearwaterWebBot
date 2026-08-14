@@ -10,7 +10,6 @@ const maxEl = document.querySelector('[data-mgmt-max]');
 const queueEl = document.querySelector('[data-mgmt-queue]');
 const updatedEl = document.querySelector('[data-mgmt-updated]');
 const refreshLine = document.querySelector('[data-mgmt-refresh-line]');
-const refreshBtn = document.querySelector('[data-mgmt-refresh]');
 const selectionEl = document.querySelector('[data-mgmt-selection]');
 const reasonInput = document.querySelector('[data-mgmt-reason]');
 const clearBtn = document.querySelector('[data-mgmt-clear]');
@@ -35,7 +34,7 @@ const TEAM_TONES = [
   ['civ', '#f4f6f8'],
 ];
 
-const REFRESH_MS = 8000;
+const REFRESH_MS = 4000;
 const DRAG_THRESHOLD = 6;
 
 let pollTimer = null;
@@ -210,7 +209,6 @@ async function ensureOwnerAccess() {
 
 async function loadMap(silent = false) {
   if (busy || dragState) return;
-  if (!silent) refreshBtn && (refreshBtn.disabled = true);
   try {
     const response = await fetch('/api/owner/erlc-map', { credentials: 'same-origin' });
     const result = await response.json().catch(() => ({}));
@@ -243,8 +241,6 @@ async function loadMap(silent = false) {
   } catch (error) {
     setNotice(error.message || 'Could not load the in-game map.', true);
     schedulePoll();
-  } finally {
-    if (refreshBtn) refreshBtn.disabled = busy;
   }
 }
 
@@ -380,8 +376,6 @@ clearBtn?.addEventListener('click', () => {
   if (!busy) clearSelection();
 });
 
-refreshBtn?.addEventListener('click', () => { void loadMap(); });
-
 async function runAction(action) {
   const targets = selectedPlayers();
   if (!targets.length || busy) return;
@@ -401,7 +395,6 @@ async function runAction(action) {
   updateSelectionUi();
   updateCountdown();
   actionButtons.forEach((button) => { button.disabled = true; });
-  if (refreshBtn) refreshBtn.disabled = true;
   setNotice(`Running ${label.toLowerCase()} on ${targets.length} player${targets.length === 1 ? '' : 's'}…`);
 
   try {
@@ -443,7 +436,6 @@ async function runAction(action) {
   } finally {
     busy = false;
     updateSelectionUi();
-    if (refreshBtn) refreshBtn.disabled = false;
     schedulePoll();
     updateCountdown();
   }
@@ -488,7 +480,6 @@ commandForm?.addEventListener('submit', async (event) => {
   updateSelectionUi();
   updateCountdown();
   if (commandRunBtn) commandRunBtn.disabled = true;
-  if (refreshBtn) refreshBtn.disabled = true;
   setCommandStatus(`Sending ${command}…`);
   setNotice(`Sending in-game command ${command}…`);
 
@@ -513,7 +504,6 @@ commandForm?.addEventListener('submit', async (event) => {
     busy = false;
     updateSelectionUi();
     if (commandRunBtn) commandRunBtn.disabled = false;
-    if (refreshBtn) refreshBtn.disabled = false;
     schedulePoll();
     updateCountdown();
   }
