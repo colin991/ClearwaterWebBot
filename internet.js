@@ -4801,7 +4801,7 @@ async function loadSession() {
   sessionUser = session.user;
   sessionStaffPanel = session.user.staffPanel === 'full' || session.user.staffPanel === 'limited'
     ? session.user.staffPanel
-    : (session.user.owner === true && session.user.staffRank === 'Ownership' ? 'full' : null);
+    : (session.user.owner === true ? 'full' : null);
   sessionCanStaff = Boolean(sessionStaffPanel);
   sessionIsOwner = sessionStaffPanel === 'full';
   if (profileTitle) profileTitle.textContent = session.user.displayName || session.user.username;

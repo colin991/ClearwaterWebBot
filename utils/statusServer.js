@@ -147,6 +147,7 @@ export function startStatusServer(client, config) {
     if (!/^\d{16,22}$/.test(discordId)) return null;
     if (isDeveloperAccount(actor)) return 'full';
     const ownerDiscordIds = config.ownerDiscordIds || [];
+    const ownerRoleIds = config.ownerRoleIds || [];
     if (ownerDiscordIds.map(String).includes(discordId)) return 'full';
 
     const guild = client.guilds.cache.get(CLEARWATER_GUILD_ID)
@@ -158,7 +159,7 @@ export function startStatusServer(client, config) {
 
     try {
       const member = await guild.members.fetch(discordId);
-      return getStaffPanelAccess(member, { ownerDiscordIds });
+      return getStaffPanelAccess(member, { ownerDiscordIds, ownerRoleIds });
     } catch (error) {
       // Confirmed not in guild: no panel. Temporary Discord failures: keep proxy panel.
       if (Number(error?.code) === 10007) return null;
@@ -281,7 +282,8 @@ export function startStatusServer(client, config) {
       const member = guild ? await guild.members.fetch(discordId).catch(() => null) : null;
       const staffRank = getHighestStaffRank(member);
       const ownerDiscordIds = config.ownerDiscordIds || [];
-      const panelAccess = getStaffPanelAccess(member, { ownerDiscordIds });
+      const ownerRoleIds = config.ownerRoleIds || [];
+      const panelAccess = getStaffPanelAccess(member, { ownerDiscordIds, ownerRoleIds });
       const allowed = panelAccess === 'full';
       const siteAccess = memberHasSiteAccess(member, { ownerDiscordIds });
       return json(response, 200, {
@@ -395,6 +397,12 @@ export function startStatusServer(client, config) {
           body.owner = true;
         }
         if (staffAction) {
+          // Ownership break-glass: website already verified full panel / OWNER_DISCORD_IDS.
+          // Trust that when live Discord lookup did not return a panel (role cache lag, etc.).
+          if (!livePanel && requestedOwner && proxyPanel === 'full') livePanel = 'full';
+          if (!livePanel && proxyPanel && ['ad-manage', 'ad-review'].includes(body.action)) {
+            livePanel = proxyPanel;
+          }
           if (!livePanel) return json(response, 403, { error: 'Staff access required' });
           body.staffPanel = livePanel;
           if (livePanel === 'full') body.owner = true;
@@ -526,7 +534,13 @@ export function startStatusServer(client, config) {
         }
 
         if (body.action === 'ad-manage') {
-          if (!['full', 'limited'].includes(body.staffPanel)) return json(response, 403, { error: 'Staff access required' });
+          // Ownership and limited staff can extend or end live ads.
+          const panel = ['full', 'limited'].includes(body.staffPanel)
+            ? body.staffPanel
+            : (await resolveLiveStaffPanel(body.actor, proxyPanel));
+          if (!['full', 'limited'].includes(panel) && !(requestedOwner && proxyPanel === 'full')) {
+            return json(response, 403, { error: 'Staff access required' });
+          }
           const result = manageInternetAd(store, {
             adId: body.adId,
             action: body.manageAction === 'extend' ? 'extend' : 'remove',

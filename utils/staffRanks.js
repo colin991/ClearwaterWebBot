@@ -23,24 +23,34 @@ export function getHighestStaffRank(member) {
 }
 
 /** Internet staff desk access. Ownership = full, Management = limited. */
-export function getStaffPanelAccess(member, { ownerDiscordIds = [] } = {}) {
+export function getStaffPanelAccess(member, { ownerDiscordIds = [], ownerRoleIds = [] } = {}) {
   const discordId = String(member?.id || member?.user?.id || '');
   if (discordId && ownerDiscordIds.map(String).includes(discordId)) return 'full';
   if (isDeveloperAccount({
     id: discordId,
     username: member?.user?.username || member?.username,
   })) return 'full';
-  if (member?.roles?.cache?.has(FULL_STAFF_PANEL_ROLE_ID)) return 'full';
-  if (member?.roles?.cache?.has(LIMITED_STAFF_PANEL_ROLE_ID)) return 'limited';
+  const roleCache = member?.roles?.cache;
+  for (const roleId of ownerRoleIds.map(String)) {
+    if (roleId && roleCache?.has(roleId)) return 'full';
+  }
+  if (roleCache?.has(FULL_STAFF_PANEL_ROLE_ID)) return 'full';
+  if (roleCache?.has(LIMITED_STAFF_PANEL_ROLE_ID)) return 'limited';
+  const rank = getHighestStaffRank(member);
+  if (rank?.panel === 'full' || rank?.owner) return 'full';
+  if (rank?.panel === 'limited') return 'limited';
   return null;
 }
 
 /** Panel access from signed session guild roles (Discord OAuth at login). */
-export function getSessionPanelAccess(user, { ownerDiscordIds = [] } = {}) {
+export function getSessionPanelAccess(user, { ownerDiscordIds = [], ownerRoleIds = [] } = {}) {
   const discordId = String(user?.id || '');
   if (discordId && ownerDiscordIds.map(String).includes(discordId)) return 'full';
   if (isDeveloperAccount(user)) return 'full';
   const roles = Array.isArray(user?.guildRoles) ? user.guildRoles.map(String) : [];
+  for (const roleId of ownerRoleIds.map(String)) {
+    if (roleId && roles.includes(roleId)) return 'full';
+  }
   if (roles.includes(FULL_STAFF_PANEL_ROLE_ID)) return 'full';
   if (roles.includes(LIMITED_STAFF_PANEL_ROLE_ID)) return 'limited';
   return null;

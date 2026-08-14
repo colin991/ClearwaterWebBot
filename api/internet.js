@@ -406,26 +406,30 @@ export default async function handler(request, response) {
         actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges },
       };
     } else if (body.action === 'ad-review') {
-      if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
+      if (!canStaff && !access.allowed) return sendJson(response, 403, { error: 'Staff access required' });
+      const panel = staffPanel || (access.allowed ? 'full' : null);
       payload = {
         action: 'ad-review',
         adId: String(body.adId || ''),
         decision: body.decision === 'deny' ? 'deny' : 'accept',
         reason: String(body.reason || '').slice(0, 300),
         actor: staffActor(user, access),
-        staffPanel,
-        owner: staffPanel === 'full',
+        staffPanel: panel,
+        owner: access.allowed || panel === 'full',
       };
     } else if (body.action === 'ad-manage') {
-      if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
+      // Ownership (full panel) and limited staff can extend or end ads.
+      if (!canStaff && !access.allowed) return sendJson(response, 403, { error: 'Staff access required' });
+      const panel = staffPanel || (access.allowed ? 'full' : null);
+      if (!panel) return sendJson(response, 403, { error: 'Staff access required' });
       payload = {
         action: 'ad-manage',
         adId: String(body.adId || ''),
         manageAction: body.manageAction === 'extend' ? 'extend' : 'remove',
         hours: Math.min(168, Math.max(1, Number(body.hours) || 24)),
         actor: staffActor(user, access),
-        staffPanel,
-        owner: staffPanel === 'full',
+        staffPanel: panel,
+        owner: access.allowed || panel === 'full',
       };
     } else if (body.action === 'wallet-transfer') {
       payload = {
