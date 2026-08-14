@@ -350,8 +350,15 @@ function publicPost(post, maskedAuthors) {
   // Reels always use the same-origin media proxy. Direct blob URLs flake in the
   // vertical player (CORS/range/codec), which made newly uploaded Reels look broken.
   if (next.kind === 'reel') {
-    if (next.imageUrl) next.imageUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=image`;
+    const slides = Array.isArray(next.slideshowUrls) ? next.slideshowUrls.filter(Boolean) : [];
+    if (slides.length) {
+      next.slideshowUrls = slides.map((_, index) => `/api/media?reel=${encodeURIComponent(post.id)}&kind=image&index=${index}`);
+      next.imageUrl = next.slideshowUrls[0];
+    } else if (next.imageUrl) {
+      next.imageUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=image`;
+    }
     if (next.videoUrl) next.videoUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=video`;
+    if (next.audioUrl) next.audioUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=audio`;
   } else {
     if (String(next.imageUrl || '').startsWith('data:')) next.imageUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=image`;
     if (String(next.videoUrl || '').startsWith('data:')) next.videoUrl = `/api/media?reel=${encodeURIComponent(post.id)}&kind=video`;
@@ -1582,6 +1589,22 @@ function sanitizeDropLocation(raw) {
   };
 }
 
+const MAX_REEL_SLIDES = 10;
+const AUDIO_DATA_URL_RE = /^data:audio\/(?:mpeg|mp3|mp4|wav|ogg|webm|aac|x-m4a);base64,[a-z0-9+/=]+$/i;
+const IMAGE_DATA_URL_RE = /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i;
+
+function normalizeReelSlideUrls(media = {}, fallbackImageUrl = '', fallbackIsImage = false) {
+  const slides = [];
+  const raw = Array.isArray(media?.images) ? media.images : [];
+  for (const item of raw.slice(0, MAX_REEL_SLIDES)) {
+    const hosted = hostedMediaUrl(item?.url);
+    const candidate = hosted || text(item?.dataUrl, 4_200_000);
+    if (hosted || IMAGE_DATA_URL_RE.test(candidate)) slides.push(candidate);
+  }
+  if (!slides.length && fallbackIsImage && fallbackImageUrl) slides.push(fallbackImageUrl);
+  return slides;
+}
+
 export function createInternetPost(store, user, content, media = {}) {
   const body = text(content, 500);
   const isReel = media?.reel === true;
@@ -1590,24 +1613,33 @@ export function createInternetPost(store, user, content, media = {}) {
   const isGif = /^https:\/\/(?:media\d*|i)\.giphy\.com\//.test(gifUrl);
   const hostedImage = hostedMediaUrl(media?.image?.url);
   const hostedVideo = hostedMediaUrl(media?.video?.url);
+  const hostedAudio = hostedMediaUrl(media?.audio?.url);
   const imageUrl = hostedImage || text(media?.image?.dataUrl, 4_200_000);
-  const isImage = Boolean(hostedImage) || /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(imageUrl);
+  const isImage = Boolean(hostedImage) || IMAGE_DATA_URL_RE.test(imageUrl);
   const videoUrl = hostedVideo || text(media?.video?.dataUrl, 4_200_000);
   const isVideo = Boolean(hostedVideo) || /^data:video\/(?:mp4|webm|quicktime);base64,[a-z0-9+/=]+$/i.test(videoUrl);
+  const audioUrl = hostedAudio || text(media?.audio?.dataUrl, 4_200_000);
+  const isAudio = Boolean(hostedAudio) || AUDIO_DATA_URL_RE.test(audioUrl);
+  const slideshowUrls = isReel && !isVideo ? normalizeReelSlideUrls(media, imageUrl, isImage) : [];
+  const hasReelPhotos = slideshowUrls.length > 0;
   const question = text(media?.poll?.question, 180);
   const options = Array.isArray(media?.poll?.options) ? media.poll.options.map((option) => text(option, 80)).filter(Boolean).slice(0, 4) : [];
   const pollDays = Math.min(30, Math.max(1, Number(media?.poll?.durationDays) || 1));
   const parentId = text(media?.parentId, 80) || null;
   const dropLocation = sanitizeDropLocation(media?.location);
   if (isReel) {
-    if (!isImage && !isVideo) throw new Error('Add a photo or a short video to post a Reel');
-    if (isGif || question) throw new Error('Reels can only include a photo or video');
+    if (!hasReelPhotos && !isVideo) throw new Error('Add photos or a short video to post a Reel');
+    if (isVideo && hasReelPhotos) throw new Error('Choose either a video or a photo slideshow');
+    if (isVideo && isAudio) throw new Error('Audio tracks are for photo slideshows. Video Reels use the clip sound.');
+    if (isAudio && !hasReelPhotos) throw new Error('Add photos before attaching audio');
+    if (isGif || question) throw new Error('Reels can only include photos, a video, and optional slideshow audio');
   } else if (!body && !isGif && !isImage && !question && !text(media?.quoteId, 80) && !dropLocation) {
     throw new Error('Write something, add an image or GIF, or create a poll before posting');
   }
   if (gifUrl && !isGif) throw new Error('Only GIFs selected from Clearwater Internet can be posted');
   if (imageUrl && !isImage) throw new Error('Choose a supported image before posting');
   if (videoUrl && !isVideo) throw new Error('Choose a supported MP4 or WebM video before posting');
+  if (audioUrl && !isAudio) throw new Error('Choose a supported MP3, M4A, WAV, or OGG audio file');
   if ((question && options.length < 2) || (!question && options.length)) throw new Error('A poll needs a question and at least two options');
   assertCanPost(store, user, { reel: isReel });
   enforceAutomod(store, {
@@ -1620,7 +1652,7 @@ export function createInternetPost(store, user, content, media = {}) {
         location: dropLocation,
         gifUrl: isGif ? gifUrl : '',
         gifTitle: isGif ? gifTitle : '',
-        imageUrl: isImage ? imageUrl : '',
+        imageUrl: isImage ? imageUrl : (hasReelPhotos ? slideshowUrls[0] : ''),
         quoteId: text(media?.quoteId, 80) || '',
       }),
     },
@@ -1656,7 +1688,15 @@ export function createInternetPost(store, user, content, media = {}) {
     quoteId: text(media?.quoteId, 80) || null,
     likes: [],
     ...(isGif ? { gifUrl, gifTitle } : {}),
-    ...(isImage ? { imageUrl } : {}),
+    ...(isReel && hasReelPhotos
+      ? {
+          imageUrl: slideshowUrls[0],
+          ...(slideshowUrls.length > 1 ? { slideshowUrls } : {}),
+          ...(isAudio ? { audioUrl } : {}),
+        }
+      : {
+          ...(isImage ? { imageUrl } : {}),
+        }),
     ...(isVideo ? { videoUrl } : {}),
     ...(dropLocation ? { location: dropLocation } : {}),
     ...(question ? { poll: { question, options, votes: {}, endsAt: new Date(Date.now() + (pollDays * 24 * 60 * 60 * 1000)).toISOString() } } : {}),

@@ -21,11 +21,24 @@ const json = (response, statusCode, body) => {
   response.end(JSON.stringify(body));
 };
 
-function serveStoredReel(response, store, reelId, kind) {
+function serveStoredReel(response, store, reelId, kind, index = null) {
   const post = store.posts.find((item) => item.id === reelId);
-  const source = kind === 'video'
-    ? post?.videoUrl
-    : (kind === 'image' ? post?.imageUrl : (post?.videoUrl || post?.imageUrl));
+  let source = '';
+  if (kind === 'video') {
+    source = post?.videoUrl || '';
+  } else if (kind === 'audio') {
+    source = post?.audioUrl || '';
+  } else if (kind === 'image') {
+    const slides = Array.isArray(post?.slideshowUrls) ? post.slideshowUrls.filter(Boolean) : [];
+    if (slides.length) {
+      const slideIndex = Math.max(0, Math.min(slides.length - 1, Number.parseInt(String(index ?? '0'), 10) || 0));
+      source = slides[slideIndex] || '';
+    } else {
+      source = post?.imageUrl || '';
+    }
+  } else {
+    source = post?.videoUrl || post?.imageUrl || '';
+  }
   if (!post || !source) {
     response.writeHead(404, { 'Cache-Control': 'no-store' });
     return response.end();
@@ -305,7 +318,7 @@ export function startStatusServer(client, config) {
         store = await readInternetStore();
         if (request.method === 'GET') {
           const reelId = url.searchParams.get('reel');
-          if (reelId) return serveStoredReel(response, store, reelId, url.searchParams.get('kind'));
+          if (reelId) return serveStoredReel(response, store, reelId, url.searchParams.get('kind'), url.searchParams.get('index'));
           const ipBan = getActiveInternetIpBan(store, [
             url.searchParams.get('ipHash'),
             url.searchParams.get('ipHashLegacy'),
@@ -419,7 +432,17 @@ export function startStatusServer(client, config) {
           const user = body.asOfficial === true && body.owner === true
             ? ensureOfficialInternetAccount(store)
             : upsertInternetUser(store, body.actor);
-          const post = createInternetPost(store, user, body.content, { gif: body.gif, image: body.image, poll: body.poll, video: body.video, reel: body.reel === true, location: body.location, quoteId: body.quoteId });
+          const post = createInternetPost(store, user, body.content, {
+            gif: body.gif,
+            image: body.image,
+            images: Array.isArray(body.images) ? body.images : null,
+            audio: body.audio,
+            poll: body.poll,
+            video: body.video,
+            reel: body.reel === true,
+            location: body.location,
+            quoteId: body.quoteId,
+          });
           await saveInternetStore(store);
           syncAnnounceInternetFeed(post);
           return json(response, 201, { post });

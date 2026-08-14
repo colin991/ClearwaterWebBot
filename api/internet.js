@@ -4,11 +4,13 @@ import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260813-wallet-tabs-staff-ads';
+const INTERNET_VERSION = '20260814-reel-slideshow-audio';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
+const MAX_REEL_AUDIO_BYTES = 40 * 1024 * 1024;
 const MAX_PROFILE_IMAGE_BYTES = 12 * 1024 * 1024;
+const MAX_REEL_SLIDES = 10;
 
 async function readBody(request) {
   if (request.body && typeof request.body === 'object') return request.body;
@@ -45,6 +47,11 @@ function safeVideoDataUrl(value) {
   return /^data:video\/(?:mp4|webm|quicktime);base64,[a-z0-9+/]+=*$/i.test(dataUrl) ? dataUrl : '';
 }
 
+function safeAudioDataUrl(value) {
+  const dataUrl = String(value || '').replace(/\s+/g, '');
+  return /^data:audio\/(?:mpeg|mp3|mp4|wav|ogg|webm|aac|x-m4a);base64,[a-z0-9+/]+=*$/i.test(dataUrl) ? dataUrl : '';
+}
+
 function safeHttpsUrl(value) {
   const candidate = String(value || '').trim().slice(0, 500);
   if (/^assets\/[a-z0-9._-]+$/i.test(candidate)) return candidate;
@@ -70,8 +77,19 @@ function mediaPayload(raw, kind) {
   if (!raw || typeof raw !== 'object') return null;
   const hosted = safeBlobMediaUrl(raw.url);
   if (hosted) return { url: hosted };
-  const dataUrl = kind === 'video' ? safeVideoDataUrl(raw.dataUrl) : safeImageDataUrl(raw.dataUrl);
+  const dataUrl = kind === 'video'
+    ? safeVideoDataUrl(raw.dataUrl)
+    : (kind === 'audio' ? safeAudioDataUrl(raw.dataUrl) : safeImageDataUrl(raw.dataUrl));
   return dataUrl ? { dataUrl: dataUrl.slice(0, MAX_MEDIA_DATA_URL) } : null;
+}
+
+function mediaListPayload(raw, kind, limit = MAX_REEL_SLIDES) {
+  if (!Array.isArray(raw)) return null;
+  const items = raw
+    .map((item) => mediaPayload(item, kind))
+    .filter(Boolean)
+    .slice(0, limit);
+  return items.length ? items : null;
 }
 
 function staffActor(user, access = {}) {
@@ -244,9 +262,14 @@ export default async function handler(request, response) {
               };
             }
             if (!/^reels\/[a-z0-9._-]+$/i.test(path)) throw new Error('Invalid upload path');
+            const isAudio = /\.(?:mp3|m4a|wav|ogg|aac|webm)$/i.test(path) || /audio/i.test(path);
             return {
-              allowedContentTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'video/mp4', 'video/webm', 'video/quicktime'],
-              maximumSizeInBytes: MAX_REEL_BYTES,
+              allowedContentTypes: [
+                'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+                'video/mp4', 'video/webm', 'video/quicktime',
+                'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/aac', 'audio/x-m4a',
+              ],
+              maximumSizeInBytes: isAudio ? MAX_REEL_AUDIO_BYTES : MAX_REEL_BYTES,
               addRandomSuffix: true,
               allowOverwrite: false,
               tokenPayload: JSON.stringify({ id: user.id }),
@@ -266,6 +289,8 @@ export default async function handler(request, response) {
         content: String(body.content || '').slice(0, 500),
         gif: body.gif && typeof body.gif === 'object' ? { url: compatibleGiphyUrl(body.gif.url), title: String(body.gif.title || '').slice(0, 120) } : null,
         image: mediaPayload(body.image, 'image'),
+        images: mediaListPayload(body.images, 'image'),
+        audio: mediaPayload(body.audio, 'audio'),
         video: mediaPayload(body.video, 'video'),
         reel: body.reel === true,
         location: body.location && typeof body.location === 'object' ? body.location : null,
