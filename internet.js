@@ -631,11 +631,11 @@ function postMenu(post) {
 
 function postActionIcon(type, filled = false) {
   const icons = {
-    reply: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a8 8 0 0 1-8.2 7.5 8.8 8.8 0 0 1-3.4-.7L4 20l1.2-3.4A7.2 7.2 0 0 1 4 12a8 8 0 0 1 16 0Z" /></svg>',
+    reply: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.4 8.7 8.7 0 0 1-3.7-.8L3.5 21l1.3-3.8A7.7 7.7 0 0 1 3.5 11.5 8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4Z" /></svg>',
     repost: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10m0 0-3-3m3 3-3 3M17 17H7m0 0 3 3m-3-3 3-3" /></svg>',
     like: `<svg viewBox="0 0 24 24" aria-hidden="true"${filled ? ' class="filled"' : ''}><path d="M20.8 8.6c0 5-8.8 10.4-8.8 10.4S3.2 13.6 3.2 8.6A4.6 4.6 0 0 1 12 6.8a4.6 4.6 0 0 1 8.8 1.8Z" /></svg>`,
     bookmark: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21l-6-3.6L6 21V4.5Z" /></svg>',
-    share: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m0 0L7.5 7.5M12 3l4.5 4.5M5 13.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6.5" /></svg>',
+    share: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13" /></svg>',
   };
   return icons[type] || '';
 }
@@ -1401,13 +1401,17 @@ function syncReelPanelStats(reel) {
   const likeButton = document.querySelector('[data-reel-panel-like]');
   const likeIcon = document.querySelector('[data-reel-panel-like-icon]');
   const likeCount = document.querySelector('[data-reel-panel-like-count]');
+  const commentIcon = document.querySelector('[data-reel-panel-comment-icon]');
   const commentCount = document.querySelector('[data-reel-panel-comment-count]');
+  const shareIcon = document.querySelector('[data-reel-panel-share-icon]');
   const tabCount = document.querySelector('[data-reel-panel-tab-count]');
   if (likeButton) {
     likeButton.classList.toggle('liked', liked);
     likeButton.dataset.reelLike = reel.id;
   }
   if (likeIcon) likeIcon.innerHTML = postActionIcon('like', liked);
+  if (commentIcon) commentIcon.innerHTML = postActionIcon('reply');
+  if (shareIcon) shareIcon.innerHTML = postActionIcon('share');
   if (likeCount) likeCount.textContent = String(likes.length);
   if (commentCount) commentCount.textContent = String(comments);
   if (tabCount) tabCount.textContent = String(comments);
