@@ -305,6 +305,8 @@ let activeBan = null;
 let sessionIsOwner = false;
 let sessionStaffPanel = null;
 let sessionCanStaff = false;
+let sessionStaffPinUnlocked = false;
+let sessionStaffPinGate = 'management';
 let activeAccount = 'personal';
 let sessionUser = null;
 let pendingReportReview = null;
@@ -2395,7 +2397,7 @@ function showView(view) {
   if (activeView === 'bookmarks') renderBookmarks();
   if (activeView === 'messages') void loadMessages();
   if (activeView === 'notifications') void loadNotifications();
-  if (activeView === 'staff') void loadModeration();
+  if (activeView === 'staff') void ensureStaffPinGate();
   if (activeView === 'wallet') {
     onboardingWalletVisited = true;
     if (currentUserId) localStorage.setItem(`clearwater-onboarding-wallet-${currentUserId}`, '1');
@@ -3206,14 +3208,92 @@ function renderStaffDashboard() {
   }
 }
 
+function renderStaffPinGate() {
+  const gate = document.querySelector('[data-staff-pin-gate]');
+  const app = document.querySelector('[data-staff-app]');
+  const title = document.querySelector('[data-staff-pin-title]');
+  const copy = document.querySelector('[data-staff-pin-copy]');
+  if (!gate || !app) return;
+  const unlocked = sessionStaffPinUnlocked === true;
+  gate.hidden = unlocked;
+  app.hidden = !unlocked;
+  sessionStaffPinGate = sessionStaffPanel === 'full' ? 'ownership' : 'management';
+  if (title) {
+    title.textContent = sessionStaffPinGate === 'ownership'
+      ? 'Ownership PIN'
+      : 'Management PIN';
+  }
+  if (copy) {
+    copy.textContent = sessionStaffPinGate === 'ownership'
+      ? 'Discord ownership access confirmed. Enter the 5-digit ownership PIN to open the full staff desk.'
+      : 'Discord management access confirmed. Enter the 5-digit management PIN to open the staff desk.';
+  }
+}
+
+async function ensureStaffPinGate() {
+  if (!sessionCanStaff) return;
+  renderStaffPinGate();
+  if (sessionStaffPinUnlocked) {
+    void loadModeration();
+    return;
+  }
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'staff-pin-status' }),
+    });
+    const result = await readApiJson(response, 'Could not check staff PIN status.');
+    if (!response.ok) throw new Error(result.error || 'Could not check staff PIN status.');
+    sessionStaffPinGate = result.gate === 'ownership' ? 'ownership' : 'management';
+    sessionStaffPinUnlocked = result.unlocked === true;
+    renderStaffPinGate();
+    if (sessionStaffPinUnlocked) void loadModeration();
+    else document.querySelector('[data-staff-pin-input]')?.focus();
+  } catch (error) {
+    sessionStaffPinUnlocked = false;
+    renderStaffPinGate();
+    const err = document.querySelector('[data-staff-pin-error]');
+    if (err) {
+      err.hidden = false;
+      err.textContent = error.message || 'Could not open the staff PIN gate.';
+    }
+  }
+}
+
+async function unlockStaffPin(pin) {
+  const response = await fetch('/api/internet', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'staff-pin-unlock', pin }),
+  });
+  const result = await readApiJson(response, 'Could not unlock the staff panel.');
+  if (!response.ok) throw new Error(result.error || 'Incorrect staff PIN');
+  sessionStaffPinUnlocked = true;
+  sessionStaffPinGate = result.gate === 'ownership' ? 'ownership' : 'management';
+  renderStaffPinGate();
+  void loadModeration();
+}
+
 async function loadModeration() {
   if (!sessionCanStaff || !staffContent) return;
+  if (!sessionStaffPinUnlocked) {
+    void ensureStaffPinGate();
+    return;
+  }
   const overview = document.querySelector('[data-staff-overview]');
   if (overview && !moderationSnapshot) overview.innerHTML = '<p class="staff-loading">Loading the moderation desk...</p>';
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'moderation' }) });
     const result = await readApiJson(response, 'Could not load the staff panel.');
-    if (!response.ok) throw new Error(result.error || 'Could not load the staff panel.');
+    if (!response.ok) {
+      if (result.code === 'STAFF_PIN_REQUIRED') {
+        sessionStaffPinUnlocked = false;
+        renderStaffPinGate();
+        return;
+      }
+      throw new Error(result.error || 'Could not load the staff panel.');
+    }
     moderationSnapshot = result;
     renderStaffDashboard();
     if (selectedStaffUserId && staffTab === 'users') void loadStaffUserDetail(selectedStaffUserId, true);
@@ -5570,6 +5650,9 @@ async function loadSession() {
     : (session.user.owner === true ? 'full' : null);
   sessionCanStaff = Boolean(sessionStaffPanel);
   sessionIsOwner = sessionStaffPanel === 'full';
+  sessionStaffPinUnlocked = false;
+  sessionStaffPinGate = sessionStaffPanel === 'full' ? 'ownership' : 'management';
+  renderStaffPinGate();
   if (profileTitle) profileTitle.textContent = session.user.displayName || session.user.username;
   if (profileCopy) profileCopy.textContent = session.user.bio || (session.user.staffRank ? `${session.user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
   if (profileAvatar && session.user.avatarUrl) profileAvatar.src = session.user.avatarUrl;
@@ -5638,6 +5721,36 @@ document.querySelector('[data-bookmark-collection-form]')?.addEventListener('sub
   } catch (error) {
     void siteAlert(error.message || 'Could not create that collection.');
   }
+});
+document.querySelector('[data-staff-pin-form]')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const input = document.querySelector('[data-staff-pin-input]');
+  const errorEl = document.querySelector('[data-staff-pin-error]');
+  const submit = document.querySelector('[data-staff-pin-submit]');
+  const pin = String(input?.value || '').trim();
+  if (errorEl) { errorEl.hidden = true; errorEl.textContent = ''; }
+  if (!/^\d{5}$/.test(pin)) {
+    if (errorEl) {
+      errorEl.hidden = false;
+      errorEl.textContent = 'Enter the 5-digit PIN';
+    }
+    return;
+  }
+  if (submit) submit.disabled = true;
+  try {
+    await unlockStaffPin(pin);
+    if (input) input.value = '';
+  } catch (error) {
+    if (errorEl) {
+      errorEl.hidden = false;
+      errorEl.textContent = error.message || 'Incorrect staff PIN';
+    }
+  } finally {
+    if (submit) submit.disabled = false;
+  }
+});
+document.querySelector('[data-staff-pin-input]')?.addEventListener('input', (event) => {
+  event.target.value = String(event.target.value || '').replace(/\D/g, '').slice(0, 5);
 });
 document.querySelector('[data-drop-location]')?.addEventListener('click', async () => {
   if (!currentUserId) { window.location.href = signInUrl(); return; }
