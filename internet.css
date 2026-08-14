@@ -8438,3 +8438,101 @@ a.post-hashtag,
 [data-internet-cash-amount] {
   color: #f2f5f8 !important;
 }
+
+/* ==========================================================================
+   Uniform button accent (#76adff) + Reels matches site #03070d.
+   ========================================================================== */
+:root {
+  --btn: #76adff;
+  --btn-ink: #03070d;
+}
+
+.rail-primary,
+.rail-signin,
+.inline-button,
+.settings-button.primary,
+.internet-header > a,
+.signed-out a,
+.composer button[data-post-button],
+.internet-view[data-view="home"] .composer-footer [data-post-button],
+.admin-panel button:not(.danger),
+.report-actions button:not(.danger),
+.member-actions button:first-child,
+.member-page-actions button:last-child,
+.post-modal-buttons button,
+.moderation-modal button[type="submit"],
+.reel-post-btn,
+.community-card a,
+.staff-refresh,
+.wallet-ad-form button[type="submit"],
+.business-member-form button,
+.join-required-card a:not(.join-required-secondary),
+.coming-soon-signin,
+.settings-button:not(.ghost):not(.primary) {
+  color: var(--btn-ink) !important;
+  background: var(--btn) !important;
+  background-image: none !important;
+  border-color: var(--btn) !important;
+  box-shadow: none !important;
+}
+
+.rail-primary:hover,
+.rail-signin:hover,
+.settings-button.primary:hover,
+.internet-view[data-view="home"] .composer-footer [data-post-button]:not(:disabled):hover,
+.reel-post-btn:hover {
+  filter: brightness(1.06);
+  background: var(--btn) !important;
+}
+
+.internet-view[data-view="home"] .composer-footer [data-post-button]:disabled,
+.composer button[data-post-button]:disabled {
+  color: #8ea0b8 !important;
+  background: #1a2433 !important;
+  border-color: #1a2433 !important;
+  opacity: .75;
+}
+
+.composer .composer-tools button,
+.internet-view[data-view="home"] .composer .composer-tools button,
+.poll-builder button,
+.poll-builder-footer button {
+  color: var(--btn) !important;
+}
+
+.settings-button.ghost,
+.profile-edit,
+.profile-discord,
+.business-member-actions button {
+  color: var(--btn) !important;
+  border-color: rgba(118, 173, 255, .35) !important;
+  background: transparent !important;
+}
+
+.settings-stack input[type="checkbox"]:checked,
+.privacy-settings input:checked {
+  background: var(--btn) !important;
+}
+
+.cw-select-option.selected {
+  color: #fff !important;
+  background: rgba(118, 173, 255, .28) !important;
+}
+
+/* Reels chrome matches the rest of the site */
+.reels-stage,
+.reels-viewport,
+.reel-card,
+.reel-card > video,
+.reel-card > img,
+.reel-card > .reel-slideshow,
+.reel-slideshow img,
+.reel-panel,
+.reels-toolbar,
+.reels-layout,
+.reels-side-card {
+  background: #03070d !important;
+  background-image: none !important;
+  border-color: rgba(255, 255, 255, .08) !important;
+  box-shadow: none !important;
+}
