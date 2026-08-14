@@ -6,7 +6,7 @@ import {
   readSessionToken,
   sendJson,
 } from '../../lib/discord-auth.js';
-import { hasOwnerAccess } from '../../lib/owner-access.js';
+import { hasServerManagementAccess } from '../../lib/owner-access.js';
 import { runErlcModeration, runErlcRawCommand } from '../../utils/erlc.js';
 
 async function readBody(request) {
@@ -72,7 +72,7 @@ export default async function handler(request, response) {
     const { sessionSecret } = getAuthConfig();
     const session = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
     if (!session) return sendJson(response, 401, { error: 'Sign in with Discord first' });
-    if (!await hasOwnerAccess(session)) return sendJson(response, 403, { error: 'Ownership access required' });
+    if (!await hasServerManagementAccess(session)) return sendJson(response, 403, { error: 'Management access required' });
 
     const body = await readBody(request);
     const serverKey = process.env.ERLC_SERVER_KEY?.trim();

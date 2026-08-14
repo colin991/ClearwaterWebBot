@@ -5,7 +5,7 @@ import {
   readSessionToken,
   sendJson,
 } from '../../lib/discord-auth.js';
-import { hasOwnerAccess } from '../../lib/owner-access.js';
+import { hasServerManagementAccess } from '../../lib/owner-access.js';
 import { attachPlayerAvatars } from '../../lib/roblox-avatars.js';
 
 export default async function handler(request, response) {
@@ -15,7 +15,7 @@ export default async function handler(request, response) {
     const { sessionSecret } = getAuthConfig();
     const session = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
     if (!session) return sendJson(response, 401, { error: 'Sign in with Discord first' });
-    if (!await hasOwnerAccess(session)) return sendJson(response, 403, { error: 'Ownership access required' });
+    if (!await hasServerManagementAccess(session)) return sendJson(response, 403, { error: 'Management access required' });
 
     const apiUrl = process.env.BOT_API_URL?.replace(/\/$/, '');
     const apiKey = process.env.BOT_API_KEY;

@@ -98,7 +98,7 @@ const loadDiscordSession = async () => {
     homepageSignedIn = true;
     homepageInternetReady = true;
     if (ownerLink && session.user.owner) ownerLink.hidden = false;
-    if (session.user.owner) {
+    if (session.user.owner || session.user.serverManagement || session.user.staffPanel) {
       serverManagementLinks.forEach((link) => { link.hidden = false; });
     }
     void loadWalletBalance();

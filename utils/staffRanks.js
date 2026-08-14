@@ -1,13 +1,25 @@
 export const CLEARWATER_GUILD_ID = '1514026810348671026';
 export const FULL_STAFF_PANEL_ROLE_ID = '1514033074948800683';
 export const LIMITED_STAFF_PANEL_ROLE_ID = '1514033321024426154';
+export const LEAD_MANAGEMENT_ROLE_ID = '1525019105432965181';
+export const SENIOR_MANAGEMENT_ROLE_ID = '1514033299524292668';
+export const TRIAL_MANAGEMENT_ROLE_ID = '1516923344685895721';
+
+/** Discord roles that can open Server Management (Ownership + Management track). */
+export const SERVER_MANAGEMENT_ROLE_IDS = Object.freeze([
+  FULL_STAFF_PANEL_ROLE_ID,
+  LEAD_MANAGEMENT_ROLE_ID,
+  SENIOR_MANAGEMENT_ROLE_ID,
+  LIMITED_STAFF_PANEL_ROLE_ID,
+  TRIAL_MANAGEMENT_ROLE_ID,
+]);
 
 export const STAFF_RANKS = Object.freeze([
   { id: FULL_STAFF_PANEL_ROLE_ID, name: 'Ownership', owner: true, panel: 'full' },
-  { id: '1525019105432965181', name: 'Lead Management' },
-  { id: '1514033299524292668', name: 'Senior Management' },
+  { id: LEAD_MANAGEMENT_ROLE_ID, name: 'Lead Management', panel: 'limited' },
+  { id: SENIOR_MANAGEMENT_ROLE_ID, name: 'Senior Management', panel: 'limited' },
   { id: LIMITED_STAFF_PANEL_ROLE_ID, name: 'Management', panel: 'limited' },
-  { id: '1516923344685895721', name: 'Trial Management' },
+  { id: TRIAL_MANAGEMENT_ROLE_ID, name: 'Trial Management', panel: 'limited' },
   { id: '1514033336505335969', name: 'Senior Supervisor' },
   { id: '1514033351655293020', name: 'Supervisor' },
   { id: '1514033381543903262', name: 'Lead Administrator' },
@@ -22,7 +34,12 @@ export function getHighestStaffRank(member) {
   return STAFF_RANKS.find((rank) => member?.roles?.cache?.has(rank.id)) || null;
 }
 
-/** Internet staff desk access. Ownership = full, Management = limited. */
+function hasAnyRole(roleIds, candidates = []) {
+  const wanted = new Set((Array.isArray(candidates) ? candidates : []).map(String));
+  return roleIds.some((id) => wanted.has(String(id)));
+}
+
+/** Internet staff desk access. Ownership = full, Management track = limited. */
 export function getStaffPanelAccess(member, { ownerDiscordIds = [], ownerRoleIds = [] } = {}) {
   const discordId = String(member?.id || member?.user?.id || '');
   if (discordId && ownerDiscordIds.map(String).includes(discordId)) return 'full';
@@ -35,7 +52,12 @@ export function getStaffPanelAccess(member, { ownerDiscordIds = [], ownerRoleIds
     if (roleId && roleCache?.has(roleId)) return 'full';
   }
   if (roleCache?.has(FULL_STAFF_PANEL_ROLE_ID)) return 'full';
-  if (roleCache?.has(LIMITED_STAFF_PANEL_ROLE_ID)) return 'limited';
+  if (
+    roleCache?.has(LIMITED_STAFF_PANEL_ROLE_ID)
+    || roleCache?.has(LEAD_MANAGEMENT_ROLE_ID)
+    || roleCache?.has(SENIOR_MANAGEMENT_ROLE_ID)
+    || roleCache?.has(TRIAL_MANAGEMENT_ROLE_ID)
+  ) return 'limited';
   const rank = getHighestStaffRank(member);
   if (rank?.panel === 'full' || rank?.owner) return 'full';
   if (rank?.panel === 'limited') return 'limited';
@@ -52,8 +74,14 @@ export function getSessionPanelAccess(user, { ownerDiscordIds = [], ownerRoleIds
     if (roleId && roles.includes(roleId)) return 'full';
   }
   if (roles.includes(FULL_STAFF_PANEL_ROLE_ID)) return 'full';
-  if (roles.includes(LIMITED_STAFF_PANEL_ROLE_ID)) return 'limited';
+  if (hasAnyRole(SERVER_MANAGEMENT_ROLE_IDS.filter((id) => id !== FULL_STAFF_PANEL_ROLE_ID), roles)) {
+    return 'limited';
+  }
   return null;
+}
+
+export function rolesAllowServerManagement(roles = []) {
+  return hasAnyRole(SERVER_MANAGEMENT_ROLE_IDS, roles);
 }
 
 export const LIMITED_STAFF_FORBIDDEN_ACTIONS = Object.freeze([

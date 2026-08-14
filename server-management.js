@@ -201,8 +201,8 @@ async function ensureOwnerAccess() {
     setNotice('Sign in with Discord to open Server Management.');
     return false;
   }
-  if (!session.user?.owner) {
-    setNotice('Server Management is restricted to Ownership.', true);
+  if (!session.user?.owner && !session.user?.serverManagement && !session.user?.staffPanel) {
+    setNotice('Server Management is restricted to Management and Ownership.', true);
     return false;
   }
   return true;
@@ -220,7 +220,7 @@ async function loadMap(silent = false) {
       return;
     }
     if (response.status === 403) {
-      setNotice('Server Management is restricted to Ownership.', true);
+      setNotice('Server Management is restricted to Management and Ownership.', true);
       if (shell) shell.hidden = true;
       return;
     }
