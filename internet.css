@@ -4936,6 +4936,13 @@ html.pref-reduce-motion *::after {
   pointer-events: auto;
   transform: none;
 }
+.reel-mute:hover + .reel-volume.is-muted,
+.reel-mute:focus-visible + .reel-volume.is-muted,
+.reel-volume.is-muted:hover,
+.reel-volume.is-muted:focus-within,
+.reel-audio:focus-within .reel-volume.is-muted {
+  opacity: .72;
+}
 @media (hover: none) {
   .reel-volume {
     max-width: 220px;
@@ -4946,9 +4953,7 @@ html.pref-reduce-motion *::after {
     pointer-events: auto;
     transform: none;
   }
-}
-.reel-volume.is-muted {
-  opacity: .72;
+  .reel-volume.is-muted { opacity: .72; }
 }
 .reel-volume input[type="range"] {
   width: min(132px, 28vw);
