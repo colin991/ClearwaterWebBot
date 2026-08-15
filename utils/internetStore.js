@@ -2587,6 +2587,11 @@ export function reviewInternetReport(store, { reportId, decision, action, reason
   return report;
 }
 
+export function countUnreadInternetWarnings(store, actor) {
+  const user = upsertInternetUser(store, actor);
+  return (Array.isArray(user.warnings) ? user.warnings : []).filter((warning) => !warning.readAt).length;
+}
+
 export function takeUnreadInternetWarnings(store, actor) {
   const user = upsertInternetUser(store, actor);
   const warnings = (Array.isArray(user.warnings) ? user.warnings : []).filter((warning) => !warning.readAt);

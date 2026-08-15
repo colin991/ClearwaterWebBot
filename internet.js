@@ -809,9 +809,10 @@ function sourcePost(post) {
 }
 
 function formatPostBody(post) {
-  return escapeHtml(post.content)
-    .replace(/(^|\s)(#[a-z0-9_]{1,60})/gi, '$1<a href="/internet" class="post-hashtag" data-topic="$2">$2</a>')
-    .replace(/(^|\s)(@[a-z0-9_]{1,80})/gi, (full, leading, handle) => {
+  const text = typeof post === 'string' ? post : post?.content;
+  return escapeHtml(text)
+    .replace(/(^|[\s([{'"“‘])(#[a-z0-9_]{1,60})/gi, '$1<a href="/internet" class="post-hashtag" data-topic="$2">$2</a>')
+    .replace(/(^|[\s([{'"“‘])(@[a-z0-9._-]{1,80})/gi, (full, leading, handle) => {
       const mentioned = [...internetUsers.values()].find((user) => String(user.username || '').toLowerCase() === handle.slice(1).toLowerCase());
       return mentioned ? `${leading}<button type="button" class="post-mention" data-open-member="${escapeHtml(mentioned.id)}">${handle}</button>` : `${leading}<span class="post-mention">${handle}</span>`;
     });
@@ -1921,7 +1922,7 @@ function renderReels() {
     const more = moreItem
       ? `<details class="reel-more reel-actions-more"><summary aria-label="More reel actions"><span aria-hidden="true">⋯</span><span>More</span></summary><div class="reel-more-menu">${moreItem}</div></details>`
       : '';
-    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient" aria-hidden="true"></div>${sound}<div class="reel-meta"><div class="reel-meta-user"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(avatarUrl)}" alt="" /><span class="reel-author"><b>${escapeHtml(displayName)}</b><small>@${escapeHtml(username)}</small></span></button>${follow}</div>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}" aria-label="Like">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}" aria-label="Comments">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}" aria-label="Share">${postActionIcon('share')}</button>${more}</div></article>`;
+    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient" aria-hidden="true"></div>${sound}<div class="reel-meta"><div class="reel-meta-user"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(avatarUrl)}" alt="" /><span class="reel-author"><b>${escapeHtml(displayName)}</b><small>@${escapeHtml(username)}</small></span></button>${follow}</div>${reel.content ? `<p>${formatPostBody(reel)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}" aria-label="Like">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}" aria-label="Comments">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}" aria-label="Share">${postActionIcon('share')}</button>${more}</div></article>`;
   }).join('');
   syncReelCardHeights(viewport);
   if (anchorId) {
@@ -2679,6 +2680,8 @@ async function loadBanStatus() {
       return;
     }
     showBan(result.banned ? result.ban : null);
+    // Status already marks presence — only pull warning bodies when needed.
+    if (Number(result.unreadWarnings || 0) > 0) void loadWarnings();
   } catch {
     // Do not hide the normal site if the bot connection is briefly unavailable.
   }
@@ -2691,12 +2694,13 @@ function currentInternetView() {
 
 let presencePulseBusy = false;
 let presenceScrollTimer = 0;
+let lastPresencePulseAt = 0;
 
 async function pulsePresence(forceView = '') {
   if (!currentUserId || presencePulseBusy || document.hidden) return;
+  // Status heartbeats already count as presence — keep this rare.
+  if (Date.now() - lastPresencePulseAt < 90_000) return;
   const view = forceView || currentInternetView();
-  // Staff asked for people browsing the site now — focus on the home feed,
-  // but still count any logged-in Internet view as online.
   if (!view) return;
   presencePulseBusy = true;
   try {
@@ -2705,6 +2709,7 @@ async function pulsePresence(forceView = '') {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'presence', view }),
     });
+    lastPresencePulseAt = Date.now();
   } catch {
     // Presence is best-effort.
   } finally {
@@ -9241,24 +9246,23 @@ window.addEventListener('resize', syncMobileRailScroll, { passive: true });
 
 window.setInterval(() => {
   if (document.hidden) return;
-  void loadPosts();
-  if (!document.querySelector('[data-view="messages"]')?.hidden) void loadMessages();
-  if (!document.querySelector('[data-view="conversation"]')?.hidden && viewedMember) void loadConversation(viewedMember);
-}, 90_000);
+  const view = currentInternetView();
+  // Only refresh the feed when it is actually on screen.
+  if (['home', 'bookmarks', 'post', 'member', 'profile', 'reels'].includes(view)) void loadPosts();
+  if (view === 'messages') void loadMessages();
+  if (view === 'conversation' && viewedMember) void loadConversation(viewedMember);
+}, 180_000);
 window.setInterval(() => {
   if (document.hidden) return;
+  // One status call covers ban + presence + unread warning peek.
   void loadBanStatus();
-  if (currentUserId) {
-    void loadWarnings();
-    void pulsePresence();
-  }
   if (!document.querySelector('[data-view="staff"]')?.hidden && sessionCanStaff) void loadModeration();
-}, 45_000);
+}, 120_000);
 window.setInterval(() => {
   if (document.hidden || !sessionCanStaff) return;
   if (document.querySelector('[data-view="staff"]')?.hidden) return;
   if (staffTab !== 'active') return;
   void loadModeration();
-}, 30_000);
+}, 90_000);
 window.addEventListener('scroll', queuePresenceFromScroll, { passive: true });
 window.setInterval(updateBanCountdown, 60 * 1000);

@@ -1,4 +1,5 @@
 import { fetchRobloxHeadshots } from '../lib/roblox-avatars.js';
+import { rejectPublicBrowse } from '../lib/api-guard.js';
 
 const cache = new Map();
 const CACHE_MS = 30 * 60 * 1000;
@@ -11,6 +12,7 @@ function sendJson(response, status, body) {
 }
 
 export default async function handler(request, response) {
+  if (rejectPublicBrowse(request, response)) return;
   if (request.method !== 'GET') return sendJson(response, 405, { error: 'Method not allowed' });
 
   const url = new URL(request.url, 'http://localhost');

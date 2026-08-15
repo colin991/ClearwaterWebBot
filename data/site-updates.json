@@ -2,6 +2,27 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-scrub-staff-pin",
+      "title": "Staff PIN fully removed",
+      "summary": "Ownership and Management open the staff desk with their Discord role only. Leftover PIN code, cookies, and settings notes are gone.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T21:22:00.000Z"
+    },
+    {
+      "id": "2026-08-15-mention-hashtag-blue",
+      "title": "@mentions and #hashtags show in blue",
+      "summary": "In Clearwater Internet posts, @handles and #tags are highlighted in blue again so they stand out from regular text.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T21:21:00.000Z"
+    },
+    {
+      "id": "2026-08-15-api-quiet",
+      "title": "Fewer API requests, quieter status",
+      "summary": "Homepage and Internet poll far less often. Status APIs are cached server-side, blocked from casual browser tabs, and heartbeats no longer spam separate presence and warning calls.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T21:20:00.000Z"
+    },
+    {
       "id": "2026-08-15-vpn-block",
       "title": "VPNs and proxies are blocked",
       "summary": "Clearwater sign-in and Internet now reject VPN and proxy connections. Turn the VPN off, then try again. Detection is cached server-side so open tabs do not spam lookup services.",

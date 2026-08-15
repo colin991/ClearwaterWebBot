@@ -36,7 +36,7 @@ const setErlcNumbers = (status) => {
 };
 
 const loadDirectErlcStatus = async () => {
-  const response = await fetch('/api/erlc/status');
+  const response = await fetch('/api/erlc/status', { credentials: 'same-origin' });
   if (!response.ok) throw new Error('ER:LC status unavailable');
   const status = await response.json();
   if (!status.online) throw new Error('ER:LC server unavailable');
@@ -168,14 +168,16 @@ const setDiscordCount = (count) => {
 const loadBotStatus = async () => {
   if (!discordCount.length && !erlcCurrent.length) return;
   try {
-    const response = await fetch('/api/bot/status');
+    const response = await fetch('/api/bot/status', { credentials: 'same-origin' });
     if (!response.ok) throw new Error('Status unavailable');
     const status = await response.json();
     if (!status.online) {
       await loadDirectErlcStatus();
+      await loadDiscordMemberCount();
       return;
     }
     if (Number.isInteger(status.memberCount)) setDiscordCount(status.memberCount.toLocaleString());
+    else await loadDiscordMemberCount();
     if (status.erlc?.online) {
       setErlcNumbers(status.erlc);
     } else {
@@ -187,13 +189,14 @@ const loadBotStatus = async () => {
     } catch {
       setErlcNumbers({ online: false });
     }
+    await loadDiscordMemberCount();
   }
 };
 
 const loadDiscordMemberCount = async () => {
   if (!discordCount.length) return;
   try {
-    const response = await fetch('/api/discord/count');
+    const response = await fetch('/api/discord/count', { credentials: 'same-origin' });
     if (!response.ok) throw new Error('Member count unavailable');
     const result = await response.json();
     if (Number.isInteger(result.memberCount)) setDiscordCount(result.memberCount.toLocaleString());
@@ -203,9 +206,7 @@ const loadDiscordMemberCount = async () => {
 };
 
 loadBotStatus();
-loadDiscordMemberCount();
-window.setInterval(loadBotStatus, 60_000);
-window.setInterval(loadDiscordMemberCount, 60_000);
+window.setInterval(loadBotStatus, 300_000);
 
 const goToInternet = () => {
   if (!homepageSignedIn) {
@@ -280,7 +281,7 @@ const applySiteBanner = (banner) => {
 
 const loadSiteBanner = async () => {
   try {
-    const response = await fetch(`/api/internet?banner=${Date.now()}`, { cache: 'no-store' });
+    const response = await fetch('/api/internet?banner=1', { credentials: 'same-origin', cache: 'default' });
     if (!response.ok) return;
     const result = await response.json();
     applySiteBanner(result.settings?.siteBanner || null);
