@@ -104,6 +104,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T04:16:32.000Z",
       "commit": "c6ea8bc"
+    },
+    {
+      "id": "2026-08-15-logo-transparent-icons",
+      "title": "Transparent logo icons",
+      "summary": "Rebuilt app/home screen icons (192, 512, apple-touch) from the Clearwater logo with a transparent background instead of the dark square fill.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T04:36:30.000Z",
+      "commit": "79bef17"
     }
   ]
 }
