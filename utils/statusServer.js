@@ -11,6 +11,7 @@ import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
 import { AutomodHoldError, adjustInternetCredits, addBusinessMember, applyStaffSiteAction, applyStaffUserAction, assertBusinessAccess, assertLimitedStaffBanQuota, banKnownInternetIps, businessActorFromAccount, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listInternetAdsForUser, listMyBusinessAccounts, manageInternetAd, moderationSnapshot, myVerificationApplication, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, purchasePostBoost, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, removeBusinessMember, respondCreditTransfer, reviewBusinessApplication, reviewInternetAd, reviewInternetReport, reviewVerificationApplication, revertInternetHistory, saveInternetStore, searchStaffUsers, sendInternetMessage, serveInternetAds, setBusinessMemberRole, setDiscordInternetNotify, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserConversation, staffUserDetail, staffUserMessages, submitBusinessApplication, submitVerificationApplication, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateBusinessProfile, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
 import { createDiscordInternetNotifier } from './discordInternetNotify.js';
 import { createInternetFeedController, shouldAnnounceInteractResult } from './discordInternetFeed.js';
+import { appendUpdateEntry, flushPendingUpdateLogs, postUpdateLog } from './updateLog.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -261,7 +262,7 @@ export function startStatusServer(client, config) {
       return json(response, 200, { ok: true, botOnline: client.isReady() });
     }
 
-    if (!['/api/status', '/api/actions', '/api/config', '/api/access', '/api/internet', '/api/erlc-map', '/api/erlc-command'].includes(url.pathname)) {
+    if (!['/api/status', '/api/actions', '/api/config', '/api/access', '/api/internet', '/api/erlc-map', '/api/erlc-command', '/api/update-log'].includes(url.pathname)) {
       return json(response, 404, { error: 'Not found' });
     }
 
@@ -272,6 +273,43 @@ export function startStatusServer(client, config) {
     const authorization = request.headers.authorization || '';
     if (!authorization.startsWith('Bearer ') || !safeEqual(authorization.slice(7), config.apiKey)) {
       return json(response, 401, { error: 'Unauthorized' });
+    }
+
+    if (url.pathname === '/api/update-log') {
+      try {
+        if (request.method === 'POST') {
+          const body = await readJson();
+          const id = String(body.id || `update-${Date.now()}`).trim();
+          const title = String(body.title || '').trim();
+          const summary = String(body.summary || body.body || '').trim();
+          const commit = String(body.commit || '').trim();
+          if (!title || !summary) {
+            return json(response, 400, { error: 'title and summary are required' });
+          }
+          const queued = await appendUpdateEntry({
+            id,
+            title,
+            summary,
+            commit,
+            createdAt: body.createdAt || new Date().toISOString(),
+          });
+          const result = await postUpdateLog(client, config, queued.entry);
+          return json(response, result.ok ? 200 : 503, {
+            ok: Boolean(result.ok),
+            added: queued.added,
+            id: queued.entry.id,
+            reason: result.reason || null,
+          });
+        }
+        if (request.method === 'GET') {
+          const result = await flushPendingUpdateLogs(client, config);
+          return json(response, 200, { ok: true, ...result });
+        }
+        return json(response, 405, { error: 'Method not allowed' });
+      } catch (error) {
+        logger.error('Update log API failed', error);
+        return json(response, 500, { error: error.message || 'Update log failed' });
+      }
     }
 
     if (request.method === 'GET' && url.pathname === '/api/erlc-map') {

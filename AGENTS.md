@@ -18,3 +18,10 @@
 - Create a concise, descriptive Git commit and push the current branch to `origin` automatically.
 - The `main` branch is the production branch and is deployed automatically by Vercel.
 - Never force-push, rewrite published history, bypass failed checks, or commit secrets. Stop and ask the user before any destructive or history-changing Git action.
+
+## Discord update log
+
+- Every completed user-facing update must be appended to `data/site-updates.json` before the final commit.
+- Each entry needs a unique `id`, short `title`, plain-language `summary`, ISO `createdAt`, and optional short `commit` hash.
+- The Discord bot posts new entries to channel `1538007463851200583` on startup (and via `POST /api/update-log` when the bot API is available).
+- Do not edit `data/site-updates-posted.json`; that file is host-local so already-posted updates are not repeated.
