@@ -3455,7 +3455,7 @@ async function loadStaffUserMessages(userId) {
     const response = await fetch('/api/internet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'staff-user-messages', targetId: userId }),
+      body: JSON.stringify({ action: 'staff-user-messages', targetId: staffActionTargetId(userId) }),
     });
     const result = await readApiJson(response, 'Could not load messages.');
     if (!response.ok) throw new Error(result.error || 'Could not load messages.');
@@ -3478,7 +3478,7 @@ async function loadStaffUserMessages(userId) {
 
 async function loadStaffUserConversation(peerId, username = '') {
   if (!sessionCanStaff || !selectedStaffUserId || !peerId) return;
-  const targetId = selectedStaffUserId;
+  const targetId = staffActionTargetId(selectedStaffUserId);
   staffMessagesState = {
     ...(staffMessagesState || {}),
     targetId,
@@ -3530,15 +3530,28 @@ async function loadStaffUserDetail(userId, silent = false) {
   const panel = document.querySelector('[data-staff-user-panel]');
   if (!silent && panel && !panel.contains(document.activeElement)) panel.innerHTML = '<p class="staff-loading">Loading this account...</p>';
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'staff-user-detail', targetId: userId }) });
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'staff-user-detail', targetId: staffActionTargetId(userId) }),
+    });
     const result = await readApiJson(response, 'Could not load this user.');
     if (!response.ok) throw new Error(result.error || 'Could not load this user.');
-    if (selectedStaffUserId !== userId) return;
+    const returnedId = String(result?.user?.id || '');
+    if (
+      selectedStaffUserId
+      && selectedStaffUserId !== userId
+      && selectedStaffUserId !== returnedId
+      && selectedStaffUserId !== String(result?.user?.discordId || '')
+    ) return;
     staffUserDetail = result;
-    if (staffMessagesState?.targetId && staffMessagesState.targetId !== userId) staffMessagesState = null;
+    if (returnedId) selectedStaffUserId = returnedId;
+    if (staffMessagesState?.targetId && staffMessagesState.targetId !== selectedStaffUserId) staffMessagesState = null;
     if (panel && !panel.contains(document.activeElement)) panel.innerHTML = staffUserPanelMarkup(result);
   } catch (error) {
-    if (panel && selectedStaffUserId === userId) panel.innerHTML = `<p class="staff-loading">${escapeHtml(error.message || 'Could not load this user.')}</p>`;
+    if (panel && (selectedStaffUserId === userId || !selectedStaffUserId)) {
+      panel.innerHTML = `<p class="staff-loading">${escapeHtml(error.message || 'Could not load this user.')}</p>`;
+    }
   }
 }
 
@@ -3585,9 +3598,22 @@ async function openStaffUser(userId) {
   if (staffMessagesState?.targetId !== nextId) staffMessagesState = null;
   selectedStaffUserId = nextId;
   staffTab = 'users';
-  staffUserDetail = staffUserDetail?.user?.id === selectedStaffUserId ? staffUserDetail : null;
+  staffUserDetail = staffUserDetail?.user?.id === selectedStaffUserId
+    || staffUserDetail?.user?.discordId === selectedStaffUserId
+    ? staffUserDetail
+    : null;
   renderStaffDashboard();
   await loadStaffUserDetail(selectedStaffUserId);
+}
+
+function staffActionTargetId(fallback = selectedStaffUserId) {
+  const detail = staffUserDetail?.user;
+  if (detail?.discordId && /^\d{16,22}$/.test(String(detail.discordId))) return String(detail.discordId);
+  if (detail?.id && (/^\d{16,22}$/.test(String(detail.id)) || /^biz_/i.test(String(detail.id)))) return String(detail.id);
+  if (fallback && (/^\d{16,22}$/.test(String(fallback)) || /^biz_/i.test(String(fallback)) || /^u1_/.test(String(fallback)))) {
+    return String(fallback);
+  }
+  return String(fallback || '');
 }
 
 async function runStaffUserAction(staffAction, postId = '') {
@@ -3606,7 +3632,7 @@ async function runStaffUserAction(staffAction, postId = '') {
       body: JSON.stringify({
         action: 'staff-user',
         staffAction,
-        targetId: selectedStaffUserId,
+        targetId: staffActionTargetId(),
         reason: fields.reason,
         note: staffAction === 'note' ? fields.note : fields.reason,
         durationDays: fields.durationDays,
@@ -3617,6 +3643,7 @@ async function runStaffUserAction(staffAction, postId = '') {
     const result = await readApiJson(response, 'Could not update this user.');
     if (!response.ok) throw new Error(result.error || 'Could not update this user.');
     staffUserDetail = result;
+    if (result?.user?.id) selectedStaffUserId = result.user.id;
     if (result.snapshot) moderationSnapshot = result.snapshot;
     renderStaffDashboard();
     redrawStaffUserPanel(result, panelState);
@@ -3633,7 +3660,7 @@ async function runStaffUserAction(staffAction, postId = '') {
 
 async function runStaffWalletAdjustment(button) {
   const panel = document.querySelector('[data-staff-user-panel]');
-  const userId = panel?.querySelector('[data-staff-wallet-user]')?.dataset.staffWalletUser || selectedStaffUserId;
+  const userId = staffActionTargetId(panel?.querySelector('[data-staff-wallet-user]')?.dataset.staffWalletUser || selectedStaffUserId);
   const rawAmount = Number(panel?.querySelector('[data-staff-wallet-amount]')?.value);
   const note = panel?.querySelector('[data-staff-wallet-note]')?.value || '';
   const amount = button.dataset.staffWalletAdjust === 'remove' ? -Math.abs(rawAmount) : Math.abs(rawAmount);
@@ -3649,6 +3676,7 @@ async function runStaffWalletAdjustment(button) {
     const result = await readApiJson(response, 'Could not update this wallet.');
     if (!response.ok) throw new Error(result.error || 'Could not update this wallet.');
     staffUserDetail = result;
+    if (result?.user?.id) selectedStaffUserId = result.user.id;
     if (result.snapshot) moderationSnapshot = result.snapshot;
     renderStaffDashboard();
     redrawStaffUserPanel(result, staffPanelUiState());

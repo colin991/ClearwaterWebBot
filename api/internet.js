@@ -1,7 +1,7 @@
 import { handleUpload } from '@vercel/blob/client';
 import { SESSION_COOKIE, avatarUrl, getAuthConfig, isSameSiteRequest, parseCookies, readSessionToken, sendJson } from '../lib/discord-auth.js';
 import { getStaffAccess } from '../lib/owner-access.js';
-import { hashClientIp, isPublicUserId, redactPublicPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
+import { hashClientIp, isPublicUserId, redactPublicPayload, redactStaffPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 import {
   assertStaffPinUnlocked,
   clearStaffPinUnlockCookie,
@@ -794,9 +794,24 @@ export default async function handler(request, response) {
       return sendJson(response, 400, { error: 'Unsupported action' });
     }
 
-    if (['withUserId', 'targetId', 'to'].some((key) => isPublicUserId(payload[key]))) {
+    if (['withUserId', 'targetId', 'to', 'userId', 'authorId', 'peerId', 'otherId', 'advertiserId', 'applicantId'].some((key) => isPublicUserId(payload[key]))) {
+      let users = [];
       const lookup = await callBot({ method: 'GET' });
-      payload = await resolvePublicIds(payload, lookup.body?.users || []);
+      if (lookup.ok && Array.isArray(lookup.body?.users)) users = lookup.body.users;
+      // Staff targets are often missing from the public feed. Pull the moderation
+      // roster so hashed IDs from older staff sessions can still be resolved.
+      if (canStaff && STAFF_PIN_ACTIONS.has(String(body.action || ''))) {
+        const roster = await callBot(request, {
+          action: 'moderation',
+          staffPanel,
+          owner: staffPanel === 'full',
+          actor: staffActor(user, access),
+        });
+        if (roster.ok && Array.isArray(roster.body?.users)) {
+          users = [...users, ...roster.body.users];
+        }
+      }
+      payload = await resolvePublicIds(payload, users);
       if (['withUserId', 'targetId', 'to'].some((key) => isPublicUserId(payload[key])) && !payload.username) {
         return sendJson(response, 404, { error: 'That member has not joined Clearwater Internet yet' });
       }
@@ -820,7 +835,10 @@ export default async function handler(request, response) {
         error: 'Sponsored ad reporting needs the latest bot files. Restart the Sparked bot host after it pulls from GitHub.',
       });
     }
-    return sendJson(response, result.ok ? (result.status === 201 ? 201 : 200) : result.status, redactPublicPayload(result.body));
+    const redact = STAFF_PIN_ACTIONS.has(String(body.action || '')) && canStaff
+      ? redactStaffPayload
+      : redactPublicPayload;
+    return sendJson(response, result.ok ? (result.status === 201 ? 201 : 200) : result.status, redact(result.body));
   } catch {
     return sendJson(response, 502, { error: 'Clearwater Internet is temporarily unavailable' });
   }
