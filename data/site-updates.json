@@ -208,6 +208,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T17:45:00.000Z",
       "commit": "ab4589d"
+    },
+    {
+      "id": "2026-08-15-phone-download",
+      "title": "Clearwater Phone download on Internet",
+      "summary": "Clearwater Phone is available from Internet → Phone (and the sidebar card). Download ClearwaterPhone.zip, extract, and run ClearwaterPhone-Launch.bat.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T17:50:00.000Z",
+      "commit": "pending"
     }
   ]
 }

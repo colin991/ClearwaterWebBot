@@ -122,7 +122,7 @@ function signInUrl(nextPath = '') {
   return `/signin?next=${encodeURIComponent(path)}`;
 }
 
-const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post', 'sponsored', 'bookmarks']);
+const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'phone', 'post', 'sponsored', 'bookmarks']);
 
 const siteDialog = document.querySelector('[data-site-dialog]');
 const siteDialogForm = document.querySelector('[data-site-dialog-form]');
@@ -2444,7 +2444,7 @@ function renderBookmarks() {
 }
 
 function showView(view) {
-  const availableViews = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post', 'sponsored', 'bookmarks']);
+  const availableViews = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'phone', 'post', 'sponsored', 'bookmarks']);
   let activeView = availableViews.has(view) ? view : 'home';
   if (activeView === 'staff' && !sessionCanStaff) activeView = 'home';
   const shell = document.querySelector('.internet-shell');

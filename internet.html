@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/assets/icon-512.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260815-right-rail-scroll" />
+    <link rel="stylesheet" href="internet.css?v=20260815-phone-dl" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260815-newsletter"></script>
   </head>
@@ -52,6 +52,7 @@
           <a class="selected" href="/internet" data-view-link="home"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>Home</a>
           <a href="/internet" data-reels-link><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3" /><path d="m10 8 5 4-5 4z" /></svg>Reels</a>
           <a href="/internet/wallet" data-view-link="wallet"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg>Wallet</a>
+          <a href="/internet/phone" data-view-link="phone"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5" /><path d="M10 18.5h4" /></svg>Phone</a>
           <a href="/internet/notifications" data-view-link="notifications" class="notification-nav"><span class="notification-nav-icon"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 22h4" /></svg><i class="notification-dot" data-notification-dot hidden></i></span>Notifications</a>
           <a href="/internet/messages" data-view-link="messages" class="notification-nav"><span class="notification-nav-icon"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg><i class="notification-dot" data-message-dot hidden></i></span>Messages</a>
           <a href="/internet/bookmarks" data-view-link="bookmarks"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21l-6-3.6L6 21V4.5Z" /></svg>Bookmarks</a>
@@ -189,6 +190,25 @@
               </form>
               <p class="wallet-status" data-sponsored-report-status role="status"></p>
             </section>
+          </article>
+        </section>
+        <section class="internet-view phone-view" data-view="phone" hidden>
+          <header class="post-detail-header">
+            <button type="button" data-back-home aria-label="Back to feed">←</button>
+            <h1>Clearwater Phone</h1>
+          </header>
+          <article class="phone-download-doc">
+            <p class="wallet-kicker">Desktop overlay</p>
+            <h2>Download for Windows</h2>
+            <p>Floating phone for ER:LC — Wallet, Marketplace, Find My, Mail, Messages, and Maps. Always on top. Press <b>F8</b> to hide or show.</p>
+            <a class="phone-download-btn" href="/downloads/ClearwaterPhone.zip" download="ClearwaterPhone.zip">Download Clearwater Phone</a>
+            <ol class="phone-download-steps">
+              <li>Download the zip</li>
+              <li>Extract it anywhere</li>
+              <li>Double-click <b>ClearwaterPhone-Launch.bat</b></li>
+              <li>First launch pulls a one-time runtime, then the phone opens</li>
+            </ol>
+            <p class="phone-download-note">Does not inject into Roblox. Windows 10/11 (64-bit). Need the files again later? Come back to this page.</p>
           </article>
         </section>
         <section class="internet-view wallet-view" data-view="wallet" hidden>
@@ -724,6 +744,12 @@
         <a class="internet-wallet-link" href="/internet/wallet" data-view-link="wallet" aria-label="Open your Clearwater credit wallet">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg><span data-internet-cash-amount>C$0</span>
         </a>
+        <article class="phone-side-card" aria-label="Clearwater Phone download">
+          <p class="wallet-kicker">Clearwater Phone</p>
+          <h2>In-game overlay</h2>
+          <p>Wallet, Marketplace, Find My, Mail, Messages, and Maps — floating above Roblox.</p>
+          <a href="/internet/phone" data-view-link="phone">Download for Windows</a>
+        </article>
         <article class="reels-side-card" data-reels-side-card aria-label="Reels tips">
           <p class="wallet-kicker">Clearwater Reels</p>
           <h2>Watch & post clips</h2>
@@ -809,6 +835,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260815-right-rail-scroll"></script>
+    <script src="internet.js?v=20260815-phone-dl"></script>
   </body>
 </html>

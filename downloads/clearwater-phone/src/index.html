@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Clearwater Phone</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@450;550;650;750;850&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="phone" id="phone">
+      <div class="phone-bezel">
+        <div class="phone-screen">
+          <div class="status-bar" data-drag>
+            <span class="status-time" id="status-time">9:41</span>
+            <div class="dynamic-island" aria-hidden="true"></div>
+            <div class="status-meta">
+              <span class="signal" aria-hidden="true"></span>
+              <span class="battery" aria-hidden="true"></span>
+            </div>
+          </div>
+
+          <!-- HOME -->
+          <section class="view view-home is-active" id="view-home" data-view="home">
+            <div class="wallpaper" aria-hidden="true">
+              <div class="wp-mesh"></div>
+              <div class="wp-horizon"></div>
+              <div class="wp-glow wp-glow-a"></div>
+              <div class="wp-glow wp-glow-b"></div>
+              <div class="wp-grid"></div>
+              <div class="wp-anchor">
+                <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="60" cy="28" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path d="M60 38V92M60 92C60 92 36 78 36 58M60 92C60 92 84 78 84 58" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+                  <path d="M42 52H78" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+                </svg>
+              </div>
+            </div>
+
+            <header class="home-header">
+              <p class="home-brand">Clearwater</p>
+              <p class="home-sub">Roleplay · Panel</p>
+            </header>
+
+            <div class="app-grid" role="list">
+              <button type="button" class="app-tile" data-open="wallet" role="listitem">
+                <span class="app-icon icon-wallet" aria-hidden="true">
+                  <svg viewBox="0 0 64 64" fill="none"><rect x="8" y="16" width="48" height="36" rx="8" fill="url(#gw)"/><path d="M8 28h48" stroke="rgba(3,7,13,.35)" stroke-width="2"/><rect x="36" y="34" width="14" height="10" rx="3" fill="#03070d" opacity=".55"/><circle cx="43" cy="39" r="2.5" fill="#38d9b0"/><defs><linearGradient id="gw" x1="8" y1="16" x2="56" y2="52"><stop stop-color="#2dd4a8"/><stop offset="1" stop-color="#0e8f72"/></linearGradient></defs></svg>
+                </span>
+                <span class="app-label">Wallet</span>
+              </button>
+
+              <button type="button" class="app-tile" data-open="marketplace" role="listitem">
+                <span class="app-icon icon-market" aria-hidden="true">
+                  <svg viewBox="0 0 64 64" fill="none"><path d="M12 22h40l-4 28H16L12 22z" fill="url(#gm)"/><path d="M20 22V18a12 12 0 0 1 24 0v4" stroke="#f4f7fb" stroke-width="3.5" stroke-linecap="round"/><circle cx="24" cy="36" r="3" fill="#03070d" opacity=".4"/><circle cx="40" cy="36" r="3" fill="#03070d" opacity=".4"/><defs><linearGradient id="gm" x1="12" y1="18" x2="52" y2="50"><stop stop-color="#76adff"/><stop offset="1" stop-color="#3a6fd4"/></linearGradient></defs></svg>
+                </span>
+                <span class="app-label">Marketplace</span>
+              </button>
+
+              <button type="button" class="app-tile" data-open="findmy" role="listitem">
+                <span class="app-icon icon-findmy" aria-hidden="true">
+                  <svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="22" fill="url(#gf)"/><circle cx="32" cy="32" r="14" stroke="rgba(3,7,13,.25)" stroke-width="2" stroke-dasharray="3 4"/><circle cx="32" cy="32" r="5" fill="#03070d"/><circle cx="32" cy="32" r="2" fill="#38d9b0"/><path d="M32 10v6M32 48v6M10 32h6M48 32h6" stroke="rgba(244,247,251,.55)" stroke-width="2" stroke-linecap="round"/><defs><linearGradient id="gf" x1="10" y1="10" x2="54" y2="54"><stop stop-color="#5eead4"/><stop offset="1" stop-color="#0d9488"/></linearGradient></defs></svg>
+                </span>
+                <span class="app-label">Find My</span>
+              </button>
+
+              <button type="button" class="app-tile" data-open="mail" role="listitem">
+                <span class="app-icon icon-mail" aria-hidden="true">
+                  <svg viewBox="0 0 64 64" fill="none"><rect x="8" y="16" width="48" height="34" rx="7" fill="url(#gma)"/><path d="M10 20l22 16L54 20" stroke="#03070d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity=".45"/><defs><linearGradient id="gma" x1="8" y1="16" x2="56" y2="50"><stop stop-color="#f4f7fb"/><stop offset="1" stop-color="#93a2b8"/></linearGradient></defs></svg>
+                </span>
+                <span class="app-label">Mail</span>
+              </button>
+
+              <button type="button" class="app-tile" data-open="messages" role="listitem">
+                <span class="app-icon icon-messages" aria-hidden="true">
+                  <svg viewBox="0 0 64 64" fill="none"><path d="M12 18c0-4 3-7 7-7h26c4 0 7 3 7 7v18c0 4-3 7-7 7H28l-10 10v-10h-6c-4 0-7-3-7-7V18z" fill="url(#gms)"/><circle cx="24" cy="28" r="2.5" fill="#03070d" opacity=".5"/><circle cx="32" cy="28" r="2.5" fill="#03070d" opacity=".5"/><circle cx="40" cy="28" r="2.5" fill="#03070d" opacity=".5"/><defs><linearGradient id="gms" x1="12" y1="11" x2="52" y2="46"><stop stop-color="#38d9b0"/><stop offset="1" stop-color="#14967a"/></linearGradient></defs></svg>
+                </span>
+                <span class="app-label">Messages</span>
+              </button>
+
+              <button type="button" class="app-tile" data-open="maps" role="listitem">
+                <span class="app-icon icon-maps" aria-hidden="true">
+                  <svg viewBox="0 0 64 64" fill="none"><path d="M14 14l14 6 14-6 8 4v36l-8-4-14 6-14-6-8 4V18l8-4z" fill="url(#gmp)"/><path d="M28 20v36M42 14v36" stroke="rgba(3,7,13,.3)" stroke-width="2"/><circle cx="35" cy="34" r="6" fill="#38d9b0"/><circle cx="35" cy="34" r="2.5" fill="#03070d"/><defs><linearGradient id="gmp" x1="14" y1="14" x2="50" y2="54"><stop stop-color="#a7f3d0"/><stop offset="1" stop-color="#0f766e"/></linearGradient></defs></svg>
+                </span>
+                <span class="app-label">Maps</span>
+              </button>
+            </div>
+
+            <div class="dock" aria-label="Quick apps">
+              <button type="button" class="dock-btn" data-open="messages" aria-label="Messages">
+                <svg viewBox="0 0 64 64" fill="none"><path d="M12 18c0-4 3-7 7-7h26c4 0 7 3 7 7v18c0 4-3 7-7 7H28l-10 10v-10h-6c-4 0-7-3-7-7V18z" fill="url(#dms)"/><defs><linearGradient id="dms" x1="12" y1="11" x2="52" y2="46"><stop stop-color="#38d9b0"/><stop offset="1" stop-color="#14967a"/></linearGradient></defs></svg>
+              </button>
+              <button type="button" class="dock-btn" data-open="mail" aria-label="Mail">
+                <svg viewBox="0 0 64 64" fill="none"><rect x="8" y="16" width="48" height="34" rx="7" fill="url(#dma)"/><path d="M10 20l22 16L54 20" stroke="#03070d" stroke-width="2.5" opacity=".45"/><defs><linearGradient id="dma" x1="8" y1="16" x2="56" y2="50"><stop stop-color="#f4f7fb"/><stop offset="1" stop-color="#93a2b8"/></linearGradient></defs></svg>
+              </button>
+              <button type="button" class="dock-btn" data-open="wallet" aria-label="Wallet">
+                <svg viewBox="0 0 64 64" fill="none"><rect x="8" y="16" width="48" height="36" rx="8" fill="url(#dw)"/><rect x="36" y="34" width="14" height="10" rx="3" fill="#03070d" opacity=".55"/><defs><linearGradient id="dw" x1="8" y1="16" x2="56" y2="52"><stop stop-color="#2dd4a8"/><stop offset="1" stop-color="#0e8f72"/></linearGradient></defs></svg>
+              </button>
+              <button type="button" class="dock-btn" data-open="maps" aria-label="Maps">
+                <svg viewBox="0 0 64 64" fill="none"><path d="M14 14l14 6 14-6 8 4v36l-8-4-14 6-14-6-8 4V18l8-4z" fill="url(#dmp)"/><circle cx="35" cy="34" r="6" fill="#38d9b0"/><defs><linearGradient id="dmp" x1="14" y1="14" x2="50" y2="54"><stop stop-color="#a7f3d0"/><stop offset="1" stop-color="#0f766e"/></linearGradient></defs></svg>
+              </button>
+            </div>
+          </section>
+
+          <!-- WALLET -->
+          <section class="view view-app" id="view-wallet" data-view="wallet" hidden>
+            <div class="app-chrome">
+              <button type="button" class="back-btn" data-home aria-label="Home">‹</button>
+              <h1>Wallet</h1>
+              <span class="chrome-spacer"></span>
+            </div>
+            <div class="app-body">
+              <p class="app-lede">Manage your funds. Send, receive, and request economy money from panel members.</p>
+              <div class="balance-hero">
+                <p class="balance-label">Available</p>
+                <p class="balance-value" id="wallet-balance">C$12,450</p>
+                <p class="balance-note">Clearwater economy · synced with panel</p>
+              </div>
+              <div class="action-row">
+                <button type="button" class="pill-action" data-wallet-action="send">Send</button>
+                <button type="button" class="pill-action" data-wallet-action="receive">Receive</button>
+                <button type="button" class="pill-action" data-wallet-action="request">Request</button>
+              </div>
+              <div class="panel" id="wallet-panel" hidden>
+                <label class="field">
+                  <span>Member</span>
+                  <input type="text" id="wallet-member" placeholder="Username or Discord" autocomplete="off" />
+                </label>
+                <label class="field">
+                  <span>Amount (C$)</span>
+                  <input type="number" id="wallet-amount" min="1" step="1" placeholder="100" />
+                </label>
+                <label class="field" id="wallet-note-field">
+                  <span>Note</span>
+                  <input type="text" id="wallet-note" placeholder="Optional" />
+                </label>
+                <button type="button" class="btn-primary" id="wallet-submit">Confirm</button>
+                <p class="form-status" id="wallet-status" hidden></p>
+              </div>
+              <h2 class="section-title">Recent</h2>
+              <ul class="txn-list" id="wallet-txns"></ul>
+            </div>
+          </section>
+
+          <!-- MARKETPLACE -->
+          <section class="view view-app" id="view-marketplace" data-view="marketplace" hidden>
+            <div class="app-chrome">
+              <button type="button" class="back-btn" data-home aria-label="Home">‹</button>
+              <h1>Marketplace</h1>
+              <span class="chrome-spacer"></span>
+            </div>
+            <div class="app-body">
+              <p class="app-lede">With Clearwater, managing your civilian business has never been easier. Open a storefront, create products, and charge customers for what you're worth.</p>
+              <div class="store-banner">
+                <div>
+                  <p class="store-name" id="store-name">Gulf Coast Customs</p>
+                  <p class="store-meta">Your storefront · 3 employees</p>
+                </div>
+                <button type="button" class="btn-ghost" id="store-edit">Edit</button>
+              </div>
+              <div class="action-row">
+                <button type="button" class="pill-action is-active" data-market-tab="products">Products</button>
+                <button type="button" class="pill-action" data-market-tab="employees">Employees</button>
+                <button type="button" class="pill-action" data-market-tab="payouts">Payouts</button>
+              </div>
+              <div class="market-pane is-active" data-pane="products">
+                <button type="button" class="btn-primary" id="add-product">+ New product</button>
+                <ul class="product-list" id="product-list"></ul>
+              </div>
+              <div class="market-pane" data-pane="employees" hidden>
+                <button type="button" class="btn-primary" id="add-employee">+ Add employee</button>
+                <ul class="people-list" id="employee-list"></ul>
+              </div>
+              <div class="market-pane" data-pane="payouts" hidden>
+                <p class="hint">Pay out your team from store revenue.</p>
+                <ul class="txn-list" id="payout-list"></ul>
+              </div>
+            </div>
+          </section>
+
+          <!-- FIND MY -->
+          <section class="view view-app" id="view-findmy" data-view="findmy" hidden>
+            <div class="app-chrome">
+              <button type="button" class="back-btn" data-home aria-label="Home">‹</button>
+              <h1>Find My</h1>
+              <span class="chrome-spacer"></span>
+            </div>
+            <div class="app-body">
+              <p class="app-lede">Share your location with trusted contacts so you can always find each other in-game. Toggle sharing per person.</p>
+              <div class="map-preview findmy-map" aria-hidden="true">
+                <div class="radar-ring"></div>
+                <div class="radar-ring delay"></div>
+                <span class="pin self">You</span>
+                <span class="pin other" style="left:62%;top:38%">Alex</span>
+                <span class="pin other" style="left:28%;top:58%">Jordan</span>
+              </div>
+              <h2 class="section-title">Trusted contacts</h2>
+              <ul class="people-list" id="findmy-list"></ul>
+            </div>
+          </section>
+
+          <!-- MAIL -->
+          <section class="view view-app" id="view-mail" data-view="mail" hidden>
+            <div class="app-chrome">
+              <button type="button" class="back-btn" data-home aria-label="Home">‹</button>
+              <h1>Mail</h1>
+              <button type="button" class="chrome-action" id="compose-mail" aria-label="Compose">✎</button>
+            </div>
+            <div class="app-body">
+              <p class="app-lede">Compose &amp; receive emails with Clearwater Mail. Purchased from Marketplace? Get a documented receipt instantly.</p>
+              <ul class="mail-list" id="mail-list"></ul>
+            </div>
+          </section>
+
+          <!-- MESSAGES -->
+          <section class="view view-app" id="view-messages" data-view="messages" hidden>
+            <div class="app-chrome">
+              <button type="button" class="back-btn" data-home aria-label="Home">‹</button>
+              <h1>Messages</h1>
+              <button type="button" class="chrome-action" id="new-message" aria-label="New">+</button>
+            </div>
+            <div class="app-body">
+              <p class="app-lede">Message your contacts and friends with Clearwater messaging.</p>
+              <ul class="thread-list" id="thread-list"></ul>
+              <div class="composer" id="msg-composer" hidden>
+                <input type="text" id="msg-to" placeholder="Contact name" />
+                <textarea id="msg-body" rows="3" placeholder="Write a message…"></textarea>
+                <button type="button" class="btn-primary" id="msg-send">Send</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- MAPS -->
+          <section class="view view-app" id="view-maps" data-view="maps" hidden>
+            <div class="app-chrome">
+              <button type="button" class="back-btn" data-home aria-label="Home">‹</button>
+              <h1>Maps</h1>
+              <span class="chrome-spacer"></span>
+            </div>
+            <div class="app-body maps-body">
+              <p class="app-lede">Lost? Open Maps and follow the fastest route to your destination.</p>
+              <div class="map-canvas" aria-hidden="true">
+                <div class="map-roads"></div>
+                <svg class="route-line" viewBox="0 0 280 220" preserveAspectRatio="none">
+                  <path d="M40 180 C80 140, 100 160, 130 120 S180 70, 220 50" fill="none" stroke="#38d9b0" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 6"/>
+                </svg>
+                <span class="pin self maps-you">You</span>
+                <span class="pin dest">★</span>
+              </div>
+              <label class="field">
+                <span>Destination</span>
+                <input type="text" id="maps-dest" list="maps-places" placeholder="Search Clearwater…" />
+                <datalist id="maps-places">
+                  <option value="Clearwater PD"></option>
+                  <option value="Fire Station 1"></option>
+                  <option value="County Hospital"></option>
+                  <option value="City Hall"></option>
+                  <option value="Pier District"></option>
+                  <option value="Bank of Clearwater"></option>
+                </datalist>
+              </label>
+              <button type="button" class="btn-primary" id="maps-go">Start route</button>
+              <p class="route-status" id="route-status" hidden></p>
+            </div>
+          </section>
+
+          <!-- COMPOSE MAIL MODAL -->
+          <div class="sheet" id="mail-sheet" hidden>
+            <div class="sheet-panel">
+              <h2>New message</h2>
+              <label class="field"><span>To</span><input type="text" id="mail-to" placeholder="name@clearwater.cw" /></label>
+              <label class="field"><span>Subject</span><input type="text" id="mail-subject" placeholder="Subject" /></label>
+              <label class="field"><span>Body</span><textarea id="mail-body" rows="4" placeholder="Write your email…"></textarea></label>
+              <div class="sheet-actions">
+                <button type="button" class="btn-ghost" data-close-sheet>Cancel</button>
+                <button type="button" class="btn-primary" id="mail-send">Send</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="home-indicator" aria-hidden="true"></div>
+        </div>
+      </div>
+      <div class="overlay-hint">F8 hide · drag status bar</div>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>
