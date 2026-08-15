@@ -1613,3 +1613,62 @@ body.hide-open-web .open-web { display: none !important; }
 #settings-download-latest {
   margin-top: 12px;
 }
+
+.update-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: fade 0.22s ease;
+}
+.update-modal[hidden] {
+  display: none !important;
+}
+.update-modal-card {
+  width: min(320px, 100%);
+  padding: 22px 20px 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(118, 173, 255, 0.28);
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(118, 173, 255, 0.16), transparent 55%),
+    #0a121c;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+.update-modal-kicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fbbf24;
+}
+.update-modal-card h2 {
+  margin: 8px 0 0;
+  font-size: 20px;
+  font-weight: 850;
+  line-height: 1.25;
+  color: #f4f8ff;
+}
+.update-modal-copy {
+  margin: 10px 0 0;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.45;
+  color: #b7c6d8;
+}
+.update-modal-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+.update-modal-actions .btn-primary,
+.update-modal-actions .btn-ghost {
+  width: 100%;
+  justify-content: center;
+}

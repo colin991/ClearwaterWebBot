@@ -122,7 +122,10 @@
     if (!label) return;
     if (latestInfo && compareVersions(appVersion, latestInfo.version) < 0) {
       label.textContent = `v${appVersion} is out of date · latest v${latestInfo.version}`;
-      if (download) download.hidden = false;
+      if (download) {
+        download.hidden = false;
+        download.textContent = `Download v${latestInfo.version}`;
+      }
     } else {
       label.textContent = `v${appVersion} · up to date`;
       if (download) download.hidden = true;
@@ -611,22 +614,57 @@
     return latestInfo?.downloadUrl || SITE + '/downloads/ClearwaterPhone.exe';
   }
 
+  function hideUpdateModal() {
+    const modal = $('#update-modal');
+    if (modal) modal.hidden = true;
+  }
+
+  function showUpdateModal(info) {
+    const modal = $('#update-modal');
+    const copy = $('#update-modal-copy');
+    const download = $('#update-modal-download');
+    if (!modal) return;
+    const latest = String(info?.version || latestInfo?.version || '').trim() || 'latest';
+    if (copy) {
+      copy.textContent = `You’re on v${appVersion}. Download v${latest} to keep Clearwater Phone up to date.`;
+    }
+    if (download) download.textContent = `Download v${latest}`;
+    modal.hidden = false;
+  }
+
   async function openLatestDownload() {
     const href = latestDownloadUrl();
     const status = $('#settings-update-status');
+    const downloadBtn = $('#update-modal-download');
+    const latest = String(latestInfo?.version || '').trim();
+    if (downloadBtn && latest) downloadBtn.textContent = `Downloading v${latest}…`;
     try {
+      if (typeof window.anchorPhone?.installUpdate === 'function') {
+        const result = await window.anchorPhone.installUpdate(href);
+        if (result?.ok) {
+          if (status) {
+            status.hidden = false;
+            status.textContent = result.message || 'Update downloaded. Restart Clearwater Phone when prompted.';
+          }
+          hideUpdateModal();
+          return;
+        }
+      }
       const opened = await window.anchorPhone?.openUrl?.(href);
       if (status) {
         status.hidden = false;
         status.textContent = opened === false
           ? 'Could not open the download. Visit cwrpvc.lol and use Download Phone.'
-          : 'Opened the latest download. Replace this app with the new file.';
+          : `Opened the v${latest || 'latest'} download. Replace this app with the new file.`;
       }
+      if (opened !== false) hideUpdateModal();
     } catch {
       if (status) {
         status.hidden = false;
         status.textContent = 'Could not open the download. Visit cwrpvc.lol and use Download Phone.';
       }
+    } finally {
+      if (downloadBtn && latest) downloadBtn.textContent = `Download v${latest}`;
     }
   }
 
@@ -634,8 +672,12 @@
     latestInfo = info;
     const banner = $('#update-banner');
     const copy = $('#update-copy');
+    const bannerBtn = $('#update-download');
+    const latest = String(info.version || '').trim() || 'latest';
     if (banner) banner.hidden = false;
-    if (copy) copy.textContent = `v${appVersion} → v${info.version}. Download the newest build from the site.`;
+    if (copy) copy.textContent = `You’re on v${appVersion}. Download v${latest}.`;
+    if (bannerBtn) bannerBtn.textContent = `Download v${latest}`;
+    showUpdateModal(info);
     renderSettings();
   }
 
@@ -656,6 +698,7 @@
       }
       const banner = $('#update-banner');
       if (banner) banner.hidden = true;
+      hideUpdateModal();
       if (status) {
         status.hidden = !manual;
         if (manual) status.textContent = 'You are on the latest version.';
@@ -674,6 +717,11 @@
   $('#settings-check-update')?.addEventListener('click', () => void checkForUpdates(true));
   $('#settings-download-latest')?.addEventListener('click', () => void openLatestDownload());
   $('#update-download')?.addEventListener('click', () => void openLatestDownload());
+  $('#update-modal-download')?.addEventListener('click', () => void openLatestDownload());
+  $('#update-modal-dismiss')?.addEventListener('click', () => hideUpdateModal());
+  $('#update-modal')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) hideUpdateModal();
+  });
 
   void (async () => {
     try {

@@ -566,6 +566,13 @@
       "summary": "The tipped post shown in the 1st or 2nd For You slot is now always the most recently tipped one, still rotating between those two positions.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T23:05:00.000Z"
+    },
+    {
+      "id": "2026-08-15-phone-outdated-popup",
+      "title": "Phone outdated version popup",
+      "summary": "Clearwater Phone now pops up when you are on an older build and offers Download v1.3.11 (or whichever version is current).",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T23:00:00.000Z"
     }
   ]
 }
