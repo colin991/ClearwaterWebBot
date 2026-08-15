@@ -1110,7 +1110,9 @@ body::before {
 }
 .profile-banner { border-radius: 0; }
 .profile-content { padding: 0 var(--cw-pad) 20px; }
-.profile-discord,
+.profile-discord {
+  border-radius: 999px !important;
+}
 .member-page-actions button {
   border-radius: var(--cw-radius-xs) !important;
 }
