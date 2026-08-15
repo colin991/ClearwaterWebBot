@@ -135,7 +135,7 @@
       "summary": "The staff panel now has an Active tab that lists Discord members currently browsing the website (avatar, display name, @username, and Discord ID), based on recent activity.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T05:05:00.000Z",
-      "commit": "49654f3"
+      "commit": "92e9d42"
     }
   ]
 }
