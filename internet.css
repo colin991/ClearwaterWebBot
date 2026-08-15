@@ -1240,7 +1240,28 @@ body.internet-booting .internet-shell {
     justify-content: center !important;
   }
   .internet-feed { grid-area: feed !important; min-width: 0; }
-  .internet-side { grid-area: side !important; position: sticky; top: 28px; }
+  .internet-side {
+    grid-area: side !important;
+    position: sticky;
+    top: 28px;
+    align-self: start;
+    max-height: calc(100vh - 56px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(180, 190, 205, .35) transparent;
+  }
+  .internet-side::-webkit-scrollbar { width: 8px; }
+  .internet-side::-webkit-scrollbar-track { background: transparent; }
+  .internet-side::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(180, 190, 205, .28);
+  }
+  .internet-side::-webkit-scrollbar-thumb:hover {
+    background: rgba(180, 190, 205, .42);
+  }
   .internet-rail {
     grid-area: rail !important;
     position: sticky !important;
@@ -1545,6 +1566,7 @@ body { margin: 0; }
   .internet-side {
     top: 18px !important;
     width: 100%;
+    max-height: calc(100vh - 36px);
   }
   .internet-shell.staff-mode {
     width: 100% !important;
@@ -6932,7 +6954,10 @@ html.pref-reduce-motion *::after {
 .site-update-banner-details[hidden] { display: none !important; }
 body.has-site-banner { padding-top: var(--site-banner-height, 40px); }
 body.has-site-banner .internet-rail { top: calc(30px + var(--site-banner-height, 40px)); height: calc(100vh - 60px - var(--site-banner-height, 40px)); }
-body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height, 40px)); }
+body.has-site-banner .internet-side {
+  top: calc(30px + var(--site-banner-height, 40px));
+  max-height: calc(100vh - 30px - var(--site-banner-height, 40px));
+}
 .staff-banner-form { display: grid; gap: 10px; }
 .staff-banner-form label { display: grid; gap: 6px; color: #d5e2f5; font-size: 12px; font-weight: 750; }
 .staff-banner-form input,
@@ -7651,10 +7676,10 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
   display: grid;
   gap: 10px;
   padding: 16px 14px 14px;
-  border: 1px solid rgba(180, 190, 205, .16);
-  border-radius: 18px;
+  border: 1px solid var(--cw-border, rgba(255, 255, 255, .08));
+  border-radius: var(--cw-radius, 18px);
   color: #eef5ff;
-  background: linear-gradient(165deg, rgba(10, 20, 38, .94), rgba(5, 11, 20, .96));
+  background: var(--cw-card, #03070d);
   box-shadow: none;
 }
 .sidebar-ad-promo-brand {
@@ -7762,9 +7787,9 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
   gap: 10px;
   margin-top: 14px;
   padding: 16px 14px 14px;
-  border: 1px solid rgba(180, 190, 205, .16);
-  border-radius: 18px;
-  background: linear-gradient(165deg, rgba(10, 20, 38, .94), rgba(5, 11, 20, .96));
+  border: 1px solid var(--cw-border, rgba(255, 255, 255, .08));
+  border-radius: var(--cw-radius, 18px);
+  background: var(--cw-card, #03070d);
 }
 .who-to-follow[hidden] { display: none !important; }
 .internet-shell:has([data-reels-stage]:not([hidden])) .who-to-follow {
@@ -8901,6 +8926,7 @@ body.has-official-post-banner .internet-rail {
 }
 body.has-official-post-banner .internet-side {
   top: calc(30px + var(--top-banner-stack, var(--official-post-banner-height, 42px)));
+  max-height: calc(100vh - 30px - var(--top-banner-stack, var(--official-post-banner-height, 42px)));
 }
 body.has-site-banner.has-official-post-banner .internet-rail {
   top: calc(30px + var(--top-banner-stack, 82px));
@@ -8908,6 +8934,7 @@ body.has-site-banner.has-official-post-banner .internet-rail {
 }
 body.has-site-banner.has-official-post-banner .internet-side {
   top: calc(30px + var(--top-banner-stack, 82px));
+  max-height: calc(100vh - 30px - var(--top-banner-stack, 82px));
 }
 
 /* Newsletter promo toast */

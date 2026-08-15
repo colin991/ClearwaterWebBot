@@ -116,10 +116,10 @@
     {
       "id": "2026-08-15-sidebar-ad-fit",
       "title": "Sidebar ad matches site chrome",
-      "summary": "Sponsored sidebar ads now use the same quiet border, surface, circular logo, and button styles as Who to Follow and other right-rail panels.",
+      "summary": "Sponsored sidebar ads now use the same solid card surface as What\u2019s happening / Who to follow, and the right rail scrolls independently when content is taller than the viewport.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T04:40:00.000Z",
-      "commit": "1c7f5e2"
+      "commit": "52b9fca"
     }
   ]
 }
