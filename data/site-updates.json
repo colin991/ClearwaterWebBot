@@ -140,10 +140,10 @@
     {
       "id": "2026-08-15-reels-photo-load",
       "title": "Reels photo load fix",
-      "summary": "Fixed intermittent Reel “photo could not be loaded” errors: same-origin /api/media now proxies Vercel Blob bytes instead of 302ing into a CSP-blocked *.public.blob host, with retries and CSP allowlist updates for large media fallbacks.",
+      "summary": "Fixed intermittent Reel \u201cphoto could not be loaded\u201d errors: same-origin /api/media now proxies Vercel Blob bytes instead of 302ing into a CSP-blocked *.public.blob host, with retries and CSP allowlist updates for large media fallbacks.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T05:20:00.000Z",
-      "commit": ""
+      "commit": "91cf3fe"
     }
   ]
 }
