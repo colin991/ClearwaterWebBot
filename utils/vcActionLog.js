@@ -25,7 +25,12 @@ export async function logVcAction(client, config, {
   details = [],
   color = 0x4f8ff7,
 } = {}) {
-  const channel = await fetchLogChannel(client, config?.vcActionLogChannelId);
+  const channelId = String(
+    config?.vcActionLogChannelId
+    || process.env.VC_ACTION_LOG_CHANNEL_ID
+    || '1538021552120135731',
+  ).trim();
+  const channel = await fetchLogChannel(client, channelId);
   if (!channel) return false;
 
   const embed = new EmbedBuilder()
