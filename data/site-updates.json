@@ -175,7 +175,7 @@
       "summary": "Renamed `-uwid` to `-void` (old alias still works). Bot replies and logs now use Discord Components V2 containers with no left accent bar color instead of classic embeds.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T17:10:00.000Z",
-      "commit": "PENDING"
+      "commit": "b16a255"
     }
   ]
 }
