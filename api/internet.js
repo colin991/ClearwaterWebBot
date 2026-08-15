@@ -3,15 +3,21 @@ import { SESSION_COOKIE, avatarUrl, getAuthConfig, isSameSiteRequest, parseCooki
 import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, redactStaffPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 import { allowRate } from '../utils/rateLimit.js';
+import { getCached, clearCached, clearCachedMatching, isAppFetchRequest, rejectPublicBrowse, setCached } from '../lib/api-guard.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260815-perf';
+const INTERNET_VERSION = '20260815-api-quiet';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_REEL_AUDIO_BYTES = 40 * 1024 * 1024;
 const MAX_PROFILE_IMAGE_BYTES = 12 * 1024 * 1024;
 const MAX_REEL_SLIDES = 10;
+const FEED_CACHE_TTL_MS = 15_000;
+const FEED_MUTATING_ACTIONS = new Set([
+  'post', 'edit', 'delete', 'post-interaction', 'poll-vote', 'social', 'staff-site',
+  'report-review', 'history-revert', 'ban', 'verify', 'ad-review', 'ad-manage', 'ad-purchase',
+]);
 const STAFF_ACTIONS = new Set([
   'moderation',
   'staff-user-detail',
@@ -246,14 +252,6 @@ async function callBot(request, payload, viewerId = '', ipHashes = null) {
   return { ok: upstream.ok, status: upstream.status, body };
 }
 
-function isBrowserDocumentRequest(request) {
-  const dest = String(request.headers['sec-fetch-dest'] || '').toLowerCase();
-  const mode = String(request.headers['sec-fetch-mode'] || '').toLowerCase();
-  // Only treat true tab navigations as documents. Do not key off Accept:
-  // some clients (including feed polls) can send text/html-first Accept headers.
-  return dest === 'document' || mode === 'navigate';
-}
-
 export default async function handler(request, response) {
   if (!['GET', 'POST'].includes(request.method)) return sendJson(response, 405, { error: 'Method not allowed' });
 
@@ -261,6 +259,15 @@ export default async function handler(request, response) {
     if (request.method === 'GET') {
       const url = new URL(request.url, `https://${request.headers.host || 'cwrpvc.lol'}`);
       if (url.searchParams.get('t')) return serveProxiedMedia(request, response);
+      if (rejectPublicBrowse(request, response)) return;
+      if (!isAppFetchRequest(request)) {
+        response.statusCode = 404;
+        response.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        response.setHeader('Cache-Control', 'no-store');
+        response.setHeader('X-Robots-Tag', 'noindex, nofollow');
+        response.end('Not found');
+        return;
+      }
       if (url.searchParams.get('reel')) {
         const { sessionSecret } = getAuthConfig();
         const viewer = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
@@ -269,28 +276,43 @@ export default async function handler(request, response) {
         if (!reelAccess.siteAccess) return sendJson(response, 403, { error: 'Clearwater Internet access required' });
         return serveReelViaBot(request, response, url);
       }
-      // Do not expose feed JSON (or auth error payloads) when someone opens /api/internet in a browser tab.
-      if (isBrowserDocumentRequest(request)) {
-        response.statusCode = 404;
-        response.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        response.setHeader('Cache-Control', 'no-store');
-        response.setHeader('X-Robots-Tag', 'noindex, nofollow');
-        response.setHeader('X-Content-Type-Options', 'nosniff');
-        response.end('Not found');
-        return;
-      }
       if (url.searchParams.get('meta') === 'version' || url.pathname.endsWith('/internet-version')) {
         return sendJson(response, 200, { version: INTERNET_VERSION });
       }
       const { sessionSecret } = getAuthConfig();
       const viewer = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
       if (!viewer) return sendJson(response, 401, { error: 'Sign in with Discord to use Clearwater Internet' });
+      if (!allowRate(`internet-get:${viewer.id}`, { max: 8, windowMs: 60_000 })) {
+        return sendJson(response, 429, { error: 'Too many requests. Wait a moment.' });
+      }
       const liveAccess = await getStaffAccess(viewer);
       if (!liveAccess.siteAccess) {
         return sendJson(response, 403, { error: 'Clearwater Internet access required' });
       }
+
+      // Homepage only needs the site banner — avoid pulling the full feed.
+      if (url.searchParams.has('banner') && !url.searchParams.has('feed')) {
+        const bannerKey = 'internet-banner-v1';
+        const cachedBanner = getCached(bannerKey);
+        if (cachedBanner) return sendJson(response, 200, cachedBanner);
+        const result = await callBot(request, undefined, viewer.id, hashClientIp(request));
+        const slim = redactPublicPayload({
+          settings: { siteBanner: result.body?.settings?.siteBanner || null },
+        });
+        if (result.ok) setCached(bannerKey, slim, 30_000);
+        return sendJson(response, result.ok ? 200 : result.status, slim);
+      }
+
+      const feedKey = `internet-feed:${viewer.id}`;
+      const cachedFeed = getCached(feedKey);
+      if (cachedFeed) {
+        response.setHeader('X-Cache', 'HIT');
+        return sendJson(response, 200, cachedFeed);
+      }
       const result = await callBot(request, undefined, viewer.id, hashClientIp(request));
-      return sendJson(response, result.ok ? 200 : result.status, redactPublicPayload(result.body));
+      const body = redactPublicPayload(result.body);
+      if (result.ok) setCached(feedKey, body, FEED_CACHE_TTL_MS);
+      return sendJson(response, result.ok ? 200 : result.status, body);
     }
 
     const body = await readBody(request);
@@ -439,6 +461,14 @@ export default async function handler(request, response) {
         actor: { id: user.id },
       };
     } else if (body.action === 'status' || body.action === 'presence') {
+      // Presence/status are heartbeats — cap them hard so open tabs cannot spam the bot.
+      const heartbeatKey = `internet-hb:${user.id}`;
+      if (!allowRate(heartbeatKey, { max: 8, windowMs: 60_000 })) {
+        if (body.action === 'presence') {
+          return sendJson(response, 200, { online: true, view: String(body.view || 'home').slice(0, 40), throttled: true });
+        }
+        return sendJson(response, 429, { error: 'Too many requests. Wait a moment.' });
+      }
       payload = {
         action: body.action === 'presence' ? 'presence' : 'status',
         view: String(body.view || 'home').slice(0, 40),
@@ -881,6 +911,12 @@ export default async function handler(request, response) {
       return sendJson(response, 503, {
         error: 'Sponsored ad reporting needs the latest bot files. Restart the Sparked bot host after it pulls from GitHub.',
       });
+    }
+    if (result.ok && FEED_MUTATING_ACTIONS.has(String(body.action || ''))) {
+      clearCached(`internet-feed:${user.id}`);
+      if (body.action === 'staff-site' || body.action === 'post') clearCached('internet-banner-v1');
+      // Staff feed edits can affect every viewer — drop shared feed entries.
+      if (STAFF_ACTIONS.has(String(body.action || ''))) clearCachedMatching('internet-feed:');
     }
     const redact = STAFF_ACTIONS.has(String(body.action || '')) && canStaff
       ? redactStaffPayload

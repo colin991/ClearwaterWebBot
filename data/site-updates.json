@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-api-quiet",
+      "title": "Fewer API requests, quieter status",
+      "summary": "Homepage and Internet poll far less often. Status APIs are cached server-side, blocked from casual browser tabs, and heartbeats no longer spam separate presence and warning calls.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T21:00:00.000Z"
+    },
+    {
       "id": "2026-08-15-staff-toggle-fix",
       "title": "Staff switches keep the side you click",
       "summary": "Staff panel on/off switches no longer snap the other way after you click. Saves are protected from background refresh, and a stuck switch now tells you to restart the bot host if needed.",

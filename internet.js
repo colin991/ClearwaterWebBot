@@ -95,7 +95,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260815-perf';
+const INTERNET_VERSION = '20260815-api-quiet';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -2669,6 +2669,8 @@ async function loadBanStatus() {
       return;
     }
     showBan(result.banned ? result.ban : null);
+    // Status already marks presence — only pull warning bodies when needed.
+    if (Number(result.unreadWarnings || 0) > 0) void loadWarnings();
   } catch {
     // Do not hide the normal site if the bot connection is briefly unavailable.
   }
@@ -2681,12 +2683,13 @@ function currentInternetView() {
 
 let presencePulseBusy = false;
 let presenceScrollTimer = 0;
+let lastPresencePulseAt = 0;
 
 async function pulsePresence(forceView = '') {
   if (!currentUserId || presencePulseBusy || document.hidden) return;
+  // Status heartbeats already count as presence — keep this rare.
+  if (Date.now() - lastPresencePulseAt < 90_000) return;
   const view = forceView || currentInternetView();
-  // Staff asked for people browsing the site now — focus on the home feed,
-  // but still count any logged-in Internet view as online.
   if (!view) return;
   presencePulseBusy = true;
   try {
@@ -2695,6 +2698,7 @@ async function pulsePresence(forceView = '') {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'presence', view }),
     });
+    lastPresencePulseAt = Date.now();
   } catch {
     // Presence is best-effort.
   } finally {
@@ -2709,7 +2713,7 @@ function queuePresenceFromScroll() {
   presenceScrollTimer = window.setTimeout(() => {
     presenceScrollTimer = 0;
     void pulsePresence('home');
-  }, 8000);
+  }, 45_000);
 }
 
 function reportSourceLabel(report) {
@@ -4913,7 +4917,7 @@ async function loadAds() {
 
 function startAdRotation() {
   if (adRotateTimer) window.clearInterval(adRotateTimer);
-  adRotateTimer = window.setInterval(() => { void loadAds(); }, 180_000);
+  adRotateTimer = window.setInterval(() => { void loadAds(); }, 300_000);
 }
 
 function renderWallet(wallet) {
@@ -6404,7 +6408,6 @@ async function loadSession() {
   renderPosts();
   try {
     await loadBanStatus();
-    void pulsePresence(currentInternetView());
     await loadWarnings();
     await loadMessages();
     if (!document.querySelector('[data-view="notifications"]')?.hidden) await loadNotifications();
@@ -9076,24 +9079,23 @@ window.addEventListener('resize', syncMobileRailScroll, { passive: true });
 
 window.setInterval(() => {
   if (document.hidden) return;
-  void loadPosts();
-  if (!document.querySelector('[data-view="messages"]')?.hidden) void loadMessages();
-  if (!document.querySelector('[data-view="conversation"]')?.hidden && viewedMember) void loadConversation(viewedMember);
-}, 90_000);
+  const view = currentInternetView();
+  // Only refresh the feed when it is actually on screen.
+  if (['home', 'bookmarks', 'post', 'member', 'profile', 'reels'].includes(view)) void loadPosts();
+  if (view === 'messages') void loadMessages();
+  if (view === 'conversation' && viewedMember) void loadConversation(viewedMember);
+}, 180_000);
 window.setInterval(() => {
   if (document.hidden) return;
+  // One status call covers ban + presence + unread warning peek.
   void loadBanStatus();
-  if (currentUserId) {
-    void loadWarnings();
-    void pulsePresence();
-  }
   if (!document.querySelector('[data-view="staff"]')?.hidden && sessionCanStaff) void loadModeration();
-}, 45_000);
+}, 120_000);
 window.setInterval(() => {
   if (document.hidden || !sessionCanStaff) return;
   if (document.querySelector('[data-view="staff"]')?.hidden) return;
   if (staffTab !== 'active') return;
   void loadModeration();
-}, 30_000);
+}, 90_000);
 window.addEventListener('scroll', queuePresenceFromScroll, { passive: true });
 window.setInterval(updateBanCountdown, 60 * 1000);
