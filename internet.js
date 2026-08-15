@@ -6214,11 +6214,46 @@ content?.addEventListener('input', () => {
   count.textContent = `${content.value.length} / 500`;
   postButton.disabled = !canComposePost();
   updateComposerHighlight();
+  syncMentionSuggest();
   // Preview only — nothing is held until the server accepts the post and
   // writes an automod report for the staff queue.
   if (postMessage) postMessage.textContent = scanClientContent(content.value) ? AUTOMOD_HOLD_PREVIEW : '';
   window.clearTimeout(composerDraftTimer);
   composerDraftTimer = window.setTimeout(() => saveComposerDraft(), 400);
+});
+content?.addEventListener('keydown', (event) => {
+  const box = document.querySelector('[data-mention-suggest]');
+  if (!box || box.hidden) return;
+  const options = [...box.querySelectorAll('[data-mention-pick]')];
+  if (!options.length && event.key !== 'Escape') return;
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    mentionSuggestIndex = Math.min(mentionSuggestIndex + 1, Math.max(options.length - 1, 0));
+    options.forEach((button, index) => button.classList.toggle('selected', index === mentionSuggestIndex));
+    options[mentionSuggestIndex]?.scrollIntoView({ block: 'nearest' });
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    mentionSuggestIndex = Math.max(mentionSuggestIndex - 1, 0);
+    options.forEach((button, index) => button.classList.toggle('selected', index === mentionSuggestIndex));
+    options[mentionSuggestIndex]?.scrollIntoView({ block: 'nearest' });
+  } else if ((event.key === 'Enter' || event.key === 'Tab') && options[mentionSuggestIndex]) {
+    event.preventDefault();
+    applyMentionPick(options[mentionSuggestIndex].dataset.mentionPick);
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    hideMentionSuggest();
+  }
+});
+content?.addEventListener('blur', () => {
+  window.setTimeout(() => {
+    if (!document.querySelector('[data-mention-suggest]:hover') && document.activeElement !== content) {
+      hideMentionSuggest();
+    }
+  }, 120);
+});
+content?.addEventListener('click', syncMentionSuggest);
+content?.addEventListener('keyup', (event) => {
+  if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) syncMentionSuggest();
 });
 document.querySelector('[data-reel-caption]')?.addEventListener('input', () => {
   window.clearTimeout(composerDraftTimer);
@@ -7211,8 +7246,17 @@ document.addEventListener('click', (event) => {
     postButton.disabled = !canComposePost();
     return;
   }
+  const mentionPick = event.target.closest('[data-mention-pick]');
+  if (mentionPick) {
+    applyMentionPick(mentionPick.dataset.mentionPick);
+    return;
+  }
   const mention = event.target.closest('[data-mention-user]');
-  if (mention) { insertAtCursor(`@${mention.dataset.mentionUser} `); mentionModal.hidden = true; return; }
+  if (mention) {
+    applyMentionPick(mention.dataset.mentionUser);
+    mentionModal.hidden = true;
+    return;
+  }
   if (event.target.closest('[data-refresh-staff]')) { void loadModeration(); return; }
   const staffSelect = event.target.closest('[data-staff-select]');
   if (staffSelect) {
@@ -7534,6 +7578,101 @@ function insertAtCursor(value) {
   count.textContent = `${content.value.length} / 500`;
   postButton.disabled = !canComposePost();
   updateComposerHighlight();
+  syncMentionSuggest();
+}
+
+let mentionSuggestState = null;
+let mentionSuggestIndex = 0;
+
+function activeMentionToken(textarea) {
+  if (!textarea) return null;
+  const value = String(textarea.value || '');
+  const caret = Number.isInteger(textarea.selectionStart) ? textarea.selectionStart : value.length;
+  const before = value.slice(0, caret);
+  const match = before.match(/(^|[\s([{])@([a-zA-Z0-9_]{0,80})$/);
+  if (!match) return null;
+  const query = match[2] || '';
+  const start = caret - query.length - 1;
+  return { start, end: caret, query };
+}
+
+function mentionCandidates(query) {
+  const needle = String(query || '').toLowerCase();
+  return [...internetUsers.values()]
+    .filter((user) => {
+      const username = String(user?.username || '').trim();
+      if (!username) return false;
+      if (!needle) return true;
+      const hay = `${user.displayName || ''} ${username}`.toLowerCase();
+      return hay.includes(needle);
+    })
+    .sort((a, b) => {
+      const au = String(a.username || '').toLowerCase();
+      const bu = String(b.username || '').toLowerCase();
+      const aStarts = needle && au.startsWith(needle) ? 0 : 1;
+      const bStarts = needle && bu.startsWith(needle) ? 0 : 1;
+      if (aStarts !== bStarts) return aStarts - bStarts;
+      return au.localeCompare(bu);
+    })
+    .slice(0, 6);
+}
+
+function hideMentionSuggest() {
+  const box = document.querySelector('[data-mention-suggest]');
+  if (box) {
+    box.hidden = true;
+    box.innerHTML = '';
+  }
+  mentionSuggestState = null;
+  mentionSuggestIndex = 0;
+}
+
+function syncMentionSuggest() {
+  const box = document.querySelector('[data-mention-suggest]');
+  if (!box || !content || document.activeElement !== content) {
+    hideMentionSuggest();
+    return;
+  }
+  const token = activeMentionToken(content);
+  if (!token) {
+    hideMentionSuggest();
+    return;
+  }
+  const users = mentionCandidates(token.query);
+  mentionSuggestState = token;
+  mentionSuggestIndex = Math.min(mentionSuggestIndex, Math.max(users.length - 1, 0));
+  if (!users.length) {
+    box.hidden = false;
+    box.innerHTML = '<p>No members found.</p>';
+    return;
+  }
+  box.hidden = false;
+  box.innerHTML = users.map((user, index) => `
+    <button type="button" role="option" class="${index === mentionSuggestIndex ? 'selected' : ''}" data-mention-pick="${escapeHtml(user.username)}">
+      <img src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" />
+      <span><b>${escapeHtml(user.displayName || user.username)}</b><small>@${escapeHtml(user.username)}</small></span>
+    </button>
+  `).join('');
+}
+
+function applyMentionPick(username) {
+  const handle = String(username || '').replace(/^@+/, '').trim();
+  if (!handle || !content) return;
+  const token = mentionSuggestState || activeMentionToken(content);
+  if (token) {
+    const next = `${content.value.slice(0, token.start)}@${handle} ${content.value.slice(token.end)}`.slice(0, 500);
+    content.value = next;
+    const caret = Math.min(token.start + handle.length + 2, next.length);
+    content.focus();
+    content.selectionStart = content.selectionEnd = caret;
+  } else {
+    insertAtCursor(`@${handle} `);
+  }
+  count.textContent = `${content.value.length} / 500`;
+  postButton.disabled = !canComposePost();
+  updateComposerHighlight();
+  hideMentionSuggest();
+  if (postMessage) postMessage.textContent = scanClientContent(content.value) ? AUTOMOD_HOLD_PREVIEW : '';
 }
 
 function updateComposerHighlight() {
@@ -7624,7 +7763,26 @@ gifSearch?.addEventListener('submit', async (event) => {
   event.preventDefault();
   void loadGifs(gifQuery?.value.trim() || '');
 });
-mentionButton?.addEventListener('click', () => { mentionModal.hidden = false; renderMentionResults(); mentionQuery?.focus(); });
+mentionButton?.addEventListener('click', () => {
+  if (!content) {
+    mentionModal.hidden = false;
+    renderMentionResults();
+    mentionQuery?.focus();
+    return;
+  }
+  const caret = content.selectionStart || content.value.length;
+  const before = content.value.slice(0, caret);
+  if (!/(^|[\s([{])@$/.test(before) && !activeMentionToken(content)) {
+    insertAtCursor('@');
+  }
+  content.focus();
+  syncMentionSuggest();
+  if (![...internetUsers.values()].length) {
+    mentionModal.hidden = false;
+    renderMentionResults();
+    mentionQuery?.focus();
+  }
+});
 document.querySelector('[data-close-mention]')?.addEventListener('click', () => { mentionModal.hidden = true; });
 mentionQuery?.addEventListener('input', renderMentionResults);
 emojiButton?.addEventListener('click', () => openEmojiPicker('post'));

@@ -9095,3 +9095,76 @@ body.has-site-banner.has-official-post-banner .internet-side {
   border-color: rgba(118, 173, 255, .28) !important;
   background: rgba(118, 173, 255, .08) !important;
 }
+
+/* Inline @ mention suggestions in the composer */
+.composer-compose {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+}
+.mention-suggest {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 2px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 14px;
+  background: #0a1018;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .45);
+}
+.mention-suggest[hidden] { display: none !important; }
+.mention-suggest p {
+  margin: 0;
+  padding: 10px 12px;
+  color: #8ea0b8;
+  font-size: 12px;
+}
+.mention-suggest button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  color: #eef4ff;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mention-suggest button:hover,
+.mention-suggest button.selected {
+  background: rgba(118, 173, 255, .14);
+}
+.mention-suggest img {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.mention-suggest span {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.mention-suggest b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.mention-suggest small {
+  overflow: hidden;
+  color: #8ea0b8;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/assets/icon-512.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260815-staff-colors" />
+    <link rel="stylesheet" href="internet.css?v=20260815-mentions" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260815-newsletter"></script>
   </head>
@@ -92,7 +92,10 @@
           <section class="composer" data-composer hidden>
             <div class="composer-top">
               <img src="assets/clearwater-logo.png" alt="" data-composer-avatar draggable="false" />
-              <div class="composer-entry"><div class="composer-highlight" data-composer-highlight aria-hidden="true"></div><textarea data-post-content maxlength="500" placeholder="What's happening?" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" data-lt-active="false"></textarea></div>
+              <div class="composer-compose">
+                <div class="composer-entry"><div class="composer-highlight" data-composer-highlight aria-hidden="true"></div><textarea data-post-content maxlength="500" placeholder="What's happening?" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" data-lt-active="false"></textarea></div>
+                <div class="mention-suggest" data-mention-suggest hidden role="listbox" aria-label="Mention suggestions"></div>
+              </div>
             </div>
             <p class="composer-draft-note" data-composer-draft-note hidden>Draft saved</p>
             <div class="composer-main">
@@ -793,6 +796,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260815-offline-msg"></script>
+    <script src="internet.js?v=20260815-mentions"></script>
   </body>
 </html>
