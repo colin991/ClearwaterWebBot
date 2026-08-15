@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-phone-outdated-popup",
+      "title": "Phone outdated version popup",
+      "summary": "Clearwater Phone now pops up when you are on an older build and offers Download v1.3.11 (or whichever version is current).",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T23:00:00.000Z"
+    },
+    {
       "id": "2026-08-15-staff-delete-business",
       "title": "Staff can delete business accounts",
       "summary": "In the staff Users panel, business accounts now have a Delete business account action. It removes the business, its posts, and its ads. The linked personal handler account stays.",
