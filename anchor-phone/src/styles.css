@@ -474,7 +474,7 @@ textarea {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  opacity: 0.28;
+  opacity: 0.9;
 }
 
 @keyframes logo-breathe {

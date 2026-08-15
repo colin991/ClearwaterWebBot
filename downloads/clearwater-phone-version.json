@@ -1,6 +1,6 @@
 {
-  "version": "1.3.11",
+  "version": "1.3.12",
   "minVersion": "1.3.0",
   "downloadUrl": "https://cwrpvc.lol/downloads/ClearwaterPhone.exe",
-  "releaseNotes": "Shows a popup when Clearwater Phone is outdated, with a direct download for the latest version."
+  "releaseNotes": "Clearwater logo on home, outdated-version popup, and Phone API bridge fixes."
 }

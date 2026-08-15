@@ -5,16 +5,13 @@
 # Local tooling and dependencies
 /.vercel/
 /node_modules/
-
 # Secrets
 .env
 .env.*
 !.env.example
-
 # Operating system files
 .DS_Store
 Thumbs.db
-
 # Runtime bot state (created on the bot host)
 /data/owner-config.json
 /data/identity-cache.json
