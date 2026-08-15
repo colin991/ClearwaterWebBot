@@ -13,7 +13,7 @@ import {
 } from '../lib/staff-pin.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260815-staff-toggles';
+const INTERNET_VERSION = '20260815-reels-video-range';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
@@ -144,20 +144,30 @@ async function serveReelViaBot(request, response, url) {
   const apiUrl = process.env.BOT_API_URL?.replace(/\/$/, '');
   const apiKey = process.env.BOT_API_KEY;
   if (!apiUrl || !apiKey) return sendJson(response, 503, { error: 'Clearwater Internet is not configured yet' });
+  const kind = String(url.searchParams.get('kind') || 'video').toLowerCase();
+  const streamDirect = kind === 'video' || kind === 'audio';
+  const upstreamHeaders = { Authorization: `Bearer ${apiKey}` };
+  if (request.headers.range) upstreamHeaders.Range = request.headers.range;
   const upstream = await fetch(`${apiUrl}/api/internet?${url.searchParams.toString()}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
+    headers: upstreamHeaders,
     signal: AbortSignal.timeout(20000),
     redirect: 'manual',
   });
   const locationHeader = upstream.headers.get('location');
   if (upstream.status >= 300 && upstream.status < 400 && locationHeader) {
-    // Proxy blob/CDN media instead of redirecting. Direct blob loads were flaky
-    // in the vertical Reel player and showed "photo could not be loaded".
     let location = locationHeader;
     try {
       location = new URL(locationHeader, apiUrl).href;
     } catch {
       location = locationHeader;
+    }
+    // Video/audio: send the browser straight to blob storage so Range requests work.
+    // Photos still proxy (same-origin) to avoid intermittent CSP/load flakes.
+    if (streamDirect) {
+      response.statusCode = 302;
+      response.setHeader('Location', location);
+      response.setHeader('Cache-Control', 'private, max-age=60');
+      return response.end();
     }
     try {
       const media = await fetch(location, {
@@ -178,6 +188,7 @@ async function serveReelViaBot(request, response, url) {
       }
       response.statusCode = 200;
       response.setHeader('Content-Type', media.headers.get('content-type') || 'application/octet-stream');
+      response.setHeader('Accept-Ranges', 'bytes');
       response.setHeader('Cache-Control', 'private, max-age=3600');
       response.setHeader('X-Content-Type-Options', 'nosniff');
       response.setHeader('Content-Length', buffer.length);
@@ -187,16 +198,19 @@ async function serveReelViaBot(request, response, url) {
       return response.end();
     }
   }
-  if (!upstream.ok) {
+  if (!upstream.ok && upstream.status !== 206) {
     response.statusCode = upstream.status === 404 ? 404 : 502;
     return response.end();
   }
   const buffer = Buffer.from(await upstream.arrayBuffer());
-  response.statusCode = 200;
+  response.statusCode = upstream.status === 206 ? 206 : 200;
   response.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream');
+  response.setHeader('Accept-Ranges', 'bytes');
   response.setHeader('Cache-Control', 'private, max-age=3600');
   response.setHeader('X-Content-Type-Options', 'nosniff');
   response.setHeader('Content-Length', buffer.length);
+  const contentRange = upstream.headers.get('content-range');
+  if (contentRange) response.setHeader('Content-Range', contentRange);
   response.end(buffer);
 }
 

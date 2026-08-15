@@ -23,7 +23,64 @@ const json = (response, statusCode, body) => {
   response.end(JSON.stringify(body));
 };
 
-async function serveStoredReel(response, store, reelId, kind, index = null) {
+function guessReelContentType(source, kind, upstreamType = '') {
+  const typed = String(upstreamType || '').split(';')[0].trim().toLowerCase();
+  if (typed && typed !== 'application/octet-stream') return typed;
+  const lower = String(source || '').toLowerCase();
+  if (kind === 'audio' || /\.(?:mp3|m4a|aac|wav|ogg)(?:$|\?)/i.test(lower)) {
+    if (/\.wav(?:$|\?)/i.test(lower)) return 'audio/wav';
+    if (/\.ogg(?:$|\?)/i.test(lower)) return 'audio/ogg';
+    if (/\.(?:m4a|aac)(?:$|\?)/i.test(lower)) return 'audio/mp4';
+    return 'audio/mpeg';
+  }
+  if (kind === 'video' || /\.(?:mp4|webm|mov)(?:$|\?)/i.test(lower)) {
+    if (/\.webm(?:$|\?)/i.test(lower)) return 'video/webm';
+    if (/\.mov(?:$|\?)/i.test(lower)) return 'video/quicktime';
+    return 'video/mp4';
+  }
+  if (/\.png(?:$|\?)/i.test(lower)) return 'image/png';
+  if (/\.webp(?:$|\?)/i.test(lower)) return 'image/webp';
+  if (/\.gif(?:$|\?)/i.test(lower)) return 'image/gif';
+  if (/\.(?:jpe?g)(?:$|\?)/i.test(lower)) return 'image/jpeg';
+  return typed || 'application/octet-stream';
+}
+
+function sendMediaBuffer(response, buffer, contentType, rangeHeader = '') {
+  const total = buffer.length;
+  const headers = {
+    'Content-Type': contentType || 'application/octet-stream',
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': 'private, max-age=3600',
+    'X-Content-Type-Options': 'nosniff',
+  };
+  const match = String(rangeHeader || '').match(/^bytes=(\d*)-(\d*)$/i);
+  if (match) {
+    let start = match[1] === '' ? null : Number(match[1]);
+    let end = match[2] === '' ? null : Number(match[2]);
+    if (start == null && end != null) {
+      start = Math.max(0, total - end);
+      end = total - 1;
+    } else {
+      start = Number.isFinite(start) ? start : 0;
+      end = end == null || !Number.isFinite(end) ? total - 1 : Math.min(end, total - 1);
+    }
+    if (start < 0 || end < 0 || start >= total || start > end) {
+      response.writeHead(416, { ...headers, 'Content-Range': `bytes */${total}` });
+      return response.end();
+    }
+    const slice = buffer.subarray(start, end + 1);
+    response.writeHead(206, {
+      ...headers,
+      'Content-Range': `bytes ${start}-${end}/${total}`,
+      'Content-Length': slice.length,
+    });
+    return response.end(slice);
+  }
+  response.writeHead(200, { ...headers, 'Content-Length': total });
+  return response.end(buffer);
+}
+
+async function serveStoredReel(request, response, store, reelId, kind, index = null) {
   const post = store.posts.find((item) => item.id === reelId);
   let source = '';
   if (kind === 'video') {
@@ -54,6 +111,15 @@ async function serveStoredReel(response, store, reelId, kind, index = null) {
   }
 
   if (/^https:\/\//i.test(source)) {
+    // Video/audio need HTTP Range from the origin host. Buffering them through
+    // this proxy breaks the vertical player (black frame / "cannot play here").
+    if (kind === 'video' || kind === 'audio') {
+      response.writeHead(302, {
+        Location: source,
+        'Cache-Control': 'private, max-age=60',
+      });
+      return response.end();
+    }
     try {
       const upstream = await fetch(source, {
         redirect: 'follow',
@@ -72,13 +138,12 @@ async function serveStoredReel(response, store, reelId, kind, index = null) {
         response.writeHead(302, { Location: source, 'Cache-Control': 'no-store' });
         return response.end();
       }
-      response.writeHead(200, {
-        'Content-Type': upstream.headers.get('content-type') || 'application/octet-stream',
-        'Content-Length': buffer.length,
-        'Cache-Control': 'private, max-age=3600',
-        'X-Content-Type-Options': 'nosniff',
-      });
-      return response.end(buffer);
+      return sendMediaBuffer(
+        response,
+        buffer,
+        guessReelContentType(source, kind, upstream.headers.get('content-type')),
+        request?.headers?.range,
+      );
     } catch {
       response.writeHead(502, { 'Cache-Control': 'no-store' });
       return response.end();
@@ -91,13 +156,12 @@ async function serveStoredReel(response, store, reelId, kind, index = null) {
     return response.end();
   }
   const buffer = Buffer.from(match[2], 'base64');
-  response.writeHead(200, {
-    'Content-Type': match[1],
-    'Content-Length': buffer.length,
-    'Cache-Control': 'private, max-age=3600',
-    'X-Content-Type-Options': 'nosniff',
-  });
-  return response.end(buffer);
+  return sendMediaBuffer(
+    response,
+    buffer,
+    guessReelContentType(source, kind, match[1]),
+    request?.headers?.range,
+  );
 }
 
 const safeEqual = (left = '', right = '') => {
@@ -451,7 +515,7 @@ export function startStatusServer(client, config) {
         store = await readInternetStore();
         if (request.method === 'GET') {
           const reelId = url.searchParams.get('reel');
-          if (reelId) return await serveStoredReel(response, store, reelId, url.searchParams.get('kind'), url.searchParams.get('index'));
+          if (reelId) return await serveStoredReel(request, response, store, reelId, url.searchParams.get('kind'), url.searchParams.get('index'));
           const ipBan = getActiveInternetIpBan(store, [
             url.searchParams.get('ipHash'),
             url.searchParams.get('ipHashLegacy'),

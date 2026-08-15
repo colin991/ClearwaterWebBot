@@ -95,7 +95,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260815-community-pauses';
+const INTERNET_VERSION = '20260815-reels-video-range';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -1758,7 +1758,13 @@ function bindReelMediaFallback(viewport) {
         video.load();
         return;
       }
-      markReelMediaBroken(card, 'This Reel video cannot play here. Re-upload as MP4 (H.264) or WebM.');
+      const unsupported = video.error?.code === 4;
+      markReelMediaBroken(
+        card,
+        unsupported
+          ? 'This Reel video cannot play here. Re-upload as MP4 (H.264) or WebM.'
+          : 'This Reel video could not be loaded. Refresh and try again.',
+      );
     });
   });
   viewport.querySelectorAll('.reel-slideshow img').forEach((image) => {
