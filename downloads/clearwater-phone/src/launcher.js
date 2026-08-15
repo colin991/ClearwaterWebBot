@@ -121,7 +121,7 @@ window.anchorPhone?.onAuth?.((payload) => {
 });
 
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') window.anchorPhone?.quit?.();
+  if (event.key === 'Escape') event.preventDefault();
 });
 
 void (async () => {

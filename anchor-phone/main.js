@@ -212,7 +212,13 @@ function openLoginWindow() {
   loginWin.webContents.on('did-finish-load', finishIfSignedIn);
   loginWin.on('closed', () => {
     loginWin = null;
-    if (win && !win.isDestroyed()) win.setAlwaysOnTop(true, 'screen-saver');
+    if (launcherIsOpen()) {
+      launcherWin.show();
+      launcherWin.focus();
+      launcherWin.setAlwaysOnTop(true, 'screen-saver');
+    } else if (win && !win.isDestroyed()) {
+      win.setAlwaysOnTop(true, 'screen-saver');
+    }
   });
   return loginWin;
 }
@@ -328,7 +334,11 @@ function startWatchLoop() {
   }, 4000);
 }
 
+let launcherMayClose = false;
+let appIsQuitting = false;
+
 function maybeCloseLauncher() {
+  launcherMayClose = true;
   if (launcherWin && !launcherWin.isDestroyed()) launcherWin.close();
 }
 
@@ -355,7 +365,7 @@ async function createOverlayWindow({ closeLauncher = true } = {}) {
     alwaysOnTop: true,
     resizable: false,
     skipTaskbar: false,
-    hasShadow: true,
+    hasShadow: false,
     backgroundColor: '#121820',
     icon: iconPath(),
     webPreferences: {
@@ -390,12 +400,13 @@ function createLauncherWindow() {
     return launcherWin;
   }
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+  launcherMayClose = false;
   launcherWin = new BrowserWindow({
     width,
     height,
     x: 0,
     y: 0,
-    fullscreen: true,
+    fullscreen: false,
     frame: false,
     alwaysOnTop: true,
     backgroundColor: '#02060c',
@@ -411,11 +422,24 @@ function createLauncherWindow() {
   });
   if (win && !win.isDestroyed()) win.setAlwaysOnTop(false);
   launcherWin.loadFile(path.join(__dirname, 'src', 'launcher.html'));
+  launcherWin.maximize();
   launcherWin.setAlwaysOnTop(true, 'screen-saver');
+  launcherWin.on('close', (event) => {
+    if (launcherMayClose) return;
+    event.preventDefault();
+    if (launcherWin && !launcherWin.isDestroyed()) {
+      launcherWin.show();
+      launcherWin.maximize();
+      launcherWin.focus();
+      launcherWin.setAlwaysOnTop(true, 'screen-saver');
+    }
+  });
   launcherWin.on('closed', () => {
     launcherWin = null;
-    startWatchLoop();
-    if (!win && !readHostSettings().launchOnApp && !argvHas('--watch')) {
+    if (appIsQuitting) return;
+    if (win && !win.isDestroyed()) startWatchLoop();
+    else if (!readHostSettings().setupComplete) createLauncherWindow();
+    else if (!win && !readHostSettings().launchOnApp && !argvHas('--watch')) {
       app.quit();
     }
   });
@@ -502,9 +526,16 @@ app.whenReady().then(() => {
     void readAuthState();
   });
 
-  if (argvHas('--watch') || argvHas('--overlay')) {
+  app.on('before-quit', () => {
+    appIsQuitting = true;
+    launcherMayClose = true;
+  });
+
+  if (argvHas('--overlay')) {
     startWatchLoop();
-    if (argvHas('--overlay')) void createOverlayWindow({ closeLauncher: false });
+    void createOverlayWindow({ closeLauncher: false });
+  } else if (argvHas('--watch') && readHostSettings().setupComplete) {
+    startWatchLoop();
   } else {
     createLauncherWindow();
   }
@@ -528,6 +559,7 @@ app.whenReady().then(() => {
   });
 
   ipcMain.on('phone-quit', () => {
+    launcherMayClose = true;
     app.quit();
   });
 

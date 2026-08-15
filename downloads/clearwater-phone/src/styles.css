@@ -87,44 +87,24 @@ textarea {
   position: relative;
   width: 100%;
   height: 100%;
-  border-radius: 48px;
-  padding: 11px;
-  background:
-    linear-gradient(145deg, #2a3548 0%, #121820 28%, #0a0e14 55%, #1a2433 100%);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.1),
-    0 0 0 2px rgba(0, 0, 0, 0.55),
-    0 32px 70px rgba(0, 0, 0, 0.62),
-    0 8px 24px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+  border-radius: 0;
+  padding: 0;
+  background: #121820;
+  box-shadow: none;
 }
 
 .bezel-shine {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    125deg,
-    rgba(255, 255, 255, 0.14) 0%,
-    transparent 22%,
-    transparent 78%,
-    rgba(118, 173, 255, 0.08) 100%
-  );
-  z-index: 2;
+  display: none;
 }
 
 .phone-screen {
   position: relative;
   width: 100%;
   height: 100%;
-  border-radius: 38px;
+  border-radius: 0;
   overflow: hidden;
   background: var(--ink);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-    inset 0 0 40px rgba(0, 0, 0, 0.35);
+  box-shadow: none;
 }
 
 /* ═══════════════════════════════════════════
