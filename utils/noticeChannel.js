@@ -13,7 +13,6 @@ const emptyState = () => ({
   version: 1,
   noticeMessageId: '',
   punishedCount: 0,
-  punishedUserIds: [],
 });
 
 function noticeContent(punishedCount = 0) {
@@ -30,23 +29,17 @@ function noticeContent(punishedCount = 0) {
 
 function isNoticeBody(content = '') {
   const text = String(content || '');
-  return text.includes('# :pin: Notice') || text.includes('# 📌 Notice') || text.includes('Sending messages here will result in a 7 day timeout');
+  return text.includes('# :pin: Notice')
+    || text.includes('# 📌 Notice')
+    || text.includes('Sending messages here will result in a 7 day timeout');
 }
 
 async function readState() {
   const data = await readJsonFile(STATE_PATH, emptyState());
-  const punishedUserIds = Array.isArray(data?.punishedUserIds)
-    ? [...new Set(data.punishedUserIds.map(String).filter(Boolean))]
-    : [];
-  const punishedCount = Math.max(
-    Number.parseInt(data?.punishedCount, 10) || 0,
-    punishedUserIds.length,
-  );
   return {
     version: 1,
     noticeMessageId: String(data?.noticeMessageId || ''),
-    punishedCount,
-    punishedUserIds,
+    punishedCount: Math.max(0, Number.parseInt(data?.punishedCount, 10) || 0),
   };
 }
 
@@ -55,9 +48,6 @@ async function writeState(state) {
     version: 1,
     noticeMessageId: String(state.noticeMessageId || ''),
     punishedCount: Math.max(0, Number(state.punishedCount) || 0),
-    punishedUserIds: Array.isArray(state.punishedUserIds)
-      ? [...new Set(state.punishedUserIds.map(String).filter(Boolean))]
-      : [],
   });
 }
 
@@ -133,7 +123,7 @@ export async function ensureNoticeChannel(client) {
   logger.info(`Notice channel ready in #${channel.name || channel.id} (kept message ${notice.id}).`);
 }
 
-async function punishMember(message, client) {
+async function punishMember(message) {
   const member = message.member
     || await message.guild.members.fetch(message.author.id).catch(() => null);
   if (!member || member.user.bot) return false;
@@ -158,7 +148,7 @@ export async function handleNoticeChannelMessage(message, client) {
 
   const state = await readState();
 
-  // Keep (and adopt) the pinned notice message — including when Ownership or the bot posts it.
+  // Keep (and adopt) the bot notice message so it is never auto-deleted.
   if (
     message.id === state.noticeMessageId
     || (message.author.id === client.user.id && isNoticeBody(message.content))
@@ -172,33 +162,55 @@ export async function handleNoticeChannelMessage(message, client) {
 
   await message.delete().catch(() => {});
 
+  // System / other bot chatter: delete only, do not bump the punishment count.
   if (message.author.bot) return true;
 
   let timedOut = false;
   try {
-    timedOut = await punishMember(message, client);
+    timedOut = await punishMember(message);
   } catch (error) {
     logger.warn(`Notice channel timeout failed for ${message.author.id}: ${error?.message || error}`);
   }
 
-  const alreadyCounted = state.punishedUserIds.includes(message.author.id);
-  if (!alreadyCounted) {
-    state.punishedUserIds.push(message.author.id);
-    state.punishedCount = state.punishedUserIds.length;
-    await writeState(state);
+  state.punishedCount += 1;
+  await writeState(state);
 
-    const channel = message.channel?.isTextBased?.()
-      ? message.channel
-      : await resolveNoticeChannel(client);
-    if (channel) {
-      await syncNoticeMessage(channel, state).catch((error) => {
-        logger.warn(`Could not refresh notice after punishment: ${error?.message || error}`);
-      });
-    }
+  const channel = message.channel?.isTextBased?.()
+    ? message.channel
+    : await resolveNoticeChannel(client);
+  if (channel) {
+    await syncNoticeMessage(channel, state).catch((error) => {
+      logger.warn(`Could not refresh notice after punishment: ${error?.message || error}`);
+    });
   }
 
   if (timedOut) {
-    logger.info(`Notice channel: timed out ${message.author.tag} (${message.author.id}).`);
+    logger.info(`Notice channel: timed out ${message.author.tag} (${message.author.id}). Count=${state.punishedCount}`);
   }
   return true;
+}
+
+/**
+ * If someone deletes the notice, post it again with the same count.
+ */
+export async function handleNoticeChannelMessageDelete(message, client) {
+  const channelId = noticeChannelId(client);
+  if (!channelId) return;
+
+  const eventChannelId = message.channelId || message.channel?.id;
+  if (eventChannelId !== channelId) return;
+
+  const state = await readState();
+  if (!state.noticeMessageId || message.id !== state.noticeMessageId) return;
+
+  state.noticeMessageId = '';
+  await writeState(state);
+
+  const channel = message.channel?.isTextBased?.()
+    ? message.channel
+    : await resolveNoticeChannel(client);
+  if (!channel) return;
+
+  const restored = await syncNoticeMessage(channel, state, { forceNew: true });
+  logger.info(`Notice channel message was removed; re-sent as ${restored.id}.`);
 }
