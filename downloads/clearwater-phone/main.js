@@ -28,6 +28,7 @@ function createWindow() {
     skipTaskbar: false,
     hasShadow: false,
     backgroundColor: '#00000000',
+    icon: path.join(__dirname, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -35,6 +36,12 @@ function createWindow() {
       sandbox: true
     }
   });
+
+  if (process.platform === 'linux') {
+    try {
+      win.setIcon(path.join(__dirname, 'build', 'icon.png'));
+    } catch {}
+  }
 
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });

@@ -264,6 +264,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:25:00.000Z",
       "commit": "fe723de"
+    },
+    {
+      "id": "2026-08-15-phone-logo-icon",
+      "title": "Clearwater Phone app icon",
+      "summary": "ClearwaterPhone.exe now uses the Clearwater server logo as the Windows app/taskbar icon.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T18:30:00.000Z",
+      "commit": "pending"
     }
   ]
 }
