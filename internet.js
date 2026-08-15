@@ -694,6 +694,8 @@ function selectPostingAccount(account) {
   accountSwitchMenu.hidden = true;
   accountSwitchButton?.setAttribute('aria-expanded', 'false');
   void loadSocial();
+  messagesRenderKey = '';
+  notificationsRenderKey = '';
   void loadMessages();
   void loadNotifications();
   if (activeAccount === 'official') openMemberProfile(officialAccountId);
@@ -4755,66 +4757,109 @@ async function loadWarnings() {
   }
 }
 
+let messagesLoadPromise = null;
+let notificationsLoadPromise = null;
+let messagesRenderKey = '';
+let notificationsRenderKey = '';
+
+function messagesListFingerprint(items) {
+  return items.map((message) => [
+    message.otherId || '',
+    message.createdAt || '',
+    Number(message.unread || 0),
+    message.content || '',
+    message.gifUrl ? '1' : '0',
+    message.otherAvatarUrl || '',
+    message.otherDisplayName || '',
+  ].join('\u001f')).join('\u001e');
+}
+
+function notificationsListFingerprint(items) {
+  return items.map((notification) => [
+    notification.id || '',
+    notification.type || '',
+    notification.actorId || '',
+    notification.postId || '',
+    notification.createdAt || '',
+    notification.actorAvatarUrl || '',
+    notification.actorName || '',
+    notification.postContent || '',
+  ].join('\u001f')).join('\u001e');
+}
+
 async function loadMessages() {
   if (!messagesList || !currentUserId) return;
-  try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'messages', ...activeAccountRequest() }) });
-    const result = await readApiJson(response, 'Could not load messages.');
-    if (!response.ok) throw new Error(result.error || 'Could not load messages.');
-    // Prefer server-built conversation summaries (include peer name/avatar). Fall
-    // back to grouping raw messages for older bot hosts.
-    let items = Array.isArray(result.conversations) ? result.conversations : null;
-    if (!items) {
-      const conversations = new Map();
-      (result.messages || []).forEach((message) => {
-        if (message.kind !== 'direct') return;
-        const otherId = message.otherId || (message.fromId === activeUserId() ? message.toId : message.fromId);
+  if (messagesLoadPromise) return messagesLoadPromise;
+  messagesLoadPromise = (async () => {
+    try {
+      const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'messages', ...activeAccountRequest() }) });
+      const result = await readApiJson(response, 'Could not load messages.');
+      if (!response.ok) throw new Error(result.error || 'Could not load messages.');
+      // Prefer server-built conversation summaries (include peer name/avatar). Fall
+      // back to grouping raw messages for older bot hosts.
+      let items = Array.isArray(result.conversations) ? result.conversations : null;
+      if (!items) {
+        const conversations = new Map();
+        (result.messages || []).forEach((message) => {
+          if (message.kind !== 'direct') return;
+          const otherId = message.otherId || (message.fromId === activeUserId() ? message.toId : message.fromId);
+          if (!otherId) return;
+          const previous = conversations.get(otherId);
+          const unread = Number(message.unread || 0) || (message.toId === activeUserId() && !message.readAt ? 1 : 0);
+          if (!previous || new Date(message.createdAt).getTime() > new Date(previous.createdAt).getTime()) {
+            conversations.set(otherId, { ...message, otherId, unread: (previous?.unread || 0) + unread });
+          } else {
+            previous.unread = (previous.unread || 0) + unread;
+          }
+        });
+        items = [...conversations.values()].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+      } else {
+        items = items.slice().sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+      }
+
+      // Seed the member cache so inbox rows stay openable even before the feed loads.
+      items.forEach((item) => {
+        const otherId = String(item.otherId || '');
         if (!otherId) return;
-        const previous = conversations.get(otherId);
-        const unread = Number(message.unread || 0) || (message.toId === activeUserId() && !message.readAt ? 1 : 0);
-        if (!previous || new Date(message.createdAt).getTime() > new Date(previous.createdAt).getTime()) {
-          conversations.set(otherId, { ...message, otherId, unread: (previous?.unread || 0) + unread });
-        } else {
-          previous.unread = (previous.unread || 0) + unread;
-        }
+        const existing = internetUsers.get(otherId) || {};
+        internetUsers.set(otherId, {
+          ...existing,
+          id: otherId,
+          displayName: item.otherDisplayName || existing.displayName || 'Clearwater member',
+          username: item.otherUsername || existing.username || 'member',
+          avatarUrl: item.otherAvatarUrl || existing.avatarUrl || null,
+          staffRank: item.otherStaffRank || existing.staffRank || null,
+        });
       });
-      items = [...conversations.values()].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
-    } else {
-      items = items.slice().sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+
+      const unreadTotal = items.reduce((total, message) => total + Number(message.unread || 0), 0);
+      socialState.unreadMessages = unreadTotal;
+      updateNotificationIndicators();
+
+      const fingerprint = messagesListFingerprint(items);
+      if (fingerprint === messagesRenderKey && messagesList.querySelector('.internet-message, .message-empty')) {
+        return;
+      }
+      messagesRenderKey = fingerprint;
+      messagesList.innerHTML = items.length
+        ? items.map((message) => {
+          const otherId = String(message.otherId || '');
+          const member = internetUsers.get(otherId) || {};
+          const name = message.otherDisplayName || member.displayName || 'Clearwater member';
+          const avatar = message.otherAvatarUrl || member.avatarUrl || 'assets/clearwater-logo.png';
+          const preview = message.content || (message.gifUrl ? 'GIF' : 'New message');
+          const unread = Number(message.unread || 0) > 0;
+          return `<button type="button" class="internet-message ${unread ? 'unread' : ''}" data-open-conversation="${escapeHtml(otherId)}"><img src="${escapeHtml(avatar)}" alt="" decoding="async" /><span><b>${escapeHtml(name)}</b><p>${escapeHtml(preview)}</p><small>${timeAgo(message.createdAt)}</small></span>${unread ? `<em>${message.unread > 9 ? '9+' : message.unread}</em>` : ''}</button>`;
+        }).join('')
+        : '<p class="message-empty">No messages yet.<span>Start a conversation with another Clearwater member.</span></p>';
+    } catch (error) {
+      messagesRenderKey = '';
+      messagesList.innerHTML = `<p class="message-empty">${escapeHtml(error.message || 'Could not load messages.')}</p>`;
     }
-
-    // Seed the member cache so inbox rows stay openable even before the feed loads.
-    items.forEach((item) => {
-      const otherId = String(item.otherId || '');
-      if (!otherId) return;
-      const existing = internetUsers.get(otherId) || {};
-      internetUsers.set(otherId, {
-        ...existing,
-        id: otherId,
-        displayName: item.otherDisplayName || existing.displayName || 'Clearwater member',
-        username: item.otherUsername || existing.username || 'member',
-        avatarUrl: item.otherAvatarUrl || existing.avatarUrl || null,
-        staffRank: item.otherStaffRank || existing.staffRank || null,
-      });
-    });
-
-    const unreadTotal = items.reduce((total, message) => total + Number(message.unread || 0), 0);
-    socialState.unreadMessages = unreadTotal;
-    updateNotificationIndicators();
-    messagesList.innerHTML = items.length
-      ? items.map((message) => {
-        const otherId = String(message.otherId || '');
-        const member = internetUsers.get(otherId) || {};
-        const name = message.otherDisplayName || member.displayName || 'Clearwater member';
-        const avatar = message.otherAvatarUrl || member.avatarUrl || 'assets/clearwater-logo.png';
-        const preview = message.content || (message.gifUrl ? 'GIF' : 'New message');
-        const unread = Number(message.unread || 0) > 0;
-        return `<button type="button" class="internet-message ${unread ? 'unread' : ''}" data-open-conversation="${escapeHtml(otherId)}"><img src="${escapeHtml(avatar)}" alt="" /><span><b>${escapeHtml(name)}</b><p>${escapeHtml(preview)}</p><small>${timeAgo(message.createdAt)}</small></span>${unread ? `<em>${message.unread > 9 ? '9+' : message.unread}</em>` : ''}</button>`;
-      }).join('')
-      : '<p class="message-empty">No messages yet.<span>Start a conversation with another Clearwater member.</span></p>';
-  } catch (error) {
-    messagesList.innerHTML = `<p class="message-empty">${escapeHtml(error.message || 'Could not load messages.')}</p>`;
-  }
+  })().finally(() => {
+    messagesLoadPromise = null;
+  });
+  return messagesLoadPromise;
 }
 
 function updateNotificationIndicators() {
@@ -4825,18 +4870,34 @@ function updateNotificationIndicators() {
 
 async function loadNotifications() {
   if (!notificationList || !currentUserId) return;
-  try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'notifications', ...activeAccountRequest() }) });
-    const result = await readApiJson(response, 'Could not load notifications.');
-    if (!response.ok) throw new Error(result.error || 'Could not load notifications.');
-    const notifications = result.notifications || [];
-    const names = { follow: 'started following you', like: 'liked your post', reply: 'replied to your post', mention: 'mentioned you in a post', repost: 'reposted your post', quote: 'quoted your post', message: 'sent you a message', boost: 'tipped your post into For You' };
-    notificationList.innerHTML = notifications.length ? notifications.map((notification) => `<button type="button" class="notification-item" ${notification.type === 'message' ? `data-notification-message="${escapeHtml(notification.actorId)}"` : notification.postId ? `data-notification-post="${escapeHtml(notification.postId)}"` : `data-notification-member="${escapeHtml(notification.actorId)}"`}><img src="${escapeHtml(notification.actorAvatarUrl || internetUsers.get(notification.actorId)?.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><span><b>${escapeHtml(notification.actorName || internetUsers.get(notification.actorId)?.displayName || 'Clearwater member')}</b> ${escapeHtml(names[notification.type] || 'interacted with you')}<small>${escapeHtml(notification.type === 'message' ? 'Open conversation' : notification.postContent || (notification.postId ? 'View post' : 'View profile'))} &middot; ${timeAgo(notification.createdAt)}</small></span></button>`).join('') : '<p class="feed-note">Nothing new yet.</p>';
-    const unread = Number(result.unreadCount || 0);
-    if (notificationCount) { notificationCount.hidden = unread < 1; notificationCount.textContent = `${unread} unread`; }
-    socialState.unreadNotifications = 0;
-    updateNotificationIndicators();
-  } catch (error) { notificationList.innerHTML = `<p>${escapeHtml(error.message || 'Could not load notifications.')}</p>`; }
+  if (notificationsLoadPromise) return notificationsLoadPromise;
+  notificationsLoadPromise = (async () => {
+    try {
+      const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'notifications', ...activeAccountRequest() }) });
+      const result = await readApiJson(response, 'Could not load notifications.');
+      if (!response.ok) throw new Error(result.error || 'Could not load notifications.');
+      const notifications = result.notifications || [];
+      const names = { follow: 'started following you', like: 'liked your post', reply: 'replied to your post', mention: 'mentioned you in a post', repost: 'reposted your post', quote: 'quoted your post', message: 'sent you a message', boost: 'tipped your post into For You' };
+      const fingerprint = notificationsListFingerprint(notifications);
+      const unread = Number(result.unreadCount || 0);
+      if (notificationCount) { notificationCount.hidden = unread < 1; notificationCount.textContent = `${unread} unread`; }
+      socialState.unreadNotifications = 0;
+      updateNotificationIndicators();
+      if (fingerprint === notificationsRenderKey && notificationList.querySelector('.notification-item, .feed-note')) {
+        return;
+      }
+      notificationsRenderKey = fingerprint;
+      notificationList.innerHTML = notifications.length
+        ? notifications.map((notification) => `<button type="button" class="notification-item" ${notification.type === 'message' ? `data-notification-message="${escapeHtml(notification.actorId)}"` : notification.postId ? `data-notification-post="${escapeHtml(notification.postId)}"` : `data-notification-member="${escapeHtml(notification.actorId)}"`}><img src="${escapeHtml(notification.actorAvatarUrl || internetUsers.get(notification.actorId)?.avatarUrl || 'assets/clearwater-logo.png')}" alt="" decoding="async" /><span><b>${escapeHtml(notification.actorName || internetUsers.get(notification.actorId)?.displayName || 'Clearwater member')}</b> ${escapeHtml(names[notification.type] || 'interacted with you')}<small>${escapeHtml(notification.type === 'message' ? 'Open conversation' : notification.postContent || (notification.postId ? 'View post' : 'View profile'))} &middot; ${timeAgo(notification.createdAt)}</small></span></button>`).join('')
+        : '<p class="feed-note">Nothing new yet.</p>';
+    } catch (error) {
+      notificationsRenderKey = '';
+      notificationList.innerHTML = `<p>${escapeHtml(error.message || 'Could not load notifications.')}</p>`;
+    }
+  })().finally(() => {
+    notificationsLoadPromise = null;
+  });
+  return notificationsLoadPromise;
 }
 
 async function loadSocial() {
@@ -5979,6 +6040,7 @@ async function loadSession() {
     await loadBanStatus();
     await loadWarnings();
     await loadMessages();
+    if (!document.querySelector('[data-view="notifications"]')?.hidden) await loadNotifications();
     await loadSocial();
     await loadPreferences();
     await loadAccountExtras();
