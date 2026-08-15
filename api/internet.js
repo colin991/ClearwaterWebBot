@@ -3,6 +3,7 @@ import { avatarUrl, getAuthConfig, isSameSiteRequest, parseCookies, readSessionT
 import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, redactStaffPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 import { allowRate } from '../utils/rateLimit.js';
+import { rejectVpnJson } from '../lib/vpn-guard.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
 const INTERNET_VERSION = '20260815-perf';
@@ -261,6 +262,7 @@ export default async function handler(request, response) {
     if (request.method === 'GET') {
       const url = new URL(request.url, `https://${request.headers.host || 'cwrpvc.lol'}`);
       if (url.searchParams.get('t')) return serveProxiedMedia(request, response);
+      if (await rejectVpnJson(request, response)) return;
       if (url.searchParams.get('reel')) {
         const { sessionSecret } = getAuthConfig();
         const viewer = readSessionToken(sessionCookieValue(parseCookies(request.headers.cookie)), sessionSecret);
@@ -311,6 +313,7 @@ export default async function handler(request, response) {
         return sendJson(response, 400, { error: 'Invalid upload callback' });
       }
     }
+    if (await rejectVpnJson(request, response)) return;
     if (request.method === 'POST' && !isSameSiteRequest(request)) {
       return sendJson(response, 403, { error: 'Invalid request origin' });
     }

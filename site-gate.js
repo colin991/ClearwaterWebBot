@@ -23,6 +23,11 @@
   fetch('/api/auth/me', { credentials: 'same-origin' })
     .then((response) => (response.ok ? response.json() : null))
     .then((session) => {
+      if (session?.vpnBlocked === true) {
+        const next = encodeURIComponent(`${path}${location.search || ''}`);
+        location.replace(`/signin?error=vpn&next=${next}`);
+        return;
+      }
       if (session?.authenticated === true && session?.siteAccess === true) {
         unlock();
         return;

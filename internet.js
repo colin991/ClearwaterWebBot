@@ -764,8 +764,13 @@ async function readApiJson(response, fallbackMessage) {
   const contentType = response.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) throw new Error(fallbackMessage);
   try {
-    return await response.json();
-  } catch {
+    const payload = await response.json();
+    if (payload?.code === 'VPN_BLOCKED' || /vpns? and proxies are not allowed/i.test(String(payload?.error || ''))) {
+      throw new Error(payload.error || 'VPNs and proxies are not allowed on Clearwater.');
+    }
+    return payload;
+  } catch (error) {
+    if (error instanceof Error && /vpns? and proxies/i.test(error.message)) throw error;
     throw new Error(fallbackMessage);
   }
 }
@@ -6498,6 +6503,11 @@ async function loadPosts() {
 async function loadSession() {
   const response = await fetch('/api/auth/me', { credentials: 'same-origin' });
   const session = await readApiJson(response, 'Discord sign-in is temporarily unavailable.');
+  if (session.vpnBlocked === true) {
+    const next = encodeURIComponent(`${location.pathname}${location.search || ''}`);
+    location.replace(`/signin?error=vpn&next=${next}`);
+    return false;
+  }
   if (!session.authenticated || !session.user) {
     document.body.classList.remove('internet-signed-in');
     if (login) login.hidden = false;

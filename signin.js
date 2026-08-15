@@ -13,7 +13,7 @@ function safeNextPath(value = '') {
   if (path === '/server-management.html') return '/server-management';
   if (path === '/' || path === '/internet' || path === '/owner' || path === '/server-management' || path === '/departments' || path === '/phone-signed-in') return path;
   if (/^\/internet\/(post|member|sponsored)\/[A-Za-z0-9._-]{1,120}$/.test(path)) return path;
-  if (/^\/internet\/(messages|notifications|settings|profile|wallet|staff|sponsored|bookmarks)$/.test(path)) return path;
+  if (/^\/internet\/(messages|notifications|settings|profile|wallet|staff|sponsored|bookmarks|government)$/.test(path)) return path;
   if (/^\/profiles\/[A-Za-z0-9._-]{1,32}$/.test(path)) return path;
   return '';
 }
@@ -23,6 +23,11 @@ const destination = safeNextPath(params.get('next') || '');
 
 if (params.get('error') === 'membership' && errorNote) {
   errorNote.hidden = false;
+  errorNote.textContent = 'You must be a member of the Clearwater Roleplay Discord server to sign in.';
+}
+if (params.get('error') === 'vpn' && errorNote) {
+  errorNote.hidden = false;
+  errorNote.textContent = 'VPNs and proxies are not allowed. Turn off your VPN, then sign in again.';
 }
 
 function syncSubmitState() {

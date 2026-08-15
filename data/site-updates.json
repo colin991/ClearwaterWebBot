@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-vpn-block",
+      "title": "VPNs and proxies are blocked",
+      "summary": "Clearwater sign-in and Internet now reject VPN and proxy connections. Turn the VPN off, then try again. Detection is cached server-side so open tabs do not spam lookup services.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T21:25:00.000Z"
+    },
+    {
       "id": "2026-08-15-government-fines",
       "title": "Government tab and credit fines",
       "summary": "A Government tab sits under Settings for the government Discord role. Members can request Clearwater Credit fines, reviewers can approve or deny them, unpaid balances go into debt until later credits pay them down, and actions log to the government Discord channel. Update log posts now include a timestamp.",
