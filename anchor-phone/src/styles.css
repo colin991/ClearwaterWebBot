@@ -2,8 +2,8 @@
   --ink: #03070d;
   --text: #f3f6fb;
   --muted: #93a2b8;
-  --cyan: #38d9b0;
-  --cyan-deep: #0e8f72;
+  --accent: #76adff;
+  --accent-deep: #3a6fd4;
   --blue: #76adff;
   --surface: rgba(8, 16, 27, 0.92);
   --line: rgba(255, 255, 255, 0.1);
@@ -149,7 +149,7 @@ button {
   content: "";
   position: absolute;
   inset: 1.5px 5px 1.5px 1.5px;
-  background: var(--cyan);
+  background: var(--accent);
   border-radius: 1px;
 }
 
@@ -201,10 +201,10 @@ button {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 90% 55% at 50% 108%, rgba(14, 143, 114, 0.55), transparent 55%),
-    radial-gradient(ellipse 70% 40% at 80% 20%, rgba(118, 173, 255, 0.18), transparent 50%),
-    radial-gradient(ellipse 50% 35% at 15% 30%, rgba(56, 217, 176, 0.12), transparent 45%),
-    linear-gradient(180deg, #06131c 0%, #0a1a24 40%, #05141c 100%);
+    radial-gradient(ellipse 90% 55% at 50% 108%, rgba(58, 111, 212, 0.45), transparent 55%),
+    radial-gradient(ellipse 70% 40% at 80% 20%, rgba(118, 173, 255, 0.22), transparent 50%),
+    radial-gradient(ellipse 50% 35% at 15% 30%, rgba(244, 248, 255, 0.06), transparent 45%),
+    linear-gradient(180deg, #060b14 0%, #0a1528 40%, #03070d 100%);
 }
 
 .wp-horizon {
@@ -216,8 +216,8 @@ button {
   background: linear-gradient(
     180deg,
     transparent 0%,
-    rgba(56, 217, 176, 0.08) 35%,
-    rgba(8, 40, 48, 0.7) 70%,
+    rgba(118, 173, 255, 0.08) 35%,
+    rgba(8, 16, 36, 0.75) 70%,
     #03070d 100%
   );
   clip-path: polygon(0 45%, 18% 38%, 35% 48%, 52% 32%, 70% 44%, 88% 28%, 100% 40%, 100% 100%, 0 100%);
@@ -236,7 +236,7 @@ button {
   height: 180px;
   left: -40px;
   top: 20%;
-  background: rgba(56, 217, 176, 0.22);
+  background: rgba(118, 173, 255, 0.22);
 }
 
 .wp-glow-b {
@@ -308,7 +308,7 @@ button {
   font-weight: 850;
   letter-spacing: -0.03em;
   line-height: 1;
-  background: linear-gradient(135deg, #f3f6fb 20%, #38d9b0 90%);
+  background: linear-gradient(135deg, #f3f6fb 20%, #76adff 90%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -486,10 +486,10 @@ button {
   border-radius: 10px;
   font-size: 28px;
   line-height: 1;
-  color: var(--cyan);
+  color: var(--accent);
   display: grid;
   place-items: center;
-  background: rgba(56, 217, 176, 0.08);
+  background: rgba(118, 173, 255, 0.08);
 }
 
 .chrome-spacer,
@@ -503,8 +503,8 @@ button {
 .chrome-action {
   border-radius: 10px;
   font-size: 18px;
-  color: var(--cyan);
-  background: rgba(56, 217, 176, 0.08);
+  color: var(--accent);
+  background: rgba(118, 173, 255, 0.08);
 }
 
 .app-body {
@@ -526,9 +526,9 @@ button {
   padding: 20px 18px;
   border-radius: var(--radius);
   background:
-    radial-gradient(ellipse at 90% 0%, rgba(56, 217, 176, 0.25), transparent 55%),
+    radial-gradient(ellipse at 90% 0%, rgba(118, 173, 255, 0.25), transparent 55%),
     linear-gradient(145deg, #0c1a24, #081018);
-  border: 1px solid rgba(56, 217, 176, 0.22);
+  border: 1px solid rgba(118, 173, 255, 0.22);
   margin-bottom: 14px;
 }
 
@@ -547,7 +547,7 @@ button {
 
 .balance-note {
   font-size: 11px;
-  color: var(--cyan);
+  color: var(--accent);
   opacity: 0.85;
 }
 
@@ -574,9 +574,9 @@ button {
 
 .pill-action:hover,
 .pill-action.is-active {
-  background: rgba(56, 217, 176, 0.15);
-  border-color: rgba(56, 217, 176, 0.35);
-  color: var(--cyan);
+  background: rgba(118, 173, 255, 0.15);
+  border-color: rgba(118, 173, 255, 0.35);
+  color: var(--accent);
 }
 
 .panel {
@@ -614,17 +614,22 @@ button {
 
 .field input:focus,
 .field textarea:focus {
-  border-color: rgba(56, 217, 176, 0.45);
+  border-color: rgba(118, 173, 255, 0.45);
 }
 
 .btn-primary {
   width: 100%;
   padding: 12px;
-  border-radius: 12px;
-  font-weight: 700;
-  background: linear-gradient(135deg, #38d9b0, #0e8f72);
-  color: var(--ink);
+  border-radius: 999px;
+  font-weight: 850;
+  background: #f4f8ff;
+  color: #081018;
+  border: 1px solid rgba(255, 255, 255, 0.16);
   margin-top: 4px;
+}
+
+.btn-primary:hover {
+  background: #fff;
 }
 
 .btn-primary:active {
@@ -636,14 +641,14 @@ button {
   border-radius: 10px;
   font-size: 12px;
   font-weight: 650;
-  color: var(--cyan);
-  border: 1px solid rgba(56, 217, 176, 0.3);
-  background: rgba(56, 217, 176, 0.08);
+  color: var(--accent);
+  border: 1px solid rgba(118, 173, 255, 0.3);
+  background: rgba(118, 173, 255, 0.08);
 }
 
 .form-status {
   font-size: 12px;
-  color: var(--cyan);
+  color: var(--accent);
   text-align: center;
 }
 
@@ -688,7 +693,7 @@ button {
 }
 
 .txn-list .amt.in {
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .txn-list .amt.out {
@@ -714,7 +719,7 @@ button {
   place-items: center;
   font-size: 13px;
   font-weight: 750;
-  background: linear-gradient(135deg, #1a3a44, #0e8f72);
+  background: linear-gradient(135deg, #1a2a44, #3a6fd4);
   flex-shrink: 0;
 }
 
@@ -743,7 +748,7 @@ button {
 }
 
 .toggle.is-on {
-  background: var(--cyan);
+  background: var(--accent);
 }
 
 .toggle.is-on::after {
@@ -800,7 +805,7 @@ button {
   margin-bottom: 14px;
   border: 1px solid var(--line);
   background:
-    radial-gradient(circle at 50% 50%, rgba(56, 217, 176, 0.12), transparent 55%),
+    radial-gradient(circle at 50% 50%, rgba(118, 173, 255, 0.12), transparent 55%),
     linear-gradient(180deg, #0a1820, #061018);
 }
 
@@ -811,7 +816,7 @@ button {
   width: 40px;
   height: 40px;
   margin: -20px 0 0 -20px;
-  border: 2px solid rgba(56, 217, 176, 0.45);
+  border: 2px solid rgba(118, 173, 255, 0.45);
   border-radius: 50%;
   animation: radar 2.8s ease-out infinite;
 }
@@ -838,8 +843,8 @@ button {
   padding: 4px 8px;
   border-radius: 8px;
   background: rgba(3, 7, 13, 0.85);
-  border: 1px solid rgba(56, 217, 176, 0.4);
-  color: var(--cyan);
+  border: 1px solid rgba(118, 173, 255, 0.4);
+  color: var(--accent);
   transform: translate(-50%, -50%);
 }
 
@@ -891,12 +896,12 @@ button {
 .route-status {
   margin-top: 10px;
   font-size: 13px;
-  color: var(--cyan);
+  color: var(--accent);
   text-align: center;
 }
 
 .mail-unread .item-title {
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .composer {
