@@ -36,6 +36,7 @@ const GROUPS = [
       `\`-roles\` / \`-members\` / \`-mutes\` / \`-modstats\` / \`-inviteinfo\` / \`-id\` / \`-diagnose\` / \`${PREFIX}help\` — **${RANK_FLOOR.anyStaff}+**`,
       `\`-nick\` — Nickname · **${RANK_FLOOR.administrator}+**`,
       `\`-bans\` — Timed ban cases · **${RANK_FLOOR.supervisor}+**`,
+      '`-say <text>` — Join your voice channel and speak the text.',
     ],
   },
 ];
