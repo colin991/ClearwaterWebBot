@@ -4,7 +4,6 @@
   const WEB = {
     wallet: '/internet/wallet',
     marketplace: '/internet/marketplace',
-    mail: '/internet/mail',
     messages: '/internet/messages',
     findmy: '/internet',
     maps: '/internet',
@@ -461,86 +460,6 @@
     });
   }
 
-  let mails = store.load('mails', [
-    {
-      from: 'Marketplace Receipts',
-      subject: 'Receipt · Performance tune',
-      preview: 'You paid C$1,800 to Gulf Coast Customs.',
-      unread: true,
-      when: '2m'
-    },
-    {
-      from: 'Clearwater Panel',
-      subject: 'Wallet request paid',
-      preview: 'Maya sent you C$500.',
-      unread: true,
-      when: '1h'
-    },
-    {
-      from: 'Clearwater Dispatch',
-      subject: 'Weekly briefing',
-      preview: 'Shift notes for civilian businesses…',
-      unread: false,
-      when: 'Mon'
-    }
-  ]);
-
-  function renderMail() {
-    const list = $('#mail-list');
-    if (!list) return;
-    list.innerHTML = mails
-      .map(
-        (m, i) => `<li class="${m.unread ? 'mail-unread' : ''}" data-mail="${i}">
-        <div class="avatar">✉</div>
-        <div style="flex:1;min-width:0">
-          <p class="item-title">${escapeHtml(m.subject)}</p>
-          <p class="item-sub">${escapeHtml(m.from)} · ${escapeHtml(m.preview)}</p>
-        </div>
-        <span class="item-sub">${escapeHtml(m.when)}</span>
-      </li>`
-      )
-      .join('');
-    $$('[data-mail]').forEach((li) => {
-      li.addEventListener('click', () => {
-        const i = Number(li.dataset.mail);
-        mails[i].unread = false;
-        store.save('mails', mails);
-        window.alert(`${mails[i].subject}\n\nFrom: ${mails[i].from}\n\n${mails[i].preview}`);
-        renderMail();
-      });
-    });
-  }
-
-  $('#compose-mail')?.addEventListener('click', () => {
-    $('#mail-sheet').hidden = false;
-  });
-
-  $$('[data-close-sheet]').forEach((b) =>
-    b.addEventListener('click', () => {
-      $('#mail-sheet').hidden = true;
-    })
-  );
-
-  $('#mail-send')?.addEventListener('click', () => {
-    const to = $('#mail-to').value.trim();
-    const subject = $('#mail-subject').value.trim() || '(No subject)';
-    const body = $('#mail-body').value.trim();
-    if (!to) return;
-    mails.unshift({
-      from: 'Me',
-      subject: `To ${to}: ${subject}`,
-      preview: body || 'Sent via Clearwater Mail',
-      unread: false,
-      when: 'Now'
-    });
-    store.save('mails', mails);
-    $('#mail-to').value = '';
-    $('#mail-subject').value = '';
-    $('#mail-body').value = '';
-    $('#mail-sheet').hidden = true;
-    renderMail();
-  });
-
   let threads = store.load('threads', [
     { name: 'Alex Rivera', last: 'On my way to the pier.', when: 'now' },
     { name: 'Marketplace Bot', last: 'Order #482 confirmed.', when: '12m' },
@@ -638,7 +557,6 @@
   renderWallet();
   renderMarket();
   renderFindMy();
-  renderMail();
   renderThreads();
 
   window.openWeb = openWeb;

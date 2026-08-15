@@ -11,7 +11,7 @@ The public homepage and Discord bot for Clearwater Roleplay.
 - `commands/` — slash commands
 - `events/` — Discord event handlers
 - `utils/` — command loading and the protected website status connection
-- `anchor-phone/` — Clearwater Phone desktop overlay (Electron) for in-game Wallet, Marketplace, Find My, Mail, Messages, and Maps — see `anchor-phone/README.md`
+- `anchor-phone/` — Clearwater Phone desktop overlay (Electron) for in-game Wallet, Marketplace, Find My, Messages, and Maps — see `anchor-phone/README.md`
 
 Updates pushed to the production branch are deployed automatically by Vercel.
 

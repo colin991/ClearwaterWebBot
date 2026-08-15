@@ -9,7 +9,6 @@ Floating **Clearwater** phone overlay for ER:LC on desktop. Always-on-top, frame
 | **Wallet** | Send, receive, and request economy money from panel members |
 | **Marketplace** | Storefront, products, employees, and payouts |
 | **Find My** | Share in-game location with trusted contacts (per-person toggle) |
-| **Mail** | Clearwater Mail — compose/receive; marketplace receipts |
 | **Messages** | Message contacts and friends |
 | **Maps** | Fastest route to a Clearwater destination |
 

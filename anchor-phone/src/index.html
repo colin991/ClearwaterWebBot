@@ -96,18 +96,6 @@
                 <span class="app-label">Find My</span>
               </button>
 
-              <button type="button" class="app-tile" data-open="mail" role="listitem">
-                <span class="app-icon icon-mail" aria-hidden="true">
-                  <svg viewBox="0 0 64 64" fill="none">
-                    <rect width="64" height="64" rx="16" fill="url(#gma)"/>
-                    <rect x="11" y="18" width="42" height="28" rx="6" fill="#fff"/>
-                    <path d="M13 22l19 14 19-14" stroke="#1d4ed8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-                    <defs><linearGradient id="gma" x1="10" y1="6" x2="54" y2="58"><stop stop-color="#60a5fa"/><stop offset="1" stop-color="#2563eb"/></linearGradient></defs>
-                  </svg>
-                </span>
-                <span class="app-label">Mail</span>
-              </button>
-
               <button type="button" class="app-tile" data-open="messages" role="listitem">
                 <span class="app-icon icon-messages" aria-hidden="true">
                   <svg viewBox="0 0 64 64" fill="none">
@@ -161,9 +149,6 @@
               <div class="dock-glass" aria-hidden="true"></div>
               <button type="button" class="dock-btn" data-open="messages" aria-label="Messages">
                 <svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="url(#dms)"/><path d="M14 20c0-4 3.2-7 7-7h22c3.8 0 7 3 7 7v16c0 4-3.2 7-7 7H30l-9 9v-9h0c-3.8 0-7-3-7-7V20z" fill="#fff"/><defs><linearGradient id="dms" x1="10" y1="6" x2="54" y2="58"><stop stop-color="#2dd4bf"/><stop offset="1" stop-color="#0d9488"/></linearGradient></defs></svg>
-              </button>
-              <button type="button" class="dock-btn" data-open="mail" aria-label="Mail">
-                <svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="url(#dma)"/><rect x="11" y="18" width="42" height="28" rx="6" fill="#fff"/><path d="M13 22l19 14 19-14" stroke="#1d4ed8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="dma" x1="10" y1="6" x2="54" y2="58"><stop stop-color="#60a5fa"/><stop offset="1" stop-color="#2563eb"/></linearGradient></defs></svg>
               </button>
               <button type="button" class="dock-btn" data-open="wallet" aria-label="Wallet">
                 <svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="url(#dw)"/><rect x="12" y="18" width="40" height="30" rx="7" fill="#fff" fill-opacity=".92"/><rect x="34" y="34" width="14" height="9" rx="3" fill="#0b2e22"/><defs><linearGradient id="dw" x1="8" y1="4" x2="56" y2="60"><stop stop-color="#34d399"/><stop offset="1" stop-color="#059669"/></linearGradient></defs></svg>
@@ -276,26 +261,6 @@
               </div>
               <h2 class="section-title">Trusted contacts</h2>
               <ul class="ios-list people-list" id="findmy-list"></ul>
-            </div>
-          </section>
-
-          <!-- MAIL -->
-          <section class="view view-app" id="view-mail" data-view="mail" hidden>
-            <div class="app-chrome">
-              <button type="button" class="back-btn" data-home aria-label="Home">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-              <h1>Mail</h1>
-              <div class="chrome-actions">
-                <button type="button" class="chrome-action" id="compose-mail" aria-label="Compose">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 17.5V20h2.5L18 8.5 15.5 6 4 17.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M13.8 6.8l2.4 2.4" stroke="currentColor" stroke-width="1.8"/></svg>
-                </button>
-                <button type="button" class="open-web" data-web="mail">Open on Internet</button>
-              </div>
-            </div>
-            <div class="app-body">
-              <p class="app-lede">Compose &amp; receive emails with Clearwater Mail. Purchased from Marketplace? Get a documented receipt instantly.</p>
-              <ul class="ios-list mail-list" id="mail-list"></ul>
             </div>
           </section>
 
@@ -412,21 +377,6 @@
               <button type="button" class="btn-primary" id="settings-update-now" hidden>Update now</button>
             </div>
           </section>
-
-          <!-- COMPOSE MAIL MODAL -->
-          <div class="sheet" id="mail-sheet" hidden>
-            <div class="sheet-panel">
-              <div class="sheet-handle" aria-hidden="true"></div>
-              <h2>New message</h2>
-              <label class="field"><span>To</span><input type="text" id="mail-to" placeholder="name@clearwater.cw" /></label>
-              <label class="field"><span>Subject</span><input type="text" id="mail-subject" placeholder="Subject" /></label>
-              <label class="field"><span>Body</span><textarea id="mail-body" rows="4" placeholder="Write your email…"></textarea></label>
-              <div class="sheet-actions">
-                <button type="button" class="btn-ghost" data-close-sheet>Cancel</button>
-                <button type="button" class="btn-primary" id="mail-send">Send</button>
-              </div>
-            </div>
-          </div>
 
           <div class="home-indicator" aria-hidden="true"></div>
         </div>

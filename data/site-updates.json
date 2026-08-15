@@ -272,6 +272,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:30:00.000Z",
       "commit": "1680994"
+    },
+    {
+      "id": "2026-08-15-remove-mail",
+      "title": "Mail removed",
+      "summary": "Removed Mail from Clearwater Internet and Clearwater Phone. Marketplace and Messages remain.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T18:40:00.000Z",
+      "commit": "pending"
     }
   ]
 }
