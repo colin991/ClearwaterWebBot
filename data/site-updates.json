@@ -88,6 +88,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T03:07:48.000Z",
       "commit": "f8ea4f1"
+    },
+    {
+      "id": "2026-08-15-vc-action-logs",
+      "title": "VC action logging",
+      "summary": "Ownership VC commands (`/say`, `/holdvc`, `/unholdvc`) now post who used them and what happened to Discord channel 1538021552120135731.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T03:09:30.000Z",
+      "commit": "169c35d"
     }
   ]
 }

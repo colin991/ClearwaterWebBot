@@ -9,6 +9,7 @@ import {
   HOLD_VC_PHRASE,
   holdVoiceChat,
 } from '../utils/holdVoiceChat.js';
+import { logVcAction } from '../utils/vcActionLog.js';
 
 export default {
   data: new SlashCommandBuilder()
@@ -26,6 +27,21 @@ export default {
 
     const channel = interaction.options.getChannel('channel', false);
     const result = await holdVoiceChat(interaction, interaction.client.config, channel);
+
+    await logVcAction(interaction.client, interaction.client.config, {
+      title: '/holdvc used',
+      actor: interaction.user,
+      voiceChannel: result.voiceChannel,
+      color: 0xf0a84b,
+      details: [
+        { name: 'Announcement', value: `“${HOLD_VC_PHRASE}”` },
+        {
+          name: 'Muted',
+          value: `${result.mutedNow} member${result.mutedNow === 1 ? '' : 's'} (Ownership skipped)`,
+          inline: true,
+        },
+      ],
+    });
 
     await interaction.editReply({
       embeds: [

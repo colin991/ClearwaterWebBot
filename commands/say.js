@@ -6,6 +6,7 @@ import {
 } from 'discord.js';
 import { requireOwnership } from '../utils/prefixHelpers.js';
 import { getActiveHold } from '../utils/holdVoiceChat.js';
+import { logVcAction } from '../utils/vcActionLog.js';
 import { SAY_MAX_CHARS, sayInVoiceChannel } from '../utils/vcSpeak.js';
 
 export default {
@@ -36,6 +37,20 @@ export default {
     const result = await sayInVoiceChannel(interaction, text, {
       explicitChannel: channel,
       leaveAfter,
+    });
+
+    await logVcAction(interaction.client, interaction.client.config, {
+      title: '/say used',
+      actor: interaction.user,
+      voiceChannel: result.voiceChannel,
+      details: [
+        { name: 'Said', value: `“${result.text}”` },
+        {
+          name: 'After',
+          value: result.leftAfter ? 'Left the voice channel' : 'Stayed (hold VC active)',
+          inline: true,
+        },
+      ],
     });
 
     await interaction.editReply({

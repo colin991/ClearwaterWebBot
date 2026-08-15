@@ -1,6 +1,7 @@
 import { EmbedBuilder, MessageFlags, SlashCommandBuilder } from 'discord.js';
 import { requireOwnership } from '../utils/prefixHelpers.js';
 import { releaseVoiceChat } from '../utils/holdVoiceChat.js';
+import { logVcAction } from '../utils/vcActionLog.js';
 
 export default {
   data: new SlashCommandBuilder()
@@ -12,6 +13,20 @@ export default {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const result = await releaseVoiceChat(interaction);
+
+    await logVcAction(interaction.client, interaction.client.config, {
+      title: '/unholdvc used',
+      actor: interaction.user,
+      voiceChannel: result.voiceChannel,
+      color: 0x38d9b0,
+      details: [
+        {
+          name: 'Unmuted',
+          value: `${result.unmuted} member${result.unmuted === 1 ? '' : 's'}`,
+          inline: true,
+        },
+      ],
+    });
 
     await interaction.editReply({
       embeds: [
