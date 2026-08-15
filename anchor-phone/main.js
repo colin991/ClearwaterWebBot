@@ -1,10 +1,15 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, screen, shell } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const https = require('https');
+const http = require('http');
+const { spawn } = require('child_process');
 
 let win = null;
 let visible = true;
 
 const ALLOWED_HOSTS = new Set(['cwrpvc.lol', 'www.cwrpvc.lol', 'localhost', '127.0.0.1']);
+const pkg = require('./package.json');
 
 function createWindow() {
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
@@ -54,6 +59,38 @@ function toggleOverlay() {
   }
 }
 
+function downloadFile(url, dest, onProgress) {
+  return new Promise((resolve, reject) => {
+    const client = url.startsWith('https') ? https : http;
+    const req = client.get(url, { headers: { 'User-Agent': 'ClearwaterPhone/' + pkg.version } }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        downloadFile(res.headers.location, dest, onProgress).then(resolve).catch(reject);
+        return;
+      }
+      if (res.statusCode !== 200) {
+        reject(new Error('Download failed (HTTP ' + res.statusCode + ')'));
+        res.resume();
+        return;
+      }
+      const total = Number(res.headers['content-length'] || 0);
+      let received = 0;
+      const file = fs.createWriteStream(dest);
+      res.on('data', (chunk) => {
+        received += chunk.length;
+        if (total && onProgress) onProgress(received / total);
+      });
+      res.pipe(file);
+      file.on('finish', () => file.close(() => resolve(dest)));
+      file.on('error', reject);
+    });
+    req.on('error', reject);
+    req.setTimeout(10 * 60 * 1000, () => {
+      req.destroy(new Error('Download timed out'));
+    });
+  });
+}
+
 app.whenReady().then(() => {
   createWindow();
 
@@ -86,6 +123,52 @@ app.whenReady().then(() => {
       return true;
     } catch {
       return false;
+    }
+  });
+
+  ipcMain.handle('phone-get-version', () => ({
+    version: pkg.version,
+    name: pkg.productName || pkg.name
+  }));
+
+  ipcMain.handle('phone-install-update', async (event, href) => {
+    try {
+      const url = new URL(String(href || ''));
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+        return { ok: false, error: 'Invalid update URL' };
+      }
+      if (!ALLOWED_HOSTS.has(url.hostname)) {
+        return { ok: false, error: 'Update host not allowed' };
+      }
+
+      const dest = path.join(app.getPath('downloads'), 'ClearwaterPhone.exe');
+      const partial = dest + '.part';
+      try {
+        fs.unlinkSync(partial);
+      } catch {}
+
+      await downloadFile(url.toString(), partial, (ratio) => {
+        if (event.sender && !event.sender.isDestroyed()) {
+          event.sender.send('phone-update-progress', Math.round(ratio * 100));
+        }
+      });
+
+      try {
+        fs.unlinkSync(dest);
+      } catch {}
+      fs.renameSync(partial, dest);
+
+      const child = spawn(dest, [], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: false
+      });
+      child.unref();
+
+      setTimeout(() => app.quit(), 600);
+      return { ok: true, path: dest };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message ? err.message : err) };
     }
   });
 

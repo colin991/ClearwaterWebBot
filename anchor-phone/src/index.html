@@ -135,7 +135,27 @@
                 </span>
                 <span class="app-label">Maps</span>
               </button>
+
+              <button type="button" class="app-tile" data-open="settings" role="listitem">
+                <span class="app-icon icon-settings" aria-hidden="true">
+                  <svg viewBox="0 0 64 64" fill="none">
+                    <rect width="64" height="64" rx="16" fill="url(#gs)"/>
+                    <circle cx="32" cy="32" r="8" stroke="#fff" stroke-width="3.2"/>
+                    <path d="M32 14v6M32 44v6M14 32h6M44 32h6M19.5 19.5l4.2 4.2M40.3 40.3l4.2 4.2M44.5 19.5l-4.2 4.2M23.7 40.3l-4.2 4.2" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+                    <defs><linearGradient id="gs" x1="8" y1="6" x2="56" y2="58"><stop stop-color="#94a3b8"/><stop offset="1" stop-color="#475569"/></linearGradient></defs>
+                  </svg>
+                </span>
+                <span class="app-label">Settings</span>
+              </button>
             </div>
+
+            <aside class="update-banner" id="update-banner" hidden>
+              <div>
+                <p class="update-kicker">Update available</p>
+                <p class="update-copy" id="update-copy">Outdated version</p>
+              </div>
+              <button type="button" class="update-btn" id="update-now">Update</button>
+            </aside>
 
             <div class="dock" aria-label="Quick apps">
               <div class="dock-glass" aria-hidden="true"></div>
@@ -338,6 +358,58 @@
               </label>
               <button type="button" class="btn-primary" id="maps-go">Start route</button>
               <p class="route-status" id="route-status" hidden></p>
+            </div>
+          </section>
+
+          <!-- SETTINGS -->
+          <section class="view view-app" id="view-settings" data-view="settings" hidden>
+            <div class="app-chrome">
+              <button type="button" class="back-btn" data-home aria-label="Home">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <h1>Settings</h1>
+              <span class="chrome-spacer"></span>
+            </div>
+            <div class="app-body">
+              <p class="app-lede">Control how Clearwater Phone opens apps and stays up to date.</p>
+
+              <h2 class="section-title">Apps</h2>
+              <ul class="ios-list settings-list">
+                <li class="settings-row">
+                  <div>
+                    <p class="item-title">Open apps on Internet</p>
+                    <p class="item-sub">Home icons open Clearwater Internet instead of in-phone screens</p>
+                  </div>
+                  <button type="button" class="toggle" id="setting-open-web" aria-label="Open apps on Internet"></button>
+                </li>
+                <li class="settings-row">
+                  <div>
+                    <p class="item-title">Show Open on Internet</p>
+                    <p class="item-sub">Keep the Open on Internet button in each app</p>
+                  </div>
+                  <button type="button" class="toggle is-on" id="setting-show-web-btn" aria-label="Show Open on Internet buttons"></button>
+                </li>
+              </ul>
+
+              <h2 class="section-title">Updates</h2>
+              <ul class="ios-list settings-list">
+                <li class="settings-row">
+                  <div>
+                    <p class="item-title">Auto-update</p>
+                    <p class="item-sub">Download and install new versions automatically</p>
+                  </div>
+                  <button type="button" class="toggle is-on" id="setting-auto-update" aria-label="Auto-update"></button>
+                </li>
+                <li class="settings-row settings-version">
+                  <div>
+                    <p class="item-title">Version</p>
+                    <p class="item-sub" id="settings-version-label">Checking…</p>
+                  </div>
+                  <button type="button" class="btn-ghost" id="settings-check-update">Check</button>
+                </li>
+              </ul>
+              <p class="form-status" id="settings-update-status" hidden></p>
+              <button type="button" class="btn-primary" id="settings-update-now" hidden>Update now</button>
             </div>
           </section>
 

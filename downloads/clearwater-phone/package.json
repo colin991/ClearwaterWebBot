@@ -1,11 +1,39 @@
 {
-  "name": "clearwater-phone",
-  "description": "Clearwater Phone overlay",
+  "name": "anchor-phone",
+  "version": "1.1.0",
+  "private": true,
+  "author": "Clearwater Roleplay",
+  "description": "Clearwater Phone — in-game overlay for ER:LC",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win portable --x64 -c.win.signAndEditExecutable=false"
+  },
+  "build": {
+    "appId": "com.clearwater.phone",
+    "productName": "Clearwater Phone",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "ClearwaterPhone.exe"
+    }
   },
   "devDependencies": {
-    "electron": "^33.2.0"
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
   }
 }

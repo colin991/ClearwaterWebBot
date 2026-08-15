@@ -5,6 +5,11 @@ contextBridge.exposeInMainWorld('anchorPhone', {
   close: () => ipcRenderer.send('phone-close'),
   drag: (dx, dy) => ipcRenderer.send('phone-drag', { dx, dy }),
   openUrl: (href) => ipcRenderer.invoke('phone-open-url', href),
+  getVersion: () => ipcRenderer.invoke('phone-get-version'),
+  installUpdate: (href) => ipcRenderer.invoke('phone-install-update', href),
+  onUpdateProgress: (cb) => {
+    ipcRenderer.on('phone-update-progress', (_e, pct) => cb(pct));
+  },
   onVisibility: (cb) => {
     ipcRenderer.on('overlay-visibility', (_e, v) => cb(v));
   }
