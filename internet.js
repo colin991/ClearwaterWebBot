@@ -1010,7 +1010,7 @@ function postMarkup(post, profile = false) {
     : '';
   const boostChip = display.boostActive ? '<span class="post-boost-chip">Tipped</span>' : '';
   const media = postMediaMarkup(display, displayName, display.kind === 'reel' ? { reelOpenId: display.id } : undefined);
-  return `<article class="post" data-post-card="${escapeHtml(display.id)}">${repostLabel}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(display.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || { ...display, id: display.authorId })}${boostChip}${display.kind === 'reel' ? '<span class="post-reel-tag">Reel</span>' : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(display.createdAt)}${display.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? `<span class="post-rank"> &middot; ${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(display)}</div>${display.content ? `<p class="post-content">${body}</p>` : ''}${quoteMarkup}${media}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(display.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options" class="${alreadyReposted ? 'reposted' : ''}">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(display.id)}">${alreadyReposted ? 'Undo repost' : 'Repost'}</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(display.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(display.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-engage="bookmark" data-post-id="${escapeHtml(display.id)}" class="${bookmarked ? 'bookmarked' : ''}" aria-label="${bookmarked ? 'Remove bookmark' : 'Bookmark'}" aria-pressed="${bookmarked ? 'true' : 'false'}">${postActionIcon('bookmark', bookmarked)}</button><button type="button" data-engage="share" data-post-id="${escapeHtml(display.id)}">${postActionIcon('share')}</button></div></article>`;
+  return `<article class="post" data-post-card="${escapeHtml(display.id)}">${repostLabel}<div class="post-layout"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div class="post-main"><div class="post-top"><button class="post-author" type="button" data-open-member="${escapeHtml(display.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || { ...display, id: display.authorId })}${boostChip}${display.kind === 'reel' ? '<span class="post-reel-tag">Reel</span>' : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(display.createdAt)}${display.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? `<span class="post-rank"> &middot; ${escapeHtml(staffRank)}</span>` : ''}</span></button>${postMenu(display)}</div>${display.content ? `<p class="post-content">${body}</p>` : ''}${quoteMarkup}${media}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(display.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options" class="${alreadyReposted ? 'reposted' : ''}">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(display.id)}">${alreadyReposted ? 'Undo repost' : 'Repost'}</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(display.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(display.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-engage="bookmark" data-post-id="${escapeHtml(display.id)}" class="${bookmarked ? 'bookmarked' : ''}" aria-label="${bookmarked ? 'Remove bookmark' : 'Bookmark'}" aria-pressed="${bookmarked ? 'true' : 'false'}">${postActionIcon('bookmark', bookmarked)}</button><button type="button" data-engage="share" data-post-id="${escapeHtml(display.id)}">${postActionIcon('share')}</button></div></div></div></article>`;
 }
 
 function safeGifUrl(value) {
@@ -4290,21 +4290,23 @@ function sponsoredFeedMarkup(ad) {
     ? `<video class="sponsored-feed-media" src="${escapeHtml(ad.videoUrl)}" muted loop playsinline autoplay></video>`
     : (safeImageUrl(ad.imageUrl) ? `<img class="sponsored-feed-media" src="${escapeHtml(ad.imageUrl)}" alt="" />` : '');
   return `<article class="post sponsored-feed-card" data-sponsored-feed-id="${escapeHtml(ad.id)}">
-    <div class="post-top">
+    <div class="post-layout">
       <img class="post-avatar" src="${escapeHtml(adBrandLogoUrl(ad))}" alt="" />
-      <div>
-        <div class="post-author sponsored-feed-author">
-          <span class="post-name">${escapeHtml(ad.businessName || 'Clearwater Ads')}</span>
-          <span class="sponsored-pill">Sponsored</span>
+      <div class="post-main">
+        <div class="post-top">
+          <div class="post-author sponsored-feed-author">
+            <span class="post-name">${escapeHtml(ad.businessName || 'Clearwater Ads')}</span>
+            <span class="sponsored-pill">Sponsored</span>
+          </div>
+        </div>
+        ${media}
+        <h3 class="sponsored-feed-title">${escapeHtml(ad.title)}</h3>
+        <p class="post-content">${escapeHtml(ad.body)}</p>
+        <div class="sponsored-feed-actions">
+          <a class="sidebar-ad-promo-btn" href="${escapeHtml(internetUrl('sponsored', ad.id))}" data-open-sponsored="${escapeHtml(ad.id)}">Learn</a>
+          <button type="button" class="sidebar-ad-promo-btn sidebar-ad-promo-btn-secondary" data-open-ad-account data-ad-id="${escapeHtml(ad.id)}" data-ad-advertiser-id="${escapeHtml(ad.advertiserId || '')}" data-ad-advertiser-username="${escapeHtml(ad.advertiserUsername || '')}" data-ad-advertiser-name="${escapeHtml(ad.advertiserName || '')}">Account</button>
         </div>
       </div>
-    </div>
-    ${media}
-    <h3 class="sponsored-feed-title">${escapeHtml(ad.title)}</h3>
-    <p class="post-content">${escapeHtml(ad.body)}</p>
-    <div class="sponsored-feed-actions">
-      <a class="sidebar-ad-promo-btn" href="${escapeHtml(internetUrl('sponsored', ad.id))}" data-open-sponsored="${escapeHtml(ad.id)}">Learn</a>
-      <button type="button" class="sidebar-ad-promo-btn sidebar-ad-promo-btn-secondary" data-open-ad-account data-ad-id="${escapeHtml(ad.id)}" data-ad-advertiser-id="${escapeHtml(ad.advertiserId || '')}" data-ad-advertiser-username="${escapeHtml(ad.advertiserUsername || '')}" data-ad-advertiser-name="${escapeHtml(ad.advertiserName || '')}">Account</button>
     </div>
   </article>`;
 }
