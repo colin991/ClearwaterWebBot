@@ -4573,7 +4573,7 @@ function renderSidebarAds(ads = sidebarAds) {
     <header class="sidebar-ad-promo-brand"><img src="${escapeHtml(adBrandLogoUrl(ad))}" alt="" /><span>${escapeHtml(ad.businessName)}</span><i>Sponsored</i></header>
     ${media}
     <h3>${escapeHtml(ad.title)}</h3>
-    <p>${escapeHtml(ad.body)}</p>
+    ${ad.body ? `<p>${escapeHtml(ad.body)}</p>` : ''}
     <div class="sidebar-ad-promo-actions">
       <a class="sidebar-ad-promo-btn" href="${escapeHtml(internetUrl('sponsored', ad.id))}" data-open-sponsored="${escapeHtml(ad.id)}">Learn</a>
       <button type="button" class="sidebar-ad-promo-btn sidebar-ad-promo-btn-secondary" data-open-ad-account data-ad-id="${escapeHtml(ad.id)}" data-ad-advertiser-id="${escapeHtml(ad.advertiserId || '')}" data-ad-advertiser-username="${escapeHtml(ad.advertiserUsername || '')}" data-ad-advertiser-name="${escapeHtml(ad.advertiserName || '')}">Account</button>
