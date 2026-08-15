@@ -564,10 +564,21 @@ async function downloadFileViaSession(url, dest, onProgress) {
 }
 
 function currentAppExecutable() {
+  const portable = process.env.PORTABLE_EXECUTABLE_FILE;
+  if (portable && fs.existsSync(portable)) return portable;
   try {
     if (app.isPackaged) return process.execPath;
   } catch {}
   return process.execPath;
+}
+
+function isPackagedApp() {
+  try {
+    if (process.env.PORTABLE_EXECUTABLE_FILE) return true;
+    return app.isPackaged === true;
+  } catch {
+    return false;
+  }
 }
 
 function scheduleWindowsReplace(currentExe, updateExe) {

@@ -564,10 +564,21 @@ async function downloadFileViaSession(url, dest, onProgress) {
 }
 
 function currentAppExecutable() {
+  const portable = process.env.PORTABLE_EXECUTABLE_FILE;
+  if (portable && fs.existsSync(portable)) return portable;
   try {
     if (app.isPackaged) return process.execPath;
   } catch {}
   return process.execPath;
+}
+
+function isPackagedApp() {
+  try {
+    if (process.env.PORTABLE_EXECUTABLE_FILE) return true;
+    return app.isPackaged === true;
+  } catch {
+    return false;
+  }
 }
 
 function scheduleWindowsReplace(currentExe, updateExe) {
@@ -639,7 +650,7 @@ async function installPhoneUpdate(event, href) {
         await downloadFile(url.toString(), staged, onProgress);
       }
 
-      if (process.platform === 'win32' && app.isPackaged) {
+      if (process.platform === 'win32' && isPackagedApp()) {
         scheduleWindowsReplace(currentExe, staged);
         setTimeout(() => app.quit(), 500);
         return { ok: true, path: currentExe, mode: 'replace', from: url.toString() };

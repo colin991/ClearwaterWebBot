@@ -3,5 +3,5 @@
   "minVersion": "1.3.3",
   "downloadUrl": "https://cwrpvc.lol/downloads/ClearwaterPhone.exe",
   "downloadUrlMirror": "https://raw.githubusercontent.com/colin991/ClearwaterWebBot/main/downloads/ClearwaterPhone.exe",
-  "releaseNotes": "Fixes in-app updates: safer Windows replace, browser download session, and GitHub mirror if Cloudflare blocks the file."
+  "releaseNotes": "Fixes in-app updates for the portable exe (replaces the real ClearwaterPhone.exe, not a temp copy), uses a browser download session, and falls back if Cloudflare blocks the file."
 }
