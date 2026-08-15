@@ -232,6 +232,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:00:00.000Z",
       "commit": "b3c61b0"
+    },
+    {
+      "id": "2026-08-15-phone-portable",
+      "title": "Clearwater Phone portable app",
+      "summary": "Replaced the console runtime-downloader with a real portable ClearwaterPhone.exe that opens the overlay directly (no black window, no separate download). Windows SmartScreen may still warn once because the app is unsigned — use More info → Run anyway.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T18:05:00.000Z",
+      "commit": "pending"
     }
   ]
 }

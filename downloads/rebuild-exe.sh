@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-# Rebuild ClearwaterPhone.exe (Windows) from the embedded app sources.
+# Rebuild the real portable ClearwaterPhone.exe and copy it into /downloads.
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")" && pwd)"
-SRC="$ROOT/clearwater-phone"
-LAUNCHER="$ROOT/launcher"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PHONE="$ROOT/anchor-phone"
+OUT="$ROOT/downloads/ClearwaterPhone.exe"
 
-rm -rf "$LAUNCHER/app"
-mkdir -p "$LAUNCHER/app"
-cp -a "$SRC/." "$LAUNCHER/app/"
-cd "$LAUNCHER"
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o "$ROOT/ClearwaterPhone.exe" .
-ls -lh "$ROOT/ClearwaterPhone.exe"
+cd "$PHONE"
+npm install
+npm run dist
+cp -f "$PHONE/dist/ClearwaterPhone.exe" "$OUT"
+ls -lh "$OUT"

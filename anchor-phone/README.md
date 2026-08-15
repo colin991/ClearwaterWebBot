@@ -34,6 +34,7 @@ Output: `anchor-phone/dist/ClearwaterPhone.exe` — download and run alongside R
 ## Notes
 
 - Overlay sits above games; it does **not** inject into Roblox.
-- **Members download from Clearwater Internet → Phone** (`/internet/phone`) — `ClearwaterPhone.exe` (double-click to open).
+- **Members download from Clearwater Internet → Phone** (`/internet/phone`) — `ClearwaterPhone.exe` (portable; double-click to open).
+- Rebuild the Windows portable with `cd anchor-phone && npm run dist`, then copy `dist/ClearwaterPhone.exe` to `downloads/` (or run `downloads/rebuild-exe.sh`).
 - Local demo data is stored in the app (`localStorage`). Live panel wallet/messages can be wired to Clearwater Internet APIs later.
 - Hide with **F8**; quit from the OS taskbar / dock menu.
