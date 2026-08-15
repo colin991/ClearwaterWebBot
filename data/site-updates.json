@@ -183,7 +183,7 @@
       "summary": "Reel videos now redirect to blob storage for streaming with HTTP Range support instead of being fully buffered by the media proxy, which had been causing black frames and \u201ccannot play here\u201d errors.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T17:25:00.000Z",
-      "commit": "PENDING"
+      "commit": "b7963a0"
     }
   ]
 }
