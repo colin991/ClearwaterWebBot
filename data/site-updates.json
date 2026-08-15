@@ -56,6 +56,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T02:50:25.000Z",
       "commit": "d33a259"
+    },
+    {
+      "id": "2026-08-15-hold-vc-join-speak",
+      "title": "Hold VC joins and speaks in channel",
+      "summary": "`-holdvc` now joins the voice channel and plays the Onyx announcement for everyone in VC (no Discord text TTS). The bot stays in the channel until `-unholdvc`.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T02:52:22.000Z",
+      "commit": "2b8e3ab"
     }
   ]
 }

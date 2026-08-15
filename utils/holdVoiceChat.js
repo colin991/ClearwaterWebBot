@@ -1,9 +1,11 @@
+import { createReadStream } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   AudioPlayerStatus,
   NoSubscriberBehavior,
+  StreamType,
   createAudioPlayer,
   createAudioResource,
   entersState,
@@ -13,7 +15,17 @@ import {
 } from '@discordjs/voice';
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
 import { FULL_STAFF_PANEL_ROLE_ID } from './staffRanks.js';
+import { createRequire } from 'node:module';
 import { logger } from './logger.js';
+
+const require = createRequire(import.meta.url);
+try {
+  const ffmpegStatic = require('ffmpeg-static');
+  if (ffmpegStatic) process.env.FFMPEG_PATH = ffmpegStatic;
+} catch {
+  // System ffmpeg on PATH is fine.
+}
+
 
 export const HOLD_VC_PHRASE = 'Please Hold this voice chat';
 
@@ -54,7 +66,7 @@ async function synthesizeOnyxSpeech(apiKey, text) {
       model: 'tts-1',
       voice: 'onyx',
       input: text,
-      response_format: 'opus',
+      response_format: 'mp3',
     }),
     signal: AbortSignal.timeout(20_000),
   });
@@ -65,7 +77,37 @@ async function synthesizeOnyxSpeech(apiKey, text) {
   return Buffer.from(await response.arrayBuffer());
 }
 
-async function playHoldAnnouncement(voiceChannel, adapterCreator, audioBuffer) {
+function waitForPlayerIdle(player, timeoutMs = 30_000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, timeoutMs);
+    const onIdle = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = (error) => {
+      cleanup();
+      reject(error);
+    };
+    const cleanup = () => {
+      clearTimeout(timer);
+      player.off(AudioPlayerStatus.Idle, onIdle);
+      player.off('error', onError);
+    };
+    player.once(AudioPlayerStatus.Idle, onIdle);
+    player.once('error', onError);
+  });
+}
+
+/**
+ * Join the voice channel and play Onyx MP3 through ffmpeg so everyone in VC hears it.
+ * Keeps the connection open afterward (until release/unhold).
+ */
+async function joinAndAnnounce(voiceChannel, adapterCreator, mp3Buffer) {
+  getVoiceConnection(voiceChannel.guild.id)?.destroy();
+
   const connection = joinVoiceChannel({
     channelId: voiceChannel.id,
     guildId: voiceChannel.guild.id,
@@ -74,44 +116,58 @@ async function playHoldAnnouncement(voiceChannel, adapterCreator, audioBuffer) {
     selfMute: false,
   });
 
+  connection.on('error', (error) => {
+    logger.error('Hold VC voice connection error', error);
+  });
+
   try {
-    await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+    await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
   } catch (error) {
     connection.destroy();
-    throw error;
+    throw new Error(`Could not join the voice channel: ${error?.message || error}`);
   }
 
+  // Give Discord a moment to finish negotiating audio before we speak.
+  await new Promise((resolve) => setTimeout(resolve, 750));
+
   const directory = await mkdtemp(join(tmpdir(), 'cw-holdvc-'));
-  const filePath = join(directory, 'hold.opus');
+  const filePath = join(directory, 'hold.mp3');
+  const player = createAudioPlayer({
+    behaviors: { noSubscriber: NoSubscriberBehavior.Pause },
+  });
+
   try {
-    await writeFile(filePath, audioBuffer);
-    const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Play } });
-    const resource = createAudioResource(filePath);
-    connection.subscribe(player);
-    player.play(resource);
-    await entersState(player, AudioPlayerStatus.Playing, 5_000);
-    await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => resolve(), 20_000);
-      player.once(AudioPlayerStatus.Idle, () => {
-        clearTimeout(timer);
-        resolve();
-      });
-      player.once('error', (error) => {
-        clearTimeout(timer);
-        reject(error);
-      });
+    await writeFile(filePath, mp3Buffer);
+
+    const subscription = connection.subscribe(player);
+    if (!subscription) {
+      throw new Error('Could not subscribe the audio player to the voice connection.');
+    }
+
+    // StreamType.Arbitrary forces ffmpeg decode → Discord opus, which is reliable for MP3.
+    const resource = createAudioResource(createReadStream(filePath), {
+      inputType: StreamType.Arbitrary,
+      inlineVolume: true,
     });
+    resource.volume?.setVolume(1);
+
+    player.play(resource);
+    await entersState(player, AudioPlayerStatus.Playing, 8_000);
+    await waitForPlayerIdle(player, 45_000);
+    // Stay connected so the bot remains visibly in the held VC.
+    return connection;
+  } catch (error) {
     player.stop(true);
+    connection.destroy();
+    throw error;
   } finally {
-    const existing = getVoiceConnection(voiceChannel.guild.id);
-    existing?.destroy();
     await rm(directory, { recursive: true, force: true }).catch(() => {});
   }
 }
 
 /**
- * Server-mute everyone in the VC except Ownership, announce the hold phrase,
- * and play OpenAI Onyx TTS in the channel when OPENAI_API_KEY is configured.
+ * Bot joins the VC, speaks the hold line with Onyx for everyone, then server-mutes
+ * non-Ownership members. Discord text TTS is never used (that only plays locally).
  */
 export async function holdVoiceChat(message, config = {}) {
   const voiceChannel = resolveHoldVoiceChannel(message);
@@ -123,15 +179,30 @@ export async function holdVoiceChat(message, config = {}) {
   if (!me?.permissions?.has(PermissionFlagsBits.MuteMembers)) {
     throw new Error('I need the Mute Members permission.');
   }
-  if (!voiceChannel.permissionsFor(me)?.has([PermissionFlagsBits.Connect, PermissionFlagsBits.Speak, PermissionFlagsBits.MuteMembers])) {
+  if (!voiceChannel.permissionsFor(me)?.has([
+    PermissionFlagsBits.Connect,
+    PermissionFlagsBits.Speak,
+    PermissionFlagsBits.MuteMembers,
+  ])) {
     throw new Error('I need Connect, Speak, and Mute Members in that voice channel.');
   }
+
+  const apiKey = String(config.openAiApiKey || process.env.OPENAI_API_KEY || '').trim();
+  if (!apiKey) {
+    throw new Error('Set OPENAI_API_KEY on the bot host so I can speak with Onyx in the voice channel.');
+  }
+
+  // Speak first while the bot is clearly in channel, then mute everyone else.
+  const audio = await synthesizeOnyxSpeech(apiKey, HOLD_VC_PHRASE);
+  await joinAndAnnounce(voiceChannel, message.guild.voiceAdapterCreator, audio);
 
   const previous = activeHolds.get(message.guild.id);
   const mutedIds = new Set(previous?.channelId === voiceChannel.id ? previous.mutedIds : []);
 
   let mutedNow = 0;
-  for (const [, member] of voiceChannel.members) {
+  // Refresh members after join.
+  const channel = await message.guild.channels.fetch(voiceChannel.id).catch(() => voiceChannel);
+  for (const [, member] of channel.members) {
     if (member.user.bot) continue;
     if (isOwnershipMember(member, config)) continue;
     if (member.voice.serverMute) {
@@ -154,31 +225,15 @@ export async function holdVoiceChat(message, config = {}) {
     at: new Date().toISOString(),
   });
 
-  let voicePlayed = false;
-  let voiceError = null;
-  const apiKey = String(config.openAiApiKey || process.env.OPENAI_API_KEY || '').trim();
-  if (apiKey) {
-    try {
-      const audio = await synthesizeOnyxSpeech(apiKey, HOLD_VC_PHRASE);
-      await playHoldAnnouncement(voiceChannel, message.guild.voiceAdapterCreator, audio);
-      voicePlayed = true;
-    } catch (error) {
-      voiceError = error?.message || String(error);
-      logger.error('Hold VC Onyx announcement failed', error);
-    }
-  }
-
   return {
-    voiceChannel,
+    voiceChannel: channel,
     mutedNow,
     mutedTotal: mutedIds.size,
-    voicePlayed,
-    voiceError,
-    hasApiKey: Boolean(apiKey),
+    voicePlayed: true,
   };
 }
 
-/** Undo a hold: unmute members this bot muted for the active hold. */
+/** Undo a hold: unmute members this bot muted, then leave the voice channel. */
 export async function releaseVoiceChat(message) {
   const hold = activeHolds.get(message.guild.id);
   if (!hold) throw new Error('No active hold VC in this server.');
