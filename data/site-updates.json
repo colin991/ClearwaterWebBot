@@ -184,6 +184,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T17:25:00.000Z",
       "commit": "b7963a0"
+    },
+    {
+      "id": "2026-08-15-staff-notice-popup",
+      "title": "Staff notice and warning popups",
+      "summary": "Staff notices now open the on-site alert modal (same as warnings), and unread warnings/notices are checked every few seconds so members already on Clearwater Internet see them without refreshing.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T17:30:00.000Z",
+      "commit": "PENDING"
     }
   ]
 }

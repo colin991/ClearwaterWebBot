@@ -2413,7 +2413,7 @@ export function reviewInternetReport(store, { reportId, decision, action, reason
   if (action === 'warning') {
     const user = upsertInternetUser(store, { id: report.authorId, displayName: report.authorName });
     user.warnings = Array.isArray(user.warnings) ? user.warnings : [];
-    const warning = { id: randomUUID(), reason: note, createdAt: new Date().toISOString(), readAt: null };
+    const warning = { id: randomUUID(), kind: 'warning', reason: note, createdAt: new Date().toISOString(), readAt: null };
     report.warningId = warning.id;
     user.warnings.unshift(warning);
     user.warnings = user.warnings.slice(0, 30);
@@ -2430,7 +2430,12 @@ export function takeUnreadInternetWarnings(store, actor) {
   const user = upsertInternetUser(store, actor);
   const warnings = (Array.isArray(user.warnings) ? user.warnings : []).filter((warning) => !warning.readAt);
   if (warnings.length) warnings.forEach((warning) => { warning.readAt = new Date().toISOString(); });
-  return warnings;
+  return warnings.map((warning) => ({
+    id: warning.id,
+    kind: warning.kind === 'notice' ? 'notice' : 'warning',
+    reason: text(warning.reason, 300),
+    createdAt: warning.createdAt,
+  }));
 }
 
 export function takeInternetMessages(store, actor) {
@@ -3003,6 +3008,7 @@ export function staffUserDetail(store, targetId) {
     },
     warnings: (Array.isArray(user.warnings) ? user.warnings : []).slice(0, 30).map((warning) => ({
       id: warning.id,
+      kind: warning.kind === 'notice' ? 'notice' : 'warning',
       reason: text(warning.reason, 300),
       createdAt: warning.createdAt,
       readAt: warning.readAt || null,
@@ -3110,7 +3116,13 @@ export function applyStaffUserAction(store, {
   } else if (action === 'warn') {
     if (!noteText) throw new Error('Enter a warning reason');
     user.warnings = Array.isArray(user.warnings) ? user.warnings : [];
-    const warning = { id: randomUUID(), reason: noteText, createdAt: new Date().toISOString(), readAt: null };
+    const warning = {
+      id: randomUUID(),
+      kind: 'warning',
+      reason: noteText,
+      createdAt: new Date().toISOString(),
+      readAt: null,
+    };
     user.warnings.unshift(warning);
     user.warnings = user.warnings.slice(0, 30);
     addInternetLog(store, `${actorName} warned ${label}. Reason: ${noteText}`, {
@@ -3219,8 +3231,22 @@ export function applyStaffUserAction(store, {
     } : null);
   } else if (action === 'send-notice') {
     if (!noteText) throw new Error('Write a staff notice first');
+    user.warnings = Array.isArray(user.warnings) ? user.warnings : [];
+    const notice = {
+      id: randomUUID(),
+      kind: 'notice',
+      reason: noteText,
+      createdAt: new Date().toISOString(),
+      readAt: null,
+    };
+    user.warnings.unshift(notice);
+    user.warnings = user.warnings.slice(0, 30);
     addInternetMessage(store, user.id, `Staff notice: ${noteText}`);
-    addInternetLog(store, `${actorName} sent a staff notice to ${label}.`);
+    addInternetLog(store, `${actorName} sent a staff notice to ${label}.`, {
+      type: 'remove-warning',
+      targetId: user.id,
+      warningId: notice.id,
+    });
   } else {
     throw new Error('Unsupported staff action');
   }

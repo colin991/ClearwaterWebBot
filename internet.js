@@ -95,7 +95,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260815-reels-video-range';
+const INTERNET_VERSION = '20260815-staff-notice-popup';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -3139,7 +3139,7 @@ function staffUserPanelMarkup(detail) {
     </section>
     <section class="staff-user-block">
       <h3>Warnings</h3>
-      ${warnings.length ? warnings.map((warning) => `<article class="staff-compact"><b>${escapeHtml(warning.reason)}</b><small>${escapeHtml(timeAgo(warning.createdAt))}${warning.readAt ? ' · seen' : ' · unread'}</small></article>`).join('') : '<p class="staff-empty">No warnings.</p>'}
+      ${warnings.length ? warnings.map((warning) => `<article class="staff-compact"><b>${warning.kind === 'notice' ? 'Notice · ' : ''}${escapeHtml(warning.reason)}</b><small>${escapeHtml(timeAgo(warning.createdAt))}${warning.readAt ? ' · seen' : ' · unread'}</small></article>`).join('') : '<p class="staff-empty">No warnings.</p>'}
     </section>
     <section class="staff-user-block">
       <h3>Reports</h3>
@@ -5039,14 +5039,30 @@ async function loadWallet() {
 
 async function loadWarnings() {
   if (!currentUserId || !warningNotice || !warningReasons) return;
+  if (warningNotice.dataset.loading === '1') return;
+  warningNotice.dataset.loading = '1';
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'warnings' }) });
     const result = await readApiJson(response, 'Could not check warnings.');
     if (!response.ok || !result.warnings?.length) return;
-    warningReasons.innerHTML = result.warnings.map((warning) => `<p>${escapeHtml(warning.reason)}</p>`).join('');
+    const items = result.warnings;
+    const hasNotice = items.some((warning) => warning.kind === 'notice');
+    const hasWarning = items.some((warning) => warning.kind !== 'notice');
+    const title = document.getElementById('warning-title');
+    if (title) {
+      if (hasWarning && hasNotice) title.textContent = 'Staff message';
+      else if (hasNotice) title.textContent = 'Staff notice';
+      else title.textContent = items.length > 1 ? 'You received warnings' : 'You received a warning';
+    }
+    warningReasons.innerHTML = items.map((warning) => {
+      const label = warning.kind === 'notice' ? 'Notice' : 'Warning';
+      return `<p><strong>${label}</strong> · ${escapeHtml(warning.reason)}</p>`;
+    }).join('');
     warningNotice.hidden = false;
   } catch {
     // The normal site remains available if warning status cannot be read.
+  } finally {
+    warningNotice.dataset.loading = '';
   }
 }
 
@@ -9190,6 +9206,10 @@ window.setInterval(() => {
 // open, without reloading the entire feed every few seconds.
 window.setInterval(() => {
   if (!document.hidden) void loadBanStatus();
+}, 5_000);
+// Warnings and staff notices should pop up while the member is already on the site.
+window.setInterval(() => {
+  if (!document.hidden && currentUserId) void loadWarnings();
 }, 5_000);
 window.setInterval(() => {
   if (document.hidden || !currentUserId) return;
