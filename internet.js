@@ -95,7 +95,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260815-reply-link';
+const INTERNET_VERSION = '20260815-staff-toggles';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -2900,7 +2900,7 @@ function staffUserChips(user) {
 function staffToggleMarkup({ active, onAction, offAction, label, expires = '', tone = '' }) {
   const action = active ? offAction : onAction;
   const state = active ? (expires || 'Active') : 'Off';
-  return `<button type="button" class="staff-toggle${active ? ' on' : ''}${tone ? ` ${tone}` : ''}" role="switch" aria-checked="${active ? 'true' : 'false'}" data-staff-user-action="${escapeHtml(action)}">
+  return `<button type="button" class="staff-toggle${active ? ' on' : ''}${tone ? ` ${tone}` : ''}" role="switch" aria-checked="${active ? 'true' : 'false'}" data-staff-user-action="${escapeHtml(action)}" data-staff-toggle-on="${escapeHtml(onAction)}" data-staff-toggle-off="${escapeHtml(offAction)}">
     <span class="staff-toggle-switch" aria-hidden="true"></span>
     <span class="staff-toggle-label"><b>${escapeHtml(label)}</b><small>${escapeHtml(state)}</small></span>
   </button>`;
@@ -2954,7 +2954,7 @@ function staffUserPanelMarkup(detail) {
         <p class="staff-action-hint">Ads and tips for this business spend the handler’s Clearwater credits wallet.</p>
       </section>`
     : (isBiz ? '<section class="staff-user-block staff-linked-handler"><h3>Linked handler</h3><p class="staff-empty">No personal account is linked to this business.</p></section>' : '');
-  return `<article class="staff-user-dossier">
+  return `<article class="staff-user-dossier" data-staff-target-id="${escapeHtml(isBiz ? user.id : (user.discordId || user.id))}">
     <header class="staff-user-hero">
       <img src="${escapeHtml(user.avatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" />
       <div>
@@ -3198,10 +3198,15 @@ function renderStaffDashboard() {
         : `<p class="staff-empty">${query ? 'No Discord-linked Internet accounts match that search.' : 'No members match that search.'}</p>`);
   }
   const userPanel = document.querySelector('[data-staff-user-panel]');
-  const keepUserPanel = Boolean(userPanel && userPanel.contains(document.activeElement));
+  const keepUserPanel = Boolean(userPanel && userPanel.contains(document.activeElement) && (
+    document.activeElement.matches('input, textarea, select')
+  ));
   if (userPanel && !keepUserPanel) {
     if (!selectedStaffUserId) userPanel.innerHTML = '<div class="staff-empty staff-empty-lg">Select a user to open their staff panel.</div>';
-    else if (staffUserDetail?.user?.id === selectedStaffUserId) userPanel.innerHTML = staffUserPanelMarkup(staffUserDetail);
+    else if (
+      staffUserDetail?.user?.id === selectedStaffUserId
+      || staffUserDetail?.user?.discordId === selectedStaffUserId
+    ) userPanel.innerHTML = staffUserPanelMarkup(staffUserDetail);
     else userPanel.innerHTML = '<p class="staff-loading">Loading this account...</p>';
   }
   const settings = moderationSnapshot.settings || {};
@@ -3630,6 +3635,8 @@ async function openStaffUser(userId) {
 }
 
 function staffActionTargetId(fallback = selectedStaffUserId) {
+  const panelTarget = document.querySelector('[data-staff-user-panel] [data-staff-target-id]')?.dataset?.staffTargetId;
+  if (panelTarget && (/^\d{16,22}$/.test(panelTarget) || /^biz_/i.test(panelTarget))) return String(panelTarget);
   const detail = staffUserDetail?.user;
   if (detail?.discordId && /^\d{16,22}$/.test(String(detail.discordId))) return String(detail.discordId);
   if (detail?.id && (/^\d{16,22}$/.test(String(detail.id)) || /^biz_/i.test(String(detail.id)))) return String(detail.id);
@@ -3639,23 +3646,43 @@ function staffActionTargetId(fallback = selectedStaffUserId) {
   return String(fallback || '');
 }
 
-async function runStaffUserAction(staffAction, postId = '') {
-  if (!selectedStaffUserId || staffUserBusy) return;
+function setStaffTogglePending(button, turningOn) {
+  if (!button?.classList?.contains('staff-toggle')) return;
+  button.classList.toggle('on', turningOn);
+  button.setAttribute('aria-checked', turningOn ? 'true' : 'false');
+  const small = button.querySelector('small');
+  if (small) small.textContent = turningOn ? 'Active' : 'Off';
+  button.dataset.staffUserAction = turningOn
+    ? (button.dataset.staffToggleOff || button.dataset.staffUserAction)
+    : (button.dataset.staffToggleOn || button.dataset.staffUserAction);
+}
+
+async function runStaffUserAction(staffAction, postId = '', sourceButton = null) {
+  const targetId = staffActionTargetId();
+  if (!targetId) {
+    void siteAlert('Select a user before running a staff action.');
+    return;
+  }
+  if (staffUserBusy) return;
   const panelState = staffPanelUiState();
   const fields = panelState.fields;
   const destructive = new Set(['ban', 'ip-ban', 'wipe-posts', 'wipe-reels', 'wipe-comments', 'wipe-messages', 'delete-post', 'reset-profile', 'shadowban']);
   if (destructive.has(staffAction) && !(await siteConfirm(`Run "${staffAction.replace(/-/g, ' ')}" on this account? This cannot be undone.`, 'Staff action'))) return;
   staffUserBusy = true;
+  const isToggle = sourceButton?.classList?.contains('staff-toggle');
+  const turningOn = Boolean(isToggle && sourceButton.dataset.staffToggleOn === staffAction);
+  if (isToggle) setStaffTogglePending(sourceButton, turningOn);
   const status = document.querySelector('[data-staff-user-status]');
   if (status) status.textContent = 'Saving...';
   try {
+    if (document.activeElement?.blur) document.activeElement.blur();
     const response = await fetch('/api/internet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'staff-user',
         staffAction,
-        targetId: staffActionTargetId(),
+        targetId,
         reason: fields.reason,
         note: staffAction === 'note' ? fields.note : fields.reason,
         durationDays: fields.durationDays,
@@ -3667,15 +3694,18 @@ async function runStaffUserAction(staffAction, postId = '') {
     if (!response.ok) throw new Error(result.error || 'Could not update this user.');
     staffUserDetail = result;
     if (result?.user?.id) selectedStaffUserId = result.user.id;
+    else if (result?.user?.discordId) selectedStaffUserId = result.user.discordId;
     if (result.snapshot) moderationSnapshot = result.snapshot;
     renderStaffDashboard();
     redrawStaffUserPanel(result, panelState);
     const nextStatus = document.querySelector('[data-staff-user-status]');
     if (nextStatus) nextStatus.textContent = 'Saved.';
   } catch (error) {
+    if (isToggle) setStaffTogglePending(sourceButton, !turningOn);
     const nextStatus = document.querySelector('[data-staff-user-status]');
     if (nextStatus) nextStatus.textContent = error.message || 'Could not update this user.';
     else void siteAlert(error.message || 'Could not update this user.');
+    if (selectedStaffUserId) void loadStaffUserDetail(selectedStaffUserId, true);
   } finally {
     staffUserBusy = false;
   }
@@ -5047,7 +5077,7 @@ async function loadNotifications() {
       const result = await readApiJson(response, 'Could not load notifications.');
       if (!response.ok) throw new Error(result.error || 'Could not load notifications.');
       const notifications = result.notifications || [];
-      const names = { follow: 'started following you', like: 'liked your post', reply: 'replied to your post', mention: 'mentioned you in a post', repost: 'reposted your post', quote: 'quoted your post', message: 'sent you a message', boost: 'tipped your post into For You' };
+      const names = { follow: 'started following you', like: 'liked your post', reply: 'replied to your post', mention: 'mentioned you in a post', repost: 'reposted your post', quote: 'quoted your post', boost: 'tipped your post into For You' };
       const fingerprint = notificationsListFingerprint(notifications);
       const unread = Number(result.unreadCount || 0);
       if (notificationCount) { notificationCount.hidden = unread < 1; notificationCount.textContent = `${unread} unread`; }
@@ -6995,7 +7025,14 @@ document.addEventListener('click', (event) => {
     return;
   }
   const staffUserAction = event.target.closest('[data-staff-user-action]');
-  if (staffUserAction) { void runStaffUserAction(staffUserAction.dataset.staffUserAction, staffUserAction.dataset.staffPostId || ''); return; }
+  if (staffUserAction) {
+    void runStaffUserAction(
+      staffUserAction.dataset.staffUserAction,
+      staffUserAction.dataset.staffPostId || '',
+      staffUserAction,
+    );
+    return;
+  }
   const staffWalletAdjust = event.target.closest('[data-staff-wallet-adjust]');
   if (staffWalletAdjust) { void runStaffWalletAdjustment(staffWalletAdjust); return; }
   const walletTransferTab = event.target.closest('[data-wallet-transfer-tab]');

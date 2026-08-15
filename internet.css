@@ -4999,10 +4999,10 @@ html.pref-reduce-motion *::after {
   transition: transform .15s ease, background .15s ease;
 }
 .staff-app .staff-toggle.on {
-  border-color: rgba(180, 190, 205, .32);
-  background: rgba(20, 40, 72, .6);
+  border-color: rgba(118, 173, 255, .45);
+  background: rgba(118, 173, 255, .14);
 }
-.staff-app .staff-toggle.on .staff-toggle-switch { background: var(--blue); }
+.staff-app .staff-toggle.on .staff-toggle-switch { background: var(--btn, #76adff); }
 .staff-app .staff-toggle.on .staff-toggle-switch::after {
   background: #fff;
   transform: translateX(14px);

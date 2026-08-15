@@ -1864,10 +1864,16 @@ export function createInternetPost(store, user, content, media = {}) {
   if (!parentId && (user.id === OFFICIAL_INTERNET_ACCOUNT_ID || user.official === true)) {
     setOfficialPostBanner(store, post);
   }
-  const mentionedHandles = [...new Set((body.match(/(?:^|\s)@([a-z0-9_]{1,80})/gi) || []).map((mention) => mention.trim().slice(1).toLowerCase()))];
+  const mentionedHandles = [...new Set(
+    (body.match(/(?:^|[^a-z0-9_])@([a-z0-9_]{1,80})/gi) || [])
+      .map((mention) => mention.replace(/^[^@]*@/, '').toLowerCase())
+      .filter(Boolean),
+  )];
   mentionedHandles.forEach((handle) => {
-    const recipient = Object.values(store.users).find((member) => String(member.username || '').toLowerCase() === handle);
-    if (recipient) addInternetNotification(store, { recipientId: recipient.id, actor: user, type: 'mention', post });
+    const recipient = findInternetMember(store, { username: handle });
+    if (recipient && recipient.id !== user.id) {
+      addInternetNotification(store, { recipientId: recipient.id, actor: user, type: 'mention', post });
+    }
   });
   if (post.quoteId) {
     const quoted = store.posts.find((item) => item.id === post.quoteId);
@@ -2611,15 +2617,18 @@ export function staffUserConversation(store, { targetId, withUserId, username } 
 
 export function takeInternetNotifications(store, actor) {
   const user = upsertInternetUser(store, actor);
-  const notifications = Array.isArray(user.notifications) ? user.notifications : [];
+  const all = Array.isArray(user.notifications) ? user.notifications : [];
+  // Message pings belong in the Messages tab, not the notifications panel.
+  const notifications = all.filter((notification) => notification?.type !== 'message');
   const unreadCount = notifications.filter((notification) => !notification.readAt).length;
   notifications.forEach((notification) => { if (!notification.readAt) notification.readAt = new Date().toISOString(); });
   // Rewrite older reply notifications that still point at the comment id.
   const healed = notifications.slice(0, 100).map((notification) => healNotificationDeepLink(store, notification));
   healed.forEach((notification, index) => {
-    if (!notification || notifications[index] === notification) return;
-    notifications[index] = {
-      ...notifications[index],
+    const sourceIndex = all.indexOf(notifications[index]);
+    if (!notification || sourceIndex < 0 || all[sourceIndex] === notification) return;
+    all[sourceIndex] = {
+      ...all[sourceIndex],
       postId: notification.postId,
       replyId: notification.replyId,
       postContent: notification.postContent,
@@ -2633,7 +2642,7 @@ export function socialSnapshot(store, actor) {
   return {
     following: Array.isArray(user.following) ? user.following : [],
     followers: Object.values(store.users).filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).map((member) => member.id),
-    unreadNotifications: (Array.isArray(user.notifications) ? user.notifications : []).filter((notification) => !notification.readAt).length,
+    unreadNotifications: (Array.isArray(user.notifications) ? user.notifications : []).filter((notification) => notification?.type !== 'message' && !notification.readAt).length,
     unreadMessages: (Array.isArray(user.messages) ? user.messages : []).filter((message) => message.kind === 'direct' && message.toId === user.id && !message.readAt).length,
     blocked: Array.isArray(user.blocked) ? user.blocked : [],
     muted: Array.isArray(user.muted) ? user.muted : [],
@@ -2836,7 +2845,7 @@ export function sendInternetMessage(store, { actor, to, content, gif, username }
   recipient.messages = recipient.messages.slice(0, 120);
   sender.lastMessageAt = sentAt;
   recordChatActivity(sender);
-  addInternetNotification(store, { recipientId: recipient.id, actor: sender, type: 'message' });
+  // DMs only bump the messages inbox / unread count — not the notifications panel.
   return { sent: true, message };
 }
 
