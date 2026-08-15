@@ -1,6 +1,5 @@
 import {
   ChannelType,
-  EmbedBuilder,
   MessageFlags,
   SlashCommandBuilder,
 } from 'discord.js';
@@ -10,6 +9,7 @@ import {
   holdVoiceChat,
 } from '../utils/holdVoiceChat.js';
 import { logVcAction } from '../utils/vcActionLog.js';
+import { v2Card } from '../utils/v2Message.js';
 
 export default {
   data: new SlashCommandBuilder()
@@ -32,7 +32,6 @@ export default {
       title: '/holdvc used',
       actor: interaction.user,
       voiceChannel: result.voiceChannel,
-      color: 0xf0a84b,
       details: [
         { name: 'Announcement', value: `“${HOLD_VC_PHRASE}”` },
         {
@@ -43,18 +42,15 @@ export default {
       ],
     });
 
-    await interaction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0x4f8ff7)
-          .setTitle('Hold VC')
-          .setDescription([
-            `Joined ${result.voiceChannel} and played for everyone:`,
-            `“${HOLD_VC_PHRASE}”`,
-            `Server-muted **${result.mutedNow}** member${result.mutedNow === 1 ? '' : 's'} (Ownership skipped).`,
-            'Use `/unholdvc` to unmute and make the bot leave.',
-          ].join('\n')),
-      ],
-    });
+    await interaction.editReply(v2Card({
+      title: 'Hold VC',
+      description: [
+        `Joined ${result.voiceChannel} and played for everyone:`,
+        `“${HOLD_VC_PHRASE}”`,
+        `Server-muted **${result.mutedNow}** member${result.mutedNow === 1 ? '' : 's'} (Ownership skipped).`,
+        'Use `/unholdvc` to unmute and make the bot leave.',
+      ].join('\n'),
+      replace: true,
+    }));
   },
 };

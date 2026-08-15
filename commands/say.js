@@ -1,6 +1,5 @@
 import {
   ChannelType,
-  EmbedBuilder,
   MessageFlags,
   SlashCommandBuilder,
 } from 'discord.js';
@@ -8,6 +7,7 @@ import { requireOwnership } from '../utils/prefixHelpers.js';
 import { getActiveHold } from '../utils/holdVoiceChat.js';
 import { logVcAction } from '../utils/vcActionLog.js';
 import { SAY_MAX_CHARS, sayInVoiceChannel } from '../utils/vcSpeak.js';
+import { v2Card } from '../utils/v2Message.js';
 
 export default {
   data: new SlashCommandBuilder()
@@ -53,17 +53,14 @@ export default {
       ],
     });
 
-    await interaction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0x4f8ff7)
-          .setTitle('Say')
-          .setDescription([
-            `Spoke in ${result.voiceChannel}:`,
-            `“${result.text}”`,
-            result.leftAfter ? 'Left the voice channel afterward.' : 'Stayed in the channel (hold VC is active).',
-          ].join('\n')),
-      ],
-    });
+    await interaction.editReply(v2Card({
+      title: 'Say',
+      description: [
+        `Spoke in ${result.voiceChannel}:`,
+        `“${result.text}”`,
+        result.leftAfter ? 'Left the voice channel afterward.' : 'Stayed in the channel (hold VC is active).',
+      ].join('\n'),
+      replace: true,
+    }));
   },
 };

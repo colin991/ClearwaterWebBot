@@ -1,6 +1,6 @@
 import { PermissionFlagsBits } from 'discord.js';
 import {
-  caseEmbed,
+  caseMessage,
   formatDuration,
   RANK_FLOOR,
   requireBotPerms,
@@ -14,12 +14,9 @@ import { createCase, withModerationStore } from '../utils/moderationStore.js';
 async function dmCase(user, entry, guildName) {
   if (!user?.send) return;
   try {
-    await user.send({
-      embeds: [
-        caseEmbed(entry, `${guildName} moderation notice`)
-          .setDescription(`You received a **${entry.type}** in **${guildName}**.`),
-      ],
-    });
+    await user.send(caseMessage(entry, `${guildName} moderation notice`, {
+      description: `You received a **${entry.type}** in **${guildName}**.`,
+    }));
   } catch {
     // User DMs closed.
   }
@@ -53,7 +50,7 @@ export const ban = {
       deleteMessageSeconds: 0,
     });
     await dmCase(user, entry, message.guild.name);
-    await message.reply({ content: `Banned **${user.tag}**.`, embeds: [caseEmbed(entry)] });
+    await message.reply(caseMessage(entry, 'Moderation case', { intro: `Banned **${user.tag}**.` }));
   },
 };
 
@@ -85,7 +82,9 @@ export const softban = {
     });
     await message.guild.members.unban(user.id, `Softban cleanup #${entry.id}`).catch(() => {});
     await dmCase(user, entry, message.guild.name);
-    await message.reply({ content: `Softbanned **${user.tag}** (messages purged).`, embeds: [caseEmbed(entry)] });
+    await message.reply(caseMessage(entry, 'Moderation case', {
+      intro: `Softbanned **${user.tag}** (messages purged).`,
+    }));
   },
 };
 
@@ -108,7 +107,7 @@ export const unban = {
       reason,
       points: 0,
     }));
-    await message.reply({ content: `Unbanned **${user.tag}**.`, embeds: [caseEmbed(entry)] });
+    await message.reply(caseMessage(entry, 'Moderation case', { intro: `Unbanned **${user.tag}**.` }));
   },
 };
 
@@ -133,7 +132,7 @@ export const kick = {
     }));
     await dmCase(member.user, entry, message.guild.name);
     await member.kick(`#${entry.id} ${reason}`.slice(0, 512));
-    await message.reply({ content: `Kicked **${member.user.tag}**.`, embeds: [caseEmbed(entry)] });
+    await message.reply(caseMessage(entry, 'Moderation case', { intro: `Kicked **${member.user.tag}**.` }));
   },
 };
 
@@ -161,7 +160,9 @@ export const mute = {
     }));
     await member.timeout(ms, `#${entry.id} ${reason}`.slice(0, 512));
     await dmCase(member.user, entry, message.guild.name);
-    await message.reply({ content: `Muted **${member.user.tag}** for ${formatDuration(ms)}.`, embeds: [caseEmbed(entry)] });
+    await message.reply(caseMessage(entry, 'Moderation case', {
+      intro: `Muted **${member.user.tag}** for ${formatDuration(ms)}.`,
+    }));
   },
 };
 
@@ -184,7 +185,7 @@ export const unmute = {
       moderatorId: message.author.id,
       reason,
     }));
-    await message.reply({ content: `Unmuted **${member.user.tag}**.`, embeds: [caseEmbed(entry)] });
+    await message.reply(caseMessage(entry, 'Moderation case', { intro: `Unmuted **${member.user.tag}**.` }));
   },
 };
 
@@ -206,7 +207,7 @@ export const warn = {
       points: 1,
     }));
     await dmCase(user, entry, message.guild.name);
-    await message.reply({ content: `Warned **${user.tag}**.`, embeds: [caseEmbed(entry)] });
+    await message.reply(caseMessage(entry, 'Moderation case', { intro: `Warned **${user.tag}**.` }));
   },
 };
 

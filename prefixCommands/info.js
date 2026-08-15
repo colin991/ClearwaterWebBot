@@ -1,4 +1,4 @@
-import { EmbedBuilder, PermissionFlagsBits } from 'discord.js';
+import { PermissionFlagsBits } from 'discord.js';
 import {
   describeRankAccess,
   formatDuration,
@@ -16,6 +16,7 @@ import {
   moderatorStats,
   withModerationStore,
 } from '../utils/moderationStore.js';
+import { v2Card } from '../utils/v2Message.js';
 
 export const roles = {
   name: 'roles',
@@ -31,14 +32,10 @@ export const roles = {
         .sort((a, b) => b.position - a.position)
         .map((role) => role.toString())
         .slice(0, 40);
-      return message.reply({
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0x4f8ff7)
-            .setTitle(`Roles · ${member.user.tag}`)
-            .setDescription(list.join(', ') || 'No roles'),
-        ],
-      });
+      return message.reply(v2Card({
+        title: `Roles · ${member.user.tag}`,
+        description: list.join(', ') || 'No roles',
+      }));
     }
     let list = [...message.guild.roles.cache.values()]
       .filter((role) => role.id !== message.guild.id)
@@ -48,14 +45,10 @@ export const roles = {
       list = list.filter((role) => role.name.toLowerCase().includes(needle) || role.id === snowflakeFrom(query));
     }
     const lines = list.slice(0, 40).map((role) => `${role} \`${role.id}\` · ${role.members.size}`);
-    await message.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0x4f8ff7)
-          .setTitle(query ? `Role search · ${query}` : 'Server roles')
-          .setDescription(lines.join('\n') || 'No roles matched.'),
-      ],
-    });
+    await message.reply(v2Card({
+      title: query ? `Role search · ${query}` : 'Server roles',
+      description: lines.join('\n') || 'No roles matched.',
+    }));
   },
 };
 
@@ -89,15 +82,11 @@ export const members = {
       && missingRoles.every((role) => !member.roles.cache.has(role.id))
     ));
     const preview = matches.slice(0, 30).map((member) => member.toString()).join(', ');
-    await message.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0x4f8ff7)
-          .setTitle(`Members · ${matches.length}`)
-          .setDescription(preview || 'Nobody matched.')
-          .setFooter({ text: `Has: ${hasRoles.map((role) => role.name).join(', ')}${missingRoles.length ? ` · Missing: ${missingRoles.map((role) => role.name).join(', ')}` : ''}` }),
-      ],
-    });
+    await message.reply(v2Card({
+      title: `Members · ${matches.length}`,
+      description: preview || 'Nobody matched.',
+      footer: `Has: ${hasRoles.map((role) => role.name).join(', ')}${missingRoles.length ? ` · Missing: ${missingRoles.map((role) => role.name).join(', ')}` : ''}`,
+    }));
   },
 };
 
@@ -121,14 +110,10 @@ export const mutes = {
         lines.push(`<@${entry.userId}> · case #${entry.id} · ${entry.expiresAt ? `<t:${Math.floor(new Date(entry.expiresAt).getTime() / 1000)}:R>` : formatDuration(entry.durationMs)}`);
       }
     }
-    await message.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0x4f8ff7)
-          .setTitle('Active mutes')
-          .setDescription(lines.join('\n') || 'Nobody is muted right now.'),
-      ],
-    });
+    await message.reply(v2Card({
+      title: 'Active mutes',
+      description: lines.join('\n') || 'Nobody is muted right now.',
+    }));
   },
 };
 
@@ -144,14 +129,10 @@ export const bans = {
     const lines = cases.map((entry) => (
       `<@${entry.userId}> · case #${entry.id} · ${entry.reason.slice(0, 60)} · <t:${Math.floor(new Date(entry.expiresAt).getTime() / 1000)}:R>`
     ));
-    await message.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0x4f8ff7)
-          .setTitle('Timed ban cases')
-          .setDescription(lines.join('\n') || 'No active timed ban cases. Discord bans are permanent unless staff unban them.'),
-      ],
-    });
+    await message.reply(v2Card({
+      title: 'Timed ban cases',
+      description: lines.join('\n') || 'No active timed ban cases. Discord bans are permanent unless staff unban them.',
+    }));
   },
 };
 
@@ -167,15 +148,11 @@ export const modstats = {
     const lines = stats.map((entry, index) => (
       `**${index + 1}.** <@${entry.moderatorId}> · ${entry.total} total · bans ${entry.ban} · kicks ${entry.kick} · mutes ${entry.mute} · warns ${entry.warn}`
     ));
-    await message.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0x4f8ff7)
-          .setTitle(user ? `Modstats · ${user.tag}` : 'Top moderators')
-          .setDescription(lines.join('\n'))
-          .setFooter({ text: 'Updates as cases are created' }),
-      ],
-    });
+    await message.reply(v2Card({
+      title: user ? `Modstats · ${user.tag}` : 'Top moderators',
+      description: lines.join('\n'),
+      footer: 'Updates as cases are created',
+    }));
   },
 };
 
@@ -190,21 +167,17 @@ export const inviteinfo = {
     if (!code) return message.reply('Use `-inviteinfo <code|url>`.');
     try {
       const invite = await message.client.fetchInvite(code, { withCounts: true });
-      await message.reply({
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0x4f8ff7)
-            .setTitle(`Invite · ${invite.code}`)
-            .addFields(
-              { name: 'Server', value: invite.guild?.name || 'Unknown', inline: true },
-              { name: 'Channel', value: invite.channel?.name || 'Unknown', inline: true },
-              { name: 'Inviter', value: invite.inviter?.tag || 'Unknown', inline: true },
-              { name: 'Members', value: String(invite.memberCount || 0), inline: true },
-              { name: 'Online', value: String(invite.presenceCount || 0), inline: true },
-              { name: 'Temporary', value: invite.temporary ? 'Yes' : 'No', inline: true },
-            ),
+      await message.reply(v2Card({
+        title: `Invite · ${invite.code}`,
+        fields: [
+          { name: 'Server', value: invite.guild?.name || 'Unknown' },
+          { name: 'Channel', value: invite.channel?.name || 'Unknown' },
+          { name: 'Inviter', value: invite.inviter?.tag || 'Unknown' },
+          { name: 'Members', value: String(invite.memberCount || 0) },
+          { name: 'Online', value: String(invite.presenceCount || 0) },
+          { name: 'Temporary', value: invite.temporary ? 'Yes' : 'No' },
         ],
-      });
+      }));
     } catch {
       await message.reply('Could not resolve that invite.');
     }
@@ -257,24 +230,24 @@ export const diagnose = {
     const commandName = args[0]?.toLowerCase();
     const command = commandName ? message.client.prefixCommands.get(commandName) : null;
     const access = describeRankAccess(message.member);
-    const embed = new EmbedBuilder()
-      .setColor(missing.length ? 0xf0a84b : 0x4f8ff7)
-      .setTitle('Diagnose')
-      .addFields(
-        { name: 'Bot', value: `${me.user.tag}\nLatency ${Math.round(message.client.ws.ping || 0)}ms`, inline: true },
-        { name: 'Your rank', value: staffRankLabel(message.member), inline: true },
-        { name: 'Access', value: `Warn ${access.canWarn ? 'yes' : 'no'} · Kick ${access.canKick ? 'yes' : 'no'} · Ban ${access.canBan ? 'yes' : 'no'}`, inline: true },
-        { name: 'Prefix commands', value: String(message.client.prefixCommands?.size || 0), inline: true },
-        { name: 'Staff ranks recognized', value: listStaffRanks().slice(0, 900) },
-        { name: 'Missing bot permissions', value: missing.join(', ') || 'None' },
-      );
+    const fields = [
+      { name: 'Bot', value: `${me.user.tag}\nLatency ${Math.round(message.client.ws.ping || 0)}ms` },
+      { name: 'Your rank', value: staffRankLabel(message.member) },
+      { name: 'Access', value: `Warn ${access.canWarn ? 'yes' : 'no'} · Kick ${access.canKick ? 'yes' : 'no'} · Ban ${access.canBan ? 'yes' : 'no'}` },
+      { name: 'Prefix commands', value: String(message.client.prefixCommands?.size || 0) },
+      { name: 'Staff ranks recognized', value: listStaffRanks().slice(0, 900) },
+      { name: 'Missing bot permissions', value: missing.join(', ') || 'None' },
+    ];
     if (commandName) {
-      embed.addFields({
+      fields.push({
         name: `Command \`${commandName}\``,
         value: command ? (command.description || 'Loaded') : 'Not found',
       });
     }
-    await message.reply({ embeds: [embed] });
+    await message.reply(v2Card({
+      title: 'Diagnose',
+      fields,
+    }));
   },
 };
 

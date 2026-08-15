@@ -1,9 +1,9 @@
 import {
   ChannelType,
-  EmbedBuilder,
   PermissionFlagsBits,
 } from 'discord.js';
 import { RANK_FLOOR, requireBotPerms, requireMinRank } from '../utils/prefixHelpers.js';
+import { v2Card } from '../utils/v2Message.js';
 
 const locked = new Map(); // guildId -> Map(channelId -> { by, at, reason })
 
@@ -102,14 +102,10 @@ export const lockedList = {
     const lines = [...map.entries()].map(([channelId, info]) => (
       `<#${channelId}> · by <@${info.by}> · ${info.reason}`
     ));
-    await message.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0x4f8ff7)
-          .setTitle('Locked channels')
-          .setDescription(lines.join('\n').slice(0, 4000)),
-      ],
-    });
+    await message.reply(v2Card({
+      title: 'Locked channels',
+      description: lines.join('\n').slice(0, 4000),
+    }));
   },
 };
 

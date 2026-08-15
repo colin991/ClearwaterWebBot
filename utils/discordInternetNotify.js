@@ -66,7 +66,7 @@ export function createDiscordInternetNotifier(client, { websiteUrl = 'https://cw
 
     const viewUrl = viewNotificationUrl(site, { type, postId });
     const container = new ContainerBuilder()
-      .setAccentColor(0x4e91f9)
+      .clearAccentColor()
       .addTextDisplayComponents(new TextDisplayBuilder().setContent(text))
       .addActionRowComponents(
         new ActionRowBuilder().addComponents(

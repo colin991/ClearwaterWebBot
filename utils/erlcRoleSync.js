@@ -1,13 +1,18 @@
-import { EmbedBuilder } from 'discord.js';
 import { fetchErlcServer, parseErlcPlayer } from './erlc.js';
 import { discordIdsByRobloxId } from './identityStore.js';
 import { getOwnerConfig } from './ownerConfig.js';
 import { logger } from './logger.js';
+import { v2Card } from './v2Message.js';
 
-async function sendGameLog(client, settings, description, color) {
+async function sendGameLog(client, settings, description) {
   if (!settings.gameLogChannelId) return;
   const channel = await client.channels.fetch(settings.gameLogChannelId).catch(() => null);
-  if (channel?.isTextBased()) await channel.send({ embeds: [new EmbedBuilder().setTitle('ER:LC Player Update').setDescription(description).setColor(color).setTimestamp()] }).catch(() => {});
+  if (channel?.isTextBased()) {
+    await channel.send(v2Card({
+      title: 'ER:LC Player Update',
+      description,
+    })).catch(() => {});
+  }
 }
 
 async function syncOnce(client, config, previousPlayers) {
@@ -47,7 +52,7 @@ async function syncOnce(client, config, previousPlayers) {
     if (member && !member.roles.cache.has(role.id)) {
       await member.roles.add(role, 'Player joined the ER:LC server');
       const player = players.find((entry) => identityMap.get(entry.robloxId) === discordId);
-      await sendGameLog(client, settings, `<@${discordId}> joined as **${player?.username || 'Unknown'}** and received <@&${role.id}>.`, 0x38d9b0);
+      await sendGameLog(client, settings, `<@${discordId}> joined as **${player?.username || 'Unknown'}** and received <@&${role.id}>.`);
     }
   }
 
@@ -55,7 +60,7 @@ async function syncOnce(client, config, previousPlayers) {
   for (const member of roleMembers.values()) {
     if (!activeDiscordIds.has(member.id)) {
       await member.roles.remove(role, 'Player left the ER:LC server');
-      await sendGameLog(client, settings, `<@${member.id}> left the game and <@&${role.id}> was removed.`, 0xf05d6c);
+      await sendGameLog(client, settings, `<@${member.id}> left the game and <@&${role.id}> was removed.`);
     }
   }
 

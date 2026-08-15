@@ -1,7 +1,4 @@
-import {
-  EmbedBuilder,
-  PermissionFlagsBits,
-} from 'discord.js';
+import { PermissionFlagsBits } from 'discord.js';
 import {
   getHighestStaffRank,
   getStaffRankIndex,
@@ -9,6 +6,7 @@ import {
   FULL_STAFF_PANEL_ROLE_ID,
   STAFF_RANKS,
 } from './staffRanks.js';
+import { v2Card } from './v2Message.js';
 
 export const PREFIX = '-';
 
@@ -152,22 +150,30 @@ export function splitTargetReason(args = []) {
   };
 }
 
-export function caseEmbed(entry, title = 'Moderation case') {
-  return new EmbedBuilder()
-    .setColor(0x4f8ff7)
-    .setTitle(`${title} #${entry.id}`)
-    .addFields(
-      { name: 'Type', value: entry.type, inline: true },
-      { name: 'User', value: `<@${entry.userId}> (\`${entry.userId}\`)`, inline: true },
-      { name: 'Moderator', value: `<@${entry.moderatorId}>`, inline: true },
+export function caseMessage(entry, title = 'Moderation case', {
+  description = '',
+  intro = '',
+} = {}) {
+  return v2Card({
+    intro,
+    title: `${title} #${entry.id}`,
+    description,
+    fields: [
+      { name: 'Type', value: entry.type },
+      { name: 'User', value: `<@${entry.userId}> (\`${entry.userId}\`)` },
+      { name: 'Moderator', value: `<@${entry.moderatorId}>` },
       { name: 'Reason', value: entry.reason || 'No reason provided.' },
-      { name: 'Duration', value: entry.expiresAt ? `Until <t:${Math.floor(new Date(entry.expiresAt).getTime() / 1000)}:f>` : formatDuration(entry.durationMs), inline: true },
-      { name: 'Points', value: String(entry.points || 0), inline: true },
-      { name: 'Created', value: `<t:${Math.floor(new Date(entry.createdAt).getTime() / 1000)}:f>`, inline: true },
-    );
+      {
+        name: 'Duration',
+        value: entry.expiresAt
+          ? `Until <t:${Math.floor(new Date(entry.expiresAt).getTime() / 1000)}:f>`
+          : formatDuration(entry.durationMs),
+      },
+      { name: 'Points', value: String(entry.points || 0) },
+      { name: 'Created', value: `<t:${Math.floor(new Date(entry.createdAt).getTime() / 1000)}:f>` },
+    ],
+  });
 }
-
-export function staffRankLabel(member) {
   return getHighestStaffRank(member)?.name || (member?.permissions?.has(PermissionFlagsBits.Administrator) ? 'Administrator' : 'Staff');
 }
 

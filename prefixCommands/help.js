@@ -1,5 +1,5 @@
-import { EmbedBuilder } from 'discord.js';
 import { PREFIX, RANK_FLOOR, requireMinRank } from '../utils/prefixHelpers.js';
+import { v2Card } from '../utils/v2Message.js';
 
 const GROUPS = [
   {
@@ -20,7 +20,7 @@ const GROUPS = [
       `\`-case <id>\` / \`-modlogs @user\` / \`-points @user\` — View · **${RANK_FLOOR.anyStaff}+**`,
       `\`-note\` / \`-notes\` / \`-presets\` — Notes & presets · **${RANK_FLOOR.anyStaff}+**`,
       `\`-editcase <id> …\` — Edit case · **${RANK_FLOOR.administrator}+**`,
-      `\`-uwid @user\` — Clear modlogs · **${RANK_FLOOR.seniorSupervisor}+**`,
+      `\`-void @user\` — Clear modlogs · **${RANK_FLOOR.seniorSupervisor}+**`,
     ],
   },
   {
@@ -47,17 +47,16 @@ export default {
   minRank: RANK_FLOOR.anyStaff,
   async execute(message) {
     requireMinRank(message, RANK_FLOOR.anyStaff);
-    const embed = new EmbedBuilder()
-      .setColor(0x4f8ff7)
-      .setTitle('Moderation Commands')
-      .setDescription(
-        `Prefix: \`${PREFIX}\` · Rank-locked\n`
-        + `**Warn** any staff · **Kick** ${RANK_FLOOR.administrator}+ · **Ban** ${RANK_FLOOR.supervisor}+`,
-      )
-      .addFields(GROUPS.map((group) => ({
+    await message.reply(v2Card({
+      title: 'Moderation Commands',
+      description: [
+        `Prefix: \`${PREFIX}\` · Rank-locked`,
+        `**Warn** any staff · **Kick** ${RANK_FLOOR.administrator}+ · **Ban** ${RANK_FLOOR.supervisor}+`,
+      ].join('\n'),
+      fields: GROUPS.map((group) => ({
         name: group.title,
         value: group.lines.join('\n').slice(0, 1024),
-      })));
-    await message.reply({ embeds: [embed] });
+      })),
+    }));
   },
 };

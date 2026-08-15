@@ -1,5 +1,5 @@
-import { EmbedBuilder } from 'discord.js';
 import { logger } from './logger.js';
+import { v2Card } from './v2Message.js';
 
 async function fetchLogChannel(client, channelId) {
   const id = String(channelId || '').trim();
@@ -23,7 +23,6 @@ export async function logVcAction(client, config, {
   actor,
   voiceChannel = null,
   details = [],
-  color = 0x4f8ff7,
 } = {}) {
   const channelId = String(
     config?.vcActionLogChannelId
@@ -33,38 +32,34 @@ export async function logVcAction(client, config, {
   const channel = await fetchLogChannel(client, channelId);
   if (!channel) return false;
 
-  const embed = new EmbedBuilder()
-    .setColor(color)
-    .setTitle(title || 'VC action')
-    .addFields(
-      {
-        name: 'Who',
-        value: actor
-          ? `<@${actor.id}> (\`${actor.id}\` · ${actor.tag || 'unknown'})`
-          : 'Unknown',
-        inline: false,
-      },
-    )
-    .setTimestamp(new Date());
+  const fields = [
+    {
+      name: 'Who',
+      value: actor
+        ? `<@${actor.id}> (\`${actor.id}\` · ${actor.tag || 'unknown'})`
+        : 'Unknown',
+    },
+  ];
 
   if (voiceChannel) {
-    embed.addFields({
+    fields.push({
       name: 'Voice channel',
       value: `${voiceChannel} (\`${voiceChannel.id}\`)`,
-      inline: false,
     });
   }
 
   for (const detail of details) {
     if (!detail?.name || !detail?.value) continue;
-    embed.addFields({
+    fields.push({
       name: String(detail.name).slice(0, 256),
       value: String(detail.value).slice(0, 1024),
-      inline: Boolean(detail.inline),
     });
   }
 
-  await channel.send({ embeds: [embed] }).catch((error) => {
+  await channel.send(v2Card({
+    title: title || 'VC action',
+    fields,
+  })).catch((error) => {
     logger.error('Failed to post VC action log', error);
   });
   return true;

@@ -1,6 +1,6 @@
 import { getIdentityCache } from './identityStore.js';
 import { logger } from './logger.js';
-import { EmbedBuilder } from 'discord.js';
+import { v2Card } from './v2Message.js';
 
 const ROBLOX_CLOUD = 'https://apis.roblox.com/cloud/v2';
 const TRANSIENT_HTTP = new Set([408, 425, 429, 500, 502, 503, 504]);
@@ -58,13 +58,11 @@ async function groupFetch(path, apiKey, options = {}, { retries = 3 } = {}) {
   throw lastError || new Error('Roblox Groups API failed after retries');
 }
 
-async function sendGroupLog(client, config, title, description, color) {
+async function sendGroupLog(client, config, title, description) {
   if (!config.robloxGroupLogChannelId) return;
   const channel = await client.channels.fetch(config.robloxGroupLogChannelId).catch(() => null);
   if (!channel?.isTextBased()) return;
-  await channel.send({
-    embeds: [new EmbedBuilder().setTitle(title).setDescription(description).setColor(color).setTimestamp()],
-  }).catch(() => null);
+  await channel.send(v2Card({ title, description })).catch(() => null);
 }
 
 async function sendGroupApprovalDm(client, discordId, { robloxId, groupId } = {}) {
@@ -74,18 +72,13 @@ async function sendGroupApprovalDm(client, discordId, { robloxId, groupId } = {}
     const groupLink = groupId
       ? `\n\nOpen the group: https://www.roblox.com/groups/${encodeURIComponent(groupId)}`
       : '';
-    await user.send({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle('Roblox group request approved')
-          .setDescription(
-            `Your join request for the Clearwater Roblox group was **accepted**.${groupLink}\n\n`
-            + `Roblox user ID: \`${robloxId || 'unknown'}\``,
-          )
-          .setColor(0x38d9b0)
-          .setTimestamp(),
-      ],
-    });
+    await user.send(v2Card({
+      title: 'Roblox group request approved',
+      description: (
+        `Your join request for the Clearwater Roblox group was **accepted**.${groupLink}\n\n`
+        + `Roblox user ID: \`${robloxId || 'unknown'}\``
+      ),
+    }));
   } catch {
     // User may have DMs closed or the bot blocked — keep the accept/log path moving.
   }
@@ -221,7 +214,6 @@ async function syncGroupJoinRequests(client, config) {
           config,
           'Roblox group request accepted',
           `<@${discordId}> was accepted into the Roblox group.\nRoblox user ID: \`${robloxId}\`\nMatched through: ${matchSource}${pendingSince}`,
-          0x38d9b0,
         );
         continue;
       }
@@ -241,12 +233,11 @@ async function syncGroupJoinRequests(client, config) {
       declinedLines.push(line);
       logger.info(`Declined Roblox group join request: ${who.replace(/`/g, '')} (no allowed Discord role).`);
       await sendGroupLog(
-        client,
-        config,
-        'Roblox group request declined',
-        `${who} was declined because they are not a Discord member with an allowed group role.${pendingSince}`,
-        0xf0a84b,
-      );
+          client,
+          config,
+          'Roblox group request declined',
+          `${who} was declined because they are not a Discord member with an allowed group role.${pendingSince}`,
+        );
     } catch (error) {
       failed += 1;
       logger.error(`Failed to process Roblox group join request ${requestName}`, error);
@@ -257,12 +248,11 @@ async function syncGroupJoinRequests(client, config) {
     const preview = declinedLines.slice(0, 15).map((line) => `• ${line}`).join('\n');
     const extra = declinedLines.length > 15 ? `\n…and ${declinedLines.length - 15} more.` : '';
     await sendGroupLog(
-      client,
-      config,
-      'Roblox pending queue cleared',
-      `Declined **${declined}** pending join request(s) with no allowed Discord role (includes older backlog).\n\n${preview}${extra}`,
-      0xf0a84b,
-    );
+          client,
+          config,
+          'Roblox pending queue cleared',
+          `Declined **${declined}** pending join request(s) with no allowed Discord role (includes older backlog).\n\n${preview}${extra}`,
+        );
   }
 
   if (accepted || declined || failed) {
@@ -299,7 +289,6 @@ export function startRobloxGroupSync(client, config) {
           config,
           'Roblox group sync error',
           `${prefix}\`${message.slice(0, 850)}\``,
-          0xed4245,
         );
       }
     } finally {

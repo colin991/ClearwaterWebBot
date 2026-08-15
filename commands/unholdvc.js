@@ -1,7 +1,8 @@
-import { EmbedBuilder, MessageFlags, SlashCommandBuilder } from 'discord.js';
+import { MessageFlags, SlashCommandBuilder } from 'discord.js';
 import { requireOwnership } from '../utils/prefixHelpers.js';
 import { releaseVoiceChat } from '../utils/holdVoiceChat.js';
 import { logVcAction } from '../utils/vcActionLog.js';
+import { v2Card } from '../utils/v2Message.js';
 
 export default {
   data: new SlashCommandBuilder()
@@ -18,7 +19,6 @@ export default {
       title: '/unholdvc used',
       actor: interaction.user,
       voiceChannel: result.voiceChannel,
-      color: 0x38d9b0,
       details: [
         {
           name: 'Unmuted',
@@ -28,17 +28,14 @@ export default {
       ],
     });
 
-    await interaction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0x4f8ff7)
-          .setTitle('Hold VC released')
-          .setDescription(
-            `Unmuted **${result.unmuted}** member${result.unmuted === 1 ? '' : 's'}`
-            + (result.voiceChannel ? ` in ${result.voiceChannel}` : '')
-            + ' and left the voice channel.',
-          ),
-      ],
-    });
+    await interaction.editReply(v2Card({
+      title: 'Hold VC released',
+      description: (
+        `Unmuted **${result.unmuted}** member${result.unmuted === 1 ? '' : 's'}`
+        + (result.voiceChannel ? ` in ${result.voiceChannel}` : '')
+        + ' and left the voice channel.'
+      ),
+      replace: true,
+    }));
   },
 };

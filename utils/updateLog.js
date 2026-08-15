@@ -1,14 +1,12 @@
-import { EmbedBuilder } from 'discord.js';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
+import { v2Card } from './v2Message.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const UPDATES_PATH = join(__dirname, '..', 'data', 'site-updates.json');
 const POSTED_PATH = join(__dirname, '..', 'data', 'site-updates-posted.json');
-
-const ACCENT = 0x4e91f9;
 
 const emptyCatalog = () => ({ version: 1, updates: [] });
 const emptyPosted = () => ({ version: 1, postedIds: [] });
@@ -60,21 +58,16 @@ async function markPosted(ids) {
   await writeJsonFile(POSTED_PATH, { version: 1, postedIds: [...posted] });
 }
 
-function buildUpdateEmbed(entry) {
-  const embed = new EmbedBuilder()
-    .setTitle(entry.title)
-    .setDescription(entry.summary)
-    .setColor(ACCENT)
-    .setFooter({ text: 'Clearwater update log' })
-    .setTimestamp(entry.createdAt ? new Date(entry.createdAt) : new Date());
-
-  if (entry.updatedBy) {
-    embed.addFields({ name: 'Updated by', value: entry.updatedBy, inline: true });
-  }
-  if (entry.commit) {
-    embed.addFields({ name: 'Commit', value: `\`${entry.commit}\``, inline: true });
-  }
-  return embed;
+function buildUpdateMessage(entry) {
+  const fields = [];
+  if (entry.updatedBy) fields.push({ name: 'Updated by', value: entry.updatedBy });
+  if (entry.commit) fields.push({ name: 'Commit', value: `\`${entry.commit}\`` });
+  return v2Card({
+    title: entry.title,
+    description: entry.summary,
+    fields,
+    footer: 'Clearwater update log',
+  });
 }
 
 async function fetchUpdateChannel(client, config) {
@@ -99,7 +92,7 @@ export async function postUpdateLog(client, config, entry) {
   const channel = await fetchUpdateChannel(client, config);
   if (!channel) return { ok: false, reason: 'channel_unavailable' };
 
-  await channel.send({ embeds: [buildUpdateEmbed(normalized)] });
+  await channel.send(buildUpdateMessage(normalized));
   await markPosted([normalized.id]);
   return { ok: true, id: normalized.id };
 }
@@ -117,7 +110,7 @@ export async function flushPendingUpdateLogs(client, config) {
   const sent = [];
   for (const entry of pending) {
     try {
-      await channel.send({ embeds: [buildUpdateEmbed(entry)] });
+      await channel.send(buildUpdateMessage(entry));
       sent.push(entry.id);
     } catch (error) {
       logger.error(`Failed to post update log ${entry.id}`, error);

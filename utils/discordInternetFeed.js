@@ -14,8 +14,6 @@ import { logger } from './logger.js';
 const MAX_ATTACH_BYTES = 8 * 1024 * 1024;
 const ANNOUNCEMENT_EMOJI = '<:Announcement:1514458339680059422>';
 const BELL_EMOJI = '<:bellring:1518378682912211195>';
-const ACCENT_LIVE = 0x4e91f9;
-const ACCENT_DELETED = 0x6b7280;
 
 function isHttpsUrl(value) {
   try {
@@ -94,7 +92,7 @@ function buildLivePayload(post, site) {
   }
 
   const container = new ContainerBuilder()
-    .setAccentColor(ACCENT_LIVE)
+    .clearAccentColor()
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(buildFeedText(post)));
 
   if (mediaUrl) {
@@ -121,7 +119,7 @@ function buildLivePayload(post, site) {
 
 function buildDeletedPayload(post) {
   const container = new ContainerBuilder()
-    .setAccentColor(ACCENT_DELETED)
+    .clearAccentColor()
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(buildDeletedFeedText(post)));
 
   return {

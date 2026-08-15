@@ -1,12 +1,12 @@
-import { EmbedBuilder } from 'discord.js';
 import {
-  caseEmbed,
+  caseMessage,
   formatDuration,
   parseDuration,
   RANK_FLOOR,
   requireMinRank,
   resolveUser,
 } from '../utils/prefixHelpers.js';
+import { v2Card } from '../utils/v2Message.js';
 import {
   addUserNote,
   clearUserCases,
@@ -26,7 +26,7 @@ export const caseCommand = {
     requireMinRank(message, RANK_FLOOR.anyStaff);
     const entry = await withModerationStore((store) => findCase(store, args[0]));
     if (!entry || entry.guildId !== message.guild.id) return message.reply('Case not found.');
-    await message.reply({ embeds: [caseEmbed(entry)] });
+    await message.reply(caseMessage(entry));
   },
 };
 
@@ -59,7 +59,7 @@ export const editcase = {
       return found;
     });
     if (!entry) return message.reply('Case not found.');
-    await message.reply({ content: `Updated case #${entry.id}.`, embeds: [caseEmbed(entry, 'Updated case')] });
+    await message.reply(caseMessage(entry, 'Updated case', { intro: `Updated case #${entry.id}.` }));
   },
 };
 
@@ -76,23 +76,23 @@ export const modlogs = {
     const lines = cases.map((entry) => (
       `\`#${entry.id}\` **${entry.type}** · ${entry.reason.slice(0, 80)} · <t:${Math.floor(new Date(entry.createdAt).getTime() / 1000)}:R>`
     ));
-    const embed = new EmbedBuilder()
-      .setColor(0x4f8ff7)
-      .setTitle(`Modlogs · ${user.tag}`)
-      .setDescription(lines.join('\n').slice(0, 4000))
-      .setFooter({ text: `${cases.length} shown` });
-    await message.reply({ embeds: [embed] });
+    await message.reply(v2Card({
+      title: `Modlogs · ${user.tag}`,
+      description: lines.join('\n').slice(0, 3500),
+      footer: `${cases.length} shown`,
+    }));
   },
 };
 
-export const uwid = {
-  name: 'uwid',
+export const voidCommand = {
+  name: 'void',
+  aliases: ['uwid'],
   description: 'Clear a users modlogs.',
   minRank: RANK_FLOOR.seniorSupervisor,
   async execute(message, args) {
     requireMinRank(message, RANK_FLOOR.seniorSupervisor);
     const user = await resolveUser(message, args[0], message.client);
-    if (!user) return message.reply('Use `-uwid @user`.');
+    if (!user) return message.reply('Use `-void @user`.');
     const removed = await withModerationStore((store) => clearUserCases(store, message.guild.id, user.id));
     await message.reply(`Cleared **${removed}** modlog${removed === 1 ? '' : 's'} for **${user.tag}**.`);
   },
@@ -145,27 +145,22 @@ export const notes = {
     if (args[1]) {
       const found = list.find((item) => item.id === args[1]);
       if (!found) return message.reply('Note not found.');
-      const embed = new EmbedBuilder()
-        .setColor(0x4f8ff7)
-        .setTitle(`Note ${found.id}`)
-        .setDescription(found.content)
-        .addFields(
-          { name: 'Author', value: `<@${found.moderatorId}>`, inline: true },
-          { name: 'Created', value: `<t:${Math.floor(new Date(found.createdAt).getTime() / 1000)}:f>`, inline: true },
-        );
-      return message.reply({ embeds: [embed] });
+      return message.reply(v2Card({
+        title: `Note ${found.id}`,
+        description: found.content,
+        fields: [
+          { name: 'Author', value: `<@${found.moderatorId}>` },
+          { name: 'Created', value: `<t:${Math.floor(new Date(found.createdAt).getTime() / 1000)}:f>` },
+        ],
+      }));
     }
     const lines = list.slice(0, 15).map((item) => (
       `\`${item.id}\` · <@${item.moderatorId}> · ${item.content.slice(0, 90)}`
     ));
-    await message.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0x4f8ff7)
-          .setTitle(`Notes · ${user.tag}`)
-          .setDescription(lines.join('\n')),
-      ],
-    });
+    await message.reply(v2Card({
+      title: `Notes · ${user.tag}`,
+      description: lines.join('\n'),
+    }));
   },
 };
 
@@ -176,15 +171,11 @@ export const presets = {
   async execute(message) {
     requireMinRank(message, RANK_FLOOR.anyStaff);
     const list = await withModerationStore((store) => store.presets);
-    await message.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0x4f8ff7)
-          .setTitle('Preset reasons')
-          .setDescription(list.map((item, index) => `\`${index + 1}.\` ${item}`).join('\n')),
-      ],
-    });
+    await message.reply(v2Card({
+      title: 'Preset reasons',
+      description: list.map((item, index) => `\`${index + 1}.\` ${item}`).join('\n'),
+    }));
   },
 };
 
-export default [caseCommand, editcase, modlogs, uwid, points, note, notes, presets];
+export default [caseCommand, editcase, modlogs, voidCommand, points, note, notes, presets];
