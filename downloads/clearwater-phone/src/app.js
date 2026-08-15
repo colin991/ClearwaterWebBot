@@ -3,7 +3,7 @@
   const VERSION_URL = SITE + '/downloads/clearwater-phone-version.json';
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
-  let appVersion = '1.3.10';
+  let appVersion = '1.3.11';
   let latestInfo = null;
   let sessionUser = null;
   let walletMode = 'send';
@@ -42,8 +42,12 @@
   }
 
   async function api(action, extra = {}) {
-    if (!window.anchorPhone?.api) return { ok: false, status: 0, body: { error: 'Phone API unavailable' } };
-    return window.anchorPhone.api({ action, ...extra });
+    try {
+      if (!window.anchorPhone?.api) return { ok: false, status: 0, body: { error: 'Phone API unavailable' } };
+      return await window.anchorPhone.api({ action, ...extra });
+    } catch (err) {
+      return { ok: false, status: 0, body: { error: err?.message || 'Phone API unavailable' } };
+    }
   }
 
   function needSignIn(el, copy) {

@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('anchorPhone', {
   saveHostSettings: (patch) => ipcRenderer.invoke('phone-host-settings-save', patch),
   showOverlay: () => ipcRenderer.invoke('phone-show-overlay'),
   feed: () => ipcRenderer.invoke('phone-feed'),
+  api: (payload) => ipcRenderer.invoke('phone-api', payload),
   installUpdate: (href) => ipcRenderer.invoke('phone-install-update', href),
   checkUpdate: () => ipcRenderer.invoke('phone-check-update'),
   onUpdateProgress: (cb) => {

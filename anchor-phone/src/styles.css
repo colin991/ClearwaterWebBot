@@ -785,7 +785,14 @@ textarea {
   color: var(--accent);
   background: rgba(118, 173, 255, 0.1);
   border: 1px solid rgba(118, 173, 255, 0.18);
+  outline: none;
   transition: background 0.15s;
+}
+
+.chrome-action:focus,
+.chrome-action:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .chrome-action svg {
