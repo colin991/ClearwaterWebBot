@@ -3,13 +3,14 @@ import { findRobloxIdentity, safeMelonlyError } from '../utils/melonly.js';
 import { rememberIdentity } from '../utils/identityStore.js';
 import { getOwnerConfig } from '../utils/ownerConfig.js';
 import { logger } from '../utils/logger.js';
-import { requireStaff, snowflakeFrom } from '../utils/prefixHelpers.js';
+import { RANK_FLOOR, requireMinRank, snowflakeFrom } from '../utils/prefixHelpers.js';
 
 export default {
   name: 'id',
   description: 'Look up a Discord user’s Melonly-verified Roblox identity.',
+  minRank: RANK_FLOOR.anyStaff,
   async execute(message, args, client) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.anyStaff);
     const settings = await getOwnerConfig();
     const targetId = message.mentions.users.first()?.id || snowflakeFrom(args[0] || '');
     if (!targetId) {

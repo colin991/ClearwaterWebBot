@@ -2,9 +2,23 @@ import {
   EmbedBuilder,
   PermissionFlagsBits,
 } from 'discord.js';
-import { getHighestStaffRank, STAFF_RANKS } from './staffRanks.js';
+import {
+  getHighestStaffRank,
+  getStaffRankIndex,
+  memberMeetsMinRank,
+  STAFF_RANKS,
+} from './staffRanks.js';
 
 export const PREFIX = '-';
+
+/** Named floors used by prefix moderation commands (must match STAFF_RANKS names). */
+export const RANK_FLOOR = Object.freeze({
+  anyStaff: 'Moderator',
+  leadModerator: 'Lead Moderator',
+  administrator: 'Administrator',
+  supervisor: 'Supervisor',
+  seniorSupervisor: 'Senior Supervisor',
+});
 
 export const snowflakeFrom = (value = '') => String(value || '').match(/\d{16,22}/)?.[0] || null;
 
@@ -27,6 +41,19 @@ export function memberIsStaff(member) {
 export function requireStaff(message) {
   if (!memberIsStaff(message.member)) {
     throw new Error('Only Clearwater staff can use moderation commands.');
+  }
+}
+
+/**
+ * Require a minimum Clearwater staff rank (and staff membership).
+ * Discord Administrator permission bypasses the named floor.
+ */
+export function requireMinRank(message, minRankName = RANK_FLOOR.anyStaff) {
+  requireStaff(message);
+  if (message.member?.permissions?.has(PermissionFlagsBits.Administrator)) return;
+  if (!memberMeetsMinRank(message.member, minRankName)) {
+    const yours = staffRankLabel(message.member);
+    throw new Error(`Requires **${minRankName}+** (your rank: ${yours}).`);
   }
 }
 
@@ -126,4 +153,16 @@ export function staffRankLabel(member) {
 
 export function listStaffRanks() {
   return STAFF_RANKS.map((rank) => rank.name).join(', ');
+}
+
+export function describeRankAccess(member) {
+  const rank = getHighestStaffRank(member);
+  const index = getStaffRankIndex(member);
+  return {
+    rank: rank?.name || null,
+    index,
+    canWarn: memberIsStaff(member),
+    canKick: member?.permissions?.has(PermissionFlagsBits.Administrator) || memberMeetsMinRank(member, RANK_FLOOR.administrator),
+    canBan: member?.permissions?.has(PermissionFlagsBits.Administrator) || memberMeetsMinRank(member, RANK_FLOOR.supervisor),
+  };
 }

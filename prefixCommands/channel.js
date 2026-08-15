@@ -3,7 +3,7 @@ import {
   EmbedBuilder,
   PermissionFlagsBits,
 } from 'discord.js';
-import { requireBotPerms, requireStaff } from '../utils/prefixHelpers.js';
+import { RANK_FLOOR, requireBotPerms, requireMinRank } from '../utils/prefixHelpers.js';
 
 const locked = new Map(); // guildId -> Map(channelId -> { by, at, reason })
 
@@ -16,8 +16,9 @@ export const purge = {
   name: 'purge',
   aliases: ['clear'],
   description: 'Bulk delete a number of messages.',
+  minRank: RANK_FLOOR.leadModerator,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.leadModerator);
     requireBotPerms(message, [PermissionFlagsBits.ManageMessages]);
     const count = Math.min(100, Math.max(1, Number.parseInt(args[0], 10) || 0));
     if (!count) return message.reply('Use `-purge <1-100> [@user]`.');
@@ -38,8 +39,9 @@ export const purge = {
 export const clean = {
   name: 'clean',
   description: 'Clean up Circle/Clearwater bot recent messages.',
+  minRank: RANK_FLOOR.leadModerator,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.leadModerator);
     requireBotPerms(message, [PermissionFlagsBits.ManageMessages]);
     const count = Math.min(50, Math.max(1, Number.parseInt(args[0], 10) || 20));
     const fetched = await message.channel.messages.fetch({ limit: 100 });
@@ -56,8 +58,9 @@ export const clean = {
 export const lock = {
   name: 'lock',
   description: 'Deny Send Messages permissions for the @everyone role in the mentioned channel.',
+  minRank: RANK_FLOOR.supervisor,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.supervisor);
     requireBotPerms(message, [PermissionFlagsBits.ManageChannels]);
     const channel = message.mentions.channels.first() || message.channel;
     if (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement) {
@@ -77,8 +80,9 @@ export const lock = {
 export const unlock = {
   name: 'unlock',
   description: 'Allow Send Messages permissions for the @everyone role in the mentioned channel.',
+  minRank: RANK_FLOOR.supervisor,
   async execute(message) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.supervisor);
     requireBotPerms(message, [PermissionFlagsBits.ManageChannels]);
     const channel = message.mentions.channels.first() || message.channel;
     await channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: null }, { reason: 'Channel unlocked by staff' });
@@ -90,8 +94,9 @@ export const unlock = {
 export const lockedList = {
   name: 'locked',
   description: 'Get a list of temporary locked channels in your server.',
+  minRank: RANK_FLOOR.supervisor,
   async execute(message) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.supervisor);
     const map = guildLocks(message.guild.id);
     if (!map.size) return message.reply('No channels are marked as locked right now.');
     const lines = [...map.entries()].map(([channelId, info]) => (

@@ -1,9 +1,11 @@
 import { EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import {
+  describeRankAccess,
   formatDuration,
   listStaffRanks,
+  RANK_FLOOR,
   requireBotPerms,
-  requireStaff,
+  requireMinRank,
   resolveMember,
   resolveUser,
   snowflakeFrom,
@@ -18,8 +20,9 @@ import {
 export const roles = {
   name: 'roles',
   description: 'List all roles in the server or that a user has, or search for specific roles.',
+  minRank: RANK_FLOOR.anyStaff,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.anyStaff);
     const query = args.join(' ').trim();
     const member = await resolveMember(message, args[0]);
     if (member) {
@@ -59,8 +62,9 @@ export const roles = {
 export const members = {
   name: 'members',
   description: 'View a list of users who have one or more roles and don\'t have others.',
+  minRank: RANK_FLOOR.anyStaff,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.anyStaff);
     if (!args.length) return message.reply('Use `-members <role> [!missingRole]`.');
     const hasTokens = [];
     const missingTokens = [];
@@ -100,8 +104,9 @@ export const members = {
 export const mutes = {
   name: 'mutes',
   description: 'Get a list of muted users and the time until they are unmuted.',
+  minRank: RANK_FLOOR.anyStaff,
   async execute(message) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.anyStaff);
     await message.guild.members.fetch().catch(() => {});
     const timed = [...message.guild.members.cache.values()]
       .filter((member) => member.communicationDisabledUntilTimestamp && member.communicationDisabledUntilTimestamp > Date.now())
@@ -131,8 +136,9 @@ export const bans = {
   name: 'bans',
   aliases: ['tempbans'],
   description: 'Get a list of muted/temp-banned users and the time until they are unmuted/unbanned.',
+  minRank: RANK_FLOOR.supervisor,
   async execute(message) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.supervisor);
     requireBotPerms(message, [PermissionFlagsBits.BanMembers]);
     const cases = await withModerationStore((store) => activeTimedCases(store, message.guild.id, 'ban').slice(0, 30));
     const lines = cases.map((entry) => (
@@ -152,8 +158,9 @@ export const bans = {
 export const modstats = {
   name: 'modstats',
   description: 'View stats for top moderators or for a specific moderator.',
+  minRank: RANK_FLOOR.anyStaff,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.anyStaff);
     const user = args[0] ? await resolveUser(message, args[0], message.client) : null;
     const stats = await withModerationStore((store) => moderatorStats(store, message.guild.id, user?.id || null).slice(0, 15));
     if (!stats.length) return message.reply('No moderation stats yet.');
@@ -175,8 +182,9 @@ export const modstats = {
 export const inviteinfo = {
   name: 'inviteinfo',
   description: 'Get information about a Discord invite.',
+  minRank: RANK_FLOOR.anyStaff,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.anyStaff);
     const raw = args[0] || '';
     const code = raw.split('/').pop()?.split('?')[0];
     if (!code) return message.reply('Use `-inviteinfo <code|url>`.');
@@ -206,8 +214,9 @@ export const inviteinfo = {
 export const nick = {
   name: 'nick',
   description: 'Change/clear the nickname of Circle or a user.',
+  minRank: RANK_FLOOR.administrator,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.administrator);
     requireBotPerms(message, [PermissionFlagsBits.ManageNicknames]);
     if (!args.length) {
       await message.guild.members.me.setNickname(null).catch(() => {});
@@ -231,8 +240,9 @@ export const nick = {
 export const diagnose = {
   name: 'diagnose',
   description: 'Check if there are any issues with Circle or one of its plugins/commands.',
+  minRank: RANK_FLOOR.anyStaff,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.anyStaff);
     const me = message.guild.members.me;
     const needed = [
       ['BanMembers', PermissionFlagsBits.BanMembers],
@@ -246,12 +256,14 @@ export const diagnose = {
     const missing = needed.filter(([, bit]) => !me.permissions.has(bit)).map(([name]) => name);
     const commandName = args[0]?.toLowerCase();
     const command = commandName ? message.client.prefixCommands.get(commandName) : null;
+    const access = describeRankAccess(message.member);
     const embed = new EmbedBuilder()
       .setColor(missing.length ? 0xf0a84b : 0x4f8ff7)
       .setTitle('Diagnose')
       .addFields(
         { name: 'Bot', value: `${me.user.tag}\nLatency ${Math.round(message.client.ws.ping || 0)}ms`, inline: true },
         { name: 'Your rank', value: staffRankLabel(message.member), inline: true },
+        { name: 'Access', value: `Warn ${access.canWarn ? 'yes' : 'no'} · Kick ${access.canKick ? 'yes' : 'no'} · Ban ${access.canBan ? 'yes' : 'no'}`, inline: true },
         { name: 'Prefix commands', value: String(message.client.prefixCommands?.size || 0), inline: true },
         { name: 'Staff ranks recognized', value: listStaffRanks().slice(0, 900) },
         { name: 'Missing bot permissions', value: missing.join(', ') || 'None' },

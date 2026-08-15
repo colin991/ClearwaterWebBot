@@ -3,7 +3,8 @@ import {
   caseEmbed,
   formatDuration,
   parseDuration,
-  requireStaff,
+  RANK_FLOOR,
+  requireMinRank,
   resolveUser,
 } from '../utils/prefixHelpers.js';
 import {
@@ -20,8 +21,9 @@ import {
 export const caseCommand = {
   name: 'case',
   description: 'Find a specific moderation case.',
+  minRank: RANK_FLOOR.anyStaff,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.anyStaff);
     const entry = await withModerationStore((store) => findCase(store, args[0]));
     if (!entry || entry.guildId !== message.guild.id) return message.reply('Case not found.');
     await message.reply({ embeds: [caseEmbed(entry)] });
@@ -31,8 +33,9 @@ export const caseCommand = {
 export const editcase = {
   name: 'editcase',
   description: 'Edit the duration or reason of a case.',
+  minRank: RANK_FLOOR.administrator,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.administrator);
     const id = args[0];
     const rest = args.slice(1);
     if (!id || !rest.length) return message.reply('Use `-editcase <id> [duration] [reason…]`.');
@@ -63,8 +66,9 @@ export const editcase = {
 export const modlogs = {
   name: 'modlogs',
   description: 'Get a list of moderation actions taken against the mentioned user.',
+  minRank: RANK_FLOOR.anyStaff,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.anyStaff);
     const user = await resolveUser(message, args[0], message.client);
     if (!user) return message.reply('Use `-modlogs @user`.');
     const cases = await withModerationStore((store) => userCases(store, message.guild.id, user.id).slice(0, 15));
@@ -84,8 +88,9 @@ export const modlogs = {
 export const uwid = {
   name: 'uwid',
   description: 'Clear a users modlogs.',
+  minRank: RANK_FLOOR.seniorSupervisor,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.seniorSupervisor);
     const user = await resolveUser(message, args[0], message.client);
     if (!user) return message.reply('Use `-uwid @user`.');
     const removed = await withModerationStore((store) => clearUserCases(store, message.guild.id, user.id));
@@ -96,8 +101,9 @@ export const uwid = {
 export const points = {
   name: 'points',
   description: 'View a user\'s moderation points.',
+  minRank: RANK_FLOOR.anyStaff,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.anyStaff);
     const user = await resolveUser(message, args[0] || message.author.id, message.client);
     if (!user) return message.reply('Use `-points @user`.');
     const total = await withModerationStore((store) => userPoints(store, message.guild.id, user.id));
@@ -108,8 +114,9 @@ export const points = {
 export const note = {
   name: 'note',
   description: 'Add or remove a private note for a user.',
+  minRank: RANK_FLOOR.anyStaff,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.anyStaff);
     if (args[0]?.toLowerCase() === 'remove') {
       const user = await resolveUser(message, args[1], message.client);
       const noteId = args[2];
@@ -128,8 +135,9 @@ export const note = {
 export const notes = {
   name: 'notes',
   description: 'View a user\'s notes, a specific one, or the edit history for one.',
+  minRank: RANK_FLOOR.anyStaff,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.anyStaff);
     const user = await resolveUser(message, args[0], message.client);
     if (!user) return message.reply('Use `-notes @user [noteId]`.');
     const list = await withModerationStore((store) => listUserNotes(store, message.guild.id, user.id));
@@ -164,8 +172,9 @@ export const notes = {
 export const presets = {
   name: 'presets',
   description: 'View your preset moderation reasons.',
+  minRank: RANK_FLOOR.anyStaff,
   async execute(message) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.anyStaff);
     const list = await withModerationStore((store) => store.presets);
     await message.reply({
       embeds: [

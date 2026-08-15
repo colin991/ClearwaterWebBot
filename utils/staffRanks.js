@@ -34,6 +34,25 @@ export function getHighestStaffRank(member) {
   return STAFF_RANKS.find((rank) => member?.roles?.cache?.has(rank.id)) || null;
 }
 
+/** Lower index = higher authority. Returns -1 when the member has no staff rank. */
+export function getStaffRankIndex(member) {
+  const rank = getHighestStaffRank(member);
+  if (!rank) return -1;
+  return STAFF_RANKS.findIndex((item) => item.id === rank.id);
+}
+
+export function staffRankIndexByName(rankName) {
+  return STAFF_RANKS.findIndex((rank) => rank.name === rankName);
+}
+
+/** True when the member's highest staff role is at or above the named floor. */
+export function memberMeetsMinRank(member, minRankName) {
+  const minIndex = staffRankIndexByName(minRankName);
+  if (minIndex < 0) return false;
+  const index = getStaffRankIndex(member);
+  return index >= 0 && index <= minIndex;
+}
+
 function hasAnyRole(roleIds, candidates = []) {
   const wanted = new Set((Array.isArray(candidates) ? candidates : []).map(String));
   return roleIds.some((id) => wanted.has(String(id)));

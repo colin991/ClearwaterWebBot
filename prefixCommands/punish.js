@@ -2,8 +2,9 @@ import { PermissionFlagsBits } from 'discord.js';
 import {
   caseEmbed,
   formatDuration,
+  RANK_FLOOR,
   requireBotPerms,
-  requireStaff,
+  requireMinRank,
   resolveMember,
   resolveUser,
   splitTargetReason,
@@ -27,8 +28,9 @@ async function dmCase(user, entry, guildName) {
 export const ban = {
   name: 'ban',
   description: 'Ban a user from the server.',
+  minRank: RANK_FLOOR.supervisor,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.supervisor);
     requireBotPerms(message, [PermissionFlagsBits.BanMembers]);
     const { target, duration, reason } = splitTargetReason(args);
     const user = await resolveUser(message, target, message.client);
@@ -58,8 +60,9 @@ export const ban = {
 export const softban = {
   name: 'softban',
   description: 'Ban then immediately unban a user to purge messages.',
+  minRank: RANK_FLOOR.supervisor,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.supervisor);
     requireBotPerms(message, [PermissionFlagsBits.BanMembers]);
     const { target, reason } = splitTargetReason(args);
     const user = await resolveUser(message, target, message.client);
@@ -89,8 +92,9 @@ export const softban = {
 export const unban = {
   name: 'unban',
   description: 'Unban a banned user from the server.',
+  minRank: RANK_FLOOR.supervisor,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.supervisor);
     requireBotPerms(message, [PermissionFlagsBits.BanMembers]);
     const { target, reason } = splitTargetReason(args);
     const user = await resolveUser(message, target, message.client);
@@ -111,8 +115,9 @@ export const unban = {
 export const kick = {
   name: 'kick',
   description: 'Kick a user from the server.',
+  minRank: RANK_FLOOR.administrator,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.administrator);
     requireBotPerms(message, [PermissionFlagsBits.KickMembers]);
     const { target, reason } = splitTargetReason(args);
     const member = await resolveMember(message, target);
@@ -135,8 +140,9 @@ export const kick = {
 export const mute = {
   name: 'mute',
   description: 'Mute a user.',
+  minRank: RANK_FLOOR.anyStaff,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.anyStaff);
     requireBotPerms(message, [PermissionFlagsBits.ModerateMembers]);
     const { target, duration, reason } = splitTargetReason(args);
     const member = await resolveMember(message, target);
@@ -162,8 +168,9 @@ export const mute = {
 export const unmute = {
   name: 'unmute',
   description: 'Unmute a muted user.',
+  minRank: RANK_FLOOR.anyStaff,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.anyStaff);
     requireBotPerms(message, [PermissionFlagsBits.ModerateMembers]);
     const { target, reason } = splitTargetReason(args);
     const member = await resolveMember(message, target);
@@ -184,8 +191,9 @@ export const unmute = {
 export const warn = {
   name: 'warn',
   description: 'Send a member an official warning DM with a case number.',
+  minRank: RANK_FLOOR.anyStaff,
   async execute(message, args) {
-    requireStaff(message);
+    requireMinRank(message, RANK_FLOOR.anyStaff);
     const { target, reason } = splitTargetReason(args);
     const user = await resolveUser(message, target, message.client);
     if (!user) return message.reply('Use `-warn @user [reason]`.');

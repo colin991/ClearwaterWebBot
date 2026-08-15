@@ -24,6 +24,14 @@
       "updatedBy": "Colin Dever",
       "createdAt": "2026-08-15T02:17:00.000Z",
       "commit": "28a2bb1"
+    },
+    {
+      "id": "2026-08-15-prefix-rank-locks",
+      "title": "Rank-locked moderation commands",
+      "summary": "Prefix moderation commands are now locked by staff rank: any staff can warn/mute; Administrator+ can kick; Supervisor+ can ban/softban/unban and lock channels; Lead Moderator+ can purge; Senior Supervisor+ can clear modlogs (`-uwid`).",
+      "updatedBy": "Colin Dever",
+      "createdAt": "2026-08-15T02:39:57.000Z",
+      "commit": "ba05a50"
     }
   ]
 }
