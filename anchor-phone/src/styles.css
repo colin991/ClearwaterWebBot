@@ -1046,6 +1046,24 @@ textarea {
   background: rgba(118, 173, 255, 0.18);
 }
 
+.settings-actions-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+
+.settings-actions-row .btn-ghost {
+  margin: 0;
+  width: 100%;
+  text-align: center;
+}
+
+#setting-show-phone {
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
 .form-status {
   font-size: 12px;
   color: var(--accent);
