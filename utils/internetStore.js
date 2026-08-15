@@ -830,42 +830,41 @@ export function upsertInternetUser(store, user) {
   const nextUsername = has('username')
     ? text(user?.username, 80) || existing.username || 'Discord user'
     : existing.username || 'Discord user';
-  store.users[id] = {
-    ...existing,
-    id,
-    discordId: isBusiness ? (existing.discordId || null) : id,
-    username: nextUsername,
-    // Keep the latest Discord handle separately so staff can find accounts even
-    // if profile display text drifts from Discord naming.
-    discordUsername: isBusiness
-      ? (existing.discordUsername || nextUsername)
-      : (has('username')
-        ? text(user?.username, 80).replace(/^@/, '') || existing.discordUsername || nextUsername
-        : (existing.discordUsername || existing.username || nextUsername)),
-    displayName: has('displayName') ? text(user?.displayName, 80) || existing.displayName || 'Discord user' : existing.displayName || 'Discord user',
-    avatarUrl: has('avatarUrl') ? text(user?.avatarUrl, 300) || null : existing.avatarUrl || null,
-    staffRank: isBusiness ? null : (has('staffRank') ? text(user?.staffRank, 80) || null : existing.staffRank || null),
-    lastSeenAt: existing.lastSeenAt || null,
-    createdAt: existing.createdAt || null,
-    business: isBusiness,
-    businessOwnerId: isBusiness
-      ? (text(user?.businessOwnerId, 24) || existing.businessOwnerId || null)
-      : null,
-    verified: isBusiness ? true : existing.verified === true,
-    badges: withSiteBadges(
-      has('badges') && Array.isArray(user?.badges)
-        ? mergeInternetBadges(existing.badges, user.badges, {
-          id,
-          username: has('username') ? user?.username : existing.username,
-        })
-        : (isBusiness ? mergeInternetBadges(existing.badges, ['business'], { id, username: nextUsername }) : existing.badges),
-      {
+  // Mutate the existing record in place. Callers often keep a local reference and
+  // then set ban/mute/lock flags on it — replacing the object would drop those writes.
+  existing.id = id;
+  existing.discordId = isBusiness ? (existing.discordId || null) : id;
+  existing.username = nextUsername;
+  // Keep the latest Discord handle separately so staff can find accounts even
+  // if profile display text drifts from Discord naming.
+  existing.discordUsername = isBusiness
+    ? (existing.discordUsername || nextUsername)
+    : (has('username')
+      ? text(user?.username, 80).replace(/^@/, '') || existing.discordUsername || nextUsername
+      : (existing.discordUsername || existing.username || nextUsername));
+  existing.displayName = has('displayName') ? text(user?.displayName, 80) || existing.displayName || 'Discord user' : existing.displayName || 'Discord user';
+  existing.avatarUrl = has('avatarUrl') ? text(user?.avatarUrl, 300) || null : existing.avatarUrl || null;
+  existing.staffRank = isBusiness ? null : (has('staffRank') ? text(user?.staffRank, 80) || null : existing.staffRank || null);
+  if (!existing.lastSeenAt) existing.lastSeenAt = null;
+  existing.business = isBusiness;
+  existing.businessOwnerId = isBusiness
+    ? (text(user?.businessOwnerId, 24) || existing.businessOwnerId || null)
+    : null;
+  existing.verified = isBusiness ? true : existing.verified === true;
+  existing.badges = withSiteBadges(
+    has('badges') && Array.isArray(user?.badges)
+      ? mergeInternetBadges(existing.badges, user.badges, {
         id,
-        username: has('username') ? text(user?.username, 80) || existing.username : existing.username,
-      },
-    ),
-  };
-  return store.users[id];
+        username: has('username') ? user?.username : existing.username,
+      })
+      : (isBusiness ? mergeInternetBadges(existing.badges, ['business'], { id, username: nextUsername }) : existing.badges),
+    {
+      id,
+      username: has('username') ? text(user?.username, 80) || existing.username : existing.username,
+    },
+  );
+  store.users[id] = existing;
+  return existing;
 }
 
 const BASE_DAILY_CREDITS = 75;
@@ -3124,9 +3123,10 @@ export function applyStaffUserAction(store, {
   const id = String(targetId || '').trim();
   if (!isStaffTargetId(id)) throw new Error('Enter a valid Discord user ID or business account');
   const action = String(staffAction || '').trim();
+  // Keep one live reference from the store. A second upsertInternetUser() replaces
+  // the object identity and would drop ban/mute/lock mutations applied below.
   const user = store.users[id] || (isBusinessAccountId(id) ? null : upsertInternetUser(store, { id }));
   if (!user) throw new Error('Business account not found');
-  if (!isBusinessAccountId(id)) upsertInternetUser(store, { id });
   const actorName = text(actor?.displayName, 80) || 'Staff';
   const label = text(user.displayName, 80) || user.username || 'a member';
   const noteText = text(reason, 300) || text(note, 300);
