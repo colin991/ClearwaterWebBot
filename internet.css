@@ -5965,10 +5965,19 @@ html.pref-reduce-motion *::after {
   .post {
     padding: 12px 12px 10px !important;
   }
+  .post-layout {
+    gap: 8px !important;
+  }
+  .post-main {
+    gap: 3px !important;
+  }
+  .post-author {
+    flex-wrap: wrap !important;
+    white-space: normal !important;
+    row-gap: 2px;
+  }
   .post-content,
   .post-actions,
-  .post-gif,
-  .post-image,
   .post-poll,
   .quote-card,
   .drop-map {
@@ -5976,8 +5985,29 @@ html.pref-reduce-motion *::after {
     width: 100% !important;
     max-width: 100% !important;
   }
+  .post-gif,
+  .post-image,
+  .post-main .post-gif,
+  .post-main .post-image {
+    display: block !important;
+    margin-left: 0 !important;
+    width: auto !important;
+    max-width: 100% !important;
+    max-height: min(52vh, 360px) !important;
+    height: auto !important;
+    object-fit: contain !important;
+  }
   .quote-card {
     width: 100% !important;
+  }
+  .post-action-row,
+  .post-main .post-action-row {
+    margin-left: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+  .reposted-label {
+    margin-left: 0 !important;
   }
   .drop-map {
     margin-top: 10px !important;
@@ -6109,6 +6139,37 @@ html.pref-reduce-motion *::after {
   .staff-app .staff-action-btn {
     flex: 1 1 calc(50% - 8px);
   }
+  .profile-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .profile-tabs::-webkit-scrollbar { display: none; }
+  .profile-tabs button {
+    min-width: max-content;
+    padding-inline: 10px !important;
+  }
+  .internet-view[data-view="home"],
+  .internet-view[data-view="home"] .composer,
+  .internet-view[data-view="home"] .posts {
+    border-radius: 14px !important;
+  }
+  .rail-primary {
+    left: max(12px, env(safe-area-inset-left, 0px)) !important;
+    bottom: max(14px, env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .page-heading h1,
+  .internet-header h1 {
+    font-size: 22px !important;
+  }
+  .wallet-tabs,
+  .feed-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .wallet-tabs::-webkit-scrollbar,
+  .feed-tabs::-webkit-scrollbar { display: none; }
 }
 
 /* Clearwater credit wallet */

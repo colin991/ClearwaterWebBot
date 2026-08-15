@@ -183,6 +183,24 @@ body.signin-body {
   font-size: 12px;
   line-height: 1.5;
 }
+.signin-note a {
+  color: #76adff;
+  font-weight: 700;
+  text-decoration: none;
+}
+.signin-note a:hover { text-decoration: underline; }
+.signin-error {
+  max-width: 42ch;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 120, 120, .35);
+  border-radius: 12px;
+  color: #ffc7c7;
+  background: rgba(120, 24, 28, .35);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.signin-error[hidden] { display: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .signin-orb, .signin-stage { animation: none; }
 }

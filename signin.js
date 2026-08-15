@@ -1,6 +1,7 @@
 const form = document.querySelector('[data-signin-form]');
 const agree = document.querySelector('[data-legal-agree]');
 const submit = document.querySelector('[data-signin-submit]');
+const errorNote = document.querySelector('[data-signin-error]');
 
 function safeNextPath(value = '') {
   const raw = String(value || '').trim();
@@ -9,13 +10,19 @@ function safeNextPath(value = '') {
   const path = (raw.split('?')[0].split('#')[0] || '/').replace(/\/+$/, '') || '/';
   if (path === '/internet.html') return '/internet';
   if (path === '/owner.html') return '/owner';
-  if (path === '/' || path === '/internet' || path === '/owner') return path;
+  if (path === '/server-management.html') return '/server-management';
+  if (path === '/' || path === '/internet' || path === '/owner' || path === '/server-management' || path === '/departments') return path;
   if (/^\/internet\/(post|member|sponsored)\/[A-Za-z0-9._-]{1,120}$/.test(path)) return path;
-  if (/^\/internet\/(messages|notifications|settings|profile|wallet|staff|sponsored)$/.test(path)) return path;
+  if (/^\/internet\/(messages|notifications|settings|profile|wallet|staff|sponsored|bookmarks)$/.test(path)) return path;
   return '';
 }
 
-const destination = safeNextPath(new URLSearchParams(location.search).get('next') || '');
+const params = new URLSearchParams(location.search);
+const destination = safeNextPath(params.get('next') || '');
+
+if (params.get('error') === 'membership' && errorNote) {
+  errorNote.hidden = false;
+}
 
 function syncSubmitState() {
   submit.disabled = !agree.checked;

@@ -1,6 +1,9 @@
 {
   "cleanUrls": false,
   "trailingSlash": false,
+  "redirects": [
+    { "source": "/coming-soon", "destination": "/", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/api/auth/(.*)", "destination": "/api/site-auth?route=$1" },
     { "source": "/api/media", "destination": "/api/internet" },
@@ -13,7 +16,6 @@
     { "source": "/terms", "destination": "/terms.html" },
     { "source": "/privacy", "destination": "/privacy.html" },
     { "source": "/signin", "destination": "/signin.html" },
-    { "source": "/coming-soon", "destination": "/coming-soon.html" },
     { "source": "/wallet", "destination": "/wallet.html" }
   ],
   "headers": [

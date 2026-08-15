@@ -1,12 +1,20 @@
 (() => {
   const path = location.pathname.replace(/\.html$/i, '') || '/';
-  const publicPaths = new Set(['/coming-soon', '/signin', '/terms', '/privacy']);
+  const publicPaths = new Set([
+    '/',
+    '/coming-soon',
+    '/signin',
+    '/terms',
+    '/privacy',
+    '/departments',
+  ]);
+  const unlock = () => document.documentElement.classList.add('site-unlocked');
+
   if (publicPaths.has(path)) {
     document.documentElement.classList.add('site-public');
+    unlock();
     return;
   }
-
-  const unlock = () => document.documentElement.classList.add('site-unlocked');
 
   fetch('/api/auth/me', { credentials: 'same-origin' })
     .then((response) => (response.ok ? response.json() : null))
@@ -15,10 +23,15 @@
         unlock();
         return;
       }
-      const denied = session?.denied === true ? '?denied=1' : '';
-      location.replace(`/coming-soon${denied}`);
+      const next = encodeURIComponent(`${path}${location.search || ''}`);
+      if (session?.denied === true) {
+        location.replace(`/signin?error=membership&next=${next}`);
+        return;
+      }
+      location.replace(`/signin?next=${next}`);
     })
     .catch(() => {
-      location.replace('/coming-soon');
+      const next = encodeURIComponent(`${path}${location.search || ''}`);
+      location.replace(`/signin?next=${next}`);
     });
 })();
