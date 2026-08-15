@@ -161,7 +161,7 @@ export async function fetchErlcPlayersOnMap(serverKey) {
   };
 }
 
-const ERLC_MOD_ACTIONS = new Set(['kick', 'jail', 'unjail', 'ban']);
+const ERLC_MOD_ACTIONS = new Set(['load', 'kick', 'jail', 'unjail', 'ban']);
 
 function sanitizeErlcTarget(value) {
   return String(value || '').trim().replace(/\s+/g, ' ').slice(0, 64);

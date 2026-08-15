@@ -77,7 +77,7 @@ export default async function handler(request, response) {
     const body = await readBody(request);
     const serverKey = process.env.ERLC_SERVER_KEY?.trim();
 
-    // Prefer running commands directly from Vercel so kick/jail/ban/raw
+    // Prefer running commands directly from Vercel so load/kick/jail/ban/raw
     // work even when the Discord bot host has not been restarted yet.
     if (serverKey) {
       try {
