@@ -65,8 +65,7 @@ export default {
       .addFields(GROUPS.map((group) => ({
         name: group.title,
         value: group.lines.join('\n').slice(0, 1024),
-      })))
-      .setFooter({ text: 'Modeled after Circle-style staff tools' });
+      })));
     await message.reply({ embeds: [embed] });
   },
 };
