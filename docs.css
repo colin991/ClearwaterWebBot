@@ -194,6 +194,42 @@ code {
 .docs-update h2 { margin: 10px 0 8px; }
 .docs-update a { font-weight: 750; }
 
+.docs-steps {
+  display: grid;
+  gap: 22px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: docs-step;
+}
+.docs-steps > li {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--docs-line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .02);
+}
+.docs-steps > li > div b {
+  display: block;
+  margin-bottom: 6px;
+  color: #fff;
+  font-size: 15px;
+}
+.docs-steps > li > div p { margin: 0; }
+.docs-shot {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--docs-line);
+  border-radius: 14px;
+  background: #05080f;
+}
+.docs-shot img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
 .docs-frame {
   width: 100%;
   height: min(70vh, 760px);
