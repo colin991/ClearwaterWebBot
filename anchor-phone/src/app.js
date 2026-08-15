@@ -192,7 +192,7 @@
       .map(
         (p) => `<li>
         <div class="avatar">▣</div>
-        <div><p class="item-title">${escapeHtml(p.name)}</p><p class="item-sub">Listed · Anchor storefront</p></div>
+        <div><p class="item-title">${escapeHtml(p.name)}</p><p class="item-sub">Listed · Clearwater storefront</p></div>
         <span class="price-tag">${formatMoney(p.price)}</span>
       </li>`
       )
@@ -296,7 +296,7 @@
       when: "2m"
     },
     {
-      from: "Anchor Panel",
+      from: "Clearwater Panel",
       subject: "Wallet request paid",
       preview: "Maya sent you C$500.",
       unread: true,
@@ -353,7 +353,7 @@
     mails.unshift({
       from: "Me",
       subject: `To ${to}: ${subject}`,
-      preview: body || "Sent via Anchor Mail",
+      preview: body || "Sent via Clearwater Mail",
       unread: false,
       when: "Now"
     });

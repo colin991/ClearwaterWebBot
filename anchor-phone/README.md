@@ -1,6 +1,6 @@
-# Anchor Phone
+# Clearwater Phone
 
-Floating **Anchor** phone overlay for Clearwater / ER:LC on desktop. Always-on-top, frameless, toggle with **F8** (fallback **Alt+A**). Drag the status bar to move.
+Floating **Clearwater** phone overlay for ER:LC on desktop. Always-on-top, frameless, toggle with **F8** (fallback **Alt+A**). Drag the status bar to move.
 
 ## Apps
 
@@ -9,11 +9,11 @@ Floating **Anchor** phone overlay for Clearwater / ER:LC on desktop. Always-on-t
 | **Wallet** | Send, receive, and request economy money from panel members |
 | **Marketplace** | Storefront, products, employees, and payouts |
 | **Find My** | Share in-game location with trusted contacts (per-person toggle) |
-| **Mail** | Anchor Mail — compose/receive; marketplace receipts |
+| **Mail** | Clearwater Mail — compose/receive; marketplace receipts |
 | **Messages** | Message contacts and friends |
 | **Maps** | Fastest route to a Clearwater destination |
 
-Icons and wallpaper are original Anchor / Clearwater designs (not copies of third-party phone UIs).
+Icons and wallpaper are original Clearwater designs (not copies of third-party phone UIs).
 
 ## Run (dev)
 
@@ -29,7 +29,7 @@ npm start
 npm run dist
 ```
 
-Output: `anchor-phone/dist/AnchorPhone.exe` — download and run alongside Roblox. No install required.
+Output: `anchor-phone/dist/ClearwaterPhone.exe` — download and run alongside Roblox. No install required.
 
 ## Notes
 

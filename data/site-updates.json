@@ -203,8 +203,8 @@
     },
     {
       "id": "2026-08-15-anchor-phone",
-      "title": "Anchor Phone overlay",
-      "summary": "New downloadable Anchor Phone desktop overlay (Electron) with original icons and wallpaper for Wallet, Marketplace, Find My, Mail, Messages, and Maps. Always-on-top; toggle with F8.",
+      "title": "Clearwater Phone overlay",
+      "summary": "New downloadable Clearwater Phone desktop overlay (Electron) with original icons and wallpaper for Wallet, Marketplace, Find My, Mail, Messages, and Maps. Always-on-top; toggle with F8.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T17:45:00.000Z",
       "commit": "ab4589d"
