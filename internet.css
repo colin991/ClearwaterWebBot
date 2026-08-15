@@ -9337,3 +9337,36 @@ body.has-site-banner.has-official-post-banner .internet-side {
 .staff-active-seen {
   color: #7dffa3 !important;
 }
+
+/* Right rail: sticky column with its own vertical scroll when content is tall. */
+@media (min-width: 941px) {
+  .internet-shell:not(.staff-mode) .internet-side {
+    display: grid !important;
+    align-content: start !important;
+    align-self: start !important;
+    position: sticky !important;
+    top: calc(28px + var(--top-banner-stack, 0px)) !important;
+    height: calc(100dvh - 56px - var(--top-banner-stack, 0px)) !important;
+    max-height: calc(100dvh - 56px - var(--top-banner-stack, 0px)) !important;
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(180, 190, 205, .45) transparent;
+    padding-right: 2px;
+    padding-bottom: 12px;
+    box-sizing: border-box;
+  }
+  .internet-shell:not(.staff-mode) .internet-side::-webkit-scrollbar { width: 8px; }
+  .internet-shell:not(.staff-mode) .internet-side::-webkit-scrollbar-track { background: transparent; }
+  .internet-shell:not(.staff-mode) .internet-side::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(180, 190, 205, .32);
+  }
+  .internet-shell:not(.staff-mode) .internet-side::-webkit-scrollbar-thumb:hover {
+    background: rgba(180, 190, 205, .48);
+  }
+}
