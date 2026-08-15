@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-phone-signin-fix",
+      "title": "Phone Discord sign-in works",
+      "summary": "Signing in with Discord on Clearwater Phone now keeps you signed in on the overlay so Wallet, Messages, and Internet load your real account.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T19:05:00.000Z"
+    },
+    {
       "id": "2026-08-15-phone-launcher-internet",
       "title": "Phone launcher, Internet app, and download",
       "summary": "Clearwater Phone opens to a full-screen intro until you click Launch Phone. The overlay now has an Internet app for posting to the live feed, plus settings to start with Windows and auto-launch when Roblox opens. Download Phone is back on the Internet sidebar.",

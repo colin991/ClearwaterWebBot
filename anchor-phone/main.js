@@ -12,22 +12,33 @@ function phoneSession() {
   return session.fromPartition(SESSION_PARTITION);
 }
 
+async function cookieHeaderForSite() {
+  const cookies = await phoneSession().cookies.get({ url: SITE });
+  return cookies
+    .filter((cookie) => cookie.value)
+    .map((cookie) => `${cookie.name}=${encodeURIComponent(cookie.value)}`)
+    .join('; ');
+}
+
 async function hasSiteSession() {
   const cookies = await phoneSession().cookies.get({ url: SITE });
-  return cookies.some((cookie) => cookie.name.includes('clearwater_session') && cookie.value);
+  return cookies.some((cookie) => /clearwater_session/i.test(cookie.name) && cookie.value);
 }
 
 async function siteFetch(pathname, { method = 'GET', body } = {}) {
   const url = pathname.startsWith('http') ? pathname : SITE + pathname;
   const payload = body != null ? JSON.stringify(body) : null;
+  const cookie = await cookieHeaderForSite();
   const response = await net.fetch(url, {
     method,
     session: phoneSession(),
+    useSessionCookies: true,
     headers: {
       Accept: 'application/json',
       Origin: SITE,
       Referer: SITE + '/internet',
       'User-Agent': 'ClearwaterPhone/' + pkg.version,
+      ...(cookie ? { Cookie: cookie } : {}),
       ...(payload ? { 'Content-Type': 'application/json' } : {}),
     },
     body: payload || undefined,
@@ -42,19 +53,38 @@ async function siteFetch(pathname, { method = 'GET', body } = {}) {
   return { ok: response.ok, status: response.status, body: data };
 }
 
+function notifyOverlayAuth(payload) {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('phone-auth', payload || { authenticated: false });
+  }
+}
+
+async function readAuthState() {
+  if (!(await hasSiteSession())) return { authenticated: false, siteAccess: false };
+  const me = await siteFetch('/api/auth/me');
+  return me.body && typeof me.body === 'object' ? me.body : { authenticated: false, siteAccess: false };
+}
+
 let loginWin = null;
+
+function closeLoginWindow() {
+  if (loginWin && !loginWin.isDestroyed()) loginWin.close();
+}
 
 function openLoginWindow() {
   if (loginWin && !loginWin.isDestroyed()) {
+    loginWin.show();
     loginWin.focus();
     return loginWin;
   }
   loginWin = new BrowserWindow({
-    width: 480,
-    height: 720,
+    width: 520,
+    height: 760,
     title: 'Sign in to Clearwater',
     autoHideMenuBar: true,
-    icon: path.join(__dirname, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    icon: iconPath(),
     webPreferences: {
       partition: SESSION_PARTITION,
       contextIsolation: true,
@@ -62,16 +92,25 @@ function openLoginWindow() {
       sandbox: true,
     },
   });
+  loginWin.setAlwaysOnTop(true, 'screen-saver');
+  if (win && !win.isDestroyed()) win.setAlwaysOnTop(false);
   loginWin.loadURL(SITE + '/signin?next=/internet');
+
   const finishIfSignedIn = async () => {
-    if (await hasSiteSession()) {
-      if (loginWin && !loginWin.isDestroyed()) loginWin.close();
-    }
+    if (!(await hasSiteSession())) return;
+    const auth = await readAuthState();
+    notifyOverlayAuth(auth);
+    if (auth.authenticated) closeLoginWindow();
   };
+
   loginWin.webContents.on('did-navigate', finishIfSignedIn);
   loginWin.webContents.on('did-navigate-in-page', finishIfSignedIn);
+  loginWin.webContents.on('did-redirect-navigation', finishIfSignedIn);
+  loginWin.webContents.on('did-finish-load', finishIfSignedIn);
   loginWin.on('closed', () => {
     loginWin = null;
+    if (win && !win.isDestroyed()) win.setAlwaysOnTop(true, 'screen-saver');
+    void readAuthState().then(notifyOverlayAuth);
   });
   return loginWin;
 }
@@ -320,6 +359,14 @@ app.whenReady().then(() => {
   ensureTray();
   startWatchLoop();
 
+  phoneSession().cookies.on('changed', (_event, cookie, _cause, removed) => {
+    if (removed || !cookie?.name || !/clearwater_session/i.test(cookie.name)) return;
+    void readAuthState().then((auth) => {
+      notifyOverlayAuth(auth);
+      if (auth.authenticated) closeLoginWindow();
+    });
+  });
+
   if (argvHas('--watch') || argvHas('--overlay')) {
     if (argvHas('--overlay')) void createOverlayWindow();
   } else {
@@ -371,12 +418,7 @@ app.whenReady().then(() => {
     name: pkg.productName || pkg.name
   }));
 
-  ipcMain.handle('phone-session', async () => {
-    const signedIn = await hasSiteSession();
-    if (!signedIn) return { authenticated: false };
-    const me = await siteFetch('/api/auth/me');
-    return me.body || { authenticated: false };
-  });
+  ipcMain.handle('phone-session', async () => readAuthState());
 
   ipcMain.handle('phone-login', async () => {
     openLoginWindow();

@@ -4,7 +4,7 @@
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
   const settings = { autoUpdate: true };
-  let appVersion = '1.3.0';
+  let appVersion = '1.3.1';
   let latestInfo = null;
   let updateInFlight = false;
   let sessionUser = null;
@@ -249,6 +249,11 @@
     renderAccount();
     return sessionUser;
   }
+
+  window.anchorPhone?.onAuth?.((payload) => {
+    sessionUser = payload && typeof payload === 'object' ? payload : { authenticated: false };
+    renderAccount();
+  });
 
   function compareVersions(a, b) {
     const pa = String(a || '0').split('.').map((n) => parseInt(n, 10) || 0);

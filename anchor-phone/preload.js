@@ -18,7 +18,7 @@ contextBridge.exposeInMainWorld('anchorPhone', {
   onUpdateProgress: (cb) => {
     ipcRenderer.on('phone-update-progress', (_e, pct) => cb(pct));
   },
-  onVisibility: (cb) => {
-    ipcRenderer.on('overlay-visibility', (_e, v) => cb(v));
-  }
+  onAuth: (cb) => {
+    ipcRenderer.on('phone-auth', (_e, payload) => cb(payload));
+  },
 });

@@ -1,6 +1,6 @@
 {
-  "version": "1.3.0",
-  "minVersion": "1.2.0",
+  "version": "1.3.1",
+  "minVersion": "1.3.0",
   "downloadUrl": "https://cwrpvc.lol/downloads/ClearwaterPhone.exe",
-  "releaseNotes": "Cinematic Launch Phone intro, Internet posting app, auto-launch when Roblox opens, and Start with Windows."
+  "releaseNotes": "Fixes Discord sign-in so the overlay actually stays signed in."
 }
