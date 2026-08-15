@@ -8692,7 +8692,7 @@ a.post-hashtag,
 .signed-out a,
 .composer button[data-post-button],
 .internet-view[data-view="home"] .composer-footer [data-post-button],
-.admin-panel button:not(.danger),
+.admin-panel button:not(.danger):not(.staff-toggle),
 .report-actions button:not(.danger),
 .member-actions button:first-child,
 .member-page-actions button:last-child,
@@ -9141,6 +9141,52 @@ body.has-site-banner.has-official-post-banner .internet-side {
   border-color: rgba(255, 255, 255, .12) !important;
   color: #e8edf5 !important;
   background: rgba(255, 255, 255, .04) !important;
+}
+
+/* Keep pause/restriction switches readable on charcoal (not solid accent fill). */
+.staff-app .staff-toggle,
+.admin-panel .staff-toggle {
+  color: #f2f6fb !important;
+  background: rgba(255, 255, 255, .04) !important;
+  border: 1px solid rgba(255, 255, 255, .12) !important;
+  box-shadow: none !important;
+}
+.staff-app .staff-toggle:hover,
+.admin-panel .staff-toggle:hover {
+  background: rgba(255, 255, 255, .07) !important;
+  border-color: rgba(255, 255, 255, .2) !important;
+}
+.staff-app .staff-toggle-label b,
+.admin-panel .staff-toggle-label b {
+  color: #f2f6fb !important;
+}
+.staff-app .staff-toggle-label small,
+.admin-panel .staff-toggle-label small {
+  color: #9aabbe !important;
+}
+.staff-app .staff-toggle.on,
+.admin-panel .staff-toggle.on {
+  border-color: rgba(118, 173, 255, .4) !important;
+  background: rgba(118, 173, 255, .12) !important;
+}
+.staff-app .staff-toggle.on .staff-toggle-label small,
+.admin-panel .staff-toggle.on .staff-toggle-label small {
+  color: #cfe0f7 !important;
+}
+.staff-app .staff-toggle.on.warn,
+.admin-panel .staff-toggle.on.warn {
+  border-color: rgba(255, 196, 72, .4) !important;
+  background: rgba(255, 196, 72, .12) !important;
+}
+.staff-app .staff-toggle.on.danger,
+.admin-panel .staff-toggle.on.danger {
+  border-color: rgba(255, 92, 92, .4) !important;
+  background: rgba(255, 70, 70, .12) !important;
+}
+.staff-app .staff-toggle.on.watch,
+.admin-panel .staff-toggle.on.watch {
+  border-color: rgba(120, 214, 255, .4) !important;
+  background: rgba(120, 214, 255, .12) !important;
 }
 
 .staff-app .staff-toggle.on .staff-toggle-switch {

@@ -160,6 +160,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T05:50:00.000Z",
       "commit": "edfc704"
+    },
+    {
+      "id": "2026-08-15-community-pauses",
+      "title": "Community pauses contrast",
+      "summary": "Staff Controls community pause toggles no longer inherit the solid accent button fill, so labels like \u201cOpen to members\u201d stay readable on the charcoal panel.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T05:55:00.000Z",
+      "commit": "PENDING"
     }
   ]
 }
