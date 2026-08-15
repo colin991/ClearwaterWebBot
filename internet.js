@@ -2085,18 +2085,19 @@ function scoreForYouPost(post, trending) {
   return score;
 }
 
-/** Rotate which tipped post wins exposure, and whether it sits 1st or 2nd. */
+/** Rotate whether the featured tip sits 1st or 2nd. */
 function tipRotationBucket() {
   return Math.floor(Date.now() / (5 * 60_000));
 }
 
 function pickTippedPost(boosted) {
   if (!boosted.length) return null;
-  const ids = boosted.map((post) => String(post.id)).sort();
-  const seed = `${tipRotationBucket()}:${ids.join('|')}`;
-  let hash = 0;
-  for (const char of seed) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0;
-  return boosted[Math.abs(hash) % boosted.length];
+  // Always feature the most recently tipped post.
+  return [...boosted].sort((left, right) => {
+    const leftAt = Date.parse(left.boostedAt || left.createdAt || 0) || 0;
+    const rightAt = Date.parse(right.boostedAt || right.createdAt || 0) || 0;
+    return rightAt - leftAt || String(right.id).localeCompare(String(left.id));
+  })[0];
 }
 
 function tippedPostSlot(boostedCount) {

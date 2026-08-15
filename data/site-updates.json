@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-tip-most-recent",
+      "title": "Newest tip leads For You",
+      "summary": "The tipped post shown in the 1st or 2nd For You slot is now always the most recently tipped one, still rotating between those two positions.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T23:05:00.000Z"
+    },
+    {
       "id": "2026-08-15-staff-delete-business",
       "title": "Staff can delete business accounts",
       "summary": "In the staff Users panel, business accounts now have a Delete business account action. It removes the business, its posts, and its ads. The linked personal handler account stays.",
