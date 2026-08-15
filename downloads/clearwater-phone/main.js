@@ -221,9 +221,7 @@ function readHostSettings() {
   try {
     const raw = fs.readFileSync(settingsPath(), 'utf8');
     const parsed = JSON.parse(raw);
-    const merged = { ...defaultHostSettings(), ...parsed };
-    if (typeof parsed.setupComplete !== 'boolean') merged.setupComplete = true;
-    return merged;
+    return { ...defaultHostSettings(), ...parsed };
   } catch {
     return defaultHostSettings();
   }
@@ -283,15 +281,20 @@ function ensureTray() {
   } catch {}
 }
 
+function launcherIsOpen() {
+  return Boolean(launcherWin && !launcherWin.isDestroyed());
+}
+
 function startWatchLoop() {
   if (watchTimer) return;
   watchTimer = setInterval(async () => {
+    if (launcherIsOpen()) return;
     const settings = readHostSettings();
     if (!settings.setupComplete || !settings.launchOnApp) return;
     const running = await isProcessRunning(settings.watchProcess || 'RobloxPlayerBeta.exe');
     if (running && !robloxWasOpen) {
       robloxWasOpen = true;
-      await createOverlayWindow({ closeLauncher: true });
+      await createOverlayWindow({ closeLauncher: false });
       if (win && !win.isDestroyed()) {
         win.show();
         visible = true;
@@ -303,7 +306,6 @@ function startWatchLoop() {
 }
 
 function maybeCloseLauncher() {
-  if (!readHostSettings().setupComplete) return;
   if (launcherWin && !launcherWin.isDestroyed()) launcherWin.close();
 }
 
@@ -372,6 +374,7 @@ function createLauncherWindow() {
     y: 0,
     fullscreen: true,
     frame: false,
+    alwaysOnTop: true,
     backgroundColor: '#02060c',
     autoHideMenuBar: true,
     icon: iconPath(),
@@ -383,9 +386,12 @@ function createLauncherWindow() {
       sandbox: true
     }
   });
+  if (win && !win.isDestroyed()) win.setAlwaysOnTop(false);
   launcherWin.loadFile(path.join(__dirname, 'src', 'launcher.html'));
+  launcherWin.setAlwaysOnTop(true, 'screen-saver');
   launcherWin.on('closed', () => {
     launcherWin = null;
+    startWatchLoop();
     if (!win && !readHostSettings().launchOnApp && !argvHas('--watch')) {
       app.quit();
     }
@@ -394,11 +400,16 @@ function createLauncherWindow() {
 }
 
 function openPhoneUi() {
+  if (launcherIsOpen()) {
+    launcherWin.show();
+    launcherWin.focus();
+    return launcherWin;
+  }
   if (!readHostSettings().setupComplete) {
     createLauncherWindow();
     return launcherWin;
   }
-  return createOverlayWindow();
+  return createOverlayWindow({ closeLauncher: false });
 }
 
 function createWindow() {
@@ -454,7 +465,6 @@ function downloadFile(url, dest, onProgress) {
 app.whenReady().then(() => {
   applyLoginItem(readHostSettings());
   ensureTray();
-  startWatchLoop();
 
   phoneSession().cookies.on('changed', (_event, cookie, _cause, removed) => {
     if (removed || !isSessionCookieName(cookie?.name)) return;
@@ -465,7 +475,8 @@ app.whenReady().then(() => {
   });
 
   if (argvHas('--watch') || argvHas('--overlay')) {
-    if (argvHas('--overlay')) void createOverlayWindow();
+    startWatchLoop();
+    if (argvHas('--overlay')) void createOverlayWindow({ closeLauncher: false });
   } else {
     createLauncherWindow();
   }
