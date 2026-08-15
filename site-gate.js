@@ -16,10 +16,11 @@
     return;
   }
 
+  // Clearwater Internet and tools: any signed-in Discord member (not staff-only).
   fetch('/api/auth/me', { credentials: 'same-origin' })
     .then((response) => (response.ok ? response.json() : null))
     .then((session) => {
-      if (session?.siteAccess === true && session?.authenticated === true) {
+      if (session?.authenticated === true && session?.siteAccess === true) {
         unlock();
         return;
       }
