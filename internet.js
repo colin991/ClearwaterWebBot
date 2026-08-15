@@ -3280,9 +3280,9 @@ function renderStaffDashboard() {
       : '<p class="staff-empty">Nobody is actively browsing the website right now.</p>';
   }
   const userPanel = document.querySelector('[data-staff-user-panel]');
-  const keepUserPanel = Boolean(userPanel && userPanel.contains(document.activeElement) && (
+  const keepUserPanel = Boolean(staffUserBusy || (userPanel && userPanel.contains(document.activeElement) && (
     document.activeElement.matches('input, textarea, select')
-  ));
+  )));
   if (userPanel && !keepUserPanel) {
     if (!selectedStaffUserId) userPanel.innerHTML = '<div class="staff-empty staff-empty-lg">Select a user to open their staff panel.</div>';
     else if (
@@ -3397,15 +3397,17 @@ function renderStaffDashboard() {
 
 async function loadModeration() {
   if (!sessionCanStaff || !staffContent) return;
+  if (staffUserBusy) return;
   const overview = document.querySelector('[data-staff-overview]');
   if (overview && !moderationSnapshot) overview.innerHTML = '<p class="staff-loading">Loading the moderation desk...</p>';
   try {
     const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'moderation' }) });
     const result = await readApiJson(response, 'Could not load the staff panel.');
     if (!response.ok) throw new Error(result.error || 'Could not load the staff panel.');
+    if (staffUserBusy) return;
     moderationSnapshot = result;
     renderStaffDashboard();
-    if (selectedStaffUserId && staffTab === 'users') void loadStaffUserDetail(selectedStaffUserId, true);
+    if (selectedStaffUserId && staffTab === 'users' && !staffUserBusy) void loadStaffUserDetail(selectedStaffUserId, true);
   } catch (error) {
     if (overview) overview.innerHTML = `<p class="staff-loading">${escapeHtml(error.message || 'Could not load the staff panel.')}</p>`;
   }
@@ -3558,6 +3560,7 @@ async function loadStaffUserConversation(peerId, username = '') {
 
 async function loadStaffUserDetail(userId, silent = false) {
   if (!sessionCanStaff || !userId) return;
+  if (staffUserBusy) return;
   const panel = document.querySelector('[data-staff-user-panel]');
   if (!silent && panel && !panel.contains(document.activeElement)) panel.innerHTML = '<p class="staff-loading">Loading this account...</p>';
   try {
@@ -3568,6 +3571,7 @@ async function loadStaffUserDetail(userId, silent = false) {
     });
     const result = await readApiJson(response, 'Could not load this user.');
     if (!response.ok) throw new Error(result.error || 'Could not load this user.');
+    if (staffUserBusy) return;
     const returnedId = String(result?.user?.id || '');
     if (
       selectedStaffUserId
@@ -3580,6 +3584,7 @@ async function loadStaffUserDetail(userId, silent = false) {
     if (staffMessagesState?.targetId && staffMessagesState.targetId !== selectedStaffUserId) staffMessagesState = null;
     if (panel && !panel.contains(document.activeElement)) panel.innerHTML = staffUserPanelMarkup(result);
   } catch (error) {
+    if (staffUserBusy) return;
     if (panel && (selectedStaffUserId === userId || !selectedStaffUserId)) {
       panel.innerHTML = `<p class="staff-loading">${escapeHtml(error.message || 'Could not load this user.')}</p>`;
     }
@@ -3660,6 +3665,46 @@ function setStaffTogglePending(button, turningOn) {
     : (button.dataset.staffToggleOn || button.dataset.staffUserAction);
 }
 
+function staffToggleFlag(staffAction) {
+  switch (String(staffAction || '')) {
+    case 'ban':
+    case 'unban':
+      return 'banned';
+    case 'mute':
+    case 'unmute':
+      return 'muted';
+    case 'verify':
+    case 'unverify':
+      return 'verified';
+    case 'shadowban':
+    case 'unshadowban':
+      return 'shadowbanned';
+    case 'watch':
+    case 'unwatch':
+      return 'watched';
+    case 'lock-posts':
+    case 'unlock-posts':
+      return 'lockPosts';
+    case 'lock-messages':
+    case 'unlock-messages':
+      return 'lockMessages';
+    case 'lock-reels':
+    case 'unlock-reels':
+      return 'lockReels';
+    case 'lock-profile':
+    case 'unlock-profile':
+      return 'lockProfile';
+    default:
+      return '';
+  }
+}
+
+function normalizeStaffDurationDays(value) {
+  if (value === 'forever' || value == null || value === '') return 'forever';
+  const days = Number(value);
+  return Number.isInteger(days) && days >= 1 && days <= 30 ? days : 'forever';
+}
+
 async function runStaffUserAction(staffAction, postId = '', sourceButton = null) {
   const targetId = staffActionTargetId();
   if (!targetId) {
@@ -3673,7 +3718,12 @@ async function runStaffUserAction(staffAction, postId = '', sourceButton = null)
   if (destructive.has(staffAction) && !(await siteConfirm(`Run "${staffAction.replace(/-/g, ' ')}" on this account? This cannot be undone.`, 'Staff action'))) return;
   staffUserBusy = true;
   const isToggle = sourceButton?.classList?.contains('staff-toggle');
-  const turningOn = Boolean(isToggle && sourceButton.dataset.staffToggleOn === staffAction);
+  // Prefer the visible switch state so on/off intent cannot invert if action attrs drift.
+  const currentlyOn = isToggle && (
+    sourceButton.getAttribute('aria-checked') === 'true'
+    || sourceButton.classList.contains('on')
+  );
+  const turningOn = Boolean(isToggle && !currentlyOn);
   if (isToggle) setStaffTogglePending(sourceButton, turningOn);
   const status = document.querySelector('[data-staff-user-status]');
   if (status) status.textContent = 'Saving...';
@@ -3688,13 +3738,17 @@ async function runStaffUserAction(staffAction, postId = '', sourceButton = null)
         targetId,
         reason: fields.reason,
         note: staffAction === 'note' ? fields.note : fields.reason,
-        durationDays: fields.durationDays,
+        durationDays: normalizeStaffDurationDays(fields.durationDays),
         ipBan: fields.ipBan,
         postId,
       }),
     });
     const result = await readApiJson(response, 'Could not update this user.');
     if (!response.ok) throw new Error(result.error || 'Could not update this user.');
+    const flag = isToggle ? staffToggleFlag(staffAction) : '';
+    if (flag && result?.user && (result.user[flag] === true) !== turningOn) {
+      throw new Error('That switch did not stick. Pull the latest bot files and restart the bot host, then try again.');
+    }
     staffUserDetail = result;
     if (result?.user?.id) selectedStaffUserId = result.user.id;
     else if (result?.user?.discordId) selectedStaffUserId = result.user.discordId;
@@ -3704,10 +3758,11 @@ async function runStaffUserAction(staffAction, postId = '', sourceButton = null)
     const nextStatus = document.querySelector('[data-staff-user-status]');
     if (nextStatus) nextStatus.textContent = 'Saved.';
   } catch (error) {
-    if (isToggle) setStaffTogglePending(sourceButton, !turningOn);
+    if (isToggle) setStaffTogglePending(sourceButton, currentlyOn);
     const nextStatus = document.querySelector('[data-staff-user-status]');
     if (nextStatus) nextStatus.textContent = error.message || 'Could not update this user.';
     else void siteAlert(error.message || 'Could not update this user.');
+    staffUserBusy = false;
     if (selectedStaffUserId) void loadStaffUserDetail(selectedStaffUserId, true);
   } finally {
     staffUserBusy = false;

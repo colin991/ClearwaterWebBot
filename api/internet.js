@@ -785,7 +785,11 @@ export default async function handler(request, response) {
         targetId: String(body.targetId || ''),
         reason: String(body.reason || '').slice(0, 300),
         note: String(body.note || '').slice(0, 500),
-        durationDays: body.durationDays === 'forever' ? 'forever' : Number(body.durationDays),
+        durationDays: (() => {
+          if (body.durationDays === 'forever' || body.durationDays == null || body.durationDays === '') return 'forever';
+          const days = Number(body.durationDays);
+          return Number.isInteger(days) && days >= 1 && days <= 30 ? days : 'forever';
+        })(),
         ipBan: staffPanel === 'full' && body.ipBan === true,
         postId: String(body.postId || ''),
         actor: staffActor(user, access),

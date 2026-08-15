@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-staff-toggle-fix",
+      "title": "Staff switches keep the side you click",
+      "summary": "Staff panel on/off switches no longer snap the other way after you click. Saves are protected from background refresh, and a stuck switch now tells you to restart the bot host if needed.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T20:50:00.000Z"
+    },
+    {
       "id": "2026-08-15-staff-ban-toggle",
       "title": "Staff ban toggle stays on",
       "summary": "Banning someone from the staff panel now keeps the Banned switch on. Ban, mute, and lock actions were writing to a discarded user record and looked like they flipped back off.",
