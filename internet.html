@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/assets/icon-512.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260815-staff-active-live" />
+    <link rel="stylesheet" href="internet.css?v=20260815-business-profile-edit" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260815-newsletter"></script>
   </head>
@@ -406,7 +406,7 @@
           <div class="profile-banner" data-member-page-banner></div>
           <div class="profile-content">
             <img class="profile-avatar" data-member-page-avatar src="assets/clearwater-logo.png" alt="" />
-            <div class="profile-actions member-page-actions"><button type="button" data-member-page-menu aria-label="Member actions">•••</button><button type="button" data-member-page-message aria-label="Message member">✉</button><button type="button" data-member-page-follow>Follow</button></div>
+            <div class="profile-actions member-page-actions"><button type="button" class="profile-edit" data-member-page-edit-business hidden>Edit business profile</button><button type="button" data-member-page-menu aria-label="Member actions">•••</button><button type="button" data-member-page-message aria-label="Message member">✉</button><button type="button" data-member-page-follow>Follow</button></div>
             <h1><span data-member-page-name>Member</span> <span class="profile-verified" data-member-page-verified hidden role="img" aria-label="Verified" data-tooltip="Verified"><img src="assets/verified-badge.png" alt="" /></span> <span class="role-badge staff-badge" data-member-page-staff-badge hidden role="img" aria-label="Staff" data-tooltip="Staff"><img src="assets/clearwater-staff-badge.png" alt="" /></span> <span class="role-badge business-badge" data-member-page-business-badge hidden role="img" aria-label="Business" data-tooltip="Business account"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 16.7 4.8 12.3l1.7-1.7 2.7 2.7 8.3-8.3 1.7 1.7z"/></svg></span> <span class="role-badge warning-badge" data-member-page-warning-badge hidden role="img" aria-label="Account warning" data-tooltip="Account warning"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.4 22 20.6H2L12 3.4Zm0 5.2c-.7 0-1.2.5-1.1 1.2l.4 5.2h1.4l.4-5.2c.1-.7-.4-1.2-1.1-1.2Zm0 9.3a1.15 1.15 0 1 0 0-2.3 1.15 1.15 0 0 0 0 2.3Z"/></svg></span></h1>
             <p class="profile-handle" data-member-page-handle>@member</p>
             <p class="profile-copy" data-member-page-copy>Clearwater Roleplay community member.</p>
@@ -544,7 +544,7 @@
                 </section>
                 <section class="settings-card" data-business-card>
                   <h2 data-business-title>Business accounts</h2>
-                  <p class="settings-hint" data-business-hint>Create a linked business or department account. Staff must approve it before it can run ads. Only the handler can advertise, using the handler’s wallet credits.</p>
+                  <p class="settings-hint" data-business-hint>Create a linked business or department account. Staff must approve it before it can run ads. After approval, handlers and managers can update the logo, name, type, and about text. Only the handler can advertise, using the handler’s wallet credits.</p>
                   <p class="settings-status" data-business-complete-status role="status" hidden></p>
                   <form class="settings-stack-form" data-business-form>
                     <div class="settings-grid">
@@ -809,6 +809,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260815-reels-photo-load"></script>
+    <script src="internet.js?v=20260815-business-profile-edit"></script>
   </body>
 </html>

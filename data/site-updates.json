@@ -144,6 +144,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T05:20:00.000Z",
       "commit": "91cf3fe"
+    },
+    {
+      "id": "2026-08-15-business-profile-edit",
+      "title": "Business profile editing",
+      "summary": "Handlers and managers can update an approved business account\u2019s logo, name, type, and about text from Settings \u2192 Account (or Edit business profile on the business page).",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T05:30:00.000Z",
+      "commit": ""
     }
   ]
 }

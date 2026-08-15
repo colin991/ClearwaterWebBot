@@ -4248,6 +4248,18 @@ body { margin: 0; }
 .business-account-card > header small,
 .business-account-card > p,
 .business-member-list small { color: #8f9aaa; }
+.business-profile-form {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255,255,255,.1);
+}
+.business-profile-form h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #e8eef8;
+}
 .business-member-list {
   list-style: none;
   margin: 0;

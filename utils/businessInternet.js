@@ -65,6 +65,7 @@ function publicBusinessAccount(biz, { viewerId = '', includeMembers = false } = 
     canPost: Boolean(isHandler || membership),
     canAds: Boolean(isHandler),
     canManageMembers: Boolean(isHandler || membership?.role === 'manager'),
+    canEditProfile: Boolean(isHandler || membership?.role === 'manager'),
   };
   if (includeMembers && (isHandler || membership?.role === 'manager')) {
     next.members = Object.entries(biz.members || {}).map(([id, member]) => ({

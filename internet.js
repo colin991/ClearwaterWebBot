@@ -427,6 +427,7 @@ let myBusinessAccounts = [];
 let myVerificationApp = null;
 let accountVerified = false;
 let businessAvatarDraft = null;
+const businessEditAvatarDrafts = new Map();
 let adPricing = {
   base: 1200,
   boost: 300,
@@ -5686,6 +5687,47 @@ function hasCompletedBusinessAccount() {
   ));
 }
 
+function canManageBusinessProfile(businessId) {
+  const biz = (Array.isArray(myBusinessAccounts) ? myBusinessAccounts : [])
+    .find((item) => item.id === String(businessId || ''));
+  return Boolean(biz && biz.status === 'active' && (biz.canEditProfile || biz.canManageMembers));
+}
+
+function revokeBusinessEditAvatarDraft(businessId) {
+  const id = String(businessId || '');
+  const draft = businessEditAvatarDrafts.get(id);
+  if (draft?.previewUrl) URL.revokeObjectURL(draft.previewUrl);
+  businessEditAvatarDrafts.delete(id);
+}
+
+function syncBusinessUserLocally(biz) {
+  if (!biz?.id) return;
+  const existing = internetUsers.get(biz.id) || {};
+  internetUsers.set(biz.id, {
+    ...existing,
+    id: biz.id,
+    username: biz.username || existing.username,
+    displayName: biz.displayName || existing.displayName,
+    avatarUrl: biz.avatarUrl || existing.avatarUrl || 'assets/clearwater-logo.png',
+    bio: biz.bio != null ? biz.bio : (existing.bio || ''),
+    verified: true,
+    business: true,
+    badges: Array.isArray(existing.badges) && existing.badges.includes('business')
+      ? existing.badges
+      : [...(Array.isArray(existing.badges) ? existing.badges.filter((badge) => badge !== 'business') : []), 'business'],
+  });
+}
+
+function openBusinessProfileEditor(businessId) {
+  history.pushState({}, '', internetUrl('settings'));
+  showView('settings');
+  showSettingsTab('account');
+  const card = document.querySelector(`[data-business-id="${CSS.escape(String(businessId || ''))}"]`);
+  const form = card?.querySelector('[data-biz-profile-form]');
+  form?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  form?.querySelector('[data-biz-name]')?.focus();
+}
+
 function renderBusinessAccountsPane() {
   const list = document.querySelector('[data-business-list]');
   const form = document.querySelector('[data-business-form]');
@@ -5714,16 +5756,42 @@ function renderBusinessAccountsPane() {
   list.innerHTML = myBusinessAccounts.map((biz) => {
     const members = Array.isArray(biz.members) ? biz.members : [];
     const canManage = biz.canManageMembers && biz.status === 'active';
+    const canEditProfile = (biz.canEditProfile || biz.canManageMembers) && biz.status === 'active';
     const memberRows = members.length
       ? members.map((member) => `<li><span><b>${escapeHtml(member.displayName || member.username || 'Member')}</b> <small>@${escapeHtml(member.username || '')} · ${escapeHtml(businessRoleLabel(member.role))}</small></span>${canManage ? `<span class="business-member-actions"><button type="button" data-biz-role="${escapeHtml(biz.id)}" data-member-id="${escapeHtml(member.id)}" data-role="${member.role === 'manager' ? 'poster' : 'manager'}">${member.role === 'manager' ? 'Make poster' : 'Make manager'}</button><button type="button" data-biz-remove="${escapeHtml(biz.id)}" data-member-id="${escapeHtml(member.id)}">Remove</button></span>` : ''}</li>`).join('')
       : '<li class="settings-hint">No extra members yet.</li>';
     const handlerRow = biz.isHandler
       ? '<li><span><b>You (handler)</b><small>Full access · ads · funds</small></span></li>'
       : '';
+    const editDraft = businessEditAvatarDrafts.get(biz.id);
+    const avatarPreviewSrc = editDraft?.previewUrl || biz.avatarUrl || '';
+    const profileEditor = canEditProfile
+      ? `<form class="business-profile-form settings-stack-form" data-biz-profile-form="${escapeHtml(biz.id)}">
+          <h3>Edit profile</h3>
+          <div class="settings-grid">
+            <label class="settings-field"><span>Name</span><input data-biz-name maxlength="80" value="${escapeHtml(biz.displayName || '')}" required /></label>
+            <label class="settings-field"><span>Username</span><input value="@${escapeHtml(biz.username || '')}" disabled aria-label="Business username (cannot be changed)" /></label>
+          </div>
+          <label class="settings-field"><span>Type</span>
+            <select data-biz-category>
+              <option value="business"${biz.category !== 'department' ? ' selected' : ''}>In-game business</option>
+              <option value="department"${biz.category === 'department' ? ' selected' : ''}>In-game department</option>
+            </select>
+          </label>
+          <label class="settings-field"><span>Logo / profile picture</span><input data-biz-avatar type="file" accept="image/png,image/jpeg,image/webp,image/gif" /></label>
+          <div class="business-avatar-preview" data-biz-avatar-preview ${avatarPreviewSrc ? '' : 'hidden'}>${avatarPreviewSrc ? `<img src="${escapeHtml(avatarPreviewSrc)}" alt="Business logo preview" />` : ''}</div>
+          <label class="settings-field"><span>About</span><textarea data-biz-bio maxlength="300" rows="3" placeholder="What does this business or department do in Clearwater RP?">${escapeHtml(biz.bio || '')}</textarea></label>
+          <div class="settings-actions">
+            <button type="submit" class="settings-button primary" data-biz-profile-save>Save business profile</button>
+            <p class="settings-status" data-biz-profile-status role="status"></p>
+          </div>
+        </form>`
+      : '';
     return `<article class="business-account-card" data-business-id="${escapeHtml(biz.id)}">
       <header><img src="${escapeHtml(biz.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><div><b>${escapeHtml(biz.displayName)}</b><small>@${escapeHtml(biz.username)} · ${escapeHtml(biz.category)} · ${escapeHtml(businessStatusLabel(biz.status))}</small><small>Your role: ${escapeHtml(businessRoleLabel(biz.role || (biz.isHandler ? 'handler' : 'poster')))}</small></div></header>
-      ${biz.bio ? `<p>${escapeHtml(biz.bio)}</p>` : ''}
+      ${biz.bio && !canEditProfile ? `<p>${escapeHtml(biz.bio)}</p>` : ''}
       ${biz.reviewNote && biz.status === 'denied' ? `<p class="settings-status" data-tone="error">${escapeHtml(biz.reviewNote)}</p>` : ''}
+      ${profileEditor}
       ${canManage ? `<form class="business-member-form" data-biz-member-form="${escapeHtml(biz.id)}"><input data-member-username maxlength="80" placeholder="@username" required /><select data-member-role><option value="poster">Poster</option><option value="manager">Manager</option></select><button type="submit">Add member</button></form>` : ''}
       <ul class="business-member-list">${handlerRow}${memberRows}</ul>
     </article>`;
@@ -6071,6 +6139,12 @@ function openMemberProfile(memberId, updateHash = true) {
   const followsYou = socialState.followers.includes(user.id);
   document.querySelector('[data-member-page-follow]').textContent = following && followsYou ? 'Friends' : following ? 'Following' : followsYou ? 'Follow back' : 'Follow';
   document.querySelector('[data-member-page-menu-list]').hidden = true;
+  const editBusiness = document.querySelector('[data-member-page-edit-business]');
+  if (editBusiness) {
+    const canEdit = canManageBusinessProfile(user.id);
+    editBusiness.hidden = !canEdit;
+    editBusiness.dataset.businessId = canEdit ? user.id : '';
+  }
   if (updateHash) setInternetRoute('member', user.id);
   showView('member');
 }
@@ -6734,6 +6808,110 @@ document.querySelector('[data-business-avatar]')?.addEventListener('change', (ev
     preview.hidden = false;
     preview.innerHTML = `<img src="${escapeHtml(businessAvatarDraft.previewUrl)}" alt="Business logo preview" />`;
   }
+});
+
+document.addEventListener('change', (event) => {
+  const input = event.target.closest('[data-biz-avatar]');
+  if (!input) return;
+  const form = input.closest('[data-biz-profile-form]');
+  const businessId = form?.dataset.bizProfileForm;
+  if (!businessId) return;
+  const file = input.files?.[0];
+  const preview = form.querySelector('[data-biz-avatar-preview]');
+  const status = form.querySelector('[data-biz-profile-status]');
+  revokeBusinessEditAvatarDraft(businessId);
+  if (!file) {
+    const biz = myBusinessAccounts.find((item) => item.id === businessId);
+    if (preview) {
+      if (biz?.avatarUrl) {
+        preview.hidden = false;
+        preview.innerHTML = `<img src="${escapeHtml(biz.avatarUrl)}" alt="Business logo preview" />`;
+      } else {
+        preview.hidden = true;
+        preview.innerHTML = '';
+      }
+    }
+    return;
+  }
+  if (!/^image\/(?:png|jpeg|webp|gif)$/.test(file.type || '')) {
+    if (status) {
+      status.dataset.tone = 'error';
+      status.textContent = 'Choose a PNG, JPEG, WebP, or GIF image.';
+    }
+    input.value = '';
+    return;
+  }
+  const previewUrl = URL.createObjectURL(file);
+  businessEditAvatarDrafts.set(businessId, { file, previewUrl });
+  if (preview) {
+    preview.hidden = false;
+    preview.innerHTML = `<img src="${escapeHtml(previewUrl)}" alt="Business logo preview" />`;
+  }
+  if (status) {
+    status.dataset.tone = '';
+    status.textContent = 'New logo selected. Save to publish it.';
+  }
+});
+
+document.addEventListener('submit', async (event) => {
+  const form = event.target.closest('[data-biz-profile-form]');
+  if (!form) return;
+  event.preventDefault();
+  const businessId = form.dataset.bizProfileForm;
+  const status = form.querySelector('[data-biz-profile-status]');
+  const save = form.querySelector('[data-biz-profile-save]');
+  if (save) save.disabled = true;
+  if (status) { status.dataset.tone = 'wait'; status.textContent = 'Saving business profile...'; }
+  try {
+    const draft = businessEditAvatarDrafts.get(businessId);
+    let avatarUrl;
+    if (draft?.file) {
+      if (status) status.textContent = 'Uploading logo...';
+      const uploaded = await uploadAdMedia(draft.file, false);
+      avatarUrl = uploaded.image?.url || '';
+      if (!avatarUrl) throw new Error('Could not upload that logo.');
+    }
+    const payload = {
+      action: 'business-update',
+      businessId,
+      displayName: form.querySelector('[data-biz-name]')?.value || '',
+      bio: form.querySelector('[data-biz-bio]')?.value || '',
+      category: form.querySelector('[data-biz-category]')?.value || 'business',
+    };
+    if (avatarUrl) payload.avatarUrl = avatarUrl;
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const result = await readApiJson(response, 'Could not update that business profile.');
+    if (!response.ok) throw new Error(result.error || 'Could not update that business profile.');
+    myBusinessAccounts = Array.isArray(result.businesses) ? result.businesses : myBusinessAccounts;
+    const updated = result.business || myBusinessAccounts.find((item) => item.id === businessId);
+    if (updated) syncBusinessUserLocally(updated);
+    revokeBusinessEditAvatarDraft(businessId);
+    renderBusinessAccountsPane();
+    updateAccountSwitcher();
+    if (viewedMember?.id === businessId) openMemberProfile(businessId, false);
+    const nextStatus = document.querySelector(`[data-biz-profile-form="${CSS.escape(businessId)}"] [data-biz-profile-status]`);
+    if (nextStatus) {
+      nextStatus.dataset.tone = 'ok';
+      nextStatus.textContent = 'Business profile saved.';
+    }
+  } catch (error) {
+    if (status) {
+      status.dataset.tone = 'error';
+      status.textContent = error.message || 'Could not update that business profile.';
+    }
+  } finally {
+    if (save) save.disabled = false;
+  }
+});
+
+document.querySelector('[data-member-page-edit-business]')?.addEventListener('click', () => {
+  const businessId = document.querySelector('[data-member-page-edit-business]')?.dataset.businessId;
+  if (!businessId || !canManageBusinessProfile(businessId)) return;
+  openBusinessProfileEditor(businessId);
 });
 
 document.querySelector('[data-business-form]')?.addEventListener('submit', async (event) => {
