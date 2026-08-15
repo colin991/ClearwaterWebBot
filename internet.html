@@ -16,9 +16,9 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/assets/icon-512.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260815-leave-mobile" />
+    <link rel="stylesheet" href="internet.css?v=20260815-newsletter" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
-    <script src="site-gate.js?v=20260815-open"></script>
+    <script src="site-gate.js?v=20260815-newsletter"></script>
   </head>
   <body class="internet-booting">
     <aside class="official-post-banner" data-official-post-banner hidden>
@@ -747,6 +747,16 @@
       <p>Finish these quick steps to get set up.</p>
       <ul data-onboarding-list></ul>
     </aside>
+    <aside class="newsletter-promo" data-newsletter-promo hidden role="dialog" aria-label="Newsletter">
+      <button type="button" class="newsletter-promo-dismiss" data-newsletter-promo-dismiss aria-label="Dismiss">×</button>
+      <img src="assets/newsletter-v2-penguin.png" alt="" />
+      <div>
+        <p>Clearwater Internet V.2</p>
+        <b>Check out our latest newsletter</b>
+        <span>Quick release notes for the public launch.</span>
+        <a href="/newsletter">Open newsletter</a>
+      </div>
+    </aside>
     <section class="ban-screen" data-ban-screen hidden aria-live="assertive"><div class="ban-card"><span class="ban-emoji" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" /><path d="m6 6 12 12" /></svg></span><p>Clearwater Internet</p><h1>Banned</h1><strong>Account access has been suspended.</strong><dl><div><dt>Reason</dt><dd data-ban-reason-display>No reason was provided.</dd></div><div><dt>Duration</dt><dd data-ban-duration-display>Forever</dd></div></dl><p>Please contact support if there are any issues.</p><a href="https://discord.com/channels/1514026810348671026/1514122689566998559" target="_blank" rel="noopener">Contact support</a></div></section>
     <section class="join-required-screen" data-join-required-screen hidden aria-live="assertive"><div class="join-required-card"><img src="assets/clearwater-logo.png" alt="Clearwater Roleplay" /><p>Clearwater Internet</p><h1>Join Clearwater Roleplay</h1><strong>You need to be in our Discord server before using Clearwater Internet.</strong><div><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a><a class="join-required-secondary" href="https://erlc.gg/join/cwrpvc" target="_blank" rel="noopener">Join cwrpvc</a></div><small>After joining Discord, return here and refresh the page.</small></div></section>
     <section class="warning-notice" data-warning-notice hidden role="dialog" aria-modal="true" aria-labelledby="warning-title"><div><span aria-hidden="true">⚠</span><p>Clearwater Internet</p><h1 id="warning-title">You received a warning</h1><div data-warning-reasons></div><button type="button" data-close-warning>Okay</button></div></section>
@@ -787,6 +797,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260815-banner-presets"></script>
+    <script src="internet.js?v=20260815-newsletter"></script>
   </body>
 </html>

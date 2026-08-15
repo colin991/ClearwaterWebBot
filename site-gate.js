@@ -7,6 +7,8 @@
     '/terms',
     '/privacy',
     '/departments',
+    '/newsletter',
+    '/docs',
   ]);
   const unlock = () => document.documentElement.classList.add('site-unlocked');
 

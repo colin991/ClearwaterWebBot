@@ -2467,7 +2467,10 @@ function showView(view) {
     pauseReelVideos();
   }
   renderSideSuggestions();
-  if (activeView === 'home') renderPosts();
+  if (activeView === 'home') {
+    renderPosts();
+    maybeShowNewsletterPromo();
+  }
   if (activeView === 'bookmarks') renderBookmarks();
   if (activeView === 'messages') void loadMessages();
   if (activeView === 'notifications') void loadNotifications();
@@ -8555,6 +8558,28 @@ document.querySelector('[data-ad-form]')?.addEventListener('submit', async (even
 
 showViewFromAddress();
 
+const NEWSLETTER_PROMO_KEY = 'clearwater-newsletter-v2-promo';
+
+function dismissNewsletterPromo() {
+  const card = document.querySelector('[data-newsletter-promo]');
+  if (card) card.hidden = true;
+  try { localStorage.setItem(NEWSLETTER_PROMO_KEY, '1'); } catch { /* ignore */ }
+}
+
+function maybeShowNewsletterPromo() {
+  const card = document.querySelector('[data-newsletter-promo]');
+  if (!card || !currentUserId) return;
+  try {
+    if (localStorage.getItem(NEWSLETTER_PROMO_KEY) === '1') return;
+  } catch { /* show anyway */ }
+  const homeOpen = !document.querySelector('[data-view="home"]')?.hidden;
+  if (!homeOpen) return;
+  card.hidden = false;
+}
+
+document.querySelector('[data-newsletter-promo-dismiss]')?.addEventListener('click', dismissNewsletterPromo);
+document.querySelector('[data-newsletter-promo] a')?.addEventListener('click', dismissNewsletterPromo);
+
 async function bootInternet() {
   try {
     const signedIn = await loadSession().catch(() => Boolean(currentUserId));
@@ -8570,6 +8595,7 @@ async function bootInternet() {
       document.body.classList.remove('internet-booting');
       document.body.classList.add('internet-ready');
       document.querySelector('[data-internet-boot]')?.setAttribute('hidden', '');
+      window.setTimeout(maybeShowNewsletterPromo, 900);
     }
   }
 }
