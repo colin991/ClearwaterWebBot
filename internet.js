@@ -122,7 +122,7 @@ function signInUrl(nextPath = '') {
   return `/signin?next=${encodeURIComponent(path)}`;
 }
 
-const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'phone', 'post', 'sponsored', 'bookmarks']);
+const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'phone', 'marketplace', 'mail', 'post', 'sponsored', 'bookmarks']);
 
 const siteDialog = document.querySelector('[data-site-dialog]');
 const siteDialogForm = document.querySelector('[data-site-dialog-form]');
@@ -2444,7 +2444,7 @@ function renderBookmarks() {
 }
 
 function showView(view) {
-  const availableViews = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'phone', 'post', 'sponsored', 'bookmarks']);
+  const availableViews = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'phone', 'marketplace', 'mail', 'post', 'sponsored', 'bookmarks']);
   let activeView = availableViews.has(view) ? view : 'home';
   if (activeView === 'staff' && !sessionCanStaff) activeView = 'home';
   const shell = document.querySelector('.internet-shell');
@@ -2500,6 +2500,8 @@ function showView(view) {
   if (activeView === 'sponsored') fillSponsoredReportForm();
   if (activeView === 'profile') renderOwnProfileDetails();
   if (activeView === 'settings' && currentUserId) void loadProfileEditor();
+  if (activeView === 'marketplace') renderMarketplacePage();
+  if (activeView === 'mail') renderMailPage();
   if (currentUserId) void pulsePresence(activeView);
 }
 
@@ -9223,3 +9225,142 @@ window.setInterval(() => {
 }, 5_000);
 window.addEventListener('scroll', queuePresenceFromScroll, { passive: true });
 window.setInterval(updateBanCountdown, 60 * 1000);
+
+/* —— Marketplace + Mail (website) —— */
+function cwAppStore(key, fallback) {
+  try {
+    const uid = currentUserId || 'guest';
+    const raw = localStorage.getItem(`cw-app.${uid}.${key}`);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function cwAppSave(key, value) {
+  const uid = currentUserId || 'guest';
+  localStorage.setItem(`cw-app.${uid}.${key}`, JSON.stringify(value));
+}
+function cwMoney(n) {
+  return `C$${Number(n || 0).toLocaleString('en-US')}`;
+}
+
+function renderMarketplacePage() {
+  const products = cwAppStore('mp.products', [
+    { name: 'Custom wrap package', price: 2500 },
+    { name: 'Performance tune', price: 1800 },
+    { name: 'Detailing — full', price: 450 }
+  ]);
+  const employees = cwAppStore('mp.employees', [
+    { name: 'Riley Chen', role: 'Manager' },
+    { name: 'Sam Ortiz', role: 'Sales' },
+    { name: 'Casey Brooks', role: 'Tech' }
+  ]);
+  const payouts = cwAppStore('mp.payouts', [
+    { title: 'Riley Chen', sub: 'Weekly share', amt: 620 },
+    { title: 'Sam Ortiz', sub: 'Commission', amt: 310 }
+  ]);
+  const storeName = cwAppStore('mp.storeName', 'Gulf Coast Customs');
+  const nameEl = document.querySelector('[data-mp-store-name]');
+  const metaEl = document.querySelector('[data-mp-store-meta]');
+  if (nameEl) nameEl.textContent = storeName;
+  if (metaEl) metaEl.textContent = `Your storefront · ${employees.length} employees`;
+
+  const productList = document.querySelector('[data-mp-products]');
+  if (productList) {
+    productList.innerHTML = products.map((p) => `<li><span class="cw-app-avatar">▣</span><div><b>${escapeHtml(p.name)}</b><small>Listed · Clearwater storefront</small></div><em>${cwMoney(p.price)}</em></li>`).join('') || '<li class="cw-app-empty">No products yet.</li>';
+  }
+  const empList = document.querySelector('[data-mp-employees]');
+  if (empList) {
+    empList.innerHTML = employees.map((e) => `<li><span class="cw-app-avatar">${escapeHtml(e.name.slice(0, 1))}</span><div><b>${escapeHtml(e.name)}</b><small>${escapeHtml(e.role)}</small></div></li>`).join('') || '<li class="cw-app-empty">No employees yet.</li>';
+  }
+  const payList = document.querySelector('[data-mp-payouts]');
+  if (payList) {
+    payList.innerHTML = payouts.map((t) => `<li><span class="cw-app-avatar">${escapeHtml(t.title.slice(0, 1))}</span><div><b>${escapeHtml(t.title)}</b><small>${escapeHtml(t.sub)}</small></div><em class="out">−${cwMoney(t.amt)}</em></li>`).join('') || '<li class="cw-app-empty">No payouts yet.</li>';
+  }
+}
+
+function renderMailPage() {
+  const mails = cwAppStore('mail.inbox', [
+    { from: 'Marketplace Receipts', subject: 'Receipt · Performance tune', preview: 'You paid C$1,800 to Gulf Coast Customs.', unread: true, when: '2m' },
+    { from: 'Clearwater Panel', subject: 'Wallet request paid', preview: 'Maya sent you C$500.', unread: true, when: '1h' },
+    { from: 'Clearwater Dispatch', subject: 'Weekly briefing', preview: 'Shift notes for civilian businesses…', unread: false, when: 'Mon' }
+  ]);
+  const list = document.querySelector('[data-mail-list]');
+  if (!list) return;
+  list.innerHTML = mails.map((m, i) => `<li class="${m.unread ? 'is-unread' : ''}" data-mail-open="${i}"><span class="cw-app-avatar">✉</span><div><b>${escapeHtml(m.subject)}</b><small>${escapeHtml(m.from)} · ${escapeHtml(m.preview)}</small></div><em>${escapeHtml(m.when)}</em></li>`).join('') || '<li class="cw-app-empty">Inbox empty.</li>';
+  list.querySelectorAll('[data-mail-open]').forEach((row) => {
+    row.addEventListener('click', () => {
+      const i = Number(row.dataset.mailOpen);
+      const next = cwAppStore('mail.inbox', mails);
+      if (!next[i]) return;
+      next[i].unread = false;
+      cwAppSave('mail.inbox', next);
+      void siteAlert(`${next[i].subject}\n\nFrom: ${next[i].from}\n\n${next[i].preview}`);
+      renderMailPage();
+    });
+  });
+}
+
+document.querySelector('[data-mp-tabs]')?.addEventListener('click', (event) => {
+  const btn = event.target.closest('[data-mp-tab]');
+  if (!btn) return;
+  document.querySelectorAll('[data-mp-tab]').forEach((b) => b.classList.toggle('selected', b === btn));
+  document.querySelectorAll('[data-mp-pane]').forEach((pane) => {
+    const on = pane.dataset.mpPane === btn.dataset.mpTab;
+    pane.hidden = !on;
+  });
+});
+
+document.querySelector('[data-mp-add-product]')?.addEventListener('click', async () => {
+  const name = await sitePrompt({ title: 'New product', label: 'Product name', placeholder: 'Product name', confirmLabel: 'Add' });
+  if (!name) return;
+  const priceRaw = await sitePrompt({ title: 'Price', label: 'Amount (C$)', value: '500', placeholder: '500', confirmLabel: 'Save' });
+  const price = Math.floor(Number(priceRaw));
+  if (!price) return;
+  const products = cwAppStore('mp.products', []);
+  products.unshift({ name, price });
+  cwAppSave('mp.products', products);
+  renderMarketplacePage();
+});
+
+document.querySelector('[data-mp-add-employee]')?.addEventListener('click', async () => {
+  const name = await sitePrompt({ title: 'Add employee', label: 'Name', placeholder: 'Employee name', confirmLabel: 'Add' });
+  if (!name) return;
+  const role = (await sitePrompt({ title: 'Role', label: 'Role', value: 'Staff', placeholder: 'Staff', confirmLabel: 'Save', required: false })) || 'Staff';
+  const employees = cwAppStore('mp.employees', []);
+  employees.push({ name, role });
+  cwAppSave('mp.employees', employees);
+  renderMarketplacePage();
+});
+
+document.querySelector('[data-mp-edit-store]')?.addEventListener('click', async () => {
+  const current = cwAppStore('mp.storeName', 'Gulf Coast Customs');
+  const name = await sitePrompt({ title: 'Edit storefront', label: 'Store name', value: current, confirmLabel: 'Save' });
+  if (!name) return;
+  cwAppSave('mp.storeName', name);
+  renderMarketplacePage();
+});
+
+document.querySelector('[data-mail-compose]')?.addEventListener('click', () => {
+  const form = document.querySelector('[data-mail-compose-form]');
+  if (form) form.hidden = false;
+});
+document.querySelector('[data-mail-cancel]')?.addEventListener('click', () => {
+  const form = document.querySelector('[data-mail-compose-form]');
+  if (form) form.hidden = true;
+});
+document.querySelector('[data-mail-compose-form]')?.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const to = document.querySelector('[data-mail-to]')?.value.trim();
+  const subject = document.querySelector('[data-mail-subject]')?.value.trim() || '(No subject)';
+  const body = document.querySelector('[data-mail-body]')?.value.trim();
+  if (!to) return;
+  const mails = cwAppStore('mail.inbox', []);
+  mails.unshift({ from: 'Me', subject: `To ${to}: ${subject}`, preview: body || 'Sent via Clearwater Mail', unread: false, when: 'Now' });
+  cwAppSave('mail.inbox', mails);
+  document.querySelector('[data-mail-to]').value = '';
+  document.querySelector('[data-mail-subject]').value = '';
+  document.querySelector('[data-mail-body]').value = '';
+  document.querySelector('[data-mail-compose-form]').hidden = true;
+  renderMailPage();
+});

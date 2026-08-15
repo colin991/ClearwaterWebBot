@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/assets/icon-512.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260815-phone-theme" />
+    <link rel="stylesheet" href="internet.css?v=20260815-mp-mail" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260815-newsletter"></script>
   </head>
@@ -52,6 +52,8 @@
           <a class="selected" href="/internet" data-view-link="home"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>Home</a>
           <a href="/internet" data-reels-link><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3" /><path d="m10 8 5 4-5 4z" /></svg>Reels</a>
           <a href="/internet/wallet" data-view-link="wallet"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg>Wallet</a>
+          <a href="/internet/marketplace" data-view-link="marketplace"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12l-1 12H7L6 7z" /><path d="M9 7V5a3 3 0 0 1 6 0v2" /></svg>Marketplace</a>
+          <a href="/internet/mail" data-view-link="mail"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>Mail</a>
           <a href="/internet/phone" data-view-link="phone"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5" /><path d="M10 18.5h4" /></svg>Phone</a>
           <a href="/internet/notifications" data-view-link="notifications" class="notification-nav"><span class="notification-nav-icon"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 22h4" /></svg><i class="notification-dot" data-notification-dot hidden></i></span>Notifications</a>
           <a href="/internet/messages" data-view-link="messages" class="notification-nav"><span class="notification-nav-icon"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg><i class="notification-dot" data-message-dot hidden></i></span>Messages</a>
@@ -193,6 +195,69 @@
             </section>
           </article>
         </section>
+        <section class="internet-view marketplace-view" data-view="marketplace" hidden>
+          <header class="post-detail-header">
+            <button type="button" data-back-home aria-label="Back to feed">←</button>
+            <h1>Marketplace</h1>
+          </header>
+          <article class="cw-app-doc marketplace-doc">
+            <p class="wallet-kicker">Civilian business</p>
+            <h2>Clearwater Marketplace</h2>
+            <p>Open a storefront, list products, charge customers, add employees, and pay out your team — built for serious servers.</p>
+            <div class="marketplace-store-banner">
+              <div>
+                <strong data-mp-store-name>Gulf Coast Customs</strong>
+                <small data-mp-store-meta>Your storefront · 3 employees</small>
+              </div>
+              <button type="button" class="cw-app-ghost" data-mp-edit-store>Edit store</button>
+            </div>
+            <nav class="marketplace-tabs" data-mp-tabs aria-label="Marketplace sections">
+              <button type="button" class="selected" data-mp-tab="products">Products</button>
+              <button type="button" data-mp-tab="employees">Employees</button>
+              <button type="button" data-mp-tab="payouts">Payouts</button>
+            </nav>
+            <div class="marketplace-pane" data-mp-pane="products">
+              <button type="button" class="cw-app-primary" data-mp-add-product>+ New product</button>
+              <ul class="cw-app-list" data-mp-products></ul>
+            </div>
+            <div class="marketplace-pane" data-mp-pane="employees" hidden>
+              <button type="button" class="cw-app-primary" data-mp-add-employee>+ Add employee</button>
+              <ul class="cw-app-list" data-mp-employees></ul>
+            </div>
+            <div class="marketplace-pane" data-mp-pane="payouts" hidden>
+              <p class="cw-app-hint">Pay out your team from store revenue.</p>
+              <ul class="cw-app-list" data-mp-payouts></ul>
+            </div>
+            <p class="cw-app-foot">Also available on <a href="/internet/phone" data-view-link="phone">Clearwater Phone</a>.</p>
+          </article>
+        </section>
+
+        <section class="internet-view mail-view" data-view="mail" hidden>
+          <header class="post-detail-header">
+            <button type="button" data-back-home aria-label="Back to feed">←</button>
+            <h1>Mail</h1>
+          </header>
+          <article class="cw-app-doc mail-doc">
+            <p class="wallet-kicker">Clearwater Mail</p>
+            <h2>Inbox</h2>
+            <p>Compose and receive mail. Marketplace purchases send a documented receipt instantly.</p>
+            <div class="mail-toolbar">
+              <button type="button" class="cw-app-primary" data-mail-compose>Compose</button>
+            </div>
+            <form class="mail-compose" data-mail-compose-form hidden>
+              <label>To<input data-mail-to maxlength="80" placeholder="name@clearwater.cw" autocomplete="off" /></label>
+              <label>Subject<input data-mail-subject maxlength="120" placeholder="Subject" autocomplete="off" /></label>
+              <label>Message<textarea data-mail-body maxlength="2000" rows="4" placeholder="Write your email…"></textarea></label>
+              <div class="mail-compose-actions">
+                <button type="button" class="cw-app-ghost" data-mail-cancel>Cancel</button>
+                <button type="submit" class="cw-app-primary">Send</button>
+              </div>
+            </form>
+            <ul class="cw-app-list mail-list" data-mail-list></ul>
+            <p class="cw-app-foot">Also available on <a href="/internet/phone" data-view-link="phone">Clearwater Phone</a>.</p>
+          </article>
+        </section>
+
         <section class="internet-view phone-view" data-view="phone" hidden>
           <header class="post-detail-header">
             <button type="button" data-back-home aria-label="Back to feed">←</button>
@@ -201,7 +266,7 @@
           <article class="phone-download-doc">
             <p class="wallet-kicker">Desktop overlay</p>
             <h2>Download for Windows</h2>
-            <p>Floating phone for ER:LC — Wallet, Marketplace, Find My, Mail, Messages, and Maps. Always on top. Press <b>F8</b> to hide or show.</p>
+            <p>Floating phone for ER:LC — Wallet, Marketplace, Find My, Mail, Messages, and Maps. Always on top. Press <b>F8</b> to hide or show. Apps open the matching pages on Clearwater Internet.</p>
             <a class="phone-download-btn" href="/downloads/ClearwaterPhone.exe" download="ClearwaterPhone.exe">Download Clearwater Phone</a>
             <ol class="phone-download-steps">
               <li>Download <b>ClearwaterPhone.exe</b></li>
@@ -830,6 +895,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260815-phone-theme"></script>
+    <script src="internet.js?v=20260815-mp-mail"></script>
   </body>
 </html>

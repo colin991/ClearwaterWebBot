@@ -9442,3 +9442,161 @@ body.has-site-banner.has-official-post-banner .internet-side {
     background: rgba(180, 190, 205, .48);
   }
 }
+
+/* Clearwater Marketplace + Mail */
+.cw-app-doc {
+  margin: 12px 16px 32px;
+  padding: 22px 20px 24px;
+  border-radius: 18px;
+  border: 1px solid rgba(180, 190, 205, 0.16);
+  background:
+    radial-gradient(ellipse at 90% 0%, rgba(118, 173, 255, 0.12), transparent 50%),
+    linear-gradient(165deg, rgba(10, 18, 34, 0.98), rgba(3, 7, 13, 0.98));
+}
+.cw-app-doc h2 {
+  margin: 6px 0 10px;
+  font-size: 26px;
+  letter-spacing: -0.03em;
+}
+.cw-app-doc > p {
+  margin: 0 0 16px;
+  color: #93a1b8;
+  line-height: 1.5;
+  max-width: 38rem;
+}
+.marketplace-store-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(118, 173, 255, 0.22);
+  background: radial-gradient(ellipse at 0% 0%, rgba(118, 173, 255, 0.16), transparent 55%), #0a1520;
+}
+.marketplace-store-banner strong { display: block; font-size: 16px; }
+.marketplace-store-banner small { color: #93a1b8; font-size: 12px; }
+.marketplace-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.marketplace-tabs button {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.05);
+  color: #dce9ff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.marketplace-tabs button.selected,
+.marketplace-tabs button:hover {
+  border-color: rgba(118, 173, 255, .35);
+  background: rgba(118, 173, 255, .14);
+  color: #9fc6ff;
+}
+.cw-app-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 0 12px;
+  padding: 11px 16px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 999px;
+  background: #f4f8ff;
+  color: #081018;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+  text-decoration: none;
+}
+.cw-app-primary:hover { background: #fff; }
+.cw-app-ghost {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(118, 173, 255, .3);
+  background: rgba(118, 173, 255, .08);
+  color: #9fc6ff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.cw-app-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.cw-app-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.04);
+  cursor: default;
+}
+.mail-list li { cursor: pointer; }
+.mail-list li.is-unread b { color: #9fc6ff; }
+.cw-app-list .cw-app-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #1a2a44, #3a6fd4);
+}
+.cw-app-list div { min-width: 0; flex: 1; }
+.cw-app-list b { display: block; font-size: 14px; }
+.cw-app-list small { display: block; margin-top: 2px; color: #93a1b8; font-size: 11px; }
+.cw-app-list em { margin-left: auto; font-style: normal; font-weight: 750; color: #76adff; font-variant-numeric: tabular-nums; }
+.cw-app-list em.out { color: #f87171; }
+.cw-app-empty { color: #93a1b8 !important; justify-content: center; }
+.cw-app-hint { margin: 0 0 10px; color: #93a1b8; font-size: 12px; }
+.cw-app-foot { margin: 18px 0 0; color: #7f8fa3; font-size: 12px; }
+.cw-app-foot a { color: #9fc6ff; font-weight: 700; text-decoration: none; }
+.cw-app-foot a:hover { text-decoration: underline; }
+.mail-toolbar { margin-bottom: 8px; }
+.mail-compose {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(0,0,0,.28);
+}
+.mail-compose label {
+  display: grid;
+  gap: 5px;
+  color: #93a1b8;
+  font-size: 12px;
+  font-weight: 650;
+}
+.mail-compose input,
+.mail-compose textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(0,0,0,.35);
+  color: #f3f6fb;
+  font: inherit;
+}
+.mail-compose-actions { display: flex; gap: 8px; }
+.mail-compose-actions .cw-app-primary,
+.mail-compose-actions .cw-app-ghost { flex: 1; margin: 0; }
