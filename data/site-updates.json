@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-phone-launcher-internet",
+      "title": "Phone launcher, Internet app, and download",
+      "summary": "Clearwater Phone opens to a full-screen intro until you click Launch Phone. The overlay now has an Internet app for posting to the live feed, plus settings to start with Windows and auto-launch when Roblox opens. Download Phone is back on the Internet sidebar.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T18:50:00.000Z"
+    },
+    {
       "id": "2026-08-15-phone-live-apps",
       "title": "Phone overlay uses live Internet",
       "summary": "Clearwater Phone now signs in with Discord and uses your real Wallet (transactions, send, request) and Messages. Maps uses the ER:LC map so you can tap a destination and route from your in-game location. Find My shares that location with friends you choose. Marketplace is removed from the overlay.",

@@ -32,6 +32,8 @@ Output: `anchor-phone/dist/ClearwaterPhone.exe` — download and run alongside R
 ## Notes
 
 - Overlay sits above games; it does **not** inject into Roblox.
-- Sign in with Discord from Settings so Wallet, Messages, Maps, and Find My use your Clearwater Internet account.
+- Opening the app shows a full-screen intro until you click **Launch Phone**.
+- Sign in with Discord from Settings so Wallet, Messages, Maps, Find My, and Internet use your Clearwater account.
+- Settings can start Phone with Windows and auto-show the overlay when `RobloxPlayerBeta.exe` (or another process) is running.
 - Rebuild the Windows portable with `cd anchor-phone && npm run dist`, then copy `dist/ClearwaterPhone.exe` to `downloads/` (or run `downloads/rebuild-exe.sh`).
 - Hide with **F8**; quit from the OS taskbar / dock menu.

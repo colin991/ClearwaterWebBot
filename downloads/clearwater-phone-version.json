@@ -1,6 +1,6 @@
 {
-  "version": "1.2.0",
-  "minVersion": "1.1.1",
+  "version": "1.3.0",
+  "minVersion": "1.2.0",
   "downloadUrl": "https://cwrpvc.lol/downloads/ClearwaterPhone.exe",
-  "releaseNotes": "Live Internet wallet and messages, Liberty County maps from ER:LC, and Find My location sharing. Marketplace removed."
+  "releaseNotes": "Cinematic Launch Phone intro, Internet posting app, auto-launch when Roblox opens, and Start with Windows."
 }

@@ -53,6 +53,17 @@
             </header>
 
             <div class="app-grid" role="list">
+              <button type="button" class="app-tile" data-open="internet" role="listitem">
+                <span class="app-icon icon-internet" aria-hidden="true">
+                  <svg viewBox="0 0 64 64" fill="none">
+                    <rect width="64" height="64" rx="16" fill="url(#gi)"/>
+                    <circle cx="32" cy="32" r="16" stroke="#fff" stroke-width="3"/>
+                    <path d="M16 32h32M32 16c6 6 6 26 0 32M32 16c-6 6-6 26 0 32" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+                    <defs><linearGradient id="gi" x1="8" y1="6" x2="56" y2="58"><stop stop-color="#76adff"/><stop offset="1" stop-color="#2563eb"/></linearGradient></defs>
+                  </svg>
+                </span>
+                <span class="app-label">Internet</span>
+              </button>
               <button type="button" class="app-tile" data-open="wallet" role="listitem">
                 <span class="app-icon icon-wallet" aria-hidden="true">
                   <svg viewBox="0 0 64 64" fill="none">
@@ -133,6 +144,9 @@
 
             <div class="dock" aria-label="Quick apps">
               <div class="dock-glass" aria-hidden="true"></div>
+              <button type="button" class="dock-btn" data-open="internet" aria-label="Internet">
+                <svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="url(#di)"/><circle cx="32" cy="32" r="16" stroke="#fff" stroke-width="3"/><defs><linearGradient id="di" x1="8" y1="6" x2="56" y2="58"><stop stop-color="#76adff"/><stop offset="1" stop-color="#2563eb"/></linearGradient></defs></svg>
+              </button>
               <button type="button" class="dock-btn" data-open="messages" aria-label="Messages">
                 <svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="url(#dms)"/><path d="M14 20c0-4 3.2-7 7-7h22c3.8 0 7 3 7 7v16c0 4-3.2 7-7 7H30l-9 9v-9h0c-3.8 0-7-3-7-7V20z" fill="#fff"/><defs><linearGradient id="dms" x1="10" y1="6" x2="54" y2="58"><stop stop-color="#2dd4bf"/><stop offset="1" stop-color="#0d9488"/></linearGradient></defs></svg>
               </button>
@@ -145,6 +159,27 @@
               <button type="button" class="dock-btn" data-open="maps" aria-label="Maps">
                 <svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="url(#dmp)"/><path d="M14 16l13 5.5 13-5.5 10 4.5v33l-10-4.5-13 5.5-13-5.5-10 4.5V20.5L14 16z" fill="#fff" fill-opacity=".94"/><path d="M35 28c0-4.2-3.2-6.5-3.2-6.5S28.6 23.8 28.6 28c0 2.4 1.5 4 3.2 6.2 1.7-2.2 3.2-3.8 3.2-6.2z" fill="#ef4444"/><defs><linearGradient id="dmp" x1="8" y1="6" x2="56" y2="58"><stop stop-color="#a5b4fc"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient></defs></svg>
               </button>
+            </div>
+          </section>
+
+          <!-- INTERNET -->
+          <section class="view view-app" id="view-internet" data-view="internet" hidden>
+            <div class="app-chrome">
+              <button type="button" class="back-btn" data-home aria-label="Home">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <h1>Internet</h1>
+              <span class="chrome-spacer"></span>
+            </div>
+            <div class="app-body">
+              <p class="app-lede">Post to the same Clearwater Internet feed as the website.</p>
+              <div class="composer" id="net-composer">
+                <textarea id="net-body" rows="3" maxlength="500" placeholder="What's happening?"></textarea>
+                <button type="button" class="btn-primary" id="net-post">Post</button>
+                <p class="form-status" id="net-status" hidden></p>
+              </div>
+              <h2 class="section-title">Feed</h2>
+              <ul class="ios-list thread-list" id="net-feed"></ul>
             </div>
           </section>
 
@@ -287,6 +322,29 @@
               <p class="hint" id="account-status">Not signed in</p>
               <button type="button" class="btn-primary" id="account-login">Sign in with Discord</button>
               <button type="button" class="btn-ghost" id="account-logout" hidden>Sign out</button>
+
+              <h2 class="section-title">Startup</h2>
+              <ul class="ios-list settings-list">
+                <li class="settings-row">
+                  <div>
+                    <p class="item-title">Start with Windows</p>
+                    <p class="item-sub">Open Clearwater Phone when you sign in</p>
+                  </div>
+                  <button type="button" class="toggle" id="setting-login-item" aria-label="Start with Windows"></button>
+                </li>
+                <li class="settings-row">
+                  <div>
+                    <p class="item-title">Launch when app opens</p>
+                    <p class="item-sub">Show the overlay when Roblox (or another app) starts</p>
+                  </div>
+                  <button type="button" class="toggle is-on" id="setting-watch-app" aria-label="Launch when app opens"></button>
+                </li>
+              </ul>
+              <label class="field">
+                <span>Watch process</span>
+                <input type="text" id="setting-watch-process" value="RobloxPlayerBeta.exe" autocomplete="off" />
+              </label>
+              <button type="button" class="btn-ghost" id="setting-watch-save">Save process name</button>
 
               <h2 class="section-title">Updates</h2>
               <ul class="ios-list settings-list">

@@ -4,7 +4,7 @@
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
   const settings = { autoUpdate: true };
-  let appVersion = '1.2.0';
+  let appVersion = '1.3.0';
   let latestInfo = null;
   let updateInFlight = false;
   let sessionUser = null;
@@ -85,7 +85,11 @@
     });
     const home = $('#view-home');
     if (home) home.hidden = id !== 'home';
-    if (id === 'settings') renderSettings();
+    if (id === 'settings') {
+      renderSettings();
+      void loadHostSettings();
+    }
+    if (id === 'internet') void loadInternetFeed();
     if (id === 'wallet') void loadWallet();
     if (id === 'messages') {
       openThread = null;
@@ -140,6 +144,82 @@
       if (btn) btn.hidden = true;
     }
   }
+
+  async function loadHostSettings() {
+    try {
+      const host = await window.anchorPhone?.hostSettings?.();
+      if (!host) return;
+      setToggle($('#setting-login-item'), host.startWithWindows === true);
+      setToggle($('#setting-watch-app'), host.launchOnApp !== false);
+      const input = $('#setting-watch-process');
+      if (input) input.value = host.watchProcess || 'RobloxPlayerBeta.exe';
+    } catch {}
+  }
+
+  $('#setting-login-item')?.addEventListener('click', async () => {
+    const on = !$('#setting-login-item').classList.contains('is-on');
+    const host = await window.anchorPhone?.saveHostSettings?.({ startWithWindows: on });
+    setToggle($('#setting-login-item'), host?.startWithWindows === true);
+  });
+
+  $('#setting-watch-app')?.addEventListener('click', async () => {
+    const on = !$('#setting-watch-app').classList.contains('is-on');
+    const host = await window.anchorPhone?.saveHostSettings?.({ launchOnApp: on });
+    setToggle($('#setting-watch-app'), host?.launchOnApp !== false);
+  });
+
+  $('#setting-watch-save')?.addEventListener('click', async () => {
+    const name = $('#setting-watch-process')?.value.trim() || 'RobloxPlayerBeta.exe';
+    const host = await window.anchorPhone?.saveHostSettings?.({ watchProcess: name });
+    const input = $('#setting-watch-process');
+    if (input && host?.watchProcess) input.value = host.watchProcess;
+  });
+
+  async function loadInternetFeed() {
+    const list = $('#net-feed');
+    if (!list) return;
+    if (!signedIn()) {
+      list.innerHTML = '<li><p class="item-sub">Sign in with Discord in Settings to post.</p></li>';
+      return;
+    }
+    const result = await window.anchorPhone?.feed?.();
+    if (!result?.ok) {
+      list.innerHTML = `<li><p class="item-sub">${escapeHtml(result?.body?.error || 'Could not load the feed.')}</p></li>`;
+      return;
+    }
+    const posts = (result.body.posts || []).slice(0, 40);
+    const users = new Map((result.body.users || []).map((u) => [String(u.id), u]));
+    list.innerHTML = posts.length
+      ? posts.map((post) => {
+        const author = users.get(String(post.authorId)) || {};
+        const name = author.displayName || author.username || 'Member';
+        const body = post.content || (post.location ? 'Dropped a location' : 'Post');
+        return `<li>
+          <div class="avatar">${escapeHtml(String(name).slice(0, 1))}</div>
+          <div style="flex:1"><p class="item-title">${escapeHtml(name)}</p><p class="item-sub">${escapeHtml(body)}</p></div>
+          <span class="item-sub">${escapeHtml(timeAgo(post.createdAt))}</span>
+        </li>`;
+      }).join('')
+      : '<li><p class="item-sub">No posts yet.</p></li>';
+  }
+
+  $('#net-post')?.addEventListener('click', async () => {
+    const status = $('#net-status');
+    const content = $('#net-body')?.value.trim();
+    if (!content) {
+      if (status) { status.hidden = false; status.textContent = 'Write something first.'; }
+      return;
+    }
+    if (status) { status.hidden = false; status.textContent = 'Posting…'; }
+    const result = await api('post', { content });
+    if (!result.ok) {
+      if (status) status.textContent = result.body?.error || 'Could not post.';
+      return;
+    }
+    if ($('#net-body')) $('#net-body').value = '';
+    if (status) status.textContent = 'Posted to Clearwater Internet.';
+    void loadInternetFeed();
+  });
 
   $('#setting-auto-update')?.addEventListener('click', () => {
     settings.autoUpdate = !settings.autoUpdate;

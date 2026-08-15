@@ -1,9 +1,9 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, screen, session, net, shell } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, screen, session, net, shell, Tray, nativeImage, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 
 const SITE = 'https://cwrpvc.lol';
 const SESSION_PARTITION = 'persist:clearwater-phone';
@@ -80,9 +80,116 @@ const ALLOWED_HOSTS = new Set(['cwrpvc.lol', 'www.cwrpvc.lol', 'localhost', '127
 const pkg = require('./package.json');
 
 let win = null;
+let launcherWin = null;
+let tray = null;
 let visible = true;
+let watchTimer = null;
+let robloxWasOpen = false;
 
-function createWindow() {
+function settingsPath() {
+  return path.join(app.getPath('userData'), 'phone-host-settings.json');
+}
+
+function defaultHostSettings() {
+  return {
+    startWithWindows: false,
+    launchOnApp: true,
+    watchProcess: 'RobloxPlayerBeta.exe',
+  };
+}
+
+function readHostSettings() {
+  try {
+    const raw = fs.readFileSync(settingsPath(), 'utf8');
+    const parsed = JSON.parse(raw);
+    return { ...defaultHostSettings(), ...parsed };
+  } catch {
+    return defaultHostSettings();
+  }
+}
+
+function writeHostSettings(next) {
+  const value = { ...defaultHostSettings(), ...next };
+  fs.mkdirSync(app.getPath('userData'), { recursive: true });
+  fs.writeFileSync(settingsPath(), JSON.stringify(value));
+  applyLoginItem(value);
+  return value;
+}
+
+function applyLoginItem(settings) {
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: settings.startWithWindows === true,
+      path: process.execPath,
+      args: ['--watch'],
+    });
+  } catch {}
+}
+
+function argvHas(flag) {
+  return process.argv.includes(flag);
+}
+
+function iconPath() {
+  return path.join(__dirname, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
+}
+
+function isProcessRunning(imageName) {
+  const name = String(imageName || '').replace(/[^\w.-]/g, '');
+  if (!name || !/\.exe$/i.test(name)) return Promise.resolve(false);
+  if (process.platform !== 'win32') return Promise.resolve(false);
+  return new Promise((resolve) => {
+    execFile('tasklist', ['/FI', `IMAGENAME eq ${name}`, '/NH'], { windowsHide: true }, (err, stdout) => {
+      const out = String(stdout || '');
+      resolve(!err && out.toLowerCase().includes(name.toLowerCase()) && !/no tasks/i.test(out));
+    });
+  });
+}
+
+function ensureTray() {
+  if (tray) return;
+  try {
+    const image = nativeImage.createFromPath(iconPath());
+    tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image);
+    tray.setToolTip('Clearwater Phone');
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Launch Phone', click: () => { void createOverlayWindow(); } },
+      { label: 'Hide overlay', click: () => { if (win) { win.hide(); visible = false; } } },
+      { type: 'separator' },
+      { label: 'Quit', click: () => app.quit() },
+    ]));
+    tray.on('click', () => { void createOverlayWindow(); });
+  } catch {}
+}
+
+function startWatchLoop() {
+  if (watchTimer) return;
+  watchTimer = setInterval(async () => {
+    const settings = readHostSettings();
+    if (!settings.launchOnApp) return;
+    const running = await isProcessRunning(settings.watchProcess || 'RobloxPlayerBeta.exe');
+    if (running && !robloxWasOpen) {
+      robloxWasOpen = true;
+      await createOverlayWindow();
+      if (win && !win.isDestroyed()) {
+        win.show();
+        visible = true;
+        win.setAlwaysOnTop(true, 'screen-saver');
+      }
+    }
+    if (!running) robloxWasOpen = false;
+  }, 4000);
+}
+
+async function createOverlayWindow() {
+  if (win && !win.isDestroyed()) {
+    win.show();
+    visible = true;
+    win.setAlwaysOnTop(true, 'screen-saver');
+    if (launcherWin && !launcherWin.isDestroyed()) launcherWin.close();
+    return win;
+  }
+
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
   const phoneW = 390;
   const phoneH = 800;
@@ -99,7 +206,7 @@ function createWindow() {
     skipTaskbar: false,
     hasShadow: false,
     backgroundColor: '#00000000',
-    icon: path.join(__dirname, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    icon: iconPath(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -109,18 +216,57 @@ function createWindow() {
   });
 
   if (process.platform === 'linux') {
-    try {
-      win.setIcon(path.join(__dirname, 'build', 'icon.png'));
-    } catch {}
+    try { win.setIcon(path.join(__dirname, 'build', 'icon.png')); } catch {}
   }
 
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
+  visible = true;
 
   win.on('closed', () => {
     win = null;
   });
+
+  if (launcherWin && !launcherWin.isDestroyed()) launcherWin.close();
+  return win;
+}
+
+function createLauncherWindow() {
+  if (launcherWin && !launcherWin.isDestroyed()) {
+    launcherWin.focus();
+    return launcherWin;
+  }
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+  launcherWin = new BrowserWindow({
+    width,
+    height,
+    x: 0,
+    y: 0,
+    fullscreen: true,
+    frame: false,
+    backgroundColor: '#02060c',
+    autoHideMenuBar: true,
+    icon: iconPath(),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+  launcherWin.loadFile(path.join(__dirname, 'src', 'launcher.html'));
+  launcherWin.on('closed', () => {
+    launcherWin = null;
+    if (!win && !readHostSettings().launchOnApp && !argvHas('--watch')) {
+      app.quit();
+    }
+  });
+  return launcherWin;
+}
+
+function createWindow() {
+  return createOverlayWindow();
 }
 
 function toggleOverlay() {
@@ -170,7 +316,15 @@ function downloadFile(url, dest, onProgress) {
 }
 
 app.whenReady().then(() => {
-  createWindow();
+  applyLoginItem(readHostSettings());
+  ensureTray();
+  startWatchLoop();
+
+  if (argvHas('--watch') || argvHas('--overlay')) {
+    if (argvHas('--overlay')) void createOverlayWindow();
+  } else {
+    createLauncherWindow();
+  }
 
   const ok = globalShortcut.register('F8', toggleOverlay);
   if (!ok) {
@@ -183,6 +337,14 @@ app.whenReady().then(() => {
   });
 
   ipcMain.on('phone-close', () => {
+    if (win && !win.isDestroyed()) win.hide();
+    visible = false;
+    if (!readHostSettings().launchOnApp && !readHostSettings().startWithWindows) {
+      app.quit();
+    }
+  });
+
+  ipcMain.on('phone-quit', () => {
     app.quit();
   });
 
@@ -230,6 +392,28 @@ app.whenReady().then(() => {
     return { ok: true };
   });
 
+  ipcMain.handle('phone-launch-overlay', async () => {
+    await createOverlayWindow();
+    return { ok: true };
+  });
+
+  ipcMain.handle('phone-host-settings', async () => readHostSettings());
+
+  ipcMain.handle('phone-host-settings-save', async (_e, patch) => {
+    const current = readHostSettings();
+    const next = { ...current };
+    if (typeof patch?.startWithWindows === 'boolean') next.startWithWindows = patch.startWithWindows;
+    if (typeof patch?.launchOnApp === 'boolean') next.launchOnApp = patch.launchOnApp;
+    if (typeof patch?.watchProcess === 'string') {
+      const name = patch.watchProcess.replace(/[^\w.-]/g, '');
+      next.watchProcess = name || 'RobloxPlayerBeta.exe';
+      if (!/\.exe$/i.test(next.watchProcess)) next.watchProcess += '.exe';
+    }
+    return writeHostSettings(next);
+  });
+
+  ipcMain.handle('phone-feed', async () => siteFetch('/api/internet'));
+
   ipcMain.handle('phone-api', async (_e, payload) => {
     const body = payload && typeof payload === 'object' ? payload : {};
     const action = String(body.action || '');
@@ -237,6 +421,7 @@ app.whenReady().then(() => {
       'wallet', 'wallet-transfer', 'wallet-transfer-respond',
       'messages', 'conversation', 'message-send',
       'findmy', 'findmy-share', 'erlc-phone-map', 'erlc-location',
+      'post', 'post-interaction',
     ]);
     if (!allowed.has(action)) return { ok: false, status: 400, body: { error: 'Unsupported phone action' } };
     return siteFetch('/api/internet', { method: 'POST', body });
@@ -284,7 +469,7 @@ app.whenReady().then(() => {
   });
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) createLauncherWindow();
   });
 });
 
@@ -293,5 +478,6 @@ app.on('will-quit', () => {
 });
 
 app.on('window-all-closed', () => {
+  if (readHostSettings().launchOnApp || readHostSettings().startWithWindows) return;
   if (process.platform !== 'darwin') app.quit();
 });
