@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-phone-clearwater-logo",
+      "title": "Phone home uses Clearwater logo",
+      "summary": "Clearwater Phone’s home wallpaper now shows the Clearwater logo instead of the old anchor mark. Download Phone v1.3.11 to get it.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T23:15:00.000Z"
+    },
+    {
       "id": "2026-08-15-staff-delete-business",
       "title": "Staff can delete business accounts",
       "summary": "In the staff Users panel, business accounts now have a Delete business account action. It removes the business, its posts, and its ads. The linked personal handler account stays.",

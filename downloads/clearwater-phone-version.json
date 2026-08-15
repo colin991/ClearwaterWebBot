@@ -1,6 +1,6 @@
 {
-  "version": "1.3.10",
+  "version": "1.3.11",
   "minVersion": "1.3.0",
   "downloadUrl": "https://cwrpvc.lol/downloads/ClearwaterPhone.exe",
-  "releaseNotes": "Keeps the startup menu open until you finish or launch, and removes the outline around the phone overlay."
+  "releaseNotes": "Replaces the home-screen anchor with the Clearwater logo."
 }
