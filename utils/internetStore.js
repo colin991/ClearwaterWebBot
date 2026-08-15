@@ -1763,7 +1763,7 @@ function safeBannerUrl(value) {
   const candidate = text(value, 500);
   if (!candidate) return '';
   if (PROFILE_BANNER_PRESETS.includes(candidate)) return candidate;
-  const invalid = new Error('Upload a banner or pick one of the Clearwater presets.');
+  const invalid = new Error('Pick one of the Clearwater banner presets.');
   if (/["'()\\\s]/.test(candidate)) throw invalid;
   let url;
   try {

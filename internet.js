@@ -108,7 +108,7 @@ const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not deliver
 const AUTOMOD_HOLD_PREVIEW = 'This may be held for staff review when you send it.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const SMALL_REEL_BYTES = 3_200_000;
-const BLOB_LIMIT_MESSAGE = 'Cloud storage hit this month’s Vercel Blob limit, so large uploads are paused. Photos under 3 MB still work. Videos, ads, and banners need Blob to reset next billing cycle, or a new/upgraded Blob store in Vercel.';
+const BLOB_LIMIT_MESSAGE = 'Cloud storage hit this month’s Vercel Blob limit, so large uploads are paused. Photos under 3 MB still work. Videos and ads need Blob to reset next billing cycle, or a new/upgraded Blob store in Vercel.';
 
 function blobUploadFailedMessage(raw, { large = true } = {}) {
   const text = String(raw || '');
@@ -7181,9 +7181,6 @@ document.querySelector('[data-banner-clear]')?.addEventListener('click', () => {
   profileDraft.bannerUrl = '';
   renderProfilePreview();
 });
-document.querySelector('[data-banner-upload]')?.addEventListener('click', () => {
-  document.querySelector('[data-banner-file]')?.click();
-});
 document.querySelector('[data-banner-presets]')?.addEventListener('click', (event) => {
   const preset = event.target.closest('[data-banner-preset]');
   if (!preset || !profileDraft) return;
@@ -7194,41 +7191,6 @@ document.querySelector('[data-accent-swatches]')?.addEventListener('click', (eve
   const swatch = event.target.closest('[data-accent-swatch]');
   if (!swatch || !profileDraft) return;
   setAccentHsvFromHex(swatch.dataset.accentSwatch || '', { draft: true, preview: true });
-});
-document.querySelector('[data-banner-file]')?.addEventListener('change', async (event) => {
-  const input = event.target;
-  const file = input.files?.[0];
-  input.value = '';
-  if (!file || profileBannerBusy) return;
-  if (!/^image\/(?:png|jpeg|webp|gif)$/.test(file.type || '')) {
-    setProfileStatus('Choose a PNG, JPEG, WebP, or GIF image.', 'error');
-    return;
-  }
-  if (file.size > 12 * 1024 * 1024) {
-    setProfileStatus('Keep banner images under 12 MB.', 'error');
-    return;
-  }
-  profileBannerBusy = true;
-  setProfileStatus('Uploading banner...');
-  try {
-    const upload = globalThis.VercelBlob?.upload;
-    if (typeof upload !== 'function') throw new Error('Banner uploads are unavailable. Refresh and try again.');
-    const safeName = String(file.name || 'banner.jpg').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'banner.jpg';
-    const blob = await upload(`profile/${safeName}`, file, {
-      access: 'public',
-      handleUploadUrl: '/api/internet',
-      contentType: file.type,
-      onUploadProgress: (progress) => setProfileStatus(`Uploading banner... ${Math.round(progress.percentage || 0)}%`),
-    });
-    if (!profileDraft) profileDraft = { ...DEFAULT_PROFILE_DRAFT };
-    profileDraft.bannerUrl = blob.url;
-    renderProfilePreview();
-    setProfileStatus('Banner ready. Save your profile to publish it.', 'ok');
-  } catch (error) {
-    setProfileStatus(blobUploadFailedMessage(error.message, { large: true }), 'error');
-  } finally {
-    profileBannerBusy = false;
-  }
 });
 document.querySelector('[data-profile-form]')?.addEventListener('submit', async (event) => {
   event.preventDefault();

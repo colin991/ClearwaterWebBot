@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-no-banner-upload",
+      "title": "Custom banner uploads removed",
+      "summary": "Profile banners can no longer be uploaded while Vercel Blob storage is full. Pick a Clearwater scene preset, or remove your banner.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T22:00:00.000Z"
+    },
+    {
       "id": "2026-08-15-tip-rotation",
       "title": "Tipped posts rotate in For You",
       "summary": "Paid For You tips now show one tipped post at a time. Which tip appears is random, and it switches between the 1st and 2nd feed slots instead of always sitting on top.",

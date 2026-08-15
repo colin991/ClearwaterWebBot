@@ -365,14 +365,8 @@ export default async function handler(request, response) {
           request,
           onBeforeGenerateToken: async (pathname) => {
             const path = String(pathname || '');
-            if (/^profile\/[a-z0-9._-]+$/i.test(path)) {
-              return {
-                allowedContentTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
-                maximumSizeInBytes: MAX_PROFILE_IMAGE_BYTES,
-                addRandomSuffix: true,
-                allowOverwrite: false,
-                tokenPayload: JSON.stringify({ id: user.id }),
-              };
+            if (/^profile\//i.test(path)) {
+              throw new Error('Custom banner uploads are disabled. Pick a Clearwater preset banner instead.');
             }
             if (/^ads\/[a-z0-9._-]+$/i.test(path)) {
               return {
