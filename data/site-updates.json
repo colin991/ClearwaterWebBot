@@ -72,6 +72,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T02:57:22.000Z",
       "commit": "6626ced"
+    },
+    {
+      "id": "2026-08-15-hold-vc-slash",
+      "title": "Hold VC is a slash command",
+      "summary": "Moved hold VC off the `-` prefix toolkit to normal Discord slash commands: `/holdvc` and `/unholdvc` (Ownership only).",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T03:01:25.000Z",
+      "commit": "90ef85e"
     }
   ]
 }

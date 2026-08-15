@@ -41,7 +41,10 @@ export default {
       await command.execute(interaction);
     } catch (error) {
       logger.error(`Command failed: /${interaction.commandName}`, error);
-      const reply = { content: 'That command could not be completed. Please try again.', flags: MessageFlags.Ephemeral };
+      const reply = {
+        content: String(error?.message || 'That command could not be completed. Please try again.').slice(0, 1800),
+        flags: MessageFlags.Ephemeral,
+      };
       if (interaction.replied || interaction.deferred) await interaction.followUp(reply);
       else await interaction.reply(reply);
     }

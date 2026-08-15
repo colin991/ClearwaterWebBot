@@ -13,6 +13,7 @@ export default {
         '`/ping` - check the bot response time',
         '`/server` - show Clearwater server information',
         '`/help` - show this command list',
+        '`/holdvc` / `/unholdvc` - Ownership only: hold or release a voice channel',
         '',
         'Staff also have Circle-style prefix commands with `-`',
         'Example: `-help`, `-ban`, `-mute`, `-purge`, `-modlogs`',

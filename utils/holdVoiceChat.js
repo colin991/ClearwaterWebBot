@@ -1,4 +1,5 @@
 import { createReadStream, existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -13,7 +14,6 @@ import {
   VoiceConnectionStatus,
 } from '@discordjs/voice';
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
-import { createRequire } from 'node:module';
 import { FULL_STAFF_PANEL_ROLE_ID } from './staffRanks.js';
 import { logger } from './logger.js';
 
@@ -47,12 +47,32 @@ function isOwnershipMember(member, config = {}) {
   return false;
 }
 
-export function resolveHoldVoiceChannel(message) {
-  const mentioned = message.mentions.channels.find((channel) => (
+function actorFrom(source) {
+  return {
+    guild: source.guild,
+    member: source.member,
+    user: source.user || source.author,
+    client: source.client,
+  };
+}
+
+export function resolveHoldVoiceChannel(source, explicitChannel = null) {
+  if (explicitChannel
+    && (explicitChannel.type === ChannelType.GuildVoice || explicitChannel.type === ChannelType.GuildStageVoice)) {
+    return explicitChannel;
+  }
+  if (source.options?.getChannel) {
+    const selected = source.options.getChannel('channel', false);
+    if (selected
+      && (selected.type === ChannelType.GuildVoice || selected.type === ChannelType.GuildStageVoice)) {
+      return selected;
+    }
+  }
+  const mentioned = source.mentions?.channels?.find?.((channel) => (
     channel.type === ChannelType.GuildVoice || channel.type === ChannelType.GuildStageVoice
   ));
   if (mentioned) return mentioned;
-  return message.member?.voice?.channel || null;
+  return source.member?.voice?.channel || null;
 }
 
 function waitForPlayerIdle(player, timeoutMs = 30_000) {
@@ -105,7 +125,6 @@ async function joinAndAnnounce(voiceChannel, adapterCreator, audioPath) {
     throw new Error(`Could not join the voice channel: ${error?.message || error}`);
   }
 
-  // Give Discord a moment to finish negotiating audio before we speak.
   await new Promise((resolve) => setTimeout(resolve, 750));
 
   const player = createAudioPlayer({
@@ -139,13 +158,14 @@ async function joinAndAnnounce(voiceChannel, adapterCreator, audioPath) {
  * Bot joins the VC, plays the bundled hold announcement for everyone, then
  * server-mutes non-Ownership members. No external TTS API key is required.
  */
-export async function holdVoiceChat(message, config = {}) {
-  const voiceChannel = resolveHoldVoiceChannel(message);
+export async function holdVoiceChat(source, config = {}, explicitChannel = null) {
+  const { guild, user } = actorFrom(source);
+  const voiceChannel = resolveHoldVoiceChannel(source, explicitChannel);
   if (!voiceChannel) {
-    throw new Error('Join a voice channel first (or mention one).');
+    throw new Error('Join a voice channel first (or choose one).');
   }
 
-  const me = message.guild.members.me;
+  const me = guild.members.me;
   if (!me?.permissions?.has(PermissionFlagsBits.MuteMembers)) {
     throw new Error('I need the Mute Members permission.');
   }
@@ -161,13 +181,13 @@ export async function holdVoiceChat(message, config = {}) {
     throw new Error('Hold VC audio file is missing on the bot host (assets/hold-vc.mp3).');
   }
 
-  await joinAndAnnounce(voiceChannel, message.guild.voiceAdapterCreator, HOLD_VC_AUDIO_PATH);
+  await joinAndAnnounce(voiceChannel, guild.voiceAdapterCreator, HOLD_VC_AUDIO_PATH);
 
-  const previous = activeHolds.get(message.guild.id);
+  const previous = activeHolds.get(guild.id);
   const mutedIds = new Set(previous?.channelId === voiceChannel.id ? previous.mutedIds : []);
 
   let mutedNow = 0;
-  const channel = await message.guild.channels.fetch(voiceChannel.id).catch(() => voiceChannel);
+  const channel = await guild.channels.fetch(voiceChannel.id).catch(() => voiceChannel);
   for (const [, member] of channel.members) {
     if (member.user.bot) continue;
     if (isOwnershipMember(member, config)) continue;
@@ -176,7 +196,7 @@ export async function holdVoiceChat(message, config = {}) {
       continue;
     }
     try {
-      await member.voice.setMute(true, `Hold VC by ${message.author.tag}`);
+      await member.voice.setMute(true, `Hold VC by ${user.tag}`);
       mutedIds.add(member.id);
       mutedNow += 1;
     } catch (error) {
@@ -184,10 +204,10 @@ export async function holdVoiceChat(message, config = {}) {
     }
   }
 
-  activeHolds.set(message.guild.id, {
+  activeHolds.set(guild.id, {
     channelId: voiceChannel.id,
     mutedIds: [...mutedIds],
-    heldBy: message.author.id,
+    heldBy: user.id,
     at: new Date().toISOString(),
   });
 
@@ -200,28 +220,29 @@ export async function holdVoiceChat(message, config = {}) {
 }
 
 /** Undo a hold: unmute members this bot muted, then leave the voice channel. */
-export async function releaseVoiceChat(message) {
-  const hold = activeHolds.get(message.guild.id);
+export async function releaseVoiceChat(source) {
+  const { guild, user } = actorFrom(source);
+  const hold = activeHolds.get(guild.id);
   if (!hold) throw new Error('No active hold VC in this server.');
 
-  const voiceChannel = message.guild.channels.cache.get(hold.channelId)
-    || await message.guild.channels.fetch(hold.channelId).catch(() => null);
+  const voiceChannel = guild.channels.cache.get(hold.channelId)
+    || await guild.channels.fetch(hold.channelId).catch(() => null);
 
   let unmuted = 0;
   for (const userId of hold.mutedIds) {
-    const member = await message.guild.members.fetch(userId).catch(() => null);
+    const member = await guild.members.fetch(userId).catch(() => null);
     if (!member?.voice?.channel) continue;
     if (!member.voice.serverMute) continue;
     try {
-      await member.voice.setMute(false, `Hold VC released by ${message.author.tag}`);
+      await member.voice.setMute(false, `Hold VC released by ${user.tag}`);
       unmuted += 1;
     } catch (error) {
       logger.warn(`Could not unmute ${userId} after hold VC: ${error?.message || error}`);
     }
   }
 
-  activeHolds.delete(message.guild.id);
-  getVoiceConnection(message.guild.id)?.destroy();
+  activeHolds.delete(guild.id);
+  getVoiceConnection(guild.id)?.destroy();
 
   return { voiceChannel, unmuted };
 }
