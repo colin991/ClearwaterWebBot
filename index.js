@@ -1,6 +1,7 @@
-import { Client, Collection, GatewayIntentBits } from 'discord.js';
+import { Client, Collection, GatewayIntentBits, Partials } from 'discord.js';
 import { config, validateConfig } from './config.js';
 import { loadCommands } from './utils/loadCommands.js';
+import { loadPrefixCommands } from './utils/loadPrefixCommands.js';
 import { loadEvents } from './utils/loadEvents.js';
 import { registerCommands } from './utils/registerCommands.js';
 import { startStatusServer } from './utils/statusServer.js';
@@ -15,15 +16,19 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildModeration,
     GatewayIntentBits.MessageContent,
   ],
+  partials: [Partials.Channel],
   allowedMentions: { parse: [], repliedUser: false },
 });
 
 client.commands = new Collection();
+client.prefixCommands = new Collection();
 client.config = config;
 
 const commands = await loadCommands(client);
+await loadPrefixCommands(client);
 await loadEvents(client);
 await registerCommands(commands, config);
 

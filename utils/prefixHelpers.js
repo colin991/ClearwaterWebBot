@@ -1,0 +1,129 @@
+import {
+  EmbedBuilder,
+  PermissionFlagsBits,
+} from 'discord.js';
+import { getHighestStaffRank, STAFF_RANKS } from './staffRanks.js';
+
+export const PREFIX = '-';
+
+export const snowflakeFrom = (value = '') => String(value || '').match(/\d{16,22}/)?.[0] || null;
+
+export function parseArgs(content, prefix = PREFIX) {
+  const body = String(content || '').slice(String(prefix).length).trim();
+  const [name = '', ...rest] = body.split(/\s+/);
+  return {
+    name: name.toLowerCase(),
+    args: rest,
+    raw: rest.join(' ').trim(),
+  };
+}
+
+export function memberIsStaff(member) {
+  if (!member) return false;
+  if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
+  return Boolean(getHighestStaffRank(member));
+}
+
+export function requireStaff(message) {
+  if (!memberIsStaff(message.member)) {
+    throw new Error('Only Clearwater staff can use moderation commands.');
+  }
+}
+
+export function requireBotPerms(message, permissions = []) {
+  const me = message.guild?.members?.me;
+  if (!me) throw new Error('Could not resolve the bot member in this server.');
+  for (const permission of permissions) {
+    if (!me.permissions.has(permission)) {
+      throw new Error(`I need the \`${permission}\` permission to run that.`);
+    }
+  }
+}
+
+export async function resolveMember(message, token) {
+  const mention = message.mentions.members?.first();
+  if (mention) return mention;
+  const id = snowflakeFrom(token);
+  if (!id) return null;
+  return message.guild.members.fetch(id).catch(() => null);
+}
+
+export async function resolveUser(message, token, client) {
+  const mention = message.mentions.users?.first();
+  if (mention) return mention;
+  const id = snowflakeFrom(token);
+  if (!id) return null;
+  return client.users.fetch(id).catch(() => null);
+}
+
+export function parseDuration(input = '') {
+  const raw = String(input || '').trim().toLowerCase();
+  if (!raw) return null;
+  if (raw === '0' || raw === 'perm' || raw === 'permanent' || raw === 'forever') return 0;
+  const match = raw.match(/^(\d+)\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$/i);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  const unit = match[2].toLowerCase();
+  const mult =
+    unit.startsWith('s') ? 1000
+      : unit.startsWith('m') ? 60_000
+        : unit.startsWith('h') ? 3_600_000
+          : unit.startsWith('d') ? 86_400_000
+            : 604_800_000;
+  return amount * mult;
+}
+
+export function formatDuration(ms) {
+  if (!ms || ms <= 0) return 'Permanent';
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours}h`;
+  const days = Math.round(hours / 24);
+  return `${days}d`;
+}
+
+export function splitTargetReason(args = []) {
+  if (!args.length) return { target: '', reason: '', duration: null, rest: [] };
+  const target = args[0] || '';
+  let duration = null;
+  let reasonParts = args.slice(1);
+  if (reasonParts.length) {
+    const maybeDuration = parseDuration(reasonParts[0]);
+    if (maybeDuration != null) {
+      duration = maybeDuration;
+      reasonParts = reasonParts.slice(1);
+    }
+  }
+  return {
+    target,
+    duration,
+    reason: reasonParts.join(' ').trim() || 'No reason provided.',
+    rest: reasonParts,
+  };
+}
+
+export function caseEmbed(entry, title = 'Moderation case') {
+  return new EmbedBuilder()
+    .setColor(0x4f8ff7)
+    .setTitle(`${title} #${entry.id}`)
+    .addFields(
+      { name: 'Type', value: entry.type, inline: true },
+      { name: 'User', value: `<@${entry.userId}> (\`${entry.userId}\`)`, inline: true },
+      { name: 'Moderator', value: `<@${entry.moderatorId}>`, inline: true },
+      { name: 'Reason', value: entry.reason || 'No reason provided.' },
+      { name: 'Duration', value: entry.expiresAt ? `Until <t:${Math.floor(new Date(entry.expiresAt).getTime() / 1000)}:f>` : formatDuration(entry.durationMs), inline: true },
+      { name: 'Points', value: String(entry.points || 0), inline: true },
+      { name: 'Created', value: `<t:${Math.floor(new Date(entry.createdAt).getTime() / 1000)}:f>`, inline: true },
+    );
+}
+
+export function staffRankLabel(member) {
+  return getHighestStaffRank(member)?.name || (member?.permissions?.has(PermissionFlagsBits.Administrator) ? 'Administrator' : 'Staff');
+}
+
+export function listStaffRanks() {
+  return STAFF_RANKS.map((rank) => rank.name).join(', ');
+}
