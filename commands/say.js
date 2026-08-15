@@ -1,0 +1,54 @@
+import {
+  ChannelType,
+  EmbedBuilder,
+  MessageFlags,
+  SlashCommandBuilder,
+} from 'discord.js';
+import { requireOwnership } from '../utils/prefixHelpers.js';
+import { getActiveHold } from '../utils/holdVoiceChat.js';
+import { SAY_MAX_CHARS, sayInVoiceChannel } from '../utils/vcSpeak.js';
+
+export default {
+  data: new SlashCommandBuilder()
+    .setName('say')
+    .setDescription('Ownership: join a voice channel and speak the given text for everyone.')
+    .addStringOption((option) => option
+      .setName('text')
+      .setDescription('What the bot should say in voice chat')
+      .setRequired(true)
+      .setMaxLength(SAY_MAX_CHARS))
+    .addChannelOption((option) => option
+      .setName('channel')
+      .setDescription('Voice channel to speak in (defaults to the one you are in)')
+      .addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice)
+      .setRequired(false)),
+
+  async execute(interaction) {
+    requireOwnership(interaction);
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const text = interaction.options.getString('text', true);
+    const channel = interaction.options.getChannel('channel', false);
+    const target = channel || interaction.member?.voice?.channel || null;
+    const hold = getActiveHold(interaction.guildId);
+    const leaveAfter = !(hold && target && hold.channelId === target.id);
+
+    const result = await sayInVoiceChannel(interaction, text, {
+      explicitChannel: channel,
+      leaveAfter,
+    });
+
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x4f8ff7)
+          .setTitle('Say')
+          .setDescription([
+            `Spoke in ${result.voiceChannel}:`,
+            `“${result.text}”`,
+            result.leftAfter ? 'Left the voice channel afterward.' : 'Stayed in the channel (hold VC is active).',
+          ].join('\n')),
+      ],
+    });
+  },
+};

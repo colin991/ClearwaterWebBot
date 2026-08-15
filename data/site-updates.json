@@ -80,6 +80,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T03:01:25.000Z",
       "commit": "90ef85e"
+    },
+    {
+      "id": "2026-08-15-say-command",
+      "title": "Say command for voice chat",
+      "summary": "Added Ownership-only `/say text:` \u2014 the bot joins a voice channel and speaks the given text for everyone (no API key).",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T03:07:48.000Z",
+      "commit": "f8ea4f1"
     }
   ]
 }
