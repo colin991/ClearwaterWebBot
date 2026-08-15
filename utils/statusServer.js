@@ -8,12 +8,18 @@ import { dropLocationNameCandidates, fetchErlcPlayersOnMap, fetchErlcServer, fin
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
 import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
-import { AutomodHoldError, adjustInternetCredits, addBusinessMember, applyStaffSiteAction, applyStaffUserAction, assertBusinessAccess, assertLimitedStaffBanQuota, banKnownInternetIps, businessActorFromAccount, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, findMyDirectory, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listInternetAdsForUser, listMyBusinessAccounts, manageInternetAd, membersSharingWith, moderationSnapshot, myVerificationApplication, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, purchasePostBoost, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, removeBusinessMember, respondCreditTransfer, reviewBusinessApplication, reviewInternetAd, reviewInternetReport, reviewVerificationApplication, revertInternetHistory, saveInternetStore, queueInternetStoreSave, searchStaffUsers, sendInternetMessage, serveInternetAds, setBusinessMemberRole, setDiscordInternetNotify, setFindMyShare, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserConversation, staffUserDetail, staffUserMessages, submitBusinessApplication, submitVerificationApplication, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateBusinessProfile, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
+import { AutomodHoldError, adjustInternetCredits, addBusinessMember, applyStaffSiteAction, applyStaffUserAction, assertBusinessAccess, assertLimitedStaffBanQuota, banKnownInternetIps, businessActorFromAccount, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, findMyDirectory, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listGovernmentFines, listInternetAdsForUser, listMyBusinessAccounts, manageInternetAd, membersSharingWith, moderationSnapshot, myVerificationApplication, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, purchasePostBoost, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, removeBusinessMember, respondCreditTransfer, reviewBusinessApplication, reviewGovernmentFine, reviewInternetAd, reviewInternetReport, reviewVerificationApplication, revertInternetHistory, saveInternetStore, queueInternetStoreSave, searchStaffUsers, sendInternetMessage, serveInternetAds, setBusinessMemberRole, setDiscordInternetNotify, setFindMyShare, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserConversation, staffUserDetail, staffUserMessages, submitBusinessApplication, submitGovernmentFine, submitVerificationApplication, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateBusinessProfile, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
 import { createDiscordInternetNotifier } from './discordInternetNotify.js';
 import { createInternetFeedController, shouldAnnounceInteractResult } from './discordInternetFeed.js';
 import { markInternetPresence } from './internetPresence.js';
 import { RateLimitError } from './rateLimit.js';
 import { appendUpdateEntry, flushPendingUpdateLogs, postUpdateLog } from './updateLog.js';
+import {
+  GOVERNMENT_GUILD_ID,
+  rolesAllowGovernmentAccess,
+  rolesAllowGovernmentReview,
+} from './governmentAccess.js';
+import { logGovernmentFine } from './governmentLog.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -170,6 +176,43 @@ const safeEqual = (left = '', right = '') => {
   const b = Buffer.from(right);
   return a.length === b.length && timingSafeEqual(a, b);
 };
+
+async function resolveGovernmentAccess(client, config, actor = {}) {
+  const discordId = String(actor?.id || '');
+  const ownerDiscordIds = (config.ownerDiscordIds || []).map(String);
+  const ownership = ownerDiscordIds.includes(discordId)
+    || isDeveloperAccount({ id: discordId, username: actor?.username });
+
+  // Ownership on the main Clearwater guild also unlocks every government tool.
+  if (!ownership) {
+    const mainGuild = client.guilds.cache.get(CLEARWATER_GUILD_ID)
+      || await client.guilds.fetch(CLEARWATER_GUILD_ID).catch(() => null);
+    const mainMember = mainGuild ? await mainGuild.members.fetch(discordId).catch(() => null) : null;
+    if (getStaffPanelAccess(mainMember, {
+      ownerDiscordIds,
+      ownerRoleIds: config.ownerRoleIds || [],
+    }) === 'full') {
+      return { governmentAccess: true, governmentReview: true, ownership: true, governmentRoles: [] };
+    }
+  } else {
+    return { governmentAccess: true, governmentReview: true, ownership: true, governmentRoles: [] };
+  }
+
+  let governmentRoles = [];
+  const govGuild = client.guilds.cache.get(GOVERNMENT_GUILD_ID)
+    || await client.guilds.fetch(GOVERNMENT_GUILD_ID).catch(() => null);
+  if (govGuild && /^\d{16,22}$/.test(discordId)) {
+    const govMember = await govGuild.members.fetch(discordId).catch(() => null);
+    if (govMember) governmentRoles = [...govMember.roles.cache.keys()].map(String);
+  }
+
+  return {
+    governmentAccess: rolesAllowGovernmentAccess(governmentRoles),
+    governmentReview: rolesAllowGovernmentReview(governmentRoles),
+    ownership: false,
+    governmentRoles,
+  };
+}
 
 const readJson = async (request) => {
   let raw = '';
@@ -532,6 +575,23 @@ export function startStatusServer(client, config) {
       const panelAccess = getStaffPanelAccess(member, { ownerDiscordIds, ownerRoleIds });
       const allowed = panelAccess === 'full';
       const siteAccess = memberHasSiteAccess(member, { ownerDiscordIds });
+      const mainRoles = member ? [...member.roles.cache.keys()].map(String) : [];
+
+      // Government roles live on a separate Discord server the bot also joins.
+      let governmentRoles = [];
+      const govGuild = client.guilds.cache.get(GOVERNMENT_GUILD_ID)
+        || await client.guilds.fetch(GOVERNMENT_GUILD_ID).catch(() => null);
+      if (govGuild) {
+        const govMember = await govGuild.members.fetch(discordId).catch(() => null);
+        if (govMember) governmentRoles = [...govMember.roles.cache.keys()].map(String);
+      }
+
+      const ownership = allowed
+        || ownerDiscordIds.map(String).includes(discordId)
+        || isDeveloperAccount({ id: discordId });
+      const governmentAccess = ownership || rolesAllowGovernmentAccess(governmentRoles);
+      const governmentReview = ownership || rolesAllowGovernmentReview(governmentRoles);
+
       return json(response, 200, {
         allowed,
         panelAccess,
@@ -539,7 +599,10 @@ export function startStatusServer(client, config) {
         member: Boolean(member),
         staffRank: staffRank?.name || null,
         badges: getInternetBadges(member),
-        roles: member ? [...member.roles.cache.keys()].map(String) : [],
+        roles: mainRoles,
+        governmentRoles,
+        governmentAccess,
+        governmentReview,
       });
     }
 
@@ -847,6 +910,60 @@ export function startStatusServer(client, config) {
           const wallet = claimInternetDailyCredits(store, body.actor);
           await saveInternetStore(store);
           return json(response, 200, { wallet });
+        }
+
+        if (body.action === 'government-fines') {
+          const access = await resolveGovernmentAccess(client, config, body.actor);
+          if (!access.governmentAccess) return json(response, 403, { error: 'Government access required' });
+          const fines = listGovernmentFines(store, {
+            reviewer: access.governmentReview,
+            actorId: body.actor?.id,
+          });
+          return json(response, 200, {
+            fines,
+            pending: fines.filter((fine) => fine.status === 'pending'),
+            governmentAccess: true,
+            governmentReview: access.governmentReview,
+          });
+        }
+
+        if (body.action === 'government-fine-request') {
+          const access = await resolveGovernmentAccess(client, config, body.actor);
+          if (!access.governmentAccess) return json(response, 403, { error: 'Government access required' });
+          const fine = submitGovernmentFine(store, {
+            actor: body.actor,
+            targetId: body.targetId,
+            targetUsername: body.targetUsername,
+            amount: body.amount,
+            reason: body.reason,
+          });
+          await saveInternetStore(store);
+          void logGovernmentFine(client, { action: 'submit', fine, actor: body.actor, config });
+          return json(response, 201, {
+            fine,
+            fines: listGovernmentFines(store, {
+              reviewer: access.governmentReview,
+              actorId: body.actor?.id,
+            }),
+          });
+        }
+
+        if (body.action === 'government-fine-review') {
+          const access = await resolveGovernmentAccess(client, config, body.actor);
+          if (!access.governmentReview) return json(response, 403, { error: 'Government review access required' });
+          const decision = String(body.decision || '').toLowerCase() === 'approve' ? 'approve' : 'deny';
+          const fine = reviewGovernmentFine(store, {
+            actor: body.actor,
+            fineId: body.fineId,
+            decision,
+            note: body.note,
+          });
+          await saveInternetStore(store);
+          void logGovernmentFine(client, { action: decision, fine, actor: body.actor, config });
+          return json(response, 200, {
+            fine,
+            fines: listGovernmentFines(store, { reviewer: true, actorId: body.actor?.id }),
+          });
         }
 
         if (body.action === 'wallet-roblox-claim') {

@@ -28,6 +28,7 @@ export const config = Object.freeze({
   robloxGroupLogChannelId: process.env.ROBLOX_GROUP_LOG_CHANNEL_ID?.trim() || '1536517651055120514',
   internetFeedChannelId: process.env.INTERNET_FEED_CHANNEL_ID?.trim() || '1537573830543933560',
   updateLogChannelId: process.env.UPDATE_LOG_CHANNEL_ID?.trim() || '1538007463851200583',
+  governmentLogChannelId: process.env.GOVERNMENT_LOG_CHANNEL_ID?.trim() || '1538291625447661768',
   vcActionLogChannelId: process.env.VC_ACTION_LOG_CHANNEL_ID?.trim() || '1538021552120135731',
   noticeChannelId: process.env.NOTICE_CHANNEL_ID?.trim() || '1515038785421836479',
   verificationChannelId: process.env.VERIFICATION_CHANNEL_ID?.trim() || '1514181167145025666',

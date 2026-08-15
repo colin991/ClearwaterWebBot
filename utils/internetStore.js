@@ -60,6 +60,7 @@ const emptyStore = Object.freeze({
   businessAccounts: {},
   robloxPackClaims: {},
   discordFeedMessages: {},
+  governmentFines: [],
   siteBanner: null,
   officialPostBanner: null,
   officialProfile: {},
@@ -247,9 +248,11 @@ function normalizeInternetStore(data) {
     ads: Array.isArray(source.ads) ? source.ads : [],
     verificationApplications: Array.isArray(source.verificationApplications) ? source.verificationApplications : [],
     businessAccounts: source.businessAccounts && typeof source.businessAccounts === 'object' ? source.businessAccounts : {},
+    robloxPackClaims: source.robloxPackClaims && typeof source.robloxPackClaims === 'object' ? source.robloxPackClaims : {},
     discordFeedMessages: source.discordFeedMessages && typeof source.discordFeedMessages === 'object'
       ? source.discordFeedMessages
       : {},
+    governmentFines: Array.isArray(source.governmentFines) ? source.governmentFines : [],
     siteBanner: sanitizeSiteBanner(source.siteBanner),
     officialPostBanner: sanitizeOfficialPostBanner(source.officialPostBanner),
     officialProfile: source.officialProfile && typeof source.officialProfile === 'object' ? source.officialProfile : {},
@@ -882,7 +885,12 @@ export const CHAT_BOOST_LEVELS = Object.freeze([
 ]);
 
 function creditBalance(user) {
-  return Math.max(0, Math.floor(Number(user?.credits) || 0));
+  // Allow negative balances (government debt). Spending paths use spendableCredits().
+  return Math.trunc(Number(user?.credits) || 0);
+}
+
+function spendableCredits(user) {
+  return Math.max(0, creditBalance(user));
 }
 
 function isSystemInternetAccount(user) {
@@ -1002,6 +1010,8 @@ function walletView(user, { claimedNow = false, actor = null } = {}) {
   const daily = resolvedDailyTier(actor, user);
   return {
     balance: creditBalance(user),
+    inDebt: creditBalance(user) < 0,
+    debt: Math.max(0, -creditBalance(user)),
     dailyAmount: daily.amount,
     dailyLabel: daily.label,
     dailySource: daily.source,
@@ -1080,7 +1090,9 @@ export function adjustInternetCredits(store, { actor, targetId, amount, note = '
   if (!Number.isSafeInteger(change) || change === 0 || Math.abs(change) > 1_000_000) throw new Error('Enter a credit amount between 1 and 1,000,000');
   const user = store.users[id] || upsertInternetUser(store, { id });
   const before = creditBalance(user);
-  const applied = change < 0 ? -Math.min(before, Math.abs(change)) : change;
+  // Staff debit only removes spendable credits (does not deepen government debt).
+  const applied = change < 0 ? -Math.min(spendableCredits(user), Math.abs(change)) : change;
+  if (change < 0 && applied === 0) throw new Error('That member has no spendable credits to remove');
   user.credits = before + applied;
   addCreditTransaction(user, {
     amount: applied,
@@ -1090,6 +1102,145 @@ export function adjustInternetCredits(store, { actor, targetId, amount, note = '
   });
   addInternetLog(store, `${text(actor?.displayName, 80) || 'Staff'} ${applied >= 0 ? 'added' : 'removed'} C$${Math.abs(applied)} ${applied >= 0 ? 'to' : 'from'} ${text(user.displayName, 80) || 'a member'}.`);
   return { user, wallet: walletView(user), applied };
+}
+
+function publicGovernmentFine(fine) {
+  if (!fine || typeof fine !== 'object') return null;
+  return {
+    id: String(fine.id || ''),
+    targetId: String(fine.targetId || ''),
+    targetUsername: text(fine.targetUsername, 80),
+    targetDisplayName: text(fine.targetDisplayName, 80),
+    amount: Math.trunc(Number(fine.amount) || 0),
+    reason: text(fine.reason, 400),
+    requesterId: String(fine.requesterId || ''),
+    requesterName: text(fine.requesterName, 80),
+    status: ['pending', 'approved', 'denied'].includes(fine.status) ? fine.status : 'pending',
+    createdAt: fine.createdAt || null,
+    reviewedAt: fine.reviewedAt || null,
+    reviewerId: fine.reviewerId ? String(fine.reviewerId) : null,
+    reviewerName: text(fine.reviewerName, 80),
+    reviewNote: text(fine.reviewNote, 300),
+    balanceAfter: fine.balanceAfter == null ? null : Math.trunc(Number(fine.balanceAfter) || 0),
+  };
+}
+
+function ensureGovernmentFines(store) {
+  if (!Array.isArray(store.governmentFines)) store.governmentFines = [];
+  return store.governmentFines;
+}
+
+export function listGovernmentFines(store, { reviewer = false, actorId = '' } = {}) {
+  const fines = ensureGovernmentFines(store)
+    .map(publicGovernmentFine)
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  if (reviewer) return fines.slice(0, 120);
+  const id = String(actorId || '');
+  return fines.filter((fine) => fine.requesterId === id).slice(0, 60);
+}
+
+export function submitGovernmentFine(store, {
+  actor,
+  targetId,
+  targetUsername = '',
+  amount,
+  reason = '',
+} = {}) {
+  const requester = upsertInternetUser(store, actor);
+  const id = String(targetId || '').trim();
+  const value = Math.trunc(Number(amount));
+  const note = text(reason, 400);
+  if (!/^\d{16,22}$/.test(id)) throw new Error('Enter a valid Discord user ID to fine');
+  if (id === requester.id) throw new Error('You cannot fine yourself');
+  if (!Number.isSafeInteger(value) || value < 1 || value > 1_000_000) {
+    throw new Error('Fine amount must be between C$1 and C$1,000,000');
+  }
+  if (!note) throw new Error('Add a reason for this fine');
+
+  let target = store.users[id];
+  if (!target) {
+    target = upsertInternetUser(store, {
+      id,
+      username: targetUsername || id,
+      displayName: targetUsername || 'Clearwater member',
+    });
+  }
+
+  const pending = ensureGovernmentFines(store).filter((fine) => fine.status === 'pending' && fine.targetId === id).length;
+  if (pending >= 5) throw new Error('That member already has several pending fine requests');
+
+  const fine = {
+    id: `govfine_${randomUUID()}`,
+    targetId: id,
+    targetUsername: text(target.username || targetUsername, 80),
+    targetDisplayName: text(target.displayName || targetUsername, 80) || 'Clearwater member',
+    amount: value,
+    reason: note,
+    requesterId: requester.id,
+    requesterName: text(requester.displayName, 80) || 'Government member',
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    reviewedAt: null,
+    reviewerId: null,
+    reviewerName: null,
+    reviewNote: '',
+    balanceAfter: null,
+  };
+  ensureGovernmentFines(store).unshift(fine);
+  store.governmentFines = store.governmentFines.slice(0, 400);
+  addInternetLog(
+    store,
+    `${fine.requesterName} requested a C$${value} government fine on ${fine.targetDisplayName}.`,
+  );
+  return publicGovernmentFine(fine);
+}
+
+export function reviewGovernmentFine(store, {
+  actor,
+  fineId,
+  decision,
+  note = '',
+} = {}) {
+  const id = String(fineId || '').trim();
+  const choice = String(decision || '').toLowerCase() === 'approve' ? 'approve' : 'deny';
+  const fines = ensureGovernmentFines(store);
+  const fine = fines.find((item) => item.id === id);
+  if (!fine) throw new Error('Fine request not found');
+  if (fine.status !== 'pending') throw new Error('That fine request was already reviewed');
+
+  fine.reviewedAt = new Date().toISOString();
+  fine.reviewerId = String(actor?.id || '');
+  fine.reviewerName = text(actor?.displayName, 80) || 'Government reviewer';
+  fine.reviewNote = text(note, 300);
+
+  if (choice === 'deny') {
+    fine.status = 'denied';
+    addInternetLog(store, `${fine.reviewerName} denied a C$${fine.amount} government fine on ${fine.targetDisplayName}.`);
+    return publicGovernmentFine(fine);
+  }
+
+  const target = store.users[fine.targetId] || upsertInternetUser(store, {
+    id: fine.targetId,
+    username: fine.targetUsername,
+    displayName: fine.targetDisplayName,
+  });
+  const before = creditBalance(target);
+  const applied = -Math.abs(Math.trunc(Number(fine.amount) || 0));
+  target.credits = before + applied;
+  fine.balanceAfter = creditBalance(target);
+  fine.status = 'approved';
+  addCreditTransaction(target, {
+    amount: applied,
+    type: 'government-fine',
+    note: text(fine.reason, 220) || 'Government fine',
+    actorName: fine.reviewerName || 'Government',
+  });
+  addInternetLog(
+    store,
+    `${fine.reviewerName} approved a C$${Math.abs(applied)} government fine on ${fine.targetDisplayName} (balance ${fine.balanceAfter}).`,
+  );
+  return publicGovernmentFine(fine);
 }
 
 function robloxPackClaimKey(robloxId, assetId) {
@@ -1368,7 +1519,7 @@ export function createCreditTransfer(store, { actor, type, targetId, username, a
   }
   const noteText = text(note, 120);
   if (kind === 'send') {
-    if (creditBalance(initiator) < value) throw new Error('You do not have enough Clearwater credits');
+    if (spendableCredits(initiator) < value) throw new Error('You do not have enough Clearwater credits');
     initiator.credits = creditBalance(initiator) - value;
     addCreditTransaction(initiator, {
       amount: -value,
@@ -1467,7 +1618,7 @@ export function respondCreditTransfer(store, { actor, transferId, decision, ipHa
         actorName: from.displayName || 'Clearwater member',
       });
     } else {
-      if (creditBalance(to) < transfer.amount) throw new Error('You do not have enough Clearwater credits');
+      if (spendableCredits(to) < transfer.amount) throw new Error('You do not have enough Clearwater credits');
       to.credits = creditBalance(to) - transfer.amount;
       from.credits = creditBalance(from) + transfer.amount;
       addCreditTransaction(to, {
@@ -2851,7 +3002,7 @@ export function purchasePostBoost(store, { actor, postId } = {}) {
   if (usedToday >= POST_BOOST_DAILY_CAP) {
     throw new Error(`You can tip up to ${POST_BOOST_DAILY_CAP} posts per day`);
   }
-  if (creditBalance(user) < POST_BOOST_COST) throw new Error(`You need C$${POST_BOOST_COST} to tip this post`);
+  if (spendableCredits(user) < POST_BOOST_COST) throw new Error(`You need C$${POST_BOOST_COST} to tip this post`);
   user.credits = creditBalance(user) - POST_BOOST_COST;
   user.postBoostDays[dayKey] = usedToday + 1;
   addCreditTransaction(user, {
@@ -3576,7 +3727,7 @@ export function purchaseInternetAd(store, {
   }
   const boostLevels = Math.min(AD_MAX_BOOST, Math.max(0, Math.trunc(Number(boost) || 0)));
   const cost = computeAdCost(adPlacement, boostLevels, seconds);
-  if (creditBalance(handler) < cost) throw new Error(`You need C$${cost} to place this ad`);
+  if (spendableCredits(handler) < cost) throw new Error(`You need C$${cost} to place this ad`);
   handler.credits = creditBalance(handler) - cost;
   const placeLabel = adPlacementLabel(adPlacement);
   addCreditTransaction(handler, {

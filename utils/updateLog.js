@@ -61,6 +61,16 @@ async function markPosted(ids) {
 function buildUpdateMessage(entry) {
   const fields = [];
   if (entry.updatedBy) fields.push({ name: 'Updated by', value: entry.updatedBy });
+  if (entry.createdAt) {
+    const when = new Date(entry.createdAt);
+    if (!Number.isNaN(when.getTime())) {
+      const unix = Math.floor(when.getTime() / 1000);
+      fields.push({
+        name: 'When',
+        value: `<t:${unix}:F> · <t:${unix}:R>`,
+      });
+    }
+  }
   if (entry.commit) fields.push({ name: 'Commit', value: `\`${entry.commit}\`` });
   return v2Card({
     title: entry.title,

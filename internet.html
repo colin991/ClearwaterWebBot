@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/assets/icon-512.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260815-toggle-fix" />
+    <link rel="stylesheet" href="internet.css?v=20260815-government" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260815-newsletter"></script>
   </head>
@@ -56,6 +56,7 @@
           <a href="/internet/bookmarks" data-view-link="bookmarks"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21l-6-3.6L6 21V4.5Z" /></svg>Bookmarks</a>
           <a href="/internet/profile" data-view-link="profile"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>Profile</a>
           <a href="/internet/settings" data-view-link="settings"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56v.09h-3v-.09A1.7 1.7 0 0 0 10.69 18.65a1.7 1.7 0 0 0-1.87.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7.04 15a1.7 1.7 0 0 0-1.56-1.03h-.09v-3h.09A1.7 1.7 0 0 0 7.04 9.94a1.7 1.7 0 0 0-.34-1.87l-.06-.06 2.12-2.12.06.06a1.7 1.7 0 0 0 1.87.34 1.7 1.7 0 0 0 1.03-1.56v-.09h3v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06 2.12 2.12-.06.06a1.7 1.7 0 0 0-.34 1.87 1.7 1.7 0 0 0 1.56 1.03h.09v3h-.09A1.7 1.7 0 0 0 19.4 15z" /></svg>Settings</a>
+          <a href="/internet/government" data-view-link="government" data-government-link hidden><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18" /><path d="M5 21V8l7-4 7 4v13" /><path d="M9 21v-6h6v6" /><path d="M9 10h.01M12 10h.01M15 10h.01" /></svg>Government</a>
           <a href="/internet/staff" data-view-link="staff" data-staff-link hidden><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.4 8.2 8 9 4.6-.8 8-4 8-9V7z" /><path d="m9 12 2 2 4-4" /></svg>Staff</a>
         </nav>
         <button class="rail-primary" type="button" data-compose-link>Post</button>
@@ -534,6 +535,40 @@
             </div>
           </div>
         </section>
+        <section class="internet-view government-view" data-view="government" hidden>
+          <header class="page-heading">
+            <div>
+              <p>Government</p>
+              <h1>Clearwater Government</h1>
+            </div>
+            <button type="button" class="settings-button" data-refresh-government>Refresh</button>
+          </header>
+          <div class="government-shell">
+            <section class="settings-card government-request-card">
+              <h2>Request a fine</h2>
+              <p class="settings-hint">Submit a Clearwater Credits fine for review. If the member cannot pay in full, their wallet goes into debt until later credits pay it down.</p>
+              <form class="government-fine-form" data-government-fine-form>
+                <label class="settings-field"><span>Discord user ID</span><input data-government-target-id maxlength="22" inputmode="numeric" placeholder="1514…" required autocomplete="off" /></label>
+                <label class="settings-field"><span>Username (optional)</span><input data-government-target-username maxlength="80" placeholder="@member" autocomplete="off" /></label>
+                <label class="settings-field"><span>Amount (C$)</span><input data-government-amount type="number" min="1" max="1000000" step="1" placeholder="250" required /></label>
+                <label class="settings-field"><span>Reason</span><textarea data-government-reason maxlength="400" rows="3" placeholder="Why is this fine being requested?" required></textarea></label>
+                <div class="settings-actions">
+                  <button type="submit" class="settings-button primary" data-government-submit>Submit fine request</button>
+                  <p class="settings-status" data-government-status role="status"></p>
+                </div>
+              </form>
+            </section>
+            <section class="settings-card government-review-card" data-government-review-card hidden>
+              <h2>Review queue</h2>
+              <p class="settings-hint">Approve to deduct the fine (debt allowed). Deny to close the request without charging.</p>
+              <div class="government-fine-list" data-government-review-list><p class="staff-empty">No pending fine requests.</p></div>
+            </section>
+            <section class="settings-card">
+              <h2>Your requests</h2>
+              <div class="government-fine-list" data-government-mine-list><p class="staff-empty">You have not submitted any fine requests yet.</p></div>
+            </section>
+          </div>
+        </section>
         <section class="internet-view staff-panel-view" data-view="staff" hidden>
           <div class="staff-app" data-staff-app>
             <header class="staff-chrome">
@@ -733,6 +768,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260815-toggle-fix"></script>
+    <script src="internet.js?v=20260815-government"></script>
   </body>
 </html>

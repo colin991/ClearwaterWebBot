@@ -9551,3 +9551,24 @@ body.has-site-banner.has-official-post-banner .internet-side {
 .cw-app-foot { margin: 18px 0 0; color: #7f8fa3; font-size: 12px; }
 .cw-app-foot a { color: #9fc6ff; font-weight: 700; text-decoration: none; }
 .cw-app-foot a:hover { text-decoration: underline; }
+
+/* Government desk */
+.government-shell { display: grid; gap: 16px; padding: 0 20px 24px; }
+.government-fine-form { display: grid; gap: 12px; margin-top: 12px; }
+.government-fine-list { display: grid; gap: 10px; margin-top: 12px; }
+.government-fine-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 14px;
+  background: rgba(255,255,255,.03);
+}
+.government-fine-card b { display: block; font-size: 14px; }
+.government-fine-card small { color: #93a1b8; font-size: 11px; }
+.government-fine-card p { margin: 8px 0 0; color: #e8edf5; font-size: 13px; line-height: 1.4; }
+.government-fine-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.government-fine-card.status-approved { border-color: rgba(74, 222, 128, .28); }
+.government-fine-card.status-denied { border-color: rgba(248, 113, 113, .28); }
+.government-view .page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+

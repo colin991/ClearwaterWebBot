@@ -497,6 +497,31 @@ export default async function handler(request, response) {
           guildRoles: Array.isArray(access.roles) ? access.roles : (user.guildRoles || []),
         },
       };
+    } else if (body.action === 'government-fines') {
+      if (!access.governmentAccess) return sendJson(response, 403, { error: 'Government access required' });
+      payload = {
+        action: 'government-fines',
+        actor: memberActor(user, access),
+      };
+    } else if (body.action === 'government-fine-request') {
+      if (!access.governmentAccess) return sendJson(response, 403, { error: 'Government access required' });
+      payload = {
+        action: 'government-fine-request',
+        targetId: String(body.targetId || '').trim(),
+        targetUsername: String(body.targetUsername || '').slice(0, 80),
+        amount: Number(body.amount),
+        reason: String(body.reason || '').slice(0, 400),
+        actor: memberActor(user, access),
+      };
+    } else if (body.action === 'government-fine-review') {
+      if (!access.governmentReview) return sendJson(response, 403, { error: 'Government review access required' });
+      payload = {
+        action: 'government-fine-review',
+        fineId: String(body.fineId || '').trim(),
+        decision: String(body.decision || '').toLowerCase() === 'approve' ? 'approve' : 'deny',
+        note: String(body.note || '').slice(0, 300),
+        actor: memberActor(user, access),
+      };
     } else if (body.action === 'ads') {
       payload = { action: 'ads', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
     } else if (body.action === 'ad-click') {

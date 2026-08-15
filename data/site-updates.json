@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-government-fines",
+      "title": "Government tab and credit fines",
+      "summary": "A Government tab sits under Settings for the government Discord role. Members can request Clearwater Credit fines, reviewers can approve or deny them, unpaid balances go into debt until later credits pay them down, and actions log to the government Discord channel. Update log posts now include a timestamp.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T21:20:00.000Z"
+    },
+    {
       "id": "2026-08-15-phone-discord-session",
       "title": "Phone Discord sign-in actually sticks",
       "summary": "Clearwater Phone now keeps a Discord session the overlay can read. Signing in no longer depends on cookies the desktop app could not see.",

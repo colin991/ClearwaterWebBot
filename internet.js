@@ -34,6 +34,7 @@ const profileVerified = document.querySelector('[data-profile-verified]');
 const profilePostCount = document.querySelector('[data-profile-post-count]');
 const profileList = document.querySelector('[data-profile-list]');
 const staffLink = document.querySelector('[data-staff-link]');
+const governmentLink = document.querySelector('[data-government-link]');
 const staffContent = document.querySelector('[data-staff-content]');
 const warningNotice = document.querySelector('[data-warning-notice]');
 const warningReasons = document.querySelector('[data-warning-reasons]');
@@ -135,7 +136,7 @@ function signInUrl(nextPath = '') {
   return `/signin?next=${encodeURIComponent(path)}`;
 }
 
-const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post', 'sponsored', 'bookmarks']);
+const INTERNET_VIEWS = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'government', 'wallet', 'post', 'sponsored', 'bookmarks']);
 
 const siteDialog = document.querySelector('[data-site-dialog]');
 const siteDialogForm = document.querySelector('[data-site-dialog-form]');
@@ -361,6 +362,8 @@ let activeBan = null;
 let sessionIsOwner = false;
 let sessionStaffPanel = null;
 let sessionCanStaff = false;
+let sessionCanGovernment = false;
+let sessionCanGovernmentReview = false;
 let activeAccount = 'personal';
 let sessionUser = null;
 let pendingReportReview = null;
@@ -2453,9 +2456,10 @@ function renderBookmarks() {
 }
 
 function showView(view) {
-  const availableViews = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'wallet', 'post', 'sponsored', 'bookmarks']);
+  const availableViews = new Set(['home', 'notifications', 'messages', 'profile', 'member', 'conversation', 'settings', 'staff', 'government', 'wallet', 'post', 'sponsored', 'bookmarks']);
   let activeView = availableViews.has(view) ? view : 'home';
   if (activeView === 'staff' && !sessionCanStaff) activeView = 'home';
+  if (activeView === 'government' && !sessionCanGovernment) activeView = 'home';
   const shell = document.querySelector('.internet-shell');
   const feed = document.querySelector('.internet-feed');
   shell?.classList.toggle('staff-mode', activeView === 'staff');
@@ -2494,6 +2498,7 @@ function showView(view) {
   if (activeView === 'messages') void loadMessages();
   if (activeView === 'notifications') void loadNotifications();
   if (activeView === 'staff') void loadModeration();
+  if (activeView === 'government') void loadGovernment();
   if (activeView === 'wallet') {
     onboardingWalletVisited = true;
     if (currentUserId) localStorage.setItem(`clearwater-onboarding-wallet-${currentUserId}`, '1');
@@ -3931,7 +3936,9 @@ function applyOfficialPostBanner(banner, forceShow = false) {
 }
 
 function formatCredits(value) {
-  return `C$${Math.max(0, Math.floor(Number(value) || 0)).toLocaleString()}`;
+  const amount = Math.trunc(Number(value) || 0);
+  if (amount < 0) return `−C$${Math.abs(amount).toLocaleString()} debt`;
+  return `C$${amount.toLocaleString()}`;
 }
 
 const CREDIT_STORE_PACKS = Object.freeze([
@@ -4927,12 +4934,15 @@ function renderWallet(wallet) {
   document.querySelectorAll('[data-internet-cash-amount]').forEach((element) => { element.textContent = formatCredits(wallet.balance); });
   if (dailyCopy) {
     const roleExtra = Number(wallet.roleExtra || 0);
+    const debtNote = wallet.inDebt || Number(wallet.balance) < 0
+      ? ` You currently owe C$${Math.abs(Math.trunc(Number(wallet.balance) || 0)).toLocaleString()} in government debt — new credits pay it down first.`
+      : '';
     const perk = roleExtra > 0 && wallet.roleLabel
       ? ` Chat pays ${formatCredits(wallet.chatDaily || 75)}; ${wallet.roleLabel} adds ${formatCredits(roleExtra)} extra (${formatCredits(wallet.dailyAmount || 75)} total).`
       : wallet.dailySource === 'chat'
         ? ` Your chat level pays ${formatCredits(wallet.dailyAmount || 75)}.`
         : ` Start at ${formatCredits(wallet.baseDailyAmount || 75)}; chat levels and Discord roles can raise it.`;
-    dailyCopy.textContent = `You receive credits every 24 hours.${perk}`;
+    dailyCopy.textContent = `You receive credits every 24 hours.${perk}${debtNote}`;
   }
   if (status) {
     status.dataset.tone = wallet.claimedNow ? 'ok' : 'wait';
@@ -4999,6 +5009,139 @@ async function loadWallet() {
       status.textContent = error.message || 'Could not load your wallet.';
     }
     if (list) list.innerHTML = `<p class="wallet-empty">${escapeHtml(error.message || 'Could not load transactions.')}</p>`;
+  }
+}
+
+function governmentFineCard(fine, { review = false } = {}) {
+  const amount = Number(fine.amount) || 0;
+  const status = String(fine.status || 'pending');
+  const actions = review && status === 'pending'
+    ? `<div class="government-fine-actions">
+        <button type="button" class="settings-button primary" data-government-review="approve" data-fine-id="${escapeHtml(fine.id)}">Approve</button>
+        <button type="button" class="settings-button ghost" data-government-review="deny" data-fine-id="${escapeHtml(fine.id)}">Deny</button>
+      </div>`
+    : '';
+  const balanceNote = status === 'approved' && fine.balanceAfter != null
+    ? `<small>Balance after fine: ${escapeHtml(formatCredits(fine.balanceAfter))}</small>`
+    : '';
+  return `<article class="government-fine-card status-${escapeHtml(status)}">
+    <div>
+      <b>${escapeHtml(fine.targetDisplayName || 'Member')} · ${escapeHtml(formatCredits(amount))}</b>
+      <small>@${escapeHtml(fine.targetUsername || fine.targetId || 'member')} · ${escapeHtml(status)} · ${escapeHtml(timeAgo(fine.createdAt))}${fine.requesterName ? ` · by ${escapeHtml(fine.requesterName)}` : ''}</small>
+      <p>${escapeHtml(fine.reason || 'No reason given')}</p>
+      ${balanceNote}
+    </div>
+    ${actions}
+  </article>`;
+}
+
+function renderGovernmentLists(fines = []) {
+  const reviewCard = document.querySelector('[data-government-review-card]');
+  const reviewList = document.querySelector('[data-government-review-list]');
+  const mineList = document.querySelector('[data-government-mine-list]');
+  if (reviewCard) reviewCard.hidden = !sessionCanGovernmentReview;
+  const pending = fines.filter((fine) => fine.status === 'pending');
+  if (reviewList) {
+    const queue = sessionCanGovernmentReview ? pending : [];
+    reviewList.innerHTML = queue.length
+      ? queue.map((fine) => governmentFineCard(fine, { review: true })).join('')
+      : '<p class="staff-empty">No pending fine requests.</p>';
+  }
+  if (mineList) {
+    const rows = fines.filter((fine) => fine.requesterId === currentUserId).slice(0, 40);
+    mineList.innerHTML = rows.length
+      ? rows.map((fine) => governmentFineCard(fine)).join('')
+      : '<p class="staff-empty">You have not submitted any fine requests yet.</p>';
+  }
+}
+
+async function loadGovernment() {
+  if (!sessionCanGovernment) return;
+  const status = document.querySelector('[data-government-status]');
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'government-fines' }),
+    });
+    const result = await readApiJson(response, 'Could not load government fines.');
+    if (!response.ok) {
+      const detail = String(result.error || '');
+      if (/unsupported action/i.test(detail)) {
+        throw new Error('Government tools need the latest bot host files and a restart.');
+      }
+      throw new Error(detail || 'Could not load government fines.');
+    }
+    if (typeof result.governmentReview === 'boolean') sessionCanGovernmentReview = result.governmentReview;
+    renderGovernmentLists(result.fines || result.pending || []);
+  } catch (error) {
+    if (status) {
+      status.dataset.tone = 'error';
+      status.textContent = error.message || 'Could not load government tools.';
+    }
+  }
+}
+
+async function submitGovernmentFineRequest(event) {
+  event.preventDefault();
+  if (!sessionCanGovernment) return;
+  const status = document.querySelector('[data-government-status]');
+  const button = document.querySelector('[data-government-submit]');
+  const targetId = String(document.querySelector('[data-government-target-id]')?.value || '').trim();
+  const targetUsername = String(document.querySelector('[data-government-target-username]')?.value || '').trim();
+  const amount = Number(document.querySelector('[data-government-amount]')?.value || 0);
+  const reason = String(document.querySelector('[data-government-reason]')?.value || '').trim();
+  if (button) button.disabled = true;
+  if (status) {
+    status.dataset.tone = 'wait';
+    status.textContent = 'Submitting fine request...';
+  }
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'government-fine-request',
+        targetId,
+        targetUsername,
+        amount,
+        reason,
+      }),
+    });
+    const result = await readApiJson(response, 'Could not submit this fine request.');
+    if (!response.ok) throw new Error(result.error || 'Could not submit this fine request.');
+    if (status) {
+      status.dataset.tone = 'ok';
+      status.textContent = 'Fine request submitted for review.';
+    }
+    document.querySelector('[data-government-fine-form]')?.reset();
+    renderGovernmentLists(result.fines || []);
+  } catch (error) {
+    if (status) {
+      status.dataset.tone = 'error';
+      status.textContent = error.message || 'Could not submit this fine request.';
+    }
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function reviewGovernmentFineRequest(fineId, decision) {
+  if (!sessionCanGovernmentReview || !fineId) return;
+  const label = decision === 'approve' ? 'Approve this fine and charge the member?' : 'Deny this fine request?';
+  if (!(await siteConfirm(label, decision === 'approve' ? 'Approve fine' : 'Deny fine'))) return;
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'government-fine-review', fineId, decision }),
+    });
+    const result = await readApiJson(response, 'Could not review this fine.');
+    if (!response.ok) throw new Error(result.error || 'Could not review this fine.');
+    renderGovernmentLists(result.fines || []);
+    void siteAlert(decision === 'approve' ? 'Fine approved and applied.' : 'Fine request denied.');
+  } catch (error) {
+    void siteAlert(error.message || 'Could not review this fine.');
   }
 }
 
@@ -6378,6 +6521,8 @@ async function loadSession() {
     ? session.user.staffPanel
     : (session.user.owner === true ? 'full' : null);
   sessionCanStaff = Boolean(sessionStaffPanel);
+  sessionCanGovernment = session.user.governmentAccess === true || session.user.owner === true;
+  sessionCanGovernmentReview = session.user.governmentReview === true || session.user.owner === true;
   sessionIsOwner = sessionStaffPanel === 'full';
   if (profileTitle) profileTitle.textContent = session.user.displayName || session.user.username;
   if (profileCopy) profileCopy.textContent = session.user.bio || (session.user.staffRank ? `${session.user.staffRank} in Clearwater Roleplay.` : 'Clearwater Roleplay community member.');
@@ -6387,6 +6532,7 @@ async function loadSession() {
   if (profileHandle) profileHandle.textContent = `@${session.user.username}`;
   refreshProfileVerified();
   if (staffLink) staffLink.hidden = !sessionCanStaff;
+  if (governmentLink) governmentLink.hidden = !sessionCanGovernment;
   if (admin) admin.hidden = !sessionIsOwner;
   if (officialAccountOption) officialAccountOption.hidden = !sessionIsOwner;
   if (officialProfileControls) officialProfileControls.hidden = !sessionIsOwner;
@@ -7518,6 +7664,12 @@ document.addEventListener('click', (event) => {
     return;
   }
   if (event.target.closest('[data-refresh-staff]')) { void loadModeration(); return; }
+  if (event.target.closest('[data-refresh-government]')) { void loadGovernment(); return; }
+  const governmentReview = event.target.closest('[data-government-review]');
+  if (governmentReview) {
+    void reviewGovernmentFineRequest(governmentReview.dataset.fineId, governmentReview.dataset.governmentReview);
+    return;
+  }
   const staffSelect = event.target.closest('[data-staff-select]');
   if (staffSelect) {
     selectedReportId = staffSelect.dataset.staffSelect;
@@ -8742,6 +8894,9 @@ document.querySelectorAll('[data-wallet-transfer-tab]').forEach((button) => {
 document.querySelector('[data-wallet-transfer-search]')?.addEventListener('input', (event) => {
   if (walletTransferTarget) selectWalletTransferTarget(null);
   renderWalletTransferResults(event.target.value);
+});
+document.querySelector('[data-government-fine-form]')?.addEventListener('submit', (event) => {
+  void submitGovernmentFineRequest(event);
 });
 document.querySelector('[data-wallet-transfer-form]')?.addEventListener('submit', async (event) => {
   event.preventDefault();
