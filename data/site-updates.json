@@ -40,6 +40,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T02:42:00.000Z",
       "commit": "5a32771"
+    },
+    {
+      "id": "2026-08-15-hold-vc",
+      "title": "Hold VC command",
+      "summary": "Added `-holdvc` / `-unholdvc`: server-mutes everyone in a voice channel except Ownership, announces \u201cPlease Hold this voice chat\u201d, and plays it with OpenAI voice onyx when OPENAI_API_KEY is set on the bot host.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T02:49:40.000Z",
+      "commit": "cd24a6b"
     }
   ]
 }

@@ -28,6 +28,7 @@ const GROUPS = [
     lines: [
       `\`-purge\` / \`-clean\` — Cleanup · **${RANK_FLOOR.leadModerator}+**`,
       `\`-lock\` / \`-unlock\` / \`-locked\` — Channel locks · **${RANK_FLOOR.supervisor}+**`,
+      `\`-holdvc\` / \`-unholdvc\` — Hold/release a VC (mute all but Ownership, Onyx announce) · **${RANK_FLOOR.supervisor}+**`,
     ],
   },
   {
