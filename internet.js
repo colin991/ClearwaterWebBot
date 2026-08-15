@@ -108,14 +108,15 @@ const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not deliver
 const AUTOMOD_HOLD_PREVIEW = 'This may be held for staff review when you send it.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const SMALL_REEL_BYTES = 3_200_000;
-const MAX_BUSINESS_LOGO_BYTES = 2 * 1024 * 1024;
 const BLOB_LIMIT_MESSAGE = 'Cloud storage hit this month’s Vercel Blob limit, so uploads are paused. Upgrade Blob or wait for the next billing cycle.';
 const BLOB_LOGO_ONLY_MESSAGE = 'Cloud storage is reserved for business logos under 2 MB. Ad and Reel cloud uploads are paused.';
 
 function blobUploadFailedMessage(raw, { large = true } = {}) {
   const text = String(raw || '');
   if (/suspended|quota|limit|billing|exceeded/i.test(text)) return BLOB_LIMIT_MESSAGE;
-  if (/reserved for business logos|Only business logo|Ad and Reel/i.test(text)) return BLOB_LOGO_ONLY_MESSAGE;
+  if (/reserved for business logos|Only business logo|Ad and Reel|logo URL/i.test(text)) {
+    return 'Business logos use a public image URL now. Paste a https link in Settings → Business accounts.';
+  }
   if (/token|blob store|No token|Failed to retrieve/i.test(text)) {
     return large
       ? 'Large uploads need Vercel Blob storage. A photo under 3 MB still works without it.'
@@ -445,8 +446,6 @@ let adBusinessAccounts = [];
 let myBusinessAccounts = [];
 let myVerificationApp = null;
 let accountVerified = false;
-let businessAvatarDraft = null;
-const businessEditAvatarDrafts = new Map();
 let adPricing = {
   base: 1200,
   boost: 300,
@@ -4806,30 +4805,29 @@ function renderAdLogoPreview() {
   preview.innerHTML = `<img src="${escapeHtml(adLogo.previewUrl)}" alt="Ad logo preview" /><button type="button" data-remove-ad-logo>Remove logo</button>`;
 }
 
-async function uploadBusinessLogo(file) {
-  if (!file) throw new Error('Choose a logo image.');
-  if (file.size > MAX_BUSINESS_LOGO_BYTES) {
-    throw new Error('Business logos must be under 2 MB.');
-  }
-  if (!/^image\/(png|jpeg|jpg|webp|gif)$/i.test(String(file.type || ''))) {
-    throw new Error('Use a PNG, JPG, WEBP, or GIF logo.');
-  }
-  const upload = globalThis.VercelBlob?.upload;
-  if (typeof upload !== 'function') {
-    throw new Error('Business logo uploads need Vercel Blob storage. Refresh after Blob is connected.');
-  }
+function safeBusinessLogoUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
   try {
-    const safeName = String(file.name || 'logo.jpg').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'logo.jpg';
-    const blob = await upload(`business/${safeName}`, file, {
-      access: 'public',
-      handleUploadUrl: '/api/internet',
-      contentType: file.type || 'image/jpeg',
-    });
-    if (blob?.url) return { url: blob.url };
-  } catch (error) {
-    throw new Error(blobUploadFailedMessage(error?.message || error, { large: false }));
+    const url = new URL(raw);
+    if (url.protocol !== 'https:' || url.username || url.password) return '';
+    if (/["'()\\\s]/.test(raw)) return '';
+    return url.href;
+  } catch {
+    return '';
   }
-  throw new Error('Could not upload that logo.');
+}
+
+function renderBusinessLogoPreview(preview, url) {
+  if (!preview) return;
+  const safe = safeBusinessLogoUrl(url);
+  if (!safe) {
+    preview.hidden = true;
+    preview.innerHTML = '';
+    return;
+  }
+  preview.hidden = false;
+  preview.innerHTML = `<img src="${escapeHtml(safe)}" alt="Business logo preview" />`;
 }
 
 async function uploadAdMedia(file, isVideo) {
@@ -5873,13 +5871,6 @@ function canManageBusinessProfile(businessId) {
   return Boolean(biz && biz.status === 'active' && (biz.canEditProfile || biz.canManageMembers));
 }
 
-function revokeBusinessEditAvatarDraft(businessId) {
-  const id = String(businessId || '');
-  const draft = businessEditAvatarDrafts.get(id);
-  if (draft?.previewUrl) URL.revokeObjectURL(draft.previewUrl);
-  businessEditAvatarDrafts.delete(id);
-}
-
 function syncBusinessUserLocally(biz) {
   if (!biz?.id) return;
   const existing = internetUsers.get(biz.id) || {};
@@ -5943,8 +5934,7 @@ function renderBusinessAccountsPane() {
     const handlerRow = biz.isHandler
       ? '<li><span><b>You (handler)</b><small>Full access · ads · funds</small></span></li>'
       : '';
-    const editDraft = businessEditAvatarDrafts.get(biz.id);
-    const avatarPreviewSrc = editDraft?.previewUrl || biz.avatarUrl || '';
+    const avatarPreviewSrc = safeBusinessLogoUrl(biz.avatarUrl) || '';
     const profileEditor = canEditProfile
       ? `<form class="business-profile-form settings-stack-form" data-biz-profile-form="${escapeHtml(biz.id)}">
           <h3>Edit profile</h3>
@@ -5958,7 +5948,7 @@ function renderBusinessAccountsPane() {
               <option value="department"${biz.category === 'department' ? ' selected' : ''}>In-game department</option>
             </select>
           </label>
-          <label class="settings-field"><span>Logo / profile picture</span><input data-biz-avatar type="file" accept="image/png,image/jpeg,image/webp,image/gif" /></label>
+          <label class="settings-field"><span>Logo image URL</span><input data-biz-avatar-url type="url" maxlength="500" value="${escapeHtml(biz.avatarUrl || '')}" placeholder="https://…" inputmode="url" autocomplete="off" /></label>
           <div class="business-avatar-preview" data-biz-avatar-preview ${avatarPreviewSrc ? '' : 'hidden'}>${avatarPreviewSrc ? `<img src="${escapeHtml(avatarPreviewSrc)}" alt="Business logo preview" />` : ''}</div>
           <label class="settings-field"><span>About</span><textarea data-biz-bio maxlength="300" rows="3" placeholder="What does this business or department do in Clearwater RP?">${escapeHtml(biz.bio || '')}</textarea></label>
           <div class="settings-actions">
@@ -6949,63 +6939,19 @@ document.querySelector('[data-verify-form]')?.addEventListener('submit', async (
   }
 });
 
-document.querySelector('[data-business-avatar]')?.addEventListener('change', (event) => {
-  const file = event.target.files?.[0];
-  const preview = document.querySelector('[data-business-avatar-preview]');
-  if (businessAvatarDraft?.previewUrl) URL.revokeObjectURL(businessAvatarDraft.previewUrl);
-  businessAvatarDraft = null;
-  if (!file) {
-    if (preview) { preview.hidden = true; preview.innerHTML = ''; }
-    return;
-  }
-  businessAvatarDraft = { file, previewUrl: URL.createObjectURL(file) };
-  if (preview) {
-    preview.hidden = false;
-    preview.innerHTML = `<img src="${escapeHtml(businessAvatarDraft.previewUrl)}" alt="Business logo preview" />`;
-  }
+document.querySelector('[data-business-avatar-url]')?.addEventListener('input', (event) => {
+  renderBusinessLogoPreview(
+    document.querySelector('[data-business-avatar-preview]'),
+    event.target.value,
+  );
 });
 
-document.addEventListener('change', (event) => {
-  const input = event.target.closest('[data-biz-avatar]');
+document.addEventListener('input', (event) => {
+  const input = event.target.closest('[data-biz-avatar-url]');
   if (!input) return;
   const form = input.closest('[data-biz-profile-form]');
-  const businessId = form?.dataset.bizProfileForm;
-  if (!businessId) return;
-  const file = input.files?.[0];
-  const preview = form.querySelector('[data-biz-avatar-preview]');
-  const status = form.querySelector('[data-biz-profile-status]');
-  revokeBusinessEditAvatarDraft(businessId);
-  if (!file) {
-    const biz = myBusinessAccounts.find((item) => item.id === businessId);
-    if (preview) {
-      if (biz?.avatarUrl) {
-        preview.hidden = false;
-        preview.innerHTML = `<img src="${escapeHtml(biz.avatarUrl)}" alt="Business logo preview" />`;
-      } else {
-        preview.hidden = true;
-        preview.innerHTML = '';
-      }
-    }
-    return;
-  }
-  if (!/^image\/(?:png|jpeg|webp|gif)$/.test(file.type || '')) {
-    if (status) {
-      status.dataset.tone = 'error';
-      status.textContent = 'Choose a PNG, JPEG, WebP, or GIF image.';
-    }
-    input.value = '';
-    return;
-  }
-  const previewUrl = URL.createObjectURL(file);
-  businessEditAvatarDrafts.set(businessId, { file, previewUrl });
-  if (preview) {
-    preview.hidden = false;
-    preview.innerHTML = `<img src="${escapeHtml(previewUrl)}" alt="Business logo preview" />`;
-  }
-  if (status) {
-    status.dataset.tone = '';
-    status.textContent = 'New logo selected. Save to publish it.';
-  }
+  if (!form) return;
+  renderBusinessLogoPreview(form.querySelector('[data-biz-avatar-preview]'), input.value);
 });
 
 document.addEventListener('submit', async (event) => {
@@ -7018,22 +6964,17 @@ document.addEventListener('submit', async (event) => {
   if (save) save.disabled = true;
   if (status) { status.dataset.tone = 'wait'; status.textContent = 'Saving business profile...'; }
   try {
-    const draft = businessEditAvatarDrafts.get(businessId);
-    let avatarUrl;
-    if (draft?.file) {
-      if (status) status.textContent = 'Uploading logo...';
-      const uploaded = await uploadBusinessLogo(draft.file);
-      avatarUrl = uploaded.url || '';
-      if (!avatarUrl) throw new Error('Could not upload that logo.');
-    }
+    const logoRaw = form.querySelector('[data-biz-avatar-url]')?.value || '';
+    const avatarUrl = logoRaw.trim() ? safeBusinessLogoUrl(logoRaw) : '';
+    if (logoRaw.trim() && !avatarUrl) throw new Error('Use a public https image URL for the logo.');
     const payload = {
       action: 'business-update',
       businessId,
       displayName: form.querySelector('[data-biz-name]')?.value || '',
       bio: form.querySelector('[data-biz-bio]')?.value || '',
       category: form.querySelector('[data-biz-category]')?.value || 'business',
+      avatarUrl,
     };
-    if (avatarUrl) payload.avatarUrl = avatarUrl;
     const response = await fetch('/api/internet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -7044,7 +6985,6 @@ document.addEventListener('submit', async (event) => {
     myBusinessAccounts = Array.isArray(result.businesses) ? result.businesses : myBusinessAccounts;
     const updated = result.business || myBusinessAccounts.find((item) => item.id === businessId);
     if (updated) syncBusinessUserLocally(updated);
-    revokeBusinessEditAvatarDraft(businessId);
     renderBusinessAccountsPane();
     updateAccountSwitcher();
     if (viewedMember?.id === businessId) openMemberProfile(businessId, false);
@@ -7076,13 +7016,9 @@ document.querySelector('[data-business-form]')?.addEventListener('submit', async
   if (submit) submit.disabled = true;
   if (status) { status.dataset.tone = 'wait'; status.textContent = 'Submitting business account...'; }
   try {
-    let avatarUrl = '';
-    if (businessAvatarDraft?.file) {
-      if (status) status.textContent = 'Uploading logo...';
-      const uploaded = await uploadBusinessLogo(businessAvatarDraft.file);
-      avatarUrl = uploaded.url || '';
-      if (!avatarUrl) throw new Error('Could not upload that logo.');
-    }
+    const logoRaw = document.querySelector('[data-business-avatar-url]')?.value || '';
+    const avatarUrl = logoRaw.trim() ? safeBusinessLogoUrl(logoRaw) : '';
+    if (logoRaw.trim() && !avatarUrl) throw new Error('Use a public https image URL for the logo.');
     const response = await fetch('/api/internet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -7102,12 +7038,9 @@ document.querySelector('[data-business-form]')?.addEventListener('submit', async
     document.querySelector('[data-business-username]').value = '';
     document.querySelector('[data-business-bio]').value = '';
     document.querySelector('[data-business-category]').value = 'business';
-    const avatarInput = document.querySelector('[data-business-avatar]');
+    const avatarInput = document.querySelector('[data-business-avatar-url]');
     if (avatarInput) avatarInput.value = '';
-    if (businessAvatarDraft?.previewUrl) URL.revokeObjectURL(businessAvatarDraft.previewUrl);
-    businessAvatarDraft = null;
-    const preview = document.querySelector('[data-business-avatar-preview]');
-    if (preview) { preview.hidden = true; preview.innerHTML = ''; }
+    renderBusinessLogoPreview(document.querySelector('[data-business-avatar-preview]'), '');
     renderBusinessAccountsPane();
     if (status) {
       status.dataset.tone = 'ok';

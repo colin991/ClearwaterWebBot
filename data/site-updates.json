@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-business-logo-url",
+      "title": "Business logos use image URLs",
+      "summary": "Business logos are set with a public https image link instead of file upload. Active business handlers get an inbox notice to update theirs. The Tipped badge is now a flat single color.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T22:50:00.000Z"
+    },
+    {
       "id": "2026-08-15-business-logo-idle",
       "title": "Business logos + idle cleanup",
       "summary": "Vercel Blob is reserved for business logos under 2 MB. Business accounts unused for a week are removed automatically, and their logos are deleted from storage.",

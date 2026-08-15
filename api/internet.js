@@ -8,10 +8,9 @@ import { rejectVpnJson } from '../lib/vpn-guard.js';
 import { deleteVercelBlobUrls } from '../utils/blobStorage.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260815-api-biz-logo';
+const INTERNET_VERSION = '20260815-api-biz-logo-url';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
-const MAX_BUSINESS_LOGO_BYTES = 2 * 1024 * 1024;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_REEL_AUDIO_BYTES = 40 * 1024 * 1024;
 const MAX_REEL_SLIDES = 10;
@@ -369,19 +368,10 @@ export default async function handler(request, response) {
             if (/^profile\//i.test(path)) {
               throw new Error('Custom banner uploads are disabled. Pick a Clearwater preset banner instead.');
             }
-            if (/^ads\//i.test(path) || /^reels\//i.test(path)) {
-              throw new Error('Cloud storage is reserved for business logos. Ad and Reel uploads are paused.');
+            if (/^ads\//i.test(path) || /^reels\//i.test(path) || /^business\//i.test(path)) {
+              throw new Error('Business logos use a public image URL now. Paste a https link in Settings → Business accounts.');
             }
-            if (!/^business\/[a-z0-9._-]+$/i.test(path)) {
-              throw new Error('Only business logo uploads are allowed right now.');
-            }
-            return {
-              allowedContentTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
-              maximumSizeInBytes: MAX_BUSINESS_LOGO_BYTES,
-              addRandomSuffix: true,
-              allowOverwrite: false,
-              tokenPayload: JSON.stringify({ id: user.id }),
-            };
+            throw new Error('File uploads to cloud storage are paused. Use a public https image URL for business logos.');
           },
           onUploadCompleted: async () => {},
         });
@@ -390,10 +380,10 @@ export default async function handler(request, response) {
         const uploadError = String(error?.message || '');
         return sendJson(response, 503, {
           error: /suspended|quota|limit|billing|exceeded/i.test(uploadError)
-            ? 'Vercel Blob is at this month’s storage limit, so business logo uploads are paused. Upgrade Blob or wait for the next billing cycle.'
+            ? 'Vercel Blob is at this month’s storage limit, so cloud uploads are paused.'
             : (/token/i.test(uploadError)
-              ? 'Create a Blob store in Vercel Storage so business logos can upload.'
-              : (uploadError || 'Could not start this business logo upload.')),
+              ? 'Cloud upload is not available. Use a public https image URL for business logos.'
+              : (uploadError || 'Could not start this upload.')),
         });
       }
     }

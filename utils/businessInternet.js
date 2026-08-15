@@ -201,6 +201,40 @@ export function purgeIdleBusinessAccounts(store, { now = Date.now(), maxAgeMs = 
   return removed;
 }
 
+/**
+ * One-shot inbox notice so active business handlers switch logos to a public URL.
+ */
+export function notifyActiveBusinessesLogoUrlUpdate(store) {
+  ensureBusinessCollections(store);
+  store.settings = store.settings && typeof store.settings === 'object' ? store.settings : {};
+  if (store.settings.businessLogoUrlNoticeAt) return 0;
+  const notice = text(
+    'Business logos now use a public image link (no file upload). Open Settings → Business accounts, paste a https logo URL (Discord, Imgur, etc.), and save.',
+    500,
+  );
+  const notified = new Set();
+  let count = 0;
+  for (const biz of Object.values(store.businessAccounts || {})) {
+    if (biz.status !== 'active' || !biz.ownerId) continue;
+    const ownerId = String(biz.ownerId);
+    if (notified.has(ownerId)) continue;
+    const owner = store.users[ownerId];
+    if (!owner) continue;
+    owner.messages = Array.isArray(owner.messages) ? owner.messages : [];
+    owner.messages.unshift({
+      id: randomUUID(),
+      content: notice,
+      createdAt: new Date().toISOString(),
+      readAt: null,
+    });
+    owner.messages = owner.messages.slice(0, 50);
+    notified.add(ownerId);
+    count += 1;
+  }
+  store.settings.businessLogoUrlNoticeAt = new Date().toISOString();
+  return count;
+}
+
 export function businessActorFromAccount(biz) {
   return {
     id: biz.id,
@@ -406,11 +440,19 @@ export function updateBusinessProfile(store, {
     biz.displayName = name;
   }
   if (avatarUrl != null) {
-    const avatar = hostedOrAssetUrl(avatarUrl);
-    if (avatarUrl && !avatar) throw new Error('Choose a supported logo or profile image URL');
-    if (avatar && avatar !== previousAvatarUrl) {
-      biz.avatarUrl = avatar;
-      avatarChanged = true;
+    const raw = String(avatarUrl || '').trim();
+    if (!raw) {
+      if (previousAvatarUrl) {
+        biz.avatarUrl = '';
+        avatarChanged = true;
+      }
+    } else {
+      const avatar = hostedOrAssetUrl(raw);
+      if (!avatar) throw new Error('Paste a public https image URL for the logo');
+      if (avatar !== previousAvatarUrl) {
+        biz.avatarUrl = avatar;
+        avatarChanged = true;
+      }
     }
   }
   if (bio != null) biz.bio = text(bio, 300);

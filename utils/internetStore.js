@@ -28,6 +28,7 @@ import {
   submitBusinessApplication,
   submitVerificationApplication,
   touchBusinessAccountActivity,
+  notifyActiveBusinessesLogoUrlUpdate,
   updateBusinessProfile,
 } from './businessInternet.js';
 
@@ -42,6 +43,7 @@ export {
   listMyBusinessAccounts,
   purgeIdleBusinessAccounts,
   touchBusinessAccountActivity,
+  notifyActiveBusinessesLogoUrlUpdate,
   myVerificationApplication,
   removeBusinessMember,
   reviewBusinessApplication,

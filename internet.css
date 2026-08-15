@@ -87,7 +87,7 @@ a { color: inherit; text-decoration: none; }
   padding: 1px 7px;
   border-radius: 999px;
   color: #241a05;
-  background: linear-gradient(120deg, #f0d27a, #d4a017);
+  background: #d4a017;
   font-size: 11px;
   font-weight: 800;
 }
