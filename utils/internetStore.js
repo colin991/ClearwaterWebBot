@@ -3471,21 +3471,6 @@ export function applyStaffUserAction(store, {
       type: 'restore-post',
       snapshot,
     } : null);
-  } else if (action === 'delete-business') {
-    const removed = deleteBusinessAccount(store, { businessId: id });
-    const ownerId = removed.ownerId;
-    if (ownerId && store.users[ownerId]) {
-      addInternetMessage(
-        store,
-        ownerId,
-        `Staff deleted your Clearwater business account “${removed.displayName}”. Its posts and ads were removed.`,
-      );
-    }
-    addInternetLog(
-      store,
-      `${actorName} deleted business account ${removed.displayName} (${removed.businessId})${removed.postsRemoved ? ` and ${removed.postsRemoved} post(s)` : ''}.`,
-    );
-    return { deleted: true, user: null, businessId: removed.businessId };
   } else if (action === 'send-notice') {
     if (!noteText) throw new Error('Write a staff notice first');
     user.warnings = Array.isArray(user.warnings) ? user.warnings : [];
