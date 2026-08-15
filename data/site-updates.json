@@ -348,7 +348,7 @@
       "summary": "Server Management now has a Load action that runs :load on players selected on the map.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T20:05:00.000Z",
-      "commit": "pending"
+      "commit": "597b288"
     }
   ]
 }
