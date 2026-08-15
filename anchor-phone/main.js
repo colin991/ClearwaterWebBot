@@ -14,53 +14,61 @@ function phoneSession() {
 
 async function sessionCookies() {
   const ses = phoneSession();
-  let cookies = await ses.cookies.get({ url: SITE });
-  if (!cookies.some((cookie) => /clearwater_session/i.test(cookie.name))) {
-    cookies = await ses.cookies.get({ url: `${SITE}/` });
-  }
-  if (!cookies.some((cookie) => /clearwater_session/i.test(cookie.name))) {
-    const all = await ses.cookies.get({});
-    cookies = all.filter((cookie) => {
-      const domain = String(cookie.domain || '').replace(/^\./, '').toLowerCase();
-      return /clearwater_session/i.test(cookie.name)
-        || !domain
-        || domain === 'cwrpvc.lol'
-        || domain.endsWith('.cwrpvc.lol');
-    });
-  }
-  return cookies;
+  const all = await ses.cookies.get({});
+  const sessionNamed = all.filter((cookie) => isSessionCookieName(cookie.name) && cookie.value);
+  if (sessionNamed.length) return sessionNamed;
+  return all.filter((cookie) => {
+    const domain = String(cookie.domain || '').replace(/^\./, '').toLowerCase();
+    return Boolean(cookie.value)
+      && (!domain || domain === 'cwrpvc.lol' || domain.endsWith('.cwrpvc.lol'));
+  });
 }
 
 async function cookieHeaderForSite() {
   const cookies = await sessionCookies();
   return cookies
     .filter((cookie) => cookie.value)
-    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .map((cookie) => `${cookie.name}=${encodeURIComponent(cookie.value)}`)
     .join('; ');
+}
+
+function isSessionCookieName(name) {
+  return /(?:^|-)clearwater_session$/i.test(String(name || ''));
 }
 
 async function hasSiteSession() {
   const cookies = await sessionCookies();
-  return cookies.some((cookie) => /clearwater_session/i.test(cookie.name) && cookie.value);
+  return cookies.some((cookie) => isSessionCookieName(cookie.name) && cookie.value);
 }
 
 async function siteFetch(pathname, { method = 'GET', body } = {}) {
   const url = pathname.startsWith('http') ? pathname : SITE + pathname;
   const payload = body != null ? JSON.stringify(body) : null;
-  const cookie = await cookieHeaderForSite();
   const headers = {
     Accept: 'application/json',
     Origin: SITE,
     Referer: SITE + '/phone-signed-in',
     'User-Agent': 'ClearwaterPhone/' + pkg.version,
-    ...(cookie ? { Cookie: cookie } : {}),
     ...(payload ? { 'Content-Type': 'application/json' } : {}),
   };
-  const init = { method, headers, body: payload || undefined };
+  const init = {
+    method,
+    headers,
+    body: payload || undefined,
+    credentials: 'include',
+  };
   const ses = phoneSession();
-  const response = typeof ses.fetch === 'function'
-    ? await ses.fetch(url, init)
-    : await net.fetch(url, { ...init, session: ses, useSessionCookies: true });
+  const doFetch = async (extraHeaders = {}) => {
+    const requestInit = { ...init, headers: { ...headers, ...extraHeaders } };
+    return typeof ses.fetch === 'function'
+      ? ses.fetch(url, requestInit)
+      : net.fetch(url, { ...requestInit, session: ses, useSessionCookies: true });
+  };
+  let response = await doFetch();
+  if (response.status === 401 || response.status === 403) {
+    const cookie = await cookieHeaderForSite();
+    if (cookie) response = await doFetch({ Cookie: cookie });
+  }
   const text = await response.text();
   let data = {};
   try {
@@ -68,7 +76,34 @@ async function siteFetch(pathname, { method = 'GET', body } = {}) {
   } catch {
     data = { error: text.slice(0, 180) || 'Invalid response' };
   }
+  if (data && data.authenticated === false && !(headers.Cookie || '').includes('clearwater_session')) {
+    const cookie = await cookieHeaderForSite();
+    if (cookie) {
+      response = await doFetch({ Cookie: cookie });
+      const retryText = await response.text();
+      try {
+        data = retryText ? JSON.parse(retryText) : {};
+      } catch {
+        data = { error: retryText.slice(0, 180) || 'Invalid response' };
+      }
+    }
+  }
   return { ok: response.ok, status: response.status, body: data };
+}
+
+async function readAuthFromWindow(browserWindow) {
+  if (!browserWindow || browserWindow.isDestroyed()) return null;
+  const href = browserWindow.webContents.getURL();
+  if (!/^https:\/\/(www\.)?cwrpvc\.lol\//i.test(href)) return null;
+  try {
+    const result = await browserWindow.webContents.executeJavaScript(
+      `fetch('/api/auth/me',{credentials:'include',headers:{Accept:'application/json'}}).then((r)=>r.json()).catch(()=>({authenticated:false}))`,
+      true,
+    );
+    return result && typeof result === 'object' ? result : null;
+  } catch {
+    return null;
+  }
 }
 
 function notifyOverlayAuth(payload) {
@@ -78,8 +113,11 @@ function notifyOverlayAuth(payload) {
 }
 
 async function readAuthState() {
-  if (!(await hasSiteSession())) return { authenticated: false, siteAccess: false };
+  const fromLogin = await readAuthFromWindow(loginWin);
+  if (fromLogin?.authenticated) return fromLogin;
   const me = await siteFetch('/api/auth/me');
+  if (me.body && me.body.authenticated) return me.body;
+  if (fromLogin && typeof fromLogin === 'object') return fromLogin;
   return me.body && typeof me.body === 'object' ? me.body : { authenticated: false, siteAccess: false };
 }
 
@@ -134,8 +172,8 @@ function openLoginWindow() {
     if (!loginLooksComplete(href) && !(await hasSiteSession())) return;
     finishing = true;
     let auth = { authenticated: false };
-    for (let i = 0; i < 12; i += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 350));
+    for (let i = 0; i < 20; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
       auth = await readAuthState();
       if (auth.authenticated) break;
     }
@@ -236,12 +274,12 @@ function ensureTray() {
     tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image);
     tray.setToolTip('Clearwater Phone');
     tray.setContextMenu(Menu.buildFromTemplate([
-      { label: 'Launch Phone', click: () => { void createOverlayWindow(); } },
+      { label: 'Launch Phone', click: () => { void openPhoneUi(); } },
       { label: 'Hide overlay', click: () => { if (win) { win.hide(); visible = false; } } },
       { type: 'separator' },
       { label: 'Quit', click: () => app.quit() },
     ]));
-    tray.on('click', () => { void createOverlayWindow(); });
+    tray.on('click', () => { void openPhoneUi(); });
   } catch {}
 }
 
@@ -249,11 +287,11 @@ function startWatchLoop() {
   if (watchTimer) return;
   watchTimer = setInterval(async () => {
     const settings = readHostSettings();
-    if (!settings.launchOnApp) return;
+    if (!settings.setupComplete || !settings.launchOnApp) return;
     const running = await isProcessRunning(settings.watchProcess || 'RobloxPlayerBeta.exe');
     if (running && !robloxWasOpen) {
       robloxWasOpen = true;
-      await createOverlayWindow();
+      await createOverlayWindow({ closeLauncher: true });
       if (win && !win.isDestroyed()) {
         win.show();
         visible = true;
@@ -264,12 +302,17 @@ function startWatchLoop() {
   }, 4000);
 }
 
-async function createOverlayWindow() {
+function maybeCloseLauncher() {
+  if (!readHostSettings().setupComplete) return;
+  if (launcherWin && !launcherWin.isDestroyed()) launcherWin.close();
+}
+
+async function createOverlayWindow({ closeLauncher = true } = {}) {
   if (win && !win.isDestroyed()) {
     win.show();
     visible = true;
     win.setAlwaysOnTop(true, 'screen-saver');
-    if (launcherWin && !launcherWin.isDestroyed()) launcherWin.close();
+    if (closeLauncher) maybeCloseLauncher();
     return win;
   }
 
@@ -312,7 +355,7 @@ async function createOverlayWindow() {
     win = null;
   });
 
-  if (launcherWin && !launcherWin.isDestroyed()) launcherWin.close();
+  if (closeLauncher) maybeCloseLauncher();
   return win;
 }
 
@@ -350,8 +393,16 @@ function createLauncherWindow() {
   return launcherWin;
 }
 
-function createWindow() {
+function openPhoneUi() {
+  if (!readHostSettings().setupComplete) {
+    createLauncherWindow();
+    return launcherWin;
+  }
   return createOverlayWindow();
+}
+
+function createWindow() {
+  return openPhoneUi();
 }
 
 function toggleOverlay() {
@@ -406,7 +457,7 @@ app.whenReady().then(() => {
   startWatchLoop();
 
   phoneSession().cookies.on('changed', (_event, cookie, _cause, removed) => {
-    if (removed || !cookie?.name || !/clearwater_session/i.test(cookie.name)) return;
+    if (removed || !isSessionCookieName(cookie?.name)) return;
     void readAuthState().then((auth) => {
       notifyOverlayAuth(auth);
       if (auth.authenticated) closeLoginWindow();
@@ -481,7 +532,8 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('phone-launch-overlay', async () => {
-    await createOverlayWindow();
+    writeHostSettings({ ...readHostSettings(), setupComplete: true });
+    await createOverlayWindow({ closeLauncher: true });
     return { ok: true };
   });
 

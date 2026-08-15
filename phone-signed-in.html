@@ -13,9 +13,30 @@
       <div>
         <img src="assets/clearwater-logo.png" alt="" width="64" height="64" />
         <p class="signin-kicker">Clearwater Phone</p>
-        <h1>You’re signed in</h1>
-        <p class="signin-lead">Return to the phone overlay. This window can close on its own.</p>
+        <h1 id="signed-in-title">Checking sign-in…</h1>
+        <p class="signin-lead" id="signed-in-lead">Hold on while we confirm your Discord session.</p>
       </div>
     </main>
+    <script>
+      (async () => {
+        const title = document.getElementById('signed-in-title');
+        const lead = document.getElementById('signed-in-lead');
+        try {
+          const response = await fetch('/api/auth/me', { credentials: 'include', headers: { Accept: 'application/json' } });
+          const me = await response.json();
+          if (me && me.authenticated) {
+            document.title = 'Signed in · Clearwater Phone';
+            title.textContent = 'You’re signed in';
+            lead.textContent = me.user && me.user.displayName
+              ? `Signed in as ${me.user.displayName}. Return to the phone — this window can close on its own.`
+              : 'Return to the phone. This window can close on its own.';
+            return;
+          }
+        } catch {}
+        document.title = 'Sign-in incomplete · Clearwater Phone';
+        title.textContent = 'Sign-in is not complete';
+        lead.textContent = 'Close this window and try Sign in with Discord again from the phone.';
+      })();
+    </script>
   </body>
 </html>
