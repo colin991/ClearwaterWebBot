@@ -5354,7 +5354,6 @@ const BANNER_PRESETS = [
   'assets/state-trooper-night.png',
   'assets/sheriff-station.png',
   'assets/fire-rescue-scene.png',
-  'assets/liberty-county-map.png',
 ];
 const DEFAULT_PROFILE_DRAFT = { bio: '', pronouns: '', location: '', website: '', bannerUrl: '', accentColor: '', pinnedPostId: '', deactivated: false, presets: BANNER_PRESETS };
 

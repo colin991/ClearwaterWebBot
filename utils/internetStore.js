@@ -1567,8 +1567,6 @@ export const PROFILE_BANNER_PRESETS = Object.freeze([
   'assets/state-trooper-night.png',
   'assets/sheriff-station.png',
   'assets/fire-rescue-scene.png',
-  'assets/liberty-county-map.jpg',
-  'assets/liberty-county-map.png',
 ]);
 
 function safeBannerUrl(value) {
