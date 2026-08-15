@@ -4007,20 +4007,10 @@ body { margin: 0; }
   white-space: nowrap;
 }
 .pinned-post {
-  position: relative;
-  display: grid;
-  border-left: 3px solid rgba(var(--profile-accent-rgb), .75);
-  background: rgba(var(--profile-accent-rgb), .05);
+  display: contents;
 }
 .pinned-flag {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 16px 0;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: .02em;
-  color: rgba(226, 238, 255, .66);
+  display: none;
 }
 
 /* ==========================================================================

@@ -2247,15 +2247,10 @@ function profileTabPosts(userId, tab) {
   return authored.filter((post) => post.kind !== 'reel' && !post.parentId);
 }
 
-// The pinned post is lifted to the top of the Posts tab only. Other tabs keep
-// plain reverse-chronological order so the pin does not show up twice.
-function profileListMarkup(posts, tab, pinnedPostId, emptyMessage) {
+// Profile post lists stay reverse-chronological; there is no pin control anymore.
+function profileListMarkup(posts, _tab, _pinnedPostId, emptyMessage) {
   if (!posts.length) return `<p>${escapeHtml(emptyMessage)}</p>`;
-  const pinned = tab === 'posts' && pinnedPostId ? posts.find((post) => post.id === pinnedPostId) : null;
-  const ordered = pinned ? [pinned, ...posts.filter((post) => post.id !== pinned.id)] : posts;
-  return ordered.map((post) => (pinned && post.id === pinned.id
-    ? `<div class="pinned-post"><span class="pinned-flag"><span aria-hidden="true">📌</span> Pinned post</span>${postMarkup(post, true)}</div>`
-    : postMarkup(post, true))).join('');
+  return posts.map((post) => postMarkup(post, true)).join('');
 }
 
 function renderProfilePosts() {
@@ -5595,29 +5590,12 @@ function renderProfileEditorChoices() {
   }
 }
 
-function renderPinnedPostOptions() {
-  const select = document.querySelector('[data-profile-pinned]');
-  if (!select || !currentUserId) return;
-  const posts = allPosts.filter((post) => post.authorId === currentUserId && !post.parentId).slice(0, 50);
-  const chosen = profileDraft?.pinnedPostId || '';
-  select.innerHTML = [
-    '<option value="">No pinned post</option>',
-    ...posts.map((post) => {
-      const label = (post.content || (post.kind === 'reel' ? 'Reel' : 'Media post')).slice(0, 60);
-      return `<option value="${escapeHtml(post.id)}"${post.id === chosen ? ' selected' : ''}>${escapeHtml(label)}</option>`;
-    }),
-  ].join('');
-  select.value = chosen;
-  refreshCustomSelect(select);
-}
-
 function fillProfileEditor() {
   if (!profileDraft) return;
   const set = (selector, value) => { const field = document.querySelector(selector); if (field) field.value = value; };
   set('[data-profile-bio]', profileDraft.bio);
   setAccentHsvFromHex(profileDraft.accentColor || '', { draft: false, preview: false });
   renderProfileEditorChoices();
-  renderPinnedPostOptions();
   renderProfilePreview();
 }
 
@@ -6364,7 +6342,6 @@ async function loadPosts() {
     refreshProfileVerified();
     renderPosts();
     renderOwnProfileDetails();
-    renderPinnedPostOptions();
     const route = readInternetRoute();
     if (route.view === 'post' && route.id) showPostDetail(route.id, false);
     if (route.view === 'member' && route.id) openMemberProfile(route.id, false);
@@ -7051,11 +7028,6 @@ const profileDraftField = (key, selector, transform = (value) => value) => {
   });
 };
 profileDraftField('bio', '[data-profile-bio]');
-document.querySelector('[data-profile-pinned]')?.addEventListener('change', (event) => {
-  if (!profileDraft) profileDraft = { ...DEFAULT_PROFILE_DRAFT };
-  profileDraft.pinnedPostId = event.target.value || '';
-  refreshCustomSelect(event.target);
-});
 document.querySelector('[data-accent-clear]')?.addEventListener('click', () => {
   if (!profileDraft) return;
   profileDraft.accentColor = '';
@@ -7134,7 +7106,7 @@ document.querySelector('[data-profile-form]')?.addEventListener('submit', async 
           website: '',
           bannerUrl: profileDraft.bannerUrl || '',
           accentColor: profileDraft.accentColor || '',
-          pinnedPostId: profileDraft.pinnedPostId || '',
+          pinnedPostId: '',
         },
       }),
     });
@@ -7156,7 +7128,7 @@ document.querySelector('[data-profile-form]')?.addEventListener('submit', async 
       me.location = '';
       me.website = '';
       me.accentColor = profileDraft.accentColor || '';
-      me.pinnedPostId = profileDraft.pinnedPostId || '';
+      me.pinnedPostId = '';
       internetUsers.set(currentUserId, me);
       renderOwnProfileDetails();
     }

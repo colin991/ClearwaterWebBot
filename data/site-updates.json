@@ -288,6 +288,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:45:00.000Z",
       "commit": "d2d765e"
+    },
+    {
+      "id": "2026-08-15-remove-pinned-post",
+      "title": "Pinned post setting removed",
+      "summary": "Removed the Pinned post dropdown from profile settings. Profiles no longer lift a pinned post to the top.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T18:50:00.000Z",
+      "commit": "pending"
     }
   ]
 }
