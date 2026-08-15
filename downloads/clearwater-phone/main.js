@@ -7,38 +7,50 @@ const { spawn, execFile } = require('child_process');
 
 const SITE = 'https://cwrpvc.lol';
 const SESSION_PARTITION = 'persist:clearwater-phone';
+const CHROME_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 function phoneSession() {
   return session.fromPartition(SESSION_PARTITION);
 }
 
-async function cookieHeaderForSite() {
-  const cookies = await phoneSession().cookies.get({ url: SITE });
-  return cookies
-    .filter((cookie) => cookie.value)
-    .map((cookie) => `${cookie.name}=${encodeURIComponent(cookie.value)}`)
-    .join('; ');
+async function listSiteCookies() {
+  const ses = phoneSession();
+  const byUrl = await ses.cookies.get({ url: SITE });
+  const all = await ses.cookies.get({});
+  const merged = new Map();
+  for (const cookie of [...byUrl, ...all]) {
+    if (!cookie?.name || !cookie.value) continue;
+    const host = String(cookie.domain || '').replace(/^\./, '');
+    if (host && host !== 'cwrpvc.lol' && !host.endsWith('.cwrpvc.lol') && cookie.name.startsWith('__Host-')) {
+      // keep __Host- cookies even when domain is empty
+    }
+    if (host && host !== 'cwrpvc.lol' && !host.endsWith('.cwrpvc.lol') && !cookie.name.startsWith('__Host-')) continue;
+    if (cookie.name.startsWith('__Host-') || host === 'cwrpvc.lol' || host.endsWith('.cwrpvc.lol') || !host) {
+      merged.set(cookie.name, cookie);
+    }
+  }
+  return [...merged.values()];
 }
 
 async function hasSiteSession() {
-  const cookies = await phoneSession().cookies.get({ url: SITE });
-  return cookies.some((cookie) => /clearwater_session/i.test(cookie.name) && cookie.value);
+  const cookies = await listSiteCookies();
+  return cookies.some((cookie) => /(?:^|_)clearwater_session$/i.test(cookie.name) || /clearwater_session/i.test(cookie.name));
 }
 
 async function siteFetch(pathname, { method = 'GET', body } = {}) {
   const url = pathname.startsWith('http') ? pathname : SITE + pathname;
   const payload = body != null ? JSON.stringify(body) : null;
-  const cookie = await cookieHeaderForSite();
-  const response = await net.fetch(url, {
+  const cookies = await listSiteCookies();
+  const cookieHeader = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
+  const response = await phoneSession().fetch(url, {
     method,
-    session: phoneSession(),
-    useSessionCookies: true,
     headers: {
       Accept: 'application/json',
       Origin: SITE,
       Referer: SITE + '/internet',
-      'User-Agent': 'ClearwaterPhone/' + pkg.version,
-      ...(cookie ? { Cookie: cookie } : {}),
+      'User-Agent': CHROME_UA,
+      ...(cookieHeader ? { Cookie: cookieHeader } : {}),
       ...(payload ? { 'Content-Type': 'application/json' } : {}),
     },
     body: payload || undefined,
@@ -66,9 +78,24 @@ async function readAuthState() {
 }
 
 let loginWin = null;
+let loginPollTimer = null;
+
+function stopLoginPoll() {
+  if (loginPollTimer) {
+    clearInterval(loginPollTimer);
+    loginPollTimer = null;
+  }
+}
 
 function closeLoginWindow() {
+  stopLoginPoll();
   if (loginWin && !loginWin.isDestroyed()) loginWin.close();
+}
+
+function applyBrowserUa(contents) {
+  try {
+    contents.setUserAgent(CHROME_UA);
+  } catch {}
 }
 
 function openLoginWindow() {
@@ -94,20 +121,66 @@ function openLoginWindow() {
   });
   loginWin.setAlwaysOnTop(true, 'screen-saver');
   if (win && !win.isDestroyed()) win.setAlwaysOnTop(false);
-  loginWin.loadURL(SITE + '/signin?next=/internet');
+  applyBrowserUa(loginWin.webContents);
+
+  loginWin.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      const host = new URL(url).hostname;
+      const allowed =
+        host === 'cwrpvc.lol' ||
+        host.endsWith('.cwrpvc.lol') ||
+        host === 'discord.com' ||
+        host.endsWith('.discord.com') ||
+        host === 'discordapp.com' ||
+        host.endsWith('.discordapp.com');
+      if (!allowed) return { action: 'deny' };
+    } catch {
+      return { action: 'deny' };
+    }
+    return {
+      action: 'allow',
+      overrideBrowserWindowOptions: {
+        width: 520,
+        height: 760,
+        autoHideMenuBar: true,
+        alwaysOnTop: true,
+        webPreferences: {
+          partition: SESSION_PARTITION,
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: true,
+        },
+      },
+    };
+  });
+
+  loginWin.webContents.on('did-create-window', (child) => {
+    applyBrowserUa(child.webContents);
+    child.setAlwaysOnTop(true, 'screen-saver');
+  });
 
   const finishIfSignedIn = async () => {
-    if (!(await hasSiteSession())) return;
-    const auth = await readAuthState();
-    notifyOverlayAuth(auth);
-    if (auth.authenticated) closeLoginWindow();
+    try {
+      if (!(await hasSiteSession())) return;
+      const auth = await readAuthState();
+      notifyOverlayAuth(auth);
+      if (auth.authenticated) closeLoginWindow();
+    } catch {}
   };
+
+  loginWin.loadURL(SITE + '/signin?next=/internet');
 
   loginWin.webContents.on('did-navigate', finishIfSignedIn);
   loginWin.webContents.on('did-navigate-in-page', finishIfSignedIn);
   loginWin.webContents.on('did-redirect-navigation', finishIfSignedIn);
   loginWin.webContents.on('did-finish-load', finishIfSignedIn);
+  stopLoginPoll();
+  loginPollTimer = setInterval(() => {
+    void finishIfSignedIn();
+  }, 1500);
+
   loginWin.on('closed', () => {
+    stopLoginPoll();
     loginWin = null;
     if (win && !win.isDestroyed()) win.setAlwaysOnTop(true, 'screen-saver');
     void readAuthState().then(notifyOverlayAuth);

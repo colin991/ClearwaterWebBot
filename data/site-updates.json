@@ -317,6 +317,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:50:00.000Z",
       "commit": "2628944"
+    },
+    {
+      "id": "2026-08-15-phone-discord-auth-harden",
+      "title": "Phone Discord sign-in hardened",
+      "summary": "Clearwater Phone Discord login now uses a normal browser user-agent, keeps OAuth popups in the same session, and polls until the account sticks (v1.3.2).",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T19:50:00.000Z",
+      "commit": "pending"
     }
   ]
 }

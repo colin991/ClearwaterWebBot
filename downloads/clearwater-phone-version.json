@@ -1,6 +1,6 @@
 {
-  "version": "1.3.1",
-  "minVersion": "1.3.0",
+  "version": "1.3.2",
+  "minVersion": "1.3.2",
   "downloadUrl": "https://cwrpvc.lol/downloads/ClearwaterPhone.exe",
-  "releaseNotes": "Fixes Discord sign-in so the overlay actually stays signed in."
+  "releaseNotes": "More reliable Discord sign-in: browser user-agent, shared OAuth windows, and session polling so login sticks on the phone."
 }

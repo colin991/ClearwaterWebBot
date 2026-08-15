@@ -4,7 +4,7 @@
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
   const settings = { autoUpdate: true };
-  let appVersion = '1.3.1';
+  let appVersion = '1.3.2';
   let latestInfo = null;
   let updateInFlight = false;
   let sessionUser = null;
@@ -230,8 +230,13 @@
   $('#account-login')?.addEventListener('click', async () => {
     await window.anchorPhone?.login?.();
     const status = $('#account-status');
-    if (status) status.textContent = 'Finish signing in in the window that opened, then return here.';
-    window.setTimeout(() => void refreshSession(), 2500);
+    if (status) status.textContent = 'Finish signing in in the window that opened…';
+    let tries = 0;
+    const poll = window.setInterval(async () => {
+      tries += 1;
+      const me = await refreshSession();
+      if (me?.authenticated || tries >= 40) window.clearInterval(poll);
+    }, 1500);
   });
 
   $('#account-logout')?.addEventListener('click', async () => {
