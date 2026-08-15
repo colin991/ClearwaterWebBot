@@ -44,7 +44,7 @@
     {
       "id": "2026-08-15-hold-vc",
       "title": "Hold VC command",
-      "summary": "Added Ownership-only `-holdvc` / `-unholdvc` (not part of the staff moderation command list): server-mutes everyone in a voice channel except Ownership, announces \u201cPlease Hold this voice chat\u201d, and plays it with OpenAI voice onyx when OPENAI_API_KEY is set on the bot host.",
+      "summary": "Added Ownership-only `-holdvc` / `-unholdvc` (not part of the staff moderation command list): server-mutes everyone in a voice channel except Ownership, announces \u201cPlease Hold this voice chat\u201d, and plays a bundled voice announcement in the channel (no API key).",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T02:49:40.000Z",
       "commit": "cd24a6b"
@@ -60,10 +60,18 @@
     {
       "id": "2026-08-15-hold-vc-join-speak",
       "title": "Hold VC joins and speaks in channel",
-      "summary": "`-holdvc` now joins the voice channel and plays the Onyx announcement for everyone in VC (no Discord text TTS). The bot stays in the channel until `-unholdvc`.",
+      "summary": "`-holdvc` now joins the voice channel and plays a bundled hold announcement for everyone in VC (no API key, no Discord text TTS). The bot stays in the channel until `-unholdvc`.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T02:52:22.000Z",
       "commit": "2b8e3ab"
+    },
+    {
+      "id": "2026-08-15-hold-vc-no-openai",
+      "title": "Hold VC no longer needs OpenAI",
+      "summary": "`-holdvc` plays a bundled `assets/hold-vc.mp3` announcement in the voice channel. No OpenAI API key is required.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T02:57:22.000Z",
+      "commit": "6626ced"
     }
   ]
 }

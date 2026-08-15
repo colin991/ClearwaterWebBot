@@ -8,7 +8,7 @@ import {
 
 export const holdvc = {
   name: 'holdvc',
-  description: 'Ownership-only: join a voice channel, speak the hold line with Onyx for everyone, then mute non-Ownership.',
+  description: 'Ownership-only: join a voice channel, play the hold announcement for everyone, then mute non-Ownership.',
   async execute(message) {
     requireOwnership(message);
     const result = await holdVoiceChat(message, message.client.config);
@@ -19,7 +19,7 @@ export const holdvc = {
           .setColor(0x4f8ff7)
           .setTitle('Hold VC')
           .setDescription([
-            `Joined ${result.voiceChannel} and played **Onyx** for everyone:`,
+            `Joined ${result.voiceChannel} and played for everyone:`,
             `“${HOLD_VC_PHRASE}”`,
             `Server-muted **${result.mutedNow}** member${result.mutedNow === 1 ? '' : 's'} (Ownership skipped).`,
             'Use `-unholdvc` to unmute and make the bot leave.',

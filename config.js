@@ -28,7 +28,6 @@ export const config = Object.freeze({
   robloxGroupLogChannelId: process.env.ROBLOX_GROUP_LOG_CHANNEL_ID?.trim() || '1536517651055120514',
   internetFeedChannelId: process.env.INTERNET_FEED_CHANNEL_ID?.trim() || '1537573830543933560',
   updateLogChannelId: process.env.UPDATE_LOG_CHANNEL_ID?.trim() || '1538007463851200583',
-  openAiApiKey: process.env.OPENAI_API_KEY?.trim() || '',
   ownerDiscordIds: (process.env.OWNER_DISCORD_IDS || '1044686997194805280')
     .split(',').map((value) => value.trim()).filter(Boolean),
   ownerRoleIds: (process.env.OWNER_ROLE_IDS || '1514033074948800683')

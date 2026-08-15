@@ -1,7 +1,6 @@
-import { createReadStream } from 'node:fs';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { createReadStream, existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   AudioPlayerStatus,
   NoSubscriberBehavior,
@@ -14,8 +13,8 @@ import {
   VoiceConnectionStatus,
 } from '@discordjs/voice';
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
-import { FULL_STAFF_PANEL_ROLE_ID } from './staffRanks.js';
 import { createRequire } from 'node:module';
+import { FULL_STAFF_PANEL_ROLE_ID } from './staffRanks.js';
 import { logger } from './logger.js';
 
 const require = createRequire(import.meta.url);
@@ -26,8 +25,9 @@ try {
   // System ffmpeg on PATH is fine.
 }
 
-
+const __dirname = dirname(fileURLToPath(import.meta.url));
 export const HOLD_VC_PHRASE = 'Please Hold this voice chat';
+export const HOLD_VC_AUDIO_PATH = join(__dirname, '..', 'assets', 'hold-vc.mp3');
 
 /** guildId -> { channelId, mutedIds: string[], heldBy: string, at: string } */
 const activeHolds = new Map();
@@ -55,28 +55,6 @@ export function resolveHoldVoiceChannel(message) {
   return message.member?.voice?.channel || null;
 }
 
-async function synthesizeOnyxSpeech(apiKey, text) {
-  const response = await fetch('https://api.openai.com/v1/audio/speech', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'tts-1',
-      voice: 'onyx',
-      input: text,
-      response_format: 'mp3',
-    }),
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(`OpenAI TTS failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`);
-  }
-  return Buffer.from(await response.arrayBuffer());
-}
-
 function waitForPlayerIdle(player, timeoutMs = 30_000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -102,10 +80,10 @@ function waitForPlayerIdle(player, timeoutMs = 30_000) {
 }
 
 /**
- * Join the voice channel and play Onyx MP3 through ffmpeg so everyone in VC hears it.
+ * Join the voice channel and play the bundled hold clip so everyone hears it.
  * Keeps the connection open afterward (until release/unhold).
  */
-async function joinAndAnnounce(voiceChannel, adapterCreator, mp3Buffer) {
+async function joinAndAnnounce(voiceChannel, adapterCreator, audioPath) {
   getVoiceConnection(voiceChannel.guild.id)?.destroy();
 
   const connection = joinVoiceChannel({
@@ -130,22 +108,17 @@ async function joinAndAnnounce(voiceChannel, adapterCreator, mp3Buffer) {
   // Give Discord a moment to finish negotiating audio before we speak.
   await new Promise((resolve) => setTimeout(resolve, 750));
 
-  const directory = await mkdtemp(join(tmpdir(), 'cw-holdvc-'));
-  const filePath = join(directory, 'hold.mp3');
   const player = createAudioPlayer({
     behaviors: { noSubscriber: NoSubscriberBehavior.Pause },
   });
 
   try {
-    await writeFile(filePath, mp3Buffer);
-
     const subscription = connection.subscribe(player);
     if (!subscription) {
       throw new Error('Could not subscribe the audio player to the voice connection.');
     }
 
-    // StreamType.Arbitrary forces ffmpeg decode → Discord opus, which is reliable for MP3.
-    const resource = createAudioResource(createReadStream(filePath), {
+    const resource = createAudioResource(createReadStream(audioPath), {
       inputType: StreamType.Arbitrary,
       inlineVolume: true,
     });
@@ -154,20 +127,17 @@ async function joinAndAnnounce(voiceChannel, adapterCreator, mp3Buffer) {
     player.play(resource);
     await entersState(player, AudioPlayerStatus.Playing, 8_000);
     await waitForPlayerIdle(player, 45_000);
-    // Stay connected so the bot remains visibly in the held VC.
     return connection;
   } catch (error) {
     player.stop(true);
     connection.destroy();
     throw error;
-  } finally {
-    await rm(directory, { recursive: true, force: true }).catch(() => {});
   }
 }
 
 /**
- * Bot joins the VC, speaks the hold line with Onyx for everyone, then server-mutes
- * non-Ownership members. Discord text TTS is never used (that only plays locally).
+ * Bot joins the VC, plays the bundled hold announcement for everyone, then
+ * server-mutes non-Ownership members. No external TTS API key is required.
  */
 export async function holdVoiceChat(message, config = {}) {
   const voiceChannel = resolveHoldVoiceChannel(message);
@@ -187,20 +157,16 @@ export async function holdVoiceChat(message, config = {}) {
     throw new Error('I need Connect, Speak, and Mute Members in that voice channel.');
   }
 
-  const apiKey = String(config.openAiApiKey || process.env.OPENAI_API_KEY || '').trim();
-  if (!apiKey) {
-    throw new Error('Set OPENAI_API_KEY on the bot host so I can speak with Onyx in the voice channel.');
+  if (!existsSync(HOLD_VC_AUDIO_PATH)) {
+    throw new Error('Hold VC audio file is missing on the bot host (assets/hold-vc.mp3).');
   }
 
-  // Speak first while the bot is clearly in channel, then mute everyone else.
-  const audio = await synthesizeOnyxSpeech(apiKey, HOLD_VC_PHRASE);
-  await joinAndAnnounce(voiceChannel, message.guild.voiceAdapterCreator, audio);
+  await joinAndAnnounce(voiceChannel, message.guild.voiceAdapterCreator, HOLD_VC_AUDIO_PATH);
 
   const previous = activeHolds.get(message.guild.id);
   const mutedIds = new Set(previous?.channelId === voiceChannel.id ? previous.mutedIds : []);
 
   let mutedNow = 0;
-  // Refresh members after join.
   const channel = await message.guild.channels.fetch(voiceChannel.id).catch(() => voiceChannel);
   for (const [, member] of channel.members) {
     if (member.user.bot) continue;
