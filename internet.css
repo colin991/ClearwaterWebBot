@@ -3838,7 +3838,7 @@ body { margin: 0; }
 }
 
 /* ==========================================================================
-   Profile overhaul: accent theming, meta row, pinned posts
+   Profile overhaul: accent theming, meta row
    ========================================================================== */
 .profile-view {
   --profile-accent: var(--blue);
@@ -4006,13 +4006,6 @@ body { margin: 0; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pinned-post {
-  display: contents;
-}
-.pinned-flag {
-  display: none;
-}
-
 /* ==========================================================================
    Settings page
    ========================================================================== */
