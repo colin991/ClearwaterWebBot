@@ -108,11 +108,14 @@ const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not deliver
 const AUTOMOD_HOLD_PREVIEW = 'This may be held for staff review when you send it.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const SMALL_REEL_BYTES = 3_200_000;
-const BLOB_LIMIT_MESSAGE = 'Cloud storage hit this month’s Vercel Blob limit, so large uploads are paused. Photos under 3 MB still work. Videos and ads need Blob to reset next billing cycle, or a new/upgraded Blob store in Vercel.';
+const MAX_BUSINESS_LOGO_BYTES = 2 * 1024 * 1024;
+const BLOB_LIMIT_MESSAGE = 'Cloud storage hit this month’s Vercel Blob limit, so uploads are paused. Upgrade Blob or wait for the next billing cycle.';
+const BLOB_LOGO_ONLY_MESSAGE = 'Cloud storage is reserved for business logos under 2 MB. Ad and Reel cloud uploads are paused.';
 
 function blobUploadFailedMessage(raw, { large = true } = {}) {
   const text = String(raw || '');
   if (/suspended|quota|limit|billing|exceeded/i.test(text)) return BLOB_LIMIT_MESSAGE;
+  if (/reserved for business logos|Only business logo|Ad and Reel/i.test(text)) return BLOB_LOGO_ONLY_MESSAGE;
   if (/token|blob store|No token|Failed to retrieve/i.test(text)) {
     return large
       ? 'Large uploads need Vercel Blob storage. A photo under 3 MB still works without it.'
@@ -740,6 +743,11 @@ function selectPostingAccount(account) {
         badges: ['business'],
       });
     }
+    void fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'business-touch', businessId: biz.id }),
+    }).catch(() => {});
   } else {
     activeAccount = account === 'official' ? 'official' : 'personal';
   }
@@ -4798,30 +4806,38 @@ function renderAdLogoPreview() {
   preview.innerHTML = `<img src="${escapeHtml(adLogo.previewUrl)}" alt="Ad logo preview" /><button type="button" data-remove-ad-logo>Remove logo</button>`;
 }
 
-async function uploadAdMedia(file, isVideo) {
+async function uploadBusinessLogo(file) {
+  if (!file) throw new Error('Choose a logo image.');
+  if (file.size > MAX_BUSINESS_LOGO_BYTES) {
+    throw new Error('Business logos must be under 2 MB.');
+  }
+  if (!/^image\/(png|jpeg|jpg|webp|gif)$/i.test(String(file.type || ''))) {
+    throw new Error('Use a PNG, JPG, WEBP, or GIF logo.');
+  }
   const upload = globalThis.VercelBlob?.upload;
-  let blobError = '';
-  if (typeof upload === 'function') {
-    try {
-      const safeName = String(file.name || (isVideo ? 'ad.mp4' : 'ad.jpg')).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || (isVideo ? 'ad.mp4' : 'ad.jpg');
-      const blob = await upload(`ads/${safeName}`, file, {
-        access: 'public',
-        handleUploadUrl: '/api/internet',
-        multipart: file.size > 80_000_000,
-        contentType: file.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
-      });
-      if (blob?.url) return isVideo ? { video: { url: blob.url } } : { image: { url: blob.url } };
-    } catch (error) {
-      blobError = String(error?.message || error || '');
-      if (isVideo || file.size > SMALL_REEL_BYTES) {
-        throw new Error(blobUploadFailedMessage(blobError, { large: true }));
-      }
-    }
-  } else if (isVideo || file.size > SMALL_REEL_BYTES) {
-    throw new Error('Ad video uploads need Vercel Blob storage. Use a smaller image under 3 MB, or configure Blob.');
+  if (typeof upload !== 'function') {
+    throw new Error('Business logo uploads need Vercel Blob storage. Refresh after Blob is connected.');
+  }
+  try {
+    const safeName = String(file.name || 'logo.jpg').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'logo.jpg';
+    const blob = await upload(`business/${safeName}`, file, {
+      access: 'public',
+      handleUploadUrl: '/api/internet',
+      contentType: file.type || 'image/jpeg',
+    });
+    if (blob?.url) return { url: blob.url };
+  } catch (error) {
+    throw new Error(blobUploadFailedMessage(error?.message || error, { large: false }));
+  }
+  throw new Error('Could not upload that logo.');
+}
+
+async function uploadAdMedia(file, isVideo) {
+  if (isVideo || file.size > SMALL_REEL_BYTES) {
+    throw new Error(BLOB_LOGO_ONLY_MESSAGE);
   }
   const dataUrl = await readFileAsDataUrl(file);
-  if (isVideo) throw new Error('Short ad videos need Blob storage. Upload an image instead, or finish Blob setup.');
+  if (isVideo) throw new Error(BLOB_LOGO_ONLY_MESSAGE);
   if (!safeImageUrl(dataUrl)) throw new Error('Choose a supported image.');
   return { image: { dataUrl } };
 }
@@ -7006,8 +7022,8 @@ document.addEventListener('submit', async (event) => {
     let avatarUrl;
     if (draft?.file) {
       if (status) status.textContent = 'Uploading logo...';
-      const uploaded = await uploadAdMedia(draft.file, false);
-      avatarUrl = uploaded.image?.url || '';
+      const uploaded = await uploadBusinessLogo(draft.file);
+      avatarUrl = uploaded.url || '';
       if (!avatarUrl) throw new Error('Could not upload that logo.');
     }
     const payload = {
@@ -7063,8 +7079,9 @@ document.querySelector('[data-business-form]')?.addEventListener('submit', async
     let avatarUrl = '';
     if (businessAvatarDraft?.file) {
       if (status) status.textContent = 'Uploading logo...';
-      const uploaded = await uploadAdMedia(businessAvatarDraft.file, false);
-      avatarUrl = uploaded.image?.url || '';
+      const uploaded = await uploadBusinessLogo(businessAvatarDraft.file);
+      avatarUrl = uploaded.url || '';
+      if (!avatarUrl) throw new Error('Could not upload that logo.');
     }
     const response = await fetch('/api/internet', {
       method: 'POST',
@@ -8599,41 +8616,15 @@ function readFileAsDataUrl(file) {
 }
 
 async function uploadReelFile(file, kind, onProgress, options = {}) {
-  const upload = globalThis.VercelBlob?.upload;
   const isVideo = kind === 'video';
   const isAudio = kind === 'audio';
   const allowDataUrl = options.allowDataUrl !== false;
-  let blobError = '';
-  const defaultName = isVideo ? 'reel.mp4' : (isAudio ? 'reel.mp3' : 'reel.jpg');
-  const defaultType = isVideo ? 'video/mp4' : (isAudio ? 'audio/mpeg' : 'image/jpeg');
-  if (typeof upload === 'function') {
-    try {
-      const safeName = String(file.name || defaultName).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || defaultName;
-      const blob = await upload(`reels/${safeName}`, file, {
-        access: 'public',
-        handleUploadUrl: '/api/internet',
-        multipart: file.size > 80_000_000,
-        contentType: file.type || defaultType,
-        onUploadProgress: (progress) => onProgress?.(progress),
-      });
-      if (blob?.url) return { url: blob.url };
-    } catch (error) {
-      blobError = String(error?.message || error || '');
-      if (!allowDataUrl || file.size > SMALL_REEL_BYTES) {
-        throw new Error(blobUploadFailedMessage(blobError, { large: true }));
-      }
-    }
-  } else if (!allowDataUrl || file.size > SMALL_REEL_BYTES) {
-    throw new Error(allowDataUrl
-      ? 'Reel uploads are unavailable for large files. Refresh, or use files under 3 MB.'
-      : 'Slideshows and audio need cloud upload. Refresh the page and try again, or post one small photo.');
+  if (isVideo || isAudio || !allowDataUrl || file.size > SMALL_REEL_BYTES) {
+    throw new Error(BLOB_LOGO_ONLY_MESSAGE);
   }
-
-  onProgress?.({ percentage: 100 });
+  onProgress?.({ loaded: file.size, total: file.size, percentage: 100 });
   const dataUrl = await readFileAsDataUrl(file);
-  if (isVideo && !safeVideoUrl(dataUrl)) throw new Error('Choose a supported MP4 or WebM video.');
-  if (isAudio && !safeAudioUrl(dataUrl)) throw new Error('Choose a supported MP3, M4A, WAV, or OGG audio file.');
-  if (!isVideo && !isAudio && !safeImageUrl(dataUrl)) throw new Error('Choose a supported image.');
+  if (!safeImageUrl(dataUrl)) throw new Error('Choose a supported image.');
   return { dataUrl };
 }
 

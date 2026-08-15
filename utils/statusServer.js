@@ -8,7 +8,8 @@ import { dropLocationNameCandidates, fetchErlcPlayersOnMap, fetchErlcServer, fin
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
 import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
-import { AutomodHoldError, adjustInternetCredits, addBusinessMember, applyStaffSiteAction, applyStaffUserAction, assertBusinessAccess, assertLimitedStaffBanQuota, banKnownInternetIps, businessActorFromAccount, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, findMyDirectory, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listGovernmentFines, listInternetAdsForUser, listMyBusinessAccounts, manageInternetAd, membersSharingWith, moderationSnapshot, myVerificationApplication, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, purchasePostBoost, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, removeBusinessMember, respondCreditTransfer, reviewBusinessApplication, reviewGovernmentFine, reviewInternetAd, reviewInternetReport, reviewVerificationApplication, revertInternetHistory, saveInternetStore, queueInternetStoreSave, searchStaffUsers, sendInternetMessage, serveInternetAds, setBusinessMemberRole, setDiscordInternetNotify, setFindMyShare, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserConversation, staffUserDetail, staffUserMessages, submitBusinessApplication, submitGovernmentFine, submitVerificationApplication, takeInternetConversation, takeInternetMessages, takeInternetNotifications, countUnreadInternetWarnings, takeUnreadInternetWarnings, touchInternetUser, updateBusinessProfile, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
+import { AutomodHoldError, adjustInternetCredits, addBusinessMember, applyStaffSiteAction, applyStaffUserAction, assertBusinessAccess, assertLimitedStaffBanQuota, banKnownInternetIps, businessActorFromAccount, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, findMyDirectory, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listGovernmentFines, listInternetAdsForUser, listMyBusinessAccounts, manageInternetAd, membersSharingWith, moderationSnapshot, myVerificationApplication, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, purchasePostBoost, purgeIdleBusinessAccounts, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, removeBusinessMember, respondCreditTransfer, reviewBusinessApplication, reviewGovernmentFine, reviewInternetAd, reviewInternetReport, reviewVerificationApplication, revertInternetHistory, saveInternetStore, queueInternetStoreSave, searchStaffUsers, sendInternetMessage, serveInternetAds, setBusinessMemberRole, setDiscordInternetNotify, setFindMyShare, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserConversation, staffUserDetail, staffUserMessages, submitBusinessApplication, submitGovernmentFine, submitVerificationApplication, takeInternetConversation, takeInternetMessages, takeInternetNotifications, countUnreadInternetWarnings, takeUnreadInternetWarnings, touchBusinessAccountActivity, touchInternetUser, updateBusinessProfile, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
+import { deleteVercelBlobUrls } from './blobStorage.js';
 import { createDiscordInternetNotifier } from './discordInternetNotify.js';
 import { createInternetFeedController, shouldAnnounceInteractResult } from './discordInternetFeed.js';
 import { markInternetPresence } from './internetPresence.js';
@@ -440,10 +441,15 @@ export function startStatusServer(client, config) {
       const store = await readInternetStore();
       const clearedBans = clearExpiredInternetBans(store);
       const clearedIpBans = clearExpiredInternetIpBans(store);
-      if (clearedBans || clearedIpBans) {
+      const idleBusinesses = purgeIdleBusinessAccounts(store);
+      if (clearedBans || clearedIpBans || idleBusinesses.length) {
         await saveInternetStore(store);
         if (clearedBans) logger.info(`Automatically unbanned ${clearedBans} Clearwater Internet account(s).`);
         if (clearedIpBans) logger.info(`Removed ${clearedIpBans} expired Clearwater Internet network ban(s).`);
+        if (idleBusinesses.length) {
+          logger.info(`Removed ${idleBusinesses.length} idle Clearwater business account(s).`);
+          await deleteVercelBlobUrls(idleBusinesses.map((item) => item.avatarUrl));
+        }
       }
     } catch (error) {
       logger.error('Could not clean up expired Clearwater Internet data', error);
@@ -718,6 +724,9 @@ export function startStatusServer(client, config) {
             businessId: asBusinessId,
             need: 'post',
           });
+          if (touchBusinessAccountActivity(store, biz.id)) {
+            queueInternetStoreSave(store);
+          }
           upsertInternetUser(store, {
             id: biz.id,
             username: biz.username,
@@ -1066,10 +1075,24 @@ export function startStatusServer(client, config) {
         if (body.action === 'business-update') {
           const result = updateBusinessProfile(store, body);
           await saveInternetStore(store);
+          if (result.previousAvatarUrl) {
+            await deleteVercelBlobUrls([result.previousAvatarUrl]);
+          }
           return json(response, 200, {
             ...result,
             businesses: listMyBusinessAccounts(store, body.actor?.id),
           });
+        }
+
+        if (body.action === 'business-touch') {
+          assertBusinessAccess(store, {
+            actor: body.actor,
+            businessId: body.businessId,
+            need: 'post',
+          });
+          const touched = touchBusinessAccountActivity(store, body.businessId, { force: true });
+          if (touched) await saveInternetStore(store);
+          return json(response, 200, { ok: true, touched });
         }
 
         if (body.action === 'business-member-add') {
@@ -1383,6 +1406,9 @@ export function startStatusServer(client, config) {
           }
           await saveInternetStore(store);
           syncDeletedInternetFeed(feedDeletes);
+          if (staffAction === 'delete-business' && detail?.avatarUrl) {
+            await deleteVercelBlobUrls([detail.avatarUrl]);
+          }
           return json(response, 200, { ...detail, snapshot: moderationSnapshot(store) });
         }
 

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-business-logo-idle",
+      "title": "Business logos + idle cleanup",
+      "summary": "Vercel Blob is reserved for business logos under 2 MB. Business accounts unused for a week are removed automatically, and their logos are deleted from storage.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T22:45:00.000Z"
+    },
+    {
       "id": "2026-08-15-staff-delete-business",
       "title": "Staff can delete business accounts",
       "summary": "In the staff Users panel, business accounts now have a Delete business account action. It removes the business, its posts, and its ads. The linked personal handler account stays.",

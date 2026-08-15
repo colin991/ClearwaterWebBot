@@ -20,12 +20,14 @@ import {
   myVerificationApplication,
   pendingBusinessApplications,
   pendingVerificationApplications,
+  purgeIdleBusinessAccounts,
   removeBusinessMember,
   reviewBusinessApplication,
   reviewVerificationApplication,
   setBusinessMemberRole,
   submitBusinessApplication,
   submitVerificationApplication,
+  touchBusinessAccountActivity,
   updateBusinessProfile,
 } from './businessInternet.js';
 
@@ -38,6 +40,8 @@ export {
   getBusinessAccount,
   isBusinessAccountId,
   listMyBusinessAccounts,
+  purgeIdleBusinessAccounts,
+  touchBusinessAccountActivity,
   myVerificationApplication,
   removeBusinessMember,
   reviewBusinessApplication,
@@ -3296,7 +3300,7 @@ export function applyStaffUserAction(store, {
       store,
       `${actorName} deleted business account ${removed.displayName} (${removed.businessId})${removed.postsRemoved ? ` and ${removed.postsRemoved} post(s)` : ''}.`,
     );
-    return { deleted: true, user: null, businessId: removed.businessId };
+    return { deleted: true, user: null, businessId: removed.businessId, avatarUrl: removed.avatarUrl || '' };
   }
   // Keep one live reference from the store. A second upsertInternetUser() replaces
   // the object identity and would drop ban/mute/lock mutations applied below.
