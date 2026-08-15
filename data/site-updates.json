@@ -112,6 +112,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T04:36:30.000Z",
       "commit": "79bef17"
+    },
+    {
+      "id": "2026-08-15-sidebar-ad-fit",
+      "title": "Sidebar ad matches site chrome",
+      "summary": "Sponsored sidebar ads now use the same quiet border, surface, circular logo, and button styles as Who to Follow and other right-rail panels.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T04:40:00.000Z",
+      "commit": "537b74a"
     }
   ]
 }
