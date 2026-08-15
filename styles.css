@@ -797,25 +797,10 @@ body.home-stage {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
-.stage-live {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #3be0a8;
-  box-shadow: 0 0 0 0 rgba(59, 224, 168, .55);
-  animation: stagePulse 2.2s ease-out infinite;
-}
 .stage-stats-sep {
   width: 1px;
   height: 12px;
   background: rgba(255, 255, 255, .28);
-}
-.stage-status {
-  margin: 8px 0 0;
-  color: rgba(186, 202, 224, .72);
-  font-size: 12px;
-  font-weight: 500;
-  animation: stageRise .9s var(--ease) .18s both;
 }
 .stage-actions {
   display: flex;
@@ -841,11 +826,6 @@ body.home-stage {
 @keyframes stageLogoIn {
   from { opacity: 0; transform: translateY(10px) scale(.92); }
   to { opacity: 1; transform: translateY(0) scale(1); }
-}
-@keyframes stagePulse {
-  0% { box-shadow: 0 0 0 0 rgba(59, 224, 168, .5); }
-  70% { box-shadow: 0 0 0 12px rgba(59, 224, 168, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(59, 224, 168, 0); }
 }
 
 @media (max-width: 640px) {
@@ -893,9 +873,7 @@ body.home-stage {
   .stage-content,
   .stage-logo,
   .stage-stats,
-  .stage-status,
   .stage-actions,
-  .stage-live,
   .departments-shell,
   .department-row {
     animation: none !important;

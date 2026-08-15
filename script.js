@@ -2,7 +2,6 @@ const header = document.querySelector('[data-header]');
 const menuButton = document.querySelector('.menu-button');
 const navigation = document.querySelector('.site-nav');
 const year = document.querySelector('[data-year]');
-const updatedTime = document.querySelector('[data-time]');
 const discordLogin = document.querySelector('[data-discord-login]');
 const discordAccount = document.querySelector('[data-discord-account]');
 const discordAvatar = document.querySelector('[data-discord-avatar]');
@@ -13,7 +12,6 @@ const discordProfile = document.querySelector('[data-discord-profile]');
 const discordProfileMenu = document.querySelector('[data-discord-profile-menu]');
 const discordLogout = document.querySelector('[data-discord-logout]');
 const discordCount = document.querySelectorAll('[data-discord-count]');
-const botConnection = document.querySelectorAll('[data-bot-connection]');
 const ownerLink = document.querySelector('[data-owner-link]');
 const serverManagementLinks = document.querySelectorAll('[data-server-management]');
 const erlcCurrent = document.querySelectorAll('[data-erlc-current]');
@@ -43,10 +41,6 @@ const loadDirectErlcStatus = async () => {
   const status = await response.json();
   if (!status.online) throw new Error('ER:LC server unavailable');
   setErlcNumbers(status);
-  if (updatedTime) {
-    const timestamp = new Date(status.updatedAt || Date.now());
-    updatedTime.textContent = `Updated ${timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
-  }
 };
 
 const updateHeader = () => {
@@ -70,7 +64,6 @@ navigation?.querySelectorAll('a').forEach((link) => {
 });
 
 if (year) year.textContent = new Date().getFullYear();
-if (updatedTime) updatedTime.textContent = 'Checking ER:LC…';
 
 const loadDiscordSession = async () => {
   if (!discordLogin || !discordAccount) return;
@@ -168,47 +161,31 @@ document.addEventListener('click', (event) => {
   }
 });
 
-const setBotConnection = (text) => {
-  botConnection.forEach((element) => { element.textContent = text; });
-};
-
 const setDiscordCount = (count) => {
   discordCount.forEach((element) => { element.textContent = count; });
 };
 
 const loadBotStatus = async () => {
-  if (!botConnection.length && !discordCount.length && !erlcCurrent.length) return;
+  if (!discordCount.length && !erlcCurrent.length) return;
   try {
     const response = await fetch('/api/bot/status');
     if (!response.ok) throw new Error('Status unavailable');
     const status = await response.json();
     if (!status.online) {
-      setBotConnection('Live data unavailable');
       await loadDirectErlcStatus();
       return;
     }
-    setBotConnection(Number.isFinite(status.latencyMs)
-      ? `Discord bot online · ${status.latencyMs}ms`
-      : 'Discord bot online');
     if (Number.isInteger(status.memberCount)) setDiscordCount(status.memberCount.toLocaleString());
     if (status.erlc?.online) {
       setErlcNumbers(status.erlc);
-      if (updatedTime) {
-        const updatedAt = status.erlc.updatedAt || status.updatedAt;
-        const timestamp = updatedAt ? new Date(updatedAt) : new Date();
-        updatedTime.textContent = `Updated ${timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
-      }
     } else {
       await loadDirectErlcStatus();
     }
   } catch {
     try {
       await loadDirectErlcStatus();
-      setBotConnection('Live ER:LC data connected');
     } catch {
-      setBotConnection('Live data unavailable');
       setErlcNumbers({ online: false });
-      if (updatedTime) updatedTime.textContent = 'ER:LC status unavailable';
     }
   }
 };
