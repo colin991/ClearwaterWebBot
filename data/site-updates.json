@@ -132,10 +132,10 @@
     {
       "id": "2026-08-15-staff-active-users",
       "title": "Staff Active users tab",
-      "summary": "The staff panel now has an Active tab that lists Discord members currently browsing the website (avatar, display name, @username, and Discord ID), based on recent activity.",
+      "summary": "The staff panel Active tab lists logged-in members currently on Clearwater Internet (especially the home feed), using live presence pulses with Discord avatar, display name, @username, and Discord ID.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T05:05:00.000Z",
-      "commit": "92e9d42"
+      "commit": "7c4cf0a"
     }
   ]
 }

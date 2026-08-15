@@ -5,6 +5,7 @@ import { AUTOMOD_HOLD_MESSAGE, AutomodHoldError, scanInternetContent } from './i
 import { JsonStoreCorruptError, readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
 import { mergeInternetBadges, sanitizeInternetBadges, withSiteBadges, dailyCreditTierForRoles } from './staffRanks.js';
+import { activePresenceWindowMs, listActiveInternetPresence } from './internetPresence.js';
 import {
   addBusinessMember,
   assertBusinessAccess,
@@ -837,6 +838,8 @@ export function upsertInternetUser(store, user) {
     displayName: has('displayName') ? text(user?.displayName, 80) || existing.displayName || 'Discord user' : existing.displayName || 'Discord user',
     avatarUrl: has('avatarUrl') ? text(user?.avatarUrl, 300) || null : existing.avatarUrl || null,
     staffRank: isBusiness ? null : (has('staffRank') ? text(user?.staffRank, 80) || null : existing.staffRank || null),
+    lastSeenAt: existing.lastSeenAt || null,
+    createdAt: existing.createdAt || null,
     business: isBusiness,
     businessOwnerId: isBusiness
       ? (text(user?.businessOwnerId, 24) || existing.businessOwnerId || null)
@@ -3834,7 +3837,7 @@ export function moderationSnapshot(store) {
   expireInternetAds(store);
   Object.values(store.users).forEach((user) => scrubPersonalBusinessCheck(user));
   const now = Date.now();
-  const ACTIVE_ONLINE_MS = 60_000;
+  const ACTIVE_ONLINE_MS = activePresenceWindowMs();
   const open = store.reports.filter((report) => report.status === 'open').map((report) => publicStaffReport(store, report));
   const reviewed = store.reports.filter((report) => report.status !== 'open').map((report) => publicStaffReport(store, report));
   const pendingAds = store.ads.filter((ad) => ad.status === 'pending').map((ad) => publicAd(ad, { owner: true }));
@@ -3844,12 +3847,33 @@ export function moderationSnapshot(store) {
   const pendingVerifications = pendingVerificationApplications(store);
   const pendingBusinesses = pendingBusinessApplications(store);
   const users = Object.values(store.users).map((user) => staffUserSummary(store, user));
-  const activeUsers = users
+  const usersById = new Map(users.map((user) => [String(user.id), user]));
+  const livePresence = listActiveInternetPresence(ACTIVE_ONLINE_MS);
+  const activeFromPresence = livePresence.map((entry) => {
+    const stored = usersById.get(String(entry.id)) || {};
+    return {
+      ...stored,
+      id: entry.id,
+      discordId: entry.discordId || entry.id,
+      username: entry.username || stored.username,
+      discordUsername: entry.discordUsername || stored.discordUsername || entry.username,
+      displayName: entry.displayName || stored.displayName || 'Discord user',
+      avatarUrl: entry.avatarUrl || stored.avatarUrl || null,
+      staffRank: entry.staffRank || stored.staffRank || null,
+      lastSeenAt: entry.lastSeenAt || stored.lastSeenAt || null,
+      activeView: entry.view || 'home',
+      online: true,
+    };
+  });
+  const activeFromStore = users
     .filter((user) => {
       if (user.isBusinessAccount || user.business) return false;
+      if (activeFromPresence.some((entry) => entry.id === user.id)) return false;
       const seen = Date.parse(user.lastSeenAt || '');
       return Number.isFinite(seen) && (now - seen) <= ACTIVE_ONLINE_MS;
     })
+    .map((user) => ({ ...user, activeView: 'home', online: true }));
+  const activeUsers = [...activeFromPresence, ...activeFromStore]
     .sort((left, right) => Date.parse(right.lastSeenAt || 0) - Date.parse(left.lastSeenAt || 0));
   const bans = users.filter((user) => user.banned).map((user) => {
     const ban = getActiveBan(store.users[user.id]);

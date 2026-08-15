@@ -2490,6 +2490,7 @@ function showView(view) {
   if (activeView === 'sponsored') fillSponsoredReportForm();
   if (activeView === 'profile') renderOwnProfileDetails();
   if (activeView === 'settings' && currentUserId) void loadProfileEditor();
+  if (currentUserId) void pulsePresence(activeView);
 }
 
 function showViewFromAddress() {
@@ -2654,7 +2655,12 @@ function updateBanCountdown() {
 async function loadBanStatus() {
   if (!currentUserId) return;
   try {
-    const response = await fetch('/api/internet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'status' }) });
+    const view = currentInternetView();
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'status', view }),
+    });
     const result = await readApiJson(response, 'Could not check account access.');
     if (!response.ok) {
       if (/network is banned/i.test(result.error || '')) showBan(result.ban || { reason: result.error, until: null });
@@ -2665,6 +2671,44 @@ async function loadBanStatus() {
   } catch {
     // Do not hide the normal site if the bot connection is briefly unavailable.
   }
+}
+
+function currentInternetView() {
+  const open = document.querySelector('.internet-view:not([hidden])');
+  return open?.dataset?.view || 'home';
+}
+
+let presencePulseBusy = false;
+let presenceScrollTimer = 0;
+
+async function pulsePresence(forceView = '') {
+  if (!currentUserId || presencePulseBusy || document.hidden) return;
+  const view = forceView || currentInternetView();
+  // Staff asked for people browsing the site now — focus on the home feed,
+  // but still count any logged-in Internet view as online.
+  if (!view) return;
+  presencePulseBusy = true;
+  try {
+    await fetch('/api/internet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'presence', view }),
+    });
+  } catch {
+    // Presence is best-effort.
+  } finally {
+    presencePulseBusy = false;
+  }
+}
+
+function queuePresenceFromScroll() {
+  if (!currentUserId) return;
+  if (currentInternetView() !== 'home') return;
+  if (presenceScrollTimer) return;
+  presenceScrollTimer = window.setTimeout(() => {
+    presenceScrollTimer = 0;
+    void pulsePresence('home');
+  }, 1200);
 }
 
 function reportSourceLabel(report) {
@@ -2936,12 +2980,15 @@ function staffActiveSeenLabel(lastSeenAt) {
 function staffActiveRowMarkup(member) {
   const handle = `@${member.discordUsername || member.username || 'member'}`;
   const discordId = member.discordId || member.id || '';
+  const viewLabel = member.activeView === 'home' || !member.activeView
+    ? 'Viewing home'
+    : `Viewing ${String(member.activeView).replace(/-/g, ' ')}`;
   return `<button type="button" class="staff-user-row staff-active-row" data-staff-open-user="${escapeHtml(member.id)}">
     <img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" />
     <span>
       <b>${escapeHtml(member.displayName || 'Discord user')} <em class="staff-active-dot">Online</em></b>
       <small>${escapeHtml(handle)}${discordId ? ` · ${escapeHtml(discordId)}` : ''}</small>
-      <small class="staff-active-seen">${escapeHtml(staffActiveSeenLabel(member.lastSeenAt))}</small>
+      <small class="staff-active-seen">${escapeHtml(viewLabel)} · ${escapeHtml(staffActiveSeenLabel(member.lastSeenAt))}</small>
       <span class="staff-chip-row">${staffUserChips(member)}</span>
     </span>
   </button>`;
@@ -6312,6 +6359,7 @@ async function loadSession() {
   renderPosts();
   try {
     await loadBanStatus();
+    void pulsePresence(currentInternetView());
     await loadWarnings();
     await loadMessages();
     if (!document.querySelector('[data-view="notifications"]')?.hidden) await loadNotifications();
@@ -8954,4 +9002,15 @@ window.setInterval(() => {
 window.setInterval(() => {
   if (!document.hidden) void loadBanStatus();
 }, 5_000);
+window.setInterval(() => {
+  if (document.hidden || !currentUserId) return;
+  void pulsePresence();
+}, 4_000);
+window.setInterval(() => {
+  if (document.hidden || !sessionCanStaff) return;
+  if (document.querySelector('[data-view="staff"]')?.hidden) return;
+  if (staffTab !== 'active') return;
+  void loadModeration();
+}, 5_000);
+window.addEventListener('scroll', queuePresenceFromScroll, { passive: true });
 window.setInterval(updateBanCountdown, 60 * 1000);

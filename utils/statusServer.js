@@ -11,6 +11,7 @@ import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
 import { AutomodHoldError, adjustInternetCredits, addBusinessMember, applyStaffSiteAction, applyStaffUserAction, assertBusinessAccess, assertLimitedStaffBanQuota, banKnownInternetIps, businessActorFromAccount, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listInternetAdsForUser, listMyBusinessAccounts, manageInternetAd, moderationSnapshot, myVerificationApplication, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, purchasePostBoost, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, removeBusinessMember, respondCreditTransfer, reviewBusinessApplication, reviewInternetAd, reviewInternetReport, reviewVerificationApplication, revertInternetHistory, saveInternetStore, searchStaffUsers, sendInternetMessage, serveInternetAds, setBusinessMemberRole, setDiscordInternetNotify, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserConversation, staffUserDetail, staffUserMessages, submitBusinessApplication, submitVerificationApplication, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateBusinessProfile, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
 import { createDiscordInternetNotifier } from './discordInternetNotify.js';
 import { createInternetFeedController, shouldAnnounceInteractResult } from './discordInternetFeed.js';
+import { markInternetPresence } from './internetPresence.js';
 import { appendUpdateEntry, flushPendingUpdateLogs, postUpdateLog } from './updateLog.js';
 
 const json = (response, statusCode, body) => {
@@ -587,13 +588,28 @@ export function startStatusServer(client, config) {
           return json(response, 200, { official });
         }
 
-        if (body.action === 'status') {
+        if (body.action === 'status' || body.action === 'presence') {
           const user = upsertInternetUser(store, body.actor);
           touchInternetUser(user);
+          markInternetPresence(body.actor, body.view || 'home');
           recordInternetIpHash(store, user.id, body.ipHash);
           const ban = getActiveBan(user);
-          await saveInternetStore(store);
-          return json(response, 200, { banned: Boolean(ban), ban });
+          // Presence heartbeats are frequent — avoid rewriting the whole store every pulse.
+          if (body.action === 'status') await saveInternetStore(store);
+          else {
+            // Persist lastSeenAt occasionally so Active still works after a bot restart.
+            const lastWrite = Number(user._presenceSavedAt || 0);
+            if (Date.now() - lastWrite > 30_000) {
+              user._presenceSavedAt = Date.now();
+              await saveInternetStore(store);
+            }
+          }
+          return json(response, 200, {
+            banned: Boolean(ban),
+            ban,
+            online: true,
+            view: String(body.view || 'home').slice(0, 40),
+          });
         }
 
         if (body.action === 'wallet') {

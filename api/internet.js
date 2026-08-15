@@ -408,9 +408,10 @@ export default async function handler(request, response) {
         },
         actor: { id: user.id },
       };
-    } else if (body.action === 'status') {
+    } else if (body.action === 'status' || body.action === 'presence') {
       payload = {
-        action: 'status',
+        action: body.action === 'presence' ? 'presence' : 'status',
+        view: String(body.view || 'home').slice(0, 40),
         actor: {
           id: user.id,
           username: user.username,
