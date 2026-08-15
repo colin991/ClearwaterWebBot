@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-staff-no-pin",
+      "title": "Staff panel opens without a PIN",
+      "summary": "Staff with Discord panel access can open the Clearwater Staff desk directly. The ownership and management PIN gate is removed.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T20:28:00.000Z"
+    },
+    {
       "id": "2026-08-15-home-status-trim",
       "title": "Homepage status strip cleaned up",
       "summary": "Removed the green live indicator and Discord bot latency line from the homepage. Player count and queue still update live.",

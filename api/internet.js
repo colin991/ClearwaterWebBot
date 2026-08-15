@@ -2,15 +2,6 @@ import { handleUpload } from '@vercel/blob/client';
 import { SESSION_COOKIE, avatarUrl, getAuthConfig, isSameSiteRequest, parseCookies, readSessionToken, sendJson } from '../lib/discord-auth.js';
 import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, redactStaffPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
-import {
-  assertStaffPinUnlocked,
-  clearStaffPinUnlockCookie,
-  createStaffPinUnlockToken,
-  pinsConfigured,
-  readStaffPinUnlock,
-  staffPinUnlockCookie,
-  verifyStaffPin,
-} from '../lib/staff-pin.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
 const INTERNET_VERSION = '20260815-core-tabs';
@@ -20,7 +11,7 @@ const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_REEL_AUDIO_BYTES = 40 * 1024 * 1024;
 const MAX_PROFILE_IMAGE_BYTES = 12 * 1024 * 1024;
 const MAX_REEL_SLIDES = 10;
-const STAFF_PIN_ACTIONS = new Set([
+const STAFF_ACTIONS = new Set([
   'moderation',
   'staff-user-detail',
   'staff-user-search',
@@ -36,7 +27,6 @@ const STAFF_PIN_ACTIONS = new Set([
   'ad-review',
   'ad-manage',
 ]);
-const STAFF_PIN_FULL_ACTIONS = new Set(['staff-wallet', 'staff-site', 'verify', 'ban']);
 
 async function readBody(request) {
   if (request.body && typeof request.body === 'object') return request.body;
@@ -322,50 +312,14 @@ export default async function handler(request, response) {
       ? String(body.asBusinessId).trim()
       : '';
 
-    if (body.action === 'staff-pin-status') {
+    if (body.action === 'staff-pin-status' || body.action === 'staff-pin-unlock' || body.action === 'staff-pin-lock') {
       if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
-      const unlock = readStaffPinUnlock(request, sessionSecret);
-      const okForPanel = Boolean(
-        unlock
-        && String(unlock.id) === String(user.id)
-        && (staffPanel === 'full' ? unlock.panel === 'full' : (unlock.panel === 'full' || unlock.panel === 'limited')),
-      );
       return sendJson(response, 200, {
-        configured: pinsConfigured(),
-        unlocked: okForPanel,
-        panel: staffPanel,
-        gate: staffPanel === 'full' ? 'ownership' : 'management',
-      });
-    }
-
-    if (body.action === 'staff-pin-unlock') {
-      if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
-      const checked = verifyStaffPin(staffPanel, body.pin);
-      if (!checked.ok) return sendJson(response, 403, { error: checked.error, code: 'STAFF_PIN_INVALID' });
-      const token = createStaffPinUnlockToken({ userId: user.id, panel: checked.panel }, sessionSecret);
-      return sendJson(response, 200, {
+        configured: false,
         unlocked: true,
-        panel: checked.panel,
-        gate: checked.panel === 'full' ? 'ownership' : 'management',
-      }, [staffPinUnlockCookie(token)]);
-    }
-
-    if (body.action === 'staff-pin-lock') {
-      return sendJson(response, 200, { unlocked: false }, [clearStaffPinUnlockCookie()]);
-    }
-
-    if (STAFF_PIN_ACTIONS.has(String(body.action || ''))) {
-      try {
-        assertStaffPinUnlocked(request, sessionSecret, {
-          userId: user.id,
-          requiredPanel: STAFF_PIN_FULL_ACTIONS.has(body.action) ? 'full' : 'limited',
-        });
-      } catch (error) {
-        return sendJson(response, 403, {
-          error: error.message || 'Enter your staff PIN to continue',
-          code: error.code || 'STAFF_PIN_REQUIRED',
-        });
-      }
+        panel: staffPanel,
+        gate: null,
+      });
     }
 
     if (body?.type === 'blob.generate-client-token') {
@@ -866,7 +820,7 @@ export default async function handler(request, response) {
       if (lookup.ok && Array.isArray(lookup.body?.users)) users = lookup.body.users;
       // Staff targets are often missing from the public feed. Pull the moderation
       // roster so hashed IDs from older staff sessions can still be resolved.
-      if (canStaff && STAFF_PIN_ACTIONS.has(String(body.action || ''))) {
+      if (canStaff && STAFF_ACTIONS.has(String(body.action || ''))) {
         const roster = await callBot(request, {
           action: 'moderation',
           staffPanel,
@@ -901,7 +855,7 @@ export default async function handler(request, response) {
         error: 'Sponsored ad reporting needs the latest bot files. Restart the Sparked bot host after it pulls from GitHub.',
       });
     }
-    const redact = STAFF_PIN_ACTIONS.has(String(body.action || '')) && canStaff
+    const redact = STAFF_ACTIONS.has(String(body.action || '')) && canStaff
       ? redactStaffPayload
       : redactPublicPayload;
     return sendJson(response, result.ok ? (result.status === 201 ? 201 : 200) : result.status, redact(result.body));
