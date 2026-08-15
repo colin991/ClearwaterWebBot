@@ -371,11 +371,40 @@ export function setDiscordInternetNotify(handler) {
   discordInternetNotify = typeof handler === 'function' ? handler : null;
 }
 
+function notificationDeepLink(store, post) {
+  if (!post?.id) return { postId: null, replyId: null, postContent: '' };
+  const postContent = text(post.content, 180);
+  // Reply / comment notifications must open the parent thread. Linking the
+  // comment id itself breaks the post detail view when that comment is hidden
+  // from the public feed (followers-only, etc.).
+  if (post.parentId) {
+    const parent = store?.posts?.find((item) => item.id === post.parentId);
+    return {
+      postId: parent?.id || post.parentId,
+      replyId: post.id,
+      postContent,
+    };
+  }
+  return { postId: post.id, replyId: null, postContent };
+}
+
+function healNotificationDeepLink(store, notification) {
+  if (!notification || typeof notification !== 'object' || !notification.postId) return notification;
+  const linked = store.posts.find((item) => item.id === notification.postId);
+  if (!linked?.parentId) return notification;
+  return {
+    ...notification,
+    replyId: notification.replyId || linked.id,
+    postId: linked.parentId,
+    postContent: notification.postContent || text(linked.content, 180),
+  };
+}
+
 function addInternetNotification(store, { recipientId, actor, type, post = null }) {
   const recipient = store.users[String(recipientId || '')];
   if (!recipient || recipient.id === actor?.id) return;
   const actorName = text(actor?.displayName, 80) || 'A Clearwater member';
-  const postContent = text(post?.content, 180);
+  const link = notificationDeepLink(store, post);
   recipient.notifications = Array.isArray(recipient.notifications) ? recipient.notifications : [];
   recipient.notifications.unshift({
     id: randomUUID(),
@@ -383,8 +412,9 @@ function addInternetNotification(store, { recipientId, actor, type, post = null 
     actorId: String(actor?.id || ''),
     actorName,
     actorAvatarUrl: text(actor?.avatarUrl, 300) || null,
-    postId: post?.id || null,
-    postContent,
+    postId: link.postId,
+    replyId: link.replyId,
+    postContent: link.postContent,
     createdAt: new Date().toISOString(),
     readAt: null,
   });
@@ -395,8 +425,8 @@ function addInternetNotification(store, { recipientId, actor, type, post = null 
       recipientId: recipient.id,
       actorName,
       type: String(type || ''),
-      postContent,
-      postId: post?.id || null,
+      postContent: link.postContent,
+      postId: link.postId,
     });
   }
 }
@@ -2584,7 +2614,18 @@ export function takeInternetNotifications(store, actor) {
   const notifications = Array.isArray(user.notifications) ? user.notifications : [];
   const unreadCount = notifications.filter((notification) => !notification.readAt).length;
   notifications.forEach((notification) => { if (!notification.readAt) notification.readAt = new Date().toISOString(); });
-  return { notifications: notifications.slice(0, 100), unreadCount };
+  // Rewrite older reply notifications that still point at the comment id.
+  const healed = notifications.slice(0, 100).map((notification) => healNotificationDeepLink(store, notification));
+  healed.forEach((notification, index) => {
+    if (!notification || notifications[index] === notification) return;
+    notifications[index] = {
+      ...notifications[index],
+      postId: notification.postId,
+      replyId: notification.replyId,
+      postContent: notification.postContent,
+    };
+  });
+  return { notifications: healed, unreadCount };
 }
 
 export function socialSnapshot(store, actor) {

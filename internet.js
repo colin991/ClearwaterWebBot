@@ -95,7 +95,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260814-settings-ui';
+const INTERNET_VERSION = '20260815-reply-link';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -2558,8 +2558,8 @@ function openReelFromDeepLink(reelId) {
   }
 }
 
-function showPostDetail(postId, updateHash = true, { focusReply = false } = {}) {
-  const id = String(postId || '');
+function showPostDetail(postId, updateHash = true, { focusReply = false, highlightReplyId = null } = {}) {
+  let id = String(postId || '');
   if (!id) return showView('home');
   openPostId = id;
   if (updateHash) setInternetRoute('post', id);
@@ -2572,7 +2572,22 @@ function showPostDetail(postId, updateHash = true, { focusReply = false } = {}) 
     return;
   }
 
-  const post = allPosts.find((item) => item.id === id);
+  let post = allPosts.find((item) => item.id === id);
+  let focusCommentId = highlightReplyId ? String(highlightReplyId) : '';
+
+  // Reply notification / deep links may still point at a comment. Open the
+  // parent thread instead of treating the comment as a root post.
+  if (post?.parentId) {
+    focusCommentId = focusCommentId || post.id;
+    const parent = allPosts.find((item) => item.id === post.parentId);
+    if (parent) {
+      post = parent;
+      id = parent.id;
+      openPostId = id;
+      if (updateHash) setInternetRoute('post', id);
+    }
+  }
+
   if (!post) {
     showView('post');
     if (postDetail) postDetail.innerHTML = '<p class="feed-note">This post is unavailable or was removed.</p>';
@@ -2587,9 +2602,17 @@ function showPostDetail(postId, updateHash = true, { focusReply = false } = {}) 
   if (!postDetail) return showView('home');
   showView('post');
   const replies = allPosts.filter((item) => item.parentId === id);
-  postDetail.innerHTML = `${postMarkup(post)}${detailReplyComposerMarkup(post.id)}<section class="detail-replies">${replies.length ? replies.map((reply) => postMarkup(reply)).join('') : '<p>There are no replies yet.</p>'}</section>`;
+  postDetail.innerHTML = `${postMarkup(post)}${detailReplyComposerMarkup(post.id)}<section class="detail-replies">${replies.length ? replies.map((reply) => {
+    const active = focusCommentId && reply.id === focusCommentId;
+    return active ? postMarkup(reply).replace('class="post"', 'class="post post-reply-target"') : postMarkup(reply);
+  }).join('') : '<p>There are no replies yet.</p>'}</section>`;
   syncAllReelOpenChips(postDetail);
   if (focusReply) queueMicrotask(focusDetailReplyComposer);
+  else if (focusCommentId) {
+    queueMicrotask(() => {
+      postDetail.querySelector('.post-reply-target')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  }
 }
 
 function showBan(ban) {
@@ -5035,7 +5058,14 @@ async function loadNotifications() {
       }
       notificationsRenderKey = fingerprint;
       notificationList.innerHTML = notifications.length
-        ? notifications.map((notification) => `<button type="button" class="notification-item" ${notification.type === 'message' ? `data-notification-message="${escapeHtml(notification.actorId)}"` : notification.postId ? `data-notification-post="${escapeHtml(notification.postId)}"` : `data-notification-member="${escapeHtml(notification.actorId)}"`}><img src="${escapeHtml(notification.actorAvatarUrl || internetUsers.get(notification.actorId)?.avatarUrl || 'assets/clearwater-logo.png')}" alt="" decoding="async" /><span><b>${escapeHtml(notification.actorName || internetUsers.get(notification.actorId)?.displayName || 'Clearwater member')}</b> ${escapeHtml(names[notification.type] || 'interacted with you')}<small>${escapeHtml(notification.type === 'message' ? 'Open conversation' : notification.postContent || (notification.postId ? 'View post' : 'View profile'))} &middot; ${timeAgo(notification.createdAt)}</small></span></button>`).join('')
+        ? notifications.map((notification) => {
+          const attrs = notification.type === 'message'
+            ? `data-notification-message="${escapeHtml(notification.actorId)}"`
+            : notification.postId
+              ? `data-notification-post="${escapeHtml(notification.postId)}"${notification.replyId ? ` data-notification-reply="${escapeHtml(notification.replyId)}"` : ''}`
+              : `data-notification-member="${escapeHtml(notification.actorId)}"`;
+          return `<button type="button" class="notification-item" ${attrs}><img src="${escapeHtml(notification.actorAvatarUrl || internetUsers.get(notification.actorId)?.avatarUrl || 'assets/clearwater-logo.png')}" alt="" decoding="async" /><span><b>${escapeHtml(notification.actorName || internetUsers.get(notification.actorId)?.displayName || 'Clearwater member')}</b> ${escapeHtml(names[notification.type] || 'interacted with you')}<small>${escapeHtml(notification.type === 'message' ? 'Open conversation' : notification.postContent || (notification.postId ? 'View post' : 'View profile'))} &middot; ${timeAgo(notification.createdAt)}</small></span></button>`;
+        }).join('')
         : '<p class="feed-note">Nothing new yet.</p>';
     } catch (error) {
       notificationsRenderKey = '';
@@ -6888,7 +6918,12 @@ document.addEventListener('input', (event) => {
 });
 document.addEventListener('click', (event) => {
   const notificationPost = event.target.closest('[data-notification-post]');
-  if (notificationPost) { showPostDetail(notificationPost.dataset.notificationPost); return; }
+  if (notificationPost) {
+    showPostDetail(notificationPost.dataset.notificationPost, true, {
+      highlightReplyId: notificationPost.dataset.notificationReply || null,
+    });
+    return;
+  }
   const notificationMessage = event.target.closest('[data-notification-message]');
   if (notificationMessage) {
     const id = notificationMessage.dataset.notificationMessage;
