@@ -340,7 +340,7 @@
       "summary": "Clearwater Phone updates now download with a real browser session, verify the exe file, replace the running app on Windows after quit, and open the download page if Cloudflare blocks the file (v1.3.4).",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T20:00:00.000Z",
-      "commit": "pending"
+      "commit": "e55fab6"
     }
   ]
 }
