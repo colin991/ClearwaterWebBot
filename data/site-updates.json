@@ -199,7 +199,7 @@
       "summary": "The home-page right column (What\u2019s happening, ads, Who to follow) stays sticky and scrolls on its own when the widgets are taller than the viewport.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T17:35:00.000Z",
-      "commit": "PENDING"
+      "commit": "e9b5ac4"
     }
   ]
 }
