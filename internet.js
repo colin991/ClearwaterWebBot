@@ -3620,6 +3620,7 @@ function applySiteBanner(banner, forceShow = false) {
     root.hidden = true;
     document.body.classList.remove('has-site-banner');
     document.body.style.removeProperty('--site-banner-height');
+    syncTopBannerOffset();
     return;
   }
   if (message) message.textContent = banner.message;
@@ -3644,7 +3645,65 @@ function applySiteBanner(banner, forceShow = false) {
   document.body.classList.add('has-site-banner');
   requestAnimationFrame(() => {
     document.body.style.setProperty('--site-banner-height', `${Math.max(36, root.offsetHeight)}px`);
+    syncTopBannerOffset();
   });
+}
+
+function officialPostBannerDismissedId() {
+  try { return localStorage.getItem('cw-official-post-banner-dismissed') || ''; } catch { return ''; }
+}
+
+function dismissOfficialPostBanner(id) {
+  try { if (id) localStorage.setItem('cw-official-post-banner-dismissed', String(id)); } catch { /* ignore */ }
+  applyOfficialPostBanner(null, false);
+}
+
+function syncTopBannerOffset() {
+  const official = document.querySelector('[data-official-post-banner]');
+  const site = document.querySelector('[data-site-banner]');
+  const officialHeight = official && !official.hidden ? Math.max(36, official.offsetHeight) : 0;
+  const siteHeight = site && !site.hidden ? Math.max(36, site.offsetHeight) : 0;
+  if (officialHeight) document.body.style.setProperty('--official-post-banner-height', `${officialHeight}px`);
+  else document.body.style.removeProperty('--official-post-banner-height');
+  if (siteHeight) document.body.style.setProperty('--site-banner-height', `${siteHeight}px`);
+  else document.body.style.removeProperty('--site-banner-height');
+  document.body.style.setProperty('--top-banner-stack', `${officialHeight + siteHeight}px`);
+}
+
+function applyOfficialPostBanner(banner, forceShow = false) {
+  const root = document.querySelector('[data-official-post-banner]');
+  if (!root) return;
+  const message = document.querySelector('[data-official-post-banner-message]');
+  const link = document.querySelector('[data-official-post-banner-link]');
+  const openBtn = document.querySelector('[data-official-post-banner-open]');
+  const expiresAt = banner?.expiresAt ? new Date(banner.expiresAt).getTime() : 0;
+  const stillLive = Number.isFinite(expiresAt) && expiresAt > Date.now();
+  const active = banner
+    && banner.postId
+    && banner.message
+    && stillLive
+    && (forceShow || officialPostBannerDismissedId() !== String(banner.id || ''));
+  if (!active) {
+    root.hidden = true;
+    root.dataset.postId = '';
+    root.dataset.bannerId = '';
+    document.body.classList.remove('has-official-post-banner');
+    syncTopBannerOffset();
+    return;
+  }
+  if (message) message.textContent = banner.message;
+  if (link) link.textContent = banner.linkLabel || 'View post';
+  if (openBtn) openBtn.setAttribute('aria-label', `${banner.message}. ${banner.linkLabel || 'View post'}`);
+  root.dataset.postId = String(banner.postId || '');
+  root.dataset.bannerId = String(banner.id || '');
+  root.hidden = false;
+  document.body.classList.add('has-official-post-banner');
+  requestAnimationFrame(syncTopBannerOffset);
+  const remaining = Math.max(1_000, expiresAt - Date.now());
+  window.clearTimeout(applyOfficialPostBanner._timer);
+  applyOfficialPostBanner._timer = window.setTimeout(() => {
+    applyOfficialPostBanner(null, false);
+  }, remaining + 250);
 }
 
 function formatCredits(value) {
@@ -5825,6 +5884,7 @@ async function loadPosts() {
     allPosts = uniquePostsById(result.posts || []);
     internetUsers = new Map((result.users || []).map((user) => [user.id, user]));
     applySiteBanner(result.settings?.siteBanner || null);
+    applyOfficialPostBanner(result.settings?.officialPostBanner || null);
     if (result.settings) {
       postBoostPricing = {
         cost: Number(result.settings.postBoostCost) || POST_BOOST_COST_FALLBACK,
@@ -6700,6 +6760,18 @@ document.addEventListener('click', (event) => {
   if (event.target.closest('[data-site-banner-dismiss]')) {
     const root = document.querySelector('[data-site-banner]');
     dismissSiteBanner(root?.dataset.bannerId || '');
+    return;
+  }
+  if (event.target.closest('[data-official-post-banner-dismiss]')) {
+    const root = document.querySelector('[data-official-post-banner]');
+    dismissOfficialPostBanner(root?.dataset.bannerId || '');
+    return;
+  }
+  const officialPostOpen = event.target.closest('[data-official-post-banner-open]');
+  if (officialPostOpen) {
+    const root = document.querySelector('[data-official-post-banner]');
+    const postId = root?.dataset.postId || '';
+    if (postId) showPostDetail(postId, true);
     return;
   }
   const copyStaffId = event.target.closest('[data-staff-copy-id]');
