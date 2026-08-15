@@ -20,11 +20,18 @@ function renderAccount(session) {
   }
 }
 
+let lastSession = { authenticated: false };
+
 async function refreshSession() {
   try {
-    renderAccount((await window.anchorPhone?.session?.()) || { authenticated: false });
+    const next = (await window.anchorPhone?.session?.()) || { authenticated: false };
+    if (lastSession?.authenticated && next.authenticated === false) return lastSession;
+    lastSession = next;
+    renderAccount(next);
   } catch {
-    renderAccount({ authenticated: false });
+    if (lastSession?.authenticated) return lastSession;
+    lastSession = { authenticated: false };
+    renderAccount(lastSession);
   }
 }
 
@@ -107,7 +114,10 @@ document.getElementById('setup-watch-app')?.addEventListener('click', async () =
 });
 
 window.anchorPhone?.onAuth?.((payload) => {
-  renderAccount(payload);
+  const next = payload && typeof payload === 'object' ? payload : { authenticated: false };
+  if (lastSession?.authenticated && next.authenticated === false) return;
+  lastSession = next;
+  renderAccount(next);
 });
 
 document.addEventListener('keydown', (event) => {

@@ -16,6 +16,13 @@
       "createdAt": "2026-08-15T21:45:00.000Z"
     },
     {
+      "id": "2026-08-15-phone-stay-signed-in",
+      "title": "Phone stays signed in",
+      "summary": "Clearwater Phone no longer flashes “Signed in” then immediately signs you out. Discord login is kept until you tap Sign out.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T21:42:00.000Z"
+    },
+    {
       "id": "2026-08-15-scrub-staff-pin",
       "title": "Staff PIN fully removed",
       "summary": "Ownership and Management open the staff desk with their Discord role only. Leftover PIN code, cookies, and settings notes are gone.",

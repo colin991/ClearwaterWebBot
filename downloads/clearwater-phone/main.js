@@ -27,8 +27,8 @@ async function sessionCookies() {
 async function cookieHeaderForSite() {
   const cookies = await sessionCookies();
   return cookies
-    .filter((cookie) => cookie.value)
-    .map((cookie) => `${cookie.name}=${encodeURIComponent(cookie.value)}`)
+    .filter((cookie) => cookie.value && isSessionCookieName(cookie.name))
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
     .join('; ');
 }
 
@@ -62,10 +62,15 @@ async function siteFetch(pathname, { method = 'GET', body } = {}) {
   };
   const ses = phoneSession();
   const doFetch = async (extraHeaders = {}) => {
-    const requestInit = { ...init, headers: { ...headers, ...extraHeaders } };
-    return typeof ses.fetch === 'function'
-      ? ses.fetch(url, requestInit)
-      : net.fetch(url, { ...requestInit, session: ses, useSessionCookies: true });
+    const requestInit = {
+      method,
+      headers: { ...headers, ...extraHeaders },
+      body: payload || undefined,
+      credentials: 'include',
+      session: ses,
+      useSessionCookies: true,
+    };
+    return net.fetch(url, requestInit);
   };
   let response = await doFetch();
   if (response.status === 401 || response.status === 403) {
@@ -109,17 +114,24 @@ async function readAuthFromWindow(browserWindow) {
   }
 }
 
-function notifyOverlayAuth(payload) {
-  const auth = payload || { authenticated: false };
-  if (win && !win.isDestroyed()) win.webContents.send('phone-auth', auth);
-  if (launcherWin && !launcherWin.isDestroyed()) launcherWin.webContents.send('phone-auth', auth);
+let cachedAuth = { authenticated: false, siteAccess: false };
+
+function notifyOverlayAuth(payload, { force = false } = {}) {
+  const auth = payload && typeof payload === 'object' ? payload : { authenticated: false };
+  if (auth.authenticated) cachedAuth = auth;
+  else if (!force && cachedAuth.authenticated) return cachedAuth;
+  else cachedAuth = auth;
+  if (win && !win.isDestroyed()) win.webContents.send('phone-auth', cachedAuth);
+  if (launcherWin && !launcherWin.isDestroyed()) launcherWin.webContents.send('phone-auth', cachedAuth);
+  return cachedAuth;
 }
 
 async function readAuthState() {
   const fromLogin = await readAuthFromWindow(loginWin);
-  if (fromLogin?.authenticated) return fromLogin;
+  if (fromLogin?.authenticated) return notifyOverlayAuth(fromLogin);
   const me = await siteFetch('/api/auth/me');
-  if (me.body && me.body.authenticated) return me.body;
+  if (me.body && me.body.authenticated) return notifyOverlayAuth(me.body);
+  if (cachedAuth.authenticated) return cachedAuth;
   if (fromLogin && typeof fromLogin === 'object') return fromLogin;
   return me.body && typeof me.body === 'object' ? me.body : { authenticated: false, siteAccess: false };
 }
@@ -188,9 +200,10 @@ function openLoginWindow() {
       auth = await readAuthState();
       if (auth.authenticated) break;
     }
-    notifyOverlayAuth(auth);
-    if (auth.authenticated) closeLoginWindow();
-    else finishing = false;
+    if (auth.authenticated) {
+      notifyOverlayAuth(auth);
+      closeLoginWindow();
+    } else finishing = false;
   };
 
   loginWin.webContents.on('did-navigate', finishIfSignedIn);
@@ -200,7 +213,6 @@ function openLoginWindow() {
   loginWin.on('closed', () => {
     loginWin = null;
     if (win && !win.isDestroyed()) win.setAlwaysOnTop(true, 'screen-saver');
-    void readAuthState().then(notifyOverlayAuth);
   });
   return loginWin;
 }
@@ -485,11 +497,9 @@ app.whenReady().then(() => {
   });
 
   phoneSession().cookies.on('changed', (_event, cookie, _cause, removed) => {
-    if (removed || !isSessionCookieName(cookie?.name)) return;
-    void readAuthState().then((auth) => {
-      notifyOverlayAuth(auth);
-      if (auth.authenticated) closeLoginWindow();
-    });
+    if (!isSessionCookieName(cookie?.name)) return;
+    if (removed) return;
+    void readAuthState();
   });
 
   if (argvHas('--watch') || argvHas('--overlay')) {
@@ -552,11 +562,13 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('phone-logout', async () => {
+    cachedAuth = { authenticated: false, siteAccess: false };
     try {
       await siteFetch('/api/auth/logout', { method: 'POST', body: {} });
     } catch {}
     const cookies = await phoneSession().cookies.get({ url: SITE });
     await Promise.all(cookies.map((cookie) => phoneSession().cookies.remove(SITE, cookie.name).catch(() => {})));
+    notifyOverlayAuth({ authenticated: false, siteAccess: false }, { force: true });
     return { ok: true };
   });
 

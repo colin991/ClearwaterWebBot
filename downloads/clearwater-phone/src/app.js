@@ -3,7 +3,7 @@
   const VERSION_URL = SITE + '/downloads/clearwater-phone-version.json';
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
-  let appVersion = '1.3.8';
+  let appVersion = '1.3.9';
   let latestInfo = null;
   let sessionUser = null;
   let walletMode = 'send';
@@ -216,8 +216,11 @@
 
   async function refreshSession() {
     try {
-      sessionUser = (await window.anchorPhone?.session?.()) || { authenticated: false };
+      const next = (await window.anchorPhone?.session?.()) || { authenticated: false };
+      if (sessionUser?.authenticated && next.authenticated === false) return sessionUser;
+      sessionUser = next;
     } catch {
+      if (sessionUser?.authenticated) return sessionUser;
       sessionUser = { authenticated: false };
     }
     renderAccount();
@@ -225,7 +228,9 @@
   }
 
   window.anchorPhone?.onAuth?.((payload) => {
-    sessionUser = payload && typeof payload === 'object' ? payload : { authenticated: false };
+    const next = payload && typeof payload === 'object' ? payload : { authenticated: false };
+    if (sessionUser?.authenticated && next.authenticated === false) return;
+    sessionUser = next;
     renderAccount();
   });
 
@@ -674,6 +679,6 @@
     await refreshSession();
     renderSettings();
     await checkForUpdates(false);
-    window.setInterval(() => void refreshSession(), 8000);
+    window.setInterval(() => void refreshSession(), 60_000);
   })();
 })();
