@@ -400,7 +400,6 @@ let connectionModalScope = null;
 let connectionModalKind = null;
 let preferenceState = {};
 let profileDraft = null;
-let profileBannerBusy = false;
 let pendingPostAction = null;
 let openPostId = null;
 let moderationSnapshot = null;
