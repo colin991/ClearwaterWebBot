@@ -19,7 +19,7 @@ function noticeContent(punishedCount = 0) {
   const count = Math.max(0, Number(punishedCount) || 0);
   const peopleLabel = count === 1 ? '1 person was' : `${count} people were`;
   return [
-    '# :pin: Notice',
+    '# Notice',
     '> Sending messages here will result in a 7 day timeout. Please refrain from sending any kind of messages here. Thanks!',
     `> -# ${peopleLabel} punished`,
     '',
@@ -29,7 +29,8 @@ function noticeContent(punishedCount = 0) {
 
 function isNoticeBody(content = '') {
   const text = String(content || '');
-  return text.includes('# :pin: Notice')
+  return text.includes('# Notice')
+    || text.includes('# :pin: Notice')
     || text.includes('# 📌 Notice')
     || text.includes('Sending messages here will result in a 7 day timeout');
 }
