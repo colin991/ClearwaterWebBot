@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-fix-internet-merge-markers",
+      "title": "Internet page script fix",
+      "summary": "Removed leftover merge conflict markers at the bottom of Clearwater Internet so the page scripts load cleanly again.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T23:55:00.000Z"
+    },
+    {
       "id": "2026-08-15-phone-node-fetch",
       "title": "Phone API connection fixed",
       "summary": "Messages, Find My, Wallet, and Maps no longer fail with a Chromium network error. The overlay now talks to Clearwater through a normal HTTPS request.",
