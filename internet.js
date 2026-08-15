@@ -3902,9 +3902,7 @@ function renderWalletBoost(wallet) {
   const roleExtra = Number(wallet?.roleExtra || 0);
   const roleLabel = wallet?.roleLabel || '';
   if (level) {
-    level.textContent = Number(boost.level) > 0
-      ? `Level ${Number(boost.level)} · ${boost.label || 'Talker'}`
-      : 'Level 0 · Starter';
+    level.textContent = `Level ${Number(boost.level) || 0}`;
   }
   if (rate) rate.textContent = `${formatCredits(totalDaily)} / day`;
   if (fill) fill.style.width = `${percent}%`;
@@ -3935,7 +3933,7 @@ function renderWalletBoost(wallet) {
     perks.innerHTML = levels.length
       ? levels.map((entry) => {
         const current = Number(entry.level) === Number(boost.level);
-        return `<span class="${current ? 'current' : ''}">Level ${entry.level} · ${escapeHtml(entry.label)} — ${Number(entry.messages || 0).toLocaleString()} chats · ${formatCredits(entry.daily)}/day</span>`;
+        return `<span class="${current ? 'current' : ''}">Level ${entry.level} — ${Number(entry.messages || 0).toLocaleString()} chats · ${formatCredits(entry.daily)}/day</span>`;
       }).join('')
       : '';
   }

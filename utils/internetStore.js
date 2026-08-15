@@ -789,12 +789,12 @@ const DAILY_CREDIT_DELAY = 24 * 60 * 60 * 1000;
 
 /** Chat more on Clearwater Internet to raise your daily credit drop. */
 export const CHAT_BOOST_LEVELS = Object.freeze([
-  { level: 0, messages: 0, daily: 75, label: 'Starter' },
-  { level: 1, messages: 25, daily: 100, label: 'Talker' },
-  { level: 2, messages: 75, daily: 125, label: 'Regular' },
-  { level: 3, messages: 150, daily: 150, label: 'Active' },
-  { level: 4, messages: 300, daily: 200, label: 'Chatter' },
-  { level: 5, messages: 500, daily: 250, label: 'City Voice' },
+  { level: 0, messages: 0, daily: 75, label: 'Level 0' },
+  { level: 1, messages: 25, daily: 100, label: 'Level 1' },
+  { level: 2, messages: 75, daily: 125, label: 'Level 2' },
+  { level: 3, messages: 150, daily: 150, label: 'Level 3' },
+  { level: 4, messages: 300, daily: 200, label: 'Level 4' },
+  { level: 5, messages: 500, daily: 250, label: 'Level 5' },
 ]);
 
 function creditBalance(user) {
