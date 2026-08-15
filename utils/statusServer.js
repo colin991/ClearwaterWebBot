@@ -1371,6 +1371,11 @@ export function startStatusServer(client, config) {
               .filter((post) => post.authorId === targetId && post.kind === 'reel' && !post.parentId)
               .map((post) => internetFeedDiscordRef(store, post))
               .filter(Boolean);
+          } else if (staffAction === 'delete-business') {
+            feedDeletes = store.posts
+              .filter((post) => post.authorId === targetId && !post.parentId)
+              .map((post) => internetFeedDiscordRef(store, post))
+              .filter(Boolean);
           }
           const detail = applyStaffUserAction(store, body);
           if (body.staffPanel === 'limited' && staffAction === 'ban') {

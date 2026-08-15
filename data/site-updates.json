@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-staff-delete-business",
+      "title": "Staff can delete business accounts",
+      "summary": "In the staff Users panel, business accounts now have a Delete business account action. It removes the business, its posts, and its ads. The linked personal handler account stays.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T22:10:00.000Z"
+    },
+    {
       "id": "2026-08-15-no-banner-upload",
       "title": "Custom banner uploads removed",
       "summary": "Profile banners can no longer be uploaded while Vercel Blob storage is full. Pick a Clearwater scene preset, or remove your banner.",

@@ -12,6 +12,7 @@ import {
   assertBusinessAccess,
   businessActorFromAccount,
   businessAsPublicUser,
+  deleteBusinessAccount,
   getBusinessAccount,
   isBusinessAccountId,
   listBusinessPublicUsers,
@@ -33,6 +34,7 @@ export {
   addBusinessMember,
   assertBusinessAccess,
   businessActorFromAccount,
+  deleteBusinessAccount,
   getBusinessAccount,
   isBusinessAccountId,
   listMyBusinessAccounts,
@@ -3279,6 +3281,23 @@ export function applyStaffUserAction(store, {
   const id = String(targetId || '').trim();
   if (!isStaffTargetId(id)) throw new Error('Enter a valid Discord user ID or business account');
   const action = String(staffAction || '').trim();
+  if (action === 'delete-business') {
+    if (!isBusinessAccountId(id)) throw new Error('That action is only for business accounts');
+    const actorName = text(actor?.displayName, 80) || 'Staff';
+    const removed = deleteBusinessAccount(store, { businessId: id });
+    if (removed.ownerId && store.users[removed.ownerId]) {
+      addInternetMessage(
+        store,
+        removed.ownerId,
+        `Staff deleted your Clearwater business account “${removed.displayName}”. Its posts and ads were removed.`,
+      );
+    }
+    addInternetLog(
+      store,
+      `${actorName} deleted business account ${removed.displayName} (${removed.businessId})${removed.postsRemoved ? ` and ${removed.postsRemoved} post(s)` : ''}.`,
+    );
+    return { deleted: true, user: null, businessId: removed.businessId };
+  }
   // Keep one live reference from the store. A second upsertInternetUser() replaces
   // the object identity and would drop ban/mute/lock mutations applied below.
   const user = store.users[id] || (isBusinessAccountId(id) ? null : upsertInternetUser(store, { id }));
@@ -3452,6 +3471,21 @@ export function applyStaffUserAction(store, {
       type: 'restore-post',
       snapshot,
     } : null);
+  } else if (action === 'delete-business') {
+    const removed = deleteBusinessAccount(store, { businessId: id });
+    const ownerId = removed.ownerId;
+    if (ownerId && store.users[ownerId]) {
+      addInternetMessage(
+        store,
+        ownerId,
+        `Staff deleted your Clearwater business account “${removed.displayName}”. Its posts and ads were removed.`,
+      );
+    }
+    addInternetLog(
+      store,
+      `${actorName} deleted business account ${removed.displayName} (${removed.businessId})${removed.postsRemoved ? ` and ${removed.postsRemoved} post(s)` : ''}.`,
+    );
+    return { deleted: true, user: null, businessId: removed.businessId };
   } else if (action === 'send-notice') {
     if (!noteText) throw new Error('Write a staff notice first');
     user.warnings = Array.isArray(user.warnings) ? user.warnings : [];

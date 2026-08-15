@@ -3153,6 +3153,7 @@ function staffUserPanelMarkup(detail) {
           ${button('wipe-comments', 'Delete all comments', 'danger')}
           ${button('wipe-messages', 'Wipe stored DMs', 'danger')}
           ${button('reset-profile', 'Reset public profile', 'danger')}
+          ${isBiz ? button('delete-business', 'Delete business account', 'danger') : ''}
           ${fullStaff && !isBiz ? `${button('ip-ban', `Block ${Number(user.ipHashCount || 0)} network hash${Number(user.ipHashCount || 0) === 1 ? '' : 'es'}`, 'danger')}${button('clear-ip-ban', 'Lift network block')}` : ''}
         </div>
       </details>
@@ -3758,8 +3759,13 @@ async function runStaffUserAction(staffAction, postId = '', sourceButton = null)
   if (staffUserBusy) return;
   const panelState = staffPanelUiState();
   const fields = panelState.fields;
-  const destructive = new Set(['ban', 'ip-ban', 'wipe-posts', 'wipe-reels', 'wipe-comments', 'wipe-messages', 'delete-post', 'reset-profile', 'shadowban']);
-  if (destructive.has(staffAction) && !(await siteConfirm(`Run "${staffAction.replace(/-/g, ' ')}" on this account? This cannot be undone.`, 'Staff action'))) return;
+  const destructive = new Set(['ban', 'ip-ban', 'wipe-posts', 'wipe-reels', 'wipe-comments', 'wipe-messages', 'delete-post', 'reset-profile', 'shadowban', 'delete-business']);
+  if (destructive.has(staffAction)) {
+    const confirmLabel = staffAction === 'delete-business'
+      ? 'Permanently delete this business account, its posts, and its ads? The linked personal handler account stays. This cannot be undone.'
+      : `Run "${staffAction.replace(/-/g, ' ')}" on this account? This cannot be undone.`;
+    if (!(await siteConfirm(confirmLabel, staffAction === 'delete-business' ? 'Delete business' : 'Staff action'))) return;
+  }
   staffUserBusy = true;
   const isToggle = sourceButton?.classList?.contains('staff-toggle');
   // Prefer the visible switch state so on/off intent cannot invert if action attrs drift.
@@ -3789,6 +3795,14 @@ async function runStaffUserAction(staffAction, postId = '', sourceButton = null)
     });
     const result = await readApiJson(response, 'Could not update this user.');
     if (!response.ok) throw new Error(result.error || 'Could not update this user.');
+    if (result.deleted === true || staffAction === 'delete-business') {
+      selectedStaffUserId = '';
+      staffUserDetail = null;
+      if (result.snapshot) moderationSnapshot = result.snapshot;
+      renderStaffDashboard();
+      void siteAlert('Business account deleted.', 'Deleted');
+      return;
+    }
     const flag = isToggle ? staffToggleFlag(staffAction) : '';
     if (flag && result?.user && (result.user[flag] === true) !== turningOn) {
       throw new Error('That switch did not stick. Pull the latest bot files and restart the bot host, then try again.');

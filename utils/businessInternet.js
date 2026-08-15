@@ -416,3 +416,54 @@ export function pendingBusinessApplications(store) {
     .slice(0, 50)
     .map((biz) => publicBusinessAccount(biz, { includeMembers: false }));
 }
+
+/**
+ * Permanently remove a business / department account and its feed content.
+ * Does not delete the linked personal handler account.
+ */
+export function deleteBusinessAccount(store, { businessId } = {}) {
+  ensureBusinessCollections(store);
+  const id = String(businessId || '').trim();
+  if (!isBusinessAccountId(id)) throw new Error('Enter a valid business account ID');
+  const biz = store.businessAccounts[id];
+  if (!biz) throw new Error('Business account not found');
+
+  const removedPosts = (Array.isArray(store.posts) ? store.posts : [])
+    .filter((post) => post.authorId === id)
+    .map((post) => post.id);
+  const removed = new Set(removedPosts);
+  store.posts = (Array.isArray(store.posts) ? store.posts : [])
+    .filter((post) => !removed.has(post.id) && !removed.has(post.parentId));
+  for (const post of store.posts) {
+    if (Array.isArray(post.likes)) post.likes = post.likes.filter((like) => like !== id);
+    if (Array.isArray(post.reposts)) post.reposts = post.reposts.filter((repost) => repost !== id);
+  }
+  store.reports = (Array.isArray(store.reports) ? store.reports : [])
+    .filter((report) => report.authorId !== id && report.reporterId !== id && !removed.has(report.postId));
+  store.ads = (Array.isArray(store.ads) ? store.ads : [])
+    .filter((ad) => ad.businessId !== id && ad.advertiserId !== id);
+
+  for (const member of Object.values(store.users || {})) {
+    if (Array.isArray(member.following)) member.following = member.following.filter((followed) => followed !== id);
+    if (Array.isArray(member.blocked)) member.blocked = member.blocked.filter((blocked) => blocked !== id);
+    if (Array.isArray(member.muted)) member.muted = member.muted.filter((muted) => muted !== id);
+    if (Array.isArray(member.bookmarks)) member.bookmarks = member.bookmarks.filter((bookmark) => !removed.has(bookmark));
+    if (Array.isArray(member.notifications)) {
+      member.notifications = member.notifications.filter((note) => note.actorId !== id && !removed.has(note.postId));
+    }
+    if (Array.isArray(member.messages)) {
+      member.messages = member.messages.filter((message) => message.fromId !== id && message.toId !== id);
+    }
+  }
+
+  delete store.users[id];
+  delete store.businessAccounts[id];
+
+  return {
+    deleted: true,
+    businessId: id,
+    ownerId: biz.ownerId || null,
+    displayName: text(biz.displayName, 80) || text(biz.username, 80) || 'Business account',
+    postsRemoved: removedPosts.length,
+  };
+}
