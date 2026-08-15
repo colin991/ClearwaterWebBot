@@ -849,7 +849,10 @@ body.home-stage {
 }
 
 @media (max-width: 640px) {
-  .stage-content h1 { font-size: clamp(40px, 12vw, 56px); }
+  .stage-content h1 { font-size: clamp(36px, 11vw, 52px); }
+  .stage {
+    padding-top: calc(118px + env(safe-area-inset-top, 0px));
+  }
   .stage-stats {
     gap: 8px 12px;
     padding: 0;
@@ -858,18 +861,31 @@ body.home-stage {
   .stage-stats-sep { display: none; }
   .stage-actions { width: 100%; }
   .stage-actions .button { flex: 1 1 calc(50% - 6px); min-width: 0; }
-  .stage-chrome .discord-name,
-  .stage-chrome .discord-rank { max-width: 88px; }
   .stage-chrome-bar {
-    justify-content: flex-end;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    padding-bottom: 8px;
   }
   .stage-chrome-split .stage-nav {
-    left: 50%;
-    transform: translateX(-50%);
+    position: static;
+    left: auto;
+    transform: none;
+    order: -1;
+    width: min(100%, 420px);
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
   }
-  .stage-nav-link { padding: 8px 12px; font-size: 12px; }
+  .stage-chrome-split .stage-nav::-webkit-scrollbar { display: none; }
+  .stage-chrome-actions {
+    width: 100%;
+    justify-content: center;
+  }
+  .stage-nav-link { padding: 8px 12px; font-size: 12px; white-space: nowrap; }
   .stage-chrome .discord-name,
-  .stage-chrome .discord-rank { max-width: 72px; }
+  .stage-chrome .discord-rank { max-width: 96px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

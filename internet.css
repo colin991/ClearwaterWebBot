@@ -8905,3 +8905,57 @@ body.has-site-banner.has-official-post-banner .internet-rail {
 body.has-site-banner.has-official-post-banner .internet-side {
   top: calc(30px + var(--top-banner-stack, 82px));
 }
+
+/* Leave Internet → main website (especially needed on mobile dock). */
+.internet-leave {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  color: #9eb0c8;
+  font-size: 12px;
+  font-weight: 750;
+  text-decoration: none;
+}
+.internet-leave .nav-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
+}
+.internet-leave:hover { color: #eef5ff; }
+@media (min-width: 941px) {
+  .internet-leave {
+    display: inline-flex;
+    margin-right: 4px;
+    padding: 8px 10px;
+    border-radius: 10px;
+  }
+  .internet-leave:hover { background: rgba(94, 151, 255, .12); }
+}
+@media (max-width: 660px) {
+  .internet-shell:not(.staff-mode) .internet-leave {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 0 !important;
+    min-width: 52px !important;
+    min-height: 48px !important;
+    margin: 0 2px 0 0 !important;
+    padding: 8px 6px !important;
+    border-radius: 14px !important;
+    color: #9eb0c8 !important;
+    background: rgba(255, 255, 255, .04) !important;
+    font-size: 0 !important;
+    line-height: 0 !important;
+  }
+  .internet-shell:not(.staff-mode) .internet-leave .nav-icon {
+    width: 22px !important;
+    height: 22px !important;
+  }
+  .internet-shell:not(.staff-mode) .internet-leave span { display: none !important; }
+}
