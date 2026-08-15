@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/assets/icon-512.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260815-phone-dl" />
+    <link rel="stylesheet" href="internet.css?v=20260815-phone-dl2" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260815-newsletter"></script>
   </head>
@@ -61,6 +61,7 @@
           <a href="/internet/staff" data-view-link="staff" data-staff-link hidden><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.4 8.2 8 9 4.6-.8 8-4 8-9V7z" /><path d="m9 12 2 2 4-4" /></svg>Staff</a>
         </nav>
         <button class="rail-primary" type="button" data-compose-link>Post</button>
+        <a class="rail-phone-download" href="/downloads/ClearwaterPhone.zip" download="ClearwaterPhone.zip">Download Phone</a>
         <a class="rail-signin" href="/signin?next=/internet" data-login>Sign in</a>
         <div class="internet-user" data-user hidden><img data-avatar src="assets/clearwater-logo.png" alt="" draggable="false" /><span><b data-name>Discord user</b><small data-rank></small></span></div>
         <div class="rail-account" data-account-switch hidden>
@@ -84,6 +85,17 @@
             <button type="button" data-feed-tab="following">Following</button>
             <button type="button" data-feed-tab="official">Official</button>
           </nav>
+          <aside class="phone-home-banner" aria-label="Clearwater Phone download">
+            <div>
+              <p class="wallet-kicker">Clearwater Phone</p>
+              <h2>Download the in-game overlay</h2>
+              <p>Wallet, Marketplace, Find My, Mail, Messages, and Maps — floats above Roblox. Press F8 to hide.</p>
+            </div>
+            <div class="phone-home-banner-actions">
+              <a class="phone-download-btn" href="/downloads/ClearwaterPhone.zip" download="ClearwaterPhone.zip">Download for Windows</a>
+              <a class="phone-home-banner-link" href="/internet/phone" data-view-link="phone">Setup steps</a>
+            </div>
+          </aside>
           <header class="search-header" data-search-header hidden>
             <h1>Search</h1>
             <p data-search-summary>People and posts</p>
@@ -835,6 +847,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260815-phone-dl"></script>
+    <script src="internet.js?v=20260815-phone-dl2"></script>
   </body>
 </html>

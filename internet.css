@@ -7146,6 +7146,78 @@ body.has-site-banner .internet-side {
   font-size: 12px !important;
   color: #7f8fa3 !important;
 }
+.phone-home-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 14px 0 18px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(56, 217, 176, 0.28);
+  background:
+    radial-gradient(ellipse at 0% 0%, rgba(56, 217, 176, 0.18), transparent 55%),
+    linear-gradient(145deg, rgba(8, 22, 28, 0.98), rgba(3, 7, 13, 0.96));
+}
+.phone-home-banner .wallet-kicker {
+  margin: 0 0 4px;
+  color: #38d9b0;
+}
+.phone-home-banner h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+.phone-home-banner p {
+  margin: 0;
+  color: #93a1b8;
+  font-size: 13px;
+  line-height: 1.45;
+  max-width: 28rem;
+}
+.phone-home-banner-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.phone-home-banner .phone-download-btn {
+  margin: 0;
+  white-space: nowrap;
+  text-align: center;
+}
+.phone-home-banner-link {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5eead4;
+  text-decoration: none;
+}
+.phone-home-banner-link:hover { text-decoration: underline; }
+.rail-phone-download {
+  display: block;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 850;
+  color: #03070d;
+  background: linear-gradient(135deg, #38d9b0, #0e8f72);
+  text-decoration: none;
+}
+.rail-phone-download:hover { filter: brightness(1.06); }
+@media (max-width: 700px) {
+  .phone-home-banner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .phone-home-banner-actions { width: 100%; }
+}
+.internet-shell:has([data-reels-stage]:not([hidden])) .phone-home-banner {
+  display: none;
+}
 .reels-stage {
   position: relative;
   display: flex;
