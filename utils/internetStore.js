@@ -59,9 +59,12 @@ const emptyStore = Object.freeze({
   robloxPackClaims: {},
   discordFeedMessages: {},
   siteBanner: null,
+  officialPostBanner: null,
   officialProfile: {},
   settings: { pausePosts: false, pauseReels: false, pauseMessages: false, pausePostBoosts: false },
 });
+
+export const OFFICIAL_POST_BANNER_MS = 10 * 60 * 1000;
 
 /** Paid placements: 48h run after staff approval, paid with Clearwater Credits. */
 export const AD_BASE_COST = 1200;
@@ -175,6 +178,45 @@ function sanitizeSiteBanner(raw) {
   };
 }
 
+function sanitizeOfficialPostBanner(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const postId = text(raw.postId, 80);
+  const message = text(raw.message, 160);
+  const expiresAt = text(raw.expiresAt, 40);
+  if (!postId || !message || !expiresAt) return null;
+  const expiresMs = new Date(expiresAt).getTime();
+  if (!Number.isFinite(expiresMs) || expiresMs <= Date.now()) return null;
+  return {
+    id: text(raw.id, 80) || randomUUID(),
+    postId,
+    message,
+    linkLabel: text(raw.linkLabel, 40) || 'View post',
+    createdAt: text(raw.createdAt, 40) || new Date().toISOString(),
+    expiresAt,
+  };
+}
+
+function setOfficialPostBanner(store, post) {
+  if (!store || !post?.id || post.parentId) return;
+  if (post.authorId !== OFFICIAL_INTERNET_ACCOUNT_ID && post.official !== true) return;
+  const now = Date.now();
+  store.officialPostBanner = {
+    id: randomUUID(),
+    postId: post.id,
+    message: 'Clearwater Official just posted',
+    linkLabel: 'View post',
+    createdAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + OFFICIAL_POST_BANNER_MS).toISOString(),
+  };
+}
+
+export function activeOfficialPostBanner(store) {
+  const banner = sanitizeOfficialPostBanner(store?.officialPostBanner);
+  if (!banner && store?.officialPostBanner) store.officialPostBanner = null;
+  else if (banner) store.officialPostBanner = banner;
+  return banner;
+}
+
 function storeStats(store) {
   return {
     users: store?.users && typeof store.users === 'object' ? Object.keys(store.users).length : 0,
@@ -207,6 +249,7 @@ function normalizeInternetStore(data) {
       ? source.discordFeedMessages
       : {},
     siteBanner: sanitizeSiteBanner(source.siteBanner),
+    officialPostBanner: sanitizeOfficialPostBanner(source.officialPostBanner),
     officialProfile: source.officialProfile && typeof source.officialProfile === 'object' ? source.officialProfile : {},
     settings: {
       pausePosts: source.settings?.pausePosts === true,
@@ -479,6 +522,7 @@ export function publicInternetSettings(store) {
     postBoostHours: POST_BOOST_HOURS,
     postBoostDailyCap: POST_BOOST_DAILY_CAP,
     siteBanner: sanitizeSiteBanner(store.siteBanner),
+    officialPostBanner: activeOfficialPostBanner(store),
   };
 }
 
@@ -1789,6 +1833,9 @@ export function createInternetPost(store, user, content, media = {}) {
   };
   store.posts.unshift(post);
   store.posts = store.posts.slice(0, 10_000);
+  if (!parentId && (user.id === OFFICIAL_INTERNET_ACCOUNT_ID || user.official === true)) {
+    setOfficialPostBanner(store, post);
+  }
   const mentionedHandles = [...new Set((body.match(/(?:^|\s)@([a-z0-9_]{1,80})/gi) || []).map((mention) => mention.trim().slice(1).toLowerCase()))];
   mentionedHandles.forEach((handle) => {
     const recipient = Object.values(store.users).find((member) => String(member.username || '').toLowerCase() === handle);

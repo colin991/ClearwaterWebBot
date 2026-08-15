@@ -8703,3 +8703,82 @@ a.post-hashtag,
   border-color: var(--btn, #76adff) !important;
   box-shadow: none !important;
 }
+
+/* Official account just-posted banner (10 minutes) */
+.official-post-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10020;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-bottom: 1px solid rgba(120, 170, 255, .28);
+  background: linear-gradient(90deg, #0b1a33 0%, #102748 55%, #0d1f3a 100%);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .28);
+}
+.official-post-banner[hidden] { display: none !important; }
+.official-post-banner-open {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  padding: 10px 14px;
+  border: 0;
+  color: #eef5ff;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.official-post-banner-open span {
+  font-size: 13px;
+  font-weight: 750;
+}
+.official-post-banner-open em {
+  flex: 0 0 auto;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 800;
+  color: #9cc4ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.official-post-banner-open:hover em { color: #fff; }
+.official-post-banner-dismiss {
+  flex: 0 0 auto;
+  width: 42px;
+  border: 0;
+  border-left: 1px solid rgba(120, 170, 255, .18);
+  color: #9eb2cc;
+  background: transparent;
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.official-post-banner-dismiss:hover { color: #fff; background: rgba(255,255,255,.06); }
+body.has-official-post-banner { padding-top: var(--official-post-banner-height, 42px); }
+body.has-site-banner.has-official-post-banner {
+  padding-top: calc(var(--official-post-banner-height, 42px) + var(--site-banner-height, 40px));
+}
+body.has-official-post-banner .site-update-banner {
+  top: var(--official-post-banner-height, 42px);
+}
+body.has-official-post-banner .internet-rail {
+  top: calc(30px + var(--top-banner-stack, var(--official-post-banner-height, 42px)));
+  height: calc(100vh - 60px - var(--top-banner-stack, var(--official-post-banner-height, 42px)));
+}
+body.has-official-post-banner .internet-side {
+  top: calc(30px + var(--top-banner-stack, var(--official-post-banner-height, 42px)));
+}
+body.has-site-banner.has-official-post-banner .internet-rail {
+  top: calc(30px + var(--top-banner-stack, 82px));
+  height: calc(100vh - 60px - var(--top-banner-stack, 82px));
+}
+body.has-site-banner.has-official-post-banner .internet-side {
+  top: calc(30px + var(--top-banner-stack, 82px));
+}
