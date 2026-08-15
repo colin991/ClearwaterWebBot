@@ -50,7 +50,6 @@
         <a class="internet-brand" href="/"><img src="assets/clearwater-logo.png" alt="" draggable="false" /><span>Clearwater<br /><b>Internet</b></span></a>
         <nav class="internet-nav" aria-label="Clearwater Internet navigation">
           <a class="selected" href="/internet" data-view-link="home"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>Home</a>
-          <a href="/internet" data-reels-link><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3" /><path d="m10 8 5 4-5 4z" /></svg>Reels</a>
           <a href="/internet/wallet" data-view-link="wallet"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg>Wallet</a>
           <a href="/internet/marketplace" data-view-link="marketplace"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12l-1 12H7L6 7z" /><path d="M9 7V5a3 3 0 0 1 6 0v2" /></svg>Marketplace</a>
           <a href="/internet/mail" data-view-link="mail"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>Mail</a>
@@ -122,48 +121,6 @@
           </section>
 
           <section class="posts" id="feed" aria-live="polite"><p class="feed-note" data-feed-note hidden>Loading posts...</p><div data-post-list></div></section>
-          <section class="reels-stage" data-reels-stage hidden>
-            <div class="reels-toolbar">
-              <button class="reel-post-btn" type="button" data-open-reel-composer>Post a Reel</button>
-            </div>
-            <div class="reels-layout">
-              <div class="reels-viewport" data-reels-viewport></div>
-              <aside class="reel-panel" data-reel-panel aria-label="Reel details and comments">
-                <div class="reel-panel-empty" data-reel-panel-empty>Select a Reel to view comments.</div>
-                <div class="reel-panel-body" data-reel-panel-body hidden>
-                  <header class="reel-panel-head">
-                    <button type="button" class="reel-panel-author" data-reel-panel-author>
-                      <img data-reel-panel-avatar src="assets/clearwater-logo.png" alt="" />
-                      <span><b data-reel-panel-name>Member</b><small data-reel-panel-handle>@member</small><em data-reel-panel-time></em></span>
-                    </button>
-                    <div class="reel-panel-head-actions">
-                      <button type="button" class="reel-panel-follow" data-reel-panel-follow>Follow</button>
-                      <details class="reel-more" data-reel-panel-more hidden>
-                        <summary aria-label="More reel actions">⋯</summary>
-                        <div class="reel-more-menu">
-                          <button type="button" data-reel-panel-report>Report Reel</button>
-                          <button type="button" data-reel-panel-delete hidden>Delete Reel</button>
-                        </div>
-                      </details>
-                    </div>
-                  </header>
-                  <p class="reel-panel-caption" data-reel-panel-caption></p>
-                  <div class="reel-panel-stats">
-                    <button type="button" data-reel-panel-like aria-label="Like"><span data-reel-panel-like-icon></span><b data-reel-panel-like-count>0</b></button>
-                    <button type="button" data-reel-panel-comment-focus aria-label="Comments"><span data-reel-panel-comment-icon></span><b data-reel-panel-comment-count>0</b></button>
-                    <button type="button" data-reel-panel-share aria-label="Share"><span data-reel-panel-share-icon></span><span>Share</span></button>
-                  </div>
-                  <div class="reel-panel-tabs"><button type="button" class="selected">Comments <span data-reel-panel-tab-count>0</span></button></div>
-                  <div class="reel-panel-comments" data-reel-panel-comments></div>
-                  <form class="reel-panel-compose" data-reel-panel-comment-form>
-                    <img data-reel-panel-self-avatar src="assets/clearwater-logo.png" alt="" />
-                    <input data-reel-panel-comment-input maxlength="280" placeholder="Add comment..." autocomplete="off" />
-                    <button type="submit" aria-label="Post comment">➤</button>
-                  </form>
-                </div>
-              </aside>
-            </div>
-          </section>
         </section>
         <section class="internet-view post-detail-view" data-view="post" hidden><header class="post-detail-header"><button type="button" data-back-home aria-label="Back to feed">←</button><h1>Post</h1></header><div data-post-detail><p class="feed-note">Loading post...</p></div></section>
         <section class="internet-view sponsored-view" data-view="sponsored" hidden>
@@ -174,9 +131,9 @@
           <article class="sponsored-doc">
             <p class="wallet-kicker">Clearwater Ads</p>
             <h2>About sponsored placements</h2>
-            <p>Clearwater departments and businesses can buy 48-hour sponsored slots in the sidebar, feed, or Reels with Clearwater Credits. Staff review every ad before it goes live.</p>
+            <p>Clearwater departments and businesses can buy 48-hour sponsored slots in the sidebar or feed with Clearwater Credits. Staff review every ad before it goes live.</p>
             <ul>
-              <li>Sidebar and feed start at C$1200 for 48 hours. Reel pricing scales with video length. Optional boosts raise how often the ad is shown.</li>
+              <li>Sidebar and feed start at C$1200 for 48 hours. Optional boosts raise how often the ad is shown.</li>
               <li>Ads must promote an in-game department or business — not Discord invites, Roblox groups, or off-platform spam.</li>
               <li>Use <b>Account</b> on a sponsored card to open the advertiser’s Clearwater profile.</li>
               <li>If an ad is misleading, harassing, or breaks the rules, report it below so staff can review it.</li>
@@ -322,13 +279,12 @@
                   <div class="wallet-card-copy">
                     <p class="wallet-kicker">Clearwater Ads</p>
                     <h2>Sponsored placements</h2>
-                    <p data-ad-card-copy>C$1,200 for 48 hours after staff approval. Choose sidebar, feed, or Reels.</p>
+                    <p data-ad-card-copy>C$1,200 for 48 hours after staff approval. Choose sidebar or feed.</p>
                   </div>
                 </header>
                 <div class="wallet-ad-placement" data-ad-placement role="radiogroup" aria-label="Ad placement">
                   <button type="button" class="selected" data-ad-placement-option="sidebar" role="radio" aria-checked="true">Sidebar</button>
                   <button type="button" data-ad-placement-option="feed" role="radio" aria-checked="false">Feed posts</button>
-                  <button type="button" data-ad-placement-option="reel" role="radio" aria-checked="false">Reels</button>
                 </div>
                 <div class="wallet-ad-tabs" data-ad-tabs hidden role="tablist" aria-label="Ad tools">
                   <button type="button" class="selected" data-ad-tab="create" role="tab" aria-selected="true">Create</button>
@@ -371,7 +327,7 @@
                       <input data-ad-media type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" />
                     </label>
                     <div class="wallet-ad-media-preview" data-ad-media-preview hidden></div>
-                    <p class="wallet-ad-media-hint" data-ad-media-hint hidden>Reel placements require a video. Duration sets the price tier.</p>
+                    <p class="wallet-ad-media-hint" data-ad-media-hint hidden></p>
                     <label>
                       <span>Boost chance</span>
                       <select data-ad-boost aria-label="Ad boost level">
@@ -585,7 +541,7 @@
                 <section class="settings-card privacy-settings">
                   <h2>Privacy</h2>
                   <div class="settings-stack">
-                    <label><span><b>Followers-only posts</b><small>Only people who follow you can see your posts and Reels.</small></span><input type="checkbox" data-preference="followersOnly" /></label>
+                    <label><span><b>Followers-only posts</b><small>Only people who follow you can see your posts.</small></span><input type="checkbox" data-preference="followersOnly" /></label>
                     <label><span><b>Hide following list</b><small>Others can see how many accounts you follow, but not who.</small></span><input type="checkbox" data-preference="hideFollowing" /></label>
                     <label><span><b>Hide profile picture &amp; banner</b><small>Your avatar and banner are hidden from everyone but you.</small></span><input type="checkbox" data-preference="hideProfile" /></label>
                     <label><span><b>Hide follower counts</b><small>Removes the follower and following totals from your profile.</small></span><input type="checkbox" data-preference="hideStats" /></label>
@@ -604,7 +560,6 @@
                     <label><span><b>Compact posts</b><small>Tighter spacing so more posts fit on screen.</small></span><input type="checkbox" data-preference="compactPosts" /></label>
                     <label><span><b>Larger text</b><small>Increases post and message text size across the site.</small></span><input type="checkbox" data-preference="largeText" /></label>
                     <label><span><b>Reduce motion</b><small>Turns off animations and transitions.</small></span><input type="checkbox" data-preference="reduceMotion" /></label>
-                    <label><span><b>Autoplay Reels</b><small>Start Reels automatically as you scroll them.</small></span><input type="checkbox" data-preference="autoplayReels" /></label>
                   </div>
                 </section>
               </section>
@@ -657,8 +612,8 @@
                 <section class="settings-card danger-zone">
                   <h2>Danger zone</h2>
                   <div class="danger-zone-box">
-                    <div><span><b data-deactivate-title>Deactivate account</b><small data-deactivate-copy>Hides your profile, posts, and Reels from everyone. Reactivate any time from this page.</small></span><button type="button" data-deactivate>Deactivate</button></div>
-                    <div><span><b>Delete account</b><small>Permanently erases your account, posts, Reels, and messages. This cannot be undone.</small></span><button type="button" data-delete-account>Delete</button></div>
+                    <div><span><b data-deactivate-title>Deactivate account</b><small data-deactivate-copy>Hides your profile and posts from everyone. Reactivate any time from this page.</small></span><button type="button" data-deactivate>Deactivate</button></div>
+                    <div><span><b>Delete account</b><small>Permanently erases your account, posts, and messages. This cannot be undone.</small></span><button type="button" data-delete-account>Delete</button></div>
                   </div>
                   <p class="settings-status" data-account-status role="status"></p>
                 </section>
@@ -811,17 +766,6 @@
         <a class="internet-wallet-link" href="/internet/wallet" data-view-link="wallet" aria-label="Open your Clearwater credit wallet">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg><span data-internet-cash-amount>C$0</span>
         </a>
-        <article class="reels-side-card" data-reels-side-card aria-label="Reels tips">
-          <p class="wallet-kicker">Clearwater Reels</p>
-          <h2>Watch & post clips</h2>
-          <p>Scroll for the next Reel. Use the panel beside the player for likes, shares, and comments.</p>
-          <ul>
-            <li>Hover a Reel to unmute audio</li>
-            <li>Jump to creators from Who to watch</li>
-            <li>Post a Reel from the blue button above</li>
-          </ul>
-          <a href="/internet/wallet" data-view-link="wallet">Advertise on Reels from Wallet</a>
-        </article>
         <label class="internet-search"><span>Search Clearwater Internet</span><input data-search type="search" placeholder="Search people and posts" autocomplete="off" /></label>
         <div class="search-side" data-search-results hidden></div>
         <div class="trending" data-trending-panel><h2>What's happening</h2><div data-trending-list><a href="/internet" data-topic="#ClearwaterRP">#ClearwaterRP <span>Community</span></a><a href="/internet" data-topic="#ERLC">#ERLC <span>Roleplay</span></a><a href="/internet" data-topic="#FireRescue">#FireRescue <span>Departments</span></a></div></div>
@@ -831,10 +775,6 @@
         <section class="who-to-follow" data-who-to-follow aria-label="Who to follow">
           <h2>Who to follow</h2>
           <div class="who-to-follow-list" data-who-to-follow-list></div>
-        </section>
-        <section class="who-to-watch" data-who-to-watch hidden aria-label="Who to watch">
-          <h2>Who to watch</h2>
-          <div class="who-to-watch-list" data-who-to-watch-list></div>
         </section>
       </aside>
     </main>
@@ -891,11 +831,9 @@
     <section class="composer-modal" data-profile-modal hidden role="dialog" aria-modal="true" aria-label="Member profile"><div class="member-profile"><header><h2 data-member-title>Member</h2><button type="button" data-close-profile aria-label="Close">×</button></header><img data-member-avatar src="assets/clearwater-logo.png" alt="" /><p data-member-handle></p><p data-member-rank></p><div class="member-actions"><button type="button" data-follow-member>Follow</button><button type="button" data-message-member>Message</button><button type="button" data-member-menu>•••</button></div><div class="member-menu" data-member-menu-list hidden><button type="button" data-mute-member>Mute</button><button type="button" data-block-member>Block</button><button type="button" data-report-member>Report</button></div></div></section>
     <section class="composer-modal" data-message-modal hidden role="dialog" aria-modal="true" aria-label="New message"><div class="message-picker"><header><h2>New message</h2><button type="button" data-close-message aria-label="Close">×</button></header><input data-message-user-search placeholder="Search members" maxlength="80" autofocus /><div class="message-user-results" data-message-user-results></div></div></section>
     <section class="composer-modal" data-post-modal hidden role="dialog" aria-modal="true"><div><header><h2 data-post-modal-title>Reply</h2><button type="button" data-close-post-modal aria-label="Close">×</button></header><form data-post-modal-form><textarea data-post-modal-content maxlength="500" placeholder="Post your reply"></textarea><div class="post-modal-buttons"><button>Post</button></div><p data-post-modal-error></p></form></div></section>
-    <section class="composer-modal reel-composer" data-reel-composer hidden role="dialog" aria-modal="true" aria-label="Post a Reel"><div><header><h2>New Reel</h2><button type="button" data-close-reel-composer aria-label="Close">×</button></header><form data-reel-form><div class="reel-media-picks"><label class="reel-drop"><input data-reel-photos type="file" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" multiple hidden /><span data-reel-photos-label>Add photos for a slideshow</span></label><label class="reel-drop"><input data-reel-video type="file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" hidden /><span data-reel-video-label>Or add one video (up to 2 GB)</span></label></div><div class="reel-preview" data-reel-preview hidden></div><label class="reel-drop reel-audio-drop" data-reel-audio-wrap hidden><input data-reel-audio type="file" accept="audio/mpeg,audio/mp3,audio/mp4,audio/wav,audio/ogg,audio/webm,audio/aac,audio/x-m4a,.mp3,.m4a,.wav,.ogg,.aac" hidden /><span data-reel-audio-label>Add audio for this slideshow (optional)</span></label><div class="reel-audio-preview" data-reel-audio-preview hidden></div><textarea data-reel-caption maxlength="220" placeholder="Write a caption"></textarea><button type="submit" data-reel-submit disabled>Post Reel</button><p data-reel-error role="status">Pick multiple photos for a slideshow, or one video. Audio appears only after photos are added.</p></form></div></section>
-    <section class="reel-comments" data-reel-comments hidden role="dialog" aria-modal="true" aria-label="Reel comments"><header><h2>Comments</h2><button type="button" data-close-reel-comments aria-label="Close">×</button></header><div data-reel-comment-list></div><form data-reel-comment-form><input data-reel-comment-input maxlength="280" placeholder="Add a comment..." autocomplete="off" /><button type="submit">Post</button></form></section>
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260815-no-phone-tab"></script>
+    <script src="internet.js?v=20260815-no-reels"></script>
   </body>
 </html>

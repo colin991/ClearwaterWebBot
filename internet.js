@@ -95,7 +95,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260815-blob-limit';
+const INTERNET_VERSION = '20260815-no-reels';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -322,6 +322,7 @@ function readInternetRoute() {
   if (parts[0] === 'post' && parts[1]) return { view: 'post', id: decodeURIComponent(parts[1]) };
   if (parts[0] === 'member' && parts[1]) return { view: 'member', id: decodeURIComponent(parts[1]) };
   if (parts[0] === 'sponsored') return { view: 'sponsored', id: parts[1] ? decodeURIComponent(parts[1]) : '' };
+  if (parts[0] === 'reels') return { view: 'home', id: '' };
   if (INTERNET_VIEWS.has(parts[0]) && parts[0] !== 'post' && parts[0] !== 'member' && parts[0] !== 'sponsored') {
     return { view: parts[0], id: '' };
   }
@@ -401,7 +402,7 @@ let pendingPostAction = null;
 let openPostId = null;
 let moderationSnapshot = null;
 let selectedReportId = null;
-let feedTab = ['foryou', 'recent', 'following', 'official', 'reels'].includes(localStorage.getItem('clearwater-feed-tab')) ? localStorage.getItem('clearwater-feed-tab') : 'foryou';
+let feedTab = ['foryou', 'recent', 'following', 'official'].includes(localStorage.getItem('clearwater-feed-tab')) ? localStorage.getItem('clearwater-feed-tab') : 'foryou';
 let selectedLocation = null;
 let dropLocationTimer = 0;
 let dropLocationBusy = false;
@@ -1097,7 +1098,7 @@ function safeAudioUrl(value) {
 }
 
 function isReelsTab() {
-  return feedTab === 'reels' && !String(search?.value || '').trim();
+  return false;
 }
 
 function isHomeViewActive() {
@@ -2561,27 +2562,8 @@ function focusDetailReplyComposer() {
   input.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
-function openReelFromDeepLink(reelId) {
-  if (search) search.value = '';
-  feedTab = 'reels';
-  localStorage.setItem('clearwater-feed-tab', feedTab);
+function openReelFromDeepLink() {
   showView('home');
-  renderPosts();
-  const reveal = () => {
-    const viewport = document.querySelector('[data-reels-viewport]');
-    if (!viewport) return false;
-    const card = [...viewport.querySelectorAll('.reel-card')].find((item) => item.dataset.reelId === reelId);
-    if (!card) return false;
-    card.scrollIntoView({ block: 'start' });
-    renderReelPanel(reelId);
-    if (typeof syncActiveReelPlayback === 'function') syncActiveReelPlayback(viewport);
-    return true;
-  };
-  if (!reveal()) {
-    requestAnimationFrame(() => {
-      if (!reveal()) window.setTimeout(reveal, 160);
-    });
-  }
 }
 
 function showPostDetail(postId, updateHash = true, { focusReply = false, highlightReplyId = null } = {}) {
@@ -2621,7 +2603,8 @@ function showPostDetail(postId, updateHash = true, { focusReply = false, highlig
   }
 
   if (post.kind === 'reel' && !post.parentId) {
-    openReelFromDeepLink(id);
+    showView('post');
+    if (postDetail) postDetail.innerHTML = '<p class="feed-note">This post is unavailable or was removed.</p>';
     return;
   }
 
@@ -3346,7 +3329,6 @@ function renderStaffDashboard() {
         </div>`)}
         ${staffActionGroupMarkup('Community pauses', 'Stop new activity without banning anyone', `<div class="staff-toggle-grid">
           ${siteToggle('pause-posts', settings.pausePosts === true, 'Posting', 'Paused for members', 'Open to members')}
-          ${siteToggle('pause-reels', settings.pauseReels === true, 'Reels', 'Paused for members', 'Open to members')}
           ${siteToggle('pause-messages', settings.pauseMessages === true, 'Direct messages', 'Paused for members', 'Open to members')}
           ${siteToggle('pause-post-boosts', settings.pausePostBoosts === true, 'Post tips / For You boosts', 'Paused for members', 'Open to members')}
         </div>`)}
@@ -6595,15 +6577,6 @@ document.querySelectorAll('[data-feed-tab]').forEach((button) => button.addEvent
   showView('home');
   renderPosts();
 }));
-document.querySelector('[data-reels-link]')?.addEventListener('click', (event) => {
-  event.preventDefault();
-  if (search) search.value = '';
-  feedTab = 'reels';
-  localStorage.setItem('clearwater-feed-tab', feedTab);
-  history.pushState({}, '', internetUrl('home'));
-  showView('home');
-  renderPosts();
-});
 document.querySelectorAll('[data-staff-tab]').forEach((button) => button.addEventListener('click', () => {
   staffTab = button.dataset.staffTab || 'overview';
   renderStaffDashboard();
@@ -7507,39 +7480,12 @@ document.addEventListener('click', (event) => {
   const staffViewVideo = event.target.closest('[data-staff-view-video]');
   if (staffViewVideo) {
     const postId = staffViewVideo.dataset.staffViewVideo;
-    const kind = staffViewVideo.dataset.staffViewKind || 'reel';
-    if (kind === 'reel') {
-      if (search) search.value = '';
-      feedTab = 'reels';
-      localStorage.setItem('clearwater-feed-tab', feedTab);
-      history.pushState({}, '', internetUrl('home'));
-      showView('home');
-      renderPosts();
-      const viewport = document.querySelector('[data-reels-viewport]');
-      const card = viewport?.querySelector(`[data-reel-id="${postId}"]`);
-      if (card) {
-        card.scrollIntoView({ block: 'start' });
-        renderReelPanel(postId);
-      }
-    } else if (typeof showPostDetail === 'function') {
-      showPostDetail(postId, true);
-    }
+    if (typeof showPostDetail === 'function') showPostDetail(postId, true);
     return;
   }
   const openReel = event.target.closest('[data-open-reel]');
   if (openReel) {
-    if (search) search.value = '';
-    feedTab = 'reels';
-    localStorage.setItem('clearwater-feed-tab', feedTab);
-    history.pushState({}, '', internetUrl('home'));
     showView('home');
-    renderPosts();
-    const viewport = document.querySelector('[data-reels-viewport]');
-    const card = viewport?.querySelector(`[data-reel-id="${openReel.dataset.openReel}"]`);
-    if (card) {
-      card.scrollIntoView({ block: 'start' });
-      renderReelPanel(openReel.dataset.openReel);
-    }
     return;
   }
   if (event.target.closest('[data-open-reel-composer]')) {
@@ -8721,8 +8667,6 @@ document.querySelector('[data-reel-form]')?.addEventListener('submit', async (ev
     clearReelDraft();
     resetReelComposer();
     document.querySelector('[data-reel-composer]')?.setAttribute('hidden', '');
-    feedTab = 'reels';
-    localStorage.setItem('clearwater-feed-tab', 'reels');
     showView('home');
     await loadPosts();
   } catch (exception) {
@@ -8941,7 +8885,7 @@ document.querySelectorAll('[data-ad-tab]').forEach((button) => {
 document.querySelectorAll('[data-ad-placement-option]').forEach((button) => {
   button.addEventListener('click', () => {
     const next = button.dataset.adPlacementOption || 'sidebar';
-    adPlacement = ['sidebar', 'feed', 'reel'].includes(next) ? next : 'sidebar';
+    adPlacement = ['sidebar', 'feed'].includes(next) ? next : 'sidebar';
     if (adPlacement !== 'reel') adVideoSeconds = 0;
     if (adPlacement === 'reel' && adMedia && !adMedia.isVideo) {
       if (adMedia.previewUrl) URL.revokeObjectURL(adMedia.previewUrl);

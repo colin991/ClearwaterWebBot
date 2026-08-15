@@ -76,7 +76,7 @@ export const AD_DURATION_MS = AD_DURATION_HOURS * 60 * 60 * 1000;
 export const AD_BODY_MAX = 500;
 export const AD_TITLE_MAX = 80;
 export const AD_CATEGORIES = Object.freeze(['department', 'business']);
-export const AD_PLACEMENTS = Object.freeze(['sidebar', 'feed', 'reel']);
+export const AD_PLACEMENTS = Object.freeze(['sidebar', 'feed']);
 /** Tip a post into For You for a short window. Staff can pause this site-wide. */
 export const POST_BOOST_COST = 250;
 export const POST_BOOST_HOURS = 12;
@@ -582,13 +582,9 @@ function viewerPrivacy(store, viewerId) {
 export function publicPosts(store, viewerId) {
   const { hiddenAuthors, maskedAuthors } = viewerPrivacy(store, viewerId);
   const visible = store.posts.filter((post) => !hiddenAuthors.has(post.authorId));
-  const reels = visible.filter((post) => post.kind === 'reel' && !post.parentId);
-  const reelIds = new Set(reels.map((reel) => reel.id));
-  // Reel comments used to land in both the normal feed (kind !== 'reel') and this
-  // dedicated comments list, so every Reel reply rendered twice in the UI.
-  const reelComments = visible.filter((post) => post.parentId && reelIds.has(post.parentId));
+  const reelIds = new Set(visible.filter((post) => post.kind === 'reel' && !post.parentId).map((reel) => reel.id));
   const feed = visible.filter((post) => post.kind !== 'reel' && !reelIds.has(post.parentId));
-  return [...reels, ...feed, ...reelComments].map((post) => publicPost(post, maskedAuthors, store));
+  return feed.map((post) => publicPost(post, maskedAuthors, store));
 }
 
 export function publicUsers(store, viewerId) {
@@ -1768,6 +1764,7 @@ function normalizeReelSlideUrls(media = {}, fallbackImageUrl = '', fallbackIsIma
 export function createInternetPost(store, user, content, media = {}) {
   const body = text(content, 500);
   const isReel = media?.reel === true;
+  if (isReel) throw new Error('Reels are no longer available.');
   const gifUrl = text(media?.gif?.url, 500);
   const gifTitle = text(media?.gif?.title, 120);
   const isGif = /^https:\/\/(?:media\d*|i)\.giphy\.com\//.test(gifUrl);
@@ -3501,6 +3498,7 @@ export function purchaseInternetAd(store, {
   copy.businessName = text(biz.displayName, 60);
   const media = sanitizeAdMedia(image, video);
   const logoUrl = sanitizeAdLogo(logo) || text(biz.avatarUrl, 500) || '';
+  if (String(placement || '').toLowerCase() === 'reel') throw new Error('Reel ads are no longer available.');
   const adPlacement = normalizeAdPlacement(placement);
   const seconds = adPlacement === 'reel' ? normalizeVideoSeconds(videoSeconds) : 0;
   if (adPlacement === 'reel' && !media.videoUrl) {
