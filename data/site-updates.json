@@ -216,6 +216,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T17:50:00.000Z",
       "commit": "dd7d031"
+    },
+    {
+      "id": "2026-08-15-phone-download-visible",
+      "title": "Clearwater Phone download more visible",
+      "summary": "Added a Download for Windows banner on the Internet home feed and a Download Phone button in the left rail so the overlay zip is easy to find.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T17:55:00.000Z",
+      "commit": "b89f553"
     }
   ]
 }
