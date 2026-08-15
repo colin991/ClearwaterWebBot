@@ -15,15 +15,18 @@ const emptyState = () => ({
   punishedCount: 0,
 });
 
-function noticeContent(punishedCount = 0) {
+function noticeContent(punishedCount = 0, verificationChannelId = '1514181167145025666') {
   const count = Math.max(0, Number(punishedCount) || 0);
   const peopleLabel = count === 1 ? '1 person was' : `${count} people were`;
+  const verifyLink = verificationChannelId
+    ? `<#${verificationChannelId}>`
+    : '#verification';
   return [
     '# Notice',
     '> Sending messages here will result in a 7 day timeout. Please refrain from sending any kind of messages here. Thanks!',
     `> -# ${peopleLabel} punished`,
     '',
-    'You can verify in #verification',
+    `You can verify in ${verifyLink}`,
   ].join('\n');
 }
 
@@ -117,22 +120,30 @@ async function pinNotice(message) {
   });
 }
 
-async function postNotice(channel, state) {
-  const content = noticeContent(state.punishedCount);
-  const posted = await channel.send({ content, allowedMentions: { parse: [] } });
+async function postNotice(channel, state, client) {
+  const verificationId = String(client?.config?.verificationChannelId || '1514181167145025666').trim();
+  const content = noticeContent(state.punishedCount, verificationId);
+  const posted = await channel.send({
+    content,
+    allowedMentions: { parse: [], users: [], roles: [], repliedUser: false },
+  });
   state.noticeMessageId = posted.id;
   await writeState(state);
   await pinNotice(posted);
   return posted;
 }
 
-async function syncNoticeMessage(channel, state, { forceNew = false } = {}) {
-  const content = noticeContent(state.punishedCount);
+async function syncNoticeMessage(channel, state, client, { forceNew = false } = {}) {
+  const verificationId = String(client?.config?.verificationChannelId || '1514181167145025666').trim();
+  const content = noticeContent(state.punishedCount, verificationId);
   if (!forceNew && state.noticeMessageId) {
     const existing = await channel.messages.fetch(state.noticeMessageId).catch(() => null);
     if (existing) {
       if (existing.content !== content) {
-        await existing.edit({ content, allowedMentions: { parse: [] } }).catch((error) => {
+        await existing.edit({
+          content,
+          allowedMentions: { parse: [], users: [], roles: [], repliedUser: false },
+        }).catch((error) => {
           logger.warn(`Could not edit notice channel message: ${error?.message || error}`);
         });
       }
@@ -141,7 +152,7 @@ async function syncNoticeMessage(channel, state, { forceNew = false } = {}) {
     }
   }
 
-  return postNotice(channel, state);
+  return postNotice(channel, state, client);
 }
 
 async function purgeOtherMessages(channel, noticeMessageId) {
@@ -178,7 +189,7 @@ export async function ensureNoticeChannel(client, { forceNew = false } = {}) {
   }
 
   const state = await readState();
-  const notice = await syncNoticeMessage(channel, state, { forceNew });
+  const notice = await syncNoticeMessage(channel, state, client, { forceNew });
   await purgeOtherMessages(channel, notice.id);
   logger.info(`Notice channel ready in #${channel.name || channel.id} (message ${notice.id}, count ${state.punishedCount}).`);
   return notice;
@@ -240,7 +251,7 @@ export async function handleNoticeChannelMessage(message, client) {
     ? message.channel
     : await resolveNoticeChannel(client);
   if (channel) {
-    await syncNoticeMessage(channel, state).catch((error) => {
+    await syncNoticeMessage(channel, state, client).catch((error) => {
       logger.warn(`Could not refresh notice after punishment: ${error?.message || error}`);
     });
   }
@@ -272,6 +283,6 @@ export async function handleNoticeChannelMessageDelete(message, client) {
     : await resolveNoticeChannel(client);
   if (!channel) return;
 
-  const restored = await syncNoticeMessage(channel, state, { forceNew: true });
+  const restored = await syncNoticeMessage(channel, state, client, { forceNew: true });
   logger.info(`Notice channel message was removed; re-sent as ${restored.id}.`);
 }

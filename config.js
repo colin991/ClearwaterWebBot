@@ -29,7 +29,8 @@ export const config = Object.freeze({
   internetFeedChannelId: process.env.INTERNET_FEED_CHANNEL_ID?.trim() || '1537573830543933560',
   updateLogChannelId: process.env.UPDATE_LOG_CHANNEL_ID?.trim() || '1538007463851200583',
   vcActionLogChannelId: process.env.VC_ACTION_LOG_CHANNEL_ID?.trim() || '1538021552120135731',
-  noticeChannelId: process.env.NOTICE_CHANNEL_ID?.trim() || '1514181167145025666',
+  noticeChannelId: process.env.NOTICE_CHANNEL_ID?.trim() || '1515038785421836479',
+  verificationChannelId: process.env.VERIFICATION_CHANNEL_ID?.trim() || '1514181167145025666',
   ownerDiscordIds: (process.env.OWNER_DISCORD_IDS || '1044686997194805280')
     .split(',').map((value) => value.trim()).filter(Boolean),
   ownerRoleIds: (process.env.OWNER_ROLE_IDS || '1514033074948800683')

@@ -124,10 +124,10 @@
     {
       "id": "2026-08-15-notice-channel-autodelete",
       "title": "Notice channel auto-moderation",
-      "summary": "The no-message notice lives in channel 1514181167145025666, uses a plain # Notice header (no pin emoji), increments +1 on every deleted post, auto-timeouts for 7 days, re-sends if deleted, and can be force-refreshed with `-noticerefresh`.",
+      "summary": "The no-message notice stays in channel 1515038785421836479 (plain # Notice), links to verification channel 1514181167145025666, increments +1 on every deleted post, auto-timeouts for 7 days, re-sends if deleted, and can be force-refreshed with `-noticerefresh`.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T04:45:00.000Z",
-      "commit": "7e4f49d"
+      "commit": "9a98cdd"
     }
   ]
 }
