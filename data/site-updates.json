@@ -13,7 +13,7 @@
       "title": "Discord update logging",
       "summary": "Site and bot changes are now logged to this channel. New updates are queued in the repo and posted automatically when the bot starts (or immediately via the bot API).",
       "createdAt": "2026-08-15T02:14:00.000Z",
-      "commit": ""
+      "commit": "6c36ac5"
     }
   ]
 }
