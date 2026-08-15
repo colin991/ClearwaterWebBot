@@ -1772,15 +1772,27 @@ body { margin: 0; }
   margin: 0 !important;
 }
 .post-main .post-gif,
-.post-main .post-image,
+.post-main .post-image {
+  display: block;
+  margin: 10px 0 0 !important;
+  width: auto;
+  max-width: min(100%, 420px);
+  max-height: 430px;
+  height: auto;
+  border-radius: 14px;
+  object-fit: cover;
+}
 .post-main .post-poll,
 .post-main .quote-card,
 .post-main .post-reel-frame,
-.post-main .post-reel-video,
 .post-main .drop-map {
   margin-left: 0 !important;
   max-width: 100%;
   width: 100%;
+}
+.post-main .post-reel-video {
+  margin-left: 0 !important;
+  max-width: 100%;
 }
 .post-main .quote-card {
   width: 100%;
