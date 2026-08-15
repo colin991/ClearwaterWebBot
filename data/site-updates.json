@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-tip-rotation",
+      "title": "Tipped posts rotate in For You",
+      "summary": "Paid For You tips now show one tipped post at a time. Which tip appears is random, and it switches between the 1st and 2nd feed slots instead of always sitting on top.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T21:55:00.000Z"
+    },
+    {
       "id": "2026-08-15-hide-government-nav",
       "title": "Government nav hidden without roles",
       "summary": "The Government link stays completely hidden unless your Discord roles allow government tools \u2014 same behavior as Staff.",
@@ -18,7 +25,7 @@
     {
       "id": "2026-08-15-phone-stay-signed-in",
       "title": "Phone stays signed in",
-      "summary": "Clearwater Phone no longer flashes “Signed in” then immediately signs you out. Discord login is kept until you tap Sign out.",
+      "summary": "Clearwater Phone no longer flashes \u201cSigned in\u201d then immediately signs you out. Discord login is kept until you tap Sign out.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T21:42:00.000Z"
     },

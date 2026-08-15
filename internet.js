@@ -2081,14 +2081,36 @@ function scoreForYouPost(post, trending) {
   if (isLowEffortPost(post)) score -= 26;
   if (text.length > 80) score += 3;
   if (likes <= 2 && recency > 0.35) score += 8;
-  if (post.boostActive) score += Number(post.boostScore) || 42;
+  // Paid tips are injected separately (one at a time) — do not score-boost them here.
   score += (stableJitter(post.id) - 0.5) * 5;
   return score;
 }
 
+/** Rotate which tipped post wins exposure, and whether it sits 1st or 2nd. */
+function tipRotationBucket() {
+  return Math.floor(Date.now() / (5 * 60_000));
+}
+
+function pickTippedPost(boosted) {
+  if (!boosted.length) return null;
+  const ids = boosted.map((post) => String(post.id)).sort();
+  const seed = `${tipRotationBucket()}:${ids.join('|')}`;
+  let hash = 0;
+  for (const char of seed) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0;
+  return boosted[Math.abs(hash) % boosted.length];
+}
+
+function tippedPostSlot(boostedCount) {
+  if (boostedCount <= 0) return 0;
+  // Alternate 1st / 2nd every rotation window so tips are not always #1.
+  return tipRotationBucket() % 2;
+}
+
 function rankedForYouPosts(posts) {
   const trending = trendingTagKeys();
-  const scored = [...posts].map((post) => ({
+  const boosted = posts.filter((post) => post.boostActive);
+  const organic = posts.filter((post) => !post.boostActive);
+  const scored = [...organic].map((post) => ({
     post,
     score: scoreForYouPost(post, trending),
     likes: Array.isArray(post.likes) ? post.likes.length : 0,
@@ -2110,6 +2132,14 @@ function rankedForYouPosts(posts) {
       quietPtr += 1;
     }
   });
+
+  const tip = pickTippedPost(boosted);
+  if (tip) {
+    const withoutTip = result.filter((post) => post.id !== tip.id);
+    const slot = Math.min(tippedPostSlot(boosted.length), withoutTip.length);
+    withoutTip.splice(slot, 0, tip);
+    return withoutTip;
+  }
   return result;
 }
 
