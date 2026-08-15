@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-hide-internet-api",
+      "title": "Internet API hidden from browser tabs",
+      "summary": "Opening /api/internet in a browser now returns Not found instead of feed JSON or API error text. The Internet app and Phone still load the feed normally.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T20:30:00.000Z"
+    },
+    {
       "id": "2026-08-15-staff-no-pin",
       "title": "Staff panel opens without a PIN",
       "summary": "Staff with Discord panel access can open the Clearwater Staff desk directly. The ownership and management PIN gate is removed.",

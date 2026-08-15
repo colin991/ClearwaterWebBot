@@ -245,6 +245,15 @@ async function callBot(request, payload, viewerId = '', ipHashes = null) {
   return { ok: upstream.ok, status: upstream.status, body };
 }
 
+function isBrowserDocumentRequest(request) {
+  const dest = String(request.headers['sec-fetch-dest'] || '').toLowerCase();
+  const mode = String(request.headers['sec-fetch-mode'] || '').toLowerCase();
+  if (dest === 'document' || mode === 'navigate') return true;
+  const accept = String(request.headers.accept || '');
+  // Address-bar / link opens send text/html first; XHR and fetch usually send */* or application/json.
+  return /^\s*text\/html\b/i.test(accept);
+}
+
 export default async function handler(request, response) {
   if (!['GET', 'POST'].includes(request.method)) return sendJson(response, 405, { error: 'Method not allowed' });
 
@@ -259,6 +268,16 @@ export default async function handler(request, response) {
         const reelAccess = await getStaffAccess(viewer);
         if (!reelAccess.siteAccess) return sendJson(response, 403, { error: 'Clearwater Internet access required' });
         return serveReelViaBot(request, response, url);
+      }
+      // Do not expose feed JSON (or auth error payloads) when someone opens /api/internet in a browser tab.
+      if (isBrowserDocumentRequest(request)) {
+        response.statusCode = 404;
+        response.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        response.setHeader('Cache-Control', 'no-store');
+        response.setHeader('X-Robots-Tag', 'noindex, nofollow');
+        response.setHeader('X-Content-Type-Options', 'nosniff');
+        response.end('Not found');
+        return;
       }
       if (url.searchParams.get('meta') === 'version' || url.pathname.endsWith('/internet-version')) {
         return sendJson(response, 200, { version: INTERNET_VERSION });
