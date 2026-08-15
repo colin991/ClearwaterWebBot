@@ -3746,7 +3746,8 @@ body { margin: 0; }
   --profile-accent: var(--blue);
   --profile-accent-rgb: 18, 87, 163;
 }
-.profile-edit {
+.profile-edit,
+.profile-discord {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3763,7 +3764,8 @@ body { margin: 0; }
   cursor: pointer;
   transition: background .18s var(--cw-ease), border-color .18s var(--cw-ease);
 }
-.profile-edit:hover {
+.profile-edit:hover,
+.profile-discord:hover {
   border-color: rgba(var(--profile-accent-rgb), .6);
   background: rgba(var(--profile-accent-rgb), .22);
 }
