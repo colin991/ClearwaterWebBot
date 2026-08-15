@@ -58,4 +58,4 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 n
-await client.login(config.token); //dhjb
+await client.login(config.token); //dhj
