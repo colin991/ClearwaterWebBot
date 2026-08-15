@@ -1,9 +1,9 @@
 import {
-  SESSION_COOKIE,
   getAuthConfig,
   parseCookies,
   readSessionToken,
   sendJson,
+  sessionCookieValue,
 } from '../../lib/discord-auth.js';
 import { hasServerManagementAccess } from '../../lib/owner-access.js';
 import { attachPlayerAvatars } from '../../lib/roblox-avatars.js';
@@ -13,7 +13,7 @@ export default async function handler(request, response) {
 
   try {
     const { sessionSecret } = getAuthConfig();
-    const session = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
+    const session = readSessionToken(sessionCookieValue(parseCookies(request.headers.cookie)), sessionSecret);
     if (!session) return sendJson(response, 401, { error: 'Sign in with Discord first' });
     if (!await hasServerManagementAccess(session)) return sendJson(response, 403, { error: 'Management access required' });
 

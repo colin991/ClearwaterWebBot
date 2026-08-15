@@ -1,10 +1,10 @@
 import {
-  SESSION_COOKIE,
   getAuthConfig,
   isSameSiteRequest,
   parseCookies,
   readSessionToken,
   sendJson,
+  sessionCookieValue,
 } from '../../lib/discord-auth.js';
 
 const readBody = async (request) => {
@@ -25,7 +25,7 @@ export default async function handler(request, response) {
 
   try {
     const { sessionSecret } = getAuthConfig();
-    const session = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
+    const session = readSessionToken(sessionCookieValue(parseCookies(request.headers.cookie)), sessionSecret);
     if (!session) return sendJson(response, 401, { error: 'Sign in with Discord first' });
 
     const body = await readBody(request);

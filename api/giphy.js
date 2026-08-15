@@ -1,4 +1,4 @@
-import { SESSION_COOKIE, getAuthConfig, parseCookies, readSessionToken, sendJson } from '../lib/discord-auth.js';
+import { getAuthConfig, parseCookies, readSessionToken, sendJson, sessionCookieValue } from '../lib/discord-auth.js';
 import { getStaffAccess } from '../lib/owner-access.js';
 
 export default async function handler(request, response) {
@@ -9,7 +9,7 @@ export default async function handler(request, response) {
 
   try {
     const { sessionSecret } = getAuthConfig();
-    const user = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
+    const user = readSessionToken(sessionCookieValue(parseCookies(request.headers.cookie)), sessionSecret);
     if (!user) return sendJson(response, 401, { error: 'Sign in with Discord to search GIFs' });
     const access = await getStaffAccess(user);
     if (!access.siteAccess) return sendJson(response, 403, { error: 'Clearwater Internet access required' });

@@ -1,6 +1,6 @@
 {
   "name": "anchor-phone",
-  "version": "1.3.6",
+  "version": "1.3.7",
   "private": true,
   "author": "Clearwater Roleplay",
   "description": "Clearwater Phone — in-game overlay for ER:LC",
@@ -19,6 +19,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "preload-login.js",
       "src/**/*",
       "build/icon.ico",
       "build/icon.png",

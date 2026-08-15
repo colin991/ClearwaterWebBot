@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-phone-discord-session",
+      "title": "Phone Discord sign-in actually sticks",
+      "summary": "Clearwater Phone now keeps a Discord session the overlay can read. Signing in no longer depends on cookies the desktop app could not see.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T20:58:00.000Z"
+    },
+    {
       "id": "2026-08-15-phone-setup-stays",
       "title": "Phone setup stays on screen",
       "summary": "Clearwater Phone keeps the first-launch setup and Launch Phone screens open until you finish. Opening Roblox no longer closes that window.",

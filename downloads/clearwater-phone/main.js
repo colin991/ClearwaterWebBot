@@ -33,7 +33,8 @@ async function cookieHeaderForSite() {
 }
 
 function isSessionCookieName(name) {
-  return /(?:^|-)clearwater_session$/i.test(String(name || ''));
+  return /(?:^|-)clearwater_session$/i.test(String(name || ''))
+    || String(name || '') === 'clearwater_phone_session';
 }
 
 async function hasSiteSession() {
@@ -44,11 +45,13 @@ async function hasSiteSession() {
 async function siteFetch(pathname, { method = 'GET', body } = {}) {
   const url = pathname.startsWith('http') ? pathname : SITE + pathname;
   const payload = body != null ? JSON.stringify(body) : null;
+  const cookie = await cookieHeaderForSite();
   const headers = {
     Accept: 'application/json',
     Origin: SITE,
     Referer: SITE + '/phone-signed-in',
     'User-Agent': 'ClearwaterPhone/' + pkg.version,
+    ...(cookie ? { Cookie: cookie } : {}),
     ...(payload ? { 'Content-Type': 'application/json' } : {}),
   };
   const init = {
@@ -155,7 +158,8 @@ function openLoginWindow() {
     skipTaskbar: false,
     icon: iconPath(),
     webPreferences: {
-      partition: SESSION_PARTITION,
+      session: phoneSession(),
+      preload: path.join(__dirname, 'preload-login.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -163,6 +167,13 @@ function openLoginWindow() {
   });
   loginWin.setAlwaysOnTop(true, 'screen-saver');
   if (win && !win.isDestroyed()) win.setAlwaysOnTop(false);
+  loginWin.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      const parsed = new URL(String(url || ''));
+      if (['http:', 'https:'].includes(parsed.protocol)) loginWin.loadURL(parsed.toString());
+    } catch {}
+    return { action: 'deny' };
+  });
   loginWin.loadURL(SITE + '/signin?next=/phone-signed-in');
 
   let finishing = false;
@@ -465,6 +476,13 @@ function downloadFile(url, dest, onProgress) {
 app.whenReady().then(() => {
   applyLoginItem(readHostSettings());
   ensureTray();
+
+  ipcMain.on('phone-login-auth', (_e, payload) => {
+    const auth = payload && typeof payload === 'object' ? payload : { authenticated: false };
+    if (!auth.authenticated) return;
+    notifyOverlayAuth(auth);
+    closeLoginWindow();
+  });
 
   phoneSession().cookies.on('changed', (_event, cookie, _cause, removed) => {
     if (removed || !isSessionCookieName(cookie?.name)) return;

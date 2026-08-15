@@ -1,5 +1,5 @@
 import { handleUpload } from '@vercel/blob/client';
-import { SESSION_COOKIE, avatarUrl, getAuthConfig, isSameSiteRequest, parseCookies, readSessionToken, sendJson } from '../lib/discord-auth.js';
+import { avatarUrl, getAuthConfig, isSameSiteRequest, parseCookies, readSessionToken, sendJson, sessionCookieValue } from '../lib/discord-auth.js';
 import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, redactStaffPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
 import { allowRate } from '../utils/rateLimit.js';
@@ -263,7 +263,7 @@ export default async function handler(request, response) {
       if (url.searchParams.get('t')) return serveProxiedMedia(request, response);
       if (url.searchParams.get('reel')) {
         const { sessionSecret } = getAuthConfig();
-        const viewer = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
+        const viewer = readSessionToken(sessionCookieValue(parseCookies(request.headers.cookie)), sessionSecret);
         if (!viewer) return sendJson(response, 401, { error: 'Sign in with Discord to use Clearwater Internet' });
         const reelAccess = await getStaffAccess(viewer);
         if (!reelAccess.siteAccess) return sendJson(response, 403, { error: 'Clearwater Internet access required' });
@@ -283,7 +283,7 @@ export default async function handler(request, response) {
         return sendJson(response, 200, { version: INTERNET_VERSION });
       }
       const { sessionSecret } = getAuthConfig();
-      const viewer = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
+      const viewer = readSessionToken(sessionCookieValue(parseCookies(request.headers.cookie)), sessionSecret);
       if (!viewer) return sendJson(response, 401, { error: 'Sign in with Discord to use Clearwater Internet' });
       const liveAccess = await getStaffAccess(viewer);
       if (!liveAccess.siteAccess) {
@@ -316,7 +316,7 @@ export default async function handler(request, response) {
     }
 
     const { sessionSecret } = getAuthConfig();
-    const user = readSessionToken(parseCookies(request.headers.cookie)[SESSION_COOKIE], sessionSecret);
+    const user = readSessionToken(sessionCookieValue(parseCookies(request.headers.cookie)), sessionSecret);
     if (!user) return sendJson(response, 401, { error: 'Sign in with Discord to post' });
 
     // Live Discord role check — session guildRoles alone are not authorization.
