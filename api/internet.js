@@ -281,7 +281,13 @@ export default async function handler(request, response) {
       }
       // Do not expose feed JSON (or auth error payloads) when someone opens /api/internet in a browser tab.
       if (isBrowserDocumentRequest(request)) {
-        return sendJson(response, 404, { error: 'Not found' });
+        response.statusCode = 404;
+        response.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        response.setHeader('Cache-Control', 'no-store');
+        response.setHeader('X-Robots-Tag', 'noindex, nofollow');
+        response.setHeader('X-Content-Type-Options', 'nosniff');
+        response.end('Not found');
+        return;
       }
       if (url.searchParams.get('meta') === 'version' || url.pathname.endsWith('/internet-version')) {
         return sendJson(response, 200, { version: INTERNET_VERSION });
