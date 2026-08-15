@@ -801,9 +801,10 @@ function sourcePost(post) {
 }
 
 function formatPostBody(post) {
-  return escapeHtml(post.content)
-    .replace(/(^|\s)(#[a-z0-9_]{1,60})/gi, '$1<a href="/internet" class="post-hashtag" data-topic="$2">$2</a>')
-    .replace(/(^|\s)(@[a-z0-9_]{1,80})/gi, (full, leading, handle) => {
+  const text = typeof post === 'string' ? post : post?.content;
+  return escapeHtml(text)
+    .replace(/(^|[\s([{'"“‘])(#[a-z0-9_]{1,60})/gi, '$1<a href="/internet" class="post-hashtag" data-topic="$2">$2</a>')
+    .replace(/(^|[\s([{'"“‘])(@[a-z0-9._-]{1,80})/gi, (full, leading, handle) => {
       const mentioned = [...internetUsers.values()].find((user) => String(user.username || '').toLowerCase() === handle.slice(1).toLowerCase());
       return mentioned ? `${leading}<button type="button" class="post-mention" data-open-member="${escapeHtml(mentioned.id)}">${handle}</button>` : `${leading}<span class="post-mention">${handle}</span>`;
     });
@@ -989,7 +990,7 @@ function quoteCardMarkup(quoted, { interactive = true } = {}) {
   const open = interactive ? ` data-open-post="${escapeHtml(quoted.id)}"` : '';
   const start = interactive ? `<button type="button" class="quote-card"${open}>` : '<div class="quote-card">';
   const end = interactive ? '</button>' : '</div>';
-  return `${start}<span class="quote-card-head"><img src="${escapeHtml(author?.avatarUrl || quoted.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><b>${escapeHtml(displayName)}</b>${identityBadges(author?.id ? author : { ...quoted, id: quoted.authorId })}<small>@${escapeHtml(author?.username || quoted.username || 'member')} · ${timeAgo(quoted.createdAt)}</small></span>${quoted.content ? `<p>${escapeHtml(quoted.content)}</p>` : ''}${postMediaMarkup(quoted, displayName)}${end}`;
+  return `${start}<span class="quote-card-head"><img src="${escapeHtml(author?.avatarUrl || quoted.avatarUrl || 'assets/clearwater-logo.png')}" alt="" /><b>${escapeHtml(displayName)}</b>${identityBadges(author?.id ? author : { ...quoted, id: quoted.authorId })}<small>@${escapeHtml(author?.username || quoted.username || 'member')} · ${timeAgo(quoted.createdAt)}</small></span>${quoted.content ? `<p>${formatPostBody(quoted)}</p>` : ''}${postMediaMarkup(quoted, displayName)}${end}`;
 }
 
 function renderQuotePreview() {
@@ -1589,7 +1590,7 @@ function reelCommentMarkup(comment) {
     <img src="${escapeHtml(author.avatarUrl || comment.avatarUrl || 'assets/clearwater-logo.png')}" alt="" />
     <div>
       <header><b>@${escapeHtml(author.username || comment.username || 'member')}</b>${isCreator ? '<em>Creator</em>' : ''}<small>${timeAgo(comment.createdAt)}</small>${action}</header>
-      <p>${escapeHtml(comment.content || '')}</p>
+      <p>${formatPostBody(comment)}</p>
     </div>
   </article>`;
 }
@@ -1645,9 +1646,11 @@ function renderReelPanel(reelId, { focusInput = false } = {}) {
   setText('[data-reel-panel-name]', displayName);
   setText('[data-reel-panel-handle]', `@${username}`);
   setText('[data-reel-panel-time]', timeAgo(reel.createdAt));
-  setText('[data-reel-panel-caption]', reel.content || '');
   const caption = document.querySelector('[data-reel-panel-caption]');
-  if (caption) caption.hidden = !reel.content;
+  if (caption) {
+    caption.innerHTML = reel.content ? formatPostBody(reel) : '';
+    caption.hidden = !reel.content;
+  }
   const authorButton = document.querySelector('[data-reel-panel-author]');
   if (authorButton) authorButton.dataset.openMember = reel.authorId;
   const follow = document.querySelector('[data-reel-panel-follow]');
@@ -1913,7 +1916,7 @@ function renderReels() {
     const more = moreItem
       ? `<details class="reel-more reel-actions-more"><summary aria-label="More reel actions"><span aria-hidden="true">⋯</span><span>More</span></summary><div class="reel-more-menu">${moreItem}</div></details>`
       : '';
-    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient" aria-hidden="true"></div>${sound}<div class="reel-meta"><div class="reel-meta-user"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(avatarUrl)}" alt="" /><span class="reel-author"><b>${escapeHtml(displayName)}</b><small>@${escapeHtml(username)}</small></span></button>${follow}</div>${reel.content ? `<p>${escapeHtml(reel.content)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}" aria-label="Like">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}" aria-label="Comments">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}" aria-label="Share">${postActionIcon('share')}</button>${more}</div></article>`;
+    return `<article class="reel-card" data-reel-id="${escapeHtml(reel.id)}">${media}<div class="reel-gradient" aria-hidden="true"></div>${sound}<div class="reel-meta"><div class="reel-meta-user"><button type="button" data-open-member="${escapeHtml(reel.authorId)}"><img src="${escapeHtml(avatarUrl)}" alt="" /><span class="reel-author"><b>${escapeHtml(displayName)}</b><small>@${escapeHtml(username)}</small></span></button>${follow}</div>${reel.content ? `<p>${formatPostBody(reel)}</p>` : ''}</div><div class="reel-actions"><button type="button" data-reel-like="${escapeHtml(reel.id)}" class="${liked ? 'liked' : ''}" aria-label="Like">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-reel-comments="${escapeHtml(reel.id)}" aria-label="Comments">${postActionIcon('reply')}<span>${comments || ''}</span></button><button type="button" data-reel-share="${escapeHtml(reel.id)}" aria-label="Share">${postActionIcon('share')}</button>${more}</div></article>`;
   }).join('');
   syncReelCardHeights(viewport);
   if (anchorId) {

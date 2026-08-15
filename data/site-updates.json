@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-mention-hashtag-blue",
+      "title": "@mentions and #hashtags show in blue",
+      "summary": "In Clearwater Internet posts, @handles and #tags are highlighted in blue again so they stand out from regular text.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T21:05:00.000Z"
+    },
+    {
       "id": "2026-08-15-staff-toggle-fix",
       "title": "Staff switches keep the side you click",
       "summary": "Staff panel on/off switches no longer snap the other way after you click. Saves are protected from background refresh, and a stuck switch now tells you to restart the bot host if needed.",
