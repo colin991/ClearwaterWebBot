@@ -240,6 +240,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:05:00.000Z",
       "commit": "80c4001"
+    },
+    {
+      "id": "2026-08-15-phone-theme",
+      "title": "Clearwater Phone theme cleanup",
+      "summary": "Removed the home/sidebar Phone promo cards, restyled Phone download buttons to Clearwater Internet colors, and updated the overlay app UI to the charcoal + blue theme.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T18:10:00.000Z",
+      "commit": "2a7ce32"
     }
   ]
 }
