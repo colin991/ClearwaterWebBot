@@ -16,7 +16,11 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/assets/icon-512.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
+<<<<<<< HEAD
     <link rel="stylesheet" href="internet.css?v=20260815-rm-warn" />
+=======
+    <link rel="stylesheet" href="internet.css?v=20260815-tipped-flat" />
+>>>>>>> origin/cursor/business-logo-idle-purge-17fb
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260815-vpn-block"></script>
   </head>
@@ -498,7 +502,7 @@
                 </section>
                 <section class="settings-card" data-business-card>
                   <h2 data-business-title>Business accounts</h2>
-                  <p class="settings-hint" data-business-hint>Create a linked business or department account. Staff must approve it before it can run ads. After approval, handlers and managers can update the logo, name, type, and about text. Only the handler can advertise, using the handler’s wallet credits.</p>
+                  <p class="settings-hint" data-business-hint>Create a linked business or department account. Staff must approve it before it can run ads. After approval, handlers and managers can update the logo URL, name, type, and about text. Paste a public https image link for the logo (Discord, Imgur, etc.). Unused business accounts are removed after a week without being switched to. Only the handler can advertise, using the handler’s wallet credits.</p>
                   <p class="settings-status" data-business-complete-status role="status" hidden></p>
                   <form class="settings-stack-form" data-business-form>
                     <div class="settings-grid">
@@ -511,7 +515,7 @@
                         <option value="department">In-game department</option>
                       </select>
                     </label>
-                    <label class="settings-field"><span>Logo / profile picture</span><input data-business-avatar type="file" accept="image/png,image/jpeg,image/webp,image/gif" /></label>
+                    <label class="settings-field"><span>Logo image URL</span><input data-business-avatar-url type="url" maxlength="500" placeholder="https://…" inputmode="url" autocomplete="off" /></label>
                     <div class="business-avatar-preview" data-business-avatar-preview hidden></div>
                     <label class="settings-field"><span>About</span><textarea data-business-bio maxlength="300" rows="3" placeholder="What does this business or department do in Clearwater RP?"></textarea></label>
                     <div class="settings-actions">
@@ -766,6 +770,10 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
+<<<<<<< HEAD
     <script src="internet.js?v=20260815-rm-warn"></script>
+=======
+    <script src="internet.js?v=20260815-biz-logo-url"></script>
+>>>>>>> origin/cursor/business-logo-idle-purge-17fb
   </body>
 </html>

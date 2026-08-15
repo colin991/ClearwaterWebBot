@@ -45,6 +45,9 @@ function publicVerificationApplication(item) {
   };
 }
 
+const BUSINESS_IDLE_MS = 7 * 24 * 60 * 60 * 1000;
+const BUSINESS_TOUCH_THROTTLE_MS = 60 * 60 * 1000;
+
 function publicBusinessAccount(biz, { viewerId = '', includeMembers = false } = {}) {
   const isHandler = viewerId && biz.ownerId === viewerId;
   const membership = biz.members && typeof biz.members === 'object' ? biz.members[viewerId] : null;
@@ -58,6 +61,7 @@ function publicBusinessAccount(biz, { viewerId = '', includeMembers = false } = 
     category: biz.category === 'department' ? 'department' : 'business',
     status: biz.status,
     createdAt: biz.createdAt,
+    lastActiveAt: biz.lastActiveAt || null,
     reviewedAt: biz.reviewedAt || null,
     reviewNote: biz.reviewNote || '',
     isHandler: Boolean(isHandler),
@@ -139,6 +143,96 @@ export function assertBusinessAccess(store, { actor, businessId, need = 'post' }
     throw new Error('Manager access required');
   }
   return { biz, role: member.role === 'manager' ? 'manager' : 'poster' };
+}
+
+/**
+ * Mark a business account as recently used (switched to / posted as).
+ * Throttled to avoid rewriting the store on every request.
+ */
+export function touchBusinessAccountActivity(store, businessId, { force = false } = {}) {
+  ensureBusinessCollections(store);
+  const biz = getBusinessAccount(store, businessId);
+  if (!biz || biz.status !== 'active') return false;
+  const now = Date.now();
+  const previous = Date.parse(biz.lastActiveAt || '');
+  if (!force && Number.isFinite(previous) && now - previous < BUSINESS_TOUCH_THROTTLE_MS) return false;
+  biz.lastActiveAt = new Date().toISOString();
+  return true;
+}
+
+function businessIdleAnchor(biz) {
+  if (!biz) return 0;
+  if (biz.status === 'active') {
+    return Date.parse(biz.lastActiveAt || biz.reviewedAt || biz.createdAt || '') || 0;
+  }
+  if (biz.status === 'pending') {
+    return Date.parse(biz.createdAt || '') || 0;
+  }
+  return Date.parse(biz.reviewedAt || biz.createdAt || '') || 0;
+}
+
+/**
+ * Remove business accounts that have not been used (or never approved) for a week.
+ * Returns deletion summaries including logo URLs for Blob cleanup.
+ */
+export function purgeIdleBusinessAccounts(store, { now = Date.now(), maxAgeMs = BUSINESS_IDLE_MS } = {}) {
+  ensureBusinessCollections(store);
+  const staleIds = Object.values(store.businessAccounts || {})
+    .filter((biz) => {
+      const anchor = businessIdleAnchor(biz);
+      return Boolean(anchor) && now - anchor >= maxAgeMs;
+    })
+    .map((biz) => biz.id);
+  const removed = [];
+  for (const businessId of staleIds) {
+    const result = deleteBusinessAccount(store, { businessId });
+    removed.push(result);
+    const owner = result.ownerId ? store.users[result.ownerId] : null;
+    if (!owner) continue;
+    owner.messages = Array.isArray(owner.messages) ? owner.messages : [];
+    owner.messages.unshift({
+      id: randomUUID(),
+      content: text(`Your Clearwater business account “${result.displayName}” was removed after a week without being used. Its logo was cleared from storage.`, 500),
+      createdAt: new Date().toISOString(),
+      readAt: null,
+    });
+    owner.messages = owner.messages.slice(0, 50);
+  }
+  return removed;
+}
+
+/**
+ * One-shot inbox notice so active business handlers switch logos to a public URL.
+ */
+export function notifyActiveBusinessesLogoUrlUpdate(store) {
+  ensureBusinessCollections(store);
+  store.settings = store.settings && typeof store.settings === 'object' ? store.settings : {};
+  if (store.settings.businessLogoUrlNoticeAt) return 0;
+  const notice = text(
+    'Business logos now use a public image link (no file upload). Open Settings → Business accounts, paste a https logo URL (Discord, Imgur, etc.), and save.',
+    500,
+  );
+  const notified = new Set();
+  let count = 0;
+  for (const biz of Object.values(store.businessAccounts || {})) {
+    if (biz.status !== 'active' || !biz.ownerId) continue;
+    const ownerId = String(biz.ownerId);
+    if (notified.has(ownerId)) continue;
+    const owner = store.users[ownerId];
+    if (!owner) continue;
+    owner.messages = Array.isArray(owner.messages) ? owner.messages : [];
+    owner.messages.unshift({
+      id: randomUUID(),
+      content: notice,
+      createdAt: new Date().toISOString(),
+      readAt: null,
+    });
+    owner.messages = owner.messages.slice(0, 50);
+    notified.add(ownerId);
+    count += 1;
+  }
+  store.settings.businessLogoUrlNoticeAt = new Date().toISOString();
+  return count;
 }
 
 export function businessActorFromAccount(biz) {
@@ -283,6 +377,7 @@ export function submitBusinessApplication(store, {
     status: 'pending',
     members: {},
     createdAt: new Date().toISOString(),
+    lastActiveAt: null,
     reviewedAt: null,
     reviewerId: null,
     reviewNote: '',
@@ -301,6 +396,7 @@ export function reviewBusinessApplication(store, { businessId, decision, actor, 
   biz.reviewNote = text(reason, 300);
   if (decision === 'accept') {
     biz.status = 'active';
+    biz.lastActiveAt = new Date().toISOString();
     syncBusinessUserRecord(store, biz);
     const owner = store.users[biz.ownerId];
     if (owner) {
@@ -335,20 +431,37 @@ export function updateBusinessProfile(store, {
   category,
 } = {}) {
   const { biz } = assertBusinessAccess(store, { actor, businessId, need: 'manage' });
+  touchBusinessAccountActivity(store, biz.id, { force: true });
+  const previousAvatarUrl = biz.avatarUrl || '';
+  let avatarChanged = false;
   if (displayName != null) {
     const name = text(displayName, 80);
     if (name.length < 2) throw new Error('Add a business or department name');
     biz.displayName = name;
   }
   if (avatarUrl != null) {
-    const avatar = hostedOrAssetUrl(avatarUrl);
-    if (avatarUrl && !avatar) throw new Error('Choose a supported logo or profile image URL');
-    if (avatar) biz.avatarUrl = avatar;
+    const raw = String(avatarUrl || '').trim();
+    if (!raw) {
+      if (previousAvatarUrl) {
+        biz.avatarUrl = '';
+        avatarChanged = true;
+      }
+    } else {
+      const avatar = hostedOrAssetUrl(raw);
+      if (!avatar) throw new Error('Paste a public https image URL for the logo');
+      if (avatar !== previousAvatarUrl) {
+        biz.avatarUrl = avatar;
+        avatarChanged = true;
+      }
+    }
   }
   if (bio != null) biz.bio = text(bio, 300);
   if (category != null) biz.category = category === 'department' ? 'department' : 'business';
   syncBusinessUserRecord(store, biz);
-  return { business: publicBusinessAccount(biz, { viewerId: actor.id, includeMembers: true }) };
+  return {
+    business: publicBusinessAccount(biz, { viewerId: actor.id, includeMembers: true }),
+    previousAvatarUrl: avatarChanged ? previousAvatarUrl : '',
+  };
 }
 
 export function addBusinessMember(store, {
@@ -427,6 +540,7 @@ export function deleteBusinessAccount(store, { businessId } = {}) {
   if (!isBusinessAccountId(id)) throw new Error('Enter a valid business account ID');
   const biz = store.businessAccounts[id];
   if (!biz) throw new Error('Business account not found');
+  const avatarUrl = biz.avatarUrl || '';
 
   const removedPosts = (Array.isArray(store.posts) ? store.posts : [])
     .filter((post) => post.authorId === id)
@@ -465,5 +579,6 @@ export function deleteBusinessAccount(store, { businessId } = {}) {
     ownerId: biz.ownerId || null,
     displayName: text(biz.displayName, 80) || text(biz.username, 80) || 'Business account',
     postsRemoved: removedPosts.length,
+    avatarUrl,
   };
 }

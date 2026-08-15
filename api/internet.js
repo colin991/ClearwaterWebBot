@@ -5,9 +5,10 @@ import { hashClientIp, isPublicUserId, redactPublicPayload, redactStaffPayload, 
 import { allowRate } from '../utils/rateLimit.js';
 import { getCached, clearCached, clearCachedMatching, isAppFetchRequest, rejectPublicBrowse, setCached } from '../lib/api-guard.js';
 import { rejectVpnJson } from '../lib/vpn-guard.js';
+import { deleteVercelBlobUrls } from '../utils/blobStorage.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260815-api-quiet';
+const INTERNET_VERSION = '20260815-api-biz-logo-url';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
@@ -367,28 +368,10 @@ export default async function handler(request, response) {
             if (/^profile\//i.test(path)) {
               throw new Error('Custom banner uploads are disabled. Pick a Clearwater preset banner instead.');
             }
-            if (/^ads\/[a-z0-9._-]+$/i.test(path)) {
-              return {
-                allowedContentTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'video/mp4', 'video/webm', 'video/quicktime'],
-                maximumSizeInBytes: 40 * 1024 * 1024,
-                addRandomSuffix: true,
-                allowOverwrite: false,
-                tokenPayload: JSON.stringify({ id: user.id }),
-              };
+            if (/^ads\//i.test(path) || /^reels\//i.test(path) || /^business\//i.test(path)) {
+              throw new Error('Business logos use a public image URL now. Paste a https link in Settings → Business accounts.');
             }
-            if (!/^reels\/[a-z0-9._-]+$/i.test(path)) throw new Error('Invalid upload path');
-            const isAudio = /\.(?:mp3|m4a|wav|ogg|aac)$/i.test(path) || /(^|\/|-)audio(-|\.|$)/i.test(path);
-            return {
-              allowedContentTypes: [
-                'image/png', 'image/jpeg', 'image/webp', 'image/gif',
-                'video/mp4', 'video/webm', 'video/quicktime',
-                'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/aac', 'audio/x-m4a',
-              ],
-              maximumSizeInBytes: isAudio ? MAX_REEL_AUDIO_BYTES : MAX_REEL_BYTES,
-              addRandomSuffix: true,
-              allowOverwrite: false,
-              tokenPayload: JSON.stringify({ id: user.id }),
-            };
+            throw new Error('File uploads to cloud storage are paused. Use a public https image URL for business logos.');
           },
           onUploadCompleted: async () => {},
         });
@@ -397,10 +380,10 @@ export default async function handler(request, response) {
         const uploadError = String(error?.message || '');
         return sendJson(response, 503, {
           error: /suspended|quota|limit|billing|exceeded/i.test(uploadError)
-            ? 'Vercel Blob is at this month’s storage limit, so video uploads are paused. Photo Reels under 3 MB still work. Upgrade Blob or wait for the next billing cycle.'
+            ? 'Vercel Blob is at this month’s storage limit, so cloud uploads are paused.'
             : (/token/i.test(uploadError)
-              ? 'Create a Blob store in Vercel Storage so Reels can upload videos.'
-              : (uploadError || 'Could not start this Reel upload.')),
+              ? 'Cloud upload is not available. Use a public https image URL for business logos.'
+              : (uploadError || 'Could not start this upload.')),
         });
       }
     }
@@ -603,6 +586,12 @@ export default async function handler(request, response) {
       };
     } else if (body.action === 'business-list') {
       payload = { action: 'business-list', actor: memberActor(user, access) };
+    } else if (body.action === 'business-touch') {
+      payload = {
+        action: 'business-touch',
+        businessId: String(body.businessId || '').slice(0, 80),
+        actor: memberActor(user, access),
+      };
     } else if (body.action === 'business-update') {
       payload = {
         action: 'business-update',
@@ -927,6 +916,17 @@ export default async function handler(request, response) {
       if (body.action === 'staff-site' || body.action === 'post') clearCached('internet-banner-v1');
       // Staff feed edits can affect every viewer — drop shared feed entries.
       if (STAFF_ACTIONS.has(String(body.action || ''))) clearCachedMatching('internet-feed:');
+    }
+    if (result.ok && body.action === 'business-update' && result.body?.previousAvatarUrl) {
+      await deleteVercelBlobUrls([result.body.previousAvatarUrl]);
+    }
+    if (
+      result.ok
+      && body.action === 'staff-user'
+      && body.staffAction === 'delete-business'
+      && result.body?.avatarUrl
+    ) {
+      await deleteVercelBlobUrls([result.body.avatarUrl]);
     }
     const redact = STAFF_ACTIONS.has(String(body.action || '')) && canStaff
       ? redactStaffPayload
