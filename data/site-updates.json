@@ -231,7 +231,7 @@
       "summary": "Clearwater Phone download is now a single ClearwaterPhone.exe — double-click to open. First launch installs the runtime once automatically.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:00:00.000Z",
-      "commit": "pending"
+      "commit": "b3c61b0"
     }
   ]
 }
