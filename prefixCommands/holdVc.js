@@ -1,8 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
-import {
-  RANK_FLOOR,
-  requireMinRank,
-} from '../utils/prefixHelpers.js';
+import { requireOwnership } from '../utils/prefixHelpers.js';
 import {
   HOLD_VC_PHRASE,
   holdVoiceChat,
@@ -11,11 +8,9 @@ import {
 
 export const holdvc = {
   name: 'holdvc',
-  aliases: ['hold', 'vchold'],
-  description: 'Server-mute everyone in a voice channel except Ownership and announce a hold with Onyx voice.',
-  minRank: RANK_FLOOR.supervisor,
+  description: 'Ownership-only: server-mute everyone in a voice channel except Ownership and announce a hold with Onyx voice.',
   async execute(message) {
-    requireMinRank(message, RANK_FLOOR.supervisor);
+    requireOwnership(message);
     const result = await holdVoiceChat(message, message.client.config);
 
     const lines = [
@@ -46,11 +41,9 @@ export const holdvc = {
 
 export const unholdvc = {
   name: 'unholdvc',
-  aliases: ['releasevc', 'unhold'],
-  description: 'Release a hold VC and unmute members muted by -holdvc.',
-  minRank: RANK_FLOOR.supervisor,
+  description: 'Ownership-only: release a hold VC and unmute members muted by -holdvc.',
   async execute(message) {
-    requireMinRank(message, RANK_FLOOR.supervisor);
+    requireOwnership(message);
     const result = await releaseVoiceChat(message);
     await message.reply({
       embeds: [

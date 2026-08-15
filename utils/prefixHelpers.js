@@ -6,6 +6,7 @@ import {
   getHighestStaffRank,
   getStaffRankIndex,
   memberMeetsMinRank,
+  FULL_STAFF_PANEL_ROLE_ID,
   STAFF_RANKS,
 } from './staffRanks.js';
 
@@ -54,6 +55,25 @@ export function requireMinRank(message, minRankName = RANK_FLOOR.anyStaff) {
   if (!memberMeetsMinRank(message.member, minRankName)) {
     const yours = staffRankLabel(message.member);
     throw new Error(`Requires **${minRankName}+** (your rank: ${yours}).`);
+  }
+}
+
+/** Ownership role / configured owner IDs only — not general staff ranks. */
+export function memberIsOwnership(member, config = {}) {
+  if (!member) return false;
+  const ownerIds = new Set((config.ownerDiscordIds || []).map(String));
+  if (ownerIds.has(String(member.id))) return true;
+  if (member.roles?.cache?.has(FULL_STAFF_PANEL_ROLE_ID)) return true;
+  for (const roleId of config.ownerRoleIds || []) {
+    if (roleId && member.roles?.cache?.has(String(roleId))) return true;
+  }
+  return getHighestStaffRank(member)?.owner === true;
+}
+
+export function requireOwnership(message) {
+  const config = message.client?.config || {};
+  if (!memberIsOwnership(message.member, config)) {
+    throw new Error('Only Ownership can use that command.');
   }
 }
 
