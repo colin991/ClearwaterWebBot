@@ -1,7 +1,5 @@
 {
   "name": "clearwater-phone",
-  "version": "1.0.0",
-  "private": true,
   "description": "Clearwater Phone overlay",
   "main": "main.js",
   "scripts": {

@@ -224,6 +224,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T17:55:00.000Z",
       "commit": "b89f553"
+    },
+    {
+      "id": "2026-08-15-phone-exe",
+      "title": "Clearwater Phone Windows exe",
+      "summary": "Clearwater Phone download is now a single ClearwaterPhone.exe — double-click to open. First launch installs the runtime once automatically.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T18:00:00.000Z",
+      "commit": "pending"
     }
   ]
 }
