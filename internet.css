@@ -2820,6 +2820,7 @@ body { margin: 0; }
 .drop-map {
   overflow: hidden;
   margin: 10px 0 0 52px;
+  width: auto;
   max-width: min(420px, calc(100% - 52px));
   border: 1px solid rgba(180, 190, 205, .18);
   border-radius: 16px;
