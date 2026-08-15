@@ -4,7 +4,7 @@
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
   const settings = { autoUpdate: true };
-  let appVersion = '1.3.3';
+  let appVersion = '1.3.4';
   let latestInfo = null;
   let updateInFlight = false;
   let sessionUser = null;
@@ -729,6 +729,15 @@
     updateInFlight = true;
     const status = $('#settings-update-status');
     const bannerCopy = $('#update-copy');
+    const setFail = (message) => {
+      const msg = message || 'Update failed — try again';
+      if (status) {
+        status.hidden = false;
+        status.textContent = msg;
+      }
+      if (bannerCopy) bannerCopy.textContent = msg;
+      updateInFlight = false;
+    };
     if (status) {
       status.hidden = false;
       status.textContent = 'Downloading update…';
@@ -736,17 +745,23 @@
     if (bannerCopy) bannerCopy.textContent = 'Downloading update…';
     try {
       if (!window.anchorPhone?.installUpdate) {
-        updateInFlight = false;
+        setFail('Updater unavailable in this build.');
         return;
       }
       const result = await window.anchorPhone.installUpdate(latestInfo.downloadUrl);
       if (!result?.ok) {
-        if (status) status.textContent = result?.error || 'Update failed.';
-        updateInFlight = false;
+        setFail(result?.error || 'Update failed — try again');
+        if (result?.openUrl) {
+          window.setTimeout(() => {
+            void window.anchorPhone?.openUrl?.(result.openUrl);
+          }, 400);
+        }
+        return;
       }
-    } catch {
-      if (status) status.textContent = 'Update failed.';
-      updateInFlight = false;
+      if (bannerCopy) bannerCopy.textContent = 'Installing update…';
+      if (status) status.textContent = 'Installing update… restarting…';
+    } catch (err) {
+      setFail(err?.message || 'Update failed — try again');
     }
   }
 
@@ -763,9 +778,16 @@
   async function checkForUpdates(manual = false) {
     const status = $('#settings-update-status');
     try {
-      const res = await fetch(VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' });
-      if (!res.ok) throw new Error('version check failed');
-      const info = await res.json();
+      let info = null;
+      if (window.anchorPhone?.checkUpdate) {
+        const result = await window.anchorPhone.checkUpdate();
+        if (!result?.ok) throw new Error(result?.error || 'version check failed');
+        info = result.info;
+      } else {
+        const res = await fetch(VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' });
+        if (!res.ok) throw new Error('version check failed');
+        info = await res.json();
+      }
       latestInfo = info;
       if (compareVersions(appVersion, info.version) < 0) {
         showOutdated(info);
@@ -797,10 +819,13 @@
   $('#update-now')?.addEventListener('click', () => void installUpdate());
   window.anchorPhone?.onUpdateProgress?.((pct) => {
     const status = $('#settings-update-status');
+    const bannerCopy = $('#update-copy');
+    const msg = `Downloading update… ${pct}%`;
     if (status) {
       status.hidden = false;
-      status.textContent = `Downloading update… ${pct}%`;
+      status.textContent = msg;
     }
+    if (bannerCopy) bannerCopy.textContent = msg;
   });
 
   loadSettings();

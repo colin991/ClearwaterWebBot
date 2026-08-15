@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('anchorPhone', {
   showOverlay: () => ipcRenderer.invoke('phone-show-overlay'),
   feed: () => ipcRenderer.invoke('phone-feed'),
   installUpdate: (href) => ipcRenderer.invoke('phone-install-update', href),
+  checkUpdate: () => ipcRenderer.invoke('phone-check-update'),
   onUpdateProgress: (cb) => {
     ipcRenderer.on('phone-update-progress', (_e, pct) => cb(pct));
   },

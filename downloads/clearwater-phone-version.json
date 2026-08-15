@@ -1,6 +1,7 @@
 {
-  "version": "1.3.3",
+  "version": "1.3.4",
   "minVersion": "1.3.3",
   "downloadUrl": "https://cwrpvc.lol/downloads/ClearwaterPhone.exe",
-  "releaseNotes": "Settings now let you change the keyboard button that shows or hides Clearwater Phone."
+  "downloadUrlMirror": "https://raw.githubusercontent.com/colin991/ClearwaterWebBot/main/downloads/ClearwaterPhone.exe",
+  "releaseNotes": "Fixes in-app updates: safer Windows replace, browser download session, and GitHub mirror if Cloudflare blocks the file."
 }

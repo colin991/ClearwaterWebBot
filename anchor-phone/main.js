@@ -185,6 +185,13 @@ function openLoginWindow() {
 }
 
 const ALLOWED_HOSTS = new Set(['cwrpvc.lol', 'www.cwrpvc.lol', 'localhost', '127.0.0.1']);
+const UPDATE_HOSTS = new Set([
+  ...ALLOWED_HOSTS,
+  'raw.githubusercontent.com',
+  'github.com',
+  'objects.githubusercontent.com',
+  'cdn.jsdelivr.net',
+]);
 const pkg = require('./package.json');
 
 let win = null;
@@ -452,33 +459,216 @@ function toggleOverlay() {
 function downloadFile(url, dest, onProgress) {
   return new Promise((resolve, reject) => {
     const client = url.startsWith('https') ? https : http;
-    const req = client.get(url, { headers: { 'User-Agent': 'ClearwaterPhone/' + pkg.version } }, (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        res.resume();
-        downloadFile(res.headers.location, dest, onProgress).then(resolve).catch(reject);
-        return;
+    const req = client.get(
+      url,
+      {
+        headers: {
+          'User-Agent': CHROME_UA,
+          Accept: 'application/octet-stream,*/*',
+          Referer: SITE + '/',
+        },
+      },
+      (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume();
+          downloadFile(res.headers.location, dest, onProgress).then(resolve).catch(reject);
+          return;
+        }
+        if (res.statusCode !== 200) {
+          reject(new Error('Download failed (HTTP ' + res.statusCode + ')'));
+          res.resume();
+          return;
+        }
+        const type = String(res.headers['content-type'] || '');
+        if (/text\/html/i.test(type)) {
+          reject(new Error('Download blocked by Cloudflare. Use Open download page.'));
+          res.resume();
+          return;
+        }
+        const total = Number(res.headers['content-length'] || 0);
+        let received = 0;
+        const chunks = [];
+        res.on('data', (chunk) => {
+          chunks.push(chunk);
+          received += chunk.length;
+          if (total && onProgress) onProgress(received / total);
+        });
+        res.on('end', () => {
+          try {
+            const buffer = Buffer.concat(chunks);
+            if (buffer.length < 64 || buffer[0] !== 0x4d || buffer[1] !== 0x5a) {
+              reject(new Error('Download did not return ClearwaterPhone.exe'));
+              return;
+            }
+            fs.writeFileSync(dest, buffer);
+            resolve(dest);
+          } catch (err) {
+            reject(err);
+          }
+        });
+        res.on('error', reject);
       }
-      if (res.statusCode !== 200) {
-        reject(new Error('Download failed (HTTP ' + res.statusCode + ')'));
-        res.resume();
-        return;
-      }
-      const total = Number(res.headers['content-length'] || 0);
-      let received = 0;
-      const file = fs.createWriteStream(dest);
-      res.on('data', (chunk) => {
-        received += chunk.length;
-        if (total && onProgress) onProgress(received / total);
-      });
-      res.pipe(file);
-      file.on('finish', () => file.close(() => resolve(dest)));
-      file.on('error', reject);
-    });
+    );
     req.on('error', reject);
     req.setTimeout(10 * 60 * 1000, () => {
       req.destroy(new Error('Download timed out'));
     });
   });
+}
+
+async function downloadFileViaSession(url, dest, onProgress) {
+  const response = await phoneSession().fetch(url, {
+    method: 'GET',
+    redirect: 'follow',
+    headers: {
+      'User-Agent': CHROME_UA,
+      Accept: 'application/octet-stream,*/*',
+      Referer: SITE + '/',
+    },
+  });
+  if (!response.ok) {
+    throw new Error('Download failed (HTTP ' + response.status + ')');
+  }
+  const type = String(response.headers.get('content-type') || '');
+  if (/text\/html/i.test(type)) {
+    throw new Error('Download blocked by Cloudflare. Use Open download page.');
+  }
+  const total = Number(response.headers.get('content-length') || 0);
+  if (!response.body || typeof response.body.getReader !== 'function') {
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length < 64 || buffer[0] !== 0x4d || buffer[1] !== 0x5a) {
+      throw new Error('Download did not return ClearwaterPhone.exe');
+    }
+    fs.writeFileSync(dest, buffer);
+    if (onProgress) onProgress(1);
+    return dest;
+  }
+  const reader = response.body.getReader();
+  const chunks = [];
+  let received = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = Buffer.from(value);
+    chunks.push(chunk);
+    received += chunk.length;
+    if (total && onProgress) onProgress(Math.min(1, received / total));
+  }
+  const buffer = Buffer.concat(chunks);
+  if (buffer.length < 64 || buffer[0] !== 0x4d || buffer[1] !== 0x5a) {
+    throw new Error('Download did not return ClearwaterPhone.exe');
+  }
+  fs.writeFileSync(dest, buffer);
+  if (onProgress) onProgress(1);
+  return dest;
+}
+
+function currentAppExecutable() {
+  try {
+    if (app.isPackaged) return process.execPath;
+  } catch {}
+  return process.execPath;
+}
+
+function scheduleWindowsReplace(currentExe, updateExe) {
+  const pid = process.pid;
+  const script = path.join(app.getPath('temp'), `cw-phone-update-${pid}.cmd`);
+  const lines = [
+    '@echo off',
+    'setlocal',
+    `set "TARGET=${currentExe.replace(/"/g, '')}"`,
+    `set "SOURCE=${updateExe.replace(/"/g, '')}"`,
+    `set "PID=${pid}"`,
+    ':wait',
+    'tasklist /FI "PID eq %PID%" 2>nul | find "%PID%" >nul',
+    'if not errorlevel 1 (',
+    '  timeout /t 1 /nobreak >nul',
+    '  goto wait',
+    ')',
+    'timeout /t 1 /nobreak >nul',
+    'copy /Y "%SOURCE%" "%TARGET%" >nul',
+    'if errorlevel 1 move /Y "%SOURCE%" "%TARGET%" >nul',
+    'start "" "%TARGET%"',
+    'del "%SOURCE%" >nul 2>&1',
+    'del "%~f0" >nul 2>&1',
+  ];
+  fs.writeFileSync(script, lines.join('\r\n'), 'utf8');
+  const child = spawn('cmd.exe', ['/c', script], {
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true,
+    cwd: path.dirname(currentExe),
+  });
+  child.unref();
+  return script;
+}
+
+async function installPhoneUpdate(event, href) {
+  const primary = String(href || '');
+  const mirror =
+    'https://raw.githubusercontent.com/colin991/ClearwaterWebBot/main/downloads/ClearwaterPhone.exe';
+  const candidates = [...new Set([primary, mirror].filter(Boolean))];
+
+  let lastError = 'Update failed';
+  for (const candidate of candidates) {
+    let url;
+    try {
+      url = new URL(candidate);
+    } catch {
+      continue;
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') continue;
+    if (!UPDATE_HOSTS.has(url.hostname)) continue;
+
+    const currentExe = currentAppExecutable();
+    const staged = path.join(app.getPath('temp'), `ClearwaterPhone-${pkg.version}-update.exe`);
+    try {
+      fs.unlinkSync(staged);
+    } catch {}
+
+    const onProgress = (ratio) => {
+      if (event.sender && !event.sender.isDestroyed()) {
+        event.sender.send('phone-update-progress', Math.round(ratio * 100));
+      }
+    };
+
+    try {
+      try {
+        await downloadFileViaSession(url.toString(), staged, onProgress);
+      } catch {
+        await downloadFile(url.toString(), staged, onProgress);
+      }
+
+      if (process.platform === 'win32' && app.isPackaged) {
+        scheduleWindowsReplace(currentExe, staged);
+        setTimeout(() => app.quit(), 500);
+        return { ok: true, path: currentExe, mode: 'replace', from: url.toString() };
+      }
+
+      const dest = path.join(app.getPath('downloads'), 'ClearwaterPhone.exe');
+      try {
+        fs.copyFileSync(staged, dest);
+      } catch {
+        fs.renameSync(staged, dest);
+      }
+      const child = spawn(dest, [], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: false,
+      });
+      child.unref();
+      setTimeout(() => app.quit(), 600);
+      return { ok: true, path: dest, mode: 'launch', from: url.toString() };
+    } catch (err) {
+      lastError = String(err && err.message ? err.message : err);
+    }
+  }
+
+  return {
+    ok: false,
+    error: lastError,
+    openUrl: primary || mirror,
+  };
 }
 
 app.whenReady().then(() => {
@@ -617,40 +807,23 @@ app.whenReady().then(() => {
 
   ipcMain.handle('phone-install-update', async (event, href) => {
     try {
-      const url = new URL(String(href || ''));
-      if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-        return { ok: false, error: 'Invalid update URL' };
+      return await installPhoneUpdate(event, href);
+    } catch (err) {
+      return {
+        ok: false,
+        error: String(err && err.message ? err.message : err),
+        openUrl: String(href || SITE + '/downloads/ClearwaterPhone.exe'),
+      };
+    }
+  });
+
+  ipcMain.handle('phone-check-update', async () => {
+    try {
+      const result = await siteFetch('/downloads/clearwater-phone-version.json?t=' + Date.now());
+      if (!result.ok || !result.body || typeof result.body !== 'object') {
+        return { ok: false, error: result.body?.error || 'Could not check for updates' };
       }
-      if (!ALLOWED_HOSTS.has(url.hostname)) {
-        return { ok: false, error: 'Update host not allowed' };
-      }
-
-      const dest = path.join(app.getPath('downloads'), 'ClearwaterPhone.exe');
-      const partial = dest + '.part';
-      try {
-        fs.unlinkSync(partial);
-      } catch {}
-
-      await downloadFile(url.toString(), partial, (ratio) => {
-        if (event.sender && !event.sender.isDestroyed()) {
-          event.sender.send('phone-update-progress', Math.round(ratio * 100));
-        }
-      });
-
-      try {
-        fs.unlinkSync(dest);
-      } catch {}
-      fs.renameSync(partial, dest);
-
-      const child = spawn(dest, [], {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: false
-      });
-      child.unref();
-
-      setTimeout(() => app.quit(), 600);
-      return { ok: true, path: dest };
+      return { ok: true, info: result.body };
     } catch (err) {
       return { ok: false, error: String(err && err.message ? err.message : err) };
     }
