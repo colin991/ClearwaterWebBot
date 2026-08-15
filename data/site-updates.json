@@ -135,7 +135,7 @@
       "summary": "The staff panel Active tab lists logged-in members currently on Clearwater Internet (especially the home feed), using live presence pulses with Discord avatar, display name, @username, and Discord ID.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T05:05:00.000Z",
-      "commit": "7c4cf0a"
+      "commit": "daf02d6"
     }
   ]
 }
