@@ -2,11 +2,19 @@
   "version": 1,
   "updates": [
     {
+<<<<<<< HEAD
       "id": "2026-08-15-phone-api-bridge",
       "title": "Phone apps work after sign-in",
       "summary": "Messages, Find My, Wallet, and Maps can talk to Clearwater again. Sign-in was sticking, but the overlay never had a working API connection.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T23:15:00.000Z"
+=======
+      "id": "2026-08-15-staff-remove-warning",
+      "title": "Remove individual warnings in staff",
+      "summary": "The staff Users panel Warnings list now has a Remove button on each warning or staff notice. Removals can be restored from moderation history.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T22:20:00.000Z"
+>>>>>>> origin/cursor/staff-remove-warning-17fb
     },
     {
       "id": "2026-08-15-staff-delete-business",

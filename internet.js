@@ -3175,7 +3175,7 @@ function staffUserPanelMarkup(detail) {
     </section>
     <section class="staff-user-block">
       <h3>Warnings</h3>
-      ${warnings.length ? warnings.map((warning) => `<article class="staff-compact"><b>${warning.kind === 'notice' ? 'Notice · ' : ''}${escapeHtml(warning.reason)}</b><small>${escapeHtml(timeAgo(warning.createdAt))}${warning.readAt ? ' · seen' : ' · unread'}</small></article>`).join('') : '<p class="staff-empty">No warnings.</p>'}
+      ${warnings.length ? warnings.map((warning) => `<article class="staff-compact"><b>${warning.kind === 'notice' ? 'Notice · ' : ''}${escapeHtml(warning.reason)}</b><small>${escapeHtml(timeAgo(warning.createdAt))}${warning.readAt ? ' · seen' : ' · unread'}</small><button type="button" class="staff-action-btn danger" data-staff-user-action="remove-warning" data-staff-warning-id="${escapeHtml(warning.id)}">Remove</button></article>`).join('') : '<p class="staff-empty">No warnings.</p>'}
     </section>
     <section class="staff-user-block">
       <h3>Reports</h3>
@@ -3759,12 +3759,15 @@ async function runStaffUserAction(staffAction, postId = '', sourceButton = null)
   if (staffUserBusy) return;
   const panelState = staffPanelUiState();
   const fields = panelState.fields;
-  const destructive = new Set(['ban', 'ip-ban', 'wipe-posts', 'wipe-reels', 'wipe-comments', 'wipe-messages', 'delete-post', 'reset-profile', 'shadowban', 'delete-business']);
+  const warningId = sourceButton?.dataset?.staffWarningId || '';
+  const destructive = new Set(['ban', 'ip-ban', 'wipe-posts', 'wipe-reels', 'wipe-comments', 'wipe-messages', 'delete-post', 'reset-profile', 'shadowban', 'delete-business', 'remove-warning']);
   if (destructive.has(staffAction)) {
     const confirmLabel = staffAction === 'delete-business'
       ? 'Permanently delete this business account, its posts, and its ads? The linked personal handler account stays. This cannot be undone.'
+      : staffAction === 'remove-warning'
+        ? 'Remove this warning from the account?'
       : `Run "${staffAction.replace(/-/g, ' ')}" on this account? This cannot be undone.`;
-    if (!(await siteConfirm(confirmLabel, staffAction === 'delete-business' ? 'Delete business' : 'Staff action'))) return;
+    if (!(await siteConfirm(confirmLabel, staffAction === 'delete-business' ? 'Delete business' : staffAction === 'remove-warning' ? 'Remove warning' : 'Staff action'))) return;
   }
   staffUserBusy = true;
   const isToggle = sourceButton?.classList?.contains('staff-toggle');
@@ -3791,6 +3794,7 @@ async function runStaffUserAction(staffAction, postId = '', sourceButton = null)
         durationDays: normalizeStaffDurationDays(fields.durationDays),
         ipBan: fields.ipBan,
         postId,
+        warningId,
       }),
     });
     const result = await readApiJson(response, 'Could not update this user.');
