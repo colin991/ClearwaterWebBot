@@ -72,9 +72,9 @@ async function siteFetch(pathname, { method = 'GET', body } = {}) {
 }
 
 function notifyOverlayAuth(payload) {
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('phone-auth', payload || { authenticated: false });
-  }
+  const auth = payload || { authenticated: false };
+  if (win && !win.isDestroyed()) win.webContents.send('phone-auth', auth);
+  if (launcherWin && !launcherWin.isDestroyed()) launcherWin.webContents.send('phone-auth', auth);
 }
 
 async function readAuthState() {
@@ -172,6 +172,7 @@ function settingsPath() {
 
 function defaultHostSettings() {
   return {
+    setupComplete: false,
     startWithWindows: false,
     launchOnApp: true,
     watchProcess: 'RobloxPlayerBeta.exe',
@@ -182,7 +183,9 @@ function readHostSettings() {
   try {
     const raw = fs.readFileSync(settingsPath(), 'utf8');
     const parsed = JSON.parse(raw);
-    return { ...defaultHostSettings(), ...parsed };
+    const merged = { ...defaultHostSettings(), ...parsed };
+    if (typeof parsed.setupComplete !== 'boolean') merged.setupComplete = true;
+    return merged;
   } catch {
     return defaultHostSettings();
   }
@@ -330,6 +333,7 @@ function createLauncherWindow() {
     autoHideMenuBar: true,
     icon: iconPath(),
     webPreferences: {
+      partition: SESSION_PARTITION,
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
@@ -486,6 +490,7 @@ app.whenReady().then(() => {
   ipcMain.handle('phone-host-settings-save', async (_e, patch) => {
     const current = readHostSettings();
     const next = { ...current };
+    if (typeof patch?.setupComplete === 'boolean') next.setupComplete = patch.setupComplete;
     if (typeof patch?.startWithWindows === 'boolean') next.startWithWindows = patch.startWithWindows;
     if (typeof patch?.launchOnApp === 'boolean') next.launchOnApp = patch.launchOnApp;
     if (typeof patch?.watchProcess === 'string') {

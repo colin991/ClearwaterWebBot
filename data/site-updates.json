@@ -2,7 +2,12 @@
   "version": 1,
   "updates": [
     {
-      "id": "2026-08-15-phone-signin-popup",
+      "id": "2026-08-15-phone-setup-page",
+      "title": "Phone first-time setup is back",
+      "summary": "The first time you open Clearwater Phone, you get a setup page to sign in with Discord and choose startup preferences before launching the overlay.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T20:10:00.000Z"
+    },
       "title": "Phone sign-in no longer opens the feed",
       "summary": "Discord login on Clearwater Phone now returns to the overlay instead of leaving you on the Internet feed in the popup, and the phone stays signed in.",
       "updatedBy": "colin991",

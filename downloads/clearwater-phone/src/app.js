@@ -4,7 +4,7 @@
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
   const settings = { autoUpdate: true };
-  let appVersion = '1.3.2';
+  let appVersion = '1.3.3';
   let latestInfo = null;
   let updateInFlight = false;
   let sessionUser = null;
