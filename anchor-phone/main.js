@@ -330,8 +330,8 @@ async function createOverlayWindow({ closeLauncher = true } = {}) {
   }
 
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
-  const phoneW = 390;
-  const phoneH = 800;
+  const phoneW = 360;
+  const phoneH = 740;
 
   win = new BrowserWindow({
     width: phoneW,
@@ -339,12 +339,12 @@ async function createOverlayWindow({ closeLauncher = true } = {}) {
     x: sw - phoneW - 28,
     y: Math.max(24, Math.floor((sh - phoneH) / 2)),
     frame: false,
-    transparent: true,
+    transparent: false,
     alwaysOnTop: true,
     resizable: false,
     skipTaskbar: false,
-    hasShadow: false,
-    backgroundColor: '#00000000',
+    hasShadow: true,
+    backgroundColor: '#121820',
     icon: iconPath(),
     webPreferences: {
       partition: SESSION_PARTITION,

@@ -16,6 +16,13 @@
       "createdAt": "2026-08-15T21:20:00.000Z"
     },
     {
+      "id": "2026-08-15-phone-overlay-opaque",
+      "title": "Phone overlay no longer ghosts",
+      "summary": "The overlay window is opaque, inactive screens stay hidden, and first-time setup no longer stacks overlapping cards or leftover welcome text.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T21:10:00.000Z"
+    },
+    {
       "id": "2026-08-15-phone-discord-session",
       "title": "Phone Discord sign-in actually sticks",
       "summary": "Clearwater Phone now keeps a Discord session the overlay can read. Signing in no longer depends on cookies the desktop app could not see.",
