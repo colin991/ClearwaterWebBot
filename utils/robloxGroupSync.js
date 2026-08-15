@@ -281,9 +281,26 @@ export function startRobloxGroupSync(client, config) {
     } catch (error) {
       logger.error('Roblox group join-request sync failed', error);
       const message = String(error?.message || 'Unknown error');
-      if (message !== lastError) {
-        lastError = message;
-        await sendGroupLog(client, config, 'Roblox group sync error', `The group sync could not run.\n\`${message.slice(0, 850)}\``, 0xed4245);
+      const transient = isTransientFetchError(error);
+      const now = Date.now();
+      // Transient Roblox outages (502/503/etc.) often clear on their own — only
+      // ping Discord at most once per 30 minutes for the same class of failure.
+      const shouldAlert = transient
+        ? (message !== lastError || now - lastTransientDiscordAlertAt > 30 * 60 * 1000)
+        : message !== lastError;
+      lastError = message;
+      if (shouldAlert) {
+        if (transient) lastTransientDiscordAlertAt = now;
+        const prefix = transient
+          ? 'Roblox had a temporary outage and the sync will retry automatically.\n'
+          : 'The group sync could not run.\n';
+        await sendGroupLog(
+          client,
+          config,
+          'Roblox group sync error',
+          `${prefix}\`${message.slice(0, 850)}\``,
+          0xed4245,
+        );
       }
     } finally {
       if (!stopped) timer = setTimeout(run, 60_000);
