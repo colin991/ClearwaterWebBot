@@ -831,6 +831,7 @@ export default async function handler(request, response) {
         })(),
         ipBan: staffPanel === 'full' && body.ipBan === true,
         postId: String(body.postId || ''),
+        warningId: String(body.warningId || ''),
         actor: staffActor(user, access),
         staffPanel,
         owner: staffPanel === 'full',

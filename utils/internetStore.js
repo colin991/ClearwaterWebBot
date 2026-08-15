@@ -3277,6 +3277,7 @@ export function applyStaffUserAction(store, {
   note = '',
   ipBan = false,
   postId = '',
+  warningId = '',
 }) {
   const id = String(targetId || '').trim();
   if (!isStaffTargetId(id)) throw new Error('Enter a valid Discord user ID or business account');
@@ -3382,6 +3383,25 @@ export function applyStaffUserAction(store, {
       targetId: user.id,
       warnings: previous,
     } : null);
+  } else if (action === 'remove-warning') {
+    const idToRemove = String(warningId || '').trim();
+    if (!idToRemove) throw new Error('Select a warning to remove');
+    user.warnings = Array.isArray(user.warnings) ? user.warnings : [];
+    const removed = user.warnings.find((warning) => warning.id === idToRemove);
+    if (!removed) throw new Error('That warning was not found');
+    user.warnings = user.warnings.filter((warning) => warning.id !== idToRemove);
+    const kindLabel = removed.kind === 'notice' ? 'staff notice' : 'warning';
+    addInternetLog(store, `${actorName} removed a ${kindLabel} from ${label}.`, {
+      type: 'restore-warning',
+      targetId: user.id,
+      warning: {
+        id: removed.id,
+        kind: removed.kind === 'notice' ? 'notice' : 'warning',
+        reason: text(removed.reason, 300),
+        createdAt: removed.createdAt || new Date().toISOString(),
+        readAt: removed.readAt || null,
+      },
+    });
   } else if (action === 'mute') {
     user.muted = true;
     user.muteReason = noteText || 'No reason was provided.';
@@ -4055,6 +4075,21 @@ function revertHistoryLog(store, { actor, logId }) {
   } else if (revert.type === 'remove-warning') {
     const user = upsertInternetUser(store, { id: revert.targetId });
     user.warnings = (Array.isArray(user.warnings) ? user.warnings : []).filter((warning) => warning.id !== revert.warningId);
+  } else if (revert.type === 'restore-warning') {
+    const user = upsertInternetUser(store, { id: revert.targetId });
+    user.warnings = Array.isArray(user.warnings) ? user.warnings : [];
+    const warning = revert.warning && typeof revert.warning === 'object' ? revert.warning : null;
+    const warningId = String(warning?.id || '').trim();
+    if (warningId && !user.warnings.some((item) => item.id === warningId)) {
+      user.warnings.unshift({
+        id: warningId,
+        kind: warning.kind === 'notice' ? 'notice' : 'warning',
+        reason: text(warning.reason, 300),
+        createdAt: warning.createdAt || new Date().toISOString(),
+        readAt: warning.readAt || null,
+      });
+      user.warnings = user.warnings.slice(0, 30);
+    }
   } else if (revert.type === 'restore-warnings') {
     const user = upsertInternetUser(store, { id: revert.targetId });
     user.warnings = Array.isArray(revert.warnings) ? revert.warnings.slice(0, 30) : [];

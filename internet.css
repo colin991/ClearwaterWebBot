@@ -656,6 +656,23 @@ body { background: #03070d; }
 .staff-compact b { font-size: 12px; }
 .staff-compact span { color: #d4dce4; font-size: 12px; }
 .staff-compact small { color: #7e93b1; font-size: 10px; }
+.staff-user-block .staff-compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+.staff-user-block .staff-compact b,
+.staff-user-block .staff-compact small {
+  grid-column: 1;
+}
+.staff-user-block .staff-compact button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+.staff-user-block .staff-compact button.danger {
+  border-color: rgba(255, 92, 92, .35);
+  background: rgba(255, 70, 70, .16);
+}
 .staff-empty {
   padding: 18px 12px;
   border: 1px dashed rgba(113, 158, 224, .2);

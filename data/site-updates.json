@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-staff-remove-warning",
+      "title": "Remove individual warnings in staff",
+      "summary": "The staff Users panel Warnings list now has a Remove button on each warning or staff notice. Removals can be restored from moderation history.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T22:20:00.000Z"
+    },
+    {
       "id": "2026-08-15-staff-delete-business",
       "title": "Staff can delete business accounts",
       "summary": "In the staff Users panel, business accounts now have a Delete business account action. It removes the business, its posts, and its ads. The linked personal handler account stays.",
