@@ -263,7 +263,7 @@
       "summary": "Clearwater Phone Settings can open apps on Clearwater Internet. The overlay checks for updates, shows an outdated banner, and can auto-download the latest ClearwaterPhone.exe.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:25:00.000Z",
-      "commit": "pending"
+      "commit": "fe723de"
     }
   ]
 }
