@@ -324,7 +324,7 @@
       "summary": "Clearwater Phone Discord login now uses a normal browser user-agent, keeps OAuth popups in the same session, and polls until the account sticks (v1.3.2).",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T19:50:00.000Z",
-      "commit": "pending"
+      "commit": "83e5945"
     }
   ]
 }
