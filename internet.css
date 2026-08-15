@@ -8536,3 +8536,89 @@ a.post-hashtag,
   border-color: rgba(255, 255, 255, .08) !important;
   box-shadow: none !important;
 }
+
+/* ==========================================================================
+   Neutral hairline borders — no blue glow / inset shimmer on panels.
+   ========================================================================== */
+:root {
+  --cw-border: rgba(255, 255, 255, .1);
+  --line: rgba(255, 255, 255, .1);
+}
+
+.wallet-tabs,
+.wallet-intro-card,
+.wallet-balance-card,
+.wallet-card,
+.wallet-claim-status,
+.wallet-daily-box,
+.wallet-transactions,
+.internet-wallet-link,
+.wallet-balance-icon,
+.page-heading,
+.settings-card,
+.settings-stack label,
+.privacy-settings label,
+.internet-side > div,
+.internet-view,
+.internet-view[data-view="home"] .internet-header,
+.internet-view[data-view="home"] .composer,
+.internet-view[data-view="home"] .posts,
+.notification-list,
+.message-list,
+.profile-view,
+.search-side,
+.feed-tabs,
+.community-card,
+.owner-controls,
+.join-required-card,
+.cw-select-trigger,
+.cw-select-menu,
+.settings-field input,
+.settings-field textarea,
+.settings-field select {
+  border-color: rgba(255, 255, 255, .1) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.wallet-intro-card,
+.wallet-balance-card,
+.wallet-card,
+.wallet-tabs,
+.internet-wallet-link {
+  background: #03070d !important;
+  background-image: none !important;
+}
+
+.wallet-balance-icon {
+  background: #0a0f16 !important;
+  border: 1px solid rgba(255, 255, 255, .12) !important;
+  box-shadow: none !important;
+}
+
+.wallet-card .wallet-next,
+.wallet-card [data-wallet-claim-status],
+.wallet-status {
+  border-color: rgba(255, 255, 255, .1) !important;
+  background: rgba(255, 255, 255, .03) !important;
+  box-shadow: none !important;
+}
+
+.wallet-transactions,
+.wallet-transaction,
+.wallet-transaction + .wallet-transaction {
+  border-color: rgba(255, 255, 255, .08) !important;
+  box-shadow: none !important;
+}
+
+.internet-view[data-view="home"] .composer-tools,
+.internet-view[data-view="home"] .composer-footer {
+  border-top-color: rgba(255, 255, 255, .1) !important;
+}
+
+.internet-rail,
+.internet-search input {
+  border-color: rgba(255, 255, 255, .1) !important;
+  box-shadow: none !important;
+  background-image: none !important;
+}
