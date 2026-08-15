@@ -7,50 +7,60 @@ const { spawn, execFile } = require('child_process');
 
 const SITE = 'https://cwrpvc.lol';
 const SESSION_PARTITION = 'persist:clearwater-phone';
-const CHROME_UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 function phoneSession() {
   return session.fromPartition(SESSION_PARTITION);
 }
 
-async function listSiteCookies() {
+async function sessionCookies() {
   const ses = phoneSession();
-  const byUrl = await ses.cookies.get({ url: SITE });
-  const all = await ses.cookies.get({});
-  const merged = new Map();
-  for (const cookie of [...byUrl, ...all]) {
-    if (!cookie?.name || !cookie.value) continue;
-    const host = String(cookie.domain || '').replace(/^\./, '');
-    const isHostCookie = cookie.name.startsWith('__Host-');
-    const onSite = !host || host === 'cwrpvc.lol' || host.endsWith('.cwrpvc.lol');
-    if (isHostCookie || onSite) merged.set(cookie.name, cookie);
+  let cookies = await ses.cookies.get({ url: SITE });
+  if (!cookies.some((cookie) => /clearwater_session/i.test(cookie.name))) {
+    cookies = await ses.cookies.get({ url: `${SITE}/` });
   }
-  return [...merged.values()];
+  if (!cookies.some((cookie) => /clearwater_session/i.test(cookie.name))) {
+    const all = await ses.cookies.get({});
+    cookies = all.filter((cookie) => {
+      const domain = String(cookie.domain || '').replace(/^\./, '').toLowerCase();
+      return /clearwater_session/i.test(cookie.name)
+        || !domain
+        || domain === 'cwrpvc.lol'
+        || domain.endsWith('.cwrpvc.lol');
+    });
+  }
+  return cookies;
+}
+
+async function cookieHeaderForSite() {
+  const cookies = await sessionCookies();
+  return cookies
+    .filter((cookie) => cookie.value)
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .join('; ');
 }
 
 async function hasSiteSession() {
-  const cookies = await listSiteCookies();
-  return cookies.some((cookie) => /(?:^|_)clearwater_session$/i.test(cookie.name) || /clearwater_session/i.test(cookie.name));
+  const cookies = await sessionCookies();
+  return cookies.some((cookie) => /clearwater_session/i.test(cookie.name) && cookie.value);
 }
 
 async function siteFetch(pathname, { method = 'GET', body } = {}) {
   const url = pathname.startsWith('http') ? pathname : SITE + pathname;
   const payload = body != null ? JSON.stringify(body) : null;
-  const cookies = await listSiteCookies();
-  const cookieHeader = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
-  const response = await phoneSession().fetch(url, {
-    method,
-    headers: {
-      Accept: 'application/json',
-      Origin: SITE,
-      Referer: SITE + '/internet',
-      'User-Agent': CHROME_UA,
-      ...(cookieHeader ? { Cookie: cookieHeader } : {}),
-      ...(payload ? { 'Content-Type': 'application/json' } : {}),
-    },
-    body: payload || undefined,
-  });
+  const cookie = await cookieHeaderForSite();
+  const headers = {
+    Accept: 'application/json',
+    Origin: SITE,
+    Referer: SITE + '/phone-signed-in',
+    'User-Agent': 'ClearwaterPhone/' + pkg.version,
+    ...(cookie ? { Cookie: cookie } : {}),
+    ...(payload ? { 'Content-Type': 'application/json' } : {}),
+  };
+  const init = { method, headers, body: payload || undefined };
+  const ses = phoneSession();
+  const response = typeof ses.fetch === 'function'
+    ? await ses.fetch(url, init)
+    : await net.fetch(url, { ...init, session: ses, useSessionCookies: true });
   const text = await response.text();
   let data = {};
   try {
@@ -74,24 +84,22 @@ async function readAuthState() {
 }
 
 let loginWin = null;
-let loginPollTimer = null;
-
-function stopLoginPoll() {
-  if (loginPollTimer) {
-    clearInterval(loginPollTimer);
-    loginPollTimer = null;
-  }
-}
 
 function closeLoginWindow() {
-  stopLoginPoll();
   if (loginWin && !loginWin.isDestroyed()) loginWin.close();
 }
 
-function applyBrowserUa(contents) {
+function loginLooksComplete(href) {
   try {
-    contents.setUserAgent(CHROME_UA);
-  } catch {}
+    const url = new URL(String(href || ''));
+    if (!['cwrpvc.lol', 'www.cwrpvc.lol'].includes(url.hostname.toLowerCase())) return false;
+    if (url.pathname === '/phone-signed-in' || url.pathname === '/phone-signed-in.html') return true;
+    if (url.pathname === '/internet' || url.pathname.startsWith('/internet/')) return true;
+    if (url.searchParams.get('login') === 'success') return true;
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 function openLoginWindow() {
@@ -117,66 +125,30 @@ function openLoginWindow() {
   });
   loginWin.setAlwaysOnTop(true, 'screen-saver');
   if (win && !win.isDestroyed()) win.setAlwaysOnTop(false);
-  applyBrowserUa(loginWin.webContents);
+  loginWin.loadURL(SITE + '/signin?next=/phone-signed-in');
 
-  loginWin.webContents.setWindowOpenHandler(({ url }) => {
-    try {
-      const host = new URL(url).hostname;
-      const allowed =
-        host === 'cwrpvc.lol' ||
-        host.endsWith('.cwrpvc.lol') ||
-        host === 'discord.com' ||
-        host.endsWith('.discord.com') ||
-        host === 'discordapp.com' ||
-        host.endsWith('.discordapp.com');
-      if (!allowed) return { action: 'deny' };
-    } catch {
-      return { action: 'deny' };
-    }
-    return {
-      action: 'allow',
-      overrideBrowserWindowOptions: {
-        width: 520,
-        height: 760,
-        autoHideMenuBar: true,
-        alwaysOnTop: true,
-        webPreferences: {
-          partition: SESSION_PARTITION,
-          contextIsolation: true,
-          nodeIntegration: false,
-          sandbox: true,
-        },
-      },
-    };
-  });
-
-  loginWin.webContents.on('did-create-window', (child) => {
-    applyBrowserUa(child.webContents);
-    child.setAlwaysOnTop(true, 'screen-saver');
-  });
-
+  let finishing = false;
   const finishIfSignedIn = async () => {
-    try {
-      if (!(await hasSiteSession())) return;
-      const auth = await readAuthState();
-      notifyOverlayAuth(auth);
-      if (auth.authenticated) closeLoginWindow();
-    } catch {}
+    if (finishing || !loginWin || loginWin.isDestroyed()) return;
+    const href = loginWin.webContents.getURL();
+    if (!loginLooksComplete(href) && !(await hasSiteSession())) return;
+    finishing = true;
+    let auth = { authenticated: false };
+    for (let i = 0; i < 12; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      auth = await readAuthState();
+      if (auth.authenticated) break;
+    }
+    notifyOverlayAuth(auth);
+    if (auth.authenticated) closeLoginWindow();
+    else finishing = false;
   };
-
-  loginWin.loadURL(SITE + '/signin?next=/internet');
 
   loginWin.webContents.on('did-navigate', finishIfSignedIn);
   loginWin.webContents.on('did-navigate-in-page', finishIfSignedIn);
   loginWin.webContents.on('did-redirect-navigation', finishIfSignedIn);
   loginWin.webContents.on('did-finish-load', finishIfSignedIn);
-  stopLoginPoll();
-  loginPollTimer = setInterval(() => {
-    void finishIfSignedIn();
-  }, 1500);
-
   loginWin.on('closed', () => {
-    stopLoginPoll();
     loginWin = null;
     if (win && !win.isDestroyed()) win.setAlwaysOnTop(true, 'screen-saver');
     void readAuthState().then(notifyOverlayAuth);
@@ -185,13 +157,6 @@ function openLoginWindow() {
 }
 
 const ALLOWED_HOSTS = new Set(['cwrpvc.lol', 'www.cwrpvc.lol', 'localhost', '127.0.0.1']);
-const UPDATE_HOSTS = new Set([
-  ...ALLOWED_HOSTS,
-  'raw.githubusercontent.com',
-  'github.com',
-  'objects.githubusercontent.com',
-  'cdn.jsdelivr.net',
-]);
 const pkg = require('./package.json');
 
 let win = null;
@@ -210,7 +175,6 @@ function defaultHostSettings() {
     startWithWindows: false,
     launchOnApp: true,
     watchProcess: 'RobloxPlayerBeta.exe',
-    toggleShortcut: 'F8',
   };
 }
 
@@ -218,71 +182,14 @@ function readHostSettings() {
   try {
     const raw = fs.readFileSync(settingsPath(), 'utf8');
     const parsed = JSON.parse(raw);
-    return { ...defaultHostSettings(), ...parsed, toggleShortcut: normalizeShortcut(parsed.toggleShortcut) };
+    return { ...defaultHostSettings(), ...parsed };
   } catch {
     return defaultHostSettings();
   }
 }
 
-function normalizeShortcut(value) {
-  const raw = String(value || '').trim();
-  if (!raw) return 'F8';
-  const cleaned = raw
-    .replace(/\s+/g, '')
-    .replace(/Control/gi, 'CommandOrControl')
-    .replace(/Ctrl/gi, 'CommandOrControl')
-    .replace(/CmdOrCtrl/gi, 'CommandOrControl')
-    .replace(/Cmd/gi, 'CommandOrControl')
-    .replace(/Option/gi, 'Alt')
-    .replace(/Super/gi, 'Super');
-  if (!/^(?:(?:CommandOrControl|Ctrl|Alt|Shift|Super)\+)*((?:F1[0-2]|F[1-9])|[A-Z0-9]|Plus|Space|Tab)$/i.test(cleaned)) {
-    return 'F8';
-  }
-  return cleaned
-    .split('+')
-    .map((part) => {
-      if (/^f\d{1,2}$/i.test(part)) return `F${part.slice(1)}`;
-      if (/^[a-z]$/i.test(part)) return part.toUpperCase();
-      if (/^commandorcontrol$/i.test(part)) return 'CommandOrControl';
-      if (/^alt$/i.test(part)) return 'Alt';
-      if (/^shift$/i.test(part)) return 'Shift';
-      if (/^super$/i.test(part)) return 'Super';
-      return part;
-    })
-    .join('+');
-}
-
-function activeToggleShortcut() {
-  return normalizeShortcut(readHostSettings().toggleShortcut);
-}
-
-function registerToggleShortcut(preferred) {
-  const primary = normalizeShortcut(preferred || activeToggleShortcut());
-  const fallback = primary === 'F8' ? 'Alt+A' : 'F8';
-  try {
-    globalShortcut.unregisterAll();
-  } catch {}
-  const okPrimary = globalShortcut.register(primary, toggleOverlay);
-  if (!okPrimary) {
-    globalShortcut.register(fallback, toggleOverlay);
-  } else if (fallback !== primary) {
-    globalShortcut.register(fallback, toggleOverlay);
-  }
-  const active = okPrimary ? primary : fallback;
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('phone-host-settings', {
-      ...readHostSettings(),
-      toggleShortcut: primary,
-      activeShortcut: active,
-    });
-  }
-  return { primary, active, fallback };
-}
-
 function writeHostSettings(next) {
   const value = { ...defaultHostSettings(), ...next };
-  value.toggleShortcut = normalizeShortcut(value.toggleShortcut);
-  value.watchProcess = String(value.watchProcess || 'RobloxPlayerBeta.exe');
   fs.mkdirSync(app.getPath('userData'), { recursive: true });
   fs.writeFileSync(settingsPath(), JSON.stringify(value));
   applyLoginItem(value);
@@ -381,6 +288,7 @@ async function createOverlayWindow() {
     backgroundColor: '#00000000',
     icon: iconPath(),
     webPreferences: {
+      partition: SESSION_PARTITION,
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
@@ -459,227 +367,33 @@ function toggleOverlay() {
 function downloadFile(url, dest, onProgress) {
   return new Promise((resolve, reject) => {
     const client = url.startsWith('https') ? https : http;
-    const req = client.get(
-      url,
-      {
-        headers: {
-          'User-Agent': CHROME_UA,
-          Accept: 'application/octet-stream,*/*',
-          Referer: SITE + '/',
-        },
-      },
-      (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          res.resume();
-          downloadFile(res.headers.location, dest, onProgress).then(resolve).catch(reject);
-          return;
-        }
-        if (res.statusCode !== 200) {
-          reject(new Error('Download failed (HTTP ' + res.statusCode + ')'));
-          res.resume();
-          return;
-        }
-        const type = String(res.headers['content-type'] || '');
-        if (/text\/html/i.test(type)) {
-          reject(new Error('Download blocked by Cloudflare. Use Open download page.'));
-          res.resume();
-          return;
-        }
-        const total = Number(res.headers['content-length'] || 0);
-        let received = 0;
-        const chunks = [];
-        res.on('data', (chunk) => {
-          chunks.push(chunk);
-          received += chunk.length;
-          if (total && onProgress) onProgress(received / total);
-        });
-        res.on('end', () => {
-          try {
-            const buffer = Buffer.concat(chunks);
-            if (buffer.length < 64 || buffer[0] !== 0x4d || buffer[1] !== 0x5a) {
-              reject(new Error('Download did not return ClearwaterPhone.exe'));
-              return;
-            }
-            fs.writeFileSync(dest, buffer);
-            resolve(dest);
-          } catch (err) {
-            reject(err);
-          }
-        });
-        res.on('error', reject);
+    const req = client.get(url, { headers: { 'User-Agent': 'ClearwaterPhone/' + pkg.version } }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        downloadFile(res.headers.location, dest, onProgress).then(resolve).catch(reject);
+        return;
       }
-    );
+      if (res.statusCode !== 200) {
+        reject(new Error('Download failed (HTTP ' + res.statusCode + ')'));
+        res.resume();
+        return;
+      }
+      const total = Number(res.headers['content-length'] || 0);
+      let received = 0;
+      const file = fs.createWriteStream(dest);
+      res.on('data', (chunk) => {
+        received += chunk.length;
+        if (total && onProgress) onProgress(received / total);
+      });
+      res.pipe(file);
+      file.on('finish', () => file.close(() => resolve(dest)));
+      file.on('error', reject);
+    });
     req.on('error', reject);
     req.setTimeout(10 * 60 * 1000, () => {
       req.destroy(new Error('Download timed out'));
     });
   });
-}
-
-async function downloadFileViaSession(url, dest, onProgress) {
-  const response = await phoneSession().fetch(url, {
-    method: 'GET',
-    redirect: 'follow',
-    headers: {
-      'User-Agent': CHROME_UA,
-      Accept: 'application/octet-stream,*/*',
-      Referer: SITE + '/',
-    },
-  });
-  if (!response.ok) {
-    throw new Error('Download failed (HTTP ' + response.status + ')');
-  }
-  const type = String(response.headers.get('content-type') || '');
-  if (/text\/html/i.test(type)) {
-    throw new Error('Download blocked by Cloudflare. Use Open download page.');
-  }
-  const total = Number(response.headers.get('content-length') || 0);
-  if (!response.body || typeof response.body.getReader !== 'function') {
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.length < 64 || buffer[0] !== 0x4d || buffer[1] !== 0x5a) {
-      throw new Error('Download did not return ClearwaterPhone.exe');
-    }
-    fs.writeFileSync(dest, buffer);
-    if (onProgress) onProgress(1);
-    return dest;
-  }
-  const reader = response.body.getReader();
-  const chunks = [];
-  let received = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const chunk = Buffer.from(value);
-    chunks.push(chunk);
-    received += chunk.length;
-    if (total && onProgress) onProgress(Math.min(1, received / total));
-  }
-  const buffer = Buffer.concat(chunks);
-  if (buffer.length < 64 || buffer[0] !== 0x4d || buffer[1] !== 0x5a) {
-    throw new Error('Download did not return ClearwaterPhone.exe');
-  }
-  fs.writeFileSync(dest, buffer);
-  if (onProgress) onProgress(1);
-  return dest;
-}
-
-function currentAppExecutable() {
-  const portable = process.env.PORTABLE_EXECUTABLE_FILE;
-  if (portable && fs.existsSync(portable)) return portable;
-  try {
-    if (app.isPackaged) return process.execPath;
-  } catch {}
-  return process.execPath;
-}
-
-function isPackagedApp() {
-  try {
-    if (process.env.PORTABLE_EXECUTABLE_FILE) return true;
-    return app.isPackaged === true;
-  } catch {
-    return false;
-  }
-}
-
-function scheduleWindowsReplace(currentExe, updateExe) {
-  const pid = process.pid;
-  const script = path.join(app.getPath('temp'), `cw-phone-update-${pid}.cmd`);
-  const lines = [
-    '@echo off',
-    'setlocal',
-    `set "TARGET=${currentExe.replace(/"/g, '')}"`,
-    `set "SOURCE=${updateExe.replace(/"/g, '')}"`,
-    `set "PID=${pid}"`,
-    ':wait',
-    'tasklist /FI "PID eq %PID%" 2>nul | find "%PID%" >nul',
-    'if not errorlevel 1 (',
-    '  timeout /t 1 /nobreak >nul',
-    '  goto wait',
-    ')',
-    'timeout /t 1 /nobreak >nul',
-    'copy /Y "%SOURCE%" "%TARGET%" >nul',
-    'if errorlevel 1 move /Y "%SOURCE%" "%TARGET%" >nul',
-    'start "" "%TARGET%"',
-    'del "%SOURCE%" >nul 2>&1',
-    'del "%~f0" >nul 2>&1',
-  ];
-  fs.writeFileSync(script, lines.join('\r\n'), 'utf8');
-  const child = spawn('cmd.exe', ['/c', script], {
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: true,
-    cwd: path.dirname(currentExe),
-  });
-  child.unref();
-  return script;
-}
-
-async function installPhoneUpdate(event, href) {
-  const primary = String(href || '');
-  const mirror =
-    'https://raw.githubusercontent.com/colin991/ClearwaterWebBot/main/downloads/ClearwaterPhone.exe';
-  const candidates = [...new Set([primary, mirror].filter(Boolean))];
-
-  let lastError = 'Update failed';
-  for (const candidate of candidates) {
-    let url;
-    try {
-      url = new URL(candidate);
-    } catch {
-      continue;
-    }
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') continue;
-    if (!UPDATE_HOSTS.has(url.hostname)) continue;
-
-    const currentExe = currentAppExecutable();
-    const staged = path.join(app.getPath('temp'), `ClearwaterPhone-${pkg.version}-update.exe`);
-    try {
-      fs.unlinkSync(staged);
-    } catch {}
-
-    const onProgress = (ratio) => {
-      if (event.sender && !event.sender.isDestroyed()) {
-        event.sender.send('phone-update-progress', Math.round(ratio * 100));
-      }
-    };
-
-    try {
-      try {
-        await downloadFileViaSession(url.toString(), staged, onProgress);
-      } catch {
-        await downloadFile(url.toString(), staged, onProgress);
-      }
-
-      if (process.platform === 'win32' && app.isPackaged) {
-        scheduleWindowsReplace(currentExe, staged);
-        setTimeout(() => app.quit(), 500);
-        return { ok: true, path: currentExe, mode: 'replace', from: url.toString() };
-      }
-
-      const dest = path.join(app.getPath('downloads'), 'ClearwaterPhone.exe');
-      try {
-        fs.copyFileSync(staged, dest);
-      } catch {
-        fs.renameSync(staged, dest);
-      }
-      const child = spawn(dest, [], {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: false,
-      });
-      child.unref();
-      setTimeout(() => app.quit(), 600);
-      return { ok: true, path: dest, mode: 'launch', from: url.toString() };
-    } catch (err) {
-      lastError = String(err && err.message ? err.message : err);
-    }
-  }
-
-  return {
-    ok: false,
-    error: lastError,
-    openUrl: primary || mirror,
-  };
 }
 
 app.whenReady().then(() => {
@@ -701,7 +415,10 @@ app.whenReady().then(() => {
     createLauncherWindow();
   }
 
-  registerToggleShortcut();
+  const ok = globalShortcut.register('F8', toggleOverlay);
+  if (!ok) {
+    globalShortcut.register('Alt+A', toggleOverlay);
+  }
 
   ipcMain.on('phone-minimize', () => {
     if (win) win.hide();
@@ -754,11 +471,8 @@ app.whenReady().then(() => {
     try {
       await siteFetch('/api/auth/logout', { method: 'POST', body: {} });
     } catch {}
-    const cookies = await listSiteCookies();
-    await Promise.all(
-      cookies.map((cookie) => phoneSession().cookies.remove(SITE, cookie.name).catch(() => {}))
-    );
-    notifyOverlayAuth({ authenticated: false, siteAccess: false });
+    const cookies = await phoneSession().cookies.get({ url: SITE });
+    await Promise.all(cookies.map((cookie) => phoneSession().cookies.remove(SITE, cookie.name).catch(() => {})));
     return { ok: true };
   });
 
@@ -767,10 +481,7 @@ app.whenReady().then(() => {
     return { ok: true };
   });
 
-  ipcMain.handle('phone-host-settings', async () => {
-    const settings = readHostSettings();
-    return { ...settings, activeShortcut: settings.toggleShortcut || 'F8' };
-  });
+  ipcMain.handle('phone-host-settings', async () => readHostSettings());
 
   ipcMain.handle('phone-host-settings-save', async (_e, patch) => {
     const current = readHostSettings();
@@ -782,23 +493,7 @@ app.whenReady().then(() => {
       next.watchProcess = name || 'RobloxPlayerBeta.exe';
       if (!/\.exe$/i.test(next.watchProcess)) next.watchProcess += '.exe';
     }
-    if (typeof patch?.toggleShortcut === 'string') {
-      next.toggleShortcut = normalizeShortcut(patch.toggleShortcut);
-    }
-    const saved = writeHostSettings(next);
-    const registered = registerToggleShortcut(saved.toggleShortcut);
-    return { ...saved, activeShortcut: registered.active };
-  });
-
-  ipcMain.handle('phone-show-overlay', async () => {
-    await createOverlayWindow();
-    if (win && !win.isDestroyed()) {
-      visible = true;
-      win.show();
-      win.setAlwaysOnTop(true, 'screen-saver');
-      win.focus();
-    }
-    return { ok: true };
+    return writeHostSettings(next);
   });
 
   ipcMain.handle('phone-feed', async () => siteFetch('/api/internet'));
@@ -818,23 +513,40 @@ app.whenReady().then(() => {
 
   ipcMain.handle('phone-install-update', async (event, href) => {
     try {
-      return await installPhoneUpdate(event, href);
-    } catch (err) {
-      return {
-        ok: false,
-        error: String(err && err.message ? err.message : err),
-        openUrl: String(href || SITE + '/downloads/ClearwaterPhone.exe'),
-      };
-    }
-  });
-
-  ipcMain.handle('phone-check-update', async () => {
-    try {
-      const result = await siteFetch('/downloads/clearwater-phone-version.json?t=' + Date.now());
-      if (!result.ok || !result.body || typeof result.body !== 'object') {
-        return { ok: false, error: result.body?.error || 'Could not check for updates' };
+      const url = new URL(String(href || ''));
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+        return { ok: false, error: 'Invalid update URL' };
       }
-      return { ok: true, info: result.body };
+      if (!ALLOWED_HOSTS.has(url.hostname)) {
+        return { ok: false, error: 'Update host not allowed' };
+      }
+
+      const dest = path.join(app.getPath('downloads'), 'ClearwaterPhone.exe');
+      const partial = dest + '.part';
+      try {
+        fs.unlinkSync(partial);
+      } catch {}
+
+      await downloadFile(url.toString(), partial, (ratio) => {
+        if (event.sender && !event.sender.isDestroyed()) {
+          event.sender.send('phone-update-progress', Math.round(ratio * 100));
+        }
+      });
+
+      try {
+        fs.unlinkSync(dest);
+      } catch {}
+      fs.renameSync(partial, dest);
+
+      const child = spawn(dest, [], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: false
+      });
+      child.unref();
+
+      setTimeout(() => app.quit(), 600);
+      return { ok: true, path: dest };
     } catch (err) {
       return { ok: false, error: String(err && err.message ? err.message : err) };
     }

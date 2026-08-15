@@ -4,7 +4,7 @@
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
   const settings = { autoUpdate: true };
-  let appVersion = '1.3.4';
+  let appVersion = '1.3.2';
   let latestInfo = null;
   let updateInFlight = false;
   let sessionUser = null;
@@ -153,103 +153,8 @@
       setToggle($('#setting-watch-app'), host.launchOnApp !== false);
       const input = $('#setting-watch-process');
       if (input) input.value = host.watchProcess || 'RobloxPlayerBeta.exe';
-      applyShortcutUi(host);
     } catch {}
   }
-
-  function formatShortcutLabel(value) {
-    return String(value || 'F8')
-      .replace(/CommandOrControl/g, 'Ctrl')
-      .replace(/Command/g, 'Ctrl');
-  }
-
-  function applyShortcutUi(host) {
-    const shortcut = host?.toggleShortcut || host?.activeShortcut || 'F8';
-    const input = $('#setting-toggle-shortcut');
-    if (input) input.value = formatShortcutLabel(shortcut);
-    const hint = $('#overlay-hint');
-    if (hint) hint.textContent = `${formatShortcutLabel(shortcut)} hide · drag status bar`;
-  }
-
-  function eventToShortcut(event) {
-    const parts = [];
-    if (event.ctrlKey || event.metaKey) parts.push('CommandOrControl');
-    if (event.altKey) parts.push('Alt');
-    if (event.shiftKey) parts.push('Shift');
-    const key = event.key;
-    if (!key || ['Control', 'Shift', 'Alt', 'Meta'].includes(key)) return '';
-    if (/^f\d{1,2}$/i.test(key)) {
-      parts.push(key.toUpperCase());
-    } else if (key === ' ') {
-      parts.push('Space');
-    } else if (key === 'Tab') {
-      parts.push('Tab');
-    } else if (key.length === 1 && /[a-z0-9]/i.test(key)) {
-      parts.push(key.toUpperCase());
-    } else {
-      return '';
-    }
-    if (parts.length === 1 && !/^F\d{1,2}$/.test(parts[0])) return '';
-    return parts.join('+');
-  }
-
-  let capturingShortcut = false;
-  $('#setting-shortcut-capture')?.addEventListener('click', () => {
-    const status = $('#setting-shortcut-status');
-    const input = $('#setting-toggle-shortcut');
-    capturingShortcut = true;
-    if (status) {
-      status.hidden = false;
-      status.textContent = 'Press the keyboard button you want…';
-    }
-    if (input) input.value = 'Press a key…';
-  });
-
-  window.addEventListener('keydown', async (event) => {
-    if (!capturingShortcut) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const shortcut = eventToShortcut(event);
-    const status = $('#setting-shortcut-status');
-    if (!shortcut) {
-      if (status) {
-        status.hidden = false;
-        status.textContent = 'Use an F-key (like F8) or Ctrl/Alt + a key.';
-      }
-      return;
-    }
-    capturingShortcut = false;
-    const host = await window.anchorPhone?.saveHostSettings?.({ toggleShortcut: shortcut });
-    applyShortcutUi(host || { toggleShortcut: shortcut });
-    if (status) {
-      status.hidden = false;
-      status.textContent = `Show phone button set to ${formatShortcutLabel(host?.activeShortcut || shortcut)}.`;
-    }
-  }, true);
-
-  $('#setting-shortcut-reset')?.addEventListener('click', async () => {
-    capturingShortcut = false;
-    const host = await window.anchorPhone?.saveHostSettings?.({ toggleShortcut: 'F8' });
-    applyShortcutUi(host || { toggleShortcut: 'F8' });
-    const status = $('#setting-shortcut-status');
-    if (status) {
-      status.hidden = false;
-      status.textContent = 'Reset to F8.';
-    }
-  });
-
-  $('#setting-show-phone')?.addEventListener('click', async () => {
-    await window.anchorPhone?.showOverlay?.();
-    const status = $('#setting-shortcut-status');
-    if (status) {
-      status.hidden = false;
-      status.textContent = 'Phone shown.';
-    }
-  });
-
-  window.anchorPhone?.onHostSettings?.((host) => {
-    applyShortcutUi(host || {});
-  });
 
   $('#setting-login-item')?.addEventListener('click', async () => {
     const on = !$('#setting-login-item').classList.contains('is-on');
@@ -325,13 +230,8 @@
   $('#account-login')?.addEventListener('click', async () => {
     await window.anchorPhone?.login?.();
     const status = $('#account-status');
-    if (status) status.textContent = 'Finish signing in in the window that opened…';
-    let tries = 0;
-    const poll = window.setInterval(async () => {
-      tries += 1;
-      const me = await refreshSession();
-      if (me?.authenticated || tries >= 40) window.clearInterval(poll);
-    }, 1500);
+    if (status) status.textContent = 'Finish signing in in the window that opened, then return here.';
+    window.setTimeout(() => void refreshSession(), 2500);
   });
 
   $('#account-logout')?.addEventListener('click', async () => {
@@ -729,15 +629,6 @@
     updateInFlight = true;
     const status = $('#settings-update-status');
     const bannerCopy = $('#update-copy');
-    const setFail = (message) => {
-      const msg = message || 'Update failed — try again';
-      if (status) {
-        status.hidden = false;
-        status.textContent = msg;
-      }
-      if (bannerCopy) bannerCopy.textContent = msg;
-      updateInFlight = false;
-    };
     if (status) {
       status.hidden = false;
       status.textContent = 'Downloading update…';
@@ -745,23 +636,17 @@
     if (bannerCopy) bannerCopy.textContent = 'Downloading update…';
     try {
       if (!window.anchorPhone?.installUpdate) {
-        setFail('Updater unavailable in this build.');
+        updateInFlight = false;
         return;
       }
       const result = await window.anchorPhone.installUpdate(latestInfo.downloadUrl);
       if (!result?.ok) {
-        setFail(result?.error || 'Update failed — try again');
-        if (result?.openUrl) {
-          window.setTimeout(() => {
-            void window.anchorPhone?.openUrl?.(result.openUrl);
-          }, 400);
-        }
-        return;
+        if (status) status.textContent = result?.error || 'Update failed.';
+        updateInFlight = false;
       }
-      if (bannerCopy) bannerCopy.textContent = 'Installing update…';
-      if (status) status.textContent = 'Installing update… restarting…';
-    } catch (err) {
-      setFail(err?.message || 'Update failed — try again');
+    } catch {
+      if (status) status.textContent = 'Update failed.';
+      updateInFlight = false;
     }
   }
 
@@ -778,16 +663,9 @@
   async function checkForUpdates(manual = false) {
     const status = $('#settings-update-status');
     try {
-      let info = null;
-      if (window.anchorPhone?.checkUpdate) {
-        const result = await window.anchorPhone.checkUpdate();
-        if (!result?.ok) throw new Error(result?.error || 'version check failed');
-        info = result.info;
-      } else {
-        const res = await fetch(VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' });
-        if (!res.ok) throw new Error('version check failed');
-        info = await res.json();
-      }
+      const res = await fetch(VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) throw new Error('version check failed');
+      const info = await res.json();
       latestInfo = info;
       if (compareVersions(appVersion, info.version) < 0) {
         showOutdated(info);
@@ -819,13 +697,10 @@
   $('#update-now')?.addEventListener('click', () => void installUpdate());
   window.anchorPhone?.onUpdateProgress?.((pct) => {
     const status = $('#settings-update-status');
-    const bannerCopy = $('#update-copy');
-    const msg = `Downloading update… ${pct}%`;
     if (status) {
       status.hidden = false;
-      status.textContent = msg;
+      status.textContent = `Downloading update… ${pct}%`;
     }
-    if (bannerCopy) bannerCopy.textContent = msg;
   });
 
   loadSettings();

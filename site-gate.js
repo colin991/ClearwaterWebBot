@@ -9,6 +9,7 @@
     '/departments',
     '/newsletter',
     '/docs',
+    '/phone-signed-in',
   ]);
   const unlock = () => document.documentElement.classList.add('site-unlocked');
 

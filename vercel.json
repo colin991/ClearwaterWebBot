@@ -17,6 +17,7 @@
     { "source": "/terms", "destination": "/terms.html" },
     { "source": "/privacy", "destination": "/privacy.html" },
     { "source": "/signin", "destination": "/signin.html" },
+    { "source": "/phone-signed-in", "destination": "/phone-signed-in.html" },
     { "source": "/newsletter", "destination": "/newsletter.html" },
     { "source": "/docs", "destination": "/docs.html" },
     { "source": "/wallet", "destination": "/wallet.html" }
