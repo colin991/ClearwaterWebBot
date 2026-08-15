@@ -255,7 +255,7 @@
       "summary": "Added Marketplace and Mail to Clearwater Internet. Clearwater Phone overlay was redesigned and each app can open the matching website page.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:20:00.000Z",
-      "commit": "pending"
+      "commit": "62beac6"
     }
   ]
 }
