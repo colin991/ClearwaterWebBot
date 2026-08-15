@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/assets/icon-512.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260815-side-scroll" />
+    <link rel="stylesheet" href="internet.css?v=20260815-staff-active" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260815-newsletter"></script>
   </head>
@@ -614,6 +614,7 @@
               <button type="button" data-staff-tab="ads">Ads <span data-staff-ad-count>0</span></button>
               <button type="button" data-staff-tab="history">History</button>
               <button type="button" data-staff-tab="users">Users</button>
+              <button type="button" data-staff-tab="active">Active <span data-staff-active-count>0</span></button>
               <button type="button" data-staff-tab="controls">Controls</button>
             </nav>
             <div class="staff-workspace">
@@ -669,6 +670,18 @@
                     <div class="staff-queue-list" data-staff-users></div>
                   </div>
                   <div class="staff-split-detail staff-user-panel" data-staff-user-panel></div>
+                </div>
+              </section>
+              <section class="staff-pane" data-staff-pane="active" hidden>
+                <div class="staff-desk staff-active-desk">
+                  <header class="staff-list-head staff-active-head">
+                    <div>
+                      <h2>Active on the website</h2>
+                      <p class="staff-active-copy">People currently browsing Clearwater Internet (seen in the last minute).</p>
+                    </div>
+                    <span class="staff-active-live" data-staff-active-live>0 online</span>
+                  </header>
+                  <div class="staff-active-list" data-staff-active-list></div>
                 </div>
               </section>
               <section class="staff-pane" data-staff-pane="controls" hidden>
@@ -796,6 +809,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260815-staff-toggles"></script>
+    <script src="internet.js?v=20260815-staff-active"></script>
   </body>
 </html>

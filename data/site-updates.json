@@ -128,6 +128,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T04:45:00.000Z",
       "commit": "4a0e32f"
+    },
+    {
+      "id": "2026-08-15-staff-active-users",
+      "title": "Staff Active users tab",
+      "summary": "The staff panel now has an Active tab that lists Discord members currently browsing the website (avatar, display name, @username, and Discord ID), based on recent activity.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T05:05:00.000Z",
+      "commit": "49654f3"
     }
   ]
 }

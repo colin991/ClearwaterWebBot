@@ -2924,6 +2924,29 @@ function staffMemberRowMeta(member) {
   return `${handle} · ${member.discordId || member.id || ''}`;
 }
 
+function staffActiveSeenLabel(lastSeenAt) {
+  const seen = Date.parse(lastSeenAt || '');
+  if (!Number.isFinite(seen)) return 'Online';
+  const seconds = Math.max(0, Math.round((Date.now() - seen) / 1000));
+  if (seconds < 8) return 'Active now';
+  if (seconds < 60) return `Seen ${seconds}s ago`;
+  return `Seen ${Math.round(seconds / 60)}m ago`;
+}
+
+function staffActiveRowMarkup(member) {
+  const handle = `@${member.discordUsername || member.username || 'member'}`;
+  const discordId = member.discordId || member.id || '';
+  return `<button type="button" class="staff-user-row staff-active-row" data-staff-open-user="${escapeHtml(member.id)}">
+    <img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" />
+    <span>
+      <b>${escapeHtml(member.displayName || 'Discord user')} <em class="staff-active-dot">Online</em></b>
+      <small>${escapeHtml(handle)}${discordId ? ` · ${escapeHtml(discordId)}` : ''}</small>
+      <small class="staff-active-seen">${escapeHtml(staffActiveSeenLabel(member.lastSeenAt))}</small>
+      <span class="staff-chip-row">${staffUserChips(member)}</span>
+    </span>
+  </button>`;
+}
+
 function staffUserPanelMarkup(detail) {
   if (!detail?.user) return '<div class="staff-empty staff-empty-lg">Select a user to open their staff panel.</div>';
   const fullStaff = sessionStaffPanel === 'full';
@@ -3197,6 +3220,17 @@ function renderStaffDashboard() {
         ? staffMembers.slice(0, 80).map((member) => `<button type="button" class="staff-user-row ${member.id === selectedStaffUserId ? 'selected' : ''}" data-staff-open-user="${escapeHtml(member.id)}"><img src="${escapeHtml(member.avatarUrl || 'assets/clearwater-logo.png')}" alt="" draggable="false" /><span><b>${escapeHtml(member.displayName || 'Discord user')}</b><small>${escapeHtml(staffMemberRowMeta(member))}</small><span class="staff-chip-row">${staffUserChips(member)}</span></span></button>`).join('')
         : `<p class="staff-empty">${query ? 'No Discord-linked Internet accounts match that search.' : 'No members match that search.'}</p>`);
   }
+  const activeUsers = Array.isArray(moderationSnapshot.activeUsers) ? moderationSnapshot.activeUsers : [];
+  const activeCountBadge = document.querySelector('[data-staff-active-count]');
+  const activeLive = document.querySelector('[data-staff-active-live]');
+  const activeList = document.querySelector('[data-staff-active-list]');
+  if (activeCountBadge) activeCountBadge.textContent = String(activeUsers.length);
+  if (activeLive) activeLive.textContent = `${activeUsers.length} online`;
+  if (activeList) {
+    activeList.innerHTML = activeUsers.length
+      ? activeUsers.map((member) => staffActiveRowMarkup(member)).join('')
+      : '<p class="staff-empty">Nobody is actively browsing the website right now.</p>';
+  }
   const userPanel = document.querySelector('[data-staff-user-panel]');
   const keepUserPanel = Boolean(userPanel && userPanel.contains(document.activeElement) && (
     document.activeElement.matches('input, textarea, select')
@@ -3298,7 +3332,7 @@ function renderStaffDashboard() {
       <section class="staff-ads-section"><header><h2>Awaiting approval</h2><span>${pendingAds.length}</span></header>${pendingAds.length ? pendingAds.map((ad) => adCard(ad, 'pending')).join('') : '<div class="staff-empty">No ads waiting for review.</div>'}</section>
       <section class="staff-ads-section"><header><h2>Live placements</h2><span>${activeAds.length}</span></header>${activeAds.length ? activeAds.map((ad) => adCard(ad, 'active')).join('') : '<div class="staff-empty">No live sponsored ads right now.</div>'}</section>`;
   }
-  const metrics = `<div class="staff-metrics"><article><b>${Number(stats.pending || reports.length)}</b><span>Pending</span></article><article><b>${Number(stats.pendingVerifications || pendingVerifications.length) + Number(stats.pendingBusinesses || pendingBusinesses.length)}</b><span>Apps</span></article><article><b>${Number(stats.pendingAds || pendingAds.length)}</b><span>Ads</span></article><article><b>${Number(stats.automod || 0)}</b><span>Automod</span></article><article><b>${Number(stats.banned || bans.length)}</b><span>Bans</span></article><article><b>${Number(stats.users || internetUsers.size)}</b><span>Users</span></article></div>`;
+  const metrics = `<div class="staff-metrics"><article><b>${Number(stats.pending || reports.length)}</b><span>Pending</span></article><article><b>${Number(stats.pendingVerifications || pendingVerifications.length) + Number(stats.pendingBusinesses || pendingBusinesses.length)}</b><span>Apps</span></article><article><b>${Number(stats.pendingAds || pendingAds.length)}</b><span>Ads</span></article><article><b>${Number(stats.active || activeUsers.length)}</b><span>Active</span></article><article><b>${Number(stats.banned || bans.length)}</b><span>Bans</span></article><article><b>${Number(stats.users || internetUsers.size)}</b><span>Users</span></article></div>`;
   if (overview) {
     overview.innerHTML = `${metrics}<div class="staff-overview-grid"><section class="staff-column"><header><h2>Oldest pending reports</h2><span>${reports.length}</span></header>${reports.length ? reports.slice(0, 8).map((report) => {
       const author = staffMemberLookup(report.authorId, report);

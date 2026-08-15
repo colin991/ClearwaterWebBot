@@ -3833,6 +3833,8 @@ function scrubPersonalBusinessCheck(user) {
 export function moderationSnapshot(store) {
   expireInternetAds(store);
   Object.values(store.users).forEach((user) => scrubPersonalBusinessCheck(user));
+  const now = Date.now();
+  const ACTIVE_ONLINE_MS = 60_000;
   const open = store.reports.filter((report) => report.status === 'open').map((report) => publicStaffReport(store, report));
   const reviewed = store.reports.filter((report) => report.status !== 'open').map((report) => publicStaffReport(store, report));
   const pendingAds = store.ads.filter((ad) => ad.status === 'pending').map((ad) => publicAd(ad, { owner: true }));
@@ -3842,6 +3844,13 @@ export function moderationSnapshot(store) {
   const pendingVerifications = pendingVerificationApplications(store);
   const pendingBusinesses = pendingBusinessApplications(store);
   const users = Object.values(store.users).map((user) => staffUserSummary(store, user));
+  const activeUsers = users
+    .filter((user) => {
+      if (user.isBusinessAccount || user.business) return false;
+      const seen = Date.parse(user.lastSeenAt || '');
+      return Number.isFinite(seen) && (now - seen) <= ACTIVE_ONLINE_MS;
+    })
+    .sort((left, right) => Date.parse(right.lastSeenAt || 0) - Date.parse(left.lastSeenAt || 0));
   const bans = users.filter((user) => user.banned).map((user) => {
     const ban = getActiveBan(store.users[user.id]);
     return { id: user.id, displayName: user.displayName, ...ban };
@@ -3865,6 +3874,7 @@ export function moderationSnapshot(store) {
       actioned: reviewed.filter((report) => report.status === 'accepted').length,
       dismissed: reviewed.filter((report) => report.status === 'denied').length,
       users: users.length,
+      active: activeUsers.length,
       banned: bans.length,
       muted: users.filter((user) => user.muted).length,
       watched: users.filter((user) => user.watched).length,
@@ -3874,6 +3884,7 @@ export function moderationSnapshot(store) {
     bans,
     mutes: users.filter((user) => user.muted),
     watched: users.filter((user) => user.watched),
+    activeUsers: activeUsers.slice(0, 200),
     ipBans: ipBans.map((ban) => ({ id: ban.id, until: ban.until || null, reason: text(ban.reason, 300), createdAt: ban.createdAt })),
     users: users.slice(0, 500),
     settings: publicInternetSettings(store),
