@@ -22,6 +22,6 @@
 ## Discord update log
 
 - Every completed user-facing update must be appended to `data/site-updates.json` before the final commit.
-- Each entry needs a unique `id`, short `title`, plain-language `summary`, ISO `createdAt`, and optional short `commit` hash.
+- Each entry needs a unique `id`, short `title`, plain-language `summary`, ISO `createdAt`, `updatedBy` (the person who requested/owns the change — not “Cursor Agent”), and optional short `commit` hash.
 - The Discord bot posts new entries to channel `1538007463851200583` on startup (and via `POST /api/update-log` when the bot API is available).
 - Do not edit `data/site-updates-posted.json`; that file is host-local so already-posted updates are not repeated.

@@ -283,6 +283,7 @@ export function startStatusServer(client, config) {
           const title = String(body.title || '').trim();
           const summary = String(body.summary || body.body || '').trim();
           const commit = String(body.commit || '').trim();
+          const updatedBy = String(body.updatedBy || body.author || body.committedBy || '').trim();
           if (!title || !summary) {
             return json(response, 400, { error: 'title and summary are required' });
           }
@@ -291,6 +292,7 @@ export function startStatusServer(client, config) {
             title,
             summary,
             commit,
+            updatedBy,
             createdAt: body.createdAt || new Date().toISOString(),
           });
           const result = await postUpdateLog(client, config, queued.entry);

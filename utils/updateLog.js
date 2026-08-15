@@ -17,11 +17,13 @@ function normalizeEntry(entry = {}) {
   const id = String(entry.id || '').trim();
   const title = String(entry.title || '').trim().slice(0, 200);
   const summary = String(entry.summary || entry.body || '').trim().slice(0, 1800);
+  const updatedBy = String(entry.updatedBy || entry.author || entry.committedBy || '').trim().slice(0, 80);
   if (!id || !title || !summary) return null;
   return {
     id,
     title,
     summary,
+    updatedBy,
     createdAt: entry.createdAt || new Date().toISOString(),
     commit: entry.commit ? String(entry.commit).trim().slice(0, 40) : '',
   };
@@ -66,6 +68,9 @@ function buildUpdateEmbed(entry) {
     .setFooter({ text: 'Clearwater update log' })
     .setTimestamp(entry.createdAt ? new Date(entry.createdAt) : new Date());
 
+  if (entry.updatedBy) {
+    embed.addFields({ name: 'Updated by', value: entry.updatedBy, inline: true });
+  }
   if (entry.commit) {
     embed.addFields({ name: 'Commit', value: `\`${entry.commit}\``, inline: true });
   }
