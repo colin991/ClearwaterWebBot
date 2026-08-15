@@ -4,7 +4,7 @@
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
   const settings = { autoUpdate: true };
-  let appVersion = '1.3.2';
+  let appVersion = '1.3.3';
   let latestInfo = null;
   let updateInFlight = false;
   let sessionUser = null;
@@ -153,8 +153,103 @@
       setToggle($('#setting-watch-app'), host.launchOnApp !== false);
       const input = $('#setting-watch-process');
       if (input) input.value = host.watchProcess || 'RobloxPlayerBeta.exe';
+      applyShortcutUi(host);
     } catch {}
   }
+
+  function formatShortcutLabel(value) {
+    return String(value || 'F8')
+      .replace(/CommandOrControl/g, 'Ctrl')
+      .replace(/Command/g, 'Ctrl');
+  }
+
+  function applyShortcutUi(host) {
+    const shortcut = host?.toggleShortcut || host?.activeShortcut || 'F8';
+    const input = $('#setting-toggle-shortcut');
+    if (input) input.value = formatShortcutLabel(shortcut);
+    const hint = $('#overlay-hint');
+    if (hint) hint.textContent = `${formatShortcutLabel(shortcut)} hide · drag status bar`;
+  }
+
+  function eventToShortcut(event) {
+    const parts = [];
+    if (event.ctrlKey || event.metaKey) parts.push('CommandOrControl');
+    if (event.altKey) parts.push('Alt');
+    if (event.shiftKey) parts.push('Shift');
+    const key = event.key;
+    if (!key || ['Control', 'Shift', 'Alt', 'Meta'].includes(key)) return '';
+    if (/^f\d{1,2}$/i.test(key)) {
+      parts.push(key.toUpperCase());
+    } else if (key === ' ') {
+      parts.push('Space');
+    } else if (key === 'Tab') {
+      parts.push('Tab');
+    } else if (key.length === 1 && /[a-z0-9]/i.test(key)) {
+      parts.push(key.toUpperCase());
+    } else {
+      return '';
+    }
+    if (parts.length === 1 && !/^F\d{1,2}$/.test(parts[0])) return '';
+    return parts.join('+');
+  }
+
+  let capturingShortcut = false;
+  $('#setting-shortcut-capture')?.addEventListener('click', () => {
+    const status = $('#setting-shortcut-status');
+    const input = $('#setting-toggle-shortcut');
+    capturingShortcut = true;
+    if (status) {
+      status.hidden = false;
+      status.textContent = 'Press the keyboard button you want…';
+    }
+    if (input) input.value = 'Press a key…';
+  });
+
+  window.addEventListener('keydown', async (event) => {
+    if (!capturingShortcut) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const shortcut = eventToShortcut(event);
+    const status = $('#setting-shortcut-status');
+    if (!shortcut) {
+      if (status) {
+        status.hidden = false;
+        status.textContent = 'Use an F-key (like F8) or Ctrl/Alt + a key.';
+      }
+      return;
+    }
+    capturingShortcut = false;
+    const host = await window.anchorPhone?.saveHostSettings?.({ toggleShortcut: shortcut });
+    applyShortcutUi(host || { toggleShortcut: shortcut });
+    if (status) {
+      status.hidden = false;
+      status.textContent = `Show phone button set to ${formatShortcutLabel(host?.activeShortcut || shortcut)}.`;
+    }
+  }, true);
+
+  $('#setting-shortcut-reset')?.addEventListener('click', async () => {
+    capturingShortcut = false;
+    const host = await window.anchorPhone?.saveHostSettings?.({ toggleShortcut: 'F8' });
+    applyShortcutUi(host || { toggleShortcut: 'F8' });
+    const status = $('#setting-shortcut-status');
+    if (status) {
+      status.hidden = false;
+      status.textContent = 'Reset to F8.';
+    }
+  });
+
+  $('#setting-show-phone')?.addEventListener('click', async () => {
+    await window.anchorPhone?.showOverlay?.();
+    const status = $('#setting-shortcut-status');
+    if (status) {
+      status.hidden = false;
+      status.textContent = 'Phone shown.';
+    }
+  });
+
+  window.anchorPhone?.onHostSettings?.((host) => {
+    applyShortcutUi(host || {});
+  });
 
   $('#setting-login-item')?.addEventListener('click', async () => {
     const on = !$('#setting-login-item').classList.contains('is-on');

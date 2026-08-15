@@ -346,6 +346,19 @@
               </label>
               <button type="button" class="btn-ghost" id="setting-watch-save">Save process name</button>
 
+              <h2 class="section-title">Show phone</h2>
+              <p class="hint">Change the keyboard button that shows or hides the overlay.</p>
+              <label class="field">
+                <span>Show / hide button</span>
+                <input type="text" id="setting-toggle-shortcut" value="F8" autocomplete="off" spellcheck="false" readonly />
+              </label>
+              <div class="settings-actions-row">
+                <button type="button" class="btn-ghost" id="setting-shortcut-capture">Change button</button>
+                <button type="button" class="btn-ghost" id="setting-shortcut-reset">Reset to F8</button>
+              </div>
+              <button type="button" class="btn-primary" id="setting-show-phone">Show phone now</button>
+              <p class="form-status" id="setting-shortcut-status" hidden></p>
+
               <h2 class="section-title">Updates</h2>
               <ul class="ios-list settings-list">
                 <li class="settings-row">
@@ -371,7 +384,7 @@
           <div class="home-indicator" aria-hidden="true"></div>
         </div>
       </div>
-      <div class="overlay-hint">F8 hide · drag status bar</div>
+      <div class="overlay-hint" id="overlay-hint">F8 hide · drag status bar</div>
     </div>
     <script src="app.js"></script>
   </body>

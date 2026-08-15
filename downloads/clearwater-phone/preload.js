@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('anchorPhone', {
   launchOverlay: () => ipcRenderer.invoke('phone-launch-overlay'),
   hostSettings: () => ipcRenderer.invoke('phone-host-settings'),
   saveHostSettings: (patch) => ipcRenderer.invoke('phone-host-settings-save', patch),
+  showOverlay: () => ipcRenderer.invoke('phone-show-overlay'),
   feed: () => ipcRenderer.invoke('phone-feed'),
   installUpdate: (href) => ipcRenderer.invoke('phone-install-update', href),
   onUpdateProgress: (cb) => {
@@ -20,5 +21,8 @@ contextBridge.exposeInMainWorld('anchorPhone', {
   },
   onAuth: (cb) => {
     ipcRenderer.on('phone-auth', (_e, payload) => cb(payload));
+  },
+  onHostSettings: (cb) => {
+    ipcRenderer.on('phone-host-settings', (_e, payload) => cb(payload));
   },
 });

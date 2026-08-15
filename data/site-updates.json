@@ -325,6 +325,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T19:50:00.000Z",
       "commit": "83e5945"
+    },
+    {
+      "id": "2026-08-15-phone-show-shortcut",
+      "title": "Phone show-button setting",
+      "summary": "Clearwater Phone Settings has a Show phone section where you can change the keyboard button that shows or hides the overlay (v1.3.3).",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T19:55:00.000Z",
+      "commit": "pending"
     }
   ]
 }

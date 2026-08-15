@@ -203,6 +203,7 @@ function defaultHostSettings() {
     startWithWindows: false,
     launchOnApp: true,
     watchProcess: 'RobloxPlayerBeta.exe',
+    toggleShortcut: 'F8',
   };
 }
 
@@ -210,14 +211,71 @@ function readHostSettings() {
   try {
     const raw = fs.readFileSync(settingsPath(), 'utf8');
     const parsed = JSON.parse(raw);
-    return { ...defaultHostSettings(), ...parsed };
+    return { ...defaultHostSettings(), ...parsed, toggleShortcut: normalizeShortcut(parsed.toggleShortcut) };
   } catch {
     return defaultHostSettings();
   }
 }
 
+function normalizeShortcut(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return 'F8';
+  const cleaned = raw
+    .replace(/\s+/g, '')
+    .replace(/Control/gi, 'CommandOrControl')
+    .replace(/Ctrl/gi, 'CommandOrControl')
+    .replace(/CmdOrCtrl/gi, 'CommandOrControl')
+    .replace(/Cmd/gi, 'CommandOrControl')
+    .replace(/Option/gi, 'Alt')
+    .replace(/Super/gi, 'Super');
+  if (!/^(?:(?:CommandOrControl|Ctrl|Alt|Shift|Super)\+)*((?:F1[0-2]|F[1-9])|[A-Z0-9]|Plus|Space|Tab)$/i.test(cleaned)) {
+    return 'F8';
+  }
+  return cleaned
+    .split('+')
+    .map((part) => {
+      if (/^f\d{1,2}$/i.test(part)) return `F${part.slice(1)}`;
+      if (/^[a-z]$/i.test(part)) return part.toUpperCase();
+      if (/^commandorcontrol$/i.test(part)) return 'CommandOrControl';
+      if (/^alt$/i.test(part)) return 'Alt';
+      if (/^shift$/i.test(part)) return 'Shift';
+      if (/^super$/i.test(part)) return 'Super';
+      return part;
+    })
+    .join('+');
+}
+
+function activeToggleShortcut() {
+  return normalizeShortcut(readHostSettings().toggleShortcut);
+}
+
+function registerToggleShortcut(preferred) {
+  const primary = normalizeShortcut(preferred || activeToggleShortcut());
+  const fallback = primary === 'F8' ? 'Alt+A' : 'F8';
+  try {
+    globalShortcut.unregisterAll();
+  } catch {}
+  const okPrimary = globalShortcut.register(primary, toggleOverlay);
+  if (!okPrimary) {
+    globalShortcut.register(fallback, toggleOverlay);
+  } else if (fallback !== primary) {
+    globalShortcut.register(fallback, toggleOverlay);
+  }
+  const active = okPrimary ? primary : fallback;
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('phone-host-settings', {
+      ...readHostSettings(),
+      toggleShortcut: primary,
+      activeShortcut: active,
+    });
+  }
+  return { primary, active, fallback };
+}
+
 function writeHostSettings(next) {
   const value = { ...defaultHostSettings(), ...next };
+  value.toggleShortcut = normalizeShortcut(value.toggleShortcut);
+  value.watchProcess = String(value.watchProcess || 'RobloxPlayerBeta.exe');
   fs.mkdirSync(app.getPath('userData'), { recursive: true });
   fs.writeFileSync(settingsPath(), JSON.stringify(value));
   applyLoginItem(value);
@@ -442,10 +500,7 @@ app.whenReady().then(() => {
     createLauncherWindow();
   }
 
-  const ok = globalShortcut.register('F8', toggleOverlay);
-  if (!ok) {
-    globalShortcut.register('Alt+A', toggleOverlay);
-  }
+  registerToggleShortcut();
 
   ipcMain.on('phone-minimize', () => {
     if (win) win.hide();
@@ -511,7 +566,10 @@ app.whenReady().then(() => {
     return { ok: true };
   });
 
-  ipcMain.handle('phone-host-settings', async () => readHostSettings());
+  ipcMain.handle('phone-host-settings', async () => {
+    const settings = readHostSettings();
+    return { ...settings, activeShortcut: settings.toggleShortcut || 'F8' };
+  });
 
   ipcMain.handle('phone-host-settings-save', async (_e, patch) => {
     const current = readHostSettings();
@@ -523,7 +581,23 @@ app.whenReady().then(() => {
       next.watchProcess = name || 'RobloxPlayerBeta.exe';
       if (!/\.exe$/i.test(next.watchProcess)) next.watchProcess += '.exe';
     }
-    return writeHostSettings(next);
+    if (typeof patch?.toggleShortcut === 'string') {
+      next.toggleShortcut = normalizeShortcut(patch.toggleShortcut);
+    }
+    const saved = writeHostSettings(next);
+    const registered = registerToggleShortcut(saved.toggleShortcut);
+    return { ...saved, activeShortcut: registered.active };
+  });
+
+  ipcMain.handle('phone-show-overlay', async () => {
+    await createOverlayWindow();
+    if (win && !win.isDestroyed()) {
+      visible = true;
+      win.show();
+      win.setAlwaysOnTop(true, 'screen-saver');
+      win.focus();
+    }
+    return { ok: true };
   });
 
   ipcMain.handle('phone-feed', async () => siteFetch('/api/internet'));
