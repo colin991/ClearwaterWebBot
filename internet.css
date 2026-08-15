@@ -4517,7 +4517,7 @@ html.pref-compact .internet-view[data-view="home"] .post + .post {
   padding-bottom: 10px !important;
 }
 html.pref-compact .post-top { gap: 8px; }
-html.pref-compact .post-content { margin-top: 4px !important; }
+html.pref-compact .post-content { margin-top: 1px !important; }
 html.pref-compact .post-actions,
 html.pref-compact .post-action-row { margin-top: 6px !important; }
 html.pref-compact .internet-feed > * + * { margin-top: 0; }
