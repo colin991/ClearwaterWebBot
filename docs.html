@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@450;550;650;750;850&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="docs.css?v=20260814-v2" />
+    <link rel="stylesheet" href="docs.css?v=20260815-scroll" />
   </head>
   <body class="docs-body">
     <header class="docs-top">
@@ -28,139 +28,103 @@
     <div class="docs-shell">
       <aside class="docs-rail" aria-label="Documentation sections">
         <p>Guide</p>
-        <button type="button" class="selected" data-docs-tab="start">Start</button>
-        <button type="button" data-docs-tab="home">Home</button>
-        <button type="button" data-docs-tab="reels">Reels</button>
-        <button type="button" data-docs-tab="wallet">Wallet</button>
-        <button type="button" data-docs-tab="inbox">Notifications &amp; Messages</button>
-        <button type="button" data-docs-tab="bookmarks">Bookmarks</button>
-        <button type="button" data-docs-tab="profile">Profile &amp; Settings</button>
+        <a href="#start" class="selected" data-docs-jump="start">Start</a>
+        <a href="#home" data-docs-jump="home">Home</a>
+        <a href="#reels" data-docs-jump="reels">Reels</a>
+        <a href="#wallet" data-docs-jump="wallet">Wallet</a>
+        <a href="#inbox" data-docs-jump="inbox">Notifications &amp; Messages</a>
+        <a href="#bookmarks" data-docs-jump="bookmarks">Bookmarks</a>
+        <a href="#profile" data-docs-jump="profile">Profile &amp; Settings</a>
         <p>More</p>
-        <button type="button" data-docs-tab="updates">Update log</button>
-        <button type="button" data-docs-tab="terms">Terms of Service</button>
-        <button type="button" data-docs-tab="privacy">Privacy Policy</button>
+        <a href="#updates" data-docs-jump="updates">Update log</a>
+        <a href="#terms" data-docs-jump="terms">Terms of Service</a>
+        <a href="#privacy" data-docs-jump="privacy">Privacy Policy</a>
       </aside>
 
       <main class="docs-main">
-        <section class="docs-pane selected" data-docs-pane="start">
-          <h1>Clearwater Internet V.2</h1>
-          <p class="docs-lead">Clearwater Internet is a community platform similar to X or Instagram where members can communicate with posts, messages, Reels, replies, and more. After two months of work, it is ready for public release inside Clearwater Roleplay.</p>
-          <div class="docs-callout">
-            <b>Discord members only</b>
-            <p>This website is strictly for members of the Clearwater Roleplay Discord server. Do not advertise other servers here.</p>
-          </div>
-          <h2>Getting started</h2>
-          <p>When you enter the website, you land on the home page with the active player count. From there you can open Departments or Internet. On Internet, set up your account in Settings, then start posting from Home.</p>
-          <p><a class="docs-btn" href="/internet">Open Clearwater Internet</a> <a class="docs-btn ghost" href="/newsletter">Read V.2 newsletter</a></p>
-        </section>
+        <article class="docs-article">
+          <header class="docs-intro">
+            <p class="docs-kicker">Clearwater Internet guide</p>
+            <h1>Clearwater Internet V.2</h1>
+            <p>Good evening. Recently the ownership team has been working on making <b>Clearwater Internet</b>. Clearwater Internet is a platform similar to <b>X</b> or <b>Instagram</b> where users can communicate in the form of posts, messages, Reels, replies, and more. We are happy to announce that after 2 months of work we are finally ready to release the website. This website is strictly for Discord members, and is only for this server, so please do not advertise your server.</p>
+            <div class="docs-callout">
+              <b>Discord members only</b>
+              <p>This website is strictly for members of the Clearwater Roleplay Discord server. Do not advertise other servers here.</p>
+            </div>
+            <p><a class="docs-btn" href="/internet">Open Clearwater Internet</a> <a class="docs-btn ghost" href="/newsletter">Read V.2 newsletter</a></p>
+          </header>
 
-        <section class="docs-pane" data-docs-pane="home">
-          <h1>Home</h1>
-          <p>On Home you can use:</p>
-          <ul>
-            <li><b>For You</b> — recommended and trending content</li>
-            <li><b>Recent</b> — the newest posts</li>
-            <li><b>Following</b> — posts from people you follow</li>
-            <li><b>Official</b> — posts from the official Clearwater account</li>
-          </ul>
-          <h2>Creating a post</h2>
-          <p>Start typing in the composer. You can:</p>
-          <ul>
-            <li>Add a GIF with the GIF button, then remove it with Remove</li>
-            <li>Add an image with the image icon, then remove it with Remove</li>
-            <li>Add an emoji with the emoji button</li>
-            <li>Mention someone by typing <code>@</code> or using the @ button</li>
-            <li>Create a poll with the three-line icon, add a question, 1–4 options, and a duration in days</li>
-          </ul>
-          <p>When you are ready, click <b>Post</b>.</p>
-          <h2>Post actions</h2>
-          <p>Use the three dots to report a post. Like with the heart, bookmark with the bookmark icon, and share with the share button.</p>
-          <h2>Right sidebar</h2>
-          <ul>
-            <li>Search people and posts</li>
-            <li><b>What’s happening</b> — trending hashtags</li>
-            <li>Sponsored ads with Learn, Account, and report options</li>
-            <li><b>Who to follow</b> — suggested accounts</li>
-          </ul>
-        </section>
+          <section class="docs-section" id="start" aria-labelledby="start-heading">
+            <h2 id="start-heading">Start</h2>
+            <p>Upon entering the website, you will find yourself on the home tab, where you can find our active player count. Then, you can navigate to the departments tab, and our internet tab. Once you click onto the internet you can set up your account via the settings tab and start posting in the home tab.</p>
+          </section>
 
-        <section class="docs-pane" data-docs-pane="reels">
-          <h1>Reels</h1>
-          <p>Open Reels from the left rail, then click <b>Post a Reel</b>.</p>
-          <ul>
-            <li>Upload photos for a slideshow (you can add music), or upload one video up to 2 GB</li>
-            <li>Write a caption, then upload</li>
-            <li>On slideshow Reels, click to move between images</li>
-            <li>On Reels with audio, use the slider to mute, unmute, or change volume</li>
-          </ul>
-          <p>You can follow the creator, report from the three dots, like, comment, or share. On the far right you may see Learn more, sponsored ads, and <b>Who to watch</b>.</p>
-        </section>
+          <section class="docs-section" id="home" aria-labelledby="home-heading">
+            <h2 id="home-heading">Home Page</h2>
+            <p>On the home page you can find a “For you” page which will show recommended content and trending content, find the most recent content by selecting the “Recent” tab, or you can see posts from who you are following by selecting the “Following” tab. See our official posts made by our only account on the “Official” tab.</p>
+            <p>You can create a post by starting to type in the post creator. You can pick from a wide variety of GIFs using the GIF button and selecting one. You can remove it by clicking the “Remove” button on the GIF. Add an image by clicking on the image icon and selecting your image; you can remove the image by clicking the “Remove” button on the image. You can add an emoji by clicking on the emoji button, and then choosing an emoji. Mention a user by either typing the @ sign or by clicking the @ symbol on the bar. You can create a poll by clicking on the icon with 3 lines, add a poll question, 1–4 options, and then selecting the amount of day(s). You’re all set and can now click the “Post” button.</p>
+            <p>Report a post by clicking the 3 dots, like by clicking the heart button, bookmark by clicking the bookmark button, and share by clicking the share button. On the right side you can find a search bar where you can search for posts and usernames, a “What’s happening” tab with trending hashtags, a sponsored ad below it where you can click “Learn” to learn about sponsored ads or report the advertisement, and an “Account” button which will take you to the creator’s account. Below, you can find a “Who to follow” tab with trending accounts we think you might like!</p>
+          </section>
 
-        <section class="docs-pane" data-docs-pane="wallet">
-          <h1>Wallet</h1>
-          <p>Wallet has five tabs: Overview, Advertise, Market, Levels, and Send.</p>
-          <h2>Overview</h2>
-          <p>Clearwater Credits (C$) are the roleplay currency. Check your balance and daily credits here. Most members receive <b>C$75 every 24 hours</b>; donors, contributors, and staff earn more. Transactions lists credits you gained or spent.</p>
-          <h2>Advertise</h2>
-          <p>Buy sidebar, feed, or Reel ads. You need an approved business account. Fill out the form and submit for staff review for <b>C$1,200</b>. Boost chances can increase visibility. Reel ad pricing depends on video length.</p>
-          <h2>Market</h2>
-          <p>Buy Clearwater Credits with Robux in the credit store. Link your Roblox account with Verify first, then use Buy on Roblox.</p>
-          <h2>Levels</h2>
-          <p>Chat and level up for an easier way to earn credits. Track your level and progress here.</p>
-          <h2>Send</h2>
-          <p>Send or request credits. Choose Send or Request, enter the member, amount, and optional note. Bank updates arrive in Messages.</p>
-        </section>
+          <section class="docs-section" id="reels" aria-labelledby="reels-heading">
+            <h2 id="reels-heading">Reels</h2>
+            <p>Navigate to the Reels tab which is right below the “Home” tab. Select the blue button with black text which says “Post a Reel” to upload a Reel. Add in photos for a slideshow, which then allows you to add music of your choice; or add a video which can be up to 2 GB total; you can then write a caption and upload the Reel. On a slideshow Reel you can click to move between each image. On all Reels with audio you can find an audio slider which you can click to mute/unmute audio or adjust volume.</p>
+            <p>On the right side you can follow the creator, report the post by clicking the three dots, like the Reel by clicking the heart icon, comment by typing in the “Add comment” box, or share by clicking the share button. Additionally, on the far right of your screen you can learn more about Reels, see an advertisement which you can click “Learn” to learn about advertisements or to report the advertisement, or the Account button to check the account who is sponsoring the advertisement. Under the advertisement find “Who to watch” which will include random Reels you might like!</p>
+          </section>
 
-        <section class="docs-pane" data-docs-pane="inbox">
-          <h1>Notifications &amp; Messages</h1>
-          <p>Notifications cover likes, replies, reposts, quotes, follows, and more.</p>
-          <p>In Messages, click <b>New message</b> to start a conversation. Add text, a GIF, or an emoji. Report abusive messages by reporting the account so staff can review.</p>
-        </section>
+          <section class="docs-section" id="wallet" aria-labelledby="wallet-heading">
+            <h2 id="wallet-heading">Wallet</h2>
+            <p>Navigate to the Wallet which is under the Reels tab. You will find 5 tabs — Overview, Advertise, Market, Levels, and Send. We will start with Overview. You can find your balance under the “Balance” text. We use a roleplay currency called Clearwater Credits. You can find how many daily credits you make under the “Daily credits” text. You receive C$75 every 24 hours; however, donors, contributors, and staff make extra credits. You can find your transactions under the “Transactions” tab which has all things that have made you credits or that you’ve spent credits on.</p>
+            <p>Now, we will move onto the next tab which is “Advertise.” You can purchase sidebar, feed post, and Reel advertisements. Select one out of those 3 options and then select Create. You are required to have a business account to do this, which will be spoken about later in the guide. Then fill out the required fields, and you can submit the advertisement for staff review which will cost C$1,200. You can purchase “boosts” for your advertisement by using the boost chances. Reel advertisement costs will depend on the length of the video.</p>
+            <p>Next we will head to the Market. Here you will find the “Credit store” where you can pay Robux (Roblox digital currency) to gain Clearwater Credits. Before you purchase, please link your Roblox account using the “Verify” button in Market. You can then click the “Buy on Roblox” button on any of the packs and gain the credits instantly.</p>
+            <p>We now move onto Levels. If you want an easy way to gain credits, you can gain them by chatting and leveling up. See your level and your progression in this tab.</p>
+            <p>Now we move onto the Send tab. In this tab you can send/request money from users. Select between the “Send” or “Request” button, then type in the member’s name, the amount you want to send/request, and any notes you might have. You will be notified by the bank via your messages.</p>
+          </section>
 
-        <section class="docs-pane" data-docs-pane="bookmarks">
-          <h1>Bookmarks</h1>
-          <p>Create collection names, then click Create. Bookmark posts from Home. Collections help you organize saved posts.</p>
-        </section>
+          <section class="docs-section" id="inbox" aria-labelledby="inbox-heading">
+            <h2 id="inbox-heading">Notifications &amp; Messages</h2>
+            <p>The notification center is where you can find all important information such as messages, likes, reposts, quotes, and more. In the Messages tab you can compose a new message by clicking on the “New message” button. Then you can write your message in the message creator, add a GIF, or an emoji. Report messages by reporting the account. Staff will then review all messages on the account.</p>
+          </section>
 
-        <section class="docs-pane" data-docs-pane="profile">
-          <h1>Profile &amp; Settings</h1>
-          <p>Your public profile shows posts, replies, mentions, media, and likes. Open Following or Followers for connection lists. Use <b>Copy link</b> for your share URL (<code>/profiles/username</code>).</p>
-          <h2>Settings</h2>
-          <ul>
-            <li><b>Profile</b> — banner (gallery or upload), accent color, bio, and pinned post</li>
-            <li><b>Privacy</b> — seven privacy controls, including private likes</li>
-            <li><b>Appearance</b> — display preferences</li>
-            <li><b>Account</b> — verification application, business account application, deactivate, or delete</li>
-          </ul>
-          <p>Deactivating hides your profile while keeping data. Deleting removes your account data except records we must keep for legal and safety reasons.</p>
-        </section>
+          <section class="docs-section" id="bookmarks" aria-labelledby="bookmarks-heading">
+            <h2 id="bookmarks-heading">Bookmarks</h2>
+            <p>Create collection names by typing the collection name, then clicking the Create button. You can bookmark posts in the Home tab. More information can be found in the Home Page guide.</p>
+          </section>
 
-        <section class="docs-pane" data-docs-pane="updates">
-          <h1>Update log</h1>
-          <p class="docs-lead">Short release notes live on the newsletter. Full product walkthroughs stay here in Docs.</p>
-          <article class="docs-update">
-            <div><span>Aug 14, 2026</span><span>V.2</span></div>
-            <h2>Clearwater Internet V.2</h2>
-            <p>Public launch for Discord members: Home, Reels, Wallet, Messages, Bookmarks, Profiles, and share links.</p>
-            <a href="/newsletter">Open newsletter</a>
-          </article>
-        </section>
+          <section class="docs-section" id="profile" aria-labelledby="profile-heading">
+            <h2 id="profile-heading">Profile &amp; Settings</h2>
+            <p>View your public profile, and check who you are following by clicking on “Following,” which will open a list with all users you follow. You can check who follows you by clicking “Followers,” which will open a list with all users who follow you. You can copy your profile link by clicking the “Copy link” button. You can filter between 5 tabs: Posts, Replies, Mentions, Media, and Likes. Firstly, you can see all posts which you’ve created on the Posts tab. See all posts you’ve replied to in the Replies tab. See who’s mentioned you in the Mentions tab. All media/Reels you’ve posted you can find within the Media tab. Find all posts/Reels you’ve liked in the Likes tab.</p>
+            <p>You can also select the “Settings” button or the “Edit profile” button which will take you to the Settings tab. In the Settings tab you can find Profile, Privacy, Appearance, and Account. On Profile you can select a profile banner from our collection of photos, or upload one yourself by clicking “Upload image.” Remove your banner by clicking the “Remove banner” button. Select your page’s accent color using our color picker. You can edit your “About you” by clicking onto the text box and adding a bio. Additionally you can select a post to pin on your page by selecting “Pin post.”</p>
+            <p>In Privacy you can select between 7 different settings. In Appearance, set up your preferences, and in “Account” you can apply for the verification badge which will display on your profile by answering the question “Why do you want to be verified?” You can also apply for a business account by filling out the required fields. Deactivating your account will hide your profile and make your account unusable, but all data is saved. Deleting your account fully wipes your data from our system, other than required data which we have to keep for legal reasons.</p>
+          </section>
 
-        <section class="docs-pane" data-docs-pane="terms">
-          <h1>Terms of Service</h1>
-          <p>The full Terms of Service are maintained on their own page so legal wording stays current.</p>
-          <p><a class="docs-btn" href="/terms" target="_blank" rel="noopener">Open Terms of Service</a></p>
-          <iframe class="docs-frame" title="Terms of Service" src="/terms" loading="lazy"></iframe>
-        </section>
+          <section class="docs-section" id="updates" aria-labelledby="updates-heading">
+            <h2 id="updates-heading">Update log</h2>
+            <p>Short release notes live on the newsletter. This guide keeps the full walkthrough above.</p>
+            <article class="docs-update">
+              <div><span>Aug 14, 2026</span><span>V.2</span></div>
+              <h3>Clearwater Internet V.2</h3>
+              <p>Public launch for Discord members: Home, Reels, Wallet, Messages, Bookmarks, Profiles, and share links.</p>
+              <a href="/newsletter">Open newsletter</a>
+            </article>
+          </section>
 
-        <section class="docs-pane" data-docs-pane="privacy">
-          <h1>Privacy Policy</h1>
-          <p>The full Privacy Policy is maintained on its own page so legal wording stays current.</p>
-          <p><a class="docs-btn" href="/privacy" target="_blank" rel="noopener">Open Privacy Policy</a></p>
-          <iframe class="docs-frame" title="Privacy Policy" src="/privacy" loading="lazy"></iframe>
-        </section>
+          <section class="docs-section" id="terms" aria-labelledby="terms-heading">
+            <h2 id="terms-heading">Terms of Service</h2>
+            <p>The full Terms of Service are maintained on their own page so legal wording stays current.</p>
+            <p><a class="docs-btn" href="/terms" target="_blank" rel="noopener">Open Terms of Service</a></p>
+            <iframe class="docs-frame" title="Terms of Service" src="/terms" loading="lazy"></iframe>
+          </section>
+
+          <section class="docs-section" id="privacy" aria-labelledby="privacy-heading">
+            <h2 id="privacy-heading">Privacy Policy</h2>
+            <p>The full Privacy Policy is maintained on their own page so legal wording stays current.</p>
+            <p><a class="docs-btn" href="/privacy" target="_blank" rel="noopener">Open Privacy Policy</a></p>
+            <iframe class="docs-frame" title="Privacy Policy" src="/privacy" loading="lazy"></iframe>
+          </section>
+        </article>
       </main>
     </div>
-    <script src="docs.js?v=20260814-v2"></script>
+    <script src="docs.js?v=20260815-scroll"></script>
   </body>
 </html>

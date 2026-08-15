@@ -85,53 +85,66 @@ code {
   text-transform: uppercase;
 }
 .docs-rail p:first-child { margin-top: 0; }
-.docs-rail button {
+.docs-rail a {
   padding: 10px 12px;
-  border: 0;
   border-radius: 10px;
   color: #d5dfec;
   background: transparent;
-  font: inherit;
   font-size: 13px;
   font-weight: 700;
-  text-align: left;
-  cursor: pointer;
+  text-decoration: none;
 }
-.docs-rail button:hover { background: rgba(255, 255, 255, .05); }
-.docs-rail button.selected {
+.docs-rail a:hover { background: rgba(255, 255, 255, .05); }
+.docs-rail a.selected {
   color: #03070d;
   background: var(--docs-btn);
 }
 
 .docs-main {
   min-width: 0;
-  padding: 22px 24px 28px;
+  padding: 22px 24px 36px;
   border: 1px solid var(--docs-line);
   border-radius: 18px;
   background: var(--docs-card);
 }
-.docs-pane { display: none; }
-.docs-pane.selected { display: block; }
+.docs-article { display: grid; gap: 8px; }
+.docs-intro,
+.docs-section {
+  scroll-margin-top: 20px;
+  padding-top: 8px;
+}
+.docs-section + .docs-section {
+  margin-top: 18px;
+  padding-top: 26px;
+  border-top: 1px solid var(--docs-line);
+}
+.docs-kicker {
+  margin: 0 0 8px;
+  color: var(--docs-btn);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
 .docs-main h1 {
-  margin: 0;
+  margin: 0 0 14px;
   font-size: clamp(28px, 4vw, 38px);
   letter-spacing: -.04em;
 }
 .docs-main h2 {
-  margin: 26px 0 10px;
-  font-size: 18px;
+  margin: 0 0 12px;
+  font-size: 22px;
+  letter-spacing: -.02em;
 }
-.docs-lead,
-.docs-main p,
-.docs-main li {
+.docs-main h3 {
+  margin: 10px 0 8px;
+  font-size: 17px;
+}
+.docs-main p {
+  margin: 0 0 14px;
   color: #c5d1e2;
-  line-height: 1.55;
-}
-.docs-main ul {
-  display: grid;
-  gap: 8px;
-  margin: 12px 0;
-  padding-left: 18px;
+  line-height: 1.65;
+  font-size: 15px;
 }
 .docs-main b { color: #fff; }
 
