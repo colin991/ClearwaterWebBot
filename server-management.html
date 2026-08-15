@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@450;550;650;750;850&display=swap" rel="stylesheet" />
     <script>document.documentElement.classList.add('js');</script>
-    <link rel="stylesheet" href="styles.css?v=20260815-mobile-home" />
+            <link rel="stylesheet" href="styles.css?v=20260815-mgmt-zoom" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260815-open"></script>
   </head>
@@ -93,17 +93,30 @@
             <button type="button" class="server-mgmt-preset" data-mgmt-preset=":h ">Announce (:h)</button>
             <button type="button" class="server-mgmt-preset" data-mgmt-preset=":m ">Message all (:m)</button>
             <button type="button" class="server-mgmt-preset" data-mgmt-preset=":hint ">Hint (:hint)</button>
+            <button type="button" class="server-mgmt-preset" data-mgmt-preset=":pm ">Private message (:pm)</button>
             <button type="button" class="server-mgmt-preset" data-mgmt-preset=":reload">Reload (:reload)</button>
+            <button type="button" class="server-mgmt-preset" data-mgmt-preset=":refresh">Refresh vehicles (:refresh)</button>
           </div>
           <p class="server-mgmt-command-status" data-mgmt-command-status hidden></p>
         </form>
 
         <div class="server-mgmt-layout">
           <figure class="server-map" data-server-map aria-label="Liberty County player map">
-            <div class="server-map-view" data-server-map-view>
-              <img src="assets/liberty-county-map.jpg" alt="Liberty County map" width="1024" height="1024" draggable="false" />
-              <div class="server-map-pins" data-server-map-pins></div>
-              <div class="server-map-marquee" data-server-map-marquee hidden></div>
+            <div class="server-map-controls" aria-label="Map zoom">
+              <button type="button" class="server-map-zoom-btn" data-map-zoom-in title="Zoom in" aria-label="Zoom in">+</button>
+              <button type="button" class="server-map-zoom-btn" data-map-zoom-out title="Zoom out" aria-label="Zoom out">−</button>
+              <button type="button" class="server-map-zoom-btn" data-map-zoom-reset title="Reset map" aria-label="Reset map">Reset</button>
+              <span class="server-map-zoom-label" data-map-zoom-label>100%</span>
+            </div>
+            <p class="server-map-hint">Scroll to zoom · Alt-drag to pan · Drag to select</p>
+            <div class="server-map-viewport" data-server-map-viewport>
+              <div class="server-map-scene" data-server-map-scene>
+                <div class="server-map-view" data-server-map-view>
+                  <img src="assets/liberty-county-map.jpg" alt="Liberty County map" width="1024" height="1024" draggable="false" />
+                  <div class="server-map-pins" data-server-map-pins></div>
+                  <div class="server-map-marquee" data-server-map-marquee hidden></div>
+                </div>
+              </div>
             </div>
           </figure>
 
@@ -112,13 +125,43 @@
               <h2>Players</h2>
               <span data-mgmt-roster-count>0</span>
             </header>
+            <div class="server-roster-tools">
+              <label class="server-roster-search">
+                <span class="sr-only">Search players</span>
+                <input type="search" maxlength="40" placeholder="Search name or callsign" data-mgmt-search />
+              </label>
+              <div class="server-roster-filters" data-mgmt-team-filters aria-label="Filter by team">
+                <button type="button" class="is-active" data-mgmt-team="all">All</button>
+                <button type="button" data-mgmt-team="police">PD</button>
+                <button type="button" data-mgmt-team="sheriff">Sheriff</button>
+                <button type="button" data-mgmt-team="fire">Fire</button>
+                <button type="button" data-mgmt-team="dot">DOT</button>
+                <button type="button" data-mgmt-team="civilian">Civ</button>
+              </div>
+              <div class="server-roster-quick">
+                <button type="button" class="button button-ghost" data-mgmt-select-filtered>Select filtered</button>
+                <button type="button" class="button button-ghost" data-mgmt-copy-selected disabled>Copy names</button>
+                <button type="button" class="button button-ghost" data-mgmt-focus-selected disabled>Focus map</button>
+              </div>
+              <p class="server-team-stats" data-mgmt-team-stats></p>
+            </div>
             <ul data-mgmt-roster></ul>
           </aside>
         </div>
+
+        <section class="server-mgmt-log" aria-label="Session activity">
+          <header>
+            <h2>Session log</h2>
+            <button type="button" class="button button-ghost" data-mgmt-log-clear>Clear log</button>
+          </header>
+          <ol data-mgmt-log>
+            <li class="server-mgmt-log-empty">Actions you run here show up for this session.</li>
+          </ol>
+        </section>
       </section>
     </main>
 
-    <script src="script.js?v=20260814-faster-refresh"></script>
-    <script src="server-management.js?v=20260814-faster-refresh"></script>
+    <script src="script.js?v=20260815-mgmt-zoom"></script>
+    <script src="server-management.js?v=20260815-mgmt-zoom"></script>
   </body>
 </html>

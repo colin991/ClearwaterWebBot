@@ -1298,15 +1298,65 @@ body.server-mgmt-page {
   background: #05070a;
   box-shadow: 0 24px 50px rgba(0, 0, 0, .28);
 }
-.server-map-view {
+.server-map-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 0;
+}
+.server-map-zoom-btn {
+  min-width: 36px;
+  min-height: 34px;
+  border: 1px solid rgba(180, 190, 205, .2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .04);
+  color: #e7eef8;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.server-map-zoom-btn:hover {
+  border-color: rgba(160, 195, 255, .45);
+  background: rgba(255, 255, 255, .08);
+}
+.server-map-zoom-label {
+  margin-left: auto;
+  color: #9eb6d8;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.server-map-hint {
+  margin: 6px 12px 8px;
+  color: rgba(158, 182, 216, .82);
+  font-size: 11px;
+  font-weight: 600;
+}
+.server-map-viewport {
   position: relative;
+  overflow: hidden;
   aspect-ratio: 1;
   background: #000;
   cursor: crosshair;
   user-select: none;
   touch-action: none;
 }
-.server-map-view.is-selecting { cursor: crosshair; }
+.server-map-viewport.is-panning { cursor: grabbing; }
+.server-map-viewport.is-selecting { cursor: crosshair; }
+.server-map-viewport.is-zoomed { cursor: grab; }
+.server-map-scene {
+  position: absolute;
+  inset: 0;
+  transform-origin: center center;
+  will-change: transform;
+}
+.server-map-view {
+  position: absolute;
+  inset: 0;
+  background: #000;
+}
 .server-map-view img {
   display: block;
   width: 100%;
@@ -1339,6 +1389,11 @@ body.server-mgmt-page {
   transform: translate(-50%, -50%);
   cursor: pointer;
   z-index: 2;
+}
+.server-map-pin.is-filtered-out {
+  opacity: .18;
+  filter: grayscale(.7);
+  pointer-events: none;
 }
 .server-map-pin img,
 .server-map-pin-fallback {
@@ -1396,6 +1451,64 @@ body.server-mgmt-page {
   color: #9eb6d8;
   font-size: 12px;
   font-weight: 750;
+}
+.server-roster-tools {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid rgba(180, 190, 205, .1);
+}
+.server-roster-search input {
+  width: 100%;
+  border: 1px solid rgba(180, 190, 205, .18);
+  border-radius: 10px;
+  background: rgba(3, 8, 16, .85);
+  color: #f3f7ff;
+  padding: 9px 11px;
+  font: inherit;
+  font-size: 13px;
+}
+.server-roster-search input:focus {
+  outline: 2px solid rgba(125, 211, 252, .4);
+  outline-offset: 1px;
+}
+.server-roster-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.server-roster-filters button {
+  border: 1px solid rgba(180, 190, 205, .16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .03);
+  color: #b7c8de;
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.server-roster-filters button.is-active,
+.server-roster-filters button:hover {
+  border-color: rgba(160, 195, 255, .45);
+  background: rgba(61, 126, 255, .18);
+  color: #fff;
+}
+.server-roster-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.server-roster-quick .button {
+  padding: 7px 10px;
+  font-size: 12px;
+}
+.server-team-stats {
+  margin: 0;
+  color: #9eb6d8;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.4;
 }
 .server-roster ul {
   list-style: none;
@@ -1470,5 +1583,55 @@ body.server-mgmt-page {
   .server-mgmt-heading { flex-direction: column; align-items: start; }
   .server-mgmt-meta { justify-items: start; text-align: left; }
   .server-mgmt-layout { grid-template-columns: 1fr; }
-  .server-roster { max-height: 360px; }
+  .server-roster { max-height: 420px; }
+}
+
+
+.server-mgmt-log {
+  margin-top: 16px;
+  border: 1px solid rgba(180, 190, 205, .16);
+  border-radius: 16px;
+  background: rgba(8, 14, 24, .72);
+  overflow: hidden;
+}
+.server-mgmt-log > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(180, 190, 205, .12);
+}
+.server-mgmt-log h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 780;
+}
+.server-mgmt-log ol {
+  list-style: none;
+  margin: 0;
+  padding: 8px 12px 12px;
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+}
+.server-mgmt-log li {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 10px;
+  color: #d7e3f4;
+  font-size: 12px;
+  font-weight: 600;
+}
+.server-mgmt-log li time {
+  color: #9eb6d8;
+  font-variant-numeric: tabular-nums;
+}
+.server-mgmt-log li.is-error span { color: #ffd0d0; }
+.server-mgmt-log-empty {
+  display: block !important;
+  color: #9eb6d8;
+  font-weight: 600;
 }
