@@ -119,7 +119,7 @@
       "summary": "Sponsored sidebar ads now use the same solid card surface as What\u2019s happening / Who to follow, and the right rail scrolls independently when content is taller than the viewport.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T04:40:00.000Z",
-      "commit": "52b9fca"
+      "commit": "c466178"
     }
   ]
 }
