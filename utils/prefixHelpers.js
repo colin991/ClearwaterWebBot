@@ -174,6 +174,8 @@ export function caseMessage(entry, title = 'Moderation case', {
     ],
   });
 }
+
+export function staffRankLabel(member) {
   return getHighestStaffRank(member)?.name || (member?.permissions?.has(PermissionFlagsBits.Administrator) ? 'Administrator' : 'Staff');
 }
 
