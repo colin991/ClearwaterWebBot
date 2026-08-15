@@ -1750,16 +1750,17 @@ function bindReelMediaFallback(viewport) {
       const card = video.closest('.reel-card');
       const reelId = card?.dataset.reelId;
       if (!reelId) return;
-      if (video.dataset.fallbackTried !== '1') {
-        video.dataset.fallbackTried = '1';
-        video.src = reelMediaProxyUrl(reelId, 'video');
+      const attempt = Number(video.dataset.fallbackTried || 0);
+      if (attempt < 2) {
+        video.dataset.fallbackTried = String(attempt + 1);
+        video.src = `${reelMediaProxyUrl(reelId, 'video')}&retry=${attempt + 1}&t=${Date.now()}`;
         video.load();
         return;
       }
       markReelMediaBroken(card, 'This Reel video cannot play here. Re-upload as MP4 (H.264) or WebM.');
     });
   });
-  viewport.querySelectorAll('.reel-card > img, .reel-slideshow img').forEach((image) => {
+  viewport.querySelectorAll('.reel-slideshow img').forEach((image) => {
     if (image.dataset.fallbackBound === '1') return;
     image.dataset.fallbackBound = '1';
     image.addEventListener('error', () => {
@@ -1767,9 +1768,10 @@ function bindReelMediaFallback(viewport) {
       const reelId = card?.dataset.reelId;
       if (!reelId) return;
       const slideIndex = image.dataset.slideIndex;
-      if (image.dataset.fallbackTried !== '1') {
-        image.dataset.fallbackTried = '1';
-        image.src = reelMediaProxyUrl(reelId, 'image', slideIndex ?? null);
+      const attempt = Number(image.dataset.fallbackTried || 0);
+      if (attempt < 2) {
+        image.dataset.fallbackTried = String(attempt + 1);
+        image.src = `${reelMediaProxyUrl(reelId, 'image', slideIndex ?? 0)}&retry=${attempt + 1}&t=${Date.now()}`;
         return;
       }
       markReelSlideBroken(image);
@@ -1782,9 +1784,10 @@ function bindReelMediaFallback(viewport) {
       const card = audio.closest('.reel-card');
       const reelId = card?.dataset.reelId;
       if (!reelId) return;
-      if (audio.dataset.fallbackTried !== '1') {
-        audio.dataset.fallbackTried = '1';
-        audio.src = reelMediaProxyUrl(reelId, 'audio');
+      const attempt = Number(audio.dataset.fallbackTried || 0);
+      if (attempt < 2) {
+        audio.dataset.fallbackTried = String(attempt + 1);
+        audio.src = `${reelMediaProxyUrl(reelId, 'audio')}&retry=${attempt + 1}&t=${Date.now()}`;
         audio.load();
       }
     });
@@ -1855,17 +1858,17 @@ function renderReels() {
     const displayName = author.displayName || reel.displayName || reel.username || 'member';
     const username = author.username || reel.username || 'member';
     const avatarUrl = author.avatarUrl || reel.avatarUrl || 'assets/clearwater-logo.png';
-    // Always load through /api/media so new blob-hosted Reels match older data-URL Reels.
+    // Always load through /api/media so blob-hosted Reels stay same-origin and reliable.
     const videoSrc = reel.videoUrl ? reelMediaProxyUrl(reel.id, 'video') : '';
     const slides = !videoSrc && Array.isArray(reel.slideshowUrls) && reel.slideshowUrls.length
-      ? reel.slideshowUrls.map((src, index) => src || reelMediaProxyUrl(reel.id, 'image', index))
-      : (!videoSrc && reel.imageUrl ? [reelMediaProxyUrl(reel.id, 'image')] : []);
+      ? reel.slideshowUrls.map((_, index) => reelMediaProxyUrl(reel.id, 'image', index))
+      : (!videoSrc && reel.imageUrl ? [reelMediaProxyUrl(reel.id, 'image', 0)] : []);
     const audioSrc = !videoSrc && reel.audioUrl ? reelMediaProxyUrl(reel.id, 'audio') : '';
     let media = '<p class="reel-missing">This Reel could not be loaded.</p>';
     if (videoSrc) {
       media = `<video src="${escapeHtml(videoSrc)}" loop muted playsinline webkit-playsinline preload="auto" autoplay></video>`;
     } else if (slides.length) {
-      const imgs = slides.map((src, index) => `<img src="${escapeHtml(src)}" alt="" data-slide-index="${index}" class="${index === 0 ? 'is-active' : ''}" />`).join('');
+      const imgs = slides.map((src, index) => `<img src="${escapeHtml(src)}" alt="" loading="${index === 0 ? 'eager' : 'lazy'}" decoding="async" data-slide-index="${index}" class="${index === 0 ? 'is-active' : ''}" />`).join('');
       const dots = slides.length > 1
         ? `<div class="reel-slide-dots" aria-hidden="true">${slides.map((_, index) => `<span data-reel-slide-dot class="${index === 0 ? 'is-active' : ''}"></span>`).join('')}</div>`
         : '';
@@ -4424,8 +4427,10 @@ function reelWatchThumbMarkup(reel) {
     return `<video src="${escapeHtml(reelMediaProxyUrl(reel.id, 'video'))}" muted playsinline preload="metadata"></video>`;
   }
   const slides = Array.isArray(reel.slideshowUrls) ? reel.slideshowUrls.filter(Boolean) : [];
-  const imageSrc = slides[0] || (reel.imageUrl ? (String(reel.imageUrl).startsWith('/api/media') ? reel.imageUrl : reelMediaProxyUrl(reel.id, 'image')) : '');
-  if (imageSrc) return `<img src="${escapeHtml(imageSrc)}" alt="" />`;
+  const imageSrc = slides.length || reel.imageUrl
+    ? reelMediaProxyUrl(reel.id, 'image', 0)
+    : '';
+  if (imageSrc) return `<img src="${escapeHtml(imageSrc)}" alt="" loading="lazy" decoding="async" />`;
   return `<img src="assets/clearwater-logo.png" alt="" />`;
 }
 

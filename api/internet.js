@@ -149,11 +149,43 @@ async function serveReelViaBot(request, response, url) {
     signal: AbortSignal.timeout(20000),
     redirect: 'manual',
   });
-  const location = upstream.headers.get('location');
-  if (upstream.status >= 300 && upstream.status < 400 && location) {
-    response.statusCode = 302;
-    response.setHeader('Location', location);
-    return response.end();
+  const locationHeader = upstream.headers.get('location');
+  if (upstream.status >= 300 && upstream.status < 400 && locationHeader) {
+    // Proxy blob/CDN media instead of redirecting. Direct blob loads were flaky
+    // in the vertical Reel player and showed "photo could not be loaded".
+    let location = locationHeader;
+    try {
+      location = new URL(locationHeader, apiUrl).href;
+    } catch {
+      location = locationHeader;
+    }
+    try {
+      const media = await fetch(location, {
+        redirect: 'follow',
+        signal: AbortSignal.timeout(20000),
+        headers: { Accept: 'image/*,video/*,audio/*,*/*;q=0.8' },
+      });
+      if (!media.ok) {
+        response.statusCode = 404;
+        return response.end();
+      }
+      const buffer = Buffer.from(await media.arrayBuffer());
+      // Stay under Vercel serverless response limits; larger media redirects to blob.
+      if (buffer.length > 3_500_000) {
+        response.statusCode = 302;
+        response.setHeader('Location', location);
+        return response.end();
+      }
+      response.statusCode = 200;
+      response.setHeader('Content-Type', media.headers.get('content-type') || 'application/octet-stream');
+      response.setHeader('Cache-Control', 'private, max-age=3600');
+      response.setHeader('X-Content-Type-Options', 'nosniff');
+      response.setHeader('Content-Length', buffer.length);
+      return response.end(buffer);
+    } catch {
+      response.statusCode = 502;
+      return response.end();
+    }
   }
   if (!upstream.ok) {
     response.statusCode = upstream.status === 404 ? 404 : 502;

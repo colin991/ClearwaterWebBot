@@ -23,7 +23,7 @@ const json = (response, statusCode, body) => {
   response.end(JSON.stringify(body));
 };
 
-function serveStoredReel(response, store, reelId, kind, index = null) {
+async function serveStoredReel(response, store, reelId, kind, index = null) {
   const post = store.posts.find((item) => item.id === reelId);
   let source = '';
   if (kind === 'video') {
@@ -41,14 +41,50 @@ function serveStoredReel(response, store, reelId, kind, index = null) {
   } else {
     source = post?.videoUrl || post?.imageUrl || '';
   }
+
+  // Older/corrupt rows sometimes stored the public proxy path instead of the
+  // real blob/data URL. That used to 404 and show "photo could not be loaded".
+  if (String(source).startsWith('/api/media')) {
+    source = '';
+  }
+
   if (!post || !source) {
     response.writeHead(404, { 'Cache-Control': 'no-store' });
     return response.end();
   }
+
   if (/^https:\/\//i.test(source)) {
-    response.writeHead(302, { Location: source, 'Cache-Control': 'no-store' });
-    return response.end();
+    try {
+      const upstream = await fetch(source, {
+        redirect: 'follow',
+        signal: AbortSignal.timeout(20_000),
+        headers: { Accept: 'image/*,video/*,audio/*,*/*;q=0.8' },
+      });
+      if (!upstream.ok) {
+        response.writeHead(404, { 'Cache-Control': 'no-store' });
+        return response.end();
+      }
+      const buffer = Buffer.from(await upstream.arrayBuffer());
+      // Keep responses under Vercel's ~4.5MB serverless payload limit when this
+      // host is reached through /api/media. Larger files fall back to a redirect
+      // (CSP allows *.public.blob.vercel-storage.com).
+      if (buffer.length > 3_500_000) {
+        response.writeHead(302, { Location: source, 'Cache-Control': 'no-store' });
+        return response.end();
+      }
+      response.writeHead(200, {
+        'Content-Type': upstream.headers.get('content-type') || 'application/octet-stream',
+        'Content-Length': buffer.length,
+        'Cache-Control': 'private, max-age=3600',
+        'X-Content-Type-Options': 'nosniff',
+      });
+      return response.end(buffer);
+    } catch {
+      response.writeHead(502, { 'Cache-Control': 'no-store' });
+      return response.end();
+    }
   }
+
   const match = String(source).replace(/\s+/g, '').match(/^data:([^;]+);base64,([a-z0-9+/]+=*)$/i);
   if (!match) {
     response.writeHead(404, { 'Cache-Control': 'no-store' });
@@ -415,7 +451,7 @@ export function startStatusServer(client, config) {
         store = await readInternetStore();
         if (request.method === 'GET') {
           const reelId = url.searchParams.get('reel');
-          if (reelId) return serveStoredReel(response, store, reelId, url.searchParams.get('kind'), url.searchParams.get('index'));
+          if (reelId) return await serveStoredReel(response, store, reelId, url.searchParams.get('kind'), url.searchParams.get('index'));
           const ipBan = getActiveInternetIpBan(store, [
             url.searchParams.get('ipHash'),
             url.searchParams.get('ipHashLegacy'),
