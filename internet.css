@@ -7752,6 +7752,7 @@ body.has-site-banner .internet-side {
   }
   .internet-shell:not(.staff-mode) .internet-brand,
   .internet-shell:not(.staff-mode) .rail-primary,
+  .internet-shell:not(.staff-mode) .rail-phone-download,
   .internet-shell:not(.staff-mode) .back-button,
   .internet-shell:not(.staff-mode) .rail-account {
     display: none !important;
