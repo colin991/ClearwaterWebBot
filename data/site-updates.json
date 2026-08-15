@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-internet-perf",
+      "title": "Internet load cut back",
+      "summary": "Clearwater Internet no longer reloads the feed, images, and status every few seconds. Likes wait a beat before saving, and rapid like-tapping is rate limited so it cannot stall the server.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T20:40:00.000Z"
+    },
+    {
       "id": "2026-08-15-phone-icons-update-link",
       "title": "Phone icons and update notice",
       "summary": "Clearwater Phone home icons now match the website (with a new Find My icon). If your phone is out of date, it shows a notice with a link to download the latest build.",

@@ -95,7 +95,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260815-core-tabs';
+const INTERNET_VERSION = '20260815-perf';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -352,7 +352,9 @@ let currentUserId = null;
 let internetUsers = new Map();
 let loadingPosts = false;
 let loadPostsQueued = false;
-const inFlightLikes = new Set();
+let lastFeedFingerprint = '';
+const likeBaseline = new Map();
+const likeFlushTimers = new Map();
 const inFlightBookmarks = new Set();
 let accountBanned = false;
 let activeBan = null;
@@ -2707,7 +2709,7 @@ function queuePresenceFromScroll() {
   presenceScrollTimer = window.setTimeout(() => {
     presenceScrollTimer = 0;
     void pulsePresence('home');
-  }, 1200);
+  }, 8000);
 }
 
 function reportSourceLabel(report) {
@@ -4856,7 +4858,7 @@ async function loadAds() {
 
 function startAdRotation() {
   if (adRotateTimer) window.clearInterval(adRotateTimer);
-  adRotateTimer = window.setInterval(() => { void loadAds(); }, 60_000);
+  adRotateTimer = window.setInterval(() => { void loadAds(); }, 180_000);
 }
 
 function renderWallet(wallet) {
@@ -5146,9 +5148,7 @@ async function loadSocial() {
       }
     }
     updateNotificationIndicators();
-    renderPosts();
-    renderBookmarks();
-    renderSideSuggestions();
+    if (!document.querySelector('[data-view="bookmarks"]')?.hidden) renderBookmarks();
     renderOnboardingChecklist();
   } catch { /* Feed stays usable during a temporary connection issue. */ }
 }
@@ -6221,15 +6221,17 @@ async function loadPosts() {
   try {
     // A unique query value prevents an intermediary cache from returning an
     // older feed to one member while other members see newer posts.
-    const response = await fetch(`/api/internet?feed=${Date.now()}`, {
-      cache: 'no-store',
+    const response = await fetch('/api/internet', {
+      cache: 'default',
       credentials: 'same-origin',
-      headers: { 'Cache-Control': 'no-cache' },
     });
     const result = await readApiJson(response, 'Clearwater Internet could not reach the website service.');
     if (!response.ok) throw new Error(result.error || 'Service unavailable');
     allPosts = uniquePostsById(result.posts || []);
     internetUsers = new Map((result.users || []).map((user) => [user.id, user]));
+    const feedFingerprint = allPosts.map((post) => `${post.id}:${Array.isArray(post.likes) ? post.likes.length : 0}:${post.editedAt || post.createdAt || ''}`).join('|');
+    const sameFeed = feedFingerprint === lastFeedFingerprint;
+    lastFeedFingerprint = feedFingerprint;
     applySiteBanner(result.settings?.siteBanner || null);
     applyOfficialPostBanner(result.settings?.officialPostBanner || null);
     if (result.settings) {
@@ -6260,7 +6262,7 @@ async function loadPosts() {
       setValue('[data-official-banner-url]', editableUrl(official.bannerUrl));
     }
     refreshProfileVerified();
-    renderPosts();
+    if (!sameFeed) renderPosts();
     renderOwnProfileDetails();
     const route = readInternetRoute();
     if (route.view === 'post' && route.id) showPostDetail(route.id, false);
@@ -7665,19 +7667,23 @@ async function handlePostEngagement(type, postId, control = null) {
   const post = sourcePost(requested);
   if (type === 'share') { pendingPostAction = { postId: post.id, type }; shareModal.hidden = false; return; }
   if (type === 'like') {
-    if (inFlightLikes.has(post.id)) return;
-    inFlightLikes.add(post.id);
+    if (!likeBaseline.has(post.id)) likeBaseline.set(post.id, Array.isArray(post.likes) && post.likes.includes(activeUserId()));
     applyLocalLike(post);
     refreshVisiblePosts();
-    try {
-      await postInteraction({ postId: post.id, type: 'like' }, { reload: false });
-    } catch (error) {
-      applyLocalLike(post);
-      refreshVisiblePosts();
-      void siteAlert(error.message || 'Could not like this post.');
-    } finally {
-      inFlightLikes.delete(post.id);
-    }
+    const existing = likeFlushTimers.get(post.id);
+    if (existing) window.clearTimeout(existing);
+    likeFlushTimers.set(post.id, window.setTimeout(() => {
+      likeFlushTimers.delete(post.id);
+      const original = likeBaseline.get(post.id);
+      likeBaseline.delete(post.id);
+      const liked = Array.isArray(post.likes) && post.likes.includes(activeUserId());
+      if (liked === original) return;
+      void postInteraction({ postId: post.id, type: 'like' }, { reload: false }).catch((error) => {
+        applyLocalLike(post);
+        refreshVisiblePosts();
+        void siteAlert(error.message || 'Could not like this post.');
+      });
+    }, 450));
     return;
   }
   if (type === 'bookmark') {
@@ -9015,30 +9021,24 @@ window.addEventListener('resize', syncMobileRailScroll, { passive: true });
 
 window.setInterval(() => {
   if (document.hidden) return;
-  loadPosts();
-  loadSocial();
+  void loadPosts();
   if (!document.querySelector('[data-view="messages"]')?.hidden) void loadMessages();
   if (!document.querySelector('[data-view="conversation"]')?.hidden && viewedMember) void loadConversation(viewedMember);
+}, 90_000);
+window.setInterval(() => {
+  if (document.hidden) return;
+  void loadBanStatus();
+  if (currentUserId) {
+    void loadWarnings();
+    void pulsePresence();
+  }
   if (!document.querySelector('[data-view="staff"]')?.hidden && sessionCanStaff) void loadModeration();
-}, 15_000);
-// A ban needs to take effect quickly for somebody who already has the page
-// open, without reloading the entire feed every few seconds.
-window.setInterval(() => {
-  if (!document.hidden) void loadBanStatus();
-}, 5_000);
-// Warnings and staff notices should pop up while the member is already on the site.
-window.setInterval(() => {
-  if (!document.hidden && currentUserId) void loadWarnings();
-}, 5_000);
-window.setInterval(() => {
-  if (document.hidden || !currentUserId) return;
-  void pulsePresence();
-}, 4_000);
+}, 45_000);
 window.setInterval(() => {
   if (document.hidden || !sessionCanStaff) return;
   if (document.querySelector('[data-view="staff"]')?.hidden) return;
   if (staffTab !== 'active') return;
   void loadModeration();
-}, 5_000);
+}, 30_000);
 window.addEventListener('scroll', queuePresenceFromScroll, { passive: true });
 window.setInterval(updateBanCountdown, 60 * 1000);

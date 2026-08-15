@@ -8,10 +8,11 @@ import { dropLocationNameCandidates, fetchErlcPlayersOnMap, fetchErlcServer, fin
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
 import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
-import { AutomodHoldError, adjustInternetCredits, addBusinessMember, applyStaffSiteAction, applyStaffUserAction, assertBusinessAccess, assertLimitedStaffBanQuota, banKnownInternetIps, businessActorFromAccount, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, findMyDirectory, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listInternetAdsForUser, listMyBusinessAccounts, manageInternetAd, membersSharingWith, moderationSnapshot, myVerificationApplication, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, purchasePostBoost, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, removeBusinessMember, respondCreditTransfer, reviewBusinessApplication, reviewInternetAd, reviewInternetReport, reviewVerificationApplication, revertInternetHistory, saveInternetStore, searchStaffUsers, sendInternetMessage, serveInternetAds, setBusinessMemberRole, setDiscordInternetNotify, setFindMyShare, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserConversation, staffUserDetail, staffUserMessages, submitBusinessApplication, submitVerificationApplication, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateBusinessProfile, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
+import { AutomodHoldError, adjustInternetCredits, addBusinessMember, applyStaffSiteAction, applyStaffUserAction, assertBusinessAccess, assertLimitedStaffBanQuota, banKnownInternetIps, businessActorFromAccount, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, findMyDirectory, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listInternetAdsForUser, listMyBusinessAccounts, manageInternetAd, membersSharingWith, moderationSnapshot, myVerificationApplication, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, purchasePostBoost, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, removeBusinessMember, respondCreditTransfer, reviewBusinessApplication, reviewInternetAd, reviewInternetReport, reviewVerificationApplication, revertInternetHistory, saveInternetStore, queueInternetStoreSave, searchStaffUsers, sendInternetMessage, serveInternetAds, setBusinessMemberRole, setDiscordInternetNotify, setFindMyShare, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserConversation, staffUserDetail, staffUserMessages, submitBusinessApplication, submitVerificationApplication, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateBusinessProfile, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
 import { createDiscordInternetNotifier } from './discordInternetNotify.js';
 import { createInternetFeedController, shouldAnnounceInteractResult } from './discordInternetFeed.js';
 import { markInternetPresence } from './internetPresence.js';
+import { RateLimitError } from './rateLimit.js';
 import { appendUpdateEntry, flushPendingUpdateLogs, postUpdateLog } from './updateLog.js';
 
 const json = (response, statusCode, body) => {
@@ -814,8 +815,13 @@ export function startStatusServer(client, config) {
           recordInternetIpHash(store, user.id, body.ipHash);
           const ban = getActiveBan(user);
           // Presence heartbeats are frequent — avoid rewriting the whole store every pulse.
-          if (body.action === 'status') await saveInternetStore(store);
-          else {
+          if (body.action === 'status') {
+            const lastWrite = Number(user._statusSavedAt || 0);
+            if (Date.now() - lastWrite > 30_000) {
+              user._statusSavedAt = Date.now();
+              await saveInternetStore(store);
+            }
+          } else {
             // Persist lastSeenAt occasionally so Active still works after a bot restart.
             const lastWrite = Number(user._presenceSavedAt || 0);
             if (Date.now() - lastWrite > 30_000) {
@@ -1083,7 +1089,8 @@ export function startStatusServer(client, config) {
 
         if (body.action === 'post-interaction') {
           const result = interactInternetPost(store, body);
-          await saveInternetStore(store);
+          if (body.type === 'like') queueInternetStoreSave(store);
+          else await saveInternetStore(store);
           if (shouldAnnounceInteractResult(body, result)) syncAnnounceInternetFeed(result.post);
           return json(response, 200, result);
         }
@@ -1096,13 +1103,11 @@ export function startStatusServer(client, config) {
 
         if (body.action === 'social-status') {
           const social = socialSnapshot(store, body.actor);
-          await saveInternetStore(store);
           return json(response, 200, { social });
         }
 
         if (body.action === 'preferences') {
           const preferences = internetPreferences(store, body.actor);
-          await saveInternetStore(store);
           return json(response, 200, { preferences });
         }
 
@@ -1114,7 +1119,6 @@ export function startStatusServer(client, config) {
 
         if (body.action === 'profile-get') {
           const profile = internetProfile(store, body.actor);
-          await saveInternetStore(store);
           return json(response, 200, { profile });
         }
 
@@ -1306,6 +1310,9 @@ export function startStatusServer(client, config) {
             held: true,
             reason: error.reason || '',
           });
+        }
+        if (error instanceof RateLimitError || error?.status === 429) {
+          return json(response, 429, { error: error.message || 'Too many requests. Wait a moment.' });
         }
         return json(response, 400, { error: error.message || 'Could not update Clearwater Internet' });
       }

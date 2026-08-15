@@ -2,9 +2,10 @@ import { handleUpload } from '@vercel/blob/client';
 import { SESSION_COOKIE, avatarUrl, getAuthConfig, isSameSiteRequest, parseCookies, readSessionToken, sendJson } from '../lib/discord-auth.js';
 import { getStaffAccess } from '../lib/owner-access.js';
 import { hashClientIp, isPublicUserId, redactPublicPayload, redactStaffPayload, resolvePublicIds, serveProxiedMedia } from '../lib/privacy.js';
+import { allowRate } from '../utils/rateLimit.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260815-core-tabs';
+const INTERNET_VERSION = '20260815-perf';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
@@ -329,6 +330,10 @@ export default async function handler(request, response) {
     const asBusinessId = !asOfficial && /^biz_[a-z0-9-]{8,80}$/i.test(String(body.asBusinessId || '').trim())
       ? String(body.asBusinessId).trim()
       : '';
+
+    if (body.action === 'post-interaction' && String(body.type || '') === 'like' && !allowRate(`like:${user.id}`, { max: 12, windowMs: 10_000 })) {
+      return sendJson(response, 429, { error: 'Too many likes. Wait a moment.' });
+    }
 
     if (body.action === 'staff-pin-status' || body.action === 'staff-pin-unlock' || body.action === 'staff-pin-lock') {
       if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });

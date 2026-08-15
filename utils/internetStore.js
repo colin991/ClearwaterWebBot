@@ -4,6 +4,7 @@ import { CREDIT_STORE_PACKS } from '../lib/credit-store.js';
 import { AUTOMOD_HOLD_MESSAGE, AutomodHoldError, scanInternetContent } from './internetAutomod.js';
 import { JsonStoreCorruptError, readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
+import { allowRate, RateLimitError } from './rateLimit.js';
 import { mergeInternetBadges, sanitizeInternetBadges, withSiteBadges, dailyCreditTierForRoles } from './staffRanks.js';
 import { activePresenceWindowMs, listActiveInternetPresence } from './internetPresence.js';
 import {
@@ -449,6 +450,16 @@ export async function saveInternetStore(store) {
     liveStore = store;
     lastPersistedStats = nextStats;
   });
+}
+
+let queuedSaveTimer = 0;
+export function queueInternetStoreSave(store) {
+  liveStore = store;
+  if (queuedSaveTimer) return;
+  queuedSaveTimer = setTimeout(() => {
+    queuedSaveTimer = 0;
+    void saveInternetStore(liveStore).catch(() => {});
+  }, 1500);
 }
 
 function hostedMediaUrl(value) {
@@ -1925,6 +1936,9 @@ export function interactInternetPost(store, { actor, postId, type, content = '',
   if (!requested) throw new Error('Post not found');
   const post = sourceInternetPost(store, requested);
   if (type === 'like') {
+    if (!allowRate(`like:${user.id}`, { max: 12, windowMs: 10_000 }) || !allowRate('like:global', { max: 80, windowMs: 10_000 })) {
+      throw new RateLimitError('Too many likes. Wait a moment.');
+    }
     post.likes = Array.isArray(post.likes) ? post.likes : [];
     const liked = post.likes.includes(user.id);
     post.likes = liked ? post.likes.filter((id) => id !== user.id) : [...post.likes, user.id];
