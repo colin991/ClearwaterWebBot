@@ -23,7 +23,7 @@
       "summary": "Discord update log embeds now include an \u201cUpdated by\u201d field naming who requested or owns each change.",
       "updatedBy": "Colin Dever",
       "createdAt": "2026-08-15T02:17:00.000Z",
-      "commit": "17f2204"
+      "commit": "28a2bb1"
     }
   ]
 }
