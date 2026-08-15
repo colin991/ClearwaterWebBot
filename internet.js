@@ -6120,9 +6120,12 @@ async function loadPosts() {
     }
     if (!document.querySelector('[data-view="messages"]')?.hidden) void loadMessages();
     if (!document.querySelector('[data-view="conversation"]')?.hidden && viewedMember) void loadConversation(viewedMember);
-  } catch {
+  } catch (error) {
     note.hidden = false;
-    note.textContent = 'Clearwater Internet is offline right now. Restart the Clearwater Discord bot host to restore posting.';
+    const detail = String(error?.message || '').trim();
+    note.textContent = detail && !/restart the clearwater discord bot host/i.test(detail)
+      ? detail
+      : 'Clearwater Internet is offline right now. Restart the Clearwater Discord bot host to restore posting.';
   } finally {
     loadingPosts = false;
     if (loadPostsQueued) {
