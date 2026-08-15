@@ -112,6 +112,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T04:36:30.000Z",
       "commit": "79bef17"
+    },
+    {
+      "id": "2026-08-15-notice-channel-autodelete",
+      "title": "Notice channel auto-moderation",
+      "summary": "Channel 1515038785421836479 now keeps a pinned notice, auto-deletes every other message (including Ownership), applies a 7-day timeout, and updates the punished people count on the notice.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T04:45:00.000Z",
+      "commit": "0cf3fe1"
     }
   ]
 }

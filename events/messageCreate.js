@@ -1,12 +1,22 @@
 import { Events } from 'discord.js';
 import { getOwnerConfig } from '../utils/ownerConfig.js';
 import { logger } from '../utils/logger.js';
+import { handleNoticeChannelMessage } from '../utils/noticeChannel.js';
 import { parseArgs } from '../utils/prefixHelpers.js';
 
 export default {
   name: Events.MessageCreate,
   async execute(message, client) {
-    if (!message.inGuild() || message.author.bot) return;
+    if (!message.inGuild()) return;
+
+    try {
+      const handled = await handleNoticeChannelMessage(message, client);
+      if (handled) return;
+    } catch (error) {
+      logger.error('Notice channel handler failed', error);
+    }
+
+    if (message.author.bot) return;
 
     const settings = await getOwnerConfig();
     const prefix = settings.prefix || '-';
