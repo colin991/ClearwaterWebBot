@@ -1,46 +1,67 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="site-public">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#02040a" />
+    <meta name="theme-color" content="#03070d" />
     <meta name="description" content="Sign in to Clearwater Internet with Discord." />
-    <title>Sign in · Clearwater Internet</title>
+    <title>Sign in · Clearwater</title>
     <link rel="icon" type="image/png" href="/assets/clearwater-logo.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/assets/icon-512.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="signin.css?v=20260814-public" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@450;550;650;750;850&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="signin.css?v=20260815-redo" />
   </head>
   <body class="signin-body">
-    <div class="signin-atmosphere" aria-hidden="true">
-      <span class="signin-orb signin-orb-a"></span>
-      <span class="signin-orb signin-orb-b"></span>
-      <span class="signin-orb signin-orb-c"></span>
-      <span class="signin-grid"></span>
+    <div class="signin-shell">
+      <section class="signin-visual" aria-hidden="true">
+        <img class="signin-visual-photo" src="assets/clearwater-police-night.png" alt="" />
+        <div class="signin-visual-veil"></div>
+        <div class="signin-visual-copy">
+          <img src="assets/clearwater-logo.png" alt="" />
+          <p>Clearwater Roleplay</p>
+          <b>Your city.<br />Your feed.</b>
+        </div>
+      </section>
+
+      <main class="signin-panel">
+        <a class="signin-back" href="/">← Back to website</a>
+        <div class="signin-panel-inner">
+          <a class="signin-mark" href="/">
+            <img src="assets/clearwater-logo.png" alt="" draggable="false" />
+            <span>Clearwater</span>
+          </a>
+          <p class="signin-kicker">Clearwater Internet</p>
+          <h1>Sign in</h1>
+          <p class="signin-lead">Use Discord to open your Clearwater Internet account. Members of the Clearwater Roleplay server only.</p>
+
+          <p class="signin-error" data-signin-error hidden>Join the Clearwater Roleplay Discord server first, then sign in again.</p>
+
+          <form class="signin-form" data-signin-form>
+            <label class="signin-agree">
+              <input type="checkbox" data-legal-agree />
+              <i aria-hidden="true"></i>
+              <span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+            </label>
+            <button type="submit" data-signin-submit disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.3 5.2A19.1 19.1 0 0 0 15.6 4l-.3.6c1.8.4 2.7.9 3.8 1.6-1.6-.8-3.2-1.3-5-1.6-.9-.1-1.8-.1-2.7 0-1.8.3-3.4.8-5 1.6 1.1-.7 2.2-1.2 3.8-1.6L9.9 4A19.2 19.2 0 0 0 5.2 5.2C2.4 9.3 1.7 13.3 2 17.2A19.5 19.5 0 0 0 8 20l.8-1.1a12.7 12.7 0 0 1-1.3-.6l.3-.2c2.6 1.2 5.4 1.2 8 0l.3.2c-.4.3-.8.5-1.3.7L17.5 20a19.4 19.4 0 0 0 6-2.8c.5-4.3-.4-8.2-3.2-12zm-11 9.6c-.8 0-1.5-.8-1.5-1.7s.7-1.7 1.5-1.7 1.5.8 1.5 1.7-.7 1.7-1.5 1.7m5.4 0c-.8 0-1.5-.8-1.5-1.7s.7-1.7 1.5-1.7 1.5.8 1.5 1.7-.6 1.7-1.5 1.7"/></svg>
+              Continue with Discord
+            </button>
+          </form>
+
+          <div class="signin-links">
+            <a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a>
+            <a href="/docs">Docs</a>
+            <a href="/docs#app">Add as app</a>
+          </div>
+          <p class="signin-note">Not in the server yet? Join Discord first, then come back and sign in.</p>
+        </div>
+      </main>
     </div>
-    <main class="signin-stage">
-      <a class="signin-mark" href="/">
-        <img src="assets/clearwater-logo.png" alt="" draggable="false" />
-        <span>CLEARWATER</span>
-      </a>
-      <h1>Welcome to<br />Clearwater</h1>
-      <p class="signin-lead">Sign in or create your Clearwater Internet account with Discord.</p>
-      <p class="signin-error" data-signin-error hidden>Join the Clearwater Roleplay Discord server first, then sign in again.</p>
-      <form class="signin-form" data-signin-form>
-        <label class="signin-agree">
-          <input type="checkbox" data-legal-agree />
-          <i aria-hidden="true"></i>
-          <span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
-        </label>
-        <button type="submit" data-signin-submit disabled>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.3 5.2A19.1 19.1 0 0 0 15.6 4l-.3.6c1.8.4 2.7.9 3.8 1.6-1.6-.8-3.2-1.3-5-1.6-.9-.1-1.8-.1-2.7 0-1.8.3-3.4.8-5 1.6 1.1-.7 2.2-1.2 3.8-1.6L9.9 4A19.2 19.2 0 0 0 5.2 5.2C2.4 9.3 1.7 13.3 2 17.2A19.5 19.5 0 0 0 8 20l.8-1.1a12.7 12.7 0 0 1-1.3-.6l.3-.2c2.6 1.2 5.4 1.2 8 0l.3.2c-.4.3-.8.5-1.3.7L17.5 20a19.4 19.4 0 0 0 6-2.8c.5-4.3-.4-8.2-3.2-12zm-11 9.6c-.8 0-1.5-.8-1.5-1.7s.7-1.7 1.5-1.7 1.5.8 1.5 1.7-.7 1.7-1.5 1.7m5.4 0c-.8 0-1.5-.8-1.5-1.7s.7-1.7 1.5-1.7 1.5.8 1.5 1.7-.6 1.7-1.5 1.7"/></svg>
-          Continue with Discord
-        </button>
-      </form>
-      <p class="signin-note">You must be in the Clearwater Roleplay Discord server to use Clearwater Internet. <a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a></p>
-    </main>
-    <script src="signin.js?v=20260814-profiles"></script>
+    <script src="signin.js?v=20260815-redo"></script>
   </body>
 </html>
