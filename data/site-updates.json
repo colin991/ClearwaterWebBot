@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-home-status-trim",
+      "title": "Homepage status strip cleaned up",
+      "summary": "Removed the green live indicator and Discord bot latency line from the homepage. Player count and queue still update live.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T20:20:00.000Z"
+    },
+    {
       "id": "2026-08-15-phone-signin-fix",
       "title": "Phone Discord sign-in works",
       "summary": "Signing in with Discord on Clearwater Phone now keeps you signed in on the overlay so Wallet, Messages, and Internet load your real account.",
