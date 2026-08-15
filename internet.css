@@ -8906,7 +8906,7 @@ body.has-site-banner.has-official-post-banner .internet-side {
   top: calc(30px + var(--top-banner-stack, 82px));
 }
 
-/* Leave Internet → main website (especially needed on mobile dock). */
+/* Leave Internet ? main website (mobile dock only). */
 .internet-leave {
   display: none;
   align-items: center;
@@ -8926,15 +8926,6 @@ body.has-site-banner.has-official-post-banner .internet-side {
   stroke-width: 1.9;
 }
 .internet-leave:hover { color: #eef5ff; }
-@media (min-width: 941px) {
-  .internet-leave {
-    display: inline-flex;
-    margin-right: 4px;
-    padding: 8px 10px;
-    border-radius: 10px;
-  }
-  .internet-leave:hover { background: rgba(94, 151, 255, .12); }
-}
 @media (max-width: 660px) {
   .internet-shell:not(.staff-mode) .internet-leave {
     display: flex !important;
