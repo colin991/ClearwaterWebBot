@@ -3,20 +3,59 @@ import { logger } from './logger.js';
 import { EmbedBuilder } from 'discord.js';
 
 const ROBLOX_CLOUD = 'https://apis.roblox.com/cloud/v2';
+const TRANSIENT_HTTP = new Set([408, 425, 429, 500, 502, 503, 504]);
 let lastEmptyRequestDiagnostic = 0;
+let lastTransientDiscordAlertAt = 0;
 const robloxUsernameCache = new Map();
 
-async function groupFetch(path, apiKey, options = {}) {
-  const response = await fetch(`${ROBLOX_CLOUD}${path}`, {
-    ...options,
-    headers: { 'x-api-key': apiKey, ...(options.headers || {}) },
-    signal: AbortSignal.timeout(12_000),
-  });
-  if (!response.ok) {
-    const message = await response.text().catch(() => '');
-    throw new Error(`Roblox Groups API failed (${response.status})${message ? `: ${message.slice(0, 160)}` : ''}`);
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function isTransientFetchError(error) {
+  const message = String(error?.message || error || '');
+  if (/failed \((408|425|429|500|502|503|504)\)/i.test(message)) return true;
+  if (/TimeoutError|AbortError|network|fetch failed|ECONNRESET|ETIMEDOUT|UND_ERR/i.test(message)) return true;
+  if (/Request Context Failure/i.test(message)) return true;
+  return error?.name === 'TimeoutError' || error?.name === 'AbortError';
+}
+
+async function groupFetch(path, apiKey, options = {}, { retries = 3 } = {}) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetch(`${ROBLOX_CLOUD}${path}`, {
+        ...options,
+        headers: { 'x-api-key': apiKey, ...(options.headers || {}) },
+        signal: AbortSignal.timeout(12_000),
+      });
+      if (response.ok) {
+        return response.status === 204 ? null : response.json();
+      }
+      const message = await response.text().catch(() => '');
+      const error = new Error(
+        `Roblox Groups API failed (${response.status})${message ? `: ${message.slice(0, 160)}` : ''}`,
+      );
+      error.status = response.status;
+      if (TRANSIENT_HTTP.has(response.status) && attempt < retries) {
+        const waitMs = Math.min(8_000, 500 * (2 ** attempt));
+        logger.warn(`Roblox Groups API ${response.status} on ${path}; retry ${attempt + 1}/${retries} in ${waitMs}ms`);
+        await sleep(waitMs);
+        lastError = error;
+        continue;
+      }
+      throw error;
+    } catch (error) {
+      lastError = error;
+      const transient = isTransientFetchError(error) || TRANSIENT_HTTP.has(error?.status);
+      if (transient && attempt < retries) {
+        const waitMs = Math.min(8_000, 500 * (2 ** attempt));
+        logger.warn(`Roblox Groups API transient error on ${path}; retry ${attempt + 1}/${retries} in ${waitMs}ms: ${error?.message || error}`);
+        await sleep(waitMs);
+        continue;
+      }
+      throw error;
+    }
   }
-  return response.status === 204 ? null : response.json();
+  throw lastError || new Error('Roblox Groups API failed after retries');
 }
 
 async function sendGroupLog(client, config, title, description, color) {
