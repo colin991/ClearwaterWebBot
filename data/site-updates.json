@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-scrub-staff-pin",
+      "title": "Staff PIN fully removed",
+      "summary": "Ownership and Management open the staff desk with their Discord role only. Leftover PIN code, cookies, and settings notes are gone.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T21:10:00.000Z"
+    },
+    {
       "id": "2026-08-15-staff-toggle-fix",
       "title": "Staff switches keep the side you click",
       "summary": "Staff panel on/off switches no longer snap the other way after you click. Saves are protected from background refresh, and a stuck switch now tells you to restart the bot host if needed.",

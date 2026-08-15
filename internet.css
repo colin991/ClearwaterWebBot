@@ -8497,93 +8497,8 @@ body.has-site-banner .internet-side {
 /* Staff message inspector */
 .staff-stat-link{padding:0;border:0;color:#e8eef6;background:transparent;font:inherit;font-weight:800;cursor:pointer;text-decoration:underline;text-underline-offset:2px}.staff-stat-link:hover{color:#fff}.staff-messages-idle{display:flex;gap:8px;align-items:center}.staff-messages-list{display:grid;gap:8px}.staff-message-row{display:grid;grid-template-columns:40px minmax(0,1fr);gap:10px;width:100%;padding:10px;border:1px solid #222931;border-radius:12px;color:inherit;background:#0a0d11;text-align:left;font:inherit;cursor:pointer}.staff-message-row:hover{border-color:#345b89;background:#0d1520}.staff-message-row img{width:40px;height:40px;border-radius:50%;object-fit:cover}.staff-message-row span{display:grid;gap:2px;min-width:0}.staff-message-row b{font-size:13px}.staff-message-row small,.staff-message-row em{color:#8ea0b8;font-size:11px;font-style:normal;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.staff-messages-thread{display:grid;gap:12px}.staff-messages-thread-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.staff-messages-thread-head>button:first-child{padding:0;border:0;color:#9eb6d8;background:transparent;font:inherit;font-size:12px;font-weight:700;cursor:pointer}.staff-messages-thread-head>div{flex:1;min-width:140px;display:grid;gap:2px}.staff-messages-thread-head small{color:#8ea0b8;font-size:11px}.staff-messages-thread-list{display:grid;gap:8px;max-height:420px;overflow:auto;padding-right:4px}.staff-message-bubble{padding:10px 12px;border:1px solid #222931;border-radius:12px;background:#0a0d11}.staff-message-bubble.from-target{border-color:#2f4f7a;background:#0d1828}.staff-message-bubble header{display:flex;justify-content:space-between;gap:10px;margin-bottom:4px}.staff-message-bubble header b{font-size:12px}.staff-message-bubble header small{color:#8ea0b8;font-size:10px}.staff-message-bubble p{margin:0;color:#e7eef8;font-size:13px;line-height:1.4;white-space:pre-wrap;word-break:break-word}.staff-message-bubble img{display:block;width:min(220px,100%);max-height:220px;margin-top:8px;border-radius:10px;object-fit:cover}.staff-message-transfer{margin-top:8px;padding:8px 10px;border-radius:8px;background:#141a22;color:#c5d2e4;font-size:12px;font-weight:700}
 
-/* Staff PIN gate (Ownership / Management) */
-.staff-pin-gate {
-  display: grid;
-  min-height: min(70vh, 720px);
-  place-items: center;
-  padding: 28px 18px;
-}
-.staff-pin-gate[hidden],
+/* Staff desk */
 .staff-app[hidden] { display: none !important; }
-.staff-pin-card {
-  width: min(100%, 420px);
-  display: grid;
-  gap: 12px;
-  padding: 28px 24px;
-  border: 1px solid rgba(180, 190, 205, .18);
-  border-radius: 22px;
-  background: linear-gradient(165deg, rgba(12, 22, 38, .96), rgba(7, 12, 22, .98));
-  box-shadow: 0 24px 60px rgba(0, 0, 0, .45);
-  text-align: center;
-}
-.staff-pin-card img {
-  width: 52px;
-  height: 52px;
-  margin: 0 auto;
-  border-radius: 14px;
-  object-fit: cover;
-}
-.staff-pin-kicker {
-  margin: 0;
-  color: #69aeff;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-}
-.staff-pin-card h1 {
-  margin: 0;
-  font-size: 28px;
-  letter-spacing: -.04em;
-}
-.staff-pin-copy {
-  margin: 0;
-  color: #9eb4d0;
-  font-size: 14px;
-  line-height: 1.45;
-}
-.staff-pin-field input {
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 54px;
-  padding: 12px 14px;
-  border: 1px solid #345b89;
-  border-radius: 14px;
-  outline: 0;
-  color: #f4f8ff;
-  background: #050b13;
-  font: inherit;
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: .35em;
-  text-align: center;
-}
-.staff-pin-field input:focus {
-  border-color: #6fc4ff;
-  box-shadow: 0 0 0 3px rgba(232, 237, 245, .17);
-}
-.staff-pin-error {
-  min-height: 18px;
-  margin: 0;
-  color: #ff9ca8;
-  font-size: 13px;
-}
-.staff-pin-submit {
-  min-height: 46px;
-  border: 0;
-  border-radius: 12px;
-  color: #fff;
-  background: #1c1c1c;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 850;
-  cursor: pointer;
-}
-.staff-pin-submit:disabled {
-  opacity: .55;
-  cursor: wait;
-}
 /* ==========================================================================
    Flat charcoal surfaces ? one dark fill for page + every panel island.
    ========================================================================== */
@@ -9117,7 +9032,6 @@ body.has-site-banner.has-official-post-banner .internet-side {
 .staff-users,
 .staff-controls,
 .staff-app .staff-list-head,
-.staff-pin-card,
 .staff-metrics article,
 .staff-panel-view .owner-controls,
 .staff-panel-view .official-profile-controls {
@@ -9138,14 +9052,12 @@ body.has-site-banner.has-official-post-banner .internet-side {
 .staff-app .staff-list-head,
 .staff-panel-view .owner-controls,
 .staff-panel-view .official-profile-controls,
-.staff-metrics article,
-.staff-pin-card {
+.staff-metrics article {
   border-color: rgba(255, 255, 255, .08) !important;
 }
 
 .staff-chrome-actions button,
 .staff-refresh,
-.staff-pin-submit,
 .staff-app .staff-action-btn.primary,
 .staff-pills button.selected,
 .staff-filters button.selected,
@@ -9179,16 +9091,6 @@ body.has-site-banner.has-official-post-banner .internet-side {
   border-color: rgba(118, 173, 255, .45) !important;
   background: rgba(118, 173, 255, .12) !important;
   box-shadow: inset 3px 0 0 var(--btn, #76adff) !important;
-}
-
-.staff-pin-kicker { color: var(--btn, #76adff) !important; }
-.staff-pin-field input {
-  border-color: rgba(255, 255, 255, .14) !important;
-  background: #03070d !important;
-}
-.staff-pin-field input:focus {
-  border-color: var(--btn, #76adff) !important;
-  box-shadow: 0 0 0 3px rgba(118, 173, 255, .18) !important;
 }
 
 .staff-app .staff-action-btn:not(.primary):not(.danger),

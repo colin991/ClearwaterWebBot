@@ -335,16 +335,6 @@ export default async function handler(request, response) {
       return sendJson(response, 429, { error: 'Too many likes. Wait a moment.' });
     }
 
-    if (body.action === 'staff-pin-status' || body.action === 'staff-pin-unlock' || body.action === 'staff-pin-lock') {
-      if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
-      return sendJson(response, 200, {
-        configured: false,
-        unlocked: true,
-        panel: staffPanel,
-        gate: null,
-      });
-    }
-
     if (body?.type === 'blob.generate-client-token') {
       try {
         const result = await handleUpload({
