@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-poll-inplace",
+      "title": "Poll votes update in place",
+      "summary": "Voting on a poll no longer reloads the whole Internet feed from /api/internet. The post updates from the vote response instead.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T20:35:00.000Z"
+    },
+    {
       "id": "2026-08-15-hide-internet-api",
       "title": "Internet API hidden from browser tabs",
       "summary": "Opening /api/internet in a browser now returns Not found instead of feed JSON or API error text. The Internet app and Phone still load the feed normally.",

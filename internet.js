@@ -7761,7 +7761,14 @@ async function voteOnPoll(postId, optionIndex, remove = false) {
       }
       throw new Error(result.error || 'Could not update this poll.');
     }
-    await loadPosts();
+    if (result.post) {
+      const index = allPosts.findIndex((post) => post.id === result.post.id);
+      if (index >= 0) allPosts[index] = { ...allPosts[index], ...result.post };
+      else allPosts.unshift(result.post);
+    }
+    renderPosts();
+    renderBookmarks();
+    if (openPostId === postId) showPostDetail(postId, false);
   } catch (error) { void siteAlert(error.message || 'Could not update this poll.'); }
 }
 

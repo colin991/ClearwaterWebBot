@@ -248,10 +248,9 @@ async function callBot(request, payload, viewerId = '', ipHashes = null) {
 function isBrowserDocumentRequest(request) {
   const dest = String(request.headers['sec-fetch-dest'] || '').toLowerCase();
   const mode = String(request.headers['sec-fetch-mode'] || '').toLowerCase();
-  if (dest === 'document' || mode === 'navigate') return true;
-  const accept = String(request.headers.accept || '');
-  // Address-bar / link opens send text/html first; XHR and fetch usually send */* or application/json.
-  return /^\s*text\/html\b/i.test(accept);
+  // Only treat true tab navigations as documents. Do not key off Accept:
+  // some clients (including feed polls) can send text/html-first Accept headers.
+  return dest === 'document' || mode === 'navigate';
 }
 
 export default async function handler(request, response) {
