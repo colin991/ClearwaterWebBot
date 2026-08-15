@@ -3,7 +3,7 @@
   const VERSION_URL = SITE + '/downloads/clearwater-phone-version.json';
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
-  let appVersion = '1.3.12';
+  let appVersion = '1.3.13';
   let latestInfo = null;
   let sessionUser = null;
   let walletMode = 'send';
@@ -122,10 +122,7 @@
     if (!label) return;
     if (latestInfo && compareVersions(appVersion, latestInfo.version) < 0) {
       label.textContent = `v${appVersion} is out of date · latest v${latestInfo.version}`;
-      if (download) {
-        download.hidden = false;
-        download.textContent = `Download v${latestInfo.version}`;
-      }
+      if (download) download.hidden = false;
     } else {
       label.textContent = `v${appVersion} · up to date`;
       if (download) download.hidden = true;

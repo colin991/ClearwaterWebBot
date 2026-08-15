@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-phone-node-fetch",
+      "title": "Phone API connection fixed",
+      "summary": "Messages, Find My, Wallet, and Maps no longer fail with a Chromium network error. The overlay now talks to Clearwater through a normal HTTPS request.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T23:32:00.000Z"
+    },
+    {
       "id": "2026-08-15-ship-open-prs",
       "title": "Staff, business logos, tips, and Phone updates",
       "summary": "Ships remove-warning in staff, business logo URLs + idle purge, newest tip in For You, Phone outdated popup, and Clearwater logo on Phone home (v1.3.12).",

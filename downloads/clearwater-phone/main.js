@@ -1,12 +1,13 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, screen, session, net, shell, Tray, nativeImage, Menu } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, screen, session, shell, Tray, nativeImage, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
 const { spawn, execFile } = require('child_process');
 
-const SITE = 'https://cwrpvc.lol';
+const SITE = 'https://www.cwrpvc.lol';
 const SESSION_PARTITION = 'persist:clearwater-phone';
+const pkg = require('./package.json');
 
 function phoneSession() {
   return session.fromPartition(SESSION_PARTITION);
@@ -43,7 +44,7 @@ async function hasSiteSession() {
 }
 
 async function siteFetch(pathname, { method = 'GET', body } = {}) {
-  const url = pathname.startsWith('http') ? pathname : SITE + pathname;
+  const startUrl = pathname.startsWith('http') ? pathname : SITE + pathname;
   const payload = body != null ? JSON.stringify(body) : null;
   const cookie = await cookieHeaderForSite();
   const headers = {
@@ -54,49 +55,59 @@ async function siteFetch(pathname, { method = 'GET', body } = {}) {
     ...(cookie ? { Cookie: cookie } : {}),
     ...(payload ? { 'Content-Type': 'application/json' } : {}),
   };
-  const init = {
-    method,
-    headers,
-    body: payload || undefined,
-    credentials: 'include',
-  };
-  const ses = phoneSession();
-  const doFetch = async (extraHeaders = {}) => {
-    const requestInit = {
-      method,
-      headers: { ...headers, ...extraHeaders },
-      body: payload || undefined,
-      credentials: 'include',
-      session: ses,
-      useSessionCookies: true,
-    };
-    return net.fetch(url, requestInit);
-  };
-  let response = await doFetch();
-  if (response.status === 401 || response.status === 403) {
-    const cookie = await cookieHeaderForSite();
-    if (cookie) response = await doFetch({ Cookie: cookie });
-  }
-  const text = await response.text();
-  let data = {};
+
+  const requestOnce = (targetUrl, headerBag, verb) => new Promise((resolve, reject) => {
+    const parsed = new URL(targetUrl);
+    const client = parsed.protocol === 'http:' ? http : https;
+    const raw = payload && verb !== 'GET' && verb !== 'HEAD' ? Buffer.from(payload) : null;
+    const req = client.request({
+      protocol: parsed.protocol,
+      hostname: parsed.hostname,
+      port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+      path: `${parsed.pathname}${parsed.search}`,
+      method: verb,
+      headers: {
+        Host: parsed.host,
+        ...headerBag,
+        ...(raw ? { 'Content-Length': String(raw.length) } : {}),
+      },
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        resolve({
+          status: res.statusCode || 0,
+          ok: (res.statusCode || 0) >= 200 && (res.statusCode || 0) < 300,
+          location: res.headers.location,
+          text: Buffer.concat(chunks).toString('utf8'),
+        });
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(20000, () => req.destroy(new Error('Request timed out')));
+    if (raw) req.write(raw);
+    req.end();
+  });
+
   try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = { error: text.slice(0, 180) || 'Invalid response' };
-  }
-  if (data && data.authenticated === false && !(headers.Cookie || '').includes('clearwater_session')) {
-    const cookie = await cookieHeaderForSite();
-    if (cookie) {
-      response = await doFetch({ Cookie: cookie });
-      const retryText = await response.text();
-      try {
-        data = retryText ? JSON.parse(retryText) : {};
-      } catch {
-        data = { error: retryText.slice(0, 180) || 'Invalid response' };
-      }
+    let url = startUrl;
+    let verb = method;
+    let response = await requestOnce(url, headers, verb);
+    for (let hop = 0; hop < 5 && response.status >= 300 && response.status < 400 && response.location; hop += 1) {
+      url = new URL(response.location, url).toString();
+      if (response.status === 301 || response.status === 302 || response.status === 303) verb = 'GET';
+      response = await requestOnce(url, headers, verb);
     }
+    let data = {};
+    try {
+      data = response.text ? JSON.parse(response.text) : {};
+    } catch {
+      data = { error: response.text.slice(0, 180) || 'Invalid response' };
+    }
+    return { ok: response.ok, status: response.status, body: data };
+  } catch (err) {
+    return { ok: false, status: 0, body: { error: String(err && err.message ? err.message : err) } };
   }
-  return { ok: response.ok, status: response.status, body: data };
 }
 
 async function readAuthFromWindow(browserWindow) {
@@ -224,7 +235,6 @@ function openLoginWindow() {
 }
 
 const ALLOWED_HOSTS = new Set(['cwrpvc.lol', 'www.cwrpvc.lol', 'localhost', '127.0.0.1']);
-const pkg = require('./package.json');
 
 let win = null;
 let launcherWin = null;
@@ -626,19 +636,29 @@ app.whenReady().then(() => {
     return writeHostSettings(next);
   });
 
-  ipcMain.handle('phone-feed', async () => siteFetch('/api/internet'));
+  ipcMain.handle('phone-feed', async () => {
+    try {
+      return await siteFetch('/api/internet');
+    } catch (err) {
+      return { ok: false, status: 0, body: { error: String(err && err.message ? err.message : err) } };
+    }
+  });
 
   ipcMain.handle('phone-api', async (_e, payload) => {
-    const body = payload && typeof payload === 'object' ? payload : {};
-    const action = String(body.action || '');
-    const allowed = new Set([
-      'wallet', 'wallet-transfer', 'wallet-transfer-respond',
-      'messages', 'conversation', 'message-send',
-      'findmy', 'findmy-share', 'erlc-phone-map', 'erlc-location',
-      'post', 'post-interaction',
-    ]);
-    if (!allowed.has(action)) return { ok: false, status: 400, body: { error: 'Unsupported phone action' } };
-    return siteFetch('/api/internet', { method: 'POST', body });
+    try {
+      const body = payload && typeof payload === 'object' ? payload : {};
+      const action = String(body.action || '');
+      const allowed = new Set([
+        'wallet', 'wallet-transfer', 'wallet-transfer-respond',
+        'messages', 'conversation', 'message-send',
+        'findmy', 'findmy-share', 'erlc-phone-map', 'erlc-location',
+        'post', 'post-interaction',
+      ]);
+      if (!allowed.has(action)) return { ok: false, status: 400, body: { error: 'Unsupported phone action' } };
+      return await siteFetch('/api/internet', { method: 'POST', body });
+    } catch (err) {
+      return { ok: false, status: 0, body: { error: String(err && err.message ? err.message : err) } };
+    }
   });
 
   ipcMain.handle('phone-install-update', async (event, href) => {

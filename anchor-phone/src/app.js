@@ -3,7 +3,7 @@
   const VERSION_URL = SITE + '/downloads/clearwater-phone-version.json';
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
-  let appVersion = '1.3.12';
+  let appVersion = '1.3.13';
   let latestInfo = null;
   let sessionUser = null;
   let walletMode = 'send';
