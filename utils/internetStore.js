@@ -467,8 +467,8 @@ function hostedMediaUrl(value) {
 function publicPost(post, maskedAuthors, store = null) {
   const next = { ...post };
   delete next.discordFeedMessageId;
-  // Reels always use the same-origin media proxy. Direct blob URLs flake in the
-  // vertical player (CORS/range/codec), which made newly uploaded Reels look broken.
+  // Reels always use the same-origin media proxy path in the feed JSON.
+  // Video/audio requests redirect to blob storage (Range-friendly); images stay proxied.
   if (next.kind === 'reel') {
     const slides = Array.isArray(next.slideshowUrls) ? next.slideshowUrls.filter(Boolean) : [];
     if (slides.length) {
