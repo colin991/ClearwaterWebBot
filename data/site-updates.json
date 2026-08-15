@@ -276,10 +276,10 @@
     {
       "id": "2026-08-15-remove-mail",
       "title": "Mail removed",
-      "summary": "Removed Mail from Clearwater Internet and Clearwater Phone. Marketplace and Messages remain.",
+      "summary": "Removed Mail from Clearwater Phone (v1.1.2). Mail was already removed from Clearwater Internet navigation.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:40:00.000Z",
-      "commit": "3662179"
+      "commit": "585650c"
     }
   ]
 }
