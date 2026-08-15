@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-hide-government-nav",
+      "title": "Government nav hidden without roles",
+      "summary": "The Government link stays completely hidden unless your Discord roles allow government tools \u2014 same behavior as Staff.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T21:50:00.000Z"
+    },
+    {
       "id": "2026-08-15-vpn-allow-user",
       "title": "VPN allowlist for one member",
       "summary": "One Discord account is allowed to use Clearwater while on a VPN. Everyone else is still blocked from VPN/proxy connections.",

@@ -258,8 +258,9 @@ h1 .role-badge.developer-badge { margin-left: 4px; vertical-align: -2px; }
 .internet-view[data-view="home"] .poll-builder-footer button { width: auto; height: auto; padding: 2px 0; color: #1764ff; background: transparent; font-size: 13px; font-weight: 700; }
 .internet-view[data-view="home"] .poll-builder select { padding: 6px 9px; border: 1px solid rgba(255,255,255,.3); border-radius: 9px; color: #fff; background: #090909; font: inherit; font-size: 12px; }
 
-/* Navigation links use flex, so explicitly preserve the hidden state for owner-only controls. */
-.internet-nav [data-staff-link][hidden] { display: none !important; }
+/* Navigation links use flex, so explicitly preserve the hidden state for role-gated links. */
+.internet-nav [data-staff-link][hidden],
+.internet-nav [data-government-link][hidden] { display: none !important; }
 .member-page-actions { display: flex; gap: 8px; flex-wrap: wrap; }.member-page-actions button { min-width: 34px; padding: 8px 11px; border: 1px solid #38567e; border-radius: 999px; color: #dcecff; background: rgba(8,20,36,.85); font: inherit; font-weight: 800; cursor: pointer; }.member-page-actions button:last-child { color: #fff; background: var(--blue); border-color: var(--blue); }.member-page-actions [data-member-page-edit-business] { width: auto; white-space: nowrap; }.member-page-menu { position: absolute; z-index: 2; top: 52px; right: 20px; display: grid; gap: 4px; min-width: 128px; padding: 7px; border: 1px solid #29476f; border-radius: 10px; background: #08121f; box-shadow: 0 14px 30px rgba(0,0,0,.35); }.member-page-menu[hidden] { display: none; }.member-page-menu button { padding: 8px 9px; border: 0; border-radius: 7px; color: #eaf2ff; background: transparent; text-align: left; font: inherit; font-size: 12px; cursor: pointer; }.member-page-menu button:hover { background: rgba(232,237,245,.16); }
 .profile-verified[hidden] { display: none !important; }
 .conversation-view { display: flex; min-height: 610px; flex-direction: column; border: 0; border-radius: 0; background: transparent; }.conversation-view[hidden] { display: none !important; }.conversation-header { display: flex; align-items: center; gap: 10px; padding: 13px 0; border-bottom: 1px solid rgba(255,255,255,.14); }.conversation-header > button { width: 30px; height: 30px; padding: 0; border: 0; color: #fff; background: transparent; font-size: 25px; cursor: pointer; }.conversation-header img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }.conversation-header div { display: grid; gap: 1px; }.conversation-header small { color: var(--muted); font-size: 11px; }.conversation-messages { display: flex; flex: 1; flex-direction: column; justify-content: flex-end; gap: 10px; padding: 22px 0; }.conversation-messages > p:first-child:last-child { margin: auto; color: var(--muted); }.conversation-bubble { align-self: flex-start; width: fit-content; max-width: 70%; margin: 0; padding: 10px 13px; border-radius: 15px 15px 15px 4px; color: #f1f4f8; background: #2a2f37; }.conversation-bubble.theirs { align-self: flex-start; background: #2a2f37; }.conversation-bubble.own { align-self: flex-end; border-radius: 15px 15px 4px 15px; color: #fff; background: #1f50ff; }.conversation-compose { display: flex; align-items: center; gap: 9px; padding: 12px 0; border-top: 1px solid rgba(255,255,255,.14); }.conversation-compose button { border: 0; color: #1764ff; background: transparent; font: inherit; font-weight: 800; cursor: pointer; }.conversation-compose input { min-width: 0; flex: 1; padding: 11px 13px; border: 0; border-radius: 11px; outline: 0; color: #fff; background: #1b1b1b; font: inherit; }.conversation-compose button:last-child { display: grid; width: 35px; height: 35px; place-items: center; border-radius: 50%; color: #fff; background: #1f50ff; }
@@ -7718,6 +7719,10 @@ body.has-site-banner .internet-side {
   /* Keep Staff out of the bottom dock; Settings must stay reachable on mobile
      (rail-account / account menu are also hidden below). */
   .internet-shell:not(.staff-mode) .internet-nav a[data-view-link="staff"] {
+    display: none !important;
+  }
+  /* Role-gated Government link: still honor [hidden] inside the flex bottom dock. */
+  .internet-shell:not(.staff-mode) .internet-nav a[data-view-link="government"][hidden] {
     display: none !important;
   }
   .internet-shell:not(.staff-mode) .notification-nav-icon {

@@ -6546,8 +6546,16 @@ async function loadSession() {
   if (profileDiscord) profileDiscord.href = 'https://discord.gg/839teFCwB';
   if (profileHandle) profileHandle.textContent = `@${session.user.username}`;
   refreshProfileVerified();
-  if (staffLink) staffLink.hidden = !sessionCanStaff;
-  if (governmentLink) governmentLink.hidden = !sessionCanGovernment;
+  if (staffLink) {
+    staffLink.hidden = !sessionCanStaff;
+    staffLink.toggleAttribute('hidden', !sessionCanStaff);
+    staffLink.setAttribute('aria-hidden', sessionCanStaff ? 'false' : 'true');
+  }
+  if (governmentLink) {
+    governmentLink.hidden = !sessionCanGovernment;
+    governmentLink.toggleAttribute('hidden', !sessionCanGovernment);
+    governmentLink.setAttribute('aria-hidden', sessionCanGovernment ? 'false' : 'true');
+  }
   if (admin) admin.hidden = !sessionIsOwner;
   if (officialAccountOption) officialAccountOption.hidden = !sessionIsOwner;
   if (officialProfileControls) officialProfileControls.hidden = !sessionIsOwner;
