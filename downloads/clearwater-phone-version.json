@@ -1,6 +1,6 @@
 {
-  "version": "1.3.4",
+  "version": "1.3.5",
   "minVersion": "1.3.0",
   "downloadUrl": "https://cwrpvc.lol/downloads/ClearwaterPhone.exe",
-  "releaseNotes": "Discord sign-in now applies to the overlay, and first-time setup stays open until you finish."
+  "releaseNotes": "Out-of-date phones now link to the latest download. Home icons match the website, with a new Find My icon."
 }

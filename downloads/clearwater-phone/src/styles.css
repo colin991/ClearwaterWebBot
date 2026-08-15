@@ -634,11 +634,24 @@ textarea {
     box-shadow 0.2s ease;
 }
 
-.app-icon svg {
-  width: 64px;
-  height: 64px;
+.app-icon svg,
+.dock-btn svg {
+  width: 30px;
+  height: 30px;
   display: block;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
+
+.icon-internet { background: linear-gradient(145deg, #76adff, #2563eb); }
+.icon-wallet { background: linear-gradient(145deg, #34d399, #059669); }
+.icon-findmy { background: linear-gradient(145deg, #4ade80, #15803d); }
+.icon-messages { background: linear-gradient(145deg, #2dd4bf, #0d9488); }
+.icon-maps { background: linear-gradient(145deg, #a5b4fc, #1d4ed8); }
+.icon-settings { background: linear-gradient(145deg, #94a3b8, #475569); }
 
 .app-tile:hover .app-icon,
 .app-tile:focus-visible .app-icon {
@@ -701,6 +714,8 @@ textarea {
 
 .dock-btn {
   position: relative;
+  display: grid;
+  place-items: center;
   width: 54px;
   height: 54px;
   border-radius: 15px;
@@ -720,9 +735,8 @@ textarea {
 }
 
 .dock-btn svg {
-  width: 100%;
-  height: 100%;
-  display: block;
+  width: 26px;
+  height: 26px;
 }
 
 /* ═══════════════════════════════════════════
@@ -1044,6 +1058,24 @@ textarea {
 
 .btn-ghost:hover {
   background: rgba(118, 173, 255, 0.18);
+}
+
+.settings-actions-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+
+.settings-actions-row .btn-ghost {
+  margin: 0;
+  width: 100%;
+  text-align: center;
+}
+
+#setting-show-phone {
+  margin-top: 4px;
+  margin-bottom: 8px;
 }
 
 .form-status {
@@ -1613,6 +1645,6 @@ body.hide-open-web .open-web { display: none !important; }
 .settings-version .btn-ghost {
   margin-left: auto;
 }
-#settings-update-now {
+#settings-download-latest {
   margin-top: 12px;
 }

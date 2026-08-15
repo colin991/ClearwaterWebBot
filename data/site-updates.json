@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-phone-icons-update-link",
+      "title": "Phone icons and update notice",
+      "summary": "Clearwater Phone home icons now match the website (with a new Find My icon). If your phone is out of date, it shows a notice with a link to download the latest build.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T20:36:00.000Z"
+    },
+    {
       "id": "2026-08-15-poll-inplace",
       "title": "Poll votes update in place",
       "summary": "Voting on a poll no longer reloads the whole Internet feed from /api/internet. The post updates from the vote response instead.",

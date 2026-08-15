@@ -3,28 +3,13 @@
   const VERSION_URL = SITE + '/downloads/clearwater-phone-version.json';
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
-  const settings = { autoUpdate: true };
-  let appVersion = '1.3.4';
+  let appVersion = '1.3.5';
   let latestInfo = null;
-  let updateInFlight = false;
   let sessionUser = null;
   let walletMode = 'send';
   let walletData = null;
   let mapState = { me: null, places: [], dest: null, friends: [] };
   let openThread = null;
-
-  function loadSettings() {
-    try {
-      const raw = localStorage.getItem('cw.phone.settings');
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (typeof parsed.autoUpdate === 'boolean') settings.autoUpdate = parsed.autoUpdate;
-    } catch {}
-  }
-
-  function saveSettings() {
-    localStorage.setItem('cw.phone.settings', JSON.stringify(settings));
-  }
 
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -130,18 +115,16 @@
   }
 
   function renderSettings() {
-    setToggle($('#setting-auto-update'), settings.autoUpdate);
     renderAccount();
     const label = $('#settings-version-label');
+    const download = $('#settings-download-latest');
     if (!label) return;
     if (latestInfo && compareVersions(appVersion, latestInfo.version) < 0) {
-      label.textContent = `v${appVersion} · outdated (latest v${latestInfo.version})`;
-      const btn = $('#settings-update-now');
-      if (btn) btn.hidden = false;
+      label.textContent = `v${appVersion} is out of date · latest v${latestInfo.version}`;
+      if (download) download.hidden = false;
     } else {
       label.textContent = `v${appVersion} · up to date`;
-      const btn = $('#settings-update-now');
-      if (btn) btn.hidden = true;
+      if (download) download.hidden = true;
     }
   }
 
@@ -219,12 +202,6 @@
     if ($('#net-body')) $('#net-body').value = '';
     if (status) status.textContent = 'Posted to Clearwater Internet.';
     void loadInternetFeed();
-  });
-
-  $('#setting-auto-update')?.addEventListener('click', () => {
-    settings.autoUpdate = !settings.autoUpdate;
-    saveSettings();
-    setToggle($('#setting-auto-update'), settings.autoUpdate);
   });
 
   $('#account-login')?.addEventListener('click', async () => {
@@ -624,29 +601,26 @@
     dragEl.addEventListener('pointercancel', end);
   }
 
-  async function installUpdate() {
-    if (!latestInfo?.downloadUrl || updateInFlight) return;
-    updateInFlight = true;
+  function latestDownloadUrl() {
+    return latestInfo?.downloadUrl || SITE + '/downloads/ClearwaterPhone.exe';
+  }
+
+  async function openLatestDownload() {
+    const href = latestDownloadUrl();
     const status = $('#settings-update-status');
-    const bannerCopy = $('#update-copy');
-    if (status) {
-      status.hidden = false;
-      status.textContent = 'Downloading update…';
-    }
-    if (bannerCopy) bannerCopy.textContent = 'Downloading update…';
     try {
-      if (!window.anchorPhone?.installUpdate) {
-        updateInFlight = false;
-        return;
-      }
-      const result = await window.anchorPhone.installUpdate(latestInfo.downloadUrl);
-      if (!result?.ok) {
-        if (status) status.textContent = result?.error || 'Update failed.';
-        updateInFlight = false;
+      const opened = await window.anchorPhone?.openUrl?.(href);
+      if (status) {
+        status.hidden = false;
+        status.textContent = opened === false
+          ? 'Could not open the download. Visit cwrpvc.lol and use Download Phone.'
+          : 'Opened the latest download. Replace this app with the new file.';
       }
     } catch {
-      if (status) status.textContent = 'Update failed.';
-      updateInFlight = false;
+      if (status) {
+        status.hidden = false;
+        status.textContent = 'Could not open the download. Visit cwrpvc.lol and use Download Phone.';
+      }
     }
   }
 
@@ -655,9 +629,8 @@
     const banner = $('#update-banner');
     const copy = $('#update-copy');
     if (banner) banner.hidden = false;
-    if (copy) copy.textContent = `Outdated version · v${appVersion} → v${info.version}`;
+    if (copy) copy.textContent = `v${appVersion} → v${info.version}. Download the newest build from the site.`;
     renderSettings();
-    if (settings.autoUpdate) void installUpdate();
   }
 
   async function checkForUpdates(manual = false) {
@@ -693,17 +666,9 @@
   }
 
   $('#settings-check-update')?.addEventListener('click', () => void checkForUpdates(true));
-  $('#settings-update-now')?.addEventListener('click', () => void installUpdate());
-  $('#update-now')?.addEventListener('click', () => void installUpdate());
-  window.anchorPhone?.onUpdateProgress?.((pct) => {
-    const status = $('#settings-update-status');
-    if (status) {
-      status.hidden = false;
-      status.textContent = `Downloading update… ${pct}%`;
-    }
-  });
+  $('#settings-download-latest')?.addEventListener('click', () => void openLatestDownload());
+  $('#update-download')?.addEventListener('click', () => void openLatestDownload());
 
-  loadSettings();
   void (async () => {
     try {
       const info = await window.anchorPhone?.getVersion?.();
