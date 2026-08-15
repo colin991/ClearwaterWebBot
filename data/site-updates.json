@@ -5,7 +5,7 @@
       "id": "2026-08-15-help-footer",
       "title": "Moderation help cleanup",
       "summary": "Removed the \u201cModeled after Circle-style staff tools\u201d footer from `-help` so the command embed stays clean.",
-      "updatedBy": "Colin Dever",
+      "updatedBy": "colin991",
       "createdAt": "2026-08-15T01:34:00.000Z",
       "commit": "e6c9826"
     },
@@ -13,7 +13,7 @@
       "id": "2026-08-15-update-log-channel",
       "title": "Discord update logging",
       "summary": "Site and bot changes are now logged to this channel. New updates are queued in the repo and posted automatically when the bot starts (or immediately via the bot API).",
-      "updatedBy": "Colin Dever",
+      "updatedBy": "colin991",
       "createdAt": "2026-08-15T02:14:00.000Z",
       "commit": "6c36ac5"
     },
@@ -21,7 +21,7 @@
       "id": "2026-08-15-update-log-author",
       "title": "Update log shows who updated",
       "summary": "Discord update log embeds now include an \u201cUpdated by\u201d field naming who requested or owns each change.",
-      "updatedBy": "Colin Dever",
+      "updatedBy": "colin991",
       "createdAt": "2026-08-15T02:17:00.000Z",
       "commit": "28a2bb1"
     },
@@ -29,9 +29,17 @@
       "id": "2026-08-15-prefix-rank-locks",
       "title": "Rank-locked moderation commands",
       "summary": "Prefix moderation commands are now locked by staff rank: any staff can warn/mute; Administrator+ can kick; Supervisor+ can ban/softban/unban and lock channels; Lead Moderator+ can purge; Senior Supervisor+ can clear modlogs (`-uwid`).",
-      "updatedBy": "Colin Dever",
+      "updatedBy": "colin991",
       "createdAt": "2026-08-15T02:39:57.000Z",
       "commit": "ba05a50"
+    },
+    {
+      "id": "2026-08-15-update-by-git-user",
+      "title": "Update log uses git username",
+      "summary": "\u201cUpdated by\u201d in the Discord update log now uses the git/GitHub username (e.g. colin991) instead of a full name.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T02:42:00.000Z",
+      "commit": "5a32771"
     }
   ]
 }
