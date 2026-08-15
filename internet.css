@@ -1784,11 +1784,15 @@ body { margin: 0; }
 }
 .post-main .post-poll,
 .post-main .quote-card,
-.post-main .post-reel-frame,
-.post-main .drop-map {
+.post-main .post-reel-frame {
   margin-left: 0 !important;
   max-width: 100%;
   width: 100%;
+}
+.post-main .drop-map {
+  margin: 10px 0 0 !important;
+  width: auto;
+  max-width: min(420px, 100%);
 }
 .post-main .post-reel-video {
   margin-left: 0 !important;
@@ -5979,8 +5983,7 @@ html.pref-reduce-motion *::after {
   .post-content,
   .post-actions,
   .post-poll,
-  .quote-card,
-  .drop-map {
+  .quote-card {
     margin-left: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
@@ -6009,12 +6012,15 @@ html.pref-reduce-motion *::after {
   .reposted-label {
     margin-left: 0 !important;
   }
-  .drop-map {
-    margin-top: 10px !important;
+  .drop-map,
+  .post-main .drop-map {
+    margin: 10px 0 0 !important;
+    width: auto !important;
+    max-width: min(320px, 100%) !important;
     border-radius: 14px;
   }
   .drop-preview .drop-map {
-    max-width: 100% !important;
+    max-width: min(280px, 100%) !important;
   }
   .composer,
   .internet-view[data-view="home"] .composer {
