@@ -295,7 +295,7 @@
       "summary": "Removed the Pinned post dropdown from profile settings. Profiles no longer lift a pinned post to the top.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:50:00.000Z",
-      "commit": "pending"
+      "commit": "2628944"
     }
   ]
 }
