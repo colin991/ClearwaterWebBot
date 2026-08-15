@@ -159,7 +159,7 @@
       "summary": "Sidebar sponsored cards again show body text and Learn/Account buttons: overflow clipping on the right rail was fixed and button/copy contrast was restored against the charcoal card surface.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T05:50:00.000Z",
-      "commit": ""
+      "commit": "edfc704"
     }
   ]
 }
