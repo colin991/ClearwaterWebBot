@@ -96,6 +96,7 @@ export function businessAsPublicUser(biz) {
     createdAt: biz.createdAt || null,
     deactivated: false,
     hideStats: false,
+    hideLikes: false,
     staffRank: null,
     verified: true,
     badges: ['business'],

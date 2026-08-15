@@ -35,7 +35,7 @@ a { color: inherit; text-decoration: none; }
 
 .staff-owner-controls { margin: 0; border-width: 1px 0 0; border-radius: 0; background: #07090b; }.staff-owner-controls h2 { font-size: 14px; }.staff-owner-controls input,.staff-owner-controls select { max-width: 620px; }.staff-owner-controls > div { max-width: 620px; }
 
-/* Small, centered Clearwater verified mark. Keep the badge image capped —
+/* Small, centered Clearwater verified mark. Keep the badge image capped ?
    without width/height on the <img>, the asset renders at full resolution. */
 .verified,
 .profile-verified {
@@ -513,7 +513,7 @@ body { background: #03070d; }
 }
 .internet-view[data-view="home"] .feed-note { padding: 28px 22px; }
 
-/* Staff command desk — same Clearwater navy language as the rest of Internet. */
+/* Staff command desk ? same Clearwater navy language as the rest of Internet. */
 .internet-shell.staff-mode {
   width: min(1360px, calc(100% - 56px));
   grid-template-columns: minmax(0, 1fr);
@@ -769,7 +769,7 @@ body { min-width: 320px; min-height: 100dvh; overflow-x: clip; background: #0307
   .feed-cover { height: 128px; border-radius: 16px; }
 }
 
-/* Flat charcoal page chrome — no aurora wash behind the columns. */
+/* Flat charcoal page chrome ? no aurora wash behind the columns. */
 body {
   position: relative;
   background: #03070d;
@@ -1327,7 +1327,7 @@ body.internet-booting .internet-shell {
   .internet-side { display: none !important; }
 }
 
-/* Redesigned post composer — squared card with a clear writing dock. */
+/* Redesigned post composer ? squared card with a clear writing dock. */
 .internet-view[data-view="home"] .composer {
   display: grid !important;
   grid-template-columns: 1fr !important;
@@ -3659,7 +3659,7 @@ body { margin: 0; }
   font-size: 12px;
 }
 .staff-case-meta span:not(:last-child)::after {
-  content: "·";
+  content: "?";
   margin-left: 8px;
   color: #5f738c;
 }
@@ -4487,7 +4487,7 @@ body { margin: 0; }
 .poll-builder-footer .cw-select { width: auto; min-width: 120px; }
 .business-member-form .cw-select { max-width: none; }
 
-/* Appearance preferences — beat feed !important padding rules. */
+/* Appearance preferences ? beat feed !important padding rules. */
 html.pref-large-text .post-content,
 html.pref-large-text .post p,
 html.pref-large-text .conversation-bubble,
@@ -5866,7 +5866,7 @@ html.pref-reduce-motion *::after {
 }
 
 /* ==========================================================================
-   Mobile cleanup — wins over earlier desktop gutters / !important wars
+   Mobile cleanup ? wins over earlier desktop gutters / !important wars
    ========================================================================== */
 @media (max-width: 660px) {
   html, body {
@@ -6815,7 +6815,7 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
 .staff-banner-live a { color: var(--blue); text-decoration: underline; }
 .staff-action-btn.ghost { color: #d7e4f7; background: #152132; }
 
-/* Reels desktop: keep the right rail so the page isn’t empty beside the player */
+/* Reels desktop: keep the right rail so the page isn?t empty beside the player */
 .internet-shell:has([data-reels-stage]:not([hidden])) {
   width: min(1440px, calc(100% - 40px));
   grid-template-columns: 210px minmax(0, 1fr) minmax(260px, 300px);
@@ -6936,16 +6936,36 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
   vertical-align: 2px;
 }
 .search-reel-chip {
-  margin: 10px 0 0;
+  position: absolute;
+  z-index: 2;
+  left: var(--reel-chip-left, 12px);
+  bottom: var(--reel-chip-bottom, 12px);
+  margin: 0;
   padding: 8px 12px;
   border: 0;
   border-radius: 999px;
-  color: #fff;
-  background: var(--blue);
+  color: var(--btn-ink, #03070d);
+  background: var(--btn, #76adff);
   font: inherit;
   font-size: 12px;
   font-weight: 800;
   cursor: pointer;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .35);
+}
+.post-reel-frame {
+  position: relative;
+  margin-top: 10px;
+  display: grid;
+  justify-items: stretch;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #03070d;
+}
+.post-reel-frame .post-reel-video {
+  margin-top: 0;
+  border-radius: 0;
+  width: 100%;
+  max-height: 420px;
 }
 .post-reel-video {
   display: block;
@@ -6953,7 +6973,7 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
   max-height: 420px;
   margin-top: 10px;
   border-radius: 14px;
-  background: #050b14;
+  background: #03070d;
   object-fit: contain;
 }
 .reel-panel {
@@ -7218,7 +7238,7 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
 @media (min-width: 901px) {
   .reels-layout .reel-meta,
   .reels-layout .reel-actions { display: none; }
-  /* Keep mute + volume on desktop — like/comment/share move to the side panel, but sound does not. */
+  /* Keep mute + volume on desktop ? like/comment/share move to the side panel, but sound does not. */
   .reels-layout .reel-audio {
     display: flex;
     top: 16px;
@@ -7440,7 +7460,7 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
     border-radius: 14px !important;
     color: #9eb0c8 !important;
     background: transparent !important;
-    /* Icon-only dock — labels made the bar feel crammed. */
+    /* Icon-only dock ? labels made the bar feel crammed. */
     font-size: 0 !important;
     font-weight: 750 !important;
     line-height: 0 !important;
@@ -8324,7 +8344,7 @@ body.has-site-banner .internet-side { top: calc(30px + var(--site-banner-height,
   cursor: wait;
 }
 /* ==========================================================================
-   Flat charcoal surfaces � one dark fill for page + every panel island.
+   Flat charcoal surfaces ? one dark fill for page + every panel island.
    ========================================================================== */
 :root {
   --page: #03070d;
@@ -8499,7 +8519,12 @@ a.post-hashtag,
 .business-member-form button,
 .join-required-card a:not(.join-required-secondary),
 .coming-soon-signin,
-.settings-button:not(.ghost):not(.primary) {
+.settings-button:not(.ghost):not(.primary),
+.search-reel-chip,
+.who-to-watch-action,
+.who-to-follow-action,
+.wallet-store-buy,
+.wallet-store-claim-btn {
   color: var(--btn-ink) !important;
   background: var(--btn) !important;
   background-image: none !important;
@@ -8511,7 +8536,10 @@ a.post-hashtag,
 .rail-signin:hover,
 .settings-button.primary:hover,
 .internet-view[data-view="home"] .composer-footer [data-post-button]:not(:disabled):hover,
-.reel-post-btn:hover {
+.reel-post-btn:hover,
+.search-reel-chip:hover,
+.who-to-watch-action:hover,
+.who-to-follow-action:hover {
   filter: brightness(1.06);
   background: var(--btn) !important;
 }
@@ -8569,7 +8597,7 @@ a.post-hashtag,
 }
 
 /* ==========================================================================
-   Neutral hairline borders � no blue glow / inset shimmer on panels.
+   Neutral hairline borders ? no blue glow / inset shimmer on panels.
    ========================================================================== */
 :root {
   --cw-border: rgba(255, 255, 255, .1);

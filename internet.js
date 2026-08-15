@@ -876,14 +876,53 @@ function dropMapMarkup(location) {
   return `<figure class="drop-map"><div class="drop-map-view"><div class="drop-map-scene" style="transform:translate(${tx.toFixed(2)}%,${ty.toFixed(2)}%) scale(${zoom})"><img src="assets/liberty-county-map.jpg" alt="Liberty County map" draggable="false" /></div><i class="drop-map-pin" style="left:${screenX.toFixed(2)}%;top:${screenY.toFixed(2)}%" aria-hidden="true"><span></span></i></div>${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}</figure>`;
 }
 
-function postMediaMarkup(post, displayName) {
+function postMediaMarkup(post, displayName, { reelOpenId = '' } = {}) {
   const gif = safeGifUrl(post.gifUrl) ? `<img class="post-gif" src="${escapeHtml(post.gifUrl)}" alt="${escapeHtml(post.gifTitle || 'GIF')}" />` : '';
   const image = safeImageUrl(post.imageUrl) ? `<img class="post-image" src="${escapeHtml(post.imageUrl)}" alt="Image shared by ${escapeHtml(displayName || 'a Clearwater member')}" />` : '';
   const videoSrc = safeVideoUrl(post.videoUrl) ? post.videoUrl : (post.videoUrl && post.kind === 'reel' ? reelMediaProxyUrl(post.id, 'video') : '');
   const video = videoSrc
     ? `<video class="post-reel-video" src="${escapeHtml(videoSrc)}" muted loop playsinline preload="metadata" controls></video>`
     : '';
-  return `${gif}${image}${video}${dropMapMarkup(post.location)}`;
+  const reelChip = reelOpenId
+    ? `<button type="button" class="search-reel-chip" data-open-reel="${escapeHtml(reelOpenId)}">Open Reel</button>`
+    : '';
+  const reelBlock = video
+    ? (reelChip ? `<div class="post-reel-frame" data-reel-frame>${video}${reelChip}</div>` : video)
+    : '';
+  return `${gif}${image}${reelBlock}${dropMapMarkup(post.location)}`;
+}
+
+function syncReelOpenChip(frame) {
+  const video = frame?.querySelector?.('video.post-reel-video, video');
+  const chip = frame?.querySelector?.('.search-reel-chip');
+  if (!video || !chip) return;
+  const place = () => {
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const frameRect = frame.getBoundingClientRect();
+    const videoRect = video.getBoundingClientRect();
+    if (!vw || !vh || frameRect.width < 1 || videoRect.width < 1) {
+      frame.style.setProperty('--reel-chip-left', '12px');
+      frame.style.setProperty('--reel-chip-bottom', '12px');
+      return;
+    }
+    const scale = Math.min(videoRect.width / vw, videoRect.height / vh);
+    const dispW = vw * scale;
+    const dispH = vh * scale;
+    const padX = (videoRect.width - dispW) / 2;
+    const padY = (videoRect.height - dispH) / 2;
+    const left = (videoRect.left - frameRect.left) + padX + 12;
+    const bottom = (frameRect.bottom - videoRect.bottom) + padY + 12;
+    frame.style.setProperty('--reel-chip-left', `${Math.max(8, left)}px`);
+    frame.style.setProperty('--reel-chip-bottom', `${Math.max(8, bottom)}px`);
+  };
+  place();
+  if (video.readyState < 1) video.addEventListener('loadedmetadata', place, { once: true });
+  video.addEventListener('loadeddata', place, { once: true });
+}
+
+function syncAllReelOpenChips(root = document) {
+  root.querySelectorAll('[data-reel-frame]').forEach(syncReelOpenChip);
 }
 
 function quoteCardMarkup(quoted, { interactive = true } = {}) {
@@ -968,11 +1007,8 @@ function postMarkup(post, profile = false) {
     ? `<small class="reposted-label">↻ ${escapeHtml(wrapper.displayName || 'A member')} reposted</small>`
     : '';
   const boostChip = display.boostActive ? '<span class="post-boost-chip">Tipped</span>' : '';
-  const media = postMediaMarkup(display, displayName);
-  const reelChip = display.kind === 'reel'
-    ? `<button type="button" class="search-reel-chip" data-open-reel="${escapeHtml(display.id)}">Open Reel</button>`
-    : '';
-  return `<article class="post" data-post-card="${escapeHtml(display.id)}">${repostLabel}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(display.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || { ...display, id: display.authorId })}${boostChip}${display.kind === 'reel' ? '<span class="post-reel-tag">Reel</span>' : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(display.createdAt)}${display.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? `<span class="post-rank"> &middot; ${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(display)}</div>${display.content ? `<p class="post-content">${body}</p>` : ''}${quoteMarkup}${media}${poll}${reelChip}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(display.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options" class="${alreadyReposted ? 'reposted' : ''}">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(display.id)}">${alreadyReposted ? 'Undo repost' : 'Repost'}</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(display.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(display.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-engage="bookmark" data-post-id="${escapeHtml(display.id)}" class="${bookmarked ? 'bookmarked' : ''}" aria-label="${bookmarked ? 'Remove bookmark' : 'Bookmark'}" aria-pressed="${bookmarked ? 'true' : 'false'}">${postActionIcon('bookmark', bookmarked)}</button><button type="button" data-engage="share" data-post-id="${escapeHtml(display.id)}">${postActionIcon('share')}</button></div></article>`;
+  const media = postMediaMarkup(display, displayName, display.kind === 'reel' ? { reelOpenId: display.id } : undefined);
+  return `<article class="post" data-post-card="${escapeHtml(display.id)}">${repostLabel}<div class="post-top"><img class="post-avatar" src="${escapeHtml(avatarUrl)}" alt="" /><div><button class="post-author" type="button" data-open-member="${escapeHtml(display.authorId)}"><span class="post-name">${escapeHtml(displayName)}</span>${identityBadges(author || { ...display, id: display.authorId })}${boostChip}${display.kind === 'reel' ? '<span class="post-reel-tag">Reel</span>' : ''}<span class="post-meta">@${escapeHtml(username)} &middot; ${timeAgo(display.createdAt)}${display.editedAt ? ' &middot; edited' : ''}${staffRank && !profile ? `<span class="post-rank"> &middot; ${escapeHtml(staffRank)}</span>` : ''}</span></button></div>${postMenu(display)}</div>${display.content ? `<p class="post-content">${body}</p>` : ''}${quoteMarkup}${media}${poll}<div class="post-action-row"><button type="button" data-engage="reply" data-post-id="${escapeHtml(display.id)}">${postActionIcon('reply')}<span>${replies || ''}</span></button><details class="repost-inline"><summary aria-label="Repost options" class="${alreadyReposted ? 'reposted' : ''}">${postActionIcon('repost')}</summary><div><button type="button" data-engage="repost-now" data-post-id="${escapeHtml(display.id)}">${alreadyReposted ? 'Undo repost' : 'Repost'}</button><button type="button" data-engage="quote" data-post-id="${escapeHtml(display.id)}">Quote</button></div></details><button type="button" data-engage="like" data-post-id="${escapeHtml(display.id)}" class="${liked ? 'liked' : ''}">${postActionIcon('like', liked)}<span>${likes.length || ''}</span></button><button type="button" data-engage="bookmark" data-post-id="${escapeHtml(display.id)}" class="${bookmarked ? 'bookmarked' : ''}" aria-label="${bookmarked ? 'Remove bookmark' : 'Bookmark'}" aria-pressed="${bookmarked ? 'true' : 'false'}">${postActionIcon('bookmark', bookmarked)}</button><button type="button" data-engage="share" data-post-id="${escapeHtml(display.id)}">${postActionIcon('share')}</button></div></article>`;
 }
 
 function safeGifUrl(value) {
@@ -1929,6 +1965,7 @@ function showPosts(posts, emptyMessage) {
     });
   }
   list.innerHTML = `${heading}${markup}`;
+  syncAllReelOpenChips(list);
 }
 
 function trendingTagKeys() {
@@ -2173,6 +2210,7 @@ function renderProfilePosts() {
     likes: 'Posts you like will appear here.',
   }[profileTab] || 'Nothing here yet.';
   profileList.innerHTML = profileListMarkup(posts, profileTab, me?.pinnedPostId, empty);
+  syncAllReelOpenChips(profileList);
 }
 
 function profileBannerFor(user, fallbackSession = null) {
@@ -2350,6 +2388,7 @@ function renderBookmarks() {
   }
   const posts = allPosts.filter((post) => ids.includes(post.id));
   bookmarkList.innerHTML = posts.length ? posts.map((post) => postMarkup(post)).join('') : '<p class="feed-note">Your saved posts will appear here.</p>';
+  syncAllReelOpenChips(bookmarkList);
 }
 
 function showView(view) {
@@ -2504,6 +2543,7 @@ function showPostDetail(postId, updateHash = true, { focusReply = false } = {}) 
   showView('post');
   const replies = allPosts.filter((item) => item.parentId === id);
   postDetail.innerHTML = `${postMarkup(post)}${detailReplyComposerMarkup(post.id)}<section class="detail-replies">${replies.length ? replies.map((reply) => postMarkup(reply)).join('') : '<p>There are no replies yet.</p>'}</section>`;
+  syncAllReelOpenChips(postDetail);
   if (focusReply) queueMicrotask(focusDetailReplyComposer);
 }
 
@@ -5584,6 +5624,10 @@ function openMemberProfile(memberId, updateHash = true) {
     if (connectionModalScope === 'member') closeConnectionsModal();
   }
   viewedMember = user;
+  const canSeeMemberLikes = user.id === activeUserId() || user.hideLikes !== true;
+  const memberLikesTab = document.querySelector('[data-member-likes-tab]');
+  if (memberLikesTab) memberLikesTab.hidden = !canSeeMemberLikes;
+  if (!canSeeMemberLikes && memberTab === 'likes') memberTab = 'posts';
   document.querySelectorAll('[data-member-tab]').forEach((tab) => tab.classList.toggle('selected', tab.dataset.memberTab === memberTab));
   const posts = profileTabPosts(user.id, memberTab);
   const banner = document.querySelector('[data-member-page-banner]');
@@ -5644,8 +5688,15 @@ function openMemberProfile(memberId, updateHash = true) {
     replies: 'No replies yet.',
     mentions: 'No mentions yet.',
     media: 'No photos or Reels yet.',
+    likes: canSeeMemberLikes ? 'No likes yet.' : 'This member’s likes are private.',
   }[memberTab] || 'Nothing here yet.';
-  document.querySelector('[data-member-page-posts]').innerHTML = profileListMarkup(posts, memberTab, user.pinnedPostId, memberEmpty);
+  const memberPostsHost = document.querySelector('[data-member-page-posts]');
+  if (!canSeeMemberLikes && memberTab === 'likes') {
+    memberPostsHost.innerHTML = `<p>${escapeHtml(memberEmpty)}</p>`;
+  } else {
+    memberPostsHost.innerHTML = profileListMarkup(posts, memberTab, user.pinnedPostId, memberEmpty);
+  }
+  syncAllReelOpenChips(memberPostsHost);
   const following = socialState.following.includes(user.id);
   const followsYou = socialState.followers.includes(user.id);
   document.querySelector('[data-member-page-follow]').textContent = following && followsYou ? 'Friends' : following ? 'Following' : followsYou ? 'Follow back' : 'Follow';
@@ -6114,8 +6165,14 @@ document.querySelectorAll('[data-preference]').forEach((input) => input.addEvent
     // Keep the just-toggled value if the host omits keys from an older payload.
     applyPreferenceState({ ...(result.preferences || {}), [key]: nextValue });
     localStorage.setItem(`clearwater-preferences-${currentUserId}`, JSON.stringify(preferenceState));
+    if (currentUserId && ['hideLikes', 'hideStats', 'hideFollowing', 'hideProfile', 'followersOnly'].includes(key)) {
+      const me = internetUsers.get(currentUserId);
+      if (me) me[key] = nextValue;
+      if (viewedMember?.id === currentUserId) viewedMember[key] = nextValue;
+    }
     renderOwnProfileDetails();
     if (['followersOnly', 'hideProfile', 'hideFollowing'].includes(key)) await loadPosts();
+    if (key === 'hideLikes' && viewedMember) openMemberProfile(viewedMember.id, false);
   } catch (error) {
     if (localOnly) {
       // Appearance still applies on this device even if the bot host is stale.
@@ -7916,6 +7973,7 @@ document.querySelector('[data-sponsored-report-form]')?.addEventListener('submit
 
 window.addEventListener('resize', () => {
   if (isVisibleReelsTab()) syncReelCardHeights();
+  syncAllReelOpenChips();
 });
 
 document.querySelector('[data-reel-comment-form]')?.addEventListener('submit', async (event) => {
