@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-vpn-allow-user",
+      "title": "VPN allowlist for one member",
+      "summary": "One Discord account is allowed to use Clearwater while on a VPN. Everyone else is still blocked from VPN/proxy connections.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T21:45:00.000Z"
+    },
+    {
       "id": "2026-08-15-scrub-staff-pin",
       "title": "Staff PIN fully removed",
       "summary": "Ownership and Management open the staff desk with their Discord role only. Leftover PIN code, cookies, and settings notes are gone.",

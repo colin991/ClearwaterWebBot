@@ -260,7 +260,9 @@ export default async function handler(request, response) {
     if (request.method === 'GET') {
       const url = new URL(request.url, `https://${request.headers.host || 'cwrpvc.lol'}`);
       if (url.searchParams.get('t')) return serveProxiedMedia(request, response);
-      if (await rejectVpnJson(request, response)) return;
+      const { sessionSecret } = getAuthConfig();
+      const viewer = readSessionToken(sessionCookieValue(parseCookies(request.headers.cookie)), sessionSecret);
+      if (await rejectVpnJson(request, response, viewer?.id)) return;
       if (rejectPublicBrowse(request, response)) return;
       if (!isAppFetchRequest(request)) {
         response.statusCode = 404;
@@ -271,8 +273,6 @@ export default async function handler(request, response) {
         return;
       }
       if (url.searchParams.get('reel')) {
-        const { sessionSecret } = getAuthConfig();
-        const viewer = readSessionToken(sessionCookieValue(parseCookies(request.headers.cookie)), sessionSecret);
         if (!viewer) return sendJson(response, 401, { error: 'Sign in with Discord to use Clearwater Internet' });
         const reelAccess = await getStaffAccess(viewer);
         if (!reelAccess.siteAccess) return sendJson(response, 403, { error: 'Clearwater Internet access required' });
@@ -281,8 +281,6 @@ export default async function handler(request, response) {
       if (url.searchParams.get('meta') === 'version' || url.pathname.endsWith('/internet-version')) {
         return sendJson(response, 200, { version: INTERNET_VERSION });
       }
-      const { sessionSecret } = getAuthConfig();
-      const viewer = readSessionToken(sessionCookieValue(parseCookies(request.headers.cookie)), sessionSecret);
       if (!viewer) return sendJson(response, 401, { error: 'Sign in with Discord to use Clearwater Internet' });
       if (!allowRate(`internet-get:${viewer.id}`, { max: 8, windowMs: 60_000 })) {
         return sendJson(response, 429, { error: 'Too many requests. Wait a moment.' });
@@ -335,13 +333,13 @@ export default async function handler(request, response) {
         return sendJson(response, 400, { error: 'Invalid upload callback' });
       }
     }
-    if (await rejectVpnJson(request, response)) return;
     if (request.method === 'POST' && !isSameSiteRequest(request)) {
       return sendJson(response, 403, { error: 'Invalid request origin' });
     }
 
     const { sessionSecret } = getAuthConfig();
     const user = readSessionToken(sessionCookieValue(parseCookies(request.headers.cookie)), sessionSecret);
+    if (await rejectVpnJson(request, response, user?.id)) return;
     if (!user) return sendJson(response, 401, { error: 'Sign in with Discord to post' });
 
     // Live Discord role check — session guildRoles alone are not authorization.
