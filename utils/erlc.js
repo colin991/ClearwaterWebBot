@@ -215,6 +215,7 @@ function buildErlcModCommand(action, player, reason) {
     const note = sanitizeErlcReason(reason) || 'Removed by Ownership';
     return `:kick ${target} ${note}`;
   }
+  if (action === 'load') return `:load ${target}`;
   if (action === 'jail') return `:jail ${target}`;
   if (action === 'unjail') return `:unjail ${target}`;
   if (action === 'ban') {
@@ -244,7 +245,7 @@ export async function runErlcRawCommand({ serverKey, command } = {}) {
 }
 
 /**
- * Run kick / jail / unjail / ban against one or more in-game players.
+ * Run load / kick / jail / unjail / ban against one or more in-game players.
  * Commands are sent sequentially to stay within ER:LC rate limits.
  */
 export async function runErlcModeration({ serverKey, action, players = [], reason = '' } = {}) {
