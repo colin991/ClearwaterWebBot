@@ -8906,7 +8906,7 @@ body.has-site-banner.has-official-post-banner .internet-side {
   top: calc(30px + var(--top-banner-stack, 82px));
 }
 
-/* Leave Internet ? main website (mobile dock only). */
+/* Leave Internet to main website (mobile dock only). */
 .internet-leave {
   display: none;
   align-items: center;
