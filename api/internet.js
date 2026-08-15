@@ -13,7 +13,7 @@ import {
 } from '../lib/staff-pin.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260815-right-rail-scroll';
+const INTERNET_VERSION = '20260815-blob-limit';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
@@ -411,7 +411,14 @@ export default async function handler(request, response) {
         });
         return sendJson(response, 200, result);
       } catch (error) {
-        return sendJson(response, 503, { error: /token/i.test(String(error?.message || '')) ? 'Create a Blob store in Vercel Storage so Reels can upload videos.' : (error.message || 'Could not start this Reel upload.') });
+        const uploadError = String(error?.message || '');
+        return sendJson(response, 503, {
+          error: /suspended|quota|limit|billing|exceeded/i.test(uploadError)
+            ? 'Vercel Blob is at this month’s storage limit, so video uploads are paused. Photo Reels under 3 MB still work. Upgrade Blob or wait for the next billing cycle.'
+            : (/token/i.test(uploadError)
+              ? 'Create a Blob store in Vercel Storage so Reels can upload videos.'
+              : (uploadError || 'Could not start this Reel upload.')),
+        });
       }
     }
     let payload;

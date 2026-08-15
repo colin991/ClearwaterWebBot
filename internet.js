@@ -95,7 +95,7 @@ const accountSwitchName = document.querySelector('[data-account-switch-name]');
 const accountSwitchHandle = document.querySelector('[data-account-switch-handle]');
 const officialAccountOption = document.querySelector('[data-official-account-option]');
 const officialProfileControls = document.querySelector('[data-official-profile-controls]');
-const INTERNET_VERSION = '20260815-right-rail-scroll';
+const INTERNET_VERSION = '20260815-blob-limit';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
 let adMedia = null;
@@ -107,6 +107,19 @@ const AUTOMOD_HOLD_MESSAGE = 'That was held for staff review and was not deliver
 const AUTOMOD_HOLD_PREVIEW = 'This may be held for staff review when you send it.';
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
 const SMALL_REEL_BYTES = 3_200_000;
+const BLOB_LIMIT_MESSAGE = 'Cloud storage hit this month’s Vercel Blob limit, so large uploads are paused. Photos under 3 MB still work. Videos, ads, and banners need Blob to reset next billing cycle, or a new/upgraded Blob store in Vercel.';
+
+function blobUploadFailedMessage(raw, { large = true } = {}) {
+  const text = String(raw || '');
+  if (/suspended|quota|limit|billing|exceeded/i.test(text)) return BLOB_LIMIT_MESSAGE;
+  if (/token|blob store|No token|Failed to retrieve/i.test(text)) {
+    return large
+      ? 'Large uploads need Vercel Blob storage. A photo under 3 MB still works without it.'
+      : 'Cloud upload is not configured.';
+  }
+  return text || 'Could not upload this file.';
+}
+
 const MAX_REEL_SLIDES = 10;
 const MAX_REEL_AUDIO_BYTES = 40 * 1024 * 1024;
 const REEL_SLIDE_MS = 3500;
@@ -4787,9 +4800,7 @@ async function uploadAdMedia(file, isVideo) {
     } catch (error) {
       blobError = String(error?.message || error || '');
       if (isVideo || file.size > SMALL_REEL_BYTES) {
-        throw new Error(/token|blob store|No token|Failed to retrieve/i.test(blobError)
-          ? 'Ad media needs Vercel Blob storage configured for larger files.'
-          : (blobError || 'Could not upload this ad media.'));
+        throw new Error(blobUploadFailedMessage(blobError, { large: true }));
       }
     }
   } else if (isVideo || file.size > SMALL_REEL_BYTES) {
@@ -7126,7 +7137,7 @@ document.querySelector('[data-banner-file]')?.addEventListener('change', async (
     renderProfilePreview();
     setProfileStatus('Banner ready. Save your profile to publish it.', 'ok');
   } catch (error) {
-    setProfileStatus(error.message || 'Could not upload that banner.', 'error');
+    setProfileStatus(blobUploadFailedMessage(error.message, { large: true }), 'error');
   } finally {
     profileBannerBusy = false;
   }
@@ -8556,9 +8567,7 @@ async function uploadReelFile(file, kind, onProgress, options = {}) {
     } catch (error) {
       blobError = String(error?.message || error || '');
       if (!allowDataUrl || file.size > SMALL_REEL_BYTES) {
-        throw new Error(/token|blob store|No token|Failed to retrieve/i.test(blobError)
-          ? 'Large Reels need Vercel Blob storage configured. A single photo under 3 MB still uploads without it.'
-          : (blobError || 'Could not upload this Reel.'));
+        throw new Error(blobUploadFailedMessage(blobError, { large: true }));
       }
     }
   } else if (!allowDataUrl || file.size > SMALL_REEL_BYTES) {
