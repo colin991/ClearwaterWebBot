@@ -14,10 +14,22 @@ export default {
     } catch (error) {
       logger.error('Could not flush pending update logs', error);
     }
-    try {
-      await ensureNoticeChannel(client);
-    } catch (error) {
-      logger.error('Could not prepare notice channel', error);
-    }
+
+    // Guild/channel cache can still be settling right after ready.
+    const postNotice = async (attempt) => {
+      try {
+        await ensureNoticeChannel(client);
+      } catch (error) {
+        logger.error(`Could not prepare notice channel (attempt ${attempt})`, error);
+        if (attempt < 3) {
+          setTimeout(() => {
+            void postNotice(attempt + 1);
+          }, attempt * 2500);
+        }
+      }
+    };
+    setTimeout(() => {
+      void postNotice(1);
+    }, 1500);
   },
 };

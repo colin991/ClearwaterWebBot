@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PermissionFlagsBits } from 'discord.js';
+import { ChannelType, PermissionFlagsBits } from 'discord.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
 
@@ -51,16 +51,62 @@ async function writeState(state) {
   });
 }
 
-function noticeChannelId(client) {
+export function noticeChannelId(client) {
   return String(client?.config?.noticeChannelId || '').trim();
 }
 
 async function resolveNoticeChannel(client) {
   const channelId = noticeChannelId(client);
-  if (!channelId) return null;
-  const channel = await client.channels.fetch(channelId).catch(() => null);
-  if (!channel?.isTextBased?.() || channel.isDMBased?.()) return null;
+  if (!channelId) {
+    logger.warn('Notice channel id is not configured.');
+    return null;
+  }
+
+  let channel = client.channels.cache.get(channelId) || null;
+  if (!channel) {
+    try {
+      channel = await client.channels.fetch(channelId);
+    } catch (error) {
+      logger.error(`Could not fetch notice channel ${channelId}`, error);
+      return null;
+    }
+  }
+
+  if (!channel) {
+    logger.warn(`Notice channel ${channelId} was not found.`);
+    return null;
+  }
+
+  if (channel.type === ChannelType.DM || channel.type === ChannelType.GroupDM) {
+    logger.warn(`Notice channel ${channelId} is a DM and cannot be used.`);
+    return null;
+  }
+
+  if (typeof channel.isTextBased === 'function' && !channel.isTextBased()) {
+    logger.warn(`Notice channel ${channelId} is not a text channel.`);
+    return null;
+  }
+
+  if (typeof channel.send !== 'function') {
+    logger.warn(`Notice channel ${channelId} does not support sending messages.`);
+    return null;
+  }
+
   return channel;
+}
+
+function botCanSend(channel) {
+  const me = channel.guild?.members?.me;
+  if (!me) return { ok: true, missing: [] };
+  const permissions = channel.permissionsFor(me);
+  if (!permissions) return { ok: true, missing: [] };
+  const needed = [
+    PermissionFlagsBits.ViewChannel,
+    PermissionFlagsBits.SendMessages,
+    PermissionFlagsBits.ManageMessages,
+  ];
+  const missing = needed.filter((flag) => !permissions.has(flag));
+  return { ok: missing.length === 0, missing, permissions };
 }
 
 async function pinNotice(message) {
@@ -68,6 +114,15 @@ async function pinNotice(message) {
   await message.pin().catch((error) => {
     logger.warn(`Could not pin notice channel message: ${error?.message || error}`);
   });
+}
+
+async function postNotice(channel, state) {
+  const content = noticeContent(state.punishedCount);
+  const posted = await channel.send({ content, allowedMentions: { parse: [] } });
+  state.noticeMessageId = posted.id;
+  await writeState(state);
+  await pinNotice(posted);
+  return posted;
 }
 
 async function syncNoticeMessage(channel, state, { forceNew = false } = {}) {
@@ -85,11 +140,7 @@ async function syncNoticeMessage(channel, state, { forceNew = false } = {}) {
     }
   }
 
-  const posted = await channel.send({ content, allowedMentions: { parse: [] } });
-  state.noticeMessageId = posted.id;
-  await writeState(state);
-  await pinNotice(posted);
-  return posted;
+  return postNotice(channel, state);
 }
 
 async function purgeOtherMessages(channel, noticeMessageId) {
@@ -108,19 +159,28 @@ async function purgeOtherMessages(channel, noticeMessageId) {
   }
 }
 
-export async function ensureNoticeChannel(client) {
-  const channel = await resolveNoticeChannel(client);
-  if (!channel) return;
+export async function ensureNoticeChannel(client, { forceNew = false } = {}) {
+  const channelId = noticeChannelId(client);
+  logger.info(`Preparing notice channel (${channelId || 'missing-id'})...`);
 
-  const me = channel.guild?.members?.me;
-  if (me && !channel.permissionsFor(me)?.has(PermissionFlagsBits.ManageMessages)) {
-    logger.warn(`Missing Manage Messages in notice channel ${channel.id}.`);
+  const channel = await resolveNoticeChannel(client);
+  if (!channel) {
+    throw new Error(`Notice channel could not be resolved (${channelId || 'missing-id'}).`);
+  }
+
+  const access = botCanSend(channel);
+  if (!access.ok) {
+    logger.warn(`Notice channel is missing permissions: ViewChannel/SendMessages/ManageMessages in ${channel.id}`);
+  }
+  if (access.permissions && !access.permissions.has(PermissionFlagsBits.SendMessages)) {
+    throw new Error(`Bot cannot Send Messages in notice channel ${channel.id}.`);
   }
 
   const state = await readState();
-  const notice = await syncNoticeMessage(channel, state);
+  const notice = await syncNoticeMessage(channel, state, { forceNew });
   await purgeOtherMessages(channel, notice.id);
-  logger.info(`Notice channel ready in #${channel.name || channel.id} (kept message ${notice.id}).`);
+  logger.info(`Notice channel ready in #${channel.name || channel.id} (message ${notice.id}, count ${state.punishedCount}).`);
+  return notice;
 }
 
 async function punishMember(message) {
