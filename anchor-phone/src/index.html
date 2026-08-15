@@ -38,8 +38,12 @@
               <div class="wp-glow wp-glow-b"></div>
               <div class="wp-glow wp-glow-c"></div>
               <div class="wp-vignette"></div>
-              <div class="wp-logo">
-                <img src="assets/clearwater-logo.png" alt="" draggable="false" />
+              <div class="wp-anchor">
+                <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="60" cy="28" r="11" stroke="currentColor" stroke-width="3.5"/>
+                  <path d="M60 39V94M60 94C60 94 34 79 34 56M60 94C60 94 86 79 86 56" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+                  <path d="M40 52H80" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+                </svg>
               </div>
             </div>
 
@@ -61,20 +65,6 @@
                   </svg>
                 </span>
                 <span class="app-label">Wallet</span>
-              </button>
-
-              <button type="button" class="app-tile" data-open="marketplace" role="listitem">
-                <span class="app-icon icon-market" aria-hidden="true">
-                  <svg viewBox="0 0 64 64" fill="none">
-                    <rect width="64" height="64" rx="16" fill="url(#gm)"/>
-                    <path d="M16 24h32l-3.5 24H19.5L16 24z" fill="#fff" fill-opacity=".95"/>
-                    <path d="M23 24v-3.5a9 9 0 0 1 18 0V24" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/>
-                    <circle cx="26" cy="36" r="2.4" fill="#9a3412"/>
-                    <circle cx="38" cy="36" r="2.4" fill="#9a3412"/>
-                    <defs><linearGradient id="gm" x1="10" y1="6" x2="54" y2="58"><stop stop-color="#fb923c"/><stop offset="1" stop-color="#ea580c"/></linearGradient></defs>
-                  </svg>
-                </span>
-                <span class="app-label">Marketplace</span>
               </button>
 
               <button type="button" class="app-tile" data-open="findmy" role="listitem">
@@ -146,6 +136,9 @@
               <button type="button" class="dock-btn" data-open="messages" aria-label="Messages">
                 <svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="url(#dms)"/><path d="M14 20c0-4 3.2-7 7-7h22c3.8 0 7 3 7 7v16c0 4-3.2 7-7 7H30l-9 9v-9h0c-3.8 0-7-3-7-7V20z" fill="#fff"/><defs><linearGradient id="dms" x1="10" y1="6" x2="54" y2="58"><stop stop-color="#2dd4bf"/><stop offset="1" stop-color="#0d9488"/></linearGradient></defs></svg>
               </button>
+              <button type="button" class="dock-btn" data-open="findmy" aria-label="Find My">
+                <svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="url(#dfm)"/><circle cx="32" cy="32" r="11" stroke="#fff" stroke-opacity=".55" stroke-width="2"/><circle cx="32" cy="32" r="4.5" fill="#fff"/><defs><linearGradient id="dfm" x1="8" y1="6" x2="56" y2="58"><stop stop-color="#4ade80"/><stop offset="1" stop-color="#15803d"/></linearGradient></defs></svg>
+              </button>
               <button type="button" class="dock-btn" data-open="wallet" aria-label="Wallet">
                 <svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="url(#dw)"/><rect x="12" y="18" width="40" height="30" rx="7" fill="#fff" fill-opacity=".92"/><rect x="34" y="34" width="14" height="9" rx="3" fill="#0b2e22"/><defs><linearGradient id="dw" x1="8" y1="4" x2="56" y2="60"><stop stop-color="#34d399"/><stop offset="1" stop-color="#059669"/></linearGradient></defs></svg>
               </button>
@@ -162,77 +155,40 @@
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
               <h1>Wallet</h1>
-              <button type="button" class="open-web" data-web="wallet">Open on Internet</button>
+              <span class="chrome-spacer"></span>
             </div>
             <div class="app-body">
-              <p class="app-lede">Manage your funds. Send, receive, and request economy money from panel members.</p>
+              <p class="app-lede">Your Clearwater credits — the same wallet as Internet. Send and request money, and review transactions.</p>
               <div class="balance-hero">
                 <div class="balance-shine" aria-hidden="true"></div>
                 <p class="balance-label">Available</p>
-                <p class="balance-value" id="wallet-balance">C$12,450</p>
-                <p class="balance-note">Clearwater economy · synced with panel</p>
+                <p class="balance-value" id="wallet-balance">C$—</p>
+                <p class="balance-note" id="wallet-note-line">Sign in to load your wallet</p>
               </div>
               <div class="action-row">
                 <button type="button" class="pill-action" data-wallet-action="send">Send</button>
-                <button type="button" class="pill-action" data-wallet-action="receive">Receive</button>
                 <button type="button" class="pill-action" data-wallet-action="request">Request</button>
               </div>
               <div class="panel" id="wallet-panel" hidden>
                 <label class="field">
                   <span>Member</span>
-                  <input type="text" id="wallet-member" placeholder="Username or Discord" autocomplete="off" />
+                  <input type="text" id="wallet-member" placeholder="Username" autocomplete="off" />
                 </label>
                 <label class="field">
                   <span>Amount (C$)</span>
                   <input type="number" id="wallet-amount" min="1" step="1" placeholder="100" />
                 </label>
-                <label class="field" id="wallet-note-field">
+                <label class="field">
                   <span>Note</span>
                   <input type="text" id="wallet-note" placeholder="Optional" />
                 </label>
                 <button type="button" class="btn-primary" id="wallet-submit">Confirm</button>
                 <p class="form-status" id="wallet-status" hidden></p>
               </div>
-              <h2 class="section-title">Recent</h2>
+              <h2 class="section-title">Pending</h2>
+              <ul class="ios-list txn-list" id="wallet-pending"></ul>
+              <h2 class="section-title">Transactions</h2>
               <ul class="ios-list txn-list" id="wallet-txns"></ul>
-            </div>
-          </section>
-
-          <!-- MARKETPLACE -->
-          <section class="view view-app" id="view-marketplace" data-view="marketplace" hidden>
-            <div class="app-chrome">
-              <button type="button" class="back-btn" data-home aria-label="Home">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-              <h1>Marketplace</h1>
-              <button type="button" class="open-web" data-web="marketplace">Open on Internet</button>
-            </div>
-            <div class="app-body">
-              <p class="app-lede">With Clearwater, managing your civilian business has never been easier. Open a storefront, create products, and charge customers for what you're worth.</p>
-              <div class="store-banner">
-                <div>
-                  <p class="store-name" id="store-name">Gulf Coast Customs</p>
-                  <p class="store-meta">Your storefront · 3 employees</p>
-                </div>
-                <button type="button" class="btn-ghost" id="store-edit">Edit</button>
-              </div>
-              <div class="action-row">
-                <button type="button" class="pill-action is-active" data-market-tab="products">Products</button>
-                <button type="button" class="pill-action" data-market-tab="employees">Employees</button>
-                <button type="button" class="pill-action" data-market-tab="payouts">Payouts</button>
-              </div>
-              <div class="market-pane is-active" data-pane="products">
-                <button type="button" class="btn-primary btn-inline" id="add-product">+ New product</button>
-                <ul class="ios-list product-list" id="product-list"></ul>
-              </div>
-              <div class="market-pane" data-pane="employees" hidden>
-                <button type="button" class="btn-primary btn-inline" id="add-employee">+ Add employee</button>
-                <ul class="ios-list people-list" id="employee-list"></ul>
-              </div>
-              <div class="market-pane" data-pane="payouts" hidden>
-                <p class="hint">Pay out your team from store revenue.</p>
-                <ul class="ios-list txn-list" id="payout-list"></ul>
-              </div>
             </div>
           </section>
 
@@ -243,19 +199,16 @@
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
               <h1>Find My</h1>
-              <button type="button" class="open-web" data-web="findmy">Open on Internet</button>
+              <span class="chrome-spacer"></span>
             </div>
             <div class="app-body">
-              <p class="app-lede">Share your location with trusted contacts so you can always find each other in-game. Toggle sharing per person.</p>
-              <div class="map-preview findmy-map" aria-hidden="true">
-                <div class="map-texture"></div>
-                <div class="radar-ring"></div>
-                <div class="radar-ring delay"></div>
-                <span class="pin self">You</span>
-                <span class="pin other" style="left:62%;top:38%">Alex</span>
-                <span class="pin other" style="left:28%;top:58%">Jordan</span>
+              <p class="app-lede">Share your live ER:LC location with friends. They only see you when you turn sharing on for them.</p>
+              <div class="map-canvas live-map" id="findmy-map">
+                <img class="liberty-map" src="https://cwrpvc.lol/assets/liberty-county-map.jpg" alt="Liberty County" draggable="false" />
+                <div class="map-pins" id="findmy-pins"></div>
               </div>
-              <h2 class="section-title">Trusted contacts</h2>
+              <p class="route-status" id="findmy-status" hidden></p>
+              <h2 class="section-title">Friends</h2>
               <ul class="ios-list people-list" id="findmy-list"></ul>
             </div>
           </section>
@@ -266,21 +219,29 @@
               <button type="button" class="back-btn" data-home aria-label="Home">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
-              <h1>Messages</h1>
+              <h1 id="messages-title">Messages</h1>
               <div class="chrome-actions">
                 <button type="button" class="chrome-action" id="new-message" aria-label="New">
                   <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
                 </button>
-                <button type="button" class="open-web" data-web="messages">Open on Internet</button>
               </div>
             </div>
             <div class="app-body">
-              <p class="app-lede">Message your contacts and friends with Clearwater messaging.</p>
-              <ul class="ios-list thread-list" id="thread-list"></ul>
-              <div class="composer" id="msg-composer" hidden>
-                <input type="text" id="msg-to" placeholder="Contact name" />
-                <textarea id="msg-body" rows="3" placeholder="Write a message…"></textarea>
-                <button type="button" class="btn-primary" id="msg-send">Send</button>
+              <div id="inbox-pane">
+                <p class="app-lede">The same conversations as Clearwater Internet.</p>
+                <ul class="ios-list thread-list" id="thread-list"></ul>
+                <div class="composer" id="msg-composer" hidden>
+                  <input type="text" id="msg-to" placeholder="Username" />
+                  <textarea id="msg-body" rows="3" placeholder="Write a message…"></textarea>
+                  <button type="button" class="btn-primary" id="msg-send">Send</button>
+                </div>
+              </div>
+              <div id="thread-pane" hidden>
+                <ul class="ios-list thread-list chat-log" id="chat-log"></ul>
+                <div class="composer">
+                  <textarea id="chat-body" rows="2" placeholder="Message…"></textarea>
+                  <button type="button" class="btn-primary" id="chat-send">Send</button>
+                </div>
               </div>
             </div>
           </section>
@@ -292,30 +253,19 @@
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
               <h1>Maps</h1>
-              <button type="button" class="open-web" data-web="maps">Open on Internet</button>
+              <span class="chrome-spacer"></span>
             </div>
             <div class="app-body maps-body">
-              <p class="app-lede">Lost? Open Maps and follow the fastest route to your destination.</p>
-              <div class="map-canvas" aria-hidden="true">
-                <div class="map-texture"></div>
-                <div class="map-roads"></div>
-                <svg class="route-line" viewBox="0 0 280 220" preserveAspectRatio="none">
-                  <path d="M40 180 C80 140, 100 160, 130 120 S180 70, 220 50" fill="none" stroke="#76adff" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 6"/>
-                </svg>
-                <span class="pin self maps-you">You</span>
-                <span class="pin dest">★</span>
+              <p class="app-lede">Tap the Liberty County map (ER:LC API) to pick a destination. We’ll route from your in-game location.</p>
+              <div class="map-canvas live-map" id="maps-map">
+                <img class="liberty-map" src="https://cwrpvc.lol/assets/liberty-county-map.jpg" alt="Liberty County" draggable="false" />
+                <svg class="route-overlay" id="maps-route" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+                <div class="map-pins" id="maps-pins"></div>
               </div>
               <label class="field">
                 <span>Destination</span>
-                <input type="text" id="maps-dest" list="maps-places" placeholder="Search Clearwater…" />
-                <datalist id="maps-places">
-                  <option value="Clearwater PD"></option>
-                  <option value="Fire Station 1"></option>
-                  <option value="County Hospital"></option>
-                  <option value="City Hall"></option>
-                  <option value="Pier District"></option>
-                  <option value="Bank of Clearwater"></option>
-                </datalist>
+                <input type="text" id="maps-dest" list="maps-places" placeholder="Search postal or street…" />
+                <datalist id="maps-places"></datalist>
               </label>
               <button type="button" class="btn-primary" id="maps-go">Start route</button>
               <p class="route-status" id="route-status" hidden></p>
@@ -332,25 +282,11 @@
               <span class="chrome-spacer"></span>
             </div>
             <div class="app-body">
-              <p class="app-lede">Control how Clearwater Phone opens apps and stays up to date.</p>
-
-              <h2 class="section-title">Apps</h2>
-              <ul class="ios-list settings-list">
-                <li class="settings-row">
-                  <div>
-                    <p class="item-title">Open apps on Internet</p>
-                    <p class="item-sub">Home icons open Clearwater Internet instead of in-phone screens</p>
-                  </div>
-                  <button type="button" class="toggle" id="setting-open-web" aria-label="Open apps on Internet"></button>
-                </li>
-                <li class="settings-row">
-                  <div>
-                    <p class="item-title">Show Open on Internet</p>
-                    <p class="item-sub">Keep the Open on Internet button in each app</p>
-                  </div>
-                  <button type="button" class="toggle is-on" id="setting-show-web-btn" aria-label="Show Open on Internet buttons"></button>
-                </li>
-              </ul>
+              <p class="app-lede">Sign in with Discord to sync Wallet, Messages, Maps, and Find My with Clearwater Internet.</p>
+              <h2 class="section-title">Account</h2>
+              <p class="hint" id="account-status">Not signed in</p>
+              <button type="button" class="btn-primary" id="account-login">Sign in with Discord</button>
+              <button type="button" class="btn-ghost" id="account-logout" hidden>Sign out</button>
 
               <h2 class="section-title">Updates</h2>
               <ul class="ios-list settings-list">

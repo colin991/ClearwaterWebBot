@@ -6,11 +6,10 @@ Floating **Clearwater** phone overlay for ER:LC on desktop. Always-on-top, frame
 
 | App | What it does |
 |-----|----------------|
-| **Wallet** | Send, receive, and request economy money from panel members |
-| **Marketplace** | Storefront, products, employees, and payouts |
-| **Find My** | Share in-game location with trusted contacts (per-person toggle) |
-| **Messages** | Message contacts and friends |
-| **Maps** | Fastest route to a Clearwater destination |
+| **Wallet** | Live Clearwater credits — transactions, send, and request (same as Internet) |
+| **Find My** | Share your ER:LC location with friends you choose |
+| **Messages** | The same DMs as Clearwater Internet |
+| **Maps** | Liberty County map from ER:LC — tap a spot to route from your in-game position |
 
 Icons and wallpaper are original Clearwater designs (not copies of third-party phone UIs).
 
@@ -33,7 +32,6 @@ Output: `anchor-phone/dist/ClearwaterPhone.exe` — download and run alongside R
 ## Notes
 
 - Overlay sits above games; it does **not** inject into Roblox.
-- **Members download from Clearwater Internet → Phone** (`/internet/phone`) — `ClearwaterPhone.exe` (portable; double-click to open).
+- Sign in with Discord from Settings so Wallet, Messages, Maps, and Find My use your Clearwater Internet account.
 - Rebuild the Windows portable with `cd anchor-phone && npm run dist`, then copy `dist/ClearwaterPhone.exe` to `downloads/` (or run `downloads/rebuild-exe.sh`).
-- Local demo data is stored in the app (`localStorage`). Live panel wallet/messages can be wired to Clearwater Internet APIs later.
 - Hide with **F8**; quit from the OS taskbar / dock menu.

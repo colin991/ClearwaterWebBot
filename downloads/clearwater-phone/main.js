@@ -1,15 +1,86 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, screen, shell } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, screen, session, net, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
 const { spawn } = require('child_process');
 
-let win = null;
-let visible = true;
+const SITE = 'https://cwrpvc.lol';
+const SESSION_PARTITION = 'persist:clearwater-phone';
+
+function phoneSession() {
+  return session.fromPartition(SESSION_PARTITION);
+}
+
+async function hasSiteSession() {
+  const cookies = await phoneSession().cookies.get({ url: SITE });
+  return cookies.some((cookie) => cookie.name.includes('clearwater_session') && cookie.value);
+}
+
+async function siteFetch(pathname, { method = 'GET', body } = {}) {
+  const url = pathname.startsWith('http') ? pathname : SITE + pathname;
+  const payload = body != null ? JSON.stringify(body) : null;
+  const response = await net.fetch(url, {
+    method,
+    session: phoneSession(),
+    headers: {
+      Accept: 'application/json',
+      Origin: SITE,
+      Referer: SITE + '/internet',
+      'User-Agent': 'ClearwaterPhone/' + pkg.version,
+      ...(payload ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: payload || undefined,
+  });
+  const text = await response.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { error: text.slice(0, 180) || 'Invalid response' };
+  }
+  return { ok: response.ok, status: response.status, body: data };
+}
+
+let loginWin = null;
+
+function openLoginWindow() {
+  if (loginWin && !loginWin.isDestroyed()) {
+    loginWin.focus();
+    return loginWin;
+  }
+  loginWin = new BrowserWindow({
+    width: 480,
+    height: 720,
+    title: 'Sign in to Clearwater',
+    autoHideMenuBar: true,
+    icon: path.join(__dirname, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    webPreferences: {
+      partition: SESSION_PARTITION,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  loginWin.loadURL(SITE + '/signin?next=/internet');
+  const finishIfSignedIn = async () => {
+    if (await hasSiteSession()) {
+      if (loginWin && !loginWin.isDestroyed()) loginWin.close();
+    }
+  };
+  loginWin.webContents.on('did-navigate', finishIfSignedIn);
+  loginWin.webContents.on('did-navigate-in-page', finishIfSignedIn);
+  loginWin.on('closed', () => {
+    loginWin = null;
+  });
+  return loginWin;
+}
 
 const ALLOWED_HOSTS = new Set(['cwrpvc.lol', 'www.cwrpvc.lol', 'localhost', '127.0.0.1']);
 const pkg = require('./package.json');
+
+let win = null;
+let visible = true;
 
 function createWindow() {
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
@@ -137,6 +208,39 @@ app.whenReady().then(() => {
     version: pkg.version,
     name: pkg.productName || pkg.name
   }));
+
+  ipcMain.handle('phone-session', async () => {
+    const signedIn = await hasSiteSession();
+    if (!signedIn) return { authenticated: false };
+    const me = await siteFetch('/api/auth/me');
+    return me.body || { authenticated: false };
+  });
+
+  ipcMain.handle('phone-login', async () => {
+    openLoginWindow();
+    return { ok: true };
+  });
+
+  ipcMain.handle('phone-logout', async () => {
+    try {
+      await siteFetch('/api/auth/logout', { method: 'POST', body: {} });
+    } catch {}
+    const cookies = await phoneSession().cookies.get({ url: SITE });
+    await Promise.all(cookies.map((cookie) => phoneSession().cookies.remove(SITE, cookie.name).catch(() => {})));
+    return { ok: true };
+  });
+
+  ipcMain.handle('phone-api', async (_e, payload) => {
+    const body = payload && typeof payload === 'object' ? payload : {};
+    const action = String(body.action || '');
+    const allowed = new Set([
+      'wallet', 'wallet-transfer', 'wallet-transfer-respond',
+      'messages', 'conversation', 'message-send',
+      'findmy', 'findmy-share', 'erlc-phone-map', 'erlc-location',
+    ]);
+    if (!allowed.has(action)) return { ok: false, status: 400, body: { error: 'Unsupported phone action' } };
+    return siteFetch('/api/internet', { method: 'POST', body });
+  });
 
   ipcMain.handle('phone-install-update', async (event, href) => {
     try {

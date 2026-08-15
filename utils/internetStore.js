@@ -2656,6 +2656,62 @@ export function socialSnapshot(store, actor) {
   };
 }
 
+function findMyShareList(user) {
+  return Array.isArray(user?.findMyShareWith)
+    ? [...new Set(user.findMyShareWith.map((id) => String(id)).filter((id) => /^\d{16,22}$/.test(id)))].slice(0, 80)
+    : [];
+}
+
+export function findMyDirectory(store, actor) {
+  const user = upsertInternetUser(store, actor);
+  assertNotBanned(user);
+  const sharing = new Set(findMyShareList(user));
+  const following = Array.isArray(user.following) ? user.following.map(String) : [];
+  const followers = Object.values(store.users)
+    .filter((member) => Array.isArray(member.following) && member.following.includes(user.id))
+    .map((member) => String(member.id));
+  const ids = new Set([...following, ...followers, ...sharing]);
+  ids.delete(String(user.id));
+  const contacts = [...ids]
+    .slice(0, 80)
+    .map((id) => {
+      const peer = store.users[id] || {};
+      return {
+        id,
+        displayName: text(peer.displayName, 80) || text(peer.username, 80) || 'Clearwater member',
+        username: text(peer.username, 80) || 'member',
+        avatarUrl: peer.avatarUrl || null,
+        sharing: sharing.has(id),
+        sharesWithYou: findMyShareList(peer).includes(String(user.id)),
+      };
+    })
+    .sort((left, right) => String(left.displayName).localeCompare(String(right.displayName)));
+  return { contacts };
+}
+
+export function setFindMyShare(store, { actor, targetId, username, enabled }) {
+  const user = upsertInternetUser(store, actor);
+  assertNotBanned(user);
+  const target = findInternetMember(store, { id: targetId, username });
+  if (!target) throw new Error('That member has not joined Clearwater Internet yet');
+  if (String(target.id) === String(user.id)) throw new Error('You already have your own location');
+  const next = new Set(findMyShareList(user));
+  if (enabled) next.add(String(target.id));
+  else next.delete(String(target.id));
+  user.findMyShareWith = [...next];
+  return findMyDirectory(store, actor);
+}
+
+export function findMyShareTargets(store, actor) {
+  const user = upsertInternetUser(store, actor);
+  return findMyShareList(user);
+}
+
+export function membersSharingWith(store, viewerId) {
+  const id = String(viewerId || '');
+  return Object.values(store.users).filter((member) => findMyShareList(member).includes(id));
+}
+
 function publicBookmarkCollections(user) {
   const collections = Array.isArray(user?.bookmarkCollections) ? user.bookmarkCollections : [];
   return collections.slice(0, 30).map((item) => ({

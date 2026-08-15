@@ -746,6 +746,18 @@ export default async function handler(request, response) {
       };
     } else if (body.action === 'erlc-location') {
       payload = { action: 'erlc-location', actor: { id: user.id, username: user.username, displayName: user.displayName } };
+    } else if (body.action === 'erlc-phone-map') {
+      payload = { action: 'erlc-phone-map', actor: { id: user.id, username: user.username, displayName: user.displayName } };
+    } else if (body.action === 'findmy') {
+      payload = { action: 'findmy', actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user) } };
+    } else if (body.action === 'findmy-share') {
+      payload = {
+        action: 'findmy-share',
+        targetId: String(body.targetId || ''),
+        username: String(body.username || '').slice(0, 80),
+        enabled: body.enabled === true,
+        actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user) },
+      };
     } else if (body.action === 'moderation') {
       if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
       payload = { action: 'moderation', staffPanel, owner: staffPanel === 'full', actor: staffActor(user, access) };

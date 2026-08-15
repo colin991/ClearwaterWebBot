@@ -1,32 +1,23 @@
 (() => {
   const SITE = 'https://cwrpvc.lol';
   const VERSION_URL = SITE + '/downloads/clearwater-phone-version.json';
-  const WEB = {
-    wallet: '/internet/wallet',
-    marketplace: '/internet/marketplace',
-    messages: '/internet/messages',
-    findmy: '/internet',
-    maps: '/internet',
-    settings: '/internet/phone'
-  };
+  const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
-  const settings = {
-    openAppsOnWeb: false,
-    showWebButtons: true,
-    autoUpdate: true
-  };
-
-  let appVersion = '1.1.0';
+  const settings = { autoUpdate: true };
+  let appVersion = '1.2.0';
   let latestInfo = null;
   let updateInFlight = false;
+  let sessionUser = null;
+  let walletMode = 'send';
+  let walletData = null;
+  let mapState = { me: null, places: [], dest: null, friends: [] };
+  let openThread = null;
 
   function loadSettings() {
     try {
       const raw = localStorage.getItem('cw.phone.settings');
       if (!raw) return;
       const parsed = JSON.parse(raw);
-      if (typeof parsed.openAppsOnWeb === 'boolean') settings.openAppsOnWeb = parsed.openAppsOnWeb;
-      if (typeof parsed.showWebButtons === 'boolean') settings.showWebButtons = parsed.showWebButtons;
       if (typeof parsed.autoUpdate === 'boolean') settings.autoUpdate = parsed.autoUpdate;
     } catch {}
   }
@@ -35,33 +26,50 @@
     localStorage.setItem('cw.phone.settings', JSON.stringify(settings));
   }
 
-  function openWeb(path) {
-    const href = SITE + path;
-    if (window.anchorPhone?.openUrl) return window.anchorPhone.openUrl(href);
-    window.open(href, '_blank', 'noopener');
-  }
-
-  function compareVersions(a, b) {
-    const pa = String(a || '0').split('.').map((n) => parseInt(n, 10) || 0);
-    const pb = String(b || '0').split('.').map((n) => parseInt(n, 10) || 0);
-    const len = Math.max(pa.length, pb.length);
-    for (let i = 0; i < len; i += 1) {
-      const x = pa[i] || 0;
-      const y = pb[i] || 0;
-      if (x < y) return -1;
-      if (x > y) return 1;
-    }
-    return 0;
-  }
-
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function formatMoney(n) {
+    return `C$${Number(n || 0).toLocaleString('en-US')}`;
+  }
+
+  function timeAgo(value) {
+    const then = new Date(value).getTime();
+    if (!Number.isFinite(then)) return '';
+    const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
+    if (mins < 1) return 'now';
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.round(mins / 60);
+    if (hours < 24) return `${hours}h`;
+    return `${Math.round(hours / 24)}d`;
+  }
+
+  function signedIn() {
+    return sessionUser?.authenticated === true;
+  }
+
+  async function api(action, extra = {}) {
+    if (!window.anchorPhone?.api) return { ok: false, status: 0, body: { error: 'Phone API unavailable' } };
+    return window.anchorPhone.api({ action, ...extra });
+  }
+
+  function needSignIn(el, copy) {
+    if (!el) return;
+    el.innerHTML = `<li class="cw-app-empty"><p class="item-sub">${escapeHtml(copy || 'Sign in with Discord in Settings.')}</p></li>`;
+  }
 
   function tick() {
     const el = $('#status-time');
     if (!el) return;
-    const d = new Date();
-    el.textContent = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    el.textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
   tick();
   setInterval(tick, 15000);
@@ -78,34 +86,21 @@
     const home = $('#view-home');
     if (home) home.hidden = id !== 'home';
     if (id === 'settings') renderSettings();
+    if (id === 'wallet') void loadWallet();
+    if (id === 'messages') {
+      openThread = null;
+      showInbox();
+      void loadMessages();
+    }
+    if (id === 'maps') void loadMap('maps');
+    if (id === 'findmy') void loadMap('findmy');
   }
 
   $$('[data-open]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const key = btn.dataset.open;
-      if (settings.openAppsOnWeb && WEB[key] && key !== 'settings') {
-        openWeb(WEB[key]);
-        return;
-      }
-      showView(key);
-    });
+    btn.addEventListener('click', () => showView(btn.dataset.open));
   });
-
   $$('[data-home]').forEach((btn) => {
     btn.addEventListener('click', () => showView('home'));
-  });
-
-  function syncWebButtons() {
-    document.body.classList.toggle('hide-open-web', !settings.showWebButtons);
-  }
-
-  $$('[data-web]').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const key = btn.dataset.web;
-      const path = WEB[key];
-      if (path) openWeb(path);
-    });
   });
 
   function setToggle(el, on) {
@@ -114,10 +109,25 @@
     el.setAttribute('aria-pressed', on ? 'true' : 'false');
   }
 
+  function renderAccount() {
+    const status = $('#account-status');
+    const login = $('#account-login');
+    const logout = $('#account-logout');
+    const user = sessionUser?.user || sessionUser;
+    if (sessionUser?.authenticated && user?.displayName) {
+      if (status) status.textContent = `Signed in as ${user.displayName}`;
+      if (login) login.hidden = true;
+      if (logout) logout.hidden = false;
+    } else {
+      if (status) status.textContent = 'Not signed in';
+      if (login) login.hidden = false;
+      if (logout) logout.hidden = true;
+    }
+  }
+
   function renderSettings() {
-    setToggle($('#setting-open-web'), settings.openAppsOnWeb);
-    setToggle($('#setting-show-web-btn'), settings.showWebButtons);
     setToggle($('#setting-auto-update'), settings.autoUpdate);
+    renderAccount();
     const label = $('#settings-version-label');
     if (!label) return;
     if (latestInfo && compareVersions(appVersion, latestInfo.version) < 0) {
@@ -131,15 +141,402 @@
     }
   }
 
-  function bindToggle(id, key) {
-    const el = $(id);
-    if (!el) return;
-    el.addEventListener('click', () => {
-      settings[key] = !settings[key];
-      saveSettings();
-      setToggle(el, settings[key]);
-      if (key === 'showWebButtons') syncWebButtons();
+  $('#setting-auto-update')?.addEventListener('click', () => {
+    settings.autoUpdate = !settings.autoUpdate;
+    saveSettings();
+    setToggle($('#setting-auto-update'), settings.autoUpdate);
+  });
+
+  $('#account-login')?.addEventListener('click', async () => {
+    await window.anchorPhone?.login?.();
+    const status = $('#account-status');
+    if (status) status.textContent = 'Finish signing in in the window that opened, then return here.';
+    window.setTimeout(() => void refreshSession(), 2500);
+  });
+
+  $('#account-logout')?.addEventListener('click', async () => {
+    await window.anchorPhone?.logout?.();
+    sessionUser = null;
+    renderAccount();
+  });
+
+  async function refreshSession() {
+    try {
+      sessionUser = (await window.anchorPhone?.session?.()) || { authenticated: false };
+    } catch {
+      sessionUser = { authenticated: false };
+    }
+    renderAccount();
+    return sessionUser;
+  }
+
+  function compareVersions(a, b) {
+    const pa = String(a || '0').split('.').map((n) => parseInt(n, 10) || 0);
+    const pb = String(b || '0').split('.').map((n) => parseInt(n, 10) || 0);
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i += 1) {
+      const x = pa[i] || 0;
+      const y = pb[i] || 0;
+      if (x < y) return -1;
+      if (x > y) return 1;
+    }
+    return 0;
+  }
+
+  function renderWallet(wallet) {
+    walletData = wallet || null;
+    const bal = $('#wallet-balance');
+    const note = $('#wallet-note-line');
+    if (bal) bal.textContent = wallet ? formatMoney(wallet.balance) : 'C$—';
+    if (note) note.textContent = wallet ? 'Synced with Clearwater Internet' : 'Sign in to load your wallet';
+    const pending = $('#wallet-pending');
+    const list = $('#wallet-txns');
+    if (pending) {
+      const items = wallet?.pendingTransfers || [];
+      pending.innerHTML = items.length
+        ? items.map((t) => {
+          const mine = t.actionable;
+          return `<li>
+            <div class="avatar">$</div>
+            <div><p class="item-title">${escapeHtml(t.type === 'request' ? 'Request' : 'Send')} · ${formatMoney(t.amount)}</p><p class="item-sub">${escapeHtml(t.note || 'Pending')}</p></div>
+            ${mine ? `<button type="button" class="btn-ghost" data-transfer="${escapeHtml(t.id)}" data-decision="accept">Accept</button>` : ''}
+          </li>`;
+        }).join('')
+        : '<li><p class="item-sub">No pending transfers.</p></li>';
+      pending.querySelectorAll('[data-transfer]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const result = await api('wallet-transfer-respond', { transferId: btn.dataset.transfer, decision: btn.dataset.decision });
+          if (result.ok && result.body?.wallet) renderWallet(result.body.wallet);
+          else void loadWallet();
+        });
+      });
+    }
+    if (list) {
+      const txns = wallet?.transactions || [];
+      list.innerHTML = txns.length
+        ? txns.map((t) => {
+          const amt = Number(t.amount || 0);
+          const dir = amt >= 0 ? 'in' : 'out';
+          return `<li>
+            <div class="avatar">${escapeHtml(String(t.type || 'C').slice(0, 1).toUpperCase())}</div>
+            <div><p class="item-title">${escapeHtml(t.note || t.type || 'Transaction')}</p><p class="item-sub">${escapeHtml(timeAgo(t.createdAt))}</p></div>
+            <span class="amt ${dir}">${amt >= 0 ? '+' : '−'}${formatMoney(Math.abs(amt))}</span>
+          </li>`;
+        }).join('')
+        : '<li><p class="item-sub">No transactions yet.</p></li>';
+    }
+  }
+
+  async function loadWallet() {
+    if (!signedIn()) {
+      renderWallet(null);
+      return;
+    }
+    const result = await api('wallet');
+    if (!result.ok) {
+      const note = $('#wallet-note-line');
+      if (note) note.textContent = result.body?.error || 'Could not load wallet.';
+      return;
+    }
+    renderWallet(result.body.wallet);
+  }
+
+  $$('[data-wallet-action]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      walletMode = btn.dataset.walletAction;
+      $$('[data-wallet-action]').forEach((b) => b.classList.toggle('is-active', b === btn));
+      const panel = $('#wallet-panel');
+      if (panel) panel.hidden = false;
+      $('#wallet-submit').textContent = walletMode === 'request' ? 'Send request' : 'Send funds';
+      $('#wallet-status').hidden = true;
     });
+  });
+
+  $('#wallet-submit')?.addEventListener('click', async () => {
+    const status = $('#wallet-status');
+    const member = $('#wallet-member').value.trim().replace(/^@/, '');
+    const amount = Math.floor(Number($('#wallet-amount').value));
+    const note = $('#wallet-note').value.trim();
+    if (!member || !amount || amount < 1) {
+      status.hidden = false;
+      status.textContent = 'Enter a member and amount.';
+      return;
+    }
+    status.hidden = false;
+    status.textContent = 'Sending…';
+    const result = await api('wallet-transfer', {
+      type: walletMode === 'request' ? 'request' : 'send',
+      username: member,
+      amount,
+      note,
+    });
+    if (!result.ok) {
+      status.textContent = result.body?.error || 'Could not create this transfer.';
+      return;
+    }
+    status.textContent = walletMode === 'request' ? 'Request sent.' : 'Transfer sent.';
+    if (result.body?.wallet) renderWallet(result.body.wallet);
+    else void loadWallet();
+    $('#wallet-member').value = '';
+    $('#wallet-amount').value = '';
+    $('#wallet-note').value = '';
+  });
+
+  function showInbox() {
+    $('#inbox-pane').hidden = false;
+    $('#thread-pane').hidden = true;
+    const title = $('#messages-title');
+    if (title) title.textContent = 'Messages';
+  }
+
+  function showThread(name) {
+    $('#inbox-pane').hidden = true;
+    $('#thread-pane').hidden = false;
+    const title = $('#messages-title');
+    if (title) title.textContent = name || 'Chat';
+  }
+
+  async function loadMessages() {
+    const list = $('#thread-list');
+    if (!signedIn()) {
+      needSignIn(list);
+      return;
+    }
+    const result = await api('messages');
+    if (!result.ok) {
+      needSignIn(list, result.body?.error || 'Could not load messages.');
+      return;
+    }
+    const items = result.body.conversations || result.body.messages || [];
+    list.innerHTML = items.length
+      ? items.map((m) => `<li data-open-thread="${escapeHtml(m.otherId || '')}" data-thread-name="${escapeHtml(m.otherDisplayName || m.otherUsername || 'Member')}">
+          <div class="avatar">${escapeHtml(String(m.otherDisplayName || 'C').slice(0, 1))}</div>
+          <div style="flex:1"><p class="item-title">${escapeHtml(m.otherDisplayName || 'Member')}</p><p class="item-sub">${escapeHtml(m.content || 'New message')}</p></div>
+          <span class="item-sub">${escapeHtml(timeAgo(m.createdAt))}</span>
+        </li>`).join('')
+      : '<li><p class="item-sub">No messages yet.</p></li>';
+    list.querySelectorAll('[data-open-thread]').forEach((row) => {
+      row.addEventListener('click', () => void openConversation(row.dataset.openThread, row.dataset.threadName));
+    });
+  }
+
+  async function openConversation(id, name) {
+    openThread = { id, name };
+    showThread(name);
+    const log = $('#chat-log');
+    const result = await api('conversation', { withUserId: id });
+    const messages = result.body?.messages || [];
+    log.innerHTML = messages.map((m) => `<li>
+      <div><p class="item-title">${escapeHtml(m.content || (m.gifUrl ? 'GIF' : ''))}</p><p class="item-sub">${escapeHtml(timeAgo(m.createdAt))}</p></div>
+    </li>`).join('') || '<li><p class="item-sub">No messages yet.</p></li>';
+    log.scrollTop = log.scrollHeight;
+  }
+
+  $('#new-message')?.addEventListener('click', () => {
+    if (openThread) {
+      openThread = null;
+      showInbox();
+      return;
+    }
+    const c = $('#msg-composer');
+    if (c) c.hidden = !c.hidden;
+  });
+
+  $('#msg-send')?.addEventListener('click', async () => {
+    const to = $('#msg-to').value.trim().replace(/^@/, '');
+    const content = $('#msg-body').value.trim();
+    if (!to || !content) return;
+    const result = await api('message-send', { username: to, content });
+    if (!result.ok) {
+      window.alert(result.body?.error || 'Could not send.');
+      return;
+    }
+    $('#msg-to').value = '';
+    $('#msg-body').value = '';
+    $('#msg-composer').hidden = true;
+    void loadMessages();
+  });
+
+  $('#chat-send')?.addEventListener('click', async () => {
+    if (!openThread) return;
+    const content = $('#chat-body').value.trim();
+    if (!content) return;
+    const result = await api('message-send', { to: openThread.id, content });
+    if (!result.ok) {
+      window.alert(result.body?.error || 'Could not send.');
+      return;
+    }
+    $('#chat-body').value = '';
+    void openConversation(openThread.id, openThread.name);
+  });
+
+  function renderPins(container, pins) {
+    if (!container) return;
+    container.innerHTML = pins.map((pin) => {
+      if (!pin || !Number.isFinite(Number(pin.left)) || !Number.isFinite(Number(pin.top))) return '';
+      const cls = pin.self ? 'pin self' : pin.dest ? 'pin dest' : 'pin other';
+      return `<span class="${cls}" style="left:${Number(pin.left) * 100}%;top:${Number(pin.top) * 100}%">${escapeHtml(pin.label || '')}</span>`;
+    }).join('');
+  }
+
+  function drawRoute(from, to) {
+    const svg = $('#maps-route');
+    if (!svg || !from || !to) {
+      if (svg) svg.innerHTML = '';
+      return;
+    }
+    const x1 = from.left * 100;
+    const y1 = from.top * 100;
+    const x2 = to.left * 100;
+    const y2 = to.top * 100;
+    svg.innerHTML = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#76adff" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="3 2" />`;
+  }
+
+  function studsBetween(a, b) {
+    const dx = (Number(b.left) - Number(a.left)) * 3120;
+    const dz = (Number(b.top) - Number(a.top)) * 3120;
+    return Math.round(Math.hypot(dx, dz));
+  }
+
+  function applyMapPayload(kind, payload) {
+    mapState.me = payload.me || null;
+    mapState.places = payload.places || [];
+    mapState.friends = payload.friends || [];
+    const list = $('#maps-places');
+    if (list) {
+      list.innerHTML = mapState.places.map((p) => `<option value="${escapeHtml(p.label)}"></option>`).join('');
+    }
+    if (kind === 'maps') {
+      renderPins($('#maps-pins'), [
+        mapState.me ? { ...mapState.me, self: true, label: 'You' } : null,
+        mapState.dest ? { ...mapState.dest, dest: true, label: mapState.dest.label || '★' } : null,
+      ].filter(Boolean));
+      drawRoute(mapState.me, mapState.dest);
+      const status = $('#route-status');
+      if (!payload.me) {
+        status.hidden = false;
+        status.textContent = 'Join the Clearwater ER:LC server to place yourself on the map.';
+      }
+    }
+    if (kind === 'findmy') {
+      renderPins($('#findmy-pins'), [
+        payload.me ? { ...payload.me, self: true, label: 'You' } : null,
+        ...(payload.friends || []).filter((f) => f.location).map((f) => ({ ...f.location, label: f.displayName })),
+      ].filter(Boolean));
+      const people = $('#findmy-list');
+      const contacts = payload.contacts || [];
+      people.innerHTML = contacts.length
+        ? contacts.map((c) => {
+          const friend = (payload.friends || []).find((f) => f.id === c.id);
+          const loc = friend?.location?.label || (c.sharesWithYou ? 'Online location hidden until they join' : 'Not sharing with you');
+          return `<li>
+            <div class="avatar">${escapeHtml(String(c.displayName || 'C').slice(0, 1))}</div>
+            <div><p class="item-title">${escapeHtml(c.displayName)}</p><p class="item-sub">${escapeHtml(loc)}</p></div>
+            <button type="button" class="toggle ${c.sharing ? 'is-on' : ''}" data-findmy-id="${escapeHtml(c.id)}" aria-label="Share with ${escapeHtml(c.displayName)}"></button>
+          </li>`;
+        }).join('')
+        : '<li><p class="item-sub">Follow friends on Internet to share locations.</p></li>';
+      people.querySelectorAll('[data-findmy-id]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const on = !btn.classList.contains('is-on');
+          await api('findmy-share', { targetId: btn.dataset.findmyId, enabled: on });
+          void loadMap('findmy');
+        });
+      });
+      const status = $('#findmy-status');
+      if (status) {
+        status.hidden = false;
+        status.textContent = payload.me
+          ? `You are in-game${payload.me.label ? ` · ${payload.me.label}` : ''}.`
+          : 'Join the Clearwater ER:LC server to appear on Find My.';
+      }
+    }
+  }
+
+  async function loadMap(kind) {
+    if (!signedIn()) {
+      const status = $(kind === 'findmy' ? '#findmy-status' : '#route-status');
+      if (status) {
+        status.hidden = false;
+        status.textContent = 'Sign in with Discord in Settings.';
+      }
+      return;
+    }
+    const result = await api('erlc-phone-map');
+    if (!result.ok) {
+      const status = $(kind === 'findmy' ? '#findmy-status' : '#route-status');
+      if (status) {
+        status.hidden = false;
+        status.textContent = result.body?.error || 'Could not load the map.';
+      }
+      return;
+    }
+    applyMapPayload(kind, result.body || {});
+  }
+
+  $('#maps-map')?.addEventListener('click', (event) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    const left = (event.clientX - box.left) / box.width;
+    const top = (event.clientY - box.top) / box.height;
+    mapState.dest = { left, top, label: 'Dropped pin' };
+    $('#maps-dest').value = 'Dropped pin';
+    renderPins($('#maps-pins'), [
+      mapState.me ? { ...mapState.me, self: true, label: 'You' } : null,
+      { ...mapState.dest, dest: true, label: '★' },
+    ].filter(Boolean));
+    drawRoute(mapState.me, mapState.dest);
+  });
+
+  $('#maps-go')?.addEventListener('click', () => {
+    const query = $('#maps-dest').value.trim();
+    const place = mapState.places.find((p) => String(p.label).toLowerCase() === query.toLowerCase());
+    if (place) mapState.dest = place;
+    const status = $('#route-status');
+    status.hidden = false;
+    if (!mapState.me) {
+      status.textContent = 'Join the server so Maps can see where you are.';
+      return;
+    }
+    if (!mapState.dest) {
+      status.textContent = 'Tap the map or pick a destination.';
+      return;
+    }
+    drawRoute(mapState.me, mapState.dest);
+    renderPins($('#maps-pins'), [
+      { ...mapState.me, self: true, label: 'You' },
+      { ...mapState.dest, dest: true, label: mapState.dest.label || '★' },
+    ]);
+    const dist = studsBetween(mapState.me, mapState.dest);
+    status.textContent = `Route to ${mapState.dest.label || 'pin'} · about ${dist} studs from your in-game position.`;
+  });
+
+  $$('.liberty-map').forEach((img) => {
+    img.src = MAP_IMG;
+  });
+
+  const dragEl = $('[data-drag]');
+  let dragging = false;
+  let lastX = 0;
+  let lastY = 0;
+  if (dragEl) {
+    dragEl.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      dragging = true;
+      lastX = e.screenX;
+      lastY = e.screenY;
+      dragEl.setPointerCapture?.(e.pointerId);
+    });
+    dragEl.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const dx = e.screenX - lastX;
+      const dy = e.screenY - lastY;
+      lastX = e.screenX;
+      lastY = e.screenY;
+      window.anchorPhone?.drag?.(dx, dy);
+    });
+    const end = () => { dragging = false; };
+    dragEl.addEventListener('pointerup', end);
+    dragEl.addEventListener('pointercancel', end);
   }
 
   async function installUpdate() {
@@ -154,14 +551,12 @@
     if (bannerCopy) bannerCopy.textContent = 'Downloading update…';
     try {
       if (!window.anchorPhone?.installUpdate) {
-        openWeb('/internet/phone');
         updateInFlight = false;
         return;
       }
       const result = await window.anchorPhone.installUpdate(latestInfo.downloadUrl);
       if (!result?.ok) {
         if (status) status.textContent = result?.error || 'Update failed.';
-        if (bannerCopy) bannerCopy.textContent = 'Update failed — try again';
         updateInFlight = false;
       }
     } catch {
@@ -176,8 +571,6 @@
     const copy = $('#update-copy');
     if (banner) banner.hidden = false;
     if (copy) copy.textContent = `Outdated version · v${appVersion} → v${info.version}`;
-    const updateBtn = $('#settings-update-now');
-    if (updateBtn) updateBtn.hidden = false;
     renderSettings();
     if (settings.autoUpdate) void installUpdate();
   }
@@ -214,351 +607,26 @@
     }
   }
 
-  const dragEl = $('[data-drag]');
-  let dragging = false;
-  let lastX = 0;
-  let lastY = 0;
-
-  if (dragEl) {
-    dragEl.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0) return;
-      dragging = true;
-      lastX = e.screenX;
-      lastY = e.screenY;
-      dragEl.setPointerCapture?.(e.pointerId);
-    });
-    dragEl.addEventListener('pointermove', (e) => {
-      if (!dragging) return;
-      const dx = e.screenX - lastX;
-      const dy = e.screenY - lastY;
-      lastX = e.screenX;
-      lastY = e.screenY;
-      window.anchorPhone?.drag?.(dx, dy);
-    });
-    const end = () => {
-      dragging = false;
-    };
-    dragEl.addEventListener('pointerup', end);
-    dragEl.addEventListener('pointercancel', end);
-  }
-
-  const store = {
-    load(key, fallback) {
-      try {
-        const raw = localStorage.getItem(`anchor.${key}`);
-        return raw ? JSON.parse(raw) : fallback;
-      } catch {
-        return fallback;
-      }
-    },
-    save(key, value) {
-      localStorage.setItem(`anchor.${key}`, JSON.stringify(value));
-    }
-  };
-
-  let balance = store.load('balance', 12450);
-  let txns = store.load('txns', [
-    { title: 'Received from Maya', sub: 'Today · Request paid', amt: 500, dir: 'in' },
-    { title: 'Sent to Panel Bank', sub: 'Yesterday', amt: 1200, dir: 'out' },
-    { title: 'Marketplace payout', sub: 'Gulf Coast Customs', amt: 840, dir: 'in' }
-  ]);
-  let walletMode = null;
-
-  function formatMoney(n) {
-    return `C$${Number(n).toLocaleString('en-US')}`;
-  }
-
-  function renderWallet() {
-    const bal = $('#wallet-balance');
-    if (bal) bal.textContent = formatMoney(balance);
-    const list = $('#wallet-txns');
-    if (!list) return;
-    list.innerHTML = txns
-      .map(
-        (t) => `<li>
-        <div class="avatar">${t.title.slice(0, 1)}</div>
-        <div><p class="item-title">${escapeHtml(t.title)}</p><p class="item-sub">${escapeHtml(t.sub)}</p></div>
-        <span class="amt ${t.dir}">${t.dir === 'in' ? '+' : '−'}${formatMoney(t.amt)}</span>
-      </li>`
-      )
-      .join('');
-  }
-
-  $$('[data-wallet-action]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      walletMode = btn.dataset.walletAction;
-      $$('[data-wallet-action]').forEach((b) => b.classList.toggle('is-active', b === btn));
-      const panel = $('#wallet-panel');
-      if (!panel) return;
-      panel.hidden = false;
-      $('#wallet-submit').textContent =
-        walletMode === 'send' ? 'Send funds' : walletMode === 'request' ? 'Send request' : 'Show receive code';
-      $('#wallet-note-field').hidden = walletMode === 'receive';
-      $('#wallet-member').parentElement.hidden = walletMode === 'receive';
-      $('#wallet-amount').parentElement.hidden = walletMode === 'receive';
-      $('#wallet-status').hidden = true;
-      if (walletMode === 'receive') {
-        $('#wallet-status').hidden = false;
-        $('#wallet-status').textContent = 'Your receive tag: @you · share with panel members';
-      }
-    });
-  });
-
-  $('#wallet-submit')?.addEventListener('click', () => {
-    const status = $('#wallet-status');
-    if (walletMode === 'receive') {
-      status.hidden = false;
-      status.textContent = 'Share @you or your Discord ID to receive funds.';
-      return;
-    }
-    const member = $('#wallet-member').value.trim();
-    const amount = Math.floor(Number($('#wallet-amount').value));
-    const note = $('#wallet-note').value.trim();
-    if (!member || !amount || amount < 1) {
-      status.hidden = false;
-      status.textContent = 'Enter a member and amount.';
-      return;
-    }
-    if (walletMode === 'send') {
-      if (amount > balance) {
-        status.hidden = false;
-        status.textContent = 'Insufficient balance.';
-        return;
-      }
-      balance -= amount;
-      txns.unshift({ title: `Sent to ${member}`, sub: note || 'Just now', amt: amount, dir: 'out' });
-      status.textContent = `Sent ${formatMoney(amount)} to ${member}.`;
-    } else {
-      txns.unshift({ title: `Requested from ${member}`, sub: note || 'Pending', amt: amount, dir: 'in' });
-      status.textContent = `Request for ${formatMoney(amount)} sent to ${member}.`;
-    }
-    store.save('balance', balance);
-    store.save('txns', txns.slice(0, 40));
-    status.hidden = false;
-    renderWallet();
-    $('#wallet-member').value = '';
-    $('#wallet-amount').value = '';
-    $('#wallet-note').value = '';
-  });
-
-  let products = store.load('products', [
-    { name: 'Custom wrap package', price: 2500 },
-    { name: 'Performance tune', price: 1800 },
-    { name: 'Detailing — full', price: 450 }
-  ]);
-  let employees = store.load('employees', [
-    { name: 'Riley Chen', role: 'Manager' },
-    { name: 'Sam Ortiz', role: 'Sales' },
-    { name: 'Casey Brooks', role: 'Tech' }
-  ]);
-  let payouts = store.load('payouts', [
-    { title: 'Riley Chen', sub: 'Weekly share', amt: 620, dir: 'out' },
-    { title: 'Sam Ortiz', sub: 'Commission', amt: 310, dir: 'out' }
-  ]);
-
-  function renderMarket() {
-    const productList = $('#product-list');
-    if (!productList) return;
-    productList.innerHTML = products
-      .map(
-        (p) => `<li>
-        <div class="avatar">▣</div>
-        <div><p class="item-title">${escapeHtml(p.name)}</p><p class="item-sub">Listed · Clearwater storefront</p></div>
-        <span class="price-tag">${formatMoney(p.price)}</span>
-      </li>`
-      )
-      .join('');
-    $('#employee-list').innerHTML = employees
-      .map(
-        (e) => `<li>
-        <div class="avatar">${escapeHtml(e.name.slice(0, 1))}</div>
-        <div><p class="item-title">${escapeHtml(e.name)}</p><p class="item-sub">${escapeHtml(e.role)}</p></div>
-      </li>`
-      )
-      .join('');
-    $('#payout-list').innerHTML = payouts
-      .map(
-        (t) => `<li>
-        <div class="avatar">${escapeHtml(t.title.slice(0, 1))}</div>
-        <div><p class="item-title">${escapeHtml(t.title)}</p><p class="item-sub">${escapeHtml(t.sub)}</p></div>
-        <span class="amt out">−${formatMoney(t.amt)}</span>
-      </li>`
-      )
-      .join('');
-  }
-
-  $$('[data-market-tab]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const tab = btn.dataset.marketTab;
-      $$('[data-market-tab]').forEach((b) => b.classList.toggle('is-active', b === btn));
-      $$('.market-pane').forEach((pane) => {
-        const on = pane.dataset.pane === tab;
-        pane.classList.toggle('is-active', on);
-        pane.hidden = !on;
-      });
-    });
-  });
-
-  $('#add-product')?.addEventListener('click', () => {
-    const name = window.prompt('Product name');
-    if (!name) return;
-    const price = Math.floor(Number(window.prompt('Price (C$)', '500')));
-    if (!price) return;
-    products.unshift({ name, price });
-    store.save('products', products);
-    renderMarket();
-  });
-
-  $('#add-employee')?.addEventListener('click', () => {
-    const name = window.prompt('Employee name');
-    if (!name) return;
-    const role = window.prompt('Role', 'Staff') || 'Staff';
-    employees.push({ name, role });
-    store.save('employees', employees);
-    renderMarket();
-    const meta = $('.store-meta');
-    if (meta) meta.textContent = `Your storefront · ${employees.length} employees`;
-  });
-
-  $('#store-edit')?.addEventListener('click', () => {
-    const el = $('#store-name');
-    const name = window.prompt('Storefront name', el?.textContent || '');
-    if (!name || !el) return;
-    el.textContent = name;
-    store.save('storeName', name);
-  });
-
-  const savedStore = store.load('storeName', null);
-  if (savedStore && $('#store-name')) $('#store-name').textContent = savedStore;
-
-  let contacts = store.load('findmy', [
-    { name: 'Alex Rivera', sharing: true },
-    { name: 'Jordan Lee', sharing: true },
-    { name: 'Morgan Blake', sharing: false },
-    { name: 'Taylor Quinn', sharing: false }
-  ]);
-
-  function renderFindMy() {
-    const list = $('#findmy-list');
-    if (!list) return;
-    list.innerHTML = contacts
-      .map(
-        (c, i) => `<li>
-        <div class="avatar">${escapeHtml(c.name.slice(0, 1))}</div>
-        <div><p class="item-title">${escapeHtml(c.name)}</p><p class="item-sub">${c.sharing ? 'Sharing location' : 'Hidden'}</p></div>
-        <button type="button" class="toggle ${c.sharing ? 'is-on' : ''}" data-findmy-toggle="${i}" aria-label="Toggle sharing for ${escapeHtml(c.name)}"></button>
-      </li>`
-      )
-      .join('');
-    $$('[data-findmy-toggle]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const i = Number(btn.dataset.findmyToggle);
-        contacts[i].sharing = !contacts[i].sharing;
-        store.save('findmy', contacts);
-        renderFindMy();
-      });
-    });
-  }
-
-  let threads = store.load('threads', [
-    { name: 'Alex Rivera', last: 'On my way to the pier.', when: 'now' },
-    { name: 'Marketplace Bot', last: 'Order #482 confirmed.', when: '12m' },
-    { name: 'Jordan Lee', last: 'Location shared ✓', when: '1h' }
-  ]);
-
-  function renderThreads() {
-    const list = $('#thread-list');
-    if (!list) return;
-    list.innerHTML = threads
-      .map(
-        (t) => `<li>
-        <div class="avatar">${escapeHtml(t.name.slice(0, 1))}</div>
-        <div style="flex:1"><p class="item-title">${escapeHtml(t.name)}</p><p class="item-sub">${escapeHtml(t.last)}</p></div>
-        <span class="item-sub">${escapeHtml(t.when)}</span>
-      </li>`
-      )
-      .join('');
-  }
-
-  $('#new-message')?.addEventListener('click', () => {
-    const c = $('#msg-composer');
-    if (c) c.hidden = !c.hidden;
-  });
-
-  $('#msg-send')?.addEventListener('click', () => {
-    const to = $('#msg-to').value.trim();
-    const body = $('#msg-body').value.trim();
-    if (!to || !body) return;
-    threads.unshift({ name: to, last: body, when: 'now' });
-    store.save('threads', threads);
-    $('#msg-to').value = '';
-    $('#msg-body').value = '';
-    $('#msg-composer').hidden = true;
-    renderThreads();
-  });
-
-  $('#maps-go')?.addEventListener('click', () => {
-    const dest = $('#maps-dest').value.trim() || 'destination';
-    const el = $('#route-status');
-    el.hidden = false;
-    el.textContent = `Routing to ${dest}… Fastest path · ~4 min drive`;
-    const pathEl = $('.route-line path');
-    if (pathEl) {
-      pathEl.style.animation = 'none';
-      void pathEl.offsetWidth;
-      pathEl.style.animation = '';
-    }
-  });
-
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  loadSettings();
-  syncWebButtons();
-  bindToggle('#setting-open-web', 'openAppsOnWeb');
-  bindToggle('#setting-show-web-btn', 'showWebButtons');
-  bindToggle('#setting-auto-update', 'autoUpdate');
-
-  $('#settings-check-update')?.addEventListener('click', () => {
-    void checkForUpdates(true);
-  });
-  $('#settings-update-now')?.addEventListener('click', () => {
-    void installUpdate();
-  });
-  $('#update-now')?.addEventListener('click', () => {
-    void installUpdate();
-  });
-
+  $('#settings-check-update')?.addEventListener('click', () => void checkForUpdates(true));
+  $('#settings-update-now')?.addEventListener('click', () => void installUpdate());
+  $('#update-now')?.addEventListener('click', () => void installUpdate());
   window.anchorPhone?.onUpdateProgress?.((pct) => {
     const status = $('#settings-update-status');
-    const copy = $('#update-copy');
-    const msg = `Downloading update… ${pct}%`;
     if (status) {
       status.hidden = false;
-      status.textContent = msg;
+      status.textContent = `Downloading update… ${pct}%`;
     }
-    if (copy) copy.textContent = msg;
   });
 
+  loadSettings();
   void (async () => {
     try {
       const info = await window.anchorPhone?.getVersion?.();
       if (info?.version) appVersion = info.version;
     } catch {}
+    await refreshSession();
     renderSettings();
     await checkForUpdates(false);
+    window.setInterval(() => void refreshSession(), 8000);
   })();
-
-  renderWallet();
-  renderMarket();
-  renderFindMy();
-  renderThreads();
-
-  window.openWeb = openWeb;
-  window.ClearwaterPhone = { SITE, WEB, openWeb, showView, checkForUpdates, settings };
 })();

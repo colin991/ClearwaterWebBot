@@ -4,11 +4,11 @@ import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { memberHasSiteAccess } from '../lib/site-access.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess, isDeveloperAccount, LIMITED_STAFF_FORBIDDEN_ACTIONS } from './staffRanks.js';
-import { dropLocationNameCandidates, fetchErlcPlayersOnMap, findPlayerDropLocation, playersOnLibertyMap, runErlcModeration, runErlcRawCommand } from './erlc.js';
+import { dropLocationNameCandidates, fetchErlcPlayersOnMap, fetchErlcServer, findPlayerDropLocation, parseErlcPlayer, playersOnLibertyMap, runErlcModeration, runErlcRawCommand } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
 import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
-import { AutomodHoldError, adjustInternetCredits, addBusinessMember, applyStaffSiteAction, applyStaffUserAction, assertBusinessAccess, assertLimitedStaffBanQuota, banKnownInternetIps, businessActorFromAccount, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listInternetAdsForUser, listMyBusinessAccounts, manageInternetAd, moderationSnapshot, myVerificationApplication, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, purchasePostBoost, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, removeBusinessMember, respondCreditTransfer, reviewBusinessApplication, reviewInternetAd, reviewInternetReport, reviewVerificationApplication, revertInternetHistory, saveInternetStore, searchStaffUsers, sendInternetMessage, serveInternetAds, setBusinessMemberRole, setDiscordInternetNotify, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserConversation, staffUserDetail, staffUserMessages, submitBusinessApplication, submitVerificationApplication, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateBusinessProfile, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
+import { AutomodHoldError, adjustInternetCredits, addBusinessMember, applyStaffSiteAction, applyStaffUserAction, assertBusinessAccess, assertLimitedStaffBanQuota, banKnownInternetIps, businessActorFromAccount, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, findMyDirectory, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listInternetAdsForUser, listMyBusinessAccounts, manageInternetAd, membersSharingWith, moderationSnapshot, myVerificationApplication, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, purchasePostBoost, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, removeBusinessMember, respondCreditTransfer, reviewBusinessApplication, reviewInternetAd, reviewInternetReport, reviewVerificationApplication, revertInternetHistory, saveInternetStore, searchStaffUsers, sendInternetMessage, serveInternetAds, setBusinessMemberRole, setDiscordInternetNotify, setFindMyShare, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserConversation, staffUserDetail, staffUserMessages, submitBusinessApplication, submitVerificationApplication, takeInternetConversation, takeInternetMessages, takeInternetNotifications, takeUnreadInternetWarnings, touchInternetUser, updateBusinessProfile, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
 import { createDiscordInternetNotifier } from './discordInternetNotify.js';
 import { createInternetFeedController, shouldAnnounceInteractResult } from './discordInternetFeed.js';
 import { markInternetPresence } from './internetPresence.js';
@@ -196,6 +196,56 @@ async function discordDropUsernames(client, actor) {
     actor?.username,
     actor?.displayName,
   );
+}
+
+function pinFromParsedPlayer(player) {
+  if (!player) return null;
+  const mapped = playersOnLibertyMap([player])[0];
+  if (!mapped) return null;
+  return {
+    username: mapped.username,
+    team: mapped.team,
+    postal: mapped.postal,
+    street: mapped.street,
+    building: mapped.building,
+    label: mapped.label,
+    left: mapped.left,
+    top: mapped.top,
+  };
+}
+
+function matchParsedPlayer(players, { robloxId, usernames = [] } = {}) {
+  const id = String(robloxId || '').replace(/[^\d]/g, '');
+  const handles = new Set(dropLocationNameCandidates(...usernames).map((name) => name.toLowerCase()));
+  return players.find((entry) => handles.has(String(entry.username || '').toLowerCase()))
+    || players.find((entry) => id && String(entry.robloxId) === id)
+    || null;
+}
+
+function phonePlacesFromPlayers(players) {
+  const buckets = new Map();
+  for (const player of players) {
+    const pin = pinFromParsedPlayer(player);
+    if (!pin) continue;
+    const key = String(pin.postal || pin.street || pin.label || '').trim().toLowerCase();
+    if (!key) continue;
+    const current = buckets.get(key);
+    if (!current) {
+      buckets.set(key, { label: pin.label, postal: pin.postal, street: pin.street, left: pin.left, top: pin.top, n: 1 });
+    } else {
+      current.left = (current.left * current.n + pin.left) / (current.n + 1);
+      current.top = (current.top * current.n + pin.top) / (current.n + 1);
+      current.n += 1;
+    }
+  }
+  return [...buckets.values()]
+    .map(({ n, ...place }) => ({
+      ...place,
+      left: Number(place.left.toFixed(5)),
+      top: Number(place.top.toFixed(5)),
+    }))
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)))
+    .slice(0, 80);
 }
 
 export function startStatusServer(client, config) {
@@ -658,6 +708,75 @@ export function startStatusServer(client, config) {
             return json(response, 200, { location });
           } catch (error) {
             return json(response, 502, { error: error.message || 'Could not read your in-game location.' });
+          }
+        }
+
+        if (body.action === 'findmy') {
+          return json(response, 200, findMyDirectory(store, body.actor));
+        }
+
+        if (body.action === 'findmy-share') {
+          const result = setFindMyShare(store, {
+            actor: body.actor,
+            targetId: body.targetId,
+            username: body.username,
+            enabled: body.enabled === true,
+          });
+          await saveInternetStore(store);
+          return json(response, 200, result);
+        }
+
+        if (body.action === 'erlc-phone-map') {
+          if (!config.erlcServerKey) return json(response, 503, { error: 'ER:LC is not configured on the bot host yet.' });
+          const directory = findMyDirectory(store, body.actor);
+          const cache = await getIdentityCache();
+          let myIdentity = cache.byDiscord?.[String(body.actor?.id || '')] || null;
+          if (!myIdentity?.robloxId && config.melonlyApiKey) {
+            try {
+              myIdentity = await findRobloxIdentity(body.actor.id, config.melonlyApiKey);
+              if (myIdentity?.robloxId) await rememberIdentity(myIdentity);
+            } catch (error) {
+              logger.warn(`Melonly lookup failed for phone map: ${safeMelonlyError(error)}`);
+            }
+          }
+          try {
+            const server = await fetchErlcServer(config.erlcServerKey);
+            const players = (server.Players || server.players || []).map(parseErlcPlayer);
+            const myNames = await discordDropUsernames(client, body.actor);
+            const mePlayer = matchParsedPlayer(players, {
+              robloxId: myIdentity?.robloxId,
+              usernames: [...myNames, myIdentity?.robloxUsername].filter(Boolean),
+            });
+            const me = pinFromParsedPlayer(mePlayer);
+            const sharingMembers = membersSharingWith(store, body.actor?.id);
+            const friends = [];
+            for (const member of sharingMembers) {
+              if (String(member.id) === String(body.actor?.id)) continue;
+              const identity = cache.byDiscord?.[String(member.id)] || null;
+              const names = dropLocationNameCandidates(member.username, member.displayName, member.discordUsername, identity?.robloxUsername);
+              const player = matchParsedPlayer(players, { robloxId: identity?.robloxId, usernames: names });
+              const pin = pinFromParsedPlayer(player);
+              friends.push({
+                id: member.id,
+                displayName: member.displayName || member.username || 'Clearwater member',
+                username: member.username || 'member',
+                avatarUrl: member.avatarUrl || null,
+                online: Boolean(pin),
+                location: pin,
+              });
+            }
+            return json(response, 200, {
+              me,
+              online: Boolean(me),
+              friends,
+              places: phonePlacesFromPlayers(players),
+              contacts: directory.contacts,
+              currentPlayers: Number.isInteger(server.CurrentPlayers) ? server.CurrentPlayers : players.length,
+              updatedAt: new Date().toISOString(),
+            });
+          } catch (error) {
+            logger.warn(`Phone ER:LC map failed: ${error?.message || error}`);
+            return json(response, 502, { error: error.message || 'Could not load the in-game map.' });
           }
         }
 
