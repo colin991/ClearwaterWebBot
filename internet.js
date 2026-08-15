@@ -243,10 +243,46 @@ siteDialogForm?.addEventListener('submit', (event) => {
   closeSiteDialog(siteDialogMode === 'confirm' ? true : undefined);
 });
 
+function profileUsernameSlug(username = '') {
+  return String(username || '')
+    .trim()
+    .replace(/^@+/, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '')
+    .slice(0, 32);
+}
+
+function looksLikeMemberId(value = '') {
+  return /^(?:\d{16,22}|u1_[a-f0-9]+|biz_[A-Za-z0-9._-]+|pending:[A-Za-z0-9._:-]+)$/i.test(String(value || '').trim());
+}
+
+function findMemberByUsername(username = '') {
+  const needle = profileUsernameSlug(username);
+  if (!needle) return null;
+  return [...internetUsers.values()].find((user) => profileUsernameSlug(user.username) === needle) || null;
+}
+
+function profileSharePath(userOrUsername = '') {
+  const slug = typeof userOrUsername === 'object' && userOrUsername
+    ? profileUsernameSlug(userOrUsername.username)
+    : profileUsernameSlug(userOrUsername);
+  return slug ? `/profiles/${encodeURIComponent(slug)}` : '';
+}
+
+function profileShareUrl(userOrUsername = '') {
+  const path = profileSharePath(userOrUsername);
+  return path ? `${location.origin}${path}` : '';
+}
+
 function internetUrl(view = 'home', id = '') {
   if (view === 'home') return INTERNET_PATH;
   if (view === 'post' && id) return `${INTERNET_PATH}/post/${encodeURIComponent(id)}`;
-  if (view === 'member' && id) return `${INTERNET_PATH}/member/${encodeURIComponent(id)}`;
+  if (view === 'member' && id) {
+    const user = internetUsers.get(id) || findInternetMember(id) || findMemberByUsername(id);
+    const slug = profileUsernameSlug(user?.username || (!looksLikeMemberId(id) ? id : ''));
+    if (slug) return `/profiles/${encodeURIComponent(slug)}`;
+    return `${INTERNET_PATH}/member/${encodeURIComponent(id)}`;
+  }
   if (view === 'sponsored' && id) return `${INTERNET_PATH}/sponsored/${encodeURIComponent(id)}`;
   if (view === 'conversation') return `${INTERNET_PATH}/messages`;
   return `${INTERNET_PATH}/${view}`;
@@ -264,6 +300,10 @@ function readInternetRoute() {
     return { view: hash === 'conversation' ? 'messages' : hash, id: '' };
   }
   const path = currentInternetPath();
+  const profileMatch = path.match(/^\/profiles\/([^/]+)$/i);
+  if (profileMatch) {
+    return { view: 'member', id: decodeURIComponent(profileMatch[1]), byUsername: true };
+  }
   const parts = path.startsWith(`${INTERNET_PATH}/`) ? path.slice(INTERNET_PATH.length + 1).split('/').filter(Boolean) : [];
   if (!parts.length) return { view: 'home', id: '' };
   if (parts[0] === 'post' && parts[1]) return { view: 'post', id: decodeURIComponent(parts[1]) };
@@ -4373,9 +4413,24 @@ function renderSidebarAds(ads = sidebarAds) {
 function findInternetMember(memberId = '', username = '') {
   const id = String(memberId || '').trim();
   if (id && internetUsers.has(id)) return internetUsers.get(id);
-  const handle = String(username || '').replace(/^@/, '').trim().toLowerCase();
-  if (!handle) return null;
-  return [...internetUsers.values()].find((user) => String(user.username || '').toLowerCase() === handle) || null;
+  const byUsername = findMemberByUsername(username || memberId);
+  return byUsername || null;
+}
+
+let pendingProfileUsername = '';
+
+async function copyProfileShareLink(userOrUsername = '') {
+  const url = profileShareUrl(userOrUsername);
+  if (!url) {
+    void siteAlert('This profile does not have a share link yet.');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    void siteAlert('Profile link copied.', 'Link copied');
+  } catch {
+    void siteAlert(`Copy this link: ${url}`);
+  }
 }
 
 function openAdAdvertiserAccount(button) {
@@ -5739,8 +5794,25 @@ async function socialAction(type, { targetId = '', postId = '', enabled = true, 
 }
 
 function openMemberProfile(memberId, updateHash = true) {
-  const user = findInternetMember(memberId) || internetUsers.get(memberId);
-  if (!user) return;
+  const user = findInternetMember(memberId) || internetUsers.get(memberId) || findMemberByUsername(memberId);
+  if (!user) {
+    pendingProfileUsername = profileUsernameSlug(memberId);
+    if (pendingProfileUsername && updateHash) {
+      const path = `/profiles/${encodeURIComponent(pendingProfileUsername)}`;
+      if (currentInternetPath() !== path) history.replaceState({}, '', path);
+    }
+    showView('member');
+    const nameEl = document.querySelector('[data-member-page-name]');
+    const handleEl = document.querySelector('[data-member-page-handle]');
+    const copyEl = document.querySelector('[data-member-page-copy]');
+    const postsEl = document.querySelector('[data-member-page-posts]');
+    if (nameEl) nameEl.textContent = pendingProfileUsername ? 'Loading profile…' : 'Profile not found';
+    if (handleEl) handleEl.textContent = pendingProfileUsername ? `@${pendingProfileUsername}` : '@member';
+    if (copyEl) copyEl.textContent = pendingProfileUsername ? 'Looking up this Clearwater member…' : 'That profile could not be found.';
+    if (postsEl) postsEl.innerHTML = pendingProfileUsername ? '<p>Loading…</p>' : '<p>Profile not found.</p>';
+    return;
+  }
+  pendingProfileUsername = '';
   if (viewedMember?.id !== user.id) {
     memberTab = 'posts';
     if (connectionModalScope === 'member') closeConnectionsModal();
@@ -6031,6 +6103,19 @@ async function loadPosts() {
     const route = readInternetRoute();
     if (route.view === 'post' && route.id) showPostDetail(route.id, false);
     if (route.view === 'member' && route.id) openMemberProfile(route.id, false);
+    else if (pendingProfileUsername) {
+      const pending = findMemberByUsername(pendingProfileUsername);
+      if (pending) openMemberProfile(pending.id, false);
+      else {
+        const nameEl = document.querySelector('[data-member-page-name]');
+        const copyEl = document.querySelector('[data-member-page-copy]');
+        const postsEl = document.querySelector('[data-member-page-posts]');
+        if (nameEl) nameEl.textContent = 'Profile not found';
+        if (copyEl) copyEl.textContent = 'That profile could not be found.';
+        if (postsEl) postsEl.innerHTML = '<p>Profile not found.</p>';
+        pendingProfileUsername = '';
+      }
+    }
     if (!document.querySelector('[data-view="messages"]')?.hidden) void loadMessages();
     if (!document.querySelector('[data-view="conversation"]')?.hidden && viewedMember) void loadConversation(viewedMember);
   } catch {
@@ -7577,6 +7662,22 @@ document.querySelector('[data-member-page-follow]')?.addEventListener('click', a
 });
 document.querySelector('[data-member-page-menu]')?.addEventListener('click', () => { const menu = document.querySelector('[data-member-page-menu-list]'); menu.hidden = !menu.hidden; });
 document.querySelector('[data-mute-member]')?.addEventListener('click', async () => { if (!viewedMember) return; try { await socialAction('mute', { targetId: viewedMember.id, enabled: !socialState.muted.includes(viewedMember.id) }); showView('home'); } catch (error) { void siteAlert(error.message); } });
+document.addEventListener('click', (event) => {
+  const copyProfile = event.target.closest('[data-copy-profile-link]');
+  if (!copyProfile) return;
+  event.preventDefault();
+  const memberPage = !document.querySelector('[data-view="member"]')?.hidden;
+  const ownPage = !document.querySelector('[data-view="profile"]')?.hidden;
+  if (memberPage && viewedMember) {
+    void copyProfileShareLink(viewedMember);
+    document.querySelector('[data-member-page-menu-list]')?.setAttribute('hidden', '');
+    return;
+  }
+  if (ownPage) {
+    const me = internetUsers.get(currentUserId) || sessionUser || activeAuthor();
+    void copyProfileShareLink(me);
+  }
+});
 document.querySelector('[data-block-member]')?.addEventListener('click', async () => { if (!viewedMember) return; try { await socialAction('block', { targetId: viewedMember.id, enabled: !socialState.blocked.includes(viewedMember.id) }); showView('home'); } catch (error) { void siteAlert(error.message); } });
 document.querySelector('[data-report-member]')?.addEventListener('click', () => { void siteAlert('To report a member, open one of their posts and choose Report post.', 'Report member'); });
 document.querySelector('[data-new-message]')?.addEventListener('click', () => { messageModal.hidden = false; renderMessageUserResults(); messageUserSearch?.focus(); });

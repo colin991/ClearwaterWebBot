@@ -14,6 +14,7 @@ function safeNextPath(value = '') {
   if (path === '/' || path === '/internet' || path === '/owner' || path === '/server-management' || path === '/departments') return path;
   if (/^\/internet\/(post|member|sponsored)\/[A-Za-z0-9._-]{1,120}$/.test(path)) return path;
   if (/^\/internet\/(messages|notifications|settings|profile|wallet|staff|sponsored|bookmarks)$/.test(path)) return path;
+  if (/^\/profiles\/[A-Za-z0-9._-]{1,32}$/.test(path)) return path;
   return '';
 }
 
