@@ -6,100 +6,150 @@
     <title>Clearwater Phone</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@450;550;650;750;850&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div class="phone" id="phone">
       <div class="phone-bezel">
+        <div class="bezel-shine" aria-hidden="true"></div>
         <div class="phone-screen">
           <div class="status-bar" data-drag>
             <span class="status-time" id="status-time">9:41</span>
-            <div class="dynamic-island" aria-hidden="true"></div>
+            <div class="dynamic-island" aria-hidden="true">
+              <span class="island-cam"></span>
+            </div>
             <div class="status-meta">
               <span class="signal" aria-hidden="true"></span>
-              <span class="battery" aria-hidden="true"></span>
+              <span class="wifi" aria-hidden="true"></span>
+              <span class="battery" aria-hidden="true"><span class="battery-fill"></span></span>
             </div>
           </div>
 
           <!-- HOME -->
           <section class="view view-home is-active" id="view-home" data-view="home">
             <div class="wallpaper" aria-hidden="true">
-              <div class="wp-mesh"></div>
-              <div class="wp-horizon"></div>
+              <div class="wp-sky"></div>
+              <div class="wp-stars"></div>
+              <div class="wp-aurora"></div>
+              <div class="wp-city"></div>
+              <div class="wp-water"></div>
               <div class="wp-glow wp-glow-a"></div>
               <div class="wp-glow wp-glow-b"></div>
-              <div class="wp-grid"></div>
+              <div class="wp-glow wp-glow-c"></div>
+              <div class="wp-vignette"></div>
               <div class="wp-anchor">
                 <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="60" cy="28" r="10" stroke="currentColor" stroke-width="4"/>
-                  <path d="M60 38V92M60 92C60 92 36 78 36 58M60 92C60 92 84 78 84 58" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-                  <path d="M42 52H78" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+                  <circle cx="60" cy="28" r="11" stroke="currentColor" stroke-width="3.5"/>
+                  <path d="M60 39V94M60 94C60 94 34 79 34 56M60 94C60 94 86 79 86 56" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+                  <path d="M40 52H80" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
                 </svg>
               </div>
             </div>
 
             <header class="home-header">
               <p class="home-brand">Clearwater</p>
-              <p class="home-sub">Roleplay · Panel</p>
+              <p class="home-sub">Internet · Roleplay Panel</p>
             </header>
 
             <div class="app-grid" role="list">
               <button type="button" class="app-tile" data-open="wallet" role="listitem">
                 <span class="app-icon icon-wallet" aria-hidden="true">
-                  <svg viewBox="0 0 64 64" fill="none"><rect x="8" y="16" width="48" height="36" rx="8" fill="url(#gw)"/><path d="M8 28h48" stroke="rgba(3,7,13,.35)" stroke-width="2"/><rect x="36" y="34" width="14" height="10" rx="3" fill="#03070d" opacity=".55"/><circle cx="43" cy="39" r="2.5" fill="#76adff"/><defs><linearGradient id="gw" x1="8" y1="16" x2="56" y2="52"><stop stop-color="#76adff"/><stop offset="1" stop-color="#3a6fd4"/></linearGradient></defs></svg>
+                  <svg viewBox="0 0 64 64" fill="none">
+                    <rect width="64" height="64" rx="16" fill="url(#gw)"/>
+                    <rect x="12" y="18" width="40" height="30" rx="7" fill="#fff" fill-opacity=".92"/>
+                    <path d="M12 28h40" stroke="#0a3d2a" stroke-opacity=".18" stroke-width="2"/>
+                    <rect x="34" y="34" width="14" height="9" rx="3" fill="#0b2e22"/>
+                    <circle cx="41" cy="38.5" r="2.2" fill="#34d399"/>
+                    <defs><linearGradient id="gw" x1="8" y1="4" x2="56" y2="60"><stop stop-color="#34d399"/><stop offset="1" stop-color="#059669"/></linearGradient></defs>
+                  </svg>
                 </span>
                 <span class="app-label">Wallet</span>
               </button>
 
               <button type="button" class="app-tile" data-open="marketplace" role="listitem">
                 <span class="app-icon icon-market" aria-hidden="true">
-                  <svg viewBox="0 0 64 64" fill="none"><path d="M12 22h40l-4 28H16L12 22z" fill="url(#gm)"/><path d="M20 22V18a12 12 0 0 1 24 0v4" stroke="#f4f7fb" stroke-width="3.5" stroke-linecap="round"/><circle cx="24" cy="36" r="3" fill="#03070d" opacity=".4"/><circle cx="40" cy="36" r="3" fill="#03070d" opacity=".4"/><defs><linearGradient id="gm" x1="12" y1="18" x2="52" y2="50"><stop stop-color="#76adff"/><stop offset="1" stop-color="#3a6fd4"/></linearGradient></defs></svg>
+                  <svg viewBox="0 0 64 64" fill="none">
+                    <rect width="64" height="64" rx="16" fill="url(#gm)"/>
+                    <path d="M16 24h32l-3.5 24H19.5L16 24z" fill="#fff" fill-opacity=".95"/>
+                    <path d="M23 24v-3.5a9 9 0 0 1 18 0V24" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/>
+                    <circle cx="26" cy="36" r="2.4" fill="#9a3412"/>
+                    <circle cx="38" cy="36" r="2.4" fill="#9a3412"/>
+                    <defs><linearGradient id="gm" x1="10" y1="6" x2="54" y2="58"><stop stop-color="#fb923c"/><stop offset="1" stop-color="#ea580c"/></linearGradient></defs>
+                  </svg>
                 </span>
                 <span class="app-label">Marketplace</span>
               </button>
 
               <button type="button" class="app-tile" data-open="findmy" role="listitem">
                 <span class="app-icon icon-findmy" aria-hidden="true">
-                  <svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="22" fill="url(#gf)"/><circle cx="32" cy="32" r="14" stroke="rgba(3,7,13,.25)" stroke-width="2" stroke-dasharray="3 4"/><circle cx="32" cy="32" r="5" fill="#03070d"/><circle cx="32" cy="32" r="2" fill="#76adff"/><path d="M32 10v6M32 48v6M10 32h6M48 32h6" stroke="rgba(244,247,251,.55)" stroke-width="2" stroke-linecap="round"/><defs><linearGradient id="gf" x1="10" y1="10" x2="54" y2="54"><stop stop-color="#9fc6ff"/><stop offset="1" stop-color="#3a6fd4"/></linearGradient></defs></svg>
+                  <svg viewBox="0 0 64 64" fill="none">
+                    <rect width="64" height="64" rx="16" fill="url(#gf)"/>
+                    <circle cx="32" cy="32" r="18" fill="#fff" fill-opacity=".16"/>
+                    <circle cx="32" cy="32" r="11" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-dasharray="3 3.5"/>
+                    <circle cx="32" cy="32" r="4.5" fill="#fff"/>
+                    <circle cx="32" cy="32" r="2" fill="#16a34a"/>
+                    <path d="M32 10v5M32 49v5M10 32h5M49 32h5" stroke="#fff" stroke-opacity=".7" stroke-width="2.2" stroke-linecap="round"/>
+                    <defs><linearGradient id="gf" x1="8" y1="6" x2="56" y2="58"><stop stop-color="#4ade80"/><stop offset="1" stop-color="#15803d"/></linearGradient></defs>
+                  </svg>
                 </span>
                 <span class="app-label">Find My</span>
               </button>
 
               <button type="button" class="app-tile" data-open="mail" role="listitem">
                 <span class="app-icon icon-mail" aria-hidden="true">
-                  <svg viewBox="0 0 64 64" fill="none"><rect x="8" y="16" width="48" height="34" rx="7" fill="url(#gma)"/><path d="M10 20l22 16L54 20" stroke="#03070d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity=".45"/><defs><linearGradient id="gma" x1="8" y1="16" x2="56" y2="50"><stop stop-color="#f4f7fb"/><stop offset="1" stop-color="#93a2b8"/></linearGradient></defs></svg>
+                  <svg viewBox="0 0 64 64" fill="none">
+                    <rect width="64" height="64" rx="16" fill="url(#gma)"/>
+                    <rect x="11" y="18" width="42" height="28" rx="6" fill="#fff"/>
+                    <path d="M13 22l19 14 19-14" stroke="#1d4ed8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    <defs><linearGradient id="gma" x1="10" y1="6" x2="54" y2="58"><stop stop-color="#60a5fa"/><stop offset="1" stop-color="#2563eb"/></linearGradient></defs>
+                  </svg>
                 </span>
                 <span class="app-label">Mail</span>
               </button>
 
               <button type="button" class="app-tile" data-open="messages" role="listitem">
                 <span class="app-icon icon-messages" aria-hidden="true">
-                  <svg viewBox="0 0 64 64" fill="none"><path d="M12 18c0-4 3-7 7-7h26c4 0 7 3 7 7v18c0 4-3 7-7 7H28l-10 10v-10h-6c-4 0-7-3-7-7V18z" fill="url(#gms)"/><circle cx="24" cy="28" r="2.5" fill="#03070d" opacity=".5"/><circle cx="32" cy="28" r="2.5" fill="#03070d" opacity=".5"/><circle cx="40" cy="28" r="2.5" fill="#03070d" opacity=".5"/><defs><linearGradient id="gms" x1="12" y1="11" x2="52" y2="46"><stop stop-color="#76adff"/><stop offset="1" stop-color="#3a6fd4"/></linearGradient></defs></svg>
+                  <svg viewBox="0 0 64 64" fill="none">
+                    <rect width="64" height="64" rx="16" fill="url(#gms)"/>
+                    <path d="M14 20c0-4 3.2-7 7-7h22c3.8 0 7 3 7 7v16c0 4-3.2 7-7 7H30l-9 9v-9h0c-3.8 0-7-3-7-7V20z" fill="#fff"/>
+                    <circle cx="26" cy="28" r="2.3" fill="#0f766e"/>
+                    <circle cx="32" cy="28" r="2.3" fill="#0f766e"/>
+                    <circle cx="38" cy="28" r="2.3" fill="#0f766e"/>
+                    <defs><linearGradient id="gms" x1="10" y1="6" x2="54" y2="58"><stop stop-color="#2dd4bf"/><stop offset="1" stop-color="#0d9488"/></linearGradient></defs>
+                  </svg>
                 </span>
                 <span class="app-label">Messages</span>
               </button>
 
               <button type="button" class="app-tile" data-open="maps" role="listitem">
                 <span class="app-icon icon-maps" aria-hidden="true">
-                  <svg viewBox="0 0 64 64" fill="none"><path d="M14 14l14 6 14-6 8 4v36l-8-4-14 6-14-6-8 4V18l8-4z" fill="url(#gmp)"/><path d="M28 20v36M42 14v36" stroke="rgba(3,7,13,.3)" stroke-width="2"/><circle cx="35" cy="34" r="6" fill="#76adff"/><circle cx="35" cy="34" r="2.5" fill="#03070d"/><defs><linearGradient id="gmp" x1="14" y1="14" x2="50" y2="54"><stop stop-color="#c5d9ff"/><stop offset="1" stop-color="#2a4f9e"/></linearGradient></defs></svg>
+                  <svg viewBox="0 0 64 64" fill="none">
+                    <rect width="64" height="64" rx="16" fill="url(#gmp)"/>
+                    <path d="M14 16l13 5.5 13-5.5 10 4.5v33l-10-4.5-13 5.5-13-5.5-10 4.5V20.5L14 16z" fill="#fff" fill-opacity=".94"/>
+                    <path d="M27 21.5v32M40 16v32" stroke="#0f172a" stroke-opacity=".12" stroke-width="2"/>
+                    <path d="M35 28c0-4.2-3.2-6.5-3.2-6.5S28.6 23.8 28.6 28c0 2.4 1.5 4 3.2 6.2 1.7-2.2 3.2-3.8 3.2-6.2z" fill="#ef4444"/>
+                    <circle cx="31.8" cy="27.6" r="1.8" fill="#fff"/>
+                    <defs><linearGradient id="gmp" x1="8" y1="6" x2="56" y2="58"><stop stop-color="#a5b4fc"/><stop offset=".45" stop-color="#76adff"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient></defs>
+                  </svg>
                 </span>
                 <span class="app-label">Maps</span>
               </button>
             </div>
 
             <div class="dock" aria-label="Quick apps">
+              <div class="dock-glass" aria-hidden="true"></div>
               <button type="button" class="dock-btn" data-open="messages" aria-label="Messages">
-                <svg viewBox="0 0 64 64" fill="none"><path d="M12 18c0-4 3-7 7-7h26c4 0 7 3 7 7v18c0 4-3 7-7 7H28l-10 10v-10h-6c-4 0-7-3-7-7V18z" fill="url(#dms)"/><defs><linearGradient id="dms" x1="12" y1="11" x2="52" y2="46"><stop stop-color="#76adff"/><stop offset="1" stop-color="#3a6fd4"/></linearGradient></defs></svg>
+                <svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="url(#dms)"/><path d="M14 20c0-4 3.2-7 7-7h22c3.8 0 7 3 7 7v16c0 4-3.2 7-7 7H30l-9 9v-9h0c-3.8 0-7-3-7-7V20z" fill="#fff"/><defs><linearGradient id="dms" x1="10" y1="6" x2="54" y2="58"><stop stop-color="#2dd4bf"/><stop offset="1" stop-color="#0d9488"/></linearGradient></defs></svg>
               </button>
               <button type="button" class="dock-btn" data-open="mail" aria-label="Mail">
-                <svg viewBox="0 0 64 64" fill="none"><rect x="8" y="16" width="48" height="34" rx="7" fill="url(#dma)"/><path d="M10 20l22 16L54 20" stroke="#03070d" stroke-width="2.5" opacity=".45"/><defs><linearGradient id="dma" x1="8" y1="16" x2="56" y2="50"><stop stop-color="#f4f7fb"/><stop offset="1" stop-color="#93a2b8"/></linearGradient></defs></svg>
+                <svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="url(#dma)"/><rect x="11" y="18" width="42" height="28" rx="6" fill="#fff"/><path d="M13 22l19 14 19-14" stroke="#1d4ed8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="dma" x1="10" y1="6" x2="54" y2="58"><stop stop-color="#60a5fa"/><stop offset="1" stop-color="#2563eb"/></linearGradient></defs></svg>
               </button>
               <button type="button" class="dock-btn" data-open="wallet" aria-label="Wallet">
-                <svg viewBox="0 0 64 64" fill="none"><rect x="8" y="16" width="48" height="36" rx="8" fill="url(#dw)"/><rect x="36" y="34" width="14" height="10" rx="3" fill="#03070d" opacity=".55"/><defs><linearGradient id="dw" x1="8" y1="16" x2="56" y2="52"><stop stop-color="#76adff"/><stop offset="1" stop-color="#3a6fd4"/></linearGradient></defs></svg>
+                <svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="url(#dw)"/><rect x="12" y="18" width="40" height="30" rx="7" fill="#fff" fill-opacity=".92"/><rect x="34" y="34" width="14" height="9" rx="3" fill="#0b2e22"/><defs><linearGradient id="dw" x1="8" y1="4" x2="56" y2="60"><stop stop-color="#34d399"/><stop offset="1" stop-color="#059669"/></linearGradient></defs></svg>
               </button>
               <button type="button" class="dock-btn" data-open="maps" aria-label="Maps">
-                <svg viewBox="0 0 64 64" fill="none"><path d="M14 14l14 6 14-6 8 4v36l-8-4-14 6-14-6-8 4V18l8-4z" fill="url(#dmp)"/><circle cx="35" cy="34" r="6" fill="#76adff"/><defs><linearGradient id="dmp" x1="14" y1="14" x2="50" y2="54"><stop stop-color="#c5d9ff"/><stop offset="1" stop-color="#2a4f9e"/></linearGradient></defs></svg>
+                <svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="url(#dmp)"/><path d="M14 16l13 5.5 13-5.5 10 4.5v33l-10-4.5-13 5.5-13-5.5-10 4.5V20.5L14 16z" fill="#fff" fill-opacity=".94"/><path d="M35 28c0-4.2-3.2-6.5-3.2-6.5S28.6 23.8 28.6 28c0 2.4 1.5 4 3.2 6.2 1.7-2.2 3.2-3.8 3.2-6.2z" fill="#ef4444"/><defs><linearGradient id="dmp" x1="8" y1="6" x2="56" y2="58"><stop stop-color="#a5b4fc"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient></defs></svg>
               </button>
             </div>
           </section>
@@ -107,13 +157,16 @@
           <!-- WALLET -->
           <section class="view view-app" id="view-wallet" data-view="wallet" hidden>
             <div class="app-chrome">
-              <button type="button" class="back-btn" data-home aria-label="Home">‹</button>
+              <button type="button" class="back-btn" data-home aria-label="Home">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
               <h1>Wallet</h1>
-              <span class="chrome-spacer"></span>
+              <button type="button" class="open-web" data-web="wallet">Open on Internet</button>
             </div>
             <div class="app-body">
               <p class="app-lede">Manage your funds. Send, receive, and request economy money from panel members.</p>
               <div class="balance-hero">
+                <div class="balance-shine" aria-hidden="true"></div>
                 <p class="balance-label">Available</p>
                 <p class="balance-value" id="wallet-balance">C$12,450</p>
                 <p class="balance-note">Clearwater economy · synced with panel</p>
@@ -140,16 +193,18 @@
                 <p class="form-status" id="wallet-status" hidden></p>
               </div>
               <h2 class="section-title">Recent</h2>
-              <ul class="txn-list" id="wallet-txns"></ul>
+              <ul class="ios-list txn-list" id="wallet-txns"></ul>
             </div>
           </section>
 
           <!-- MARKETPLACE -->
           <section class="view view-app" id="view-marketplace" data-view="marketplace" hidden>
             <div class="app-chrome">
-              <button type="button" class="back-btn" data-home aria-label="Home">‹</button>
+              <button type="button" class="back-btn" data-home aria-label="Home">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
               <h1>Marketplace</h1>
-              <span class="chrome-spacer"></span>
+              <button type="button" class="open-web" data-web="marketplace">Open on Internet</button>
             </div>
             <div class="app-body">
               <p class="app-lede">With Clearwater, managing your civilian business has never been easier. Open a storefront, create products, and charge customers for what you're worth.</p>
@@ -166,16 +221,16 @@
                 <button type="button" class="pill-action" data-market-tab="payouts">Payouts</button>
               </div>
               <div class="market-pane is-active" data-pane="products">
-                <button type="button" class="btn-primary" id="add-product">+ New product</button>
-                <ul class="product-list" id="product-list"></ul>
+                <button type="button" class="btn-primary btn-inline" id="add-product">+ New product</button>
+                <ul class="ios-list product-list" id="product-list"></ul>
               </div>
               <div class="market-pane" data-pane="employees" hidden>
-                <button type="button" class="btn-primary" id="add-employee">+ Add employee</button>
-                <ul class="people-list" id="employee-list"></ul>
+                <button type="button" class="btn-primary btn-inline" id="add-employee">+ Add employee</button>
+                <ul class="ios-list people-list" id="employee-list"></ul>
               </div>
               <div class="market-pane" data-pane="payouts" hidden>
                 <p class="hint">Pay out your team from store revenue.</p>
-                <ul class="txn-list" id="payout-list"></ul>
+                <ul class="ios-list txn-list" id="payout-list"></ul>
               </div>
             </div>
           </section>
@@ -183,13 +238,16 @@
           <!-- FIND MY -->
           <section class="view view-app" id="view-findmy" data-view="findmy" hidden>
             <div class="app-chrome">
-              <button type="button" class="back-btn" data-home aria-label="Home">‹</button>
+              <button type="button" class="back-btn" data-home aria-label="Home">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
               <h1>Find My</h1>
-              <span class="chrome-spacer"></span>
+              <button type="button" class="open-web" data-web="findmy">Open on Internet</button>
             </div>
             <div class="app-body">
               <p class="app-lede">Share your location with trusted contacts so you can always find each other in-game. Toggle sharing per person.</p>
               <div class="map-preview findmy-map" aria-hidden="true">
+                <div class="map-texture"></div>
                 <div class="radar-ring"></div>
                 <div class="radar-ring delay"></div>
                 <span class="pin self">You</span>
@@ -197,33 +255,47 @@
                 <span class="pin other" style="left:28%;top:58%">Jordan</span>
               </div>
               <h2 class="section-title">Trusted contacts</h2>
-              <ul class="people-list" id="findmy-list"></ul>
+              <ul class="ios-list people-list" id="findmy-list"></ul>
             </div>
           </section>
 
           <!-- MAIL -->
           <section class="view view-app" id="view-mail" data-view="mail" hidden>
             <div class="app-chrome">
-              <button type="button" class="back-btn" data-home aria-label="Home">‹</button>
+              <button type="button" class="back-btn" data-home aria-label="Home">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
               <h1>Mail</h1>
-              <button type="button" class="chrome-action" id="compose-mail" aria-label="Compose">✎</button>
+              <div class="chrome-actions">
+                <button type="button" class="chrome-action" id="compose-mail" aria-label="Compose">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 17.5V20h2.5L18 8.5 15.5 6 4 17.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M13.8 6.8l2.4 2.4" stroke="currentColor" stroke-width="1.8"/></svg>
+                </button>
+                <button type="button" class="open-web" data-web="mail">Open on Internet</button>
+              </div>
             </div>
             <div class="app-body">
               <p class="app-lede">Compose &amp; receive emails with Clearwater Mail. Purchased from Marketplace? Get a documented receipt instantly.</p>
-              <ul class="mail-list" id="mail-list"></ul>
+              <ul class="ios-list mail-list" id="mail-list"></ul>
             </div>
           </section>
 
           <!-- MESSAGES -->
           <section class="view view-app" id="view-messages" data-view="messages" hidden>
             <div class="app-chrome">
-              <button type="button" class="back-btn" data-home aria-label="Home">‹</button>
+              <button type="button" class="back-btn" data-home aria-label="Home">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
               <h1>Messages</h1>
-              <button type="button" class="chrome-action" id="new-message" aria-label="New">+</button>
+              <div class="chrome-actions">
+                <button type="button" class="chrome-action" id="new-message" aria-label="New">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+                </button>
+                <button type="button" class="open-web" data-web="messages">Open on Internet</button>
+              </div>
             </div>
             <div class="app-body">
               <p class="app-lede">Message your contacts and friends with Clearwater messaging.</p>
-              <ul class="thread-list" id="thread-list"></ul>
+              <ul class="ios-list thread-list" id="thread-list"></ul>
               <div class="composer" id="msg-composer" hidden>
                 <input type="text" id="msg-to" placeholder="Contact name" />
                 <textarea id="msg-body" rows="3" placeholder="Write a message…"></textarea>
@@ -235,13 +307,16 @@
           <!-- MAPS -->
           <section class="view view-app" id="view-maps" data-view="maps" hidden>
             <div class="app-chrome">
-              <button type="button" class="back-btn" data-home aria-label="Home">‹</button>
+              <button type="button" class="back-btn" data-home aria-label="Home">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
               <h1>Maps</h1>
-              <span class="chrome-spacer"></span>
+              <button type="button" class="open-web" data-web="maps">Open on Internet</button>
             </div>
             <div class="app-body maps-body">
               <p class="app-lede">Lost? Open Maps and follow the fastest route to your destination.</p>
               <div class="map-canvas" aria-hidden="true">
+                <div class="map-texture"></div>
                 <div class="map-roads"></div>
                 <svg class="route-line" viewBox="0 0 280 220" preserveAspectRatio="none">
                   <path d="M40 180 C80 140, 100 160, 130 120 S180 70, 220 50" fill="none" stroke="#76adff" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 6"/>
@@ -269,6 +344,7 @@
           <!-- COMPOSE MAIL MODAL -->
           <div class="sheet" id="mail-sheet" hidden>
             <div class="sheet-panel">
+              <div class="sheet-handle" aria-hidden="true"></div>
               <h2>New message</h2>
               <label class="field"><span>To</span><input type="text" id="mail-to" placeholder="name@clearwater.cw" /></label>
               <label class="field"><span>Subject</span><input type="text" id="mail-subject" placeholder="Subject" /></label>

@@ -212,7 +212,7 @@
     {
       "id": "2026-08-15-phone-download",
       "title": "Clearwater Phone download on Internet",
-      "summary": "Clearwater Phone is available from Internet → Phone (and the sidebar card). Download ClearwaterPhone.zip, extract, and run ClearwaterPhone-Launch.bat.",
+      "summary": "Clearwater Phone is available from Internet \u2192 Phone (and the sidebar card). Download ClearwaterPhone.zip, extract, and run ClearwaterPhone-Launch.bat.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T17:50:00.000Z",
       "commit": "dd7d031"
@@ -228,7 +228,7 @@
     {
       "id": "2026-08-15-phone-exe",
       "title": "Clearwater Phone Windows exe",
-      "summary": "Clearwater Phone download is now a single ClearwaterPhone.exe — double-click to open. First launch installs the runtime once automatically.",
+      "summary": "Clearwater Phone download is now a single ClearwaterPhone.exe \u2014 double-click to open. First launch installs the runtime once automatically.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:00:00.000Z",
       "commit": "b3c61b0"
@@ -236,7 +236,7 @@
     {
       "id": "2026-08-15-phone-portable",
       "title": "Clearwater Phone portable app",
-      "summary": "Replaced the console runtime-downloader with a real portable ClearwaterPhone.exe that opens the overlay directly (no black window, no separate download). Windows SmartScreen may still warn once because the app is unsigned — use More info → Run anyway.",
+      "summary": "Replaced the console runtime-downloader with a real portable ClearwaterPhone.exe that opens the overlay directly (no black window, no separate download). Windows SmartScreen may still warn once because the app is unsigned \u2014 use More info \u2192 Run anyway.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:05:00.000Z",
       "commit": "80c4001"
@@ -248,6 +248,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:10:00.000Z",
       "commit": "2a7ce32"
+    },
+    {
+      "id": "2026-08-15-mp-mail-phone",
+      "title": "Marketplace, Mail, and premium Phone",
+      "summary": "Added Marketplace and Mail to Clearwater Internet. Clearwater Phone overlay was redesigned and each app can open the matching website page.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T18:20:00.000Z",
+      "commit": "62beac6"
     }
   ]
 }

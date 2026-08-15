@@ -1,13 +1,15 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, screen, shell } = require('electron');
 const path = require('path');
 
 let win = null;
 let visible = true;
 
+const ALLOWED_HOSTS = new Set(['cwrpvc.lol', 'www.cwrpvc.lol', 'localhost', '127.0.0.1']);
+
 function createWindow() {
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
-  const phoneW = 380;
-  const phoneH = 760;
+  const phoneW = 390;
+  const phoneH = 800;
 
   win = new BrowserWindow({
     width: phoneW,
@@ -73,6 +75,18 @@ app.whenReady().then(() => {
     if (!win) return;
     const [x, y] = win.getPosition();
     win.setPosition(Math.round(x + dx), Math.round(y + dy));
+  });
+
+  ipcMain.handle('phone-open-url', async (_e, href) => {
+    try {
+      const url = new URL(String(href || ''));
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') return false;
+      if (!ALLOWED_HOSTS.has(url.hostname)) return false;
+      await shell.openExternal(url.toString());
+      return true;
+    } catch {
+      return false;
+    }
   });
 
   app.on('activate', () => {

@@ -1,54 +1,80 @@
 (() => {
+  const SITE = 'https://cwrpvc.lol';
+  const WEB = {
+    wallet: '/internet/wallet',
+    marketplace: '/internet/marketplace',
+    mail: '/internet/mail',
+    messages: '/internet/messages',
+    findmy: '/internet',
+    maps: '/internet'
+  };
+
+  function openWeb(path) {
+    const href = SITE + path;
+    if (window.anchorPhone?.openUrl) return window.anchorPhone.openUrl(href);
+    window.open(href, '_blank', 'noopener');
+  }
+
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
   /* —— Clock —— */
   function tick() {
-    const el = $("#status-time");
+    const el = $('#status-time');
     if (!el) return;
     const d = new Date();
-    el.textContent = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    el.textContent = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
   tick();
   setInterval(tick, 15000);
 
   /* —— Navigation —— */
-  const views = $$(".view");
+  const views = $$('.view');
 
   function showView(id) {
     views.forEach((v) => {
       const on = v.dataset.view === id;
-      v.classList.toggle("is-active", on);
+      v.classList.toggle('is-active', on);
       if (on) v.hidden = false;
-      else if (v.dataset.view !== "home") v.hidden = true;
+      else if (v.dataset.view !== 'home') v.hidden = true;
     });
-    const home = $("#view-home");
-    if (home) home.hidden = id !== "home";
+    const home = $('#view-home');
+    if (home) home.hidden = id !== 'home';
   }
 
-  $$("[data-open]").forEach((btn) => {
-    btn.addEventListener("click", () => showView(btn.dataset.open));
+  $$('[data-open]').forEach((btn) => {
+    btn.addEventListener('click', () => showView(btn.dataset.open));
   });
 
-  $$("[data-home]").forEach((btn) => {
-    btn.addEventListener("click", () => showView("home"));
+  $$('[data-home]').forEach((btn) => {
+    btn.addEventListener('click', () => showView('home'));
+  });
+
+  /* —— Open on Internet —— */
+  $$('[data-web]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const key = btn.dataset.web;
+      const path = WEB[key];
+      if (path) openWeb(path);
+    });
   });
 
   /* —— Drag window —— */
-  const dragEl = $("[data-drag]");
+  const dragEl = $('[data-drag]');
   let dragging = false;
   let lastX = 0;
   let lastY = 0;
 
   if (dragEl) {
-    dragEl.addEventListener("pointerdown", (e) => {
+    dragEl.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
       dragging = true;
       lastX = e.screenX;
       lastY = e.screenY;
       dragEl.setPointerCapture?.(e.pointerId);
     });
-    dragEl.addEventListener("pointermove", (e) => {
+    dragEl.addEventListener('pointermove', (e) => {
       if (!dragging) return;
       const dx = e.screenX - lastX;
       const dy = e.screenY - lastY;
@@ -59,8 +85,8 @@
     const end = () => {
       dragging = false;
     };
-    dragEl.addEventListener("pointerup", end);
-    dragEl.addEventListener("pointercancel", end);
+    dragEl.addEventListener('pointerup', end);
+    dragEl.addEventListener('pointercancel', end);
   }
 
   /* —— Persist —— */
@@ -78,350 +104,365 @@
     }
   };
 
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function formatMoney(n) {
+    return `C$${Number(n).toLocaleString('en-US')}`;
+  }
+
   /* —— Wallet —— */
-  let balance = store.load("balance", 12450);
-  let txns = store.load("txns", [
-    { title: "Received from Maya", sub: "Today · Request paid", amt: 500, dir: "in" },
-    { title: "Sent to Panel Bank", sub: "Yesterday", amt: 1200, dir: "out" },
-    { title: "Marketplace payout", sub: "Gulf Coast Customs", amt: 840, dir: "in" }
+  let balance = store.load('balance', 12450);
+  let txns = store.load('txns', [
+    { title: 'Received from Maya', sub: 'Today · Request paid', amt: 500, dir: 'in' },
+    { title: 'Sent to Panel Bank', sub: 'Yesterday', amt: 1200, dir: 'out' },
+    { title: 'Marketplace payout', sub: 'Gulf Coast Customs', amt: 840, dir: 'in' },
+    { title: 'Fuel reimbursement', sub: '2 days ago', amt: 85, dir: 'in' }
   ]);
   let walletMode = null;
 
-  function formatMoney(n) {
-    return `C$${Number(n).toLocaleString("en-US")}`;
-  }
-
   function renderWallet() {
-    $("#wallet-balance").textContent = formatMoney(balance);
-    const list = $("#wallet-txns");
+    $('#wallet-balance').textContent = formatMoney(balance);
+    const list = $('#wallet-txns');
     list.innerHTML = txns
       .map(
         (t) => `<li>
-        <div class="avatar">${t.title.slice(0, 1)}</div>
-        <div><p class="item-title">${escapeHtml(t.title)}</p><p class="item-sub">${escapeHtml(t.sub)}</p></div>
-        <span class="amt ${t.dir}">${t.dir === "in" ? "+" : "−"}${formatMoney(t.amt)}</span>
+        <div class="avatar tint-green">${escapeHtml(t.title.slice(0, 1))}</div>
+        <div style="flex:1;min-width:0"><p class="item-title">${escapeHtml(t.title)}</p><p class="item-sub">${escapeHtml(t.sub)}</p></div>
+        <span class="amt ${t.dir}">${t.dir === 'in' ? '+' : '−'}${formatMoney(t.amt)}</span>
       </li>`
       )
-      .join("");
+      .join('');
   }
 
-  $$("[data-wallet-action]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+  $$('[data-wallet-action]').forEach((btn) => {
+    btn.addEventListener('click', () => {
       walletMode = btn.dataset.walletAction;
-      $$("[data-wallet-action]").forEach((b) => b.classList.toggle("is-active", b === btn));
-      const panel = $("#wallet-panel");
+      $$('[data-wallet-action]').forEach((b) => b.classList.toggle('is-active', b === btn));
+      const panel = $('#wallet-panel');
       panel.hidden = false;
-      $("#wallet-submit").textContent =
-        walletMode === "send" ? "Send funds" : walletMode === "request" ? "Send request" : "Show receive code";
-      $("#wallet-note-field").hidden = walletMode === "receive";
-      $("#wallet-member").parentElement.hidden = walletMode === "receive";
-      $("#wallet-amount").parentElement.hidden = walletMode === "receive";
-      $("#wallet-status").hidden = true;
-      if (walletMode === "receive") {
-        $("#wallet-status").hidden = false;
-        $("#wallet-status").textContent = "Your receive tag: @you · share with panel members";
+      $('#wallet-submit').textContent =
+        walletMode === 'send' ? 'Send funds' : walletMode === 'request' ? 'Send request' : 'Show receive code';
+      $('#wallet-note-field').hidden = walletMode === 'receive';
+      $('#wallet-member').parentElement.hidden = walletMode === 'receive';
+      $('#wallet-amount').parentElement.hidden = walletMode === 'receive';
+      $('#wallet-status').hidden = true;
+      if (walletMode === 'receive') {
+        $('#wallet-status').hidden = false;
+        $('#wallet-status').textContent = 'Your receive tag: @you · share with panel members';
       }
     });
   });
 
-  $("#wallet-submit")?.addEventListener("click", () => {
-    const status = $("#wallet-status");
-    if (walletMode === "receive") {
+  $('#wallet-submit')?.addEventListener('click', () => {
+    const status = $('#wallet-status');
+    if (walletMode === 'receive') {
       status.hidden = false;
-      status.textContent = "Share @you or your Discord ID to receive funds.";
+      status.textContent = 'Share @you or your Discord ID to receive funds.';
       return;
     }
-    const member = $("#wallet-member").value.trim();
-    const amount = Math.floor(Number($("#wallet-amount").value));
-    const note = $("#wallet-note").value.trim();
+    const member = $('#wallet-member').value.trim();
+    const amount = Math.floor(Number($('#wallet-amount').value));
+    const note = $('#wallet-note').value.trim();
     if (!member || !amount || amount < 1) {
       status.hidden = false;
-      status.textContent = "Enter a member and amount.";
+      status.textContent = 'Enter a member and amount.';
       return;
     }
-    if (walletMode === "send") {
+    if (walletMode === 'send') {
       if (amount > balance) {
         status.hidden = false;
-        status.textContent = "Insufficient balance.";
+        status.textContent = 'Insufficient balance.';
         return;
       }
       balance -= amount;
       txns.unshift({
         title: `Sent to ${member}`,
-        sub: note || "Just now",
+        sub: note || 'Just now',
         amt: amount,
-        dir: "out"
+        dir: 'out'
       });
       status.textContent = `Sent ${formatMoney(amount)} to ${member}.`;
     } else {
       txns.unshift({
         title: `Requested from ${member}`,
-        sub: note || "Pending",
+        sub: note || 'Pending',
         amt: amount,
-        dir: "in"
+        dir: 'in'
       });
       status.textContent = `Request for ${formatMoney(amount)} sent to ${member}.`;
     }
-    store.save("balance", balance);
-    store.save("txns", txns.slice(0, 40));
+    store.save('balance', balance);
+    store.save('txns', txns.slice(0, 40));
     status.hidden = false;
     renderWallet();
-    $("#wallet-member").value = "";
-    $("#wallet-amount").value = "";
-    $("#wallet-note").value = "";
+    $('#wallet-member').value = '';
+    $('#wallet-amount').value = '';
+    $('#wallet-note').value = '';
   });
 
   /* —— Marketplace —— */
-  let products = store.load("products", [
-    { name: "Custom wrap package", price: 2500 },
-    { name: "Performance tune", price: 1800 },
-    { name: "Detailing — full", price: 450 }
+  let products = store.load('products', [
+    { name: 'Custom wrap package', price: 2500 },
+    { name: 'Performance tune', price: 1800 },
+    { name: 'Detailing — full', price: 450 },
+    { name: 'Ceramic coat', price: 950 }
   ]);
-  let employees = store.load("employees", [
-    { name: "Riley Chen", role: "Manager" },
-    { name: "Sam Ortiz", role: "Sales" },
-    { name: "Casey Brooks", role: "Tech" }
+  let employees = store.load('employees', [
+    { name: 'Riley Chen', role: 'Manager' },
+    { name: 'Sam Ortiz', role: 'Sales' },
+    { name: 'Casey Brooks', role: 'Tech' }
   ]);
-  let payouts = store.load("payouts", [
-    { title: "Riley Chen", sub: "Weekly share", amt: 620, dir: "out" },
-    { title: "Sam Ortiz", sub: "Commission", amt: 310, dir: "out" }
+  let payouts = store.load('payouts', [
+    { title: 'Riley Chen', sub: 'Weekly share', amt: 620, dir: 'out' },
+    { title: 'Sam Ortiz', sub: 'Commission', amt: 310, dir: 'out' },
+    { title: 'Casey Brooks', sub: 'Hourly', amt: 480, dir: 'out' }
   ]);
 
   function renderMarket() {
-    $("#product-list").innerHTML = products
+    $('#product-list').innerHTML = products
       .map(
         (p) => `<li>
-        <div class="avatar">▣</div>
-        <div><p class="item-title">${escapeHtml(p.name)}</p><p class="item-sub">Listed · Clearwater storefront</p></div>
+        <div class="avatar tint-orange">▣</div>
+        <div style="flex:1;min-width:0"><p class="item-title">${escapeHtml(p.name)}</p><p class="item-sub">Listed · Clearwater storefront</p></div>
         <span class="price-tag">${formatMoney(p.price)}</span>
       </li>`
       )
-      .join("");
-    $("#employee-list").innerHTML = employees
+      .join('');
+    $('#employee-list').innerHTML = employees
       .map(
         (e) => `<li>
-        <div class="avatar">${escapeHtml(e.name.slice(0, 1))}</div>
-        <div><p class="item-title">${escapeHtml(e.name)}</p><p class="item-sub">${escapeHtml(e.role)}</p></div>
+        <div class="avatar tint-orange">${escapeHtml(e.name.slice(0, 1))}</div>
+        <div style="flex:1;min-width:0"><p class="item-title">${escapeHtml(e.name)}</p><p class="item-sub">${escapeHtml(e.role)}</p></div>
       </li>`
       )
-      .join("");
-    $("#payout-list").innerHTML = payouts
+      .join('');
+    $('#payout-list').innerHTML = payouts
       .map(
         (t) => `<li>
-        <div class="avatar">${escapeHtml(t.title.slice(0, 1))}</div>
-        <div><p class="item-title">${escapeHtml(t.title)}</p><p class="item-sub">${escapeHtml(t.sub)}</p></div>
+        <div class="avatar tint-orange">${escapeHtml(t.title.slice(0, 1))}</div>
+        <div style="flex:1;min-width:0"><p class="item-title">${escapeHtml(t.title)}</p><p class="item-sub">${escapeHtml(t.sub)}</p></div>
         <span class="amt out">−${formatMoney(t.amt)}</span>
       </li>`
       )
-      .join("");
+      .join('');
   }
 
-  $$("[data-market-tab]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+  $$('[data-market-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => {
       const tab = btn.dataset.marketTab;
-      $$("[data-market-tab]").forEach((b) => b.classList.toggle("is-active", b === btn));
-      $$(".market-pane").forEach((pane) => {
+      $$('[data-market-tab]').forEach((b) => b.classList.toggle('is-active', b === btn));
+      $$('.market-pane').forEach((pane) => {
         const on = pane.dataset.pane === tab;
-        pane.classList.toggle("is-active", on);
+        pane.classList.toggle('is-active', on);
         pane.hidden = !on;
       });
     });
   });
 
-  $("#add-product")?.addEventListener("click", () => {
-    const name = window.prompt("Product name");
+  $('#add-product')?.addEventListener('click', () => {
+    const name = window.prompt('Product name');
     if (!name) return;
-    const price = Math.floor(Number(window.prompt("Price (C$)", "500")));
+    const price = Math.floor(Number(window.prompt('Price (C$)', '500')));
     if (!price) return;
     products.unshift({ name, price });
-    store.save("products", products);
+    store.save('products', products);
     renderMarket();
   });
 
-  $("#add-employee")?.addEventListener("click", () => {
-    const name = window.prompt("Employee name");
+  $('#add-employee')?.addEventListener('click', () => {
+    const name = window.prompt('Employee name');
     if (!name) return;
-    const role = window.prompt("Role", "Staff") || "Staff";
+    const role = window.prompt('Role', 'Staff') || 'Staff';
     employees.push({ name, role });
-    store.save("employees", employees);
+    store.save('employees', employees);
     renderMarket();
-    $(".store-meta").textContent = `Your storefront · ${employees.length} employees`;
+    $('.store-meta').textContent = `Your storefront · ${employees.length} employees`;
   });
 
-  $("#store-edit")?.addEventListener("click", () => {
-    const name = window.prompt("Storefront name", $("#store-name").textContent);
+  $('#store-edit')?.addEventListener('click', () => {
+    const name = window.prompt('Storefront name', $('#store-name').textContent);
     if (!name) return;
-    $("#store-name").textContent = name;
-    store.save("storeName", name);
+    $('#store-name').textContent = name;
+    store.save('storeName', name);
   });
 
-  const savedStore = store.load("storeName", null);
-  if (savedStore) $("#store-name").textContent = savedStore;
+  const savedStore = store.load('storeName', null);
+  if (savedStore) $('#store-name').textContent = savedStore;
 
   /* —— Find My —— */
-  let contacts = store.load("findmy", [
-    { name: "Alex Rivera", sharing: true },
-    { name: "Jordan Lee", sharing: true },
-    { name: "Morgan Blake", sharing: false },
-    { name: "Taylor Quinn", sharing: false }
+  let contacts = store.load('findmy', [
+    { name: 'Alex Rivera', sharing: true },
+    { name: 'Jordan Lee', sharing: true },
+    { name: 'Morgan Blake', sharing: false },
+    { name: 'Taylor Quinn', sharing: false }
   ]);
 
   function renderFindMy() {
-    $("#findmy-list").innerHTML = contacts
+    $('#findmy-list').innerHTML = contacts
       .map(
         (c, i) => `<li>
-        <div class="avatar">${escapeHtml(c.name.slice(0, 1))}</div>
-        <div><p class="item-title">${escapeHtml(c.name)}</p><p class="item-sub">${c.sharing ? "Sharing location" : "Hidden"}</p></div>
-        <button type="button" class="toggle ${c.sharing ? "is-on" : ""}" data-findmy-toggle="${i}" aria-label="Toggle sharing for ${escapeHtml(c.name)}"></button>
+        <div class="avatar tint-green">${escapeHtml(c.name.slice(0, 1))}</div>
+        <div style="flex:1;min-width:0"><p class="item-title">${escapeHtml(c.name)}</p><p class="item-sub">${c.sharing ? 'Sharing location' : 'Hidden'}</p></div>
+        <button type="button" class="toggle ${c.sharing ? 'is-on' : ''}" data-findmy-toggle="${i}" aria-label="Toggle sharing for ${escapeHtml(c.name)}"></button>
       </li>`
       )
-      .join("");
-    $$("[data-findmy-toggle]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      .join('');
+    $$('[data-findmy-toggle]').forEach((btn) => {
+      btn.addEventListener('click', () => {
         const i = Number(btn.dataset.findmyToggle);
         contacts[i].sharing = !contacts[i].sharing;
-        store.save("findmy", contacts);
+        store.save('findmy', contacts);
         renderFindMy();
       });
     });
   }
 
   /* —— Mail —— */
-  let mails = store.load("mails", [
+  let mails = store.load('mails', [
     {
-      from: "Marketplace Receipts",
-      subject: "Receipt · Performance tune",
-      preview: "You paid C$1,800 to Gulf Coast Customs.",
+      from: 'Marketplace Receipts',
+      subject: 'Receipt · Performance tune',
+      preview: 'You paid C$1,800 to Gulf Coast Customs.',
       unread: true,
-      when: "2m"
+      when: '2m'
     },
     {
-      from: "Clearwater Panel",
-      subject: "Wallet request paid",
-      preview: "Maya sent you C$500.",
+      from: 'Clearwater Panel',
+      subject: 'Wallet request paid',
+      preview: 'Maya sent you C$500.',
       unread: true,
-      when: "1h"
+      when: '1h'
     },
     {
-      from: "Clearwater Dispatch",
-      subject: "Weekly briefing",
-      preview: "Shift notes for civilian businesses…",
+      from: 'Clearwater Dispatch',
+      subject: 'Weekly briefing',
+      preview: 'Shift notes for civilian businesses…',
       unread: false,
-      when: "Mon"
+      when: 'Mon'
+    },
+    {
+      from: 'Bank of Clearwater',
+      subject: 'Statement ready',
+      preview: 'Your weekly economy summary is available.',
+      unread: false,
+      when: 'Sun'
     }
   ]);
 
   function renderMail() {
-    $("#mail-list").innerHTML = mails
+    $('#mail-list').innerHTML = mails
       .map(
-        (m, i) => `<li class="${m.unread ? "mail-unread" : ""}" data-mail="${i}">
-        <div class="avatar">✉</div>
+        (m, i) => `<li class="${m.unread ? 'mail-unread' : ''}" data-mail="${i}">
+        <div class="avatar tint-blue">✉</div>
         <div style="flex:1;min-width:0">
           <p class="item-title">${escapeHtml(m.subject)}</p>
           <p class="item-sub">${escapeHtml(m.from)} · ${escapeHtml(m.preview)}</p>
         </div>
-        <span class="item-sub">${escapeHtml(m.when)}</span>
+        <span class="item-sub" style="flex-shrink:0">${escapeHtml(m.when)}</span>
       </li>`
       )
-      .join("");
-    $$("[data-mail]").forEach((li) => {
-      li.addEventListener("click", () => {
+      .join('');
+    $$('[data-mail]').forEach((li) => {
+      li.addEventListener('click', () => {
         const i = Number(li.dataset.mail);
         mails[i].unread = false;
-        store.save("mails", mails);
+        store.save('mails', mails);
         window.alert(`${mails[i].subject}\n\nFrom: ${mails[i].from}\n\n${mails[i].preview}`);
         renderMail();
       });
     });
   }
 
-  $("#compose-mail")?.addEventListener("click", () => {
-    $("#mail-sheet").hidden = false;
+  $('#compose-mail')?.addEventListener('click', () => {
+    $('#mail-sheet').hidden = false;
   });
 
-  $$("[data-close-sheet]").forEach((b) =>
-    b.addEventListener("click", () => {
-      $("#mail-sheet").hidden = true;
+  $$('[data-close-sheet]').forEach((b) =>
+    b.addEventListener('click', () => {
+      $('#mail-sheet').hidden = true;
     })
   );
 
-  $("#mail-send")?.addEventListener("click", () => {
-    const to = $("#mail-to").value.trim();
-    const subject = $("#mail-subject").value.trim() || "(No subject)";
-    const body = $("#mail-body").value.trim();
+  $('#mail-send')?.addEventListener('click', () => {
+    const to = $('#mail-to').value.trim();
+    const subject = $('#mail-subject').value.trim() || '(No subject)';
+    const body = $('#mail-body').value.trim();
     if (!to) return;
     mails.unshift({
-      from: "Me",
+      from: 'Me',
       subject: `To ${to}: ${subject}`,
-      preview: body || "Sent via Clearwater Mail",
+      preview: body || 'Sent via Clearwater Mail',
       unread: false,
-      when: "Now"
+      when: 'Now'
     });
-    store.save("mails", mails);
-    $("#mail-to").value = "";
-    $("#mail-subject").value = "";
-    $("#mail-body").value = "";
-    $("#mail-sheet").hidden = true;
+    store.save('mails', mails);
+    $('#mail-to').value = '';
+    $('#mail-subject').value = '';
+    $('#mail-body').value = '';
+    $('#mail-sheet').hidden = true;
     renderMail();
   });
 
   /* —— Messages —— */
-  let threads = store.load("threads", [
-    { name: "Alex Rivera", last: "On my way to the pier.", when: "now" },
-    { name: "Marketplace Bot", last: "Order #482 confirmed.", when: "12m" },
-    { name: "Jordan Lee", last: "Location shared ✓", when: "1h" }
+  let threads = store.load('threads', [
+    { name: 'Alex Rivera', last: 'On my way to the pier.', when: 'now' },
+    { name: 'Marketplace Bot', last: 'Order #482 confirmed.', when: '12m' },
+    { name: 'Jordan Lee', last: 'Location shared ✓', when: '1h' },
+    { name: 'Riley Chen', last: 'Store closes at 10.', when: '3h' }
   ]);
 
   function renderThreads() {
-    $("#thread-list").innerHTML = threads
+    $('#thread-list').innerHTML = threads
       .map(
         (t) => `<li>
-        <div class="avatar">${escapeHtml(t.name.slice(0, 1))}</div>
-        <div style="flex:1"><p class="item-title">${escapeHtml(t.name)}</p><p class="item-sub">${escapeHtml(t.last)}</p></div>
-        <span class="item-sub">${escapeHtml(t.when)}</span>
+        <div class="avatar tint-teal">${escapeHtml(t.name.slice(0, 1))}</div>
+        <div style="flex:1;min-width:0"><p class="item-title">${escapeHtml(t.name)}</p><p class="item-sub">${escapeHtml(t.last)}</p></div>
+        <span class="item-sub" style="flex-shrink:0">${escapeHtml(t.when)}</span>
       </li>`
       )
-      .join("");
+      .join('');
   }
 
-  $("#new-message")?.addEventListener("click", () => {
-    const c = $("#msg-composer");
+  $('#new-message')?.addEventListener('click', () => {
+    const c = $('#msg-composer');
     c.hidden = !c.hidden;
   });
 
-  $("#msg-send")?.addEventListener("click", () => {
-    const to = $("#msg-to").value.trim();
-    const body = $("#msg-body").value.trim();
+  $('#msg-send')?.addEventListener('click', () => {
+    const to = $('#msg-to').value.trim();
+    const body = $('#msg-body').value.trim();
     if (!to || !body) return;
-    threads.unshift({ name: to, last: body, when: "now" });
-    store.save("threads", threads);
-    $("#msg-to").value = "";
-    $("#msg-body").value = "";
-    $("#msg-composer").hidden = true;
+    threads.unshift({ name: to, last: body, when: 'now' });
+    store.save('threads', threads);
+    $('#msg-to').value = '';
+    $('#msg-body').value = '';
+    $('#msg-composer').hidden = true;
     renderThreads();
   });
 
   /* —— Maps —— */
-  $("#maps-go")?.addEventListener("click", () => {
-    const dest = $("#maps-dest").value.trim() || "destination";
-    const el = $("#route-status");
+  $('#maps-go')?.addEventListener('click', () => {
+    const dest = $('#maps-dest').value.trim() || 'destination';
+    const el = $('#route-status');
     el.hidden = false;
     el.textContent = `Routing to ${dest}… Fastest path · ~4 min drive`;
-    const path = $(".route-line path");
+    const path = $('.route-line path');
     if (path) {
-      path.style.animation = "none";
+      path.style.animation = 'none';
       void path.offsetWidth;
-      path.style.animation = "";
+      path.style.animation = '';
     }
   });
 
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
+  /* Expose for debugging / Electron bridge consumers */
+  window.openWeb = openWeb;
+  window.ClearwaterPhone = { SITE, WEB, openWeb, showView };
 
   renderWallet();
   renderMarket();
