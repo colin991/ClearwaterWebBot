@@ -280,6 +280,14 @@
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:40:00.000Z",
       "commit": "585650c"
+    },
+    {
+      "id": "2026-08-15-phone-home-logo",
+      "title": "Phone home uses Clearwater logo",
+      "summary": "Clearwater Phone home wallpaper now shows the Clearwater logo instead of the old anchor mark. Phone v1.1.3.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-15T18:45:00.000Z",
+      "commit": "pending"
     }
   ]
 }

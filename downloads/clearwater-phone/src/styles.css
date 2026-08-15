@@ -491,32 +491,35 @@ textarea {
   pointer-events: none;
 }
 
-.wp-anchor {
+.wp-logo {
   position: absolute;
   left: 50%;
   top: 40%;
   transform: translate(-50%, -50%);
-  width: 96px;
-  height: 96px;
-  color: rgba(244, 248, 255, 0.12);
-  filter: drop-shadow(0 0 24px rgba(118, 173, 255, 0.15));
-  animation: anchor-breathe 7s ease-in-out infinite;
+  width: 118px;
+  height: 118px;
+  filter: drop-shadow(0 0 28px rgba(118, 173, 255, 0.22));
+  animation: logo-breathe 7s ease-in-out infinite;
+  pointer-events: none;
 }
 
-.wp-anchor svg {
+.wp-logo img {
+  display: block;
   width: 100%;
   height: 100%;
+  object-fit: contain;
+  opacity: 0.28;
 }
 
-@keyframes anchor-breathe {
+@keyframes logo-breathe {
   0%,
   100% {
-    opacity: 0.65;
+    opacity: 0.85;
     transform: translate(-50%, -50%) scale(1);
   }
   50% {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1.05);
+    transform: translate(-50%, -50%) scale(1.04);
   }
 }
 
