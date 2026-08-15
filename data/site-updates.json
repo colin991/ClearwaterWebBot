@@ -127,7 +127,7 @@
       "summary": "The no-message notice lives in channel 1514181167145025666, uses a plain # Notice header (no pin emoji), increments +1 on every deleted post, auto-timeouts for 7 days, re-sends if deleted, and can be force-refreshed with `-noticerefresh`.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T04:45:00.000Z",
-      "commit": "e9e9b9f"
+      "commit": "7e4f49d"
     }
   ]
 }
