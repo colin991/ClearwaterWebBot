@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-16-holdvc-prefix",
+      "title": "Hold VC is a prefix command again",
+      "summary": "Ownership hold VC is back on the dash prefix: `-holdvc` and `-unholdvc` (slash `/holdvc` / `/unholdvc` removed).",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T17:51:00.000Z"
+    },
+    {
       "id": "2026-08-16-phone-launcher-setup-logo",
       "title": "Phone launcher uses setup and the Clearwater logo",
       "summary": "Opening Clearwater Phone now always starts with Discord, Z Phone or X Phone, wallpaper, and settings. The launcher uses the Clearwater logo instead of the old anchor mark.",
