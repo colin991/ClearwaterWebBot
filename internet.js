@@ -4823,13 +4823,37 @@ function renderAdLogoPreview() {
 }
 
 function safeBusinessLogoUrl(value) {
-  const raw = String(value || '').trim();
+  return normalizeBusinessLogoUrl(value);
+}
+
+function normalizeBusinessLogoUrl(value) {
+  const raw = String(value || '').trim().slice(0, 500);
   if (!raw) return '';
+  if (/^assets\/[a-z0-9._-]+$/i.test(raw)) return raw;
   try {
     const url = new URL(raw);
     if (url.protocol !== 'https:' || url.username || url.password) return '';
     if (/["'()\\\s]/.test(raw)) return '';
-    return url.href;
+    const host = url.hostname.toLowerCase();
+    if (host === 'freeimage.host' || host.endsWith('.freeimage.host')) {
+      const part = url.pathname.split('/').filter(Boolean).pop() || '';
+      const id = (part.includes('.') ? part.split('.').pop() : part).replace(/[^a-zA-Z0-9]/g, '');
+      return id ? `https://iili.io/${id}.png` : '';
+    }
+    if (host === 'imgur.com' || host === 'www.imgur.com' || host === 'm.imgur.com') {
+      const part = url.pathname.split('/').filter(Boolean).pop() || '';
+      const id = part.replace(/\.[a-z0-9]+$/i, '').replace(/[^a-zA-Z0-9]/g, '');
+      return id ? `https://i.imgur.com/${id}.png` : '';
+    }
+    url.hash = '';
+    const href = url.href;
+    if (/\.(?:png|jpe?g|gif|webp|svg)(?:$|\?)/i.test(url.pathname)) return href;
+    if (/^(?:(?:media\d*|cdn|images-ext-\d+)\.)?discord(?:app)?\.(?:com|net)$/i.test(host)) return href;
+    if (/^(?:.+\.)?blob\.vercel-storage\.com$/i.test(host)) return href;
+    if (/^(?:.+\.)?public\.blob\.vercel-storage\.com$/i.test(host)) return href;
+    if (host === 'i.imgur.com' || host === 'iili.io') return href;
+    if (/^(?:media\d*|i)\.giphy\.com$/i.test(host)) return href;
+    return '';
   } catch {
     return '';
   }
@@ -4838,13 +4862,23 @@ function safeBusinessLogoUrl(value) {
 function renderBusinessLogoPreview(preview, url) {
   if (!preview) return;
   const safe = safeBusinessLogoUrl(url);
+  const raw = String(url || '').trim();
   if (!safe) {
-    preview.hidden = true;
-    preview.innerHTML = '';
+    preview.hidden = !raw;
+    preview.classList.toggle('is-error', Boolean(raw));
+    preview.innerHTML = raw
+      ? '<p class="business-avatar-preview-error">Use a direct image link (png/jpg/webp), or a freeimage.host / Imgur / Discord image URL.</p>'
+      : '';
     return;
   }
   preview.hidden = false;
+  preview.classList.remove('is-error');
   preview.innerHTML = `<img src="${escapeHtml(safe)}" alt="Business logo preview" />`;
+  const img = preview.querySelector('img');
+  img?.addEventListener('error', () => {
+    preview.classList.add('is-error');
+    preview.innerHTML = '<p class="business-avatar-preview-error">Could not load that image. Open the image in a new tab and paste the address that ends in .png or .jpg.</p>';
+  }, { once: true });
 }
 
 async function uploadAdMedia(file, isVideo) {
@@ -6985,7 +7019,7 @@ document.addEventListener('submit', async (event) => {
   try {
     const logoRaw = form.querySelector('[data-biz-avatar-url]')?.value || '';
     const avatarUrl = logoRaw.trim() ? safeBusinessLogoUrl(logoRaw) : '';
-    if (logoRaw.trim() && !avatarUrl) throw new Error('Use a public https image URL for the logo.');
+    if (logoRaw.trim() && !avatarUrl) throw new Error('Use a direct https image URL for the logo (png/jpg/webp), or a freeimage.host / Imgur / Discord image link.');
     const payload = {
       action: 'business-update',
       businessId,
@@ -7037,7 +7071,7 @@ document.querySelector('[data-business-form]')?.addEventListener('submit', async
   try {
     const logoRaw = document.querySelector('[data-business-avatar-url]')?.value || '';
     const avatarUrl = logoRaw.trim() ? safeBusinessLogoUrl(logoRaw) : '';
-    if (logoRaw.trim() && !avatarUrl) throw new Error('Use a public https image URL for the logo.');
+    if (logoRaw.trim() && !avatarUrl) throw new Error('Use a direct https image URL for the logo (png/jpg/webp), or a freeimage.host / Imgur / Discord image link.');
     const response = await fetch('/api/internet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

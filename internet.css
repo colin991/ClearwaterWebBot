@@ -8201,6 +8201,12 @@ body.has-site-banner .internet-side {
   border-radius: 16px;
   background: #05070a;
 }
+.business-avatar-preview.is-error {
+  width: min(100%, 360px);
+  height: auto;
+  min-height: 0;
+  padding: 10px 12px;
+}
 .business-avatar-preview[hidden] { display: none !important; }
 .business-avatar-preview img {
   display: block;
@@ -8209,6 +8215,13 @@ body.has-site-banner .internet-side {
   max-width: 72px;
   max-height: 72px;
   object-fit: cover;
+}
+.business-avatar-preview-error {
+  margin: 0;
+  color: #f0b4b4;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 650;
 }
 .staff-ad-card .staff-ad-media {
   display: block;

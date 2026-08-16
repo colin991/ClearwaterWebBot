@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-16-business-logo-url-fix",
+      "title": "Business logo URL preview fixed",
+      "summary": "Logo image URL now converts freeimage.host and Imgur page links into direct image links, shows a clear error when a link is not an image, and allows iili.io / Imgur images through the site security policy.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T22:30:00.000Z"
+    },
+    {
       "id": "2026-08-16-owner-panel-visibility",
       "title": "Owner Panel only for owners",
       "summary": "Owner Panel no longer uses the broken hidden attribute on the homepage menu. It stays invisible unless you are Ownership, then shows with a proper visibility class.",

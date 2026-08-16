@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { normalizeLogoImageUrl } from './logoUrl.js';
 
 const BUSINESS_ROLES = new Set(['manager', 'poster']);
 const BUSINESS_ID_RE = /^biz_[a-z0-9-]{8,80}$/i;
@@ -8,16 +9,7 @@ function text(value, max = 120) {
 }
 
 function hostedOrAssetUrl(value) {
-  const raw = String(value || '').trim().slice(0, 500);
-  if (/^assets\/[a-z0-9._-]+$/i.test(raw)) return raw;
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== 'https:' || url.username || url.password) return '';
-    if (/["'()\\\s]/.test(raw)) return '';
-    return url.href;
-  } catch {
-    return '';
-  }
+  return normalizeLogoImageUrl(value);
 }
 
 export function ensureBusinessCollections(store) {
@@ -448,7 +440,7 @@ export function updateBusinessProfile(store, {
       }
     } else {
       const avatar = hostedOrAssetUrl(raw);
-      if (!avatar) throw new Error('Paste a public https image URL for the logo');
+      if (!avatar) throw new Error('Paste a direct https image URL (png/jpg/webp), or a freeimage.host / Imgur / Discord image link');
       if (avatar !== previousAvatarUrl) {
         biz.avatarUrl = avatar;
         avatarChanged = true;
