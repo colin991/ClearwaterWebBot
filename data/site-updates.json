@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-16-owner-panel-visibility",
+      "title": "Owner Panel only for owners",
+      "summary": "Owner Panel no longer uses the broken hidden attribute on the homepage menu. It stays invisible unless you are Ownership, then shows with a proper visibility class.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T21:40:00.000Z"
+    },
+    {
       "id": "2026-08-16-fix-giphy",
       "title": "GIF search fixed",
       "summary": "Clearwater Internet GIF search works again. The Giphy endpoint was missing a cache helper import and failed every search.",
@@ -32,7 +39,7 @@
     {
       "id": "2026-08-16-phone-first-customize",
       "title": "Phone first-launch customize",
-      "summary": "Opening Clearwater Phone for the first time now goes Sign in → pick Z Phone (Samsung) or X Phone (Apple) → choose a wallpaper color, then launches.",
+      "summary": "Opening Clearwater Phone for the first time now goes Sign in \u2192 pick Z Phone (Samsung) or X Phone (Apple) \u2192 choose a wallpaper color, then launches.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-16T15:20:00.000Z"
     },

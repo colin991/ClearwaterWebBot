@@ -80,19 +80,27 @@ const loadDiscordSession = async () => {
     if (discordAvatar && session.user.avatarUrl) discordAvatar.src = session.user.avatarUrl;
     if (discordRank && session.user.staffRank) {
       discordRank.textContent = session.user.staffRank;
-      discordRank.hidden = false;
+      discordRank.classList.add('is-visible');
+      discordRank.removeAttribute('hidden');
     }
     if (discordProfileMenuRank && session.user.staffRank) {
       discordProfileMenuRank.textContent = session.user.staffRank;
-      discordProfileMenuRank.hidden = false;
+      discordProfileMenuRank.classList.add('is-visible');
+      discordProfileMenuRank.removeAttribute('hidden');
     }
     discordLogin.hidden = true;
     discordAccount.hidden = false;
     homepageSignedIn = true;
     homepageInternetReady = true;
-    if (ownerLink && session.user.owner) ownerLink.hidden = false;
+    if (ownerLink && session.user.owner) {
+      ownerLink.classList.add('is-visible');
+      ownerLink.removeAttribute('hidden');
+    }
     if (session.user.owner || session.user.serverManagement || session.user.staffPanel) {
-      serverManagementLinks.forEach((link) => { link.hidden = false; });
+      serverManagementLinks.forEach((link) => {
+        link.classList.add('is-visible');
+        link.removeAttribute('hidden');
+      });
     }
     void loadWalletBalance();
   } catch {
@@ -144,8 +152,8 @@ if (window.history.replaceState && /[?&]login=/.test(window.location.search)) {
 
 discordProfile?.addEventListener('click', () => {
   const canOpen = Boolean(
-    (ownerLink && !ownerLink.hidden)
-    || (discordProfileMenuRank && !discordProfileMenuRank.hidden)
+    (ownerLink && ownerLink.classList.contains('is-visible'))
+    || (discordProfileMenuRank && discordProfileMenuRank.classList.contains('is-visible'))
     || cashBalance
   );
   if (!canOpen) return;
