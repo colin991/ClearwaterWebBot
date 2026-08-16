@@ -1,6 +1,6 @@
 import { getAuthConfig, parseCookies, readSessionToken, sendJson, sessionCookieValue } from '../lib/discord-auth.js';
 import { getStaffAccess } from '../lib/owner-access.js';
-import { isAppFetchRequest, rejectPublicBrowse } from '../lib/api-guard.js';
+import { cachedJson, isAppFetchRequest, rejectPublicBrowse } from '../lib/api-guard.js';
 import { allowRate } from '../utils/rateLimit.js';
 
 export default async function handler(request, response) {

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-16-fix-giphy",
+      "title": "GIF search fixed",
+      "summary": "Clearwater Internet GIF search works again. The Giphy endpoint was missing a cache helper import and failed every search.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T17:58:00.000Z"
+    },
+    {
       "id": "2026-08-16-holdvc-prefix",
       "title": "Hold VC is a prefix command again",
       "summary": "Ownership hold VC is back on the dash prefix: `-holdvc` and `-unholdvc` (slash `/holdvc` / `/unholdvc` removed).",
