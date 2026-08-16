@@ -2,18 +2,27 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-16-phone-home-sub",
+      "title": "Phone home tagline removed",
+      "summary": "The Clearwater Phone home screen no longer shows the Internet / Roleplay Panel line under the logo.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T01:22:00.000Z"
+    },
+    {
       "id": "2026-08-16-phone-full-internet",
       "title": "Phone Internet is the real mobile site",
       "summary": "Clearwater Phone now opens the full mobile Internet app with profile pictures, scrollable Maps without the extra background, tighter text, and the Windows app name Clearwater Phone instead of Electron.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-16T01:15:00.000Z"
     },
+    {
       "id": "2026-08-15-phone-overlay-api-v2",
       "title": "Phone overlay and apps restored",
       "summary": "The Phone start screen is a normal window again instead of a black fullscreen, and Messages/Find My talk to Clearwater through the signed-in browser session.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-16T00:05:00.000Z"
     },
+    {
       "id": "2026-08-15-phone-node-fetch",
       "title": "Phone API connection fixed",
       "summary": "Messages, Find My, Wallet, and Maps no longer fail with a Chromium network error. The overlay now talks to Clearwater through a normal HTTPS request.",
