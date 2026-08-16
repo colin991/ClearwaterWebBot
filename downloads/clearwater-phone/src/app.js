@@ -3,7 +3,7 @@
   const VERSION_URL = SITE + '/downloads/clearwater-phone-version.json';
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
-  let appVersion = '1.3.21';
+  let appVersion = '1.3.22';
   let latestInfo = null;
   let sessionUser = null;
   let walletMode = 'send';
@@ -12,9 +12,29 @@
   let mapTimer = null;
   let mapCam = { zoom: 1.4, x: 0, y: 0 };
   let findmyState = { payload: null, query: '' };
+  const PHONE_MODELS = new Set(['z', 'x']);
+  const WALLPAPERS = new Set(['gulf', 'midnight', 'ocean', 'ember', 'forest', 'violet']);
 
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+
+  function applyAppearance(host = {}) {
+    const model = PHONE_MODELS.has(host.phoneModel) ? host.phoneModel : 'z';
+    const wallpaper = WALLPAPERS.has(host.wallpaperColor) ? host.wallpaperColor : 'gulf';
+    document.body.classList.remove('phone-model-x', 'phone-model-z');
+    document.body.classList.add(`phone-model-${model}`);
+    document.body.dataset.wallpaper = wallpaper;
+    $$('[data-setting-phone]').forEach((btn) => {
+      const on = btn.dataset.settingPhone === model;
+      btn.classList.toggle('is-selected', on);
+      btn.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+    $$('[data-setting-wallpaper]').forEach((btn) => {
+      const on = btn.dataset.settingWallpaper === wallpaper;
+      btn.classList.toggle('is-selected', on);
+      btn.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  }
 
   function escapeHtml(s) {
     return String(s)
@@ -177,8 +197,23 @@
       setToggle($('#setting-watch-app'), host.launchOnApp !== false);
       const input = $('#setting-watch-process');
       if (input) input.value = host.watchProcess || 'RobloxPlayerBeta.exe';
+      applyAppearance(host);
     } catch {}
   }
+
+  $$('[data-setting-phone]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const host = await window.anchorPhone?.saveHostSettings?.({ phoneModel: btn.dataset.settingPhone });
+      applyAppearance(host || { phoneModel: btn.dataset.settingPhone });
+    });
+  });
+
+  $$('[data-setting-wallpaper]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const host = await window.anchorPhone?.saveHostSettings?.({ wallpaperColor: btn.dataset.settingWallpaper });
+      applyAppearance(host || { wallpaperColor: btn.dataset.settingWallpaper });
+    });
+  });
 
   $('#setting-login-item')?.addEventListener('click', async () => {
     const on = !$('#setting-login-item').classList.contains('is-on');
@@ -975,6 +1010,7 @@
       const info = await window.anchorPhone?.getVersion?.();
       if (info?.version) appVersion = info.version;
     } catch {}
+    await loadHostSettings();
     await refreshSession();
     renderSettings();
     await checkForUpdates(false);
