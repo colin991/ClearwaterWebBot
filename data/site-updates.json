@@ -2,6 +2,12 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-15-phone-overlay-api-v2",
+      "title": "Phone overlay and apps restored",
+      "summary": "The Phone start screen is a normal window again instead of a black fullscreen, and Messages/Find My talk to Clearwater through the signed-in browser session.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T00:05:00.000Z"
+    },
       "id": "2026-08-15-phone-node-fetch",
       "title": "Phone API connection fixed",
       "summary": "Messages, Find My, Wallet, and Maps no longer fail with a Chromium network error. The overlay now talks to Clearwater through a normal HTTPS request.",

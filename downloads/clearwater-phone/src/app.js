@@ -1,9 +1,9 @@
 (() => {
-  const SITE = 'https://cwrpvc.lol';
+  const SITE = 'https://www.cwrpvc.lol';
   const VERSION_URL = SITE + '/downloads/clearwater-phone-version.json';
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
-  let appVersion = '1.3.13';
+  let appVersion = '1.3.14';
   let latestInfo = null;
   let sessionUser = null;
   let walletMode = 'send';
@@ -681,9 +681,9 @@
   async function checkForUpdates(manual = false) {
     const status = $('#settings-update-status');
     try {
-      const res = await fetch(VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' });
-      if (!res.ok) throw new Error('version check failed');
-      const info = await res.json();
+      const res = await window.anchorPhone?.checkUpdate?.();
+      if (!res?.ok || !res.body?.version) throw new Error('version check failed');
+      const info = res.body;
       latestInfo = info;
       if (compareVersions(appVersion, info.version) < 0) {
         showOutdated(info);
