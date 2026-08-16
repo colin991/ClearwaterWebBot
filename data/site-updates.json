@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-16-findmy-map-size",
+      "title": "Bigger Find My map",
+      "summary": "The Find My map in Clearwater Phone now fills most of the screen instead of a small preview.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T02:45:00.000Z"
+    },
+    {
       "id": "2026-08-16-phone-reroute-findmy",
       "title": "Maps reroutes and Find My search",
       "summary": "Phone Maps recalculates the road path if you go off route. Find My now has a name search and Discord profile pictures on the list and map.",

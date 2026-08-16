@@ -750,8 +750,22 @@ textarea {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
   padding: 8px 10px 12px;
   background: transparent;
+}
+
+#findmy-map.map-canvas {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 380px;
+  margin: 0 0 8px;
+}
+
+.findmy-body .people-list {
+  flex: 0 1 160px;
+  min-height: 72px;
+  overflow: auto;
 }
 
 .gmap {
@@ -1389,6 +1403,12 @@ img.avatar {
 .map-canvas.live-map {
   height: 240px;
   cursor: crosshair;
+}
+
+#findmy-map.map-canvas.live-map {
+  height: auto;
+  min-height: 380px;
+  cursor: grab;
 }
 
 .liberty-map {
