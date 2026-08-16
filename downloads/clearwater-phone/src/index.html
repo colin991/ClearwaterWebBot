@@ -200,36 +200,20 @@
           </section>
 
           <!-- MESSAGES -->
-          <section class="view view-app" id="view-messages" data-view="messages" hidden>
+          <section class="view view-app view-internet" id="view-messages" data-view="messages" hidden>
             <div class="app-chrome">
               <button type="button" class="back-btn" data-home aria-label="Home">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
-              <h1 id="messages-title">Messages</h1>
-              <div class="chrome-actions">
-                <button type="button" class="chrome-action" id="new-message" aria-label="New">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-                </button>
-              </div>
+              <h1>Messages</h1>
+              <span class="chrome-spacer"></span>
             </div>
-            <div class="app-body">
-              <div id="inbox-pane">
-                <p class="app-lede">The same conversations as Clearwater Internet.</p>
-                <ul class="ios-list thread-list" id="thread-list"></ul>
-                <div class="composer" id="msg-composer" hidden>
-                  <input type="text" id="msg-to" placeholder="Username" />
-                  <textarea id="msg-body" rows="3" placeholder="Write a message…"></textarea>
-                  <button type="button" class="btn-primary" id="msg-send">Send</button>
-                </div>
-              </div>
-              <div id="thread-pane" hidden>
-                <ul class="ios-list thread-list chat-log" id="chat-log"></ul>
-                <div class="composer">
-                  <textarea id="chat-body" rows="2" placeholder="Message…"></textarea>
-                  <button type="button" class="btn-primary" id="chat-send">Send</button>
-                </div>
-              </div>
-            </div>
+            <webview
+              id="messages-webview"
+              class="internet-webview"
+              partition="persist:clearwater-phone"
+              allowpopups="on"
+            ></webview>
           </section>
 
           <!-- MAPS -->

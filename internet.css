@@ -9521,5 +9521,10 @@ html.cw-phone-embed .internet-shell {
 html.cw-phone-embed .community-card {
   display: none !important;
 }
+html.cw-phone-embed .internet-nav a[data-view-link="wallet"],
+html.cw-phone-embed .internet-nav a[data-view-link="messages"],
+html.cw-phone-embed .rail-phone-download {
+  display: none !important;
+}
 
 

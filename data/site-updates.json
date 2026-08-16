@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-16-phone-messages-site",
+      "title": "Phone Messages matches Internet",
+      "summary": "Inside Phone Internet, Wallet and Messages are hidden because those are their own Phone apps. The Messages app now opens the same inbox as the website Messages tab.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T02:25:00.000Z"
+    },
+    {
       "id": "2026-08-16-hide-edit-business",
       "title": "Edit business profile only for managers",
       "summary": "The Edit business profile button no longer shows on every member page. It only appears on a business account you actually manage.",

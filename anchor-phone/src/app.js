@@ -3,7 +3,7 @@
   const VERSION_URL = SITE + '/downloads/clearwater-phone-version.json';
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
-  let appVersion = '1.3.17';
+  let appVersion = '1.3.18';
   let latestInfo = null;
   let sessionUser = null;
   let walletMode = 'send';
@@ -11,7 +11,6 @@
   let mapState = { me: null, places: [], dest: null, friends: [], roads: [], route: [], navigating: false };
   let mapTimer = null;
   let mapCam = { zoom: 1.4, x: 0, y: 0 };
-  let openThread = null;
 
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -86,13 +85,9 @@
       renderSettings();
       void loadHostSettings();
     }
-    if (id === 'internet') ensureInternetWebview();
+    if (id === 'internet') ensureSiteWebview('#internet-webview', '/internet?embed=phone');
+    if (id === 'messages') ensureSiteWebview('#messages-webview', '/internet/messages?embed=phone', true);
     if (id === 'wallet') void loadWallet();
-    if (id === 'messages') {
-      openThread = null;
-      showInbox();
-      void loadMessages();
-    }
     if (id === 'maps') {
       void loadMap('maps');
       if (mapTimer) window.clearInterval(mapTimer);
@@ -113,8 +108,9 @@
   $$('[data-home]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const internetOn = $('#view-internet')?.classList.contains('is-active');
-      const wv = $('#internet-webview');
-      if (internetOn && wv && typeof wv.canGoBack === 'function' && wv.canGoBack()) {
+      const messagesOn = $('#view-messages')?.classList.contains('is-active');
+      const wv = internetOn ? $('#internet-webview') : messagesOn ? $('#messages-webview') : null;
+      if (wv && typeof wv.canGoBack === 'function' && wv.canGoBack()) {
         wv.goBack();
         return;
       }
@@ -188,11 +184,11 @@
     if (input && host?.watchProcess) input.value = host.watchProcess;
   });
 
-  function ensureInternetWebview() {
-    const wv = $('#internet-webview');
+  function ensureSiteWebview(selector, path, reload = false) {
+    const wv = $(selector);
     if (!wv) return;
-    const dest = SITE + '/internet?embed=phone';
-    if (!wv.getAttribute('src')) wv.setAttribute('src', dest);
+    const dest = SITE + path;
+    if (reload || !wv.getAttribute('src')) wv.setAttribute('src', dest);
     if (wv.dataset.bound === '1') return;
     wv.dataset.bound = '1';
     wv.addEventListener('will-navigate', (event) => {
@@ -204,7 +200,7 @@
   }
 
   async function loadInternetFeed() {
-    ensureInternetWebview();
+    ensureSiteWebview('#internet-webview', '/internet?embed=phone');
   }
 
   $('#net-post')?.addEventListener('click', async () => {
@@ -368,94 +364,6 @@
     $('#wallet-member').value = '';
     $('#wallet-amount').value = '';
     $('#wallet-note').value = '';
-  });
-
-  function showInbox() {
-    $('#inbox-pane').hidden = false;
-    $('#thread-pane').hidden = true;
-    const title = $('#messages-title');
-    if (title) title.textContent = 'Messages';
-  }
-
-  function showThread(name) {
-    $('#inbox-pane').hidden = true;
-    $('#thread-pane').hidden = false;
-    const title = $('#messages-title');
-    if (title) title.textContent = name || 'Chat';
-  }
-
-  async function loadMessages() {
-    const list = $('#thread-list');
-    if (!signedIn()) {
-      needSignIn(list);
-      return;
-    }
-    const result = await api('messages');
-    if (!result.ok) {
-      needSignIn(list, result.body?.error || 'Could not load messages.');
-      return;
-    }
-    const items = result.body.conversations || result.body.messages || [];
-    list.innerHTML = items.length
-      ? items.map((m) => `<li data-open-thread="${escapeHtml(m.otherId || '')}" data-thread-name="${escapeHtml(m.otherDisplayName || m.otherUsername || 'Member')}">
-          ${avatarHtml({ displayName: m.otherDisplayName, avatarUrl: m.otherAvatarUrl || m.avatarUrl }, m.otherDisplayName)}
-          <div style="flex:1"><p class="item-title">${escapeHtml(m.otherDisplayName || 'Member')}</p><p class="item-sub">${escapeHtml(m.content || 'New message')}</p></div>
-          <span class="item-sub">${escapeHtml(timeAgo(m.createdAt))}</span>
-        </li>`).join('')
-      : '<li><p class="item-sub">No messages yet.</p></li>';
-    list.querySelectorAll('[data-open-thread]').forEach((row) => {
-      row.addEventListener('click', () => void openConversation(row.dataset.openThread, row.dataset.threadName));
-    });
-  }
-
-  async function openConversation(id, name) {
-    openThread = { id, name };
-    showThread(name);
-    const log = $('#chat-log');
-    const result = await api('conversation', { withUserId: id });
-    const messages = result.body?.messages || [];
-    log.innerHTML = messages.map((m) => `<li>
-      <div><p class="item-title">${escapeHtml(m.content || (m.gifUrl ? 'GIF' : ''))}</p><p class="item-sub">${escapeHtml(timeAgo(m.createdAt))}</p></div>
-    </li>`).join('') || '<li><p class="item-sub">No messages yet.</p></li>';
-    log.scrollTop = log.scrollHeight;
-  }
-
-  $('#new-message')?.addEventListener('click', () => {
-    if (openThread) {
-      openThread = null;
-      showInbox();
-      return;
-    }
-    const c = $('#msg-composer');
-    if (c) c.hidden = !c.hidden;
-  });
-
-  $('#msg-send')?.addEventListener('click', async () => {
-    const to = $('#msg-to').value.trim().replace(/^@/, '');
-    const content = $('#msg-body').value.trim();
-    if (!to || !content) return;
-    const result = await api('message-send', { username: to, content });
-    if (!result.ok) {
-      window.alert(result.body?.error || 'Could not send.');
-      return;
-    }
-    $('#msg-to').value = '';
-    $('#msg-body').value = '';
-    $('#msg-composer').hidden = true;
-    void loadMessages();
-  });
-
-  $('#chat-send')?.addEventListener('click', async () => {
-    if (!openThread) return;
-    const content = $('#chat-body').value.trim();
-    if (!content) return;
-    const result = await api('message-send', { to: openThread.id, content });
-    if (!result.ok) {
-      window.alert(result.body?.error || 'Could not send.');
-      return;
-    }
-    $('#chat-body').value = '';
-    void openConversation(openThread.id, openThread.name);
   });
 
   function renderPins(container, pins) {
