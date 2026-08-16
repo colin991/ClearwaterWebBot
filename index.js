@@ -59,4 +59,4 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-await client.login(config.token); //gjjddddssssss
+await client.login(config.token); //gjjddddssssssss
