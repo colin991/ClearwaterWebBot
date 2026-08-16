@@ -4,9 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Clearwater Phone</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -45,7 +42,6 @@
 
             <header class="home-header">
               <p class="home-brand">Clearwater</p>
-              <p class="home-sub">Internet · Roleplay Panel</p>
             </header>
 
             <div class="app-grid" role="list">
@@ -120,7 +116,7 @@
           </section>
 
           <!-- INTERNET -->
-          <section class="view view-app" id="view-internet" data-view="internet" hidden>
+          <section class="view view-app view-internet" id="view-internet" data-view="internet" hidden>
             <div class="app-chrome">
               <button type="button" class="back-btn" data-home aria-label="Home">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -128,16 +124,12 @@
               <h1>Internet</h1>
               <span class="chrome-spacer"></span>
             </div>
-            <div class="app-body">
-              <p class="app-lede">Post to the same Clearwater Internet feed as the website.</p>
-              <div class="composer" id="net-composer">
-                <textarea id="net-body" rows="3" maxlength="500" placeholder="What's happening?"></textarea>
-                <button type="button" class="btn-primary" id="net-post">Post</button>
-                <p class="form-status" id="net-status" hidden></p>
-              </div>
-              <h2 class="section-title">Feed</h2>
-              <ul class="ios-list thread-list" id="net-feed"></ul>
-            </div>
+            <webview
+              id="internet-webview"
+              class="internet-webview"
+              partition="persist:clearwater-phone"
+              allowpopups="on"
+            ></webview>
           </section>
 
           <!-- WALLET -->
@@ -193,11 +185,17 @@
               <h1>Find My</h1>
               <span class="chrome-spacer"></span>
             </div>
-            <div class="app-body">
-              <p class="app-lede">Share your live ER:LC location with friends. They only see you when you turn sharing on for them.</p>
-              <div class="map-canvas live-map" id="findmy-map">
-                <img class="liberty-map" src="https://cwrpvc.lol/assets/liberty-county-map.jpg" alt="Liberty County" draggable="false" />
-                <div class="map-pins" id="findmy-pins"></div>
+            <div class="app-body findmy-body">
+              <p class="app-lede">Share live ER:LC location with friends.</p>
+              <label class="field">
+                <span>Search</span>
+                <input type="search" id="findmy-search" placeholder="Name or username" autocomplete="off" />
+              </label>
+              <div class="map-canvas live-map is-pan" id="findmy-map">
+                <div class="map-world">
+                  <img class="liberty-map" src="https://www.cwrpvc.lol/assets/liberty-county-map.jpg" alt="Liberty County" draggable="false" />
+                  <div class="map-pins" id="findmy-pins"></div>
+                </div>
               </div>
               <p class="route-status" id="findmy-status" hidden></p>
               <h2 class="section-title">Friends</h2>
@@ -206,36 +204,20 @@
           </section>
 
           <!-- MESSAGES -->
-          <section class="view view-app" id="view-messages" data-view="messages" hidden>
+          <section class="view view-app view-internet" id="view-messages" data-view="messages" hidden>
             <div class="app-chrome">
               <button type="button" class="back-btn" data-home aria-label="Home">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
-              <h1 id="messages-title">Messages</h1>
-              <div class="chrome-actions">
-                <button type="button" class="chrome-action" id="new-message" aria-label="New">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-                </button>
-              </div>
+              <h1>Messages</h1>
+              <span class="chrome-spacer"></span>
             </div>
-            <div class="app-body">
-              <div id="inbox-pane">
-                <p class="app-lede">The same conversations as Clearwater Internet.</p>
-                <ul class="ios-list thread-list" id="thread-list"></ul>
-                <div class="composer" id="msg-composer" hidden>
-                  <input type="text" id="msg-to" placeholder="Username" />
-                  <textarea id="msg-body" rows="3" placeholder="Write a message…"></textarea>
-                  <button type="button" class="btn-primary" id="msg-send">Send</button>
-                </div>
-              </div>
-              <div id="thread-pane" hidden>
-                <ul class="ios-list thread-list chat-log" id="chat-log"></ul>
-                <div class="composer">
-                  <textarea id="chat-body" rows="2" placeholder="Message…"></textarea>
-                  <button type="button" class="btn-primary" id="chat-send">Send</button>
-                </div>
-              </div>
-            </div>
+            <webview
+              id="messages-webview"
+              class="internet-webview"
+              partition="persist:clearwater-phone"
+              allowpopups="on"
+            ></webview>
           </section>
 
           <!-- MAPS -->
@@ -248,18 +230,27 @@
               <span class="chrome-spacer"></span>
             </div>
             <div class="app-body maps-body">
-              <p class="app-lede">Tap the Liberty County map (ER:LC API) to pick a destination. We’ll route from your in-game location.</p>
-              <div class="map-canvas live-map" id="maps-map">
-                <img class="liberty-map" src="https://cwrpvc.lol/assets/liberty-county-map.jpg" alt="Liberty County" draggable="false" />
-                <svg class="route-overlay" id="maps-route" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
-                <div class="map-pins" id="maps-pins"></div>
+              <div class="gmap" id="maps-gmap">
+                <div class="gmap-viewport" id="maps-map">
+                  <div class="gmap-scene" id="maps-scene">
+                    <img class="liberty-map" src="https://www.cwrpvc.lol/assets/liberty-county-map.jpg" alt="Liberty County" draggable="false" />
+                    <svg class="route-overlay roads-overlay" id="maps-roads" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+                    <svg class="route-overlay" id="maps-route" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+                    <div class="map-pins" id="maps-pins"></div>
+                  </div>
+                </div>
+                <div class="gmap-zoom" aria-label="Map zoom">
+                  <button type="button" id="maps-zoom-in" aria-label="Zoom in">+</button>
+                  <button type="button" id="maps-zoom-out" aria-label="Zoom out">−</button>
+                </div>
               </div>
               <label class="field">
                 <span>Destination</span>
-                <input type="text" id="maps-dest" list="maps-places" placeholder="Search postal or street…" />
+                <input type="text" id="maps-dest" list="maps-places" placeholder="Postal or street" />
                 <datalist id="maps-places"></datalist>
               </label>
               <button type="button" class="btn-primary" id="maps-go">Start route</button>
+              <button type="button" class="btn-ghost" id="maps-stop" hidden>Stop route</button>
               <p class="route-status" id="route-status" hidden></p>
             </div>
           </section>

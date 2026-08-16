@@ -2839,6 +2839,42 @@ function findMyShareList(user) {
     : [];
 }
 
+export function getLibertyRoads(store) {
+  const roads = Array.isArray(store.libertyRoads) ? store.libertyRoads : [];
+  return roads.map((road) => ({
+    id: String(road?.id || ''),
+    points: (Array.isArray(road?.points) ? road.points : [])
+      .map((point) => ({
+        left: Math.min(1, Math.max(0, Number(point.left))),
+        top: Math.min(1, Math.max(0, Number(point.top))),
+      }))
+      .filter((point) => Number.isFinite(point.left) && Number.isFinite(point.top))
+      .slice(0, 240),
+  })).filter((road) => road.points.length >= 2).slice(0, 80);
+}
+
+export function setLibertyRoads(store, roads) {
+  store.libertyRoads = getLibertyRoads({ libertyRoads: Array.isArray(roads) ? roads : [] }).map((road, index) => ({
+    id: road.id || `road_${index + 1}`,
+    points: road.points,
+  }));
+  return store.libertyRoads;
+}
+
+export function discordProfileAvatar(id, stored) {
+  const url = String(stored || '').trim();
+  if (/^https:\/\/cdn\.discordapp\.com\//i.test(url)) return url;
+  const snow = String(id || '').replace(/\D/g, '');
+  if (snow.length >= 16) {
+    try {
+      return `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(snow) >> 22n) % 6}.png`;
+    } catch {
+      /* ignore */
+    }
+  }
+  return /^https?:\/\//i.test(url) ? url : null;
+}
+
 export function findMyDirectory(store, actor) {
   const user = upsertInternetUser(store, actor);
   assertNotBanned(user);
@@ -2857,7 +2893,7 @@ export function findMyDirectory(store, actor) {
         id,
         displayName: text(peer.displayName, 80) || text(peer.username, 80) || 'Clearwater member',
         username: text(peer.username, 80) || 'member',
-        avatarUrl: peer.avatarUrl || null,
+        avatarUrl: discordProfileAvatar(id, peer.avatarUrl),
         sharing: sharing.has(id),
         sharesWithYou: findMyShareList(peer).includes(String(user.id)),
       };

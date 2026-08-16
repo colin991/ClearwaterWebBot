@@ -8,7 +8,7 @@ import { dropLocationNameCandidates, fetchErlcPlayersOnMap, fetchErlcServer, fin
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
 import { AUTOMOD_HOLD_MESSAGE } from './internetAutomod.js';
-import { AutomodHoldError, adjustInternetCredits, addBusinessMember, applyStaffSiteAction, applyStaffUserAction, assertBusinessAccess, assertLimitedStaffBanQuota, banKnownInternetIps, businessActorFromAccount, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, findMyDirectory, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listGovernmentFines, listInternetAdsForUser, listMyBusinessAccounts, manageInternetAd, membersSharingWith, moderationSnapshot, myVerificationApplication, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, notifyActiveBusinessesLogoUrlUpdate, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, purchasePostBoost, purgeIdleBusinessAccounts, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, removeBusinessMember, respondCreditTransfer, reviewBusinessApplication, reviewGovernmentFine, reviewInternetAd, reviewInternetReport, reviewVerificationApplication, revertInternetHistory, saveInternetStore, queueInternetStoreSave, searchStaffUsers, sendInternetMessage, serveInternetAds, setBusinessMemberRole, setDiscordInternetNotify, setFindMyShare, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserConversation, staffUserDetail, staffUserMessages, submitBusinessApplication, submitGovernmentFine, submitVerificationApplication, takeInternetConversation, takeInternetMessages, takeInternetNotifications, countUnreadInternetWarnings, takeUnreadInternetWarnings, touchBusinessAccountActivity, touchInternetUser, updateBusinessProfile, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
+import { AutomodHoldError, adjustInternetCredits, addBusinessMember, applyStaffSiteAction, applyStaffUserAction, assertBusinessAccess, assertLimitedStaffBanQuota, banKnownInternetIps, businessActorFromAccount, claimInternetDailyCredits, claimRobloxCreditPacks, clearExpiredInternetBans, clearExpiredInternetIpBans, clearKnownInternetIpBans, createCreditTransfer, createInternetAdReport, createInternetPost, createInternetReport, deleteInternetAccount, deleteInternetPost, discordProfileAvatar, editInternetPost, ensureBankInternetAccount, ensureOfficialInternetAccount, findMyDirectory, getLibertyRoads, setLibertyRoads, getActiveBan, getActiveInternetIpBan, interactInternetPost, internetFeedDiscordRef, internetPreferences, internetProfile, listGovernmentFines, listInternetAdsForUser, listMyBusinessAccounts, manageInternetAd, membersSharingWith, moderationSnapshot, myVerificationApplication, BANK_INTERNET_ACCOUNT_ID, OFFICIAL_INTERNET_ACCOUNT_ID, notifyActiveBusinessesLogoUrlUpdate, publicInternetSettings, publicPosts, publicUsers, purchaseInternetAd, purchasePostBoost, purgeIdleBusinessAccounts, readInternetStore, recordInternetAdClick, recordInternetIpHash, recordLimitedStaffBan, removeBusinessMember, respondCreditTransfer, reviewBusinessApplication, reviewGovernmentFine, reviewInternetAd, reviewInternetReport, reviewVerificationApplication, revertInternetHistory, saveInternetStore, queueInternetStoreSave, searchStaffUsers, sendInternetMessage, serveInternetAds, setBusinessMemberRole, setDiscordInternetNotify, setFindMyShare, setInternetAccountActive, setInternetBan, setInternetPostDiscordFeedMessage, socialSnapshot, staffUserConversation, staffUserDetail, staffUserMessages, submitBusinessApplication, submitGovernmentFine, submitVerificationApplication, takeInternetConversation, takeInternetMessages, takeInternetNotifications, countUnreadInternetWarnings, takeUnreadInternetWarnings, touchBusinessAccountActivity, touchInternetUser, updateBusinessProfile, updateInternetPreference, updateInternetProfile, updateInternetSocial, updateOfficialInternetProfile, upsertInternetUser, voteInternetPoll, walletSnapshot, internetAdPricing } from './internetStore.js';
 import { deleteVercelBlobUrls } from './blobStorage.js';
 import { createDiscordInternetNotifier } from './discordInternetNotify.js';
 import { createInternetFeedController, shouldAnnounceInteractResult } from './discordInternetFeed.js';
@@ -801,6 +801,19 @@ export function startStatusServer(client, config) {
           return json(response, 200, result);
         }
 
+        if (body.action === 'liberty-roads-get') {
+          return json(response, 200, { roads: getLibertyRoads(store) });
+        }
+
+        if (body.action === 'liberty-roads-save') {
+          if (body.owner !== true && body.staffPanel !== 'full' && body.staffPanel !== 'limited' && body.serverManagement !== true) {
+            return json(response, 403, { error: 'Server management access required' });
+          }
+          const roads = setLibertyRoads(store, body.roads);
+          await saveInternetStore(store);
+          return json(response, 200, { roads, saved: true });
+        }
+
         if (body.action === 'erlc-phone-map') {
           if (!config.erlcServerKey) return json(response, 503, { error: 'ER:LC is not configured on the bot host yet.' });
           const directory = findMyDirectory(store, body.actor);
@@ -835,7 +848,7 @@ export function startStatusServer(client, config) {
                 id: member.id,
                 displayName: member.displayName || member.username || 'Clearwater member',
                 username: member.username || 'member',
-                avatarUrl: member.avatarUrl || null,
+                avatarUrl: discordProfileAvatar(member.id, member.avatarUrl),
                 online: Boolean(pin),
                 location: pin,
               });
@@ -845,6 +858,7 @@ export function startStatusServer(client, config) {
               online: Boolean(me),
               friends,
               places: phonePlacesFromPlayers(players),
+              roads: getLibertyRoads(store),
               contacts: directory.contacts,
               currentPlayers: Number.isInteger(server.CurrentPlayers) ? server.CurrentPlayers : players.length,
               updatedAt: new Date().toISOString(),

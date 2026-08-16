@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@450;550;650;750;850&display=swap" rel="stylesheet" />
     <script>document.documentElement.classList.add('js');</script>
-            <link rel="stylesheet" href="styles.css?v=20260815-mgmt-load" />
+            <link rel="stylesheet" href="styles.css?v=20260816-roads" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260815-vpn-block"></script>
   </head>
@@ -110,11 +110,19 @@
               <button type="button" class="server-map-zoom-btn" data-map-zoom-reset title="Reset map" aria-label="Reset map">Reset</button>
               <span class="server-map-zoom-label" data-map-zoom-label>100%</span>
             </div>
-            <p class="server-map-hint">Scroll to zoom · Alt-drag to pan · Drag to select</p>
+            <p class="server-map-hint">Scroll to zoom · Alt-drag to pan · Drag to select · Road paint is a temporary routing map for Phone Maps</p>
+            <div class="server-map-road-tools">
+              <button type="button" class="button button-secondary" data-road-mode>Draw roads</button>
+              <button type="button" class="button button-ghost" data-road-new disabled>New road</button>
+              <button type="button" class="button button-ghost" data-road-undo disabled>Undo point</button>
+              <button type="button" class="button button-ghost" data-road-save disabled>Save roads</button>
+              <span class="server-map-road-status" data-road-status>Off</span>
+            </div>
             <div class="server-map-viewport" data-server-map-viewport>
               <div class="server-map-scene" data-server-map-scene>
                 <div class="server-map-view" data-server-map-view>
                   <img src="assets/liberty-county-map.jpg" alt="Liberty County map" width="1024" height="1024" draggable="false" />
+                  <svg class="server-map-roads" data-server-map-roads viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
                   <div class="server-map-pins" data-server-map-pins></div>
                   <div class="server-map-marquee" data-server-map-marquee hidden></div>
                 </div>

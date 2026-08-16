@@ -2,6 +2,69 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-16-phone-installer",
+      "title": "Phone installs as a Windows app",
+      "summary": "Download Phone now installs Clearwater Phone like a normal Windows app (Start Menu and desktop shortcut). After setup you can delete the downloaded installer. Quit the old tray app first if Windows will not let you delete the previous .exe.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T02:50:00.000Z"
+    },
+    {
+      "id": "2026-08-16-findmy-map-size",
+      "title": "Bigger Find My map",
+      "summary": "The Find My map in Clearwater Phone now fills most of the screen instead of a small preview.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T02:45:00.000Z"
+    },
+    {
+      "id": "2026-08-16-phone-reroute-findmy",
+      "title": "Maps reroutes and Find My search",
+      "summary": "Phone Maps recalculates the road path if you go off route. Find My now has a name search and Discord profile pictures on the list and map.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T02:40:00.000Z"
+    },
+    {
+      "id": "2026-08-16-phone-messages-site",
+      "title": "Phone Messages matches Internet",
+      "summary": "Inside Phone Internet, Wallet and Messages are hidden because those are their own Phone apps. The Messages app now opens the same inbox as the website Messages tab.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T02:25:00.000Z"
+    },
+    {
+      "id": "2026-08-16-hide-edit-business",
+      "title": "Edit business profile only for managers",
+      "summary": "The Edit business profile button no longer shows on every member page. It only appears on a business account you actually manage.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T02:15:00.000Z"
+    },
+    {
+      "id": "2026-08-16-phone-road-nav",
+      "title": "Phone Maps follows roads",
+      "summary": "Start route now navigates along painted Liberty County roads. Management can draw those roads on Server Management, Phone Maps zooms like Google Maps, and your in-game pin updates about every two seconds.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T01:30:00.000Z"
+    },
+    {
+      "id": "2026-08-16-phone-home-sub",
+      "title": "Phone home tagline removed",
+      "summary": "The Clearwater Phone home screen no longer shows the Internet / Roleplay Panel line under the logo.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T01:22:00.000Z"
+    },
+    {
+      "id": "2026-08-16-phone-full-internet",
+      "title": "Phone Internet is the real mobile site",
+      "summary": "Clearwater Phone now opens the full mobile Internet app with profile pictures, scrollable Maps without the extra background, tighter text, and the Windows app name Clearwater Phone instead of Electron.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T01:15:00.000Z"
+    },
+    {
+      "id": "2026-08-15-phone-overlay-api-v2",
+      "title": "Phone overlay and apps restored",
+      "summary": "The Phone start screen is a normal window again instead of a black fullscreen, and Messages/Find My talk to Clearwater through the signed-in browser session.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T00:05:00.000Z"
+    },
+    {
       "id": "2026-08-15-fix-internet-merge-markers",
       "title": "Internet page script fix",
       "summary": "Removed leftover merge conflict markers at the bottom of Clearwater Internet so the page scripts load cleanly again.",
@@ -67,7 +130,7 @@
     {
       "id": "2026-08-15-hide-government-nav",
       "title": "Government nav hidden without roles",
-      "summary": "The Government link stays completely hidden unless your Discord roles allow government tools — same behavior as Staff.",
+      "summary": "The Government link stays completely hidden unless your Discord roles allow government tools \u2014 same behavior as Staff.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T21:50:00.000Z"
     },
@@ -81,7 +144,7 @@
     {
       "id": "2026-08-15-phone-stay-signed-in",
       "title": "Phone stays signed in",
-      "summary": "Clearwater Phone no longer flashes “Signed in” then immediately signs you out. Discord login is kept until you tap Sign out.",
+      "summary": "Clearwater Phone no longer flashes \u201cSigned in\u201d then immediately signs you out. Discord login is kept until you tap Sign out.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T21:42:00.000Z"
     },
@@ -242,7 +305,7 @@
     {
       "id": "2026-08-15-help-footer",
       "title": "Moderation help cleanup",
-      "summary": "Removed the “Modeled after Circle-style staff tools” footer from `-help` so the command embed stays clean.",
+      "summary": "Removed the \u201cModeled after Circle-style staff tools\u201d footer from `-help` so the command embed stays clean.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T01:34:00.000Z",
       "commit": "e6c9826"
@@ -258,7 +321,7 @@
     {
       "id": "2026-08-15-update-log-author",
       "title": "Update log shows who updated",
-      "summary": "Discord update log embeds now include an “Updated by” field naming who requested or owns each change.",
+      "summary": "Discord update log embeds now include an \u201cUpdated by\u201d field naming who requested or owns each change.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T02:17:00.000Z",
       "commit": "28a2bb1"
@@ -274,7 +337,7 @@
     {
       "id": "2026-08-15-update-by-git-user",
       "title": "Update log uses git username",
-      "summary": "“Updated by” in the Discord update log now uses the git/GitHub username (e.g. colin991) instead of a full name.",
+      "summary": "\u201cUpdated by\u201d in the Discord update log now uses the git/GitHub username (e.g. colin991) instead of a full name.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T02:42:00.000Z",
       "commit": "5a32771"
@@ -282,7 +345,7 @@
     {
       "id": "2026-08-15-hold-vc",
       "title": "Hold VC command",
-      "summary": "Added Ownership-only `-holdvc` / `-unholdvc` (not part of the staff moderation command list): server-mutes everyone in a voice channel except Ownership, announces “Please Hold this voice chat”, and plays a bundled voice announcement in the channel (no API key).",
+      "summary": "Added Ownership-only `-holdvc` / `-unholdvc` (not part of the staff moderation command list): server-mutes everyone in a voice channel except Ownership, announces \u201cPlease Hold this voice chat\u201d, and plays a bundled voice announcement in the channel (no API key).",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T02:49:40.000Z",
       "commit": "cd24a6b"
@@ -322,7 +385,7 @@
     {
       "id": "2026-08-15-say-command",
       "title": "Say command for voice chat",
-      "summary": "Added Ownership-only `/say text:` — the bot joins a voice channel and speaks the given text for everyone (no API key).",
+      "summary": "Added Ownership-only `/say text:` \u2014 the bot joins a voice channel and speaks the given text for everyone (no API key).",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T03:07:48.000Z",
       "commit": "f8ea4f1"
@@ -354,7 +417,7 @@
     {
       "id": "2026-08-15-sidebar-ad-fit",
       "title": "Sidebar ad matches site chrome",
-      "summary": "Sponsored sidebar ads match the solid card surface of What’s happening / Who to follow, and the right rail is a fixed-height independently scrollable column.",
+      "summary": "Sponsored sidebar ads match the solid card surface of What\u2019s happening / Who to follow, and the right rail is a fixed-height independently scrollable column.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T04:40:00.000Z",
       "commit": "e812581"
@@ -378,7 +441,7 @@
     {
       "id": "2026-08-15-reels-photo-load",
       "title": "Reels photo load fix",
-      "summary": "Fixed intermittent Reel “photo could not be loaded” errors: same-origin /api/media now proxies Vercel Blob bytes instead of 302ing into a CSP-blocked *.public.blob host, with retries and CSP allowlist updates for large media fallbacks.",
+      "summary": "Fixed intermittent Reel \u201cphoto could not be loaded\u201d errors: same-origin /api/media now proxies Vercel Blob bytes instead of 302ing into a CSP-blocked *.public.blob host, with retries and CSP allowlist updates for large media fallbacks.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T05:20:00.000Z",
       "commit": "91cf3fe"
@@ -386,7 +449,7 @@
     {
       "id": "2026-08-15-business-profile-edit",
       "title": "Business profile editing",
-      "summary": "Handlers and managers can update an approved business account’s logo, name, type, and about text from Settings → Account (or Edit business profile on the business page).",
+      "summary": "Handlers and managers can update an approved business account\u2019s logo, name, type, and about text from Settings \u2192 Account (or Edit business profile on the business page).",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T05:30:00.000Z",
       "commit": "48ec77d"
@@ -402,7 +465,7 @@
     {
       "id": "2026-08-15-community-pauses",
       "title": "Community pauses contrast",
-      "summary": "Staff Controls community pause toggles no longer inherit the solid accent button fill, so labels like “Open to members” stay readable on the charcoal panel.",
+      "summary": "Staff Controls community pause toggles no longer inherit the solid accent button fill, so labels like \u201cOpen to members\u201d stay readable on the charcoal panel.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T05:55:00.000Z",
       "commit": "7253062"
@@ -418,7 +481,7 @@
     {
       "id": "2026-08-15-reels-video-range",
       "title": "Reel video playback fix",
-      "summary": "Reel videos now redirect to blob storage for streaming with HTTP Range support instead of being fully buffered by the media proxy, which had been causing black frames and “cannot play here” errors.",
+      "summary": "Reel videos now redirect to blob storage for streaming with HTTP Range support instead of being fully buffered by the media proxy, which had been causing black frames and \u201ccannot play here\u201d errors.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T17:25:00.000Z",
       "commit": "b7963a0"
@@ -434,7 +497,7 @@
     {
       "id": "2026-08-15-right-rail-scroll",
       "title": "Scrollable Internet right rail",
-      "summary": "The home-page right column (What’s happening, ads, Who to follow) stays sticky and scrolls on its own when the widgets are taller than the viewport.",
+      "summary": "The home-page right column (What\u2019s happening, ads, Who to follow) stays sticky and scrolls on its own when the widgets are taller than the viewport.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T17:35:00.000Z",
       "commit": "e9b5ac4"
@@ -450,7 +513,7 @@
     {
       "id": "2026-08-15-phone-download",
       "title": "Clearwater Phone download on Internet",
-      "summary": "Clearwater Phone is available from Internet → Phone (and the sidebar card). Download ClearwaterPhone.zip, extract, and run ClearwaterPhone-Launch.bat.",
+      "summary": "Clearwater Phone is available from Internet \u2192 Phone (and the sidebar card). Download ClearwaterPhone.zip, extract, and run ClearwaterPhone-Launch.bat.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T17:50:00.000Z",
       "commit": "dd7d031"
@@ -466,7 +529,7 @@
     {
       "id": "2026-08-15-phone-exe",
       "title": "Clearwater Phone Windows exe",
-      "summary": "Clearwater Phone download is now a single ClearwaterPhone.exe — double-click to open. First launch installs the runtime once automatically.",
+      "summary": "Clearwater Phone download is now a single ClearwaterPhone.exe \u2014 double-click to open. First launch installs the runtime once automatically.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:00:00.000Z",
       "commit": "b3c61b0"
@@ -474,7 +537,7 @@
     {
       "id": "2026-08-15-phone-portable",
       "title": "Clearwater Phone portable app",
-      "summary": "Replaced the console runtime-downloader with a real portable ClearwaterPhone.exe that opens the overlay directly (no black window, no separate download). Windows SmartScreen may still warn once because the app is unsigned — use More info → Run anyway.",
+      "summary": "Replaced the console runtime-downloader with a real portable ClearwaterPhone.exe that opens the overlay directly (no black window, no separate download). Windows SmartScreen may still warn once because the app is unsigned \u2014 use More info \u2192 Run anyway.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:05:00.000Z",
       "commit": "80c4001"
@@ -598,7 +661,7 @@
     {
       "id": "2026-08-15-phone-clearwater-logo",
       "title": "Phone home uses Clearwater logo",
-      "summary": "Clearwater Phone’s home wallpaper now shows the Clearwater logo instead of the old anchor mark. Download Phone v1.3.11 to get it.",
+      "summary": "Clearwater Phone\u2019s home wallpaper now shows the Clearwater logo instead of the old anchor mark. Download Phone v1.3.11 to get it.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T23:15:00.000Z"
     }

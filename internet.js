@@ -1,3 +1,7 @@
+if (new URLSearchParams(window.location.search).get('embed') === 'phone') {
+  document.documentElement.classList.add('cw-phone-embed');
+}
+
 const login = document.querySelector('[data-login]');
 const userBox = document.querySelector('[data-user]');
 const avatar = document.querySelector('[data-avatar]');
@@ -292,18 +296,25 @@ function profileShareUrl(userOrUsername = '') {
   return path ? `${location.origin}${path}` : '';
 }
 
+function withPhoneEmbed(path) {
+  const value = String(path || '');
+  if (!document.documentElement.classList.contains('cw-phone-embed')) return value;
+  if (/[?&]embed=phone(?:&|$)/.test(value)) return value;
+  return `${value}${value.includes('?') ? '&' : '?'}embed=phone`;
+}
+
 function internetUrl(view = 'home', id = '') {
-  if (view === 'home') return INTERNET_PATH;
-  if (view === 'post' && id) return `${INTERNET_PATH}/post/${encodeURIComponent(id)}`;
-  if (view === 'member' && id) {
+  let path = INTERNET_PATH;
+  if (view === 'home') path = INTERNET_PATH;
+  else if (view === 'post' && id) path = `${INTERNET_PATH}/post/${encodeURIComponent(id)}`;
+  else if (view === 'member' && id) {
     const user = internetUsers.get(id) || findInternetMember(id) || findMemberByUsername(id);
     const slug = profileUsernameSlug(user?.username || (!looksLikeMemberId(id) ? id : ''));
-    if (slug) return `/profiles/${encodeURIComponent(slug)}`;
-    return `${INTERNET_PATH}/member/${encodeURIComponent(id)}`;
-  }
-  if (view === 'sponsored' && id) return `${INTERNET_PATH}/sponsored/${encodeURIComponent(id)}`;
-  if (view === 'conversation') return `${INTERNET_PATH}/messages`;
-  return `${INTERNET_PATH}/${view}`;
+    path = slug ? `/profiles/${encodeURIComponent(slug)}` : `${INTERNET_PATH}/member/${encodeURIComponent(id)}`;
+  } else if (view === 'sponsored' && id) path = `${INTERNET_PATH}/sponsored/${encodeURIComponent(id)}`;
+  else if (view === 'conversation') path = `${INTERNET_PATH}/messages`;
+  else path = `${INTERNET_PATH}/${view}`;
+  return withPhoneEmbed(path);
 }
 
 function currentInternetPath() {
@@ -336,9 +347,10 @@ function readInternetRoute() {
 
 function setInternetRoute(view, id = '', replace = false) {
   const url = internetUrl(view, id);
-  if (currentInternetPath() === url && !location.hash) return;
+  const next = new URL(url, location.origin);
+  if (currentInternetPath() === next.pathname.replace(/\/+$/, '') && location.search === next.search && !location.hash) return;
   const write = replace || location.hash || /\.html$/i.test(location.pathname) ? history.replaceState : history.pushState;
-  write.call(history, {}, '', url);
+  write.call(history, {}, '', `${next.pathname}${next.search}`);
 }
 let officialAccountId = '';
 const OFFICIAL_ACCOUNT_FALLBACK = Object.freeze({
@@ -5871,8 +5883,10 @@ function hasCompletedBusinessAccount() {
 }
 
 function canManageBusinessProfile(businessId) {
+  const id = String(businessId || '');
+  if (!id || !/^biz_/i.test(id)) return false;
   const biz = (Array.isArray(myBusinessAccounts) ? myBusinessAccounts : [])
-    .find((item) => item.id === String(businessId || ''));
+    .find((item) => item.id === id);
   return Boolean(biz && biz.status === 'active' && (biz.canEditProfile || biz.canManageMembers));
 }
 
@@ -6217,8 +6231,8 @@ function openMemberProfile(memberId, updateHash = true) {
   if (!user) {
     pendingProfileUsername = profileUsernameSlug(memberId);
     if (pendingProfileUsername && updateHash) {
-      const path = `/profiles/${encodeURIComponent(pendingProfileUsername)}`;
-      if (currentInternetPath() !== path) history.replaceState({}, '', path);
+      const path = withPhoneEmbed(`/profiles/${encodeURIComponent(pendingProfileUsername)}`);
+      if (currentInternetPath() !== new URL(path, location.origin).pathname.replace(/\/+$/, '')) history.replaceState({}, '', path);
     }
     showView('member');
     const nameEl = document.querySelector('[data-member-page-name]');
@@ -6316,7 +6330,7 @@ function openMemberProfile(memberId, updateHash = true) {
   document.querySelector('[data-member-page-menu-list]').hidden = true;
   const editBusiness = document.querySelector('[data-member-page-edit-business]');
   if (editBusiness) {
-    const canEdit = canManageBusinessProfile(user.id);
+    const canEdit = isBusinessAccountUser(user) && canManageBusinessProfile(user.id);
     editBusiness.hidden = !canEdit;
     editBusiness.dataset.businessId = canEdit ? user.id : '';
   }
@@ -6857,7 +6871,7 @@ document.addEventListener('click', (event) => {
     localStorage.setItem('clearwater-feed-tab', feedTab);
     pauseReelVideos();
   }
-  if (currentInternetPath() === internetUrl(view) && !location.hash) showView(view);
+  if (currentInternetPath() === new URL(internetUrl(view), location.origin).pathname.replace(/\/+$/, '') && !location.hash) showView(view);
   else {
     history.pushState({}, '', internetUrl(view));
     showView(view);

@@ -33,6 +33,13 @@ const zoomInBtn = document.querySelector('[data-map-zoom-in]');
 const zoomOutBtn = document.querySelector('[data-map-zoom-out]');
 const zoomResetBtn = document.querySelector('[data-map-zoom-reset]');
 const zoomLabel = document.querySelector('[data-map-zoom-label]');
+const roadsLayer = document.querySelector('[data-server-map-roads]');
+const roadModeBtn = document.querySelector('[data-road-mode]');
+const roadNewBtn = document.querySelector('[data-road-new]');
+const roadUndoBtn = document.querySelector('[data-road-undo]');
+const roadSaveBtn = document.querySelector('[data-road-save]');
+const roadStatus = document.querySelector('[data-road-status]');
+const mapFigure = document.querySelector('[data-server-map]');
 
 const TEAM_TONES = [
   ['sheriff', '#8b7355'],
@@ -77,6 +84,9 @@ let mapZoom = 1;
 let mapPanX = 0;
 let mapPanY = 0;
 const sessionLog = [];
+let roadMode = false;
+let roads = [];
+let draftRoad = [];
 
 function teamTone(team = '') {
   const value = String(team).toLowerCase();
@@ -474,6 +484,15 @@ function endPan() {
 
 mapViewport?.addEventListener('pointerdown', (event) => {
   if (busy) return;
+  if (roadMode && event.button === 0) {
+    const point = mapPointFromEvent(event);
+    if (!point) return;
+    draftRoad.push({ left: point.x, top: point.y });
+    renderRoads();
+    updateRoadUi();
+    event.preventDefault();
+    return;
+  }
   const wantsPan = event.altKey || event.button === 1 || event.button === 2;
   if (wantsPan) {
     if (mapZoom <= 1.001) return;
@@ -772,6 +791,89 @@ commandForm?.addEventListener('submit', async (event) => {
   }
 });
 
+function roadPolyline(points, draft = false) {
+  if (!points.length) return '';
+  const d = points.map((p, i) => `${i ? 'L' : 'M'} ${(p.left * 100).toFixed(2)} ${(p.top * 100).toFixed(2)}`).join(' ');
+  return `<path d="${d}" fill="none" stroke="${draft ? '#fbbf24' : '#7dd3fc'}" stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round" />`;
+}
+
+function renderRoads() {
+  if (!roadsLayer) return;
+  roadsLayer.innerHTML = [
+    ...roads.map((road) => roadPolyline(road.points || [])),
+    roadPolyline(draftRoad, true),
+  ].join('');
+}
+
+function updateRoadUi() {
+  mapFigure?.classList.toggle('is-drawing-roads', roadMode);
+  if (roadModeBtn) roadModeBtn.textContent = roadMode ? 'Stop drawing' : 'Draw roads';
+  if (roadNewBtn) roadNewBtn.disabled = !roadMode || draftRoad.length < 2;
+  if (roadUndoBtn) roadUndoBtn.disabled = !roadMode || draftRoad.length < 1;
+  if (roadSaveBtn) roadSaveBtn.disabled = roads.length < 1 && draftRoad.length < 2;
+  if (roadStatus) {
+    roadStatus.textContent = roadMode
+      ? `Drawing · ${roads.length} saved roads · ${draftRoad.length} points on this road`
+      : `${roads.length} roads saved for Phone Maps`;
+  }
+}
+
+async function loadRoads() {
+  try {
+    const response = await fetch('/api/internet', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'liberty-roads-get' }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && Array.isArray(result.roads)) roads = result.roads;
+  } catch {}
+  renderRoads();
+  updateRoadUi();
+}
+
+async function saveRoads() {
+  const payload = [...roads];
+  if (draftRoad.length >= 2) payload.push({ id: `road_${Date.now()}`, points: draftRoad });
+  const response = await fetch('/api/internet', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'liberty-roads-save', roads: payload }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Could not save roads');
+  roads = Array.isArray(result.roads) ? result.roads : payload;
+  draftRoad = [];
+  renderRoads();
+  updateRoadUi();
+}
+
+roadModeBtn?.addEventListener('click', () => {
+  roadMode = !roadMode;
+  updateRoadUi();
+});
+roadNewBtn?.addEventListener('click', () => {
+  if (draftRoad.length >= 2) roads.push({ id: `road_${Date.now()}`, points: draftRoad });
+  draftRoad = [];
+  renderRoads();
+  updateRoadUi();
+});
+roadUndoBtn?.addEventListener('click', () => {
+  draftRoad.pop();
+  renderRoads();
+  updateRoadUi();
+});
+roadSaveBtn?.addEventListener('click', async () => {
+  try {
+    await saveRoads();
+    if (roadStatus) roadStatus.textContent = `${roads.length} roads saved`;
+  } catch (error) {
+    if (roadStatus) roadStatus.textContent = error.message || 'Save failed';
+  }
+});
+
 window.addEventListener('resize', () => applyMapTransform());
 
 (async () => {
@@ -779,6 +881,7 @@ window.addEventListener('resize', () => applyMapTransform());
   if (!allowed) return;
   applyMapTransform();
   await loadMap();
+  await loadRoads();
   pollTimer = window.setInterval(() => {
     if (Date.now() >= nextRefreshAt) void loadMap(true);
   }, 1000);

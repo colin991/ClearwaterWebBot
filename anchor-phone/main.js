@@ -9,6 +9,13 @@ const SITE = 'https://www.cwrpvc.lol';
 const SESSION_PARTITION = 'persist:clearwater-phone';
 const pkg = require('./package.json');
 
+try {
+  app.setName('Clearwater Phone');
+} catch {}
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.clearwater.phone');
+}
+
 function phoneSession() {
   return session.fromPartition(SESSION_PARTITION);
 }
@@ -43,32 +50,22 @@ async function hasSiteSession() {
   return cookies.some((cookie) => isSessionCookieName(cookie.name) && cookie.value);
 }
 
-async function siteFetch(pathname, { method = 'GET', body } = {}) {
-  const startUrl = pathname.startsWith('http') ? pathname : SITE + pathname;
-  const payload = body != null ? JSON.stringify(body) : null;
-  const cookie = await cookieHeaderForSite();
-  const headers = {
-    Accept: 'application/json',
-    Origin: SITE,
-    Referer: SITE + '/phone-signed-in',
-    'User-Agent': 'ClearwaterPhone/' + pkg.version,
-    ...(cookie ? { Cookie: cookie } : {}),
-    ...(payload ? { 'Content-Type': 'application/json' } : {}),
-  };
+let siteWin = null;
 
-  const requestOnce = (targetUrl, headerBag, verb) => new Promise((resolve, reject) => {
-    const parsed = new URL(targetUrl);
+function nodeSiteRequest(url, method, payload, headers) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
     const client = parsed.protocol === 'http:' ? http : https;
-    const raw = payload && verb !== 'GET' && verb !== 'HEAD' ? Buffer.from(payload) : null;
+    const raw = payload && method !== 'GET' && method !== 'HEAD' ? Buffer.from(payload) : null;
     const req = client.request({
       protocol: parsed.protocol,
       hostname: parsed.hostname,
       port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
       path: `${parsed.pathname}${parsed.search}`,
-      method: verb,
+      method,
       headers: {
         Host: parsed.host,
-        ...headerBag,
+        ...headers,
         ...(raw ? { 'Content-Length': String(raw.length) } : {}),
       },
     }, (res) => {
@@ -88,15 +85,75 @@ async function siteFetch(pathname, { method = 'GET', body } = {}) {
     if (raw) req.write(raw);
     req.end();
   });
+}
+
+async function ensureSiteWindow() {
+  if (siteWin && !siteWin.isDestroyed()) return siteWin;
+  siteWin = new BrowserWindow({
+    show: false,
+    width: 420,
+    height: 320,
+    frame: false,
+    skipTaskbar: true,
+    webPreferences: {
+      session: phoneSession(),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  siteWin.on('closed', () => { siteWin = null; });
+  await siteWin.loadURL(SITE + '/phone-signed-in');
+  return siteWin;
+}
+
+async function siteFetchViaSession(pathname, method, payload) {
+  const target = pathname.startsWith('http') ? pathname : pathname;
+  const page = await ensureSiteWindow();
+  const script = `fetch(${JSON.stringify(target)},${JSON.stringify({
+    method,
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      ...(payload ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: payload || undefined,
+  })}).then(async (res) => {
+    const text = await res.text();
+    let body = {};
+    try { body = text ? JSON.parse(text) : {}; } catch { body = { error: text.slice(0, 180) }; }
+    return { ok: res.ok, status: res.status, body };
+  }).catch((err) => ({ ok: false, status: 0, body: { error: String(err && err.message ? err.message : err) } }))`;
+  return page.webContents.executeJavaScript(script, true);
+}
+
+async function siteFetch(pathname, { method = 'GET', body } = {}) {
+  const payload = body != null ? JSON.stringify(body) : null;
+  const cookie = await cookieHeaderForSite();
+  const headers = {
+    Accept: 'application/json',
+    Origin: SITE,
+    Referer: SITE + '/phone-signed-in',
+    'User-Agent': 'ClearwaterPhone/' + pkg.version,
+    ...(cookie ? { Cookie: cookie } : {}),
+    ...(payload ? { 'Content-Type': 'application/json' } : {}),
+  };
 
   try {
-    let url = startUrl;
+    const viaPage = await siteFetchViaSession(pathname.startsWith('http') ? pathname : pathname, method, payload);
+    if (viaPage && typeof viaPage === 'object' && !String(viaPage.body?.error || '').includes('ERR_FAILED')) {
+      return viaPage;
+    }
+  } catch {}
+
+  try {
+    let url = pathname.startsWith('http') ? pathname : SITE + pathname;
     let verb = method;
-    let response = await requestOnce(url, headers, verb);
+    let response = await nodeSiteRequest(url, verb, payload, headers);
     for (let hop = 0; hop < 5 && response.status >= 300 && response.status < 400 && response.location; hop += 1) {
       url = new URL(response.location, url).toString();
       if (response.status === 301 || response.status === 302 || response.status === 303) verb = 'GET';
-      response = await requestOnce(url, headers, verb);
+      response = await nodeSiteRequest(url, verb, payload, headers);
     }
     let data = {};
     try {
@@ -362,8 +419,8 @@ async function createOverlayWindow({ closeLauncher = true } = {}) {
   }
 
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
-  const phoneW = 360;
-  const phoneH = 740;
+  const phoneW = 390;
+  const phoneH = 760;
 
   win = new BrowserWindow({
     width: phoneW,
@@ -376,6 +433,8 @@ async function createOverlayWindow({ closeLauncher = true } = {}) {
     resizable: false,
     skipTaskbar: false,
     hasShadow: false,
+    autoHideMenuBar: true,
+    title: 'Clearwater Phone',
     backgroundColor: '#121820',
     icon: iconPath(),
     webPreferences: {
@@ -383,7 +442,8 @@ async function createOverlayWindow({ closeLauncher = true } = {}) {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: false,
+      webviewTag: true
     }
   });
 
@@ -391,9 +451,17 @@ async function createOverlayWindow({ closeLauncher = true } = {}) {
     try { win.setIcon(path.join(__dirname, 'build', 'icon.png')); } catch {}
   }
 
+  win.setTitle('Clearwater Phone');
+  win.setMenuBarVisibility(false);
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  win.loadFile(path.join(__dirname, 'src', 'index.html'));
+  const overlayPage = path.join(__dirname, 'src', 'index.html');
+  win.loadFile(overlayPage);
+  win.webContents.on('did-fail-load', (_e, code, desc) => {
+    if (win && !win.isDestroyed()) {
+      win.loadURL(`data:text/html,<body style="background:#121820;color:#f4f8ff;font-family:sans-serif;padding:24px"><h1>Clearwater Phone</h1><p>${String(desc || code)}</p></body>`);
+    }
+  });
   visible = true;
 
   win.on('closed', () => {
@@ -409,18 +477,17 @@ function createLauncherWindow() {
     launcherWin.focus();
     return launcherWin;
   }
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   launcherMayClose = false;
   launcherWin = new BrowserWindow({
-    width,
-    height,
-    x: 0,
-    y: 0,
-    fullscreen: false,
+    width: 560,
+    height: 780,
     frame: false,
+    fullscreen: false,
+    maximizable: false,
     alwaysOnTop: true,
     backgroundColor: '#02060c',
     autoHideMenuBar: true,
+    title: 'Clearwater Phone',
     icon: iconPath(),
     webPreferences: {
       partition: SESSION_PARTITION,
@@ -431,15 +498,17 @@ function createLauncherWindow() {
     }
   });
   if (win && !win.isDestroyed()) win.setAlwaysOnTop(false);
+  launcherWin.setMenuBarVisibility(false);
+  launcherWin.setTitle('Clearwater Phone');
+  launcherWin.center();
   launcherWin.loadFile(path.join(__dirname, 'src', 'launcher.html'));
-  launcherWin.maximize();
   launcherWin.setAlwaysOnTop(true, 'screen-saver');
   launcherWin.on('close', (event) => {
     if (launcherMayClose) return;
     event.preventDefault();
     if (launcherWin && !launcherWin.isDestroyed()) {
       launcherWin.show();
-      launcherWin.maximize();
+      launcherWin.center();
       launcherWin.focus();
       launcherWin.setAlwaysOnTop(true, 'screen-saver');
     }
@@ -636,6 +705,8 @@ app.whenReady().then(() => {
     return writeHostSettings(next);
   });
 
+  ipcMain.handle('phone-check-update', async () => siteFetch('/downloads/clearwater-phone-version.json'));
+
   ipcMain.handle('phone-feed', async () => {
     try {
       return await siteFetch('/api/internet');
@@ -651,7 +722,7 @@ app.whenReady().then(() => {
       const allowed = new Set([
         'wallet', 'wallet-transfer', 'wallet-transfer-respond',
         'messages', 'conversation', 'message-send',
-        'findmy', 'findmy-share', 'erlc-phone-map', 'erlc-location',
+        'findmy', 'findmy-share', 'erlc-phone-map', 'erlc-location', 'liberty-roads-get',
         'post', 'post-interaction',
       ]);
       if (!allowed.has(action)) return { ok: false, status: 400, body: { error: 'Unsupported phone action' } };

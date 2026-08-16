@@ -25,7 +25,7 @@
   --phone-h: 740px;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.34, 1.45, 0.64, 1);
-  --font: "Outfit", system-ui, sans-serif;
+  --font: system-ui, "Segoe UI", sans-serif;
   font-family: var(--font);
 }
 
@@ -709,10 +709,158 @@ textarea {
    App chrome
    ═══════════════════════════════════════════ */
 
+.view-internet {
+  background: #050811;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.internet-webview {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: #050811;
+}
+
+.app-lede,
+.item-title,
+.item-sub,
+.hint,
+.form-status,
+.route-status,
+.pin {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.app-lede {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+#view-maps.view-app,
+#view-findmy.view-app {
+  background: #03070d;
+}
+
+.maps-body,
+.findmy-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px 10px 12px;
+  background: transparent;
+}
+
+#findmy-map.map-canvas {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 380px;
+  margin: 0 0 8px;
+}
+
+.findmy-body .people-list {
+  flex: 0 1 160px;
+  min-height: 72px;
+  overflow: auto;
+}
+
+.gmap {
+  position: relative;
+  flex: 1;
+  min-height: 280px;
+  margin: 0 0 10px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #03070d;
+}
+.gmap-viewport {
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+.gmap-viewport.is-panning { cursor: grabbing; }
+.gmap-scene {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.gmap-scene .liberty-map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+.gmap-zoom {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: grid;
+  gap: 6px;
+  z-index: 5;
+}
+.gmap-zoom button {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(8,16,27,0.86);
+  color: #f4f8ff;
+  font-size: 18px;
+  line-height: 1;
+}
+.roads-overlay path {
+  fill: none;
+}
+.gmap-scene .route-overlay,
+.gmap-scene .map-pins {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.map-world {
+  position: relative;
+  width: 160%;
+  height: 160%;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+img.avatar {
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+}
+
+.pin.has-face {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 2px;
+}
+.pin.has-face img {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
 .view-app {
-  background:
-    radial-gradient(ellipse 80% 40% at 50% -5%, rgba(118, 173, 255, 0.1), transparent 55%),
-    linear-gradient(180deg, #07111c 0%, #03070d 42%);
+  background: #03070d;
 }
 
 .app-chrome {
@@ -734,6 +882,9 @@ textarea {
   font-weight: 750;
   letter-spacing: -0.025em;
   min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .back-btn {
@@ -1252,6 +1403,12 @@ textarea {
 .map-canvas.live-map {
   height: 240px;
   cursor: crosshair;
+}
+
+#findmy-map.map-canvas.live-map {
+  height: auto;
+  min-height: 380px;
+  cursor: grab;
 }
 
 .liberty-map {

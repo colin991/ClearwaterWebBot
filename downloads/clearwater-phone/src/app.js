@@ -1,15 +1,17 @@
 (() => {
-  const SITE = 'https://cwrpvc.lol';
+  const SITE = 'https://www.cwrpvc.lol';
   const VERSION_URL = SITE + '/downloads/clearwater-phone-version.json';
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
-  let appVersion = '1.3.13';
+  let appVersion = '1.3.21';
   let latestInfo = null;
   let sessionUser = null;
   let walletMode = 'send';
   let walletData = null;
-  let mapState = { me: null, places: [], dest: null, friends: [] };
-  let openThread = null;
+  let mapState = { me: null, places: [], dest: null, friends: [], roads: [], route: [], navigating: false, rerouting: false };
+  let mapTimer = null;
+  let mapCam = { zoom: 1.4, x: 0, y: 0 };
+  let findmyState = { payload: null, query: '' };
 
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -35,6 +37,29 @@
     const hours = Math.round(mins / 60);
     if (hours < 24) return `${hours}h`;
     return `${Math.round(hours / 24)}d`;
+  }
+
+  function avatarSrc(user) {
+    const url = String(user?.avatarUrl || user?.avatar || '').trim();
+    if (/^https:\/\/cdn\.discordapp\.com\//i.test(url) || /^https?:\/\/(cdn\.discordapp\.com|media\.discordapp\.net)\//i.test(url)) return url;
+    if (/^https?:\/\//i.test(url) && !/cwrpvc\.lol\/assets\/clearwater-logo/i.test(url)) return url;
+    const id = String(user?.id || user?.discordId || '').replace(/\D/g, '');
+    if (id.length >= 16) {
+      try {
+        return `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(id) >> 22n) % 6}.png`;
+      } catch { /* ignore */ }
+    }
+    if (url.startsWith('assets/') || url.startsWith('/')) return SITE + (url.startsWith('/') ? url : `/${url}`);
+    return '';
+  }
+
+  function avatarHtml(user, fallbackName) {
+    const name = user?.displayName || user?.username || fallbackName || 'C';
+    const url = avatarSrc(user);
+    if (url) {
+      return `<img class="avatar" src="${escapeHtml(url)}" alt="" />`;
+    }
+    return `<div class="avatar">${escapeHtml(String(name).slice(0, 1))}</div>`;
   }
 
   function signedIn() {
@@ -75,22 +100,37 @@
       renderSettings();
       void loadHostSettings();
     }
-    if (id === 'internet') void loadInternetFeed();
+    if (id === 'internet') ensureSiteWebview('#internet-webview', '/internet?embed=phone');
+    if (id === 'messages') ensureSiteWebview('#messages-webview', '/internet/messages?embed=phone', true);
     if (id === 'wallet') void loadWallet();
-    if (id === 'messages') {
-      openThread = null;
-      showInbox();
-      void loadMessages();
+    if (id === 'maps') {
+      void loadMap('maps');
+      if (mapTimer) window.clearInterval(mapTimer);
+      mapTimer = window.setInterval(() => void loadMap('maps'), 1000);
+    } else if (id === 'findmy') {
+      void loadMap('findmy');
+      if (mapTimer) window.clearInterval(mapTimer);
+      mapTimer = window.setInterval(() => void loadMap('findmy'), 2500);
+    } else if (mapTimer) {
+      window.clearInterval(mapTimer);
+      mapTimer = null;
     }
-    if (id === 'maps') void loadMap('maps');
-    if (id === 'findmy') void loadMap('findmy');
   }
 
   $$('[data-open]').forEach((btn) => {
     btn.addEventListener('click', () => showView(btn.dataset.open));
   });
   $$('[data-home]').forEach((btn) => {
-    btn.addEventListener('click', () => showView('home'));
+    btn.addEventListener('click', () => {
+      const internetOn = $('#view-internet')?.classList.contains('is-active');
+      const messagesOn = $('#view-messages')?.classList.contains('is-active');
+      const wv = internetOn ? $('#internet-webview') : messagesOn ? $('#messages-webview') : null;
+      if (wv && typeof wv.canGoBack === 'function' && wv.canGoBack()) {
+        wv.goBack();
+        return;
+      }
+      showView('home');
+    });
   });
 
   function setToggle(el, on) {
@@ -159,32 +199,23 @@
     if (input && host?.watchProcess) input.value = host.watchProcess;
   });
 
+  function ensureSiteWebview(selector, path, reload = false) {
+    const wv = $(selector);
+    if (!wv) return;
+    const dest = SITE + path;
+    if (reload || !wv.getAttribute('src')) wv.setAttribute('src', dest);
+    if (wv.dataset.bound === '1') return;
+    wv.dataset.bound = '1';
+    wv.addEventListener('will-navigate', (event) => {
+      const href = String(event.url || '');
+      if (!/^https:\/\/(www\.)?cwrpvc\.lol\//i.test(href) && !/^https:\/\/discord\.com\//i.test(href)) {
+        event.preventDefault();
+      }
+    });
+  }
+
   async function loadInternetFeed() {
-    const list = $('#net-feed');
-    if (!list) return;
-    if (!signedIn()) {
-      list.innerHTML = '<li><p class="item-sub">Sign in with Discord in Settings to post.</p></li>';
-      return;
-    }
-    const result = await window.anchorPhone?.feed?.();
-    if (!result?.ok) {
-      list.innerHTML = `<li><p class="item-sub">${escapeHtml(result?.body?.error || 'Could not load the feed.')}</p></li>`;
-      return;
-    }
-    const posts = (result.body.posts || []).slice(0, 40);
-    const users = new Map((result.body.users || []).map((u) => [String(u.id), u]));
-    list.innerHTML = posts.length
-      ? posts.map((post) => {
-        const author = users.get(String(post.authorId)) || {};
-        const name = author.displayName || author.username || 'Member';
-        const body = post.content || (post.location ? 'Dropped a location' : 'Post');
-        return `<li>
-          <div class="avatar">${escapeHtml(String(name).slice(0, 1))}</div>
-          <div style="flex:1"><p class="item-title">${escapeHtml(name)}</p><p class="item-sub">${escapeHtml(body)}</p></div>
-          <span class="item-sub">${escapeHtml(timeAgo(post.createdAt))}</span>
-        </li>`;
-      }).join('')
-      : '<li><p class="item-sub">No posts yet.</p></li>';
+    ensureSiteWebview('#internet-webview', '/internet?embed=phone');
   }
 
   $('#net-post')?.addEventListener('click', async () => {
@@ -350,174 +381,289 @@
     $('#wallet-note').value = '';
   });
 
-  function showInbox() {
-    $('#inbox-pane').hidden = false;
-    $('#thread-pane').hidden = true;
-    const title = $('#messages-title');
-    if (title) title.textContent = 'Messages';
-  }
-
-  function showThread(name) {
-    $('#inbox-pane').hidden = true;
-    $('#thread-pane').hidden = false;
-    const title = $('#messages-title');
-    if (title) title.textContent = name || 'Chat';
-  }
-
-  async function loadMessages() {
-    const list = $('#thread-list');
-    if (!signedIn()) {
-      needSignIn(list);
-      return;
-    }
-    const result = await api('messages');
-    if (!result.ok) {
-      needSignIn(list, result.body?.error || 'Could not load messages.');
-      return;
-    }
-    const items = result.body.conversations || result.body.messages || [];
-    list.innerHTML = items.length
-      ? items.map((m) => `<li data-open-thread="${escapeHtml(m.otherId || '')}" data-thread-name="${escapeHtml(m.otherDisplayName || m.otherUsername || 'Member')}">
-          <div class="avatar">${escapeHtml(String(m.otherDisplayName || 'C').slice(0, 1))}</div>
-          <div style="flex:1"><p class="item-title">${escapeHtml(m.otherDisplayName || 'Member')}</p><p class="item-sub">${escapeHtml(m.content || 'New message')}</p></div>
-          <span class="item-sub">${escapeHtml(timeAgo(m.createdAt))}</span>
-        </li>`).join('')
-      : '<li><p class="item-sub">No messages yet.</p></li>';
-    list.querySelectorAll('[data-open-thread]').forEach((row) => {
-      row.addEventListener('click', () => void openConversation(row.dataset.openThread, row.dataset.threadName));
-    });
-  }
-
-  async function openConversation(id, name) {
-    openThread = { id, name };
-    showThread(name);
-    const log = $('#chat-log');
-    const result = await api('conversation', { withUserId: id });
-    const messages = result.body?.messages || [];
-    log.innerHTML = messages.map((m) => `<li>
-      <div><p class="item-title">${escapeHtml(m.content || (m.gifUrl ? 'GIF' : ''))}</p><p class="item-sub">${escapeHtml(timeAgo(m.createdAt))}</p></div>
-    </li>`).join('') || '<li><p class="item-sub">No messages yet.</p></li>';
-    log.scrollTop = log.scrollHeight;
-  }
-
-  $('#new-message')?.addEventListener('click', () => {
-    if (openThread) {
-      openThread = null;
-      showInbox();
-      return;
-    }
-    const c = $('#msg-composer');
-    if (c) c.hidden = !c.hidden;
-  });
-
-  $('#msg-send')?.addEventListener('click', async () => {
-    const to = $('#msg-to').value.trim().replace(/^@/, '');
-    const content = $('#msg-body').value.trim();
-    if (!to || !content) return;
-    const result = await api('message-send', { username: to, content });
-    if (!result.ok) {
-      window.alert(result.body?.error || 'Could not send.');
-      return;
-    }
-    $('#msg-to').value = '';
-    $('#msg-body').value = '';
-    $('#msg-composer').hidden = true;
-    void loadMessages();
-  });
-
-  $('#chat-send')?.addEventListener('click', async () => {
-    if (!openThread) return;
-    const content = $('#chat-body').value.trim();
-    if (!content) return;
-    const result = await api('message-send', { to: openThread.id, content });
-    if (!result.ok) {
-      window.alert(result.body?.error || 'Could not send.');
-      return;
-    }
-    $('#chat-body').value = '';
-    void openConversation(openThread.id, openThread.name);
-  });
-
   function renderPins(container, pins) {
     if (!container) return;
     container.innerHTML = pins.map((pin) => {
       if (!pin || !Number.isFinite(Number(pin.left)) || !Number.isFinite(Number(pin.top))) return '';
       const cls = pin.self ? 'pin self' : pin.dest ? 'pin dest' : 'pin other';
-      return `<span class="${cls}" style="left:${Number(pin.left) * 100}%;top:${Number(pin.top) * 100}%">${escapeHtml(pin.label || '')}</span>`;
+      const face = avatarSrc(pin);
+      const photo = face ? `<img src="${escapeHtml(face)}" alt="" />` : '';
+      return `<span class="${cls}${face ? ' has-face' : ''}" style="left:${Number(pin.left) * 100}%;top:${Number(pin.top) * 100}%">${photo}${escapeHtml(pin.label || '')}</span>`;
+    }).join('');
+  }
+
+  function distToSegment(p, a, b) {
+    const ax = Number(a.left);
+    const ay = Number(a.top);
+    const bx = Number(b.left);
+    const by = Number(b.top);
+    const px = Number(p.left);
+    const py = Number(p.top);
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len2 = (dx * dx) + (dy * dy);
+    if (len2 < 1e-12) return Math.hypot(px - ax, py - ay);
+    let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+    t = Math.min(1, Math.max(0, t));
+    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+  }
+
+  function distToPath(p, path) {
+    if (!p || !Array.isArray(path) || path.length < 2) return Infinity;
+    let best = Infinity;
+    for (let i = 1; i < path.length; i += 1) best = Math.min(best, distToSegment(p, path[i - 1], path[i]));
+    return best;
+  }
+
+  function followOrReroute() {
+    if (!mapState.navigating || !mapState.me || !mapState.dest) return;
+    const previous = Array.isArray(mapState.route) ? mapState.route : [];
+    const offTrack = previous.length > 1 && distToPath(mapState.me, previous) > 0.028;
+    if (offTrack || previous.length < 2) {
+      mapState.route = shortestRoadPath(mapState.roads, mapState.me, mapState.dest);
+      mapState.rerouting = offTrack;
+      return;
+    }
+    mapState.rerouting = false;
+    let next = previous.slice();
+    while (next.length > 2 && ptDist(mapState.me, next[1]) <= ptDist(mapState.me, next[0]) + 0.004) {
+      next = next.slice(1);
+    }
+    next[0] = { left: Number(mapState.me.left), top: Number(mapState.me.top) };
+    mapState.route = next;
+  }
+
+  function ptDist(a, b) {
+    return Math.hypot(Number(a.left) - Number(b.left), Number(a.top) - Number(b.top));
+  }
+
+  function studsBetween(a, b) {
+    return Math.round(ptDist(a, b) * 3120);
+  }
+
+  function pathLength(points) {
+    let total = 0;
+    for (let i = 1; i < points.length; i += 1) total += studsBetween(points[i - 1], points[i]);
+    return total;
+  }
+
+  function buildRoadGraph(roads) {
+    const nodes = [];
+    const addNode = (p) => {
+      const hit = nodes.findIndex((n) => ptDist(n, p) < 0.004);
+      if (hit >= 0) return hit;
+      nodes.push({ left: Number(p.left), top: Number(p.top) });
+      return nodes.length - 1;
+    };
+    const adj = [];
+    const link = (a, b) => {
+      if (a === b) return;
+      const w = ptDist(nodes[a], nodes[b]);
+      adj[a] = adj[a] || [];
+      adj[b] = adj[b] || [];
+      adj[a].push({ to: b, w });
+      adj[b].push({ to: a, w });
+    };
+    (roads || []).forEach((road) => {
+      let prev = -1;
+      (road.points || []).forEach((p) => {
+        const i = addNode(p);
+        adj[i] = adj[i] || [];
+        if (prev >= 0) link(prev, i);
+        prev = i;
+      });
+    });
+    for (let i = 0; i < nodes.length; i += 1) {
+      for (let j = i + 1; j < nodes.length; j += 1) {
+        if (ptDist(nodes[i], nodes[j]) < 0.012) link(i, j);
+      }
+    }
+    return { nodes, adj: nodes.map((_, i) => adj[i] || []) };
+  }
+
+  function nearestNode(nodes, p) {
+    let best = 0;
+    let bestD = Infinity;
+    nodes.forEach((n, i) => {
+      const d = ptDist(n, p);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    });
+    return best;
+  }
+
+  function shortestRoadPath(roads, from, to) {
+    const graph = buildRoadGraph(roads);
+    if (graph.nodes.length < 2) return [from, to];
+    const start = nearestNode(graph.nodes, from);
+    const end = nearestNode(graph.nodes, to);
+    const dist = graph.nodes.map(() => Infinity);
+    const prev = graph.nodes.map(() => -1);
+    const used = graph.nodes.map(() => false);
+    dist[start] = 0;
+    for (let k = 0; k < graph.nodes.length; k += 1) {
+      let u = -1;
+      for (let i = 0; i < graph.nodes.length; i += 1) {
+        if (!used[i] && (u < 0 || dist[i] < dist[u])) u = i;
+      }
+      if (u < 0 || dist[u] === Infinity) break;
+      used[u] = true;
+      if (u === end) break;
+      graph.adj[u].forEach((edge) => {
+        const next = dist[u] + edge.w;
+        if (next < dist[edge.to]) {
+          dist[edge.to] = next;
+          prev[edge.to] = u;
+        }
+      });
+    }
+    if (dist[end] === Infinity) return [from, to];
+    const path = [];
+    for (let x = end; x !== -1; x = prev[x]) path.push(graph.nodes[x]);
+    path.reverse();
+    return [from, ...path, to];
+  }
+
+  function drawRoadsOverlay() {
+    const svg = $('#maps-roads');
+    if (!svg) return;
+    svg.innerHTML = (mapState.roads || []).map((road) => {
+      const pts = road.points || [];
+      if (pts.length < 2) return '';
+      const d = pts.map((p, i) => `${i ? 'L' : 'M'} ${(p.left * 100).toFixed(2)} ${(p.top * 100).toFixed(2)}`).join(' ');
+      return `<path d="${d}" stroke="rgba(125,211,252,0.35)" stroke-width="0.9" stroke-linecap="round" />`;
     }).join('');
   }
 
   function drawRoute(from, to) {
     const svg = $('#maps-route');
-    if (!svg || !from || !to) {
-      if (svg) svg.innerHTML = '';
+    if (!svg) return;
+    const points = (mapState.route && mapState.route.length > 1)
+      ? mapState.route
+      : (from && to ? [from, to] : []);
+    if (points.length < 2) {
+      svg.innerHTML = '';
       return;
     }
-    const x1 = from.left * 100;
-    const y1 = from.top * 100;
-    const x2 = to.left * 100;
-    const y2 = to.top * 100;
-    svg.innerHTML = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#76adff" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="3 2" />`;
+    const d = points.map((p, i) => `${i ? 'L' : 'M'} ${(p.left * 100).toFixed(2)} ${(p.top * 100).toFixed(2)}`).join(' ');
+    svg.innerHTML = `<path d="${d}" fill="none" stroke="#76adff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />`;
   }
 
-  function studsBetween(a, b) {
-    const dx = (Number(b.left) - Number(a.left)) * 3120;
-    const dz = (Number(b.top) - Number(a.top)) * 3120;
-    return Math.round(Math.hypot(dx, dz));
+  function applyMapCamera() {
+    const scene = $('#maps-scene');
+    if (!scene) return;
+    scene.style.transform = `translate(${mapCam.x}px, ${mapCam.y}px) scale(${mapCam.zoom})`;
+  }
+
+  function panMapTo(point) {
+    const view = $('#maps-map');
+    if (!view || !point) return;
+    const w = view.clientWidth;
+    const h = view.clientHeight;
+    mapCam.x = w / 2 - Number(point.left) * w * mapCam.zoom;
+    mapCam.y = h / 2 - Number(point.top) * h * mapCam.zoom;
+    applyMapCamera();
+  }
+
+  function refreshMapsPins() {
+    renderPins($('#maps-pins'), [
+      mapState.me ? { ...mapState.me, self: true, label: 'You', avatarUrl: (sessionUser?.user || sessionUser)?.avatarUrl, id: (sessionUser?.user || sessionUser)?.id } : null,
+      mapState.dest ? { ...mapState.dest, dest: true, label: mapState.dest.label || '★' } : null,
+    ].filter(Boolean));
+    drawRoadsOverlay();
+    drawRoute(mapState.me, mapState.dest);
   }
 
   function applyMapPayload(kind, payload) {
-    mapState.me = payload.me || null;
-    mapState.places = payload.places || [];
+    if (payload.me) mapState.me = payload.me;
+    else if (!mapState.navigating) mapState.me = null;
+    mapState.places = payload.places || mapState.places || [];
     mapState.friends = payload.friends || [];
+    if (Array.isArray(payload.roads)) mapState.roads = payload.roads;
     const list = $('#maps-places');
     if (list) {
       list.innerHTML = mapState.places.map((p) => `<option value="${escapeHtml(p.label)}"></option>`).join('');
     }
     if (kind === 'maps') {
-      renderPins($('#maps-pins'), [
-        mapState.me ? { ...mapState.me, self: true, label: 'You' } : null,
-        mapState.dest ? { ...mapState.dest, dest: true, label: mapState.dest.label || '★' } : null,
-      ].filter(Boolean));
-      drawRoute(mapState.me, mapState.dest);
+      if (mapState.navigating && mapState.me && mapState.dest) {
+        followOrReroute();
+        panMapTo(mapState.me);
+        const status = $('#route-status');
+        if (status) {
+          status.hidden = false;
+          const left = pathLength(mapState.route);
+          if (left < 40) {
+            status.textContent = 'You have arrived.';
+            mapState.navigating = false;
+            mapState.rerouting = false;
+          } else if (mapState.rerouting) {
+            status.textContent = `Rerouting to ${mapState.dest.label || 'pin'} · ${left} studs via roads`;
+          } else {
+            status.textContent = `Navigating to ${mapState.dest.label || 'pin'} · ${left} studs via roads`;
+          }
+        }
+      }
+      refreshMapsPins();
       const status = $('#route-status');
-      if (!payload.me) {
+      if (status && !payload.me && !mapState.navigating) {
         status.hidden = false;
         status.textContent = 'Join the Clearwater ER:LC server to place yourself on the map.';
       }
     }
     if (kind === 'findmy') {
-      renderPins($('#findmy-pins'), [
-        payload.me ? { ...payload.me, self: true, label: 'You' } : null,
-        ...(payload.friends || []).filter((f) => f.location).map((f) => ({ ...f.location, label: f.displayName })),
-      ].filter(Boolean));
-      const people = $('#findmy-list');
-      const contacts = payload.contacts || [];
-      people.innerHTML = contacts.length
-        ? contacts.map((c) => {
-          const friend = (payload.friends || []).find((f) => f.id === c.id);
-          const loc = friend?.location?.label || (c.sharesWithYou ? 'Online location hidden until they join' : 'Not sharing with you');
-          return `<li>
-            <div class="avatar">${escapeHtml(String(c.displayName || 'C').slice(0, 1))}</div>
+      findmyState.payload = payload;
+      renderFindMy();
+    }
+  }
+
+  function renderFindMy() {
+    const payload = findmyState.payload || {};
+    const meUser = sessionUser?.user || sessionUser || {};
+    renderPins($('#findmy-pins'), [
+      payload.me ? { ...payload.me, self: true, label: 'You', avatarUrl: meUser.avatarUrl, id: meUser.id } : null,
+      ...(payload.friends || []).filter((f) => f.location).map((f) => ({
+        ...f.location,
+        label: f.displayName,
+        avatarUrl: f.avatarUrl,
+        id: f.id,
+      })),
+    ].filter(Boolean));
+    const people = $('#findmy-list');
+    if (!people) return;
+    const query = String(findmyState.query || '').trim().toLowerCase();
+    const contacts = (payload.contacts || []).filter((c) => {
+      if (!query) return true;
+      const hay = `${c.displayName || ''} ${c.username || ''}`.toLowerCase();
+      return hay.includes(query);
+    });
+    people.innerHTML = contacts.length
+      ? contacts.map((c) => {
+        const friend = (payload.friends || []).find((f) => String(f.id) === String(c.id));
+        const loc = friend?.location?.label
+          || (friend?.online ? 'In Liberty County' : null)
+          || (c.sharesWithYou ? 'Online location hidden until they join' : 'Not sharing with you');
+        return `<li>
+            ${avatarHtml({ id: c.id, displayName: c.displayName, avatarUrl: c.avatarUrl || friend?.avatarUrl }, c.displayName)}
             <div><p class="item-title">${escapeHtml(c.displayName)}</p><p class="item-sub">${escapeHtml(loc)}</p></div>
             <button type="button" class="toggle ${c.sharing ? 'is-on' : ''}" data-findmy-id="${escapeHtml(c.id)}" aria-label="Share with ${escapeHtml(c.displayName)}"></button>
           </li>`;
-        }).join('')
-        : '<li><p class="item-sub">Follow friends on Internet to share locations.</p></li>';
-      people.querySelectorAll('[data-findmy-id]').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const on = !btn.classList.contains('is-on');
-          await api('findmy-share', { targetId: btn.dataset.findmyId, enabled: on });
-          void loadMap('findmy');
-        });
+      }).join('')
+      : `<li><p class="item-sub">${query ? 'No names match that search.' : 'Follow friends on Internet to share locations.'}</p></li>`;
+    people.querySelectorAll('[data-findmy-id]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const on = !btn.classList.contains('is-on');
+        await api('findmy-share', { targetId: btn.dataset.findmyId, enabled: on });
+        void loadMap('findmy');
       });
-      const status = $('#findmy-status');
-      if (status) {
-        status.hidden = false;
-        status.textContent = payload.me
-          ? `You are in-game${payload.me.label ? ` · ${payload.me.label}` : ''}.`
-          : 'Join the Clearwater ER:LC server to appear on Find My.';
-      }
+    });
+    const status = $('#findmy-status');
+    if (status) {
+      status.hidden = false;
+      status.textContent = payload.me
+        ? `You are in-game${payload.me.label ? ` · ${payload.me.label}` : ''}.`
+        : 'Join the Clearwater ER:LC server to appear on Find My.';
     }
   }
 
@@ -539,47 +685,151 @@
       }
       return;
     }
+    if (kind === 'maps' && !Array.isArray(result.body?.roads)) {
+      const roads = await api('liberty-roads-get');
+      if (roads.ok && Array.isArray(roads.body?.roads)) result.body.roads = roads.body.roads;
+    }
     applyMapPayload(kind, result.body || {});
   }
 
-  $('#maps-map')?.addEventListener('click', (event) => {
-    const box = event.currentTarget.getBoundingClientRect();
-    const left = (event.clientX - box.left) / box.width;
-    const top = (event.clientY - box.top) / box.height;
-    mapState.dest = { left, top, label: 'Dropped pin' };
-    $('#maps-dest').value = 'Dropped pin';
-    renderPins($('#maps-pins'), [
-      mapState.me ? { ...mapState.me, self: true, label: 'You' } : null,
-      { ...mapState.dest, dest: true, label: '★' },
-    ].filter(Boolean));
-    drawRoute(mapState.me, mapState.dest);
-  });
+  function mapPointFromPointer(event) {
+    const view = $('#maps-map');
+    const scene = $('#maps-scene');
+    if (!view || !scene) return null;
+    const rect = view.getBoundingClientRect();
+    const x = (event.clientX - rect.left - mapCam.x) / (rect.width * mapCam.zoom);
+    const y = (event.clientY - rect.top - mapCam.y) / (rect.height * mapCam.zoom);
+    return {
+      left: Math.min(1, Math.max(0, x)),
+      top: Math.min(1, Math.max(0, y)),
+    };
+  }
 
-  $('#maps-go')?.addEventListener('click', () => {
-    const query = $('#maps-dest').value.trim();
+  function startRoute() {
+    const status = $('#route-status');
+    const stop = $('#maps-stop');
+    if (status) status.hidden = false;
+    const query = $('#maps-dest')?.value.trim();
     const place = mapState.places.find((p) => String(p.label).toLowerCase() === query.toLowerCase());
     if (place) mapState.dest = place;
-    const status = $('#route-status');
-    status.hidden = false;
     if (!mapState.me) {
-      status.textContent = 'Join the server so Maps can see where you are.';
+      if (status) status.textContent = 'Join the server so Maps can see where you are.';
       return;
     }
     if (!mapState.dest) {
-      status.textContent = 'Tap the map or pick a destination.';
+      if (status) status.textContent = 'Tap the map or pick a destination.';
       return;
     }
-    drawRoute(mapState.me, mapState.dest);
-    renderPins($('#maps-pins'), [
-      { ...mapState.me, self: true, label: 'You' },
-      { ...mapState.dest, dest: true, label: mapState.dest.label || '★' },
-    ]);
-    const dist = studsBetween(mapState.me, mapState.dest);
-    status.textContent = `Route to ${mapState.dest.label || 'pin'} · about ${dist} studs from your in-game position.`;
+    mapState.route = shortestRoadPath(mapState.roads, mapState.me, mapState.dest);
+    mapState.navigating = true;
+    mapState.rerouting = false;
+    mapCam.zoom = Math.max(mapCam.zoom, 2.2);
+    panMapTo(mapState.me);
+    refreshMapsPins();
+    if (stop) stop.hidden = false;
+    const viaRoads = (mapState.roads || []).length > 0;
+    if (status) {
+      status.textContent = viaRoads
+        ? `Navigating to ${mapState.dest.label || 'pin'} · ${pathLength(mapState.route)} studs via roads`
+        : `Straight-line fallback · paint roads in Server Management, then save. ${pathLength(mapState.route)} studs`;
+    }
+  }
+
+  $('#maps-go')?.addEventListener('click', (event) => {
+    event.preventDefault();
+    startRoute();
+  });
+  $('#maps-stop')?.addEventListener('click', () => {
+    mapState.navigating = false;
+    mapState.rerouting = false;
+    const stop = $('#maps-stop');
+    if (stop) stop.hidden = true;
+    const status = $('#route-status');
+    if (status) status.textContent = 'Route stopped.';
+  });
+
+  $('#findmy-search')?.addEventListener('input', (event) => {
+    findmyState.query = event.target.value || '';
+    if (findmyState.payload) renderFindMy();
+  });
+
+  const mapsView = $('#maps-map');
+  if (mapsView) {
+    let pan = null;
+    mapsView.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      pan = { id: event.pointerId, x: event.clientX, y: event.clientY, camX: mapCam.x, camY: mapCam.y, moved: 0 };
+      mapsView.classList.add('is-panning');
+      mapsView.setPointerCapture?.(event.pointerId);
+    });
+    mapsView.addEventListener('pointermove', (event) => {
+      if (!pan || event.pointerId !== pan.id) return;
+      const dx = event.clientX - pan.x;
+      const dy = event.clientY - pan.y;
+      pan.moved = Math.hypot(dx, dy);
+      mapCam.x = pan.camX + dx;
+      mapCam.y = pan.camY + dy;
+      applyMapCamera();
+    });
+    const endPan = (event) => {
+      if (!pan || event.pointerId !== pan.id) return;
+      const moved = pan.moved;
+      pan = null;
+      mapsView.classList.remove('is-panning');
+      if (moved > 8) return;
+      const point = mapPointFromPointer(event);
+      if (!point) return;
+      mapState.dest = { ...point, label: 'Dropped pin' };
+      const destInput = $('#maps-dest');
+      if (destInput) destInput.value = 'Dropped pin';
+      if (mapState.navigating && mapState.me) mapState.route = shortestRoadPath(mapState.roads, mapState.me, mapState.dest);
+      refreshMapsPins();
+    };
+    mapsView.addEventListener('pointerup', endPan);
+    mapsView.addEventListener('pointercancel', () => { pan = null; mapsView.classList.remove('is-panning'); });
+    mapsView.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      const rect = mapsView.getBoundingClientRect();
+      const prev = mapCam.zoom;
+      const next = Math.min(5, Math.max(1, prev * (event.deltaY > 0 ? 0.9 : 1.12)));
+      const cx = event.clientX - rect.left;
+      const cy = event.clientY - rect.top;
+      mapCam.x = cx - ((cx - mapCam.x) / prev) * next;
+      mapCam.y = cy - ((cy - mapCam.y) / prev) * next;
+      mapCam.zoom = next;
+      applyMapCamera();
+    }, { passive: false });
+    applyMapCamera();
+  }
+
+  $('#maps-zoom-in')?.addEventListener('click', () => {
+    mapCam.zoom = Math.min(5, mapCam.zoom * 1.2);
+    if (mapState.me) panMapTo(mapState.me);
+    else applyMapCamera();
+  });
+  $('#maps-zoom-out')?.addEventListener('click', () => {
+    mapCam.zoom = Math.max(1, mapCam.zoom / 1.2);
+    applyMapCamera();
   });
 
   $$('.liberty-map').forEach((img) => {
     img.src = MAP_IMG;
+  });
+
+  $$('.map-canvas.is-pan').forEach((canvas) => {
+    const world = canvas.querySelector('.map-world');
+    if (!world) return;
+    let scale = 1.6;
+    const apply = () => {
+      world.style.width = `${Math.round(scale * 100)}%`;
+      world.style.height = `${Math.round(scale * 100)}%`;
+    };
+    apply();
+    canvas.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      scale = Math.min(3.2, Math.max(1, scale + (event.deltaY > 0 ? -0.15 : 0.15)));
+      apply();
+    }, { passive: false });
   });
 
   const dragEl = $('[data-drag]');
@@ -652,7 +902,7 @@
         status.hidden = false;
         status.textContent = opened === false
           ? 'Could not open the download. Visit cwrpvc.lol and use Download Phone.'
-          : `Opened the v${latest || 'latest'} download. Replace this app with the new file.`;
+          : `Opened the installer. Finish setup, then you can delete the downloaded file.`;
       }
       if (opened !== false) hideUpdateModal();
     } catch {
@@ -681,9 +931,9 @@
   async function checkForUpdates(manual = false) {
     const status = $('#settings-update-status');
     try {
-      const res = await fetch(VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' });
-      if (!res.ok) throw new Error('version check failed');
-      const info = await res.json();
+      const res = await window.anchorPhone?.checkUpdate?.();
+      if (!res?.ok || !res.body?.version) throw new Error('version check failed');
+      const info = res.body;
       latestInfo = info;
       if (compareVersions(appVersion, info.version) < 0) {
         showOutdated(info);
