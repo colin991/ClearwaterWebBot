@@ -1,6 +1,6 @@
 {
-  "version": "1.3.23",
+  "version": "1.3.24",
   "minVersion": "1.3.0",
   "downloadUrl": "https://cwrpvc.lol/downloads/ClearwaterPhone.exe",
-  "releaseNotes": "First launch requires Discord, then Z or X Phone, working wallpaper colors, and Settings options. Maps is no longer squished, Find My pans and zooms, and the bottom bar closes apps."
+  "releaseNotes": "The launcher now always opens setup (Discord, Z/X Phone, wallpaper, settings) and uses the Clearwater logo."
 }

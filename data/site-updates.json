@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-16-phone-launcher-setup-logo",
+      "title": "Phone launcher uses setup and the Clearwater logo",
+      "summary": "Opening Clearwater Phone now always starts with Discord, Z Phone or X Phone, wallpaper, and settings. The launcher uses the Clearwater logo instead of the old anchor mark.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T16:15:00.000Z"
+    },
+    {
       "id": "2026-08-16-phone-setup-maps-home",
       "title": "Phone setup, maps, and home bar",
       "summary": "First launch now requires Discord, then Z Phone (Samsung) or X Phone (Apple), wallpaper colors that actually tint the home screen, and the same startup and shortcut settings as Settings. Maps no longer shows extra road lines or a squished county map. The bottom bar closes the current app, and Find My pans and zooms like Maps.",

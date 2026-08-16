@@ -231,8 +231,8 @@ document.addEventListener('keydown', (event) => {
 });
 
 void (async () => {
-  const host = await loadHost();
-  showSetup(host.setupComplete !== true);
-  setSetupStep(1);
+  await loadHost();
+  showSetup(true);
   await refreshSession();
+  setSetupStep(lastSession?.authenticated ? 2 : 1);
 })();
