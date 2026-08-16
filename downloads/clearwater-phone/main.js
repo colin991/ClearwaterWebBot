@@ -312,6 +312,7 @@ function defaultHostSettings() {
     watchProcess: 'RobloxPlayerBeta.exe',
     phoneModel: 'z',
     wallpaperColor: 'gulf',
+    toggleShortcut: 'F8',
   };
 }
 
@@ -330,6 +331,7 @@ function writeHostSettings(next) {
   fs.mkdirSync(app.getPath('userData'), { recursive: true });
   fs.writeFileSync(settingsPath(), JSON.stringify(value));
   applyLoginItem(value);
+  applyToggleShortcut(value);
   return value;
 }
 
@@ -341,6 +343,18 @@ function applyLoginItem(settings) {
       args: ['--watch'],
     });
   } catch {}
+}
+
+function applyToggleShortcut(settings) {
+  try { globalShortcut.unregisterAll(); } catch {}
+  const wanted = String(settings?.toggleShortcut || 'F8').trim() || 'F8';
+  try {
+    if (!globalShortcut.register(wanted, toggleOverlay) && wanted !== 'F8') {
+      globalShortcut.register('F8', toggleOverlay);
+    }
+  } catch {
+    try { globalShortcut.register('F8', toggleOverlay); } catch {}
+  }
 }
 
 function argvHas(flag) {
@@ -430,14 +444,14 @@ async function createOverlayWindow({ closeLauncher = true } = {}) {
     x: sw - phoneW - 28,
     y: Math.max(24, Math.floor((sh - phoneH) / 2)),
     frame: false,
-    transparent: false,
+    transparent: true,
     alwaysOnTop: true,
     resizable: false,
     skipTaskbar: false,
-    hasShadow: false,
+    hasShadow: true,
     autoHideMenuBar: true,
     title: 'Clearwater Phone',
-    backgroundColor: '#121820',
+    backgroundColor: '#00000000',
     icon: iconPath(),
     webPreferences: {
       partition: SESSION_PARTITION,
@@ -621,10 +635,7 @@ app.whenReady().then(() => {
     createLauncherWindow();
   }
 
-  const ok = globalShortcut.register('F8', toggleOverlay);
-  if (!ok) {
-    globalShortcut.register('Alt+A', toggleOverlay);
-  }
+  applyToggleShortcut(readHostSettings());
 
   ipcMain.on('phone-minimize', () => {
     if (win) win.hide();
@@ -693,6 +704,16 @@ app.whenReady().then(() => {
 
   ipcMain.handle('phone-host-settings', async () => readHostSettings());
 
+  ipcMain.handle('phone-show-overlay', async () => {
+    if (!win || win.isDestroyed()) await createOverlayWindow({ closeLauncher: false });
+    if (win && !win.isDestroyed()) {
+      visible = true;
+      win.show();
+      win.setAlwaysOnTop(true, 'screen-saver');
+    }
+    return { ok: true };
+  });
+
   ipcMain.handle('phone-host-settings-save', async (_e, patch) => {
     const current = readHostSettings();
     const next = { ...current };
@@ -712,6 +733,9 @@ app.whenReady().then(() => {
       const name = patch.watchProcess.replace(/[^\w.-]/g, '');
       next.watchProcess = name || 'RobloxPlayerBeta.exe';
       if (!/\.exe$/i.test(next.watchProcess)) next.watchProcess += '.exe';
+    }
+    if (typeof patch?.toggleShortcut === 'string') {
+      next.toggleShortcut = patch.toggleShortcut.trim().slice(0, 32) || 'F8';
     }
     return writeHostSettings(next);
   });

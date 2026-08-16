@@ -192,10 +192,16 @@
                 <span>Search</span>
                 <input type="search" id="findmy-search" placeholder="Name or username" autocomplete="off" />
               </label>
-              <div class="map-canvas live-map is-pan" id="findmy-map">
-                <div class="map-world">
-                  <img class="liberty-map" src="https://www.cwrpvc.lol/assets/liberty-county-map.jpg" alt="Liberty County" draggable="false" />
-                  <div class="map-pins" id="findmy-pins"></div>
+              <div class="gmap findmy-gmap" id="findmy-gmap">
+                <div class="gmap-viewport" id="findmy-map">
+                  <div class="gmap-scene" id="findmy-scene">
+                    <img class="liberty-map" src="https://www.cwrpvc.lol/assets/liberty-county-map.jpg" alt="Liberty County" draggable="false" />
+                    <div class="map-pins" id="findmy-pins"></div>
+                  </div>
+                </div>
+                <div class="gmap-zoom" aria-label="Map zoom">
+                  <button type="button" id="findmy-zoom-in" aria-label="Zoom in">+</button>
+                  <button type="button" id="findmy-zoom-out" aria-label="Zoom out">−</button>
                 </div>
               </div>
               <p class="route-status" id="findmy-status" hidden></p>
@@ -235,7 +241,6 @@
                 <div class="gmap-viewport" id="maps-map">
                   <div class="gmap-scene" id="maps-scene">
                     <img class="liberty-map" src="https://www.cwrpvc.lol/assets/liberty-county-map.jpg" alt="Liberty County" draggable="false" />
-                    <svg class="route-overlay roads-overlay" id="maps-roads" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
                     <svg class="route-overlay" id="maps-route" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
                     <div class="map-pins" id="maps-pins"></div>
                   </div>
@@ -339,7 +344,7 @@
             </div>
           </section>
 
-          <div class="home-indicator" aria-hidden="true"></div>
+          <button type="button" class="home-indicator" id="home-indicator" aria-label="Go home"></button>
         </div>
       </div>
       <div class="overlay-hint" id="overlay-hint">F8 hide · drag status bar</div>

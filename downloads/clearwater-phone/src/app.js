@@ -3,7 +3,7 @@
   const VERSION_URL = SITE + '/downloads/clearwater-phone-version.json';
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
-  let appVersion = '1.3.22';
+  let appVersion = '1.3.23';
   let latestInfo = null;
   let sessionUser = null;
   let walletMode = 'send';
@@ -11,6 +11,7 @@
   let mapState = { me: null, places: [], dest: null, friends: [], roads: [], route: [], navigating: false, rerouting: false };
   let mapTimer = null;
   let mapCam = { zoom: 1.4, x: 0, y: 0 };
+  let findCam = { zoom: 1.4, x: 0, y: 0 };
   let findmyState = { payload: null, query: '' };
   const PHONE_MODELS = new Set(['z', 'x']);
   const WALLPAPERS = new Set(['gulf', 'midnight', 'ocean', 'ember', 'forest', 'violet']);
@@ -18,9 +19,15 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+  function currentPhoneModel() {
+    return document.body.classList.contains('phone-model-x') ? 'x' : 'z';
+  }
+
   function applyAppearance(host = {}) {
-    const model = PHONE_MODELS.has(host.phoneModel) ? host.phoneModel : 'z';
-    const wallpaper = WALLPAPERS.has(host.wallpaperColor) ? host.wallpaperColor : 'gulf';
+    const model = PHONE_MODELS.has(host.phoneModel) ? host.phoneModel : currentPhoneModel();
+    const wallpaper = WALLPAPERS.has(host.wallpaperColor)
+      ? host.wallpaperColor
+      : (WALLPAPERS.has(document.body.dataset.wallpaper) ? document.body.dataset.wallpaper : 'gulf');
     document.body.classList.remove('phone-model-x', 'phone-model-z');
     document.body.classList.add(`phone-model-${model}`);
     document.body.dataset.wallpaper = wallpaper;
@@ -125,10 +132,14 @@
     if (id === 'wallet') void loadWallet();
     if (id === 'maps') {
       void loadMap('maps');
+      sizeLibertyScene($('#maps-scene'));
+      applyMapCamera(mapCam, '#maps-scene');
       if (mapTimer) window.clearInterval(mapTimer);
       mapTimer = window.setInterval(() => void loadMap('maps'), 1000);
     } else if (id === 'findmy') {
       void loadMap('findmy');
+      sizeLibertyScene($('#findmy-scene'));
+      applyMapCamera(findCam, '#findmy-scene');
       if (mapTimer) window.clearInterval(mapTimer);
       mapTimer = window.setInterval(() => void loadMap('findmy'), 2500);
     } else if (mapTimer) {
@@ -152,6 +163,7 @@
       showView('home');
     });
   });
+  $('#home-indicator')?.addEventListener('click', () => showView('home'));
 
   function setToggle(el, on) {
     if (!el) return;
@@ -197,6 +209,8 @@
       setToggle($('#setting-watch-app'), host.launchOnApp !== false);
       const input = $('#setting-watch-process');
       if (input) input.value = host.watchProcess || 'RobloxPlayerBeta.exe';
+      const shortcut = $('#setting-toggle-shortcut');
+      if (shortcut) shortcut.value = host.toggleShortcut || 'F8';
       applyAppearance(host);
     } catch {}
   }
@@ -232,6 +246,49 @@
     const host = await window.anchorPhone?.saveHostSettings?.({ watchProcess: name });
     const input = $('#setting-watch-process');
     if (input && host?.watchProcess) input.value = host.watchProcess;
+  });
+
+  function acceleratorFromEvent(event) {
+    if (['Shift', 'Control', 'Alt', 'Meta', 'OS'].includes(event.key)) return null;
+    const parts = [];
+    if (event.ctrlKey) parts.push('Control');
+    if (event.altKey) parts.push('Alt');
+    if (event.metaKey) parts.push('Command');
+    if (event.shiftKey && !/^F\d{1,2}$/i.test(event.key)) parts.push('Shift');
+    const key = event.key === ' ' ? 'Space' : event.key.length === 1 ? event.key.toUpperCase() : event.key;
+    parts.push(key);
+    return parts.join('+');
+  }
+
+  $('#setting-shortcut-capture')?.addEventListener('click', () => {
+    const input = $('#setting-toggle-shortcut');
+    const status = $('#setting-shortcut-status');
+    if (input) input.value = 'Press a key…';
+    if (status) {
+      status.hidden = false;
+      status.textContent = 'Press the key you want to show or hide the phone.';
+    }
+    const onKey = async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const accel = acceleratorFromEvent(event);
+      if (!accel) return;
+      window.removeEventListener('keydown', onKey, true);
+      const host = await window.anchorPhone?.saveHostSettings?.({ toggleShortcut: accel });
+      if (input) input.value = host?.toggleShortcut || accel;
+      if (status) status.textContent = `Show / hide is now ${host?.toggleShortcut || accel}.`;
+    };
+    window.addEventListener('keydown', onKey, true);
+  });
+
+  $('#setting-shortcut-reset')?.addEventListener('click', async () => {
+    const host = await window.anchorPhone?.saveHostSettings?.({ toggleShortcut: 'F8' });
+    const input = $('#setting-toggle-shortcut');
+    if (input) input.value = host?.toggleShortcut || 'F8';
+  });
+
+  $('#setting-show-phone')?.addEventListener('click', () => {
+    void window.anchorPhone?.showOverlay?.();
   });
 
   function ensureSiteWebview(selector, path, reload = false) {
@@ -561,16 +618,7 @@
     return [from, ...path, to];
   }
 
-  function drawRoadsOverlay() {
-    const svg = $('#maps-roads');
-    if (!svg) return;
-    svg.innerHTML = (mapState.roads || []).map((road) => {
-      const pts = road.points || [];
-      if (pts.length < 2) return '';
-      const d = pts.map((p, i) => `${i ? 'L' : 'M'} ${(p.left * 100).toFixed(2)} ${(p.top * 100).toFixed(2)}`).join(' ');
-      return `<path d="${d}" stroke="rgba(125,211,252,0.35)" stroke-width="0.9" stroke-linecap="round" />`;
-    }).join('');
-  }
+  function drawRoadsOverlay() {}
 
   function drawRoute(from, to) {
     const svg = $('#maps-route');
@@ -586,20 +634,32 @@
     svg.innerHTML = `<path d="${d}" fill="none" stroke="#76adff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />`;
   }
 
-  function applyMapCamera() {
-    const scene = $('#maps-scene');
+  function applyMapCamera(cam = mapCam, sceneId = '#maps-scene') {
+    const scene = $(sceneId);
     if (!scene) return;
-    scene.style.transform = `translate(${mapCam.x}px, ${mapCam.y}px) scale(${mapCam.zoom})`;
+    scene.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.zoom})`;
   }
 
-  function panMapTo(point) {
-    const view = $('#maps-map');
-    if (!view || !point) return;
-    const w = view.clientWidth;
-    const h = view.clientHeight;
-    mapCam.x = w / 2 - Number(point.left) * w * mapCam.zoom;
-    mapCam.y = h / 2 - Number(point.top) * h * mapCam.zoom;
-    applyMapCamera();
+  function sizeLibertyScene(scene) {
+    const view = scene?.parentElement;
+    const img = scene?.querySelector('.liberty-map');
+    if (!view || !img) return;
+    const ar = (img.naturalWidth && img.naturalHeight) ? img.naturalWidth / img.naturalHeight : 16 / 10;
+    const h = Math.max(1, view.clientHeight);
+    scene.style.width = `${Math.round(h * ar)}px`;
+    scene.style.height = `${h}px`;
+  }
+
+  function panMapTo(point, cam = mapCam, viewId = '#maps-map', sceneId = '#maps-scene') {
+    const view = $(viewId);
+    const scene = $(sceneId);
+    if (!view || !scene || !point) return;
+    sizeLibertyScene(scene);
+    const w = scene.offsetWidth || view.clientWidth;
+    const h = scene.offsetHeight || view.clientHeight;
+    cam.x = view.clientWidth / 2 - Number(point.left) * w * cam.zoom;
+    cam.y = view.clientHeight / 2 - Number(point.top) * h * cam.zoom;
+    applyMapCamera(cam, sceneId);
   }
 
   function refreshMapsPins() {
@@ -700,6 +760,10 @@
         ? `You are in-game${payload.me.label ? ` · ${payload.me.label}` : ''}.`
         : 'Join the Clearwater ER:LC server to appear on Find My.';
     }
+    if (payload.me && !findCam._placed) {
+      panMapTo(payload.me, findCam, '#findmy-map', '#findmy-scene');
+      findCam._placed = true;
+    }
   }
 
   async function loadMap(kind) {
@@ -727,17 +791,65 @@
     applyMapPayload(kind, result.body || {});
   }
 
-  function mapPointFromPointer(event) {
-    const view = $('#maps-map');
-    const scene = $('#maps-scene');
+  function mapPointFromPointer(event, cam = mapCam, viewId = '#maps-map', sceneId = '#maps-scene') {
+    const view = $(viewId);
+    const scene = $(sceneId);
     if (!view || !scene) return null;
     const rect = view.getBoundingClientRect();
-    const x = (event.clientX - rect.left - mapCam.x) / (rect.width * mapCam.zoom);
-    const y = (event.clientY - rect.top - mapCam.y) / (rect.height * mapCam.zoom);
+    const w = scene.offsetWidth || rect.width;
+    const h = scene.offsetHeight || rect.height;
+    const x = (event.clientX - rect.left - cam.x) / (w * cam.zoom);
+    const y = (event.clientY - rect.top - cam.y) / (h * cam.zoom);
     return {
       left: Math.min(1, Math.max(0, x)),
       top: Math.min(1, Math.max(0, y)),
     };
+  }
+
+  function bindGmap(viewId, sceneId, cam, onTap) {
+    const view = $(viewId);
+    const scene = $(sceneId);
+    if (!view || !scene) return;
+    sizeLibertyScene(scene);
+    let pan = null;
+    view.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      pan = { id: event.pointerId, x: event.clientX, y: event.clientY, camX: cam.x, camY: cam.y, moved: 0 };
+      view.classList.add('is-panning');
+      view.setPointerCapture?.(event.pointerId);
+    });
+    view.addEventListener('pointermove', (event) => {
+      if (!pan || event.pointerId !== pan.id) return;
+      const dx = event.clientX - pan.x;
+      const dy = event.clientY - pan.y;
+      pan.moved = Math.hypot(dx, dy);
+      cam.x = pan.camX + dx;
+      cam.y = pan.camY + dy;
+      applyMapCamera(cam, sceneId);
+    });
+    const endPan = (event) => {
+      if (!pan || event.pointerId !== pan.id) return;
+      const moved = pan.moved;
+      pan = null;
+      view.classList.remove('is-panning');
+      if (moved > 8 || !onTap) return;
+      onTap(event);
+    };
+    view.addEventListener('pointerup', endPan);
+    view.addEventListener('pointercancel', () => { pan = null; view.classList.remove('is-panning'); });
+    view.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      const rect = view.getBoundingClientRect();
+      const prev = cam.zoom;
+      const next = Math.min(5, Math.max(1, prev * (event.deltaY > 0 ? 0.9 : 1.12)));
+      const cx = event.clientX - rect.left;
+      const cy = event.clientY - rect.top;
+      cam.x = cx - ((cx - cam.x) / prev) * next;
+      cam.y = cy - ((cy - cam.y) / prev) * next;
+      cam.zoom = next;
+      applyMapCamera(cam, sceneId);
+    }, { passive: false });
+    applyMapCamera(cam, sceneId);
   }
 
   function startRoute() {
@@ -788,54 +900,16 @@
     if (findmyState.payload) renderFindMy();
   });
 
-  const mapsView = $('#maps-map');
-  if (mapsView) {
-    let pan = null;
-    mapsView.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0) return;
-      pan = { id: event.pointerId, x: event.clientX, y: event.clientY, camX: mapCam.x, camY: mapCam.y, moved: 0 };
-      mapsView.classList.add('is-panning');
-      mapsView.setPointerCapture?.(event.pointerId);
-    });
-    mapsView.addEventListener('pointermove', (event) => {
-      if (!pan || event.pointerId !== pan.id) return;
-      const dx = event.clientX - pan.x;
-      const dy = event.clientY - pan.y;
-      pan.moved = Math.hypot(dx, dy);
-      mapCam.x = pan.camX + dx;
-      mapCam.y = pan.camY + dy;
-      applyMapCamera();
-    });
-    const endPan = (event) => {
-      if (!pan || event.pointerId !== pan.id) return;
-      const moved = pan.moved;
-      pan = null;
-      mapsView.classList.remove('is-panning');
-      if (moved > 8) return;
-      const point = mapPointFromPointer(event);
-      if (!point) return;
-      mapState.dest = { ...point, label: 'Dropped pin' };
-      const destInput = $('#maps-dest');
-      if (destInput) destInput.value = 'Dropped pin';
-      if (mapState.navigating && mapState.me) mapState.route = shortestRoadPath(mapState.roads, mapState.me, mapState.dest);
-      refreshMapsPins();
-    };
-    mapsView.addEventListener('pointerup', endPan);
-    mapsView.addEventListener('pointercancel', () => { pan = null; mapsView.classList.remove('is-panning'); });
-    mapsView.addEventListener('wheel', (event) => {
-      event.preventDefault();
-      const rect = mapsView.getBoundingClientRect();
-      const prev = mapCam.zoom;
-      const next = Math.min(5, Math.max(1, prev * (event.deltaY > 0 ? 0.9 : 1.12)));
-      const cx = event.clientX - rect.left;
-      const cy = event.clientY - rect.top;
-      mapCam.x = cx - ((cx - mapCam.x) / prev) * next;
-      mapCam.y = cy - ((cy - mapCam.y) / prev) * next;
-      mapCam.zoom = next;
-      applyMapCamera();
-    }, { passive: false });
-    applyMapCamera();
-  }
+  bindGmap('#maps-map', '#maps-scene', mapCam, (event) => {
+    const point = mapPointFromPointer(event);
+    if (!point) return;
+    mapState.dest = { ...point, label: 'Dropped pin' };
+    const destInput = $('#maps-dest');
+    if (destInput) destInput.value = 'Dropped pin';
+    if (mapState.navigating && mapState.me) mapState.route = shortestRoadPath(mapState.roads, mapState.me, mapState.dest);
+    refreshMapsPins();
+  });
+  bindGmap('#findmy-map', '#findmy-scene', findCam);
 
   $('#maps-zoom-in')?.addEventListener('click', () => {
     mapCam.zoom = Math.min(5, mapCam.zoom * 1.2);
@@ -846,25 +920,23 @@
     mapCam.zoom = Math.max(1, mapCam.zoom / 1.2);
     applyMapCamera();
   });
+  $('#findmy-zoom-in')?.addEventListener('click', () => {
+    findCam.zoom = Math.min(5, findCam.zoom * 1.2);
+    const me = findmyState.payload?.me;
+    if (me) panMapTo(me, findCam, '#findmy-map', '#findmy-scene');
+    else applyMapCamera(findCam, '#findmy-scene');
+  });
+  $('#findmy-zoom-out')?.addEventListener('click', () => {
+    findCam.zoom = Math.max(1, findCam.zoom / 1.2);
+    applyMapCamera(findCam, '#findmy-scene');
+  });
 
   $$('.liberty-map').forEach((img) => {
     img.src = MAP_IMG;
-  });
-
-  $$('.map-canvas.is-pan').forEach((canvas) => {
-    const world = canvas.querySelector('.map-world');
-    if (!world) return;
-    let scale = 1.6;
-    const apply = () => {
-      world.style.width = `${Math.round(scale * 100)}%`;
-      world.style.height = `${Math.round(scale * 100)}%`;
-    };
-    apply();
-    canvas.addEventListener('wheel', (event) => {
-      event.preventDefault();
-      scale = Math.min(3.2, Math.max(1, scale + (event.deltaY > 0 ? -0.15 : 0.15)));
-      apply();
-    }, { passive: false });
+    img.addEventListener('load', () => {
+      const scene = img.closest('.gmap-scene');
+      if (scene) sizeLibertyScene(scene);
+    });
   });
 
   const dragEl = $('[data-drag]');

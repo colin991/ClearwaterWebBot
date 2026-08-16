@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-16-phone-setup-maps-home",
+      "title": "Phone setup, maps, and home bar",
+      "summary": "First launch now requires Discord, then Z Phone (Samsung) or X Phone (Apple), wallpaper colors that actually tint the home screen, and the same startup and shortcut settings as Settings. Maps no longer shows extra road lines or a squished county map. The bottom bar closes the current app, and Find My pans and zooms like Maps.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T16:00:00.000Z"
+    },
+    {
       "id": "2026-08-16-phone-first-customize",
       "title": "Phone first-launch customize",
       "summary": "Opening Clearwater Phone for the first time now goes Sign in → pick Z Phone (Samsung) or X Phone (Apple) → choose a wallpaper color, then launches.",

@@ -10,6 +10,15 @@ const WALLPAPERS = new Set(['gulf', 'midnight', 'ocean', 'ember', 'forest', 'vio
 let setupStep = 1;
 let phoneModel = 'z';
 let wallpaperColor = 'gulf';
+let startWithWindows = false;
+let launchOnApp = true;
+let watchProcess = 'RobloxPlayerBeta.exe';
+let toggleShortcut = 'F8';
+
+function setToggle(el, on) {
+  if (!el) return;
+  el.classList.toggle('is-on', on);
+}
 
 function renderAccount(session) {
   const user = session?.user || session;
@@ -83,6 +92,16 @@ async function loadHost() {
   else selectPhoneModel('z');
   if (WALLPAPERS.has(host.wallpaperColor)) selectWallpaper(host.wallpaperColor);
   else selectWallpaper('gulf');
+  startWithWindows = host.startWithWindows === true;
+  launchOnApp = host.launchOnApp !== false;
+  watchProcess = host.watchProcess || 'RobloxPlayerBeta.exe';
+  toggleShortcut = host.toggleShortcut || 'F8';
+  setToggle(document.getElementById('setup-login-item'), startWithWindows);
+  setToggle(document.getElementById('setup-watch-app'), launchOnApp);
+  const watchInput = document.getElementById('setup-watch-process');
+  if (watchInput) watchInput.value = watchProcess;
+  const shortcutInput = document.getElementById('setup-toggle-shortcut');
+  if (shortcutInput) shortcutInput.value = toggleShortcut;
   return host;
 }
 
@@ -113,8 +132,10 @@ document.getElementById('setup-finish')?.addEventListener('click', async () => {
       setupComplete: true,
       phoneModel,
       wallpaperColor,
-      launchOnApp: true,
-      startWithWindows: false,
+      launchOnApp,
+      startWithWindows,
+      watchProcess: document.getElementById('setup-watch-process')?.value.trim() || watchProcess,
+      toggleShortcut,
     });
     await window.anchorPhone?.launchOverlay?.();
   } catch {
@@ -138,7 +159,13 @@ document.getElementById('setup-login')?.addEventListener('click', async () => {
   window.setTimeout(() => void refreshSession(), 2500);
 });
 
-document.getElementById('setup-next-1')?.addEventListener('click', () => setSetupStep(2));
+document.getElementById('setup-next-1')?.addEventListener('click', () => {
+  if (!lastSession?.authenticated) {
+    if (accountStatus) accountStatus.textContent = 'Sign in with Discord to continue.';
+    return;
+  }
+  setSetupStep(2);
+});
 document.getElementById('setup-next-2')?.addEventListener('click', () => setSetupStep(3));
 document.getElementById('setup-back-2')?.addEventListener('click', () => setSetupStep(1));
 document.getElementById('setup-back-3')?.addEventListener('click', () => setSetupStep(2));
@@ -149,6 +176,47 @@ document.querySelectorAll('[data-phone-model]').forEach((card) => {
 
 document.querySelectorAll('.wallpaper-swatch[data-wallpaper]').forEach((swatch) => {
   swatch.addEventListener('click', () => selectWallpaper(swatch.dataset.wallpaper));
+});
+
+document.getElementById('setup-login-item')?.addEventListener('click', () => {
+  startWithWindows = !startWithWindows;
+  setToggle(document.getElementById('setup-login-item'), startWithWindows);
+});
+document.getElementById('setup-watch-app')?.addEventListener('click', () => {
+  launchOnApp = !launchOnApp;
+  setToggle(document.getElementById('setup-watch-app'), launchOnApp);
+});
+
+function acceleratorFromEvent(event) {
+  if (['Shift', 'Control', 'Alt', 'Meta', 'OS'].includes(event.key)) return null;
+  const parts = [];
+  if (event.ctrlKey) parts.push('Control');
+  if (event.altKey) parts.push('Alt');
+  if (event.metaKey) parts.push('Command');
+  if (event.shiftKey && !/^F\d{1,2}$/i.test(event.key)) parts.push('Shift');
+  const key = event.key === ' ' ? 'Space' : event.key.length === 1 ? event.key.toUpperCase() : event.key;
+  parts.push(key);
+  return parts.join('+');
+}
+
+document.getElementById('setup-shortcut-capture')?.addEventListener('click', () => {
+  const input = document.getElementById('setup-toggle-shortcut');
+  const status = document.getElementById('setup-step3-status');
+  if (input) input.value = 'Press a key…';
+  if (status) {
+    status.hidden = false;
+    status.textContent = 'Press the key you want to show or hide the phone.';
+  }
+  const onKey = (event) => {
+    event.preventDefault();
+    const accel = acceleratorFromEvent(event);
+    if (!accel) return;
+    window.removeEventListener('keydown', onKey, true);
+    toggleShortcut = accel;
+    if (input) input.value = accel;
+    if (status) status.textContent = `Show / hide is ${accel}.`;
+  };
+  window.addEventListener('keydown', onKey, true);
 });
 
 window.anchorPhone?.onAuth?.((payload) => {

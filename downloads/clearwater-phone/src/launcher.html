@@ -34,7 +34,7 @@
               <h2>Discord</h2>
               <p class="setup-status" id="setup-account-status">Not signed in</p>
               <button type="button" class="cine-launch setup-login" id="setup-login">Sign in with Discord</button>
-              <p class="setup-hint">You can skip this and sign in later from Settings.</p>
+              <p class="setup-hint" id="setup-login-hint">You must sign in with Discord to continue.</p>
             </section>
             <button type="button" class="cine-launch" id="setup-next-1">Continue</button>
             <button type="button" class="cine-quit" id="setup-quit">Quit</button>
@@ -68,8 +68,8 @@
           </section>
 
           <section class="setup-step" data-setup-step="3" hidden>
-            <h1 class="setup-title">Wallpaper color</h1>
-            <p class="setup-sub">Choose the color for your home screen.</p>
+            <h1 class="setup-title">Look and settings</h1>
+            <p class="setup-sub">Choose a wallpaper, then set startup and the show / hide key.</p>
             <div class="wallpaper-pick" role="radiogroup" aria-label="Wallpaper color" id="wallpaper-pick">
               <button type="button" class="wallpaper-swatch is-selected" data-wallpaper="gulf" style="--swatch:#3a6fd4" role="radio" aria-checked="true" title="Gulf">
                 <span>Gulf</span>
@@ -94,6 +94,35 @@
               <div class="wallpaper-preview-sky"></div>
               <p>Home preview</p>
             </div>
+            <section class="setup-card">
+              <h2>Startup</h2>
+              <ul class="setup-list">
+                <li>
+                  <div>
+                    <p class="item-title">Start with Windows</p>
+                    <p class="item-sub">Open Clearwater Phone when you sign in</p>
+                  </div>
+                  <button type="button" class="toggle" id="setup-login-item" aria-label="Start with Windows"></button>
+                </li>
+                <li>
+                  <div>
+                    <p class="item-title">Launch when app opens</p>
+                    <p class="item-sub">Show the overlay when Roblox starts</p>
+                  </div>
+                  <button type="button" class="toggle is-on" id="setup-watch-app" aria-label="Launch when app opens"></button>
+                </li>
+              </ul>
+              <label class="field">
+                <span>Watch process</span>
+                <input type="text" id="setup-watch-process" value="RobloxPlayerBeta.exe" autocomplete="off" />
+              </label>
+              <label class="field">
+                <span>Show / hide button</span>
+                <input type="text" id="setup-toggle-shortcut" value="F8" autocomplete="off" spellcheck="false" readonly />
+              </label>
+              <button type="button" class="cine-quit" id="setup-shortcut-capture">Change show / hide button</button>
+            </section>
+            <p class="setup-status" id="setup-step3-status" hidden></p>
             <button type="button" class="cine-launch" id="setup-finish">Finish and launch</button>
             <button type="button" class="cine-quit" id="setup-back-3">Back</button>
           </section>

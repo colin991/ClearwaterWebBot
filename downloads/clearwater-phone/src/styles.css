@@ -42,7 +42,7 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #121820;
+  background: transparent;
   color: var(--text);
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
@@ -81,16 +81,36 @@ textarea {
   height: 100%;
   margin: 0;
   position: relative;
+  padding: 10px;
 }
 
 .phone-bezel {
   position: relative;
   width: 100%;
   height: 100%;
-  border-radius: 0;
-  padding: 0;
-  background: #121820;
-  box-shadow: none;
+  padding: 10px;
+  background: #0d1016;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+
+body.phone-model-x .phone-bezel {
+  border-radius: 46px;
+  padding: 12px;
+  background: #050506;
+}
+
+body.phone-model-x .phone-screen {
+  border-radius: 36px;
+}
+
+body.phone-model-z .phone-bezel {
+  border-radius: 10px;
+  padding: 8px 6px;
+  background: #1a1d24;
+}
+
+body.phone-model-z .phone-screen {
+  border-radius: 4px;
 }
 
 .bezel-shine {
@@ -194,11 +214,11 @@ body.phone-model-x .dynamic-island {
 }
 
 body.phone-model-x .phone-screen {
-  border-radius: 0;
+  border-radius: 36px;
 }
 
 body.phone-model-z .phone-screen {
-  border-radius: 0;
+  border-radius: 4px;
 }
 
 .island-cam {
@@ -392,8 +412,8 @@ body[data-wallpaper="violet"] {
   background: linear-gradient(
     105deg,
     transparent 10%,
-    rgba(118, 173, 255, 0.1) 35%,
-    rgba(58, 111, 212, 0.16) 50%,
+    color-mix(in srgb, var(--wp-accent, #3a6fd4) 22%, transparent) 35%,
+    color-mix(in srgb, var(--wp-accent, #3a6fd4) 34%, transparent) 50%,
     rgba(52, 211, 153, 0.06) 65%,
     transparent 85%
   );
@@ -486,13 +506,13 @@ body[data-wallpaper="violet"] {
   bottom: 0;
   height: 28%;
   background:
-    linear-gradient(180deg, transparent, rgba(118, 173, 255, 0.08) 30%, rgba(8, 20, 40, 0.7) 70%, #03070d),
+    linear-gradient(180deg, transparent, color-mix(in srgb, var(--wp-accent, #3a6fd4) 16%, transparent) 30%, rgba(8, 20, 40, 0.7) 70%, #03070d),
     repeating-linear-gradient(
       90deg,
       transparent,
       transparent 18px,
-      rgba(118, 173, 255, 0.03) 18px,
-      rgba(118, 173, 255, 0.03) 20px
+      color-mix(in srgb, var(--wp-accent, #3a6fd4) 8%, transparent) 18px,
+      color-mix(in srgb, var(--wp-accent, #3a6fd4) 8%, transparent) 20px
     );
   mask-image: linear-gradient(180deg, transparent, #000 35%);
 }
@@ -510,7 +530,8 @@ body[data-wallpaper="violet"] {
   height: 200px;
   left: -50px;
   top: 18%;
-  background: rgba(118, 173, 255, 0.22);
+  background: var(--wp-accent, #3a6fd4);
+  opacity: 0.35;
 }
 
 .wp-glow-b {
@@ -518,7 +539,8 @@ body[data-wallpaper="violet"] {
   height: 160px;
   right: -30px;
   top: 48%;
-  background: rgba(58, 111, 212, 0.2);
+  background: var(--wp-accent, #3a6fd4);
+  opacity: 0.28;
   animation-delay: -3.5s;
 }
 
@@ -527,7 +549,8 @@ body[data-wallpaper="violet"] {
   height: 120px;
   left: 35%;
   bottom: 22%;
-  background: rgba(52, 211, 153, 0.08);
+  background: var(--wp-accent, #3a6fd4);
+  opacity: 0.2;
   animation-delay: -7s;
 }
 
@@ -845,10 +868,10 @@ body[data-wallpaper="violet"] {
   background: transparent;
 }
 
-#findmy-map.map-canvas {
+#maps-gmap.gmap,
+#findmy-gmap.gmap {
   flex: 1 1 auto;
-  height: auto;
-  min-height: 380px;
+  min-height: 300px;
   margin: 0 0 8px;
 }
 
@@ -889,7 +912,9 @@ body[data-wallpaper="violet"] {
   width: 100%;
   height: 100%;
   object-fit: fill;
+  object-position: center;
   pointer-events: none;
+  background: #03070d;
 }
 .gmap-zoom {
   position: absolute;
@@ -1781,10 +1806,22 @@ img.avatar {
   left: 50%;
   transform: translateX(-50%);
   width: 112px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  z-index: 45;
+  cursor: pointer;
+  appearance: none;
+}
+.home-indicator::after {
+  content: '';
+  display: block;
+  width: 112px;
   height: 4px;
+  margin: 10px auto 0;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.38);
-  z-index: 45;
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.25);
 }
 
