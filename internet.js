@@ -1,3 +1,7 @@
+if (new URLSearchParams(window.location.search).get('embed') === 'phone') {
+  document.documentElement.classList.add('cw-phone-embed');
+}
+
 const login = document.querySelector('[data-login]');
 const userBox = document.querySelector('[data-user]');
 const avatar = document.querySelector('[data-avatar]');

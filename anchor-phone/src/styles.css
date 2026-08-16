@@ -709,10 +709,75 @@ textarea {
    App chrome
    ═══════════════════════════════════════════ */
 
+.view-internet {
+  background: #050811;
+}
+
+.internet-webview {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: #050811;
+}
+
+.app-lede,
+.item-title,
+.item-sub,
+.hint,
+.form-status,
+.route-status,
+.pin {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.app-lede {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+#view-maps.view-app,
+#view-findmy.view-app {
+  background: #03070d;
+}
+
+.maps-body,
+.findmy-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px 10px 12px;
+  background: transparent;
+}
+
+.map-canvas.is-pan {
+  flex: 1;
+  min-height: 220px;
+  height: auto;
+  overflow: auto;
+  cursor: grab;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  border-radius: 12px;
+  margin-bottom: 10px;
+}
+
+.map-world {
+  position: relative;
+  width: 160%;
+  height: 160%;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+img.avatar {
+  object-fit: cover;
+}
+
 .view-app {
-  background:
-    radial-gradient(ellipse 80% 40% at 50% -5%, rgba(118, 173, 255, 0.1), transparent 55%),
-    linear-gradient(180deg, #07111c 0%, #03070d 42%);
+  background: #03070d;
 }
 
 .app-chrome {
@@ -734,6 +799,9 @@ textarea {
   font-weight: 750;
   letter-spacing: -0.025em;
   min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .back-btn {

@@ -9,6 +9,13 @@ const SITE = 'https://www.cwrpvc.lol';
 const SESSION_PARTITION = 'persist:clearwater-phone';
 const pkg = require('./package.json');
 
+try {
+  app.setName('Clearwater Phone');
+} catch {}
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.clearwater.phone');
+}
+
 function phoneSession() {
   return session.fromPartition(SESSION_PARTITION);
 }
@@ -412,8 +419,8 @@ async function createOverlayWindow({ closeLauncher = true } = {}) {
   }
 
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
-  const phoneW = 360;
-  const phoneH = 740;
+  const phoneW = 390;
+  const phoneH = 760;
 
   win = new BrowserWindow({
     width: phoneW,
@@ -435,7 +442,8 @@ async function createOverlayWindow({ closeLauncher = true } = {}) {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: false,
+      webviewTag: true
     }
   });
 
@@ -443,6 +451,7 @@ async function createOverlayWindow({ closeLauncher = true } = {}) {
     try { win.setIcon(path.join(__dirname, 'build', 'icon.png')); } catch {}
   }
 
+  win.setTitle('Clearwater Phone');
   win.setMenuBarVisibility(false);
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -490,6 +499,7 @@ function createLauncherWindow() {
   });
   if (win && !win.isDestroyed()) win.setAlwaysOnTop(false);
   launcherWin.setMenuBarVisibility(false);
+  launcherWin.setTitle('Clearwater Phone');
   launcherWin.center();
   launcherWin.loadFile(path.join(__dirname, 'src', 'launcher.html'));
   launcherWin.setAlwaysOnTop(true, 'screen-saver');

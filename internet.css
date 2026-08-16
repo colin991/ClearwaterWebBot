@@ -9502,3 +9502,20 @@ body.has-site-banner.has-official-post-banner .internet-side {
 .government-fine-card.status-denied { border-color: rgba(248, 113, 113, .28); }
 .government-view .page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 
+html.cw-phone-embed,
+html.cw-phone-embed body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+html.cw-phone-embed .internet-shell {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 8px 8px 72px !important;
+  box-sizing: border-box;
+}
+html.cw-phone-embed .community-card {
+  display: none !important;
+}
+
+

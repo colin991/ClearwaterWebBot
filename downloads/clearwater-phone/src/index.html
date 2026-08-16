@@ -117,7 +117,7 @@
           </section>
 
           <!-- INTERNET -->
-          <section class="view view-app" id="view-internet" data-view="internet" hidden>
+          <section class="view view-app view-internet" id="view-internet" data-view="internet" hidden>
             <div class="app-chrome">
               <button type="button" class="back-btn" data-home aria-label="Home">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5L8 12l7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -125,16 +125,12 @@
               <h1>Internet</h1>
               <span class="chrome-spacer"></span>
             </div>
-            <div class="app-body">
-              <p class="app-lede">Post to the same Clearwater Internet feed as the website.</p>
-              <div class="composer" id="net-composer">
-                <textarea id="net-body" rows="3" maxlength="500" placeholder="What's happening?"></textarea>
-                <button type="button" class="btn-primary" id="net-post">Post</button>
-                <p class="form-status" id="net-status" hidden></p>
-              </div>
-              <h2 class="section-title">Feed</h2>
-              <ul class="ios-list thread-list" id="net-feed"></ul>
-            </div>
+            <webview
+              id="internet-webview"
+              class="internet-webview"
+              partition="persist:clearwater-phone"
+              allowpopups="on"
+            ></webview>
           </section>
 
           <!-- WALLET -->
@@ -190,11 +186,13 @@
               <h1>Find My</h1>
               <span class="chrome-spacer"></span>
             </div>
-            <div class="app-body">
-              <p class="app-lede">Share your live ER:LC location with friends. They only see you when you turn sharing on for them.</p>
-              <div class="map-canvas live-map" id="findmy-map">
-                <img class="liberty-map" src="https://cwrpvc.lol/assets/liberty-county-map.jpg" alt="Liberty County" draggable="false" />
-                <div class="map-pins" id="findmy-pins"></div>
+            <div class="app-body findmy-body">
+              <p class="app-lede">Share live ER:LC location with friends.</p>
+              <div class="map-canvas live-map is-pan" id="findmy-map">
+                <div class="map-world">
+                  <img class="liberty-map" src="https://www.cwrpvc.lol/assets/liberty-county-map.jpg" alt="Liberty County" draggable="false" />
+                  <div class="map-pins" id="findmy-pins"></div>
+                </div>
               </div>
               <p class="route-status" id="findmy-status" hidden></p>
               <h2 class="section-title">Friends</h2>
@@ -245,15 +243,16 @@
               <span class="chrome-spacer"></span>
             </div>
             <div class="app-body maps-body">
-              <p class="app-lede">Tap the Liberty County map (ER:LC API) to pick a destination. We’ll route from your in-game location.</p>
-              <div class="map-canvas live-map" id="maps-map">
-                <img class="liberty-map" src="https://cwrpvc.lol/assets/liberty-county-map.jpg" alt="Liberty County" draggable="false" />
-                <svg class="route-overlay" id="maps-route" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
-                <div class="map-pins" id="maps-pins"></div>
+              <div class="map-canvas live-map is-pan" id="maps-map">
+                <div class="map-world">
+                  <img class="liberty-map" src="https://www.cwrpvc.lol/assets/liberty-county-map.jpg" alt="Liberty County" draggable="false" />
+                  <svg class="route-overlay" id="maps-route" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+                  <div class="map-pins" id="maps-pins"></div>
+                </div>
               </div>
               <label class="field">
                 <span>Destination</span>
-                <input type="text" id="maps-dest" list="maps-places" placeholder="Search postal or street…" />
+                <input type="text" id="maps-dest" list="maps-places" placeholder="Postal or street" />
                 <datalist id="maps-places"></datalist>
               </label>
               <button type="button" class="btn-primary" id="maps-go">Start route</button>

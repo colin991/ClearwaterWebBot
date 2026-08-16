@@ -3,7 +3,7 @@
   const VERSION_URL = SITE + '/downloads/clearwater-phone-version.json';
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
-  let appVersion = '1.3.14';
+  let appVersion = '1.3.15';
   let latestInfo = null;
   let sessionUser = null;
   let walletMode = 'send';
@@ -35,6 +35,15 @@
     const hours = Math.round(mins / 60);
     if (hours < 24) return `${hours}h`;
     return `${Math.round(hours / 24)}d`;
+  }
+
+  function avatarHtml(user, fallbackName) {
+    const name = user?.displayName || user?.username || fallbackName || 'C';
+    const url = String(user?.avatarUrl || user?.avatar || '').trim();
+    if (/^https?:\/\//i.test(url)) {
+      return `<img class="avatar" src="${escapeHtml(url)}" alt="" />`;
+    }
+    return `<div class="avatar">${escapeHtml(String(name).slice(0, 1))}</div>`;
   }
 
   function signedIn() {
@@ -75,7 +84,7 @@
       renderSettings();
       void loadHostSettings();
     }
-    if (id === 'internet') void loadInternetFeed();
+    if (id === 'internet') ensureInternetWebview();
     if (id === 'wallet') void loadWallet();
     if (id === 'messages') {
       openThread = null;
@@ -90,7 +99,15 @@
     btn.addEventListener('click', () => showView(btn.dataset.open));
   });
   $$('[data-home]').forEach((btn) => {
-    btn.addEventListener('click', () => showView('home'));
+    btn.addEventListener('click', () => {
+      const internetOn = $('#view-internet')?.classList.contains('is-active');
+      const wv = $('#internet-webview');
+      if (internetOn && wv && typeof wv.canGoBack === 'function' && wv.canGoBack()) {
+        wv.goBack();
+        return;
+      }
+      showView('home');
+    });
   });
 
   function setToggle(el, on) {
@@ -159,32 +176,23 @@
     if (input && host?.watchProcess) input.value = host.watchProcess;
   });
 
+  function ensureInternetWebview() {
+    const wv = $('#internet-webview');
+    if (!wv) return;
+    const dest = SITE + '/internet?embed=phone';
+    if (!wv.getAttribute('src')) wv.setAttribute('src', dest);
+    if (wv.dataset.bound === '1') return;
+    wv.dataset.bound = '1';
+    wv.addEventListener('will-navigate', (event) => {
+      const href = String(event.url || '');
+      if (!/^https:\/\/(www\.)?cwrpvc\.lol\//i.test(href) && !/^https:\/\/discord\.com\//i.test(href)) {
+        event.preventDefault();
+      }
+    });
+  }
+
   async function loadInternetFeed() {
-    const list = $('#net-feed');
-    if (!list) return;
-    if (!signedIn()) {
-      list.innerHTML = '<li><p class="item-sub">Sign in with Discord in Settings to post.</p></li>';
-      return;
-    }
-    const result = await window.anchorPhone?.feed?.();
-    if (!result?.ok) {
-      list.innerHTML = `<li><p class="item-sub">${escapeHtml(result?.body?.error || 'Could not load the feed.')}</p></li>`;
-      return;
-    }
-    const posts = (result.body.posts || []).slice(0, 40);
-    const users = new Map((result.body.users || []).map((u) => [String(u.id), u]));
-    list.innerHTML = posts.length
-      ? posts.map((post) => {
-        const author = users.get(String(post.authorId)) || {};
-        const name = author.displayName || author.username || 'Member';
-        const body = post.content || (post.location ? 'Dropped a location' : 'Post');
-        return `<li>
-          <div class="avatar">${escapeHtml(String(name).slice(0, 1))}</div>
-          <div style="flex:1"><p class="item-title">${escapeHtml(name)}</p><p class="item-sub">${escapeHtml(body)}</p></div>
-          <span class="item-sub">${escapeHtml(timeAgo(post.createdAt))}</span>
-        </li>`;
-      }).join('')
-      : '<li><p class="item-sub">No posts yet.</p></li>';
+    ensureInternetWebview();
   }
 
   $('#net-post')?.addEventListener('click', async () => {
@@ -378,7 +386,7 @@
     const items = result.body.conversations || result.body.messages || [];
     list.innerHTML = items.length
       ? items.map((m) => `<li data-open-thread="${escapeHtml(m.otherId || '')}" data-thread-name="${escapeHtml(m.otherDisplayName || m.otherUsername || 'Member')}">
-          <div class="avatar">${escapeHtml(String(m.otherDisplayName || 'C').slice(0, 1))}</div>
+          ${avatarHtml({ displayName: m.otherDisplayName, avatarUrl: m.otherAvatarUrl || m.avatarUrl }, m.otherDisplayName)}
           <div style="flex:1"><p class="item-title">${escapeHtml(m.otherDisplayName || 'Member')}</p><p class="item-sub">${escapeHtml(m.content || 'New message')}</p></div>
           <span class="item-sub">${escapeHtml(timeAgo(m.createdAt))}</span>
         </li>`).join('')
@@ -498,7 +506,7 @@
           const friend = (payload.friends || []).find((f) => f.id === c.id);
           const loc = friend?.location?.label || (c.sharesWithYou ? 'Online location hidden until they join' : 'Not sharing with you');
           return `<li>
-            <div class="avatar">${escapeHtml(String(c.displayName || 'C').slice(0, 1))}</div>
+            ${avatarHtml({ displayName: c.displayName, avatarUrl: c.avatarUrl || friend?.avatarUrl }, c.displayName)}
             <div><p class="item-title">${escapeHtml(c.displayName)}</p><p class="item-sub">${escapeHtml(loc)}</p></div>
             <button type="button" class="toggle ${c.sharing ? 'is-on' : ''}" data-findmy-id="${escapeHtml(c.id)}" aria-label="Share with ${escapeHtml(c.displayName)}"></button>
           </li>`;
@@ -543,7 +551,8 @@
   }
 
   $('#maps-map')?.addEventListener('click', (event) => {
-    const box = event.currentTarget.getBoundingClientRect();
+    const world = event.currentTarget.querySelector('.map-world') || event.currentTarget;
+    const box = world.getBoundingClientRect();
     const left = (event.clientX - box.left) / box.width;
     const top = (event.clientY - box.top) / box.height;
     mapState.dest = { left, top, label: 'Dropped pin' };
@@ -580,6 +589,22 @@
 
   $$('.liberty-map').forEach((img) => {
     img.src = MAP_IMG;
+  });
+
+  $$('.map-canvas.is-pan').forEach((canvas) => {
+    const world = canvas.querySelector('.map-world');
+    if (!world) return;
+    let scale = 1.6;
+    const apply = () => {
+      world.style.width = `${Math.round(scale * 100)}%`;
+      world.style.height = `${Math.round(scale * 100)}%`;
+    };
+    apply();
+    canvas.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      scale = Math.min(3.2, Math.max(1, scale + (event.deltaY > 0 ? -0.15 : 0.15)));
+      apply();
+    }, { passive: false });
   });
 
   const dragEl = $('[data-drag]');
