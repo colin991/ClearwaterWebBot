@@ -3,12 +3,14 @@
   const VERSION_URL = SITE + '/downloads/clearwater-phone-version.json';
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
-  let appVersion = '1.3.16';
+  let appVersion = '1.3.17';
   let latestInfo = null;
   let sessionUser = null;
   let walletMode = 'send';
   let walletData = null;
-  let mapState = { me: null, places: [], dest: null, friends: [] };
+  let mapState = { me: null, places: [], dest: null, friends: [], roads: [], route: [], navigating: false };
+  let mapTimer = null;
+  let mapCam = { zoom: 1.4, x: 0, y: 0 };
   let openThread = null;
 
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -91,8 +93,18 @@
       showInbox();
       void loadMessages();
     }
-    if (id === 'maps') void loadMap('maps');
-    if (id === 'findmy') void loadMap('findmy');
+    if (id === 'maps') {
+      void loadMap('maps');
+      if (mapTimer) window.clearInterval(mapTimer);
+      mapTimer = window.setInterval(() => void loadMap('maps'), 1000);
+    } else if (id === 'findmy') {
+      void loadMap('findmy');
+      if (mapTimer) window.clearInterval(mapTimer);
+      mapTimer = window.setInterval(() => void loadMap('findmy'), 2500);
+    } else if (mapTimer) {
+      window.clearInterval(mapTimer);
+      mapTimer = null;
+    }
   }
 
   $$('[data-open]').forEach((btn) => {
@@ -455,41 +467,176 @@
     }).join('');
   }
 
-  function drawRoute(from, to) {
-    const svg = $('#maps-route');
-    if (!svg || !from || !to) {
-      if (svg) svg.innerHTML = '';
-      return;
-    }
-    const x1 = from.left * 100;
-    const y1 = from.top * 100;
-    const x2 = to.left * 100;
-    const y2 = to.top * 100;
-    svg.innerHTML = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#76adff" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="3 2" />`;
+  function ptDist(a, b) {
+    return Math.hypot(Number(a.left) - Number(b.left), Number(a.top) - Number(b.top));
   }
 
   function studsBetween(a, b) {
-    const dx = (Number(b.left) - Number(a.left)) * 3120;
-    const dz = (Number(b.top) - Number(a.top)) * 3120;
-    return Math.round(Math.hypot(dx, dz));
+    return Math.round(ptDist(a, b) * 3120);
+  }
+
+  function pathLength(points) {
+    let total = 0;
+    for (let i = 1; i < points.length; i += 1) total += studsBetween(points[i - 1], points[i]);
+    return total;
+  }
+
+  function buildRoadGraph(roads) {
+    const nodes = [];
+    const addNode = (p) => {
+      const hit = nodes.findIndex((n) => ptDist(n, p) < 0.004);
+      if (hit >= 0) return hit;
+      nodes.push({ left: Number(p.left), top: Number(p.top) });
+      return nodes.length - 1;
+    };
+    const adj = [];
+    const link = (a, b) => {
+      if (a === b) return;
+      const w = ptDist(nodes[a], nodes[b]);
+      adj[a] = adj[a] || [];
+      adj[b] = adj[b] || [];
+      adj[a].push({ to: b, w });
+      adj[b].push({ to: a, w });
+    };
+    (roads || []).forEach((road) => {
+      let prev = -1;
+      (road.points || []).forEach((p) => {
+        const i = addNode(p);
+        adj[i] = adj[i] || [];
+        if (prev >= 0) link(prev, i);
+        prev = i;
+      });
+    });
+    for (let i = 0; i < nodes.length; i += 1) {
+      for (let j = i + 1; j < nodes.length; j += 1) {
+        if (ptDist(nodes[i], nodes[j]) < 0.012) link(i, j);
+      }
+    }
+    return { nodes, adj: nodes.map((_, i) => adj[i] || []) };
+  }
+
+  function nearestNode(nodes, p) {
+    let best = 0;
+    let bestD = Infinity;
+    nodes.forEach((n, i) => {
+      const d = ptDist(n, p);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    });
+    return best;
+  }
+
+  function shortestRoadPath(roads, from, to) {
+    const graph = buildRoadGraph(roads);
+    if (graph.nodes.length < 2) return [from, to];
+    const start = nearestNode(graph.nodes, from);
+    const end = nearestNode(graph.nodes, to);
+    const dist = graph.nodes.map(() => Infinity);
+    const prev = graph.nodes.map(() => -1);
+    const used = graph.nodes.map(() => false);
+    dist[start] = 0;
+    for (let k = 0; k < graph.nodes.length; k += 1) {
+      let u = -1;
+      for (let i = 0; i < graph.nodes.length; i += 1) {
+        if (!used[i] && (u < 0 || dist[i] < dist[u])) u = i;
+      }
+      if (u < 0 || dist[u] === Infinity) break;
+      used[u] = true;
+      if (u === end) break;
+      graph.adj[u].forEach((edge) => {
+        const next = dist[u] + edge.w;
+        if (next < dist[edge.to]) {
+          dist[edge.to] = next;
+          prev[edge.to] = u;
+        }
+      });
+    }
+    if (dist[end] === Infinity) return [from, to];
+    const path = [];
+    for (let x = end; x !== -1; x = prev[x]) path.push(graph.nodes[x]);
+    path.reverse();
+    return [from, ...path, to];
+  }
+
+  function drawRoadsOverlay() {
+    const svg = $('#maps-roads');
+    if (!svg) return;
+    svg.innerHTML = (mapState.roads || []).map((road) => {
+      const pts = road.points || [];
+      if (pts.length < 2) return '';
+      const d = pts.map((p, i) => `${i ? 'L' : 'M'} ${(p.left * 100).toFixed(2)} ${(p.top * 100).toFixed(2)}`).join(' ');
+      return `<path d="${d}" stroke="rgba(125,211,252,0.35)" stroke-width="0.9" stroke-linecap="round" />`;
+    }).join('');
+  }
+
+  function drawRoute(from, to) {
+    const svg = $('#maps-route');
+    if (!svg) return;
+    const points = (mapState.route && mapState.route.length > 1)
+      ? mapState.route
+      : (from && to ? [from, to] : []);
+    if (points.length < 2) {
+      svg.innerHTML = '';
+      return;
+    }
+    const d = points.map((p, i) => `${i ? 'L' : 'M'} ${(p.left * 100).toFixed(2)} ${(p.top * 100).toFixed(2)}`).join(' ');
+    svg.innerHTML = `<path d="${d}" fill="none" stroke="#76adff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />`;
+  }
+
+  function applyMapCamera() {
+    const scene = $('#maps-scene');
+    if (!scene) return;
+    scene.style.transform = `translate(${mapCam.x}px, ${mapCam.y}px) scale(${mapCam.zoom})`;
+  }
+
+  function panMapTo(point) {
+    const view = $('#maps-map');
+    if (!view || !point) return;
+    const w = view.clientWidth;
+    const h = view.clientHeight;
+    mapCam.x = w / 2 - Number(point.left) * w * mapCam.zoom;
+    mapCam.y = h / 2 - Number(point.top) * h * mapCam.zoom;
+    applyMapCamera();
+  }
+
+  function refreshMapsPins() {
+    renderPins($('#maps-pins'), [
+      mapState.me ? { ...mapState.me, self: true, label: 'You' } : null,
+      mapState.dest ? { ...mapState.dest, dest: true, label: mapState.dest.label || '★' } : null,
+    ].filter(Boolean));
+    drawRoadsOverlay();
+    drawRoute(mapState.me, mapState.dest);
   }
 
   function applyMapPayload(kind, payload) {
-    mapState.me = payload.me || null;
-    mapState.places = payload.places || [];
+    if (payload.me) mapState.me = payload.me;
+    else if (!mapState.navigating) mapState.me = null;
+    mapState.places = payload.places || mapState.places || [];
     mapState.friends = payload.friends || [];
+    if (Array.isArray(payload.roads)) mapState.roads = payload.roads;
     const list = $('#maps-places');
     if (list) {
       list.innerHTML = mapState.places.map((p) => `<option value="${escapeHtml(p.label)}"></option>`).join('');
     }
     if (kind === 'maps') {
-      renderPins($('#maps-pins'), [
-        mapState.me ? { ...mapState.me, self: true, label: 'You' } : null,
-        mapState.dest ? { ...mapState.dest, dest: true, label: mapState.dest.label || '★' } : null,
-      ].filter(Boolean));
-      drawRoute(mapState.me, mapState.dest);
+      if (mapState.navigating && mapState.me && mapState.dest) {
+        mapState.route = shortestRoadPath(mapState.roads, mapState.me, mapState.dest);
+        panMapTo(mapState.me);
+        const status = $('#route-status');
+        if (status) {
+          status.hidden = false;
+          const left = pathLength(mapState.route);
+          status.textContent = left < 40
+            ? 'You have arrived.'
+            : `Navigating to ${mapState.dest.label || 'pin'} · ${left} studs via roads`;
+        }
+        if (pathLength(mapState.route) < 40) mapState.navigating = false;
+      }
+      refreshMapsPins();
       const status = $('#route-status');
-      if (!payload.me) {
+      if (status && !payload.me && !mapState.navigating) {
         status.hidden = false;
         status.textContent = 'Join the Clearwater ER:LC server to place yourself on the map.';
       }
@@ -547,44 +694,124 @@
       }
       return;
     }
+    if (kind === 'maps' && !Array.isArray(result.body?.roads)) {
+      const roads = await api('liberty-roads-get');
+      if (roads.ok && Array.isArray(roads.body?.roads)) result.body.roads = roads.body.roads;
+    }
     applyMapPayload(kind, result.body || {});
   }
 
-  $('#maps-map')?.addEventListener('click', (event) => {
-    const world = event.currentTarget.querySelector('.map-world') || event.currentTarget;
-    const box = world.getBoundingClientRect();
-    const left = (event.clientX - box.left) / box.width;
-    const top = (event.clientY - box.top) / box.height;
-    mapState.dest = { left, top, label: 'Dropped pin' };
-    $('#maps-dest').value = 'Dropped pin';
-    renderPins($('#maps-pins'), [
-      mapState.me ? { ...mapState.me, self: true, label: 'You' } : null,
-      { ...mapState.dest, dest: true, label: '★' },
-    ].filter(Boolean));
-    drawRoute(mapState.me, mapState.dest);
-  });
+  function mapPointFromPointer(event) {
+    const view = $('#maps-map');
+    const scene = $('#maps-scene');
+    if (!view || !scene) return null;
+    const rect = view.getBoundingClientRect();
+    const x = (event.clientX - rect.left - mapCam.x) / (rect.width * mapCam.zoom);
+    const y = (event.clientY - rect.top - mapCam.y) / (rect.height * mapCam.zoom);
+    return {
+      left: Math.min(1, Math.max(0, x)),
+      top: Math.min(1, Math.max(0, y)),
+    };
+  }
 
-  $('#maps-go')?.addEventListener('click', () => {
-    const query = $('#maps-dest').value.trim();
+  function startRoute() {
+    const status = $('#route-status');
+    const stop = $('#maps-stop');
+    if (status) status.hidden = false;
+    const query = $('#maps-dest')?.value.trim();
     const place = mapState.places.find((p) => String(p.label).toLowerCase() === query.toLowerCase());
     if (place) mapState.dest = place;
-    const status = $('#route-status');
-    status.hidden = false;
     if (!mapState.me) {
-      status.textContent = 'Join the server so Maps can see where you are.';
+      if (status) status.textContent = 'Join the server so Maps can see where you are.';
       return;
     }
     if (!mapState.dest) {
-      status.textContent = 'Tap the map or pick a destination.';
+      if (status) status.textContent = 'Tap the map or pick a destination.';
       return;
     }
-    drawRoute(mapState.me, mapState.dest);
-    renderPins($('#maps-pins'), [
-      { ...mapState.me, self: true, label: 'You' },
-      { ...mapState.dest, dest: true, label: mapState.dest.label || '★' },
-    ]);
-    const dist = studsBetween(mapState.me, mapState.dest);
-    status.textContent = `Route to ${mapState.dest.label || 'pin'} · about ${dist} studs from your in-game position.`;
+    mapState.route = shortestRoadPath(mapState.roads, mapState.me, mapState.dest);
+    mapState.navigating = true;
+    mapCam.zoom = Math.max(mapCam.zoom, 2.2);
+    panMapTo(mapState.me);
+    refreshMapsPins();
+    if (stop) stop.hidden = false;
+    const viaRoads = (mapState.roads || []).length > 0;
+    if (status) {
+      status.textContent = viaRoads
+        ? `Navigating to ${mapState.dest.label || 'pin'} · ${pathLength(mapState.route)} studs via roads`
+        : `Straight-line fallback · paint roads in Server Management, then save. ${pathLength(mapState.route)} studs`;
+    }
+  }
+
+  $('#maps-go')?.addEventListener('click', (event) => {
+    event.preventDefault();
+    startRoute();
+  });
+  $('#maps-stop')?.addEventListener('click', () => {
+    mapState.navigating = false;
+    const stop = $('#maps-stop');
+    if (stop) stop.hidden = true;
+    const status = $('#route-status');
+    if (status) status.textContent = 'Route stopped.';
+  });
+
+  const mapsView = $('#maps-map');
+  if (mapsView) {
+    let pan = null;
+    mapsView.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      pan = { id: event.pointerId, x: event.clientX, y: event.clientY, camX: mapCam.x, camY: mapCam.y, moved: 0 };
+      mapsView.classList.add('is-panning');
+      mapsView.setPointerCapture?.(event.pointerId);
+    });
+    mapsView.addEventListener('pointermove', (event) => {
+      if (!pan || event.pointerId !== pan.id) return;
+      const dx = event.clientX - pan.x;
+      const dy = event.clientY - pan.y;
+      pan.moved = Math.hypot(dx, dy);
+      mapCam.x = pan.camX + dx;
+      mapCam.y = pan.camY + dy;
+      applyMapCamera();
+    });
+    const endPan = (event) => {
+      if (!pan || event.pointerId !== pan.id) return;
+      const moved = pan.moved;
+      pan = null;
+      mapsView.classList.remove('is-panning');
+      if (moved > 8) return;
+      const point = mapPointFromPointer(event);
+      if (!point) return;
+      mapState.dest = { ...point, label: 'Dropped pin' };
+      const destInput = $('#maps-dest');
+      if (destInput) destInput.value = 'Dropped pin';
+      if (mapState.navigating && mapState.me) mapState.route = shortestRoadPath(mapState.roads, mapState.me, mapState.dest);
+      refreshMapsPins();
+    };
+    mapsView.addEventListener('pointerup', endPan);
+    mapsView.addEventListener('pointercancel', () => { pan = null; mapsView.classList.remove('is-panning'); });
+    mapsView.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      const rect = mapsView.getBoundingClientRect();
+      const prev = mapCam.zoom;
+      const next = Math.min(5, Math.max(1, prev * (event.deltaY > 0 ? 0.9 : 1.12)));
+      const cx = event.clientX - rect.left;
+      const cy = event.clientY - rect.top;
+      mapCam.x = cx - ((cx - mapCam.x) / prev) * next;
+      mapCam.y = cy - ((cy - mapCam.y) / prev) * next;
+      mapCam.zoom = next;
+      applyMapCamera();
+    }, { passive: false });
+    applyMapCamera();
+  }
+
+  $('#maps-zoom-in')?.addEventListener('click', () => {
+    mapCam.zoom = Math.min(5, mapCam.zoom * 1.2);
+    if (mapState.me) panMapTo(mapState.me);
+    else applyMapCamera();
+  });
+  $('#maps-zoom-out')?.addEventListener('click', () => {
+    mapCam.zoom = Math.max(1, mapCam.zoom / 1.2);
+    applyMapCamera();
   });
 
   $$('.liberty-map').forEach((img) => {

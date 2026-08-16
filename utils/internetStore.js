@@ -2839,6 +2839,28 @@ function findMyShareList(user) {
     : [];
 }
 
+export function getLibertyRoads(store) {
+  const roads = Array.isArray(store.libertyRoads) ? store.libertyRoads : [];
+  return roads.map((road) => ({
+    id: String(road?.id || ''),
+    points: (Array.isArray(road?.points) ? road.points : [])
+      .map((point) => ({
+        left: Math.min(1, Math.max(0, Number(point.left))),
+        top: Math.min(1, Math.max(0, Number(point.top))),
+      }))
+      .filter((point) => Number.isFinite(point.left) && Number.isFinite(point.top))
+      .slice(0, 240),
+  })).filter((road) => road.points.length >= 2).slice(0, 80);
+}
+
+export function setLibertyRoads(store, roads) {
+  store.libertyRoads = getLibertyRoads({ libertyRoads: Array.isArray(roads) ? roads : [] }).map((road, index) => ({
+    id: road.id || `road_${index + 1}`,
+    points: road.points,
+  }));
+  return store.libertyRoads;
+}
+
 export function findMyDirectory(store, actor) {
   const user = upsertInternetUser(store, actor);
   assertNotBanned(user);

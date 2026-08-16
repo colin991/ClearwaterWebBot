@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-16-phone-road-nav",
+      "title": "Phone Maps follows roads",
+      "summary": "Start route now navigates along painted Liberty County roads. Management can draw those roads on Server Management, Phone Maps zooms like Google Maps, and your in-game pin updates about every two seconds.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T01:30:00.000Z"
+    },
+    {
       "id": "2026-08-16-phone-home-sub",
       "title": "Phone home tagline removed",
       "summary": "The Clearwater Phone home screen no longer shows the Internet / Roleplay Panel line under the logo.",

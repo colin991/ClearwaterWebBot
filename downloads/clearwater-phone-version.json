@@ -1,6 +1,6 @@
 {
-  "version": "1.3.16",
+  "version": "1.3.17",
   "minVersion": "1.3.0",
   "downloadUrl": "https://cwrpvc.lol/downloads/ClearwaterPhone.exe",
-  "releaseNotes": "Removes the Internet / Roleplay Panel line from the Phone home screen."
+  "releaseNotes": "Maps start route works, follows painted roads, Google-style zoom, and live location updates."
 }

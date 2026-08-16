@@ -751,17 +751,67 @@ textarea {
   background: transparent;
 }
 
-.map-canvas.is-pan {
+.gmap {
+  position: relative;
   flex: 1;
-  min-height: 220px;
-  height: auto;
-  overflow: auto;
-  cursor: grab;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
+  min-height: 280px;
+  margin: 0 0 10px;
   border-radius: 12px;
-  margin-bottom: 10px;
+  overflow: hidden;
+  background: #03070d;
+}
+.gmap-viewport {
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+.gmap-viewport.is-panning { cursor: grabbing; }
+.gmap-scene {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.gmap-scene .liberty-map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+.gmap-zoom {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: grid;
+  gap: 6px;
+  z-index: 5;
+}
+.gmap-zoom button {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(8,16,27,0.86);
+  color: #f4f8ff;
+  font-size: 18px;
+  line-height: 1;
+}
+.roads-overlay path {
+  fill: none;
+}
+.gmap-scene .route-overlay,
+.gmap-scene .map-pins {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .map-world {

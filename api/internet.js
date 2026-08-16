@@ -749,6 +749,20 @@ export default async function handler(request, response) {
         staffPanel,
         owner: staffPanel === 'full',
       };
+    } else if (body.action === 'liberty-roads-get') {
+      payload = { action: 'liberty-roads-get', actor: { id: user.id, username: user.username, displayName: user.displayName } };
+    } else if (body.action === 'liberty-roads-save') {
+      if (!access.serverManagement && !access.allowed && !canStaff) {
+        return sendJson(response, 403, { error: 'Server management access required' });
+      }
+      payload = {
+        action: 'liberty-roads-save',
+        roads: Array.isArray(body.roads) ? body.roads : [],
+        actor: staffActor(user, access),
+        staffPanel: staffPanel,
+        owner: access.allowed || staffPanel === 'full',
+        serverManagement: access.serverManagement === true,
+      };
     } else if (body.action === 'erlc-location') {
       payload = { action: 'erlc-location', actor: { id: user.id, username: user.username, displayName: user.displayName } };
     } else if (body.action === 'erlc-phone-map') {

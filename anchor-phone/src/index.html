@@ -242,11 +242,18 @@
               <span class="chrome-spacer"></span>
             </div>
             <div class="app-body maps-body">
-              <div class="map-canvas live-map is-pan" id="maps-map">
-                <div class="map-world">
-                  <img class="liberty-map" src="https://www.cwrpvc.lol/assets/liberty-county-map.jpg" alt="Liberty County" draggable="false" />
-                  <svg class="route-overlay" id="maps-route" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
-                  <div class="map-pins" id="maps-pins"></div>
+              <div class="gmap" id="maps-gmap">
+                <div class="gmap-viewport" id="maps-map">
+                  <div class="gmap-scene" id="maps-scene">
+                    <img class="liberty-map" src="https://www.cwrpvc.lol/assets/liberty-county-map.jpg" alt="Liberty County" draggable="false" />
+                    <svg class="route-overlay roads-overlay" id="maps-roads" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+                    <svg class="route-overlay" id="maps-route" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+                    <div class="map-pins" id="maps-pins"></div>
+                  </div>
+                </div>
+                <div class="gmap-zoom" aria-label="Map zoom">
+                  <button type="button" id="maps-zoom-in" aria-label="Zoom in">+</button>
+                  <button type="button" id="maps-zoom-out" aria-label="Zoom out">−</button>
                 </div>
               </div>
               <label class="field">
@@ -255,6 +262,7 @@
                 <datalist id="maps-places"></datalist>
               </label>
               <button type="button" class="btn-primary" id="maps-go">Start route</button>
+              <button type="button" class="btn-ghost" id="maps-stop" hidden>Stop route</button>
               <p class="route-status" id="route-status" hidden></p>
             </div>
           </section>

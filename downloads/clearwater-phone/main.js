@@ -722,7 +722,7 @@ app.whenReady().then(() => {
       const allowed = new Set([
         'wallet', 'wallet-transfer', 'wallet-transfer-respond',
         'messages', 'conversation', 'message-send',
-        'findmy', 'findmy-share', 'erlc-phone-map', 'erlc-location',
+        'findmy', 'findmy-share', 'erlc-phone-map', 'erlc-location', 'liberty-roads-get',
         'post', 'post-interaction',
       ]);
       if (!allowed.has(action)) return { ok: false, status: 400, body: { error: 'Unsupported phone action' } };
