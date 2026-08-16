@@ -3,7 +3,7 @@
   const VERSION_URL = SITE + '/downloads/clearwater-phone-version.json';
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
-  let appVersion = '1.3.20';
+  let appVersion = '1.3.21';
   let latestInfo = null;
   let sessionUser = null;
   let walletMode = 'send';
@@ -902,7 +902,7 @@
         status.hidden = false;
         status.textContent = opened === false
           ? 'Could not open the download. Visit cwrpvc.lol and use Download Phone.'
-          : `Opened the v${latest || 'latest'} download. Replace this app with the new file.`;
+          : `Opened the installer. Finish setup, then you can delete the downloaded file.`;
       }
       if (opened !== false) hideUpdateModal();
     } catch {

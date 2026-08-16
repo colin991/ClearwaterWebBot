@@ -1,15 +1,15 @@
 {
   "name": "clearwater-phone",
   "productName": "Clearwater Phone",
-      "version": "1.3.20",
+  "version": "1.3.21",
   "private": true,
   "author": "Clearwater Roleplay",
-  "description": "Clearwater Phone \u2014 in-game overlay for ER:LC",
+  "description": "Clearwater Phone — in-game overlay for ER:LC",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --dir",
-    "dist": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win portable --x64 -c.win.signAndEditExecutable=false"
+    "dist": "electron-builder --win nsis --x64"
   },
   "build": {
     "appId": "com.clearwater.phone",
@@ -28,13 +28,22 @@
     ],
     "win": {
       "target": [
-        "portable"
+        "nsis"
       ],
       "signAndEditExecutable": false,
       "icon": "build/icon.ico"
     },
-    "portable": {
-      "artifactName": "ClearwaterPhone.exe"
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Clearwater Phone",
+      "uninstallDisplayName": "Clearwater Phone",
+      "artifactName": "ClearwaterPhone.exe",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
     },
     "icon": "build/icon.ico"
   },

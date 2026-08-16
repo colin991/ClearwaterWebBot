@@ -1,6 +1,6 @@
 {
-  "version": "1.3.20",
+  "version": "1.3.21",
   "minVersion": "1.3.0",
   "downloadUrl": "https://cwrpvc.lol/downloads/ClearwaterPhone.exe",
-  "releaseNotes": "Find My map is larger and fills most of the Phone screen."
+  "releaseNotes": "Download Phone now installs as a real Windows app. After setup you can delete the installer file."
 }

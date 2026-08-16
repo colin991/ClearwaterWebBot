@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-16-phone-installer",
+      "title": "Phone installs as a Windows app",
+      "summary": "Download Phone now installs Clearwater Phone like a normal Windows app (Start Menu and desktop shortcut). After setup you can delete the downloaded installer. Quit the old tray app first if Windows will not let you delete the previous .exe.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T02:50:00.000Z"
+    },
+    {
       "id": "2026-08-16-findmy-map-size",
       "title": "Bigger Find My map",
       "summary": "The Find My map in Clearwater Phone now fills most of the screen instead of a small preview.",
