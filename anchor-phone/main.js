@@ -310,6 +310,8 @@ function defaultHostSettings() {
     startWithWindows: false,
     launchOnApp: true,
     watchProcess: 'RobloxPlayerBeta.exe',
+    phoneModel: 'z',
+    wallpaperColor: 'gulf',
   };
 }
 
@@ -697,6 +699,15 @@ app.whenReady().then(() => {
     if (typeof patch?.setupComplete === 'boolean') next.setupComplete = patch.setupComplete;
     if (typeof patch?.startWithWindows === 'boolean') next.startWithWindows = patch.startWithWindows;
     if (typeof patch?.launchOnApp === 'boolean') next.launchOnApp = patch.launchOnApp;
+    if (typeof patch?.phoneModel === 'string') {
+      const model = String(patch.phoneModel).trim().toLowerCase();
+      next.phoneModel = model === 'x' ? 'x' : 'z';
+    }
+    if (typeof patch?.wallpaperColor === 'string') {
+      const color = String(patch.wallpaperColor).trim().toLowerCase();
+      const allowed = new Set(['gulf', 'midnight', 'ocean', 'ember', 'forest', 'violet']);
+      if (allowed.has(color)) next.wallpaperColor = color;
+    }
     if (typeof patch?.watchProcess === 'string') {
       const name = patch.watchProcess.replace(/[^\w.-]/g, '');
       next.watchProcess = name || 'RobloxPlayerBeta.exe';

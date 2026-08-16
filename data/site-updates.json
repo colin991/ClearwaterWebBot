@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-16-phone-first-customize",
+      "title": "Phone first-launch customize",
+      "summary": "Opening Clearwater Phone for the first time now goes Sign in → pick Z Phone (Samsung) or X Phone (Apple) → choose a wallpaper color, then launches.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T15:20:00.000Z"
+    },
+    {
       "id": "2026-08-16-phone-installer",
       "title": "Phone installs as a Windows app",
       "summary": "Download Phone now installs Clearwater Phone like a normal Windows app (Start Menu and desktop shortcut). After setup you can delete the downloaded installer. Quit the old tray app first if Windows will not let you delete the previous .exe.",

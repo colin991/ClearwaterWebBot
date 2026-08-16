@@ -1,6 +1,6 @@
 {
-  "version": "1.3.21",
+  "version": "1.3.22",
   "minVersion": "1.3.0",
   "downloadUrl": "https://cwrpvc.lol/downloads/ClearwaterPhone.exe",
-  "releaseNotes": "Download Phone now installs as a real Windows app. After setup you can delete the installer file."
+  "releaseNotes": "First launch now walks through Discord sign-in, Z Phone or X Phone, then a wallpaper color."
 }

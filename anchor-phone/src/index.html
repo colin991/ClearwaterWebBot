@@ -6,7 +6,7 @@
     <title>Clearwater Phone</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
+  <body class="phone-model-z" data-wallpaper="gulf">
     <div class="phone" id="phone">
       <div class="phone-bezel">
         <div class="bezel-shine" aria-hidden="true"></div>
@@ -16,6 +16,7 @@
             <div class="dynamic-island" aria-hidden="true">
               <span class="island-cam"></span>
             </div>
+            <div class="punch-hole" aria-hidden="true"></div>
             <div class="status-meta">
               <span class="signal" aria-hidden="true"></span>
               <span class="wifi" aria-hidden="true"></span>
@@ -270,6 +271,22 @@
               <p class="hint" id="account-status">Not signed in</p>
               <button type="button" class="btn-primary" id="account-login">Sign in with Discord</button>
               <button type="button" class="btn-ghost" id="account-logout" hidden>Sign out</button>
+
+              <h2 class="section-title">Look</h2>
+              <p class="hint">Z Phone is Samsung style. X Phone is Apple style.</p>
+              <div class="look-pick" role="radiogroup" aria-label="Phone model">
+                <button type="button" class="look-chip is-selected" data-setting-phone="z" role="radio" aria-checked="true">Z Phone</button>
+                <button type="button" class="look-chip" data-setting-phone="x" role="radio" aria-checked="false">X Phone</button>
+              </div>
+              <p class="hint">Home wallpaper color</p>
+              <div class="look-swatches" role="radiogroup" aria-label="Wallpaper color" id="setting-wallpaper-pick">
+                <button type="button" class="look-swatch is-selected" data-setting-wallpaper="gulf" style="--swatch:#3a6fd4" title="Gulf" role="radio" aria-checked="true"></button>
+                <button type="button" class="look-swatch" data-setting-wallpaper="midnight" style="--swatch:#64748b" title="Midnight" role="radio" aria-checked="false"></button>
+                <button type="button" class="look-swatch" data-setting-wallpaper="ocean" style="--swatch:#0ea5a4" title="Ocean" role="radio" aria-checked="false"></button>
+                <button type="button" class="look-swatch" data-setting-wallpaper="ember" style="--swatch:#e07a3a" title="Ember" role="radio" aria-checked="false"></button>
+                <button type="button" class="look-swatch" data-setting-wallpaper="forest" style="--swatch:#3d8b6e" title="Forest" role="radio" aria-checked="false"></button>
+                <button type="button" class="look-swatch" data-setting-wallpaper="violet" style="--swatch:#7c6cf0" title="Violet" role="radio" aria-checked="false"></button>
+              </div>
 
               <h2 class="section-title">Startup</h2>
               <ul class="ios-list settings-list">

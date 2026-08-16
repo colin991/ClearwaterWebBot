@@ -153,6 +153,54 @@ textarea {
   padding-right: 10px;
 }
 
+.punch-hole {
+  display: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #1a2740, #05080e 70%);
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.85),
+    0 0 0 3px rgba(255, 255, 255, 0.08);
+  justify-self: center;
+}
+
+body.phone-model-z .dynamic-island {
+  display: none;
+}
+
+body.phone-model-z .punch-hole {
+  display: block;
+}
+
+body.phone-model-z .status-bar {
+  grid-template-columns: 1fr auto 1fr;
+  padding-top: 14px;
+}
+
+body.phone-model-z .home-indicator {
+  width: 72px;
+  height: 5px;
+  border-radius: 3px;
+  opacity: 0.55;
+}
+
+body.phone-model-x .punch-hole {
+  display: none;
+}
+
+body.phone-model-x .dynamic-island {
+  display: flex;
+}
+
+body.phone-model-x .phone-screen {
+  border-radius: 0;
+}
+
+body.phone-model-z .phone-screen {
+  border-radius: 0;
+}
+
 .island-cam {
   width: 8px;
   height: 8px;
@@ -261,10 +309,52 @@ textarea {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 100% 70% at 50% -10%, rgba(58, 111, 212, 0.38), transparent 55%),
-    radial-gradient(ellipse 60% 40% at 85% 18%, rgba(118, 173, 255, 0.2), transparent 50%),
+    radial-gradient(ellipse 100% 70% at 50% -10%, color-mix(in srgb, var(--wp-accent, #3a6fd4) 55%, transparent), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 85% 18%, color-mix(in srgb, var(--wp-accent, #3a6fd4) 32%, transparent), transparent 50%),
     radial-gradient(ellipse 50% 35% at 10% 25%, rgba(244, 248, 255, 0.07), transparent 48%),
-    linear-gradient(180deg, #050b16 0%, #071428 32%, #04101c 62%, #03070d 100%);
+    linear-gradient(180deg, var(--wp-top, #050b16) 0%, var(--wp-mid, #071428) 32%, var(--wp-low, #04101c) 62%, #03070d 100%);
+}
+
+body[data-wallpaper="gulf"] {
+  --wp-accent: #3a6fd4;
+  --wp-top: #050b16;
+  --wp-mid: #071428;
+  --wp-low: #04101c;
+}
+
+body[data-wallpaper="midnight"] {
+  --wp-accent: #64748b;
+  --wp-top: #070a10;
+  --wp-mid: #111827;
+  --wp-low: #0b1220;
+}
+
+body[data-wallpaper="ocean"] {
+  --wp-accent: #0ea5a4;
+  --wp-top: #041016;
+  --wp-mid: #062428;
+  --wp-low: #03181c;
+}
+
+body[data-wallpaper="ember"] {
+  --wp-accent: #e07a3a;
+  --wp-top: #140a06;
+  --wp-mid: #2a140c;
+  --wp-low: #1a0c08;
+}
+
+body[data-wallpaper="forest"] {
+  --wp-accent: #3d8b6e;
+  --wp-top: #06120e;
+  --wp-mid: #0d241c;
+  --wp-low: #081812;
+}
+
+body[data-wallpaper="violet"] {
+  --wp-accent: #7c6cf0;
+  --wp-top: #0c0a18;
+  --wp-mid: #1a1533;
+  --wp-low: #120e24;
 }
 
 .wp-stars {
@@ -1717,6 +1807,52 @@ img.avatar {
 /* Settings + updates */
 body.hide-open-web .open-web { display: none !important; }
 .chrome-spacer { width: 36px; height: 36px; }
+
+.look-pick {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.look-chip {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  border-radius: 12px;
+  padding: 12px 10px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.look-chip.is-selected {
+  border-color: rgba(118, 173, 255, 0.8);
+  background: rgba(118, 173, 255, 0.14);
+}
+
+.look-swatches {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.look-swatch {
+  appearance: none;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--swatch) 80%, white), var(--swatch));
+  cursor: pointer;
+}
+
+.look-swatch.is-selected {
+  border-color: #76adff;
+  box-shadow: 0 0 0 2px rgba(118, 173, 255, 0.35);
+}
 .update-banner {
   position: relative;
   z-index: 3;
