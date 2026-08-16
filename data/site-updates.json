@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-16-hide-edit-business",
+      "title": "Edit business profile only for managers",
+      "summary": "The Edit business profile button no longer shows on every member page. It only appears on a business account you actually manage.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-16T02:15:00.000Z"
+    },
+    {
       "id": "2026-08-16-phone-road-nav",
       "title": "Phone Maps follows roads",
       "summary": "Start route now navigates along painted Liberty County roads. Management can draw those roads on Server Management, Phone Maps zooms like Google Maps, and your in-game pin updates about every two seconds.",

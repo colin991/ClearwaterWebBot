@@ -5875,8 +5875,10 @@ function hasCompletedBusinessAccount() {
 }
 
 function canManageBusinessProfile(businessId) {
+  const id = String(businessId || '');
+  if (!id || !/^biz_/i.test(id)) return false;
   const biz = (Array.isArray(myBusinessAccounts) ? myBusinessAccounts : [])
-    .find((item) => item.id === String(businessId || ''));
+    .find((item) => item.id === id);
   return Boolean(biz && biz.status === 'active' && (biz.canEditProfile || biz.canManageMembers));
 }
 
@@ -6320,7 +6322,7 @@ function openMemberProfile(memberId, updateHash = true) {
   document.querySelector('[data-member-page-menu-list]').hidden = true;
   const editBusiness = document.querySelector('[data-member-page-edit-business]');
   if (editBusiness) {
-    const canEdit = canManageBusinessProfile(user.id);
+    const canEdit = isBusinessAccountUser(user) && canManageBusinessProfile(user.id);
     editBusiness.hidden = !canEdit;
     editBusiness.dataset.businessId = canEdit ? user.id : '';
   }

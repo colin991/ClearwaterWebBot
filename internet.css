@@ -3865,6 +3865,10 @@ body { margin: 0; }
   --profile-accent: var(--blue);
   --profile-accent-rgb: 18, 87, 163;
 }
+.profile-edit[hidden],
+.profile-discord[hidden] {
+  display: none !important;
+}
 .profile-edit,
 .profile-discord {
   display: inline-flex;
