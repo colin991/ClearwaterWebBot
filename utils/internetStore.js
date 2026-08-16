@@ -2861,6 +2861,20 @@ export function setLibertyRoads(store, roads) {
   return store.libertyRoads;
 }
 
+export function discordProfileAvatar(id, stored) {
+  const url = String(stored || '').trim();
+  if (/^https:\/\/cdn\.discordapp\.com\//i.test(url)) return url;
+  const snow = String(id || '').replace(/\D/g, '');
+  if (snow.length >= 16) {
+    try {
+      return `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(snow) >> 22n) % 6}.png`;
+    } catch {
+      /* ignore */
+    }
+  }
+  return /^https?:\/\//i.test(url) ? url : null;
+}
+
 export function findMyDirectory(store, actor) {
   const user = upsertInternetUser(store, actor);
   assertNotBanned(user);
@@ -2879,7 +2893,7 @@ export function findMyDirectory(store, actor) {
         id,
         displayName: text(peer.displayName, 80) || text(peer.username, 80) || 'Clearwater member',
         username: text(peer.username, 80) || 'member',
-        avatarUrl: peer.avatarUrl || null,
+        avatarUrl: discordProfileAvatar(id, peer.avatarUrl),
         sharing: sharing.has(id),
         sharesWithYou: findMyShareList(peer).includes(String(user.id)),
       };

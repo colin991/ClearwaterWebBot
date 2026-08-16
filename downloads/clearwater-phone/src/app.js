@@ -3,14 +3,15 @@
   const VERSION_URL = SITE + '/downloads/clearwater-phone-version.json';
   const MAP_IMG = SITE + '/assets/liberty-county-map.jpg';
 
-  let appVersion = '1.3.18';
+  let appVersion = '1.3.19';
   let latestInfo = null;
   let sessionUser = null;
   let walletMode = 'send';
   let walletData = null;
-  let mapState = { me: null, places: [], dest: null, friends: [], roads: [], route: [], navigating: false };
+  let mapState = { me: null, places: [], dest: null, friends: [], roads: [], route: [], navigating: false, rerouting: false };
   let mapTimer = null;
   let mapCam = { zoom: 1.4, x: 0, y: 0 };
+  let findmyState = { payload: null, query: '' };
 
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -38,10 +39,24 @@
     return `${Math.round(hours / 24)}d`;
   }
 
+  function avatarSrc(user) {
+    const url = String(user?.avatarUrl || user?.avatar || '').trim();
+    if (/^https:\/\/cdn\.discordapp\.com\//i.test(url) || /^https?:\/\/(cdn\.discordapp\.com|media\.discordapp\.net)\//i.test(url)) return url;
+    if (/^https?:\/\//i.test(url) && !/cwrpvc\.lol\/assets\/clearwater-logo/i.test(url)) return url;
+    const id = String(user?.id || user?.discordId || '').replace(/\D/g, '');
+    if (id.length >= 16) {
+      try {
+        return `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(id) >> 22n) % 6}.png`;
+      } catch { /* ignore */ }
+    }
+    if (url.startsWith('assets/') || url.startsWith('/')) return SITE + (url.startsWith('/') ? url : `/${url}`);
+    return '';
+  }
+
   function avatarHtml(user, fallbackName) {
     const name = user?.displayName || user?.username || fallbackName || 'C';
-    const url = String(user?.avatarUrl || user?.avatar || '').trim();
-    if (/^https?:\/\//i.test(url)) {
+    const url = avatarSrc(user);
+    if (url) {
       return `<img class="avatar" src="${escapeHtml(url)}" alt="" />`;
     }
     return `<div class="avatar">${escapeHtml(String(name).slice(0, 1))}</div>`;
@@ -371,8 +386,51 @@
     container.innerHTML = pins.map((pin) => {
       if (!pin || !Number.isFinite(Number(pin.left)) || !Number.isFinite(Number(pin.top))) return '';
       const cls = pin.self ? 'pin self' : pin.dest ? 'pin dest' : 'pin other';
-      return `<span class="${cls}" style="left:${Number(pin.left) * 100}%;top:${Number(pin.top) * 100}%">${escapeHtml(pin.label || '')}</span>`;
+      const face = avatarSrc(pin);
+      const photo = face ? `<img src="${escapeHtml(face)}" alt="" />` : '';
+      return `<span class="${cls}${face ? ' has-face' : ''}" style="left:${Number(pin.left) * 100}%;top:${Number(pin.top) * 100}%">${photo}${escapeHtml(pin.label || '')}</span>`;
     }).join('');
+  }
+
+  function distToSegment(p, a, b) {
+    const ax = Number(a.left);
+    const ay = Number(a.top);
+    const bx = Number(b.left);
+    const by = Number(b.top);
+    const px = Number(p.left);
+    const py = Number(p.top);
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len2 = (dx * dx) + (dy * dy);
+    if (len2 < 1e-12) return Math.hypot(px - ax, py - ay);
+    let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+    t = Math.min(1, Math.max(0, t));
+    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+  }
+
+  function distToPath(p, path) {
+    if (!p || !Array.isArray(path) || path.length < 2) return Infinity;
+    let best = Infinity;
+    for (let i = 1; i < path.length; i += 1) best = Math.min(best, distToSegment(p, path[i - 1], path[i]));
+    return best;
+  }
+
+  function followOrReroute() {
+    if (!mapState.navigating || !mapState.me || !mapState.dest) return;
+    const previous = Array.isArray(mapState.route) ? mapState.route : [];
+    const offTrack = previous.length > 1 && distToPath(mapState.me, previous) > 0.028;
+    if (offTrack || previous.length < 2) {
+      mapState.route = shortestRoadPath(mapState.roads, mapState.me, mapState.dest);
+      mapState.rerouting = offTrack;
+      return;
+    }
+    mapState.rerouting = false;
+    let next = previous.slice();
+    while (next.length > 2 && ptDist(mapState.me, next[1]) <= ptDist(mapState.me, next[0]) + 0.004) {
+      next = next.slice(1);
+    }
+    next[0] = { left: Number(mapState.me.left), top: Number(mapState.me.top) };
+    mapState.route = next;
   }
 
   function ptDist(a, b) {
@@ -511,7 +569,7 @@
 
   function refreshMapsPins() {
     renderPins($('#maps-pins'), [
-      mapState.me ? { ...mapState.me, self: true, label: 'You' } : null,
+      mapState.me ? { ...mapState.me, self: true, label: 'You', avatarUrl: (sessionUser?.user || sessionUser)?.avatarUrl, id: (sessionUser?.user || sessionUser)?.id } : null,
       mapState.dest ? { ...mapState.dest, dest: true, label: mapState.dest.label || '★' } : null,
     ].filter(Boolean));
     drawRoadsOverlay();
@@ -530,17 +588,22 @@
     }
     if (kind === 'maps') {
       if (mapState.navigating && mapState.me && mapState.dest) {
-        mapState.route = shortestRoadPath(mapState.roads, mapState.me, mapState.dest);
+        followOrReroute();
         panMapTo(mapState.me);
         const status = $('#route-status');
         if (status) {
           status.hidden = false;
           const left = pathLength(mapState.route);
-          status.textContent = left < 40
-            ? 'You have arrived.'
-            : `Navigating to ${mapState.dest.label || 'pin'} · ${left} studs via roads`;
+          if (left < 40) {
+            status.textContent = 'You have arrived.';
+            mapState.navigating = false;
+            mapState.rerouting = false;
+          } else if (mapState.rerouting) {
+            status.textContent = `Rerouting to ${mapState.dest.label || 'pin'} · ${left} studs via roads`;
+          } else {
+            status.textContent = `Navigating to ${mapState.dest.label || 'pin'} · ${left} studs via roads`;
+          }
         }
-        if (pathLength(mapState.route) < 40) mapState.navigating = false;
       }
       refreshMapsPins();
       const status = $('#route-status');
@@ -550,37 +613,57 @@
       }
     }
     if (kind === 'findmy') {
-      renderPins($('#findmy-pins'), [
-        payload.me ? { ...payload.me, self: true, label: 'You' } : null,
-        ...(payload.friends || []).filter((f) => f.location).map((f) => ({ ...f.location, label: f.displayName })),
-      ].filter(Boolean));
-      const people = $('#findmy-list');
-      const contacts = payload.contacts || [];
-      people.innerHTML = contacts.length
-        ? contacts.map((c) => {
-          const friend = (payload.friends || []).find((f) => f.id === c.id);
-          const loc = friend?.location?.label || (c.sharesWithYou ? 'Online location hidden until they join' : 'Not sharing with you');
-          return `<li>
-            ${avatarHtml({ displayName: c.displayName, avatarUrl: c.avatarUrl || friend?.avatarUrl }, c.displayName)}
+      findmyState.payload = payload;
+      renderFindMy();
+    }
+  }
+
+  function renderFindMy() {
+    const payload = findmyState.payload || {};
+    const meUser = sessionUser?.user || sessionUser || {};
+    renderPins($('#findmy-pins'), [
+      payload.me ? { ...payload.me, self: true, label: 'You', avatarUrl: meUser.avatarUrl, id: meUser.id } : null,
+      ...(payload.friends || []).filter((f) => f.location).map((f) => ({
+        ...f.location,
+        label: f.displayName,
+        avatarUrl: f.avatarUrl,
+        id: f.id,
+      })),
+    ].filter(Boolean));
+    const people = $('#findmy-list');
+    if (!people) return;
+    const query = String(findmyState.query || '').trim().toLowerCase();
+    const contacts = (payload.contacts || []).filter((c) => {
+      if (!query) return true;
+      const hay = `${c.displayName || ''} ${c.username || ''}`.toLowerCase();
+      return hay.includes(query);
+    });
+    people.innerHTML = contacts.length
+      ? contacts.map((c) => {
+        const friend = (payload.friends || []).find((f) => String(f.id) === String(c.id));
+        const loc = friend?.location?.label
+          || (friend?.online ? 'In Liberty County' : null)
+          || (c.sharesWithYou ? 'Online location hidden until they join' : 'Not sharing with you');
+        return `<li>
+            ${avatarHtml({ id: c.id, displayName: c.displayName, avatarUrl: c.avatarUrl || friend?.avatarUrl }, c.displayName)}
             <div><p class="item-title">${escapeHtml(c.displayName)}</p><p class="item-sub">${escapeHtml(loc)}</p></div>
             <button type="button" class="toggle ${c.sharing ? 'is-on' : ''}" data-findmy-id="${escapeHtml(c.id)}" aria-label="Share with ${escapeHtml(c.displayName)}"></button>
           </li>`;
-        }).join('')
-        : '<li><p class="item-sub">Follow friends on Internet to share locations.</p></li>';
-      people.querySelectorAll('[data-findmy-id]').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const on = !btn.classList.contains('is-on');
-          await api('findmy-share', { targetId: btn.dataset.findmyId, enabled: on });
-          void loadMap('findmy');
-        });
+      }).join('')
+      : `<li><p class="item-sub">${query ? 'No names match that search.' : 'Follow friends on Internet to share locations.'}</p></li>`;
+    people.querySelectorAll('[data-findmy-id]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const on = !btn.classList.contains('is-on');
+        await api('findmy-share', { targetId: btn.dataset.findmyId, enabled: on });
+        void loadMap('findmy');
       });
-      const status = $('#findmy-status');
-      if (status) {
-        status.hidden = false;
-        status.textContent = payload.me
-          ? `You are in-game${payload.me.label ? ` · ${payload.me.label}` : ''}.`
-          : 'Join the Clearwater ER:LC server to appear on Find My.';
-      }
+    });
+    const status = $('#findmy-status');
+    if (status) {
+      status.hidden = false;
+      status.textContent = payload.me
+        ? `You are in-game${payload.me.label ? ` · ${payload.me.label}` : ''}.`
+        : 'Join the Clearwater ER:LC server to appear on Find My.';
     }
   }
 
@@ -639,6 +722,7 @@
     }
     mapState.route = shortestRoadPath(mapState.roads, mapState.me, mapState.dest);
     mapState.navigating = true;
+    mapState.rerouting = false;
     mapCam.zoom = Math.max(mapCam.zoom, 2.2);
     panMapTo(mapState.me);
     refreshMapsPins();
@@ -657,10 +741,16 @@
   });
   $('#maps-stop')?.addEventListener('click', () => {
     mapState.navigating = false;
+    mapState.rerouting = false;
     const stop = $('#maps-stop');
     if (stop) stop.hidden = true;
     const status = $('#route-status');
     if (status) status.textContent = 'Route stopped.';
+  });
+
+  $('#findmy-search')?.addEventListener('input', (event) => {
+    findmyState.query = event.target.value || '';
+    if (findmyState.payload) renderFindMy();
   });
 
   const mapsView = $('#maps-map');

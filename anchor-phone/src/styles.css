@@ -826,7 +826,23 @@ textarea {
 }
 
 img.avatar {
+  width: 34px;
+  height: 34px;
   object-fit: cover;
+}
+
+.pin.has-face {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 2px;
+}
+.pin.has-face img {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 
 .view-app {
