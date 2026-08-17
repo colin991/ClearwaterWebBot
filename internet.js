@@ -500,17 +500,33 @@ function discordEmojiCdnUrl(emojiId, animated = false) {
   return `https://cdn.discordapp.com/emojis/${id}.${animated ? 'gif' : 'png'}?size=64&quality=lossless`;
 }
 
-function discordEmojiMarkup(emoji) {
-  if (!emoji?.emojiId || !emoji?.name) return '';
-  return `<${emoji.animated ? 'a' : ''}:${emoji.name}:${emoji.emojiId}>`;
+function discordEmojiToken(emojiId, animated = false) {
+  const id = String(emojiId || '').replace(/\D/g, '');
+  if (!id) return '';
+  return animated ? `[[a:${id}]]` : `[[${id}]]`;
+}
+
+function discordEmojiLabel(emojiId) {
+  const id = String(emojiId || '').replace(/\D/g, '');
+  const match = discordEmojiChoices.find((emoji) => String(emoji.emojiId) === id);
+  return match?.name ? `:${match.name}:` : ':emoji:';
+}
+
+function discordEmojiImgMarkup(emojiId, animated = false) {
+  const id = String(emojiId || '').replace(/\D/g, '');
+  const src = discordEmojiCdnUrl(id, animated);
+  if (!src) return '';
+  const label = discordEmojiLabel(id);
+  return `<img class="discord-emoji" src="${escapeHtml(src)}" alt="${escapeHtml(label)}" title="${escapeHtml(label)}" loading="lazy" decoding="async" draggable="false" />`;
 }
 
 function formatDiscordEmojis(escapedHtml) {
-  return String(escapedHtml || '').replace(/&lt;(a?):([a-zA-Z0-9_]{2,32}):(\d{17,20})&gt;/g, (_, animated, name, id) => {
-    const src = discordEmojiCdnUrl(id, animated === 'a');
-    if (!src) return _;
-    return `<img class="discord-emoji" src="${escapeHtml(src)}" alt=":${escapeHtml(name)}:" title=":${escapeHtml(name)}:" loading="lazy" decoding="async" draggable="false" />`;
-  });
+  return String(escapedHtml || '')
+    .replace(/\[\[a:(\d{17,22})\]\]/g, (_, id) => discordEmojiImgMarkup(id, true))
+    .replace(/\[\[(\d{17,22})\]\]/g, (_, id) => discordEmojiImgMarkup(id, false))
+    .replace(/&lt;(a?):([a-zA-Z0-9_]{1,32}):(\d{17,22})&gt;/g, (_, animated, _name, id) => discordEmojiImgMarkup(id, animated === 'a'))
+    .replace(/:([a-zA-Z0-9_]{1,32})[:.](\d{17,22}):/g, (_, _name, id) => discordEmojiImgMarkup(id, false))
+    .replace(/:([a-zA-Z0-9_]{1,32}):(\d{17,22})(?=\s|$)/g, (_, _name, id) => discordEmojiImgMarkup(id, false));
 }
 
 function formatRichText(value) {
@@ -7395,8 +7411,20 @@ document.addEventListener('click', (event) => {
   }
   const card = event.target.closest('[data-post-card]');
   if (card && !event.target.closest('button,a,details,input,textarea')) { showPostDetail(card.dataset.postCard); return; }
-  const emojiChoice = event.target.closest('[data-emoji-choice]');
-  if (emojiChoice) { if (pickerTarget === 'message' && conversationInput) { conversationInput.value += emojiChoice.dataset.emojiChoice; conversationInput.focus(); } else insertAtCursor(emojiChoice.dataset.emojiChoice); emojiModal.hidden = true; return; }
+  const emojiChoice = event.target.closest('[data-emoji-choice], [data-emoji-id]');
+  if (emojiChoice) {
+    const token = emojiChoice.dataset.emojiId
+      ? discordEmojiToken(emojiChoice.dataset.emojiId, emojiChoice.dataset.emojiAnimated === '1')
+      : emojiChoice.dataset.emojiChoice;
+    if (pickerTarget === 'message' && conversationInput) {
+      conversationInput.value += token;
+      conversationInput.focus();
+    } else {
+      insertAtCursor(token);
+    }
+    emojiModal.hidden = true;
+    return;
+  }
   const engage = event.target.closest('[data-engage]');
   if (engage) { void handlePostEngagement(engage.dataset.engage, engage.dataset.postId, engage); return; }
   const pollVote = event.target.closest('[data-poll-vote]');
@@ -8233,10 +8261,7 @@ function renderEmojiGrid() {
   const custom = clearwaterEmojiChoices.filter(([emoji, label]) => !query || emoji.includes(query) || label.toLowerCase().includes(query));
   const regular = emojiChoices.filter((emoji) => !query || emoji.includes(query));
   const discordSection = discord.length
-    ? `<p class="emoji-section-title">Discord</p>${discord.map((emoji) => {
-      const markup = discordEmojiMarkup(emoji);
-      return `<button type="button" class="discord-custom-emoji" data-emoji-choice="${escapeHtml(markup)}" aria-label=":${escapeHtml(emoji.name)}:" title=":${escapeHtml(emoji.name)}:"><img src="${escapeHtml(emoji.url)}" alt=":${escapeHtml(emoji.name)}:" loading="lazy" decoding="async" draggable="false" /></button>`;
-    }).join('')}`
+    ? `<p class="emoji-section-title">Discord</p>${discord.map((emoji) => `<button type="button" class="discord-custom-emoji" data-emoji-id="${escapeHtml(emoji.emojiId)}" data-emoji-animated="${emoji.animated ? '1' : '0'}" aria-label=":${escapeHtml(emoji.name)}:" title=":${escapeHtml(emoji.name)}:"><img src="${escapeHtml(emoji.url)}" alt="" loading="lazy" decoding="async" draggable="false" /></button>`).join('')}`
     : '';
   const favoritesSection = custom.length
     ? `<p class="emoji-section-title">Clearwater favorites</p>${custom.map(([emoji, label]) => `<button type="button" class="clearwater-emoji" data-emoji-choice="${emoji}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${emoji}</button>`).join('')}`

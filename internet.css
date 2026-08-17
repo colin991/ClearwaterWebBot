@@ -3048,6 +3048,14 @@ body { margin: 0; }
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
 }
 .emoji-grid .clearwater-emoji:hover { border-color: #6fa8ff; background: rgba(53, 117, 224, .7); }
+.emoji-grid button.discord-custom-emoji {
+  width: 36px !important;
+  height: 36px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+}
 .emoji-grid .discord-custom-emoji {
   display: grid;
   place-items: center;
@@ -3059,22 +3067,38 @@ body { margin: 0; }
   background: rgba(36, 74, 128, .45);
 }
 .emoji-grid .discord-custom-emoji img {
-  width: 28px;
-  height: 28px;
+  display: block;
+  width: 22px !important;
+  height: 22px !important;
+  max-width: 22px !important;
+  max-height: 22px !important;
   object-fit: contain;
   pointer-events: none;
 }
 img.discord-emoji {
   display: inline-block;
-  width: 1.35em;
-  height: 1.35em;
-  margin: 0 .06em;
-  vertical-align: -0.28em;
+  width: 22px !important;
+  height: 22px !important;
+  max-width: 22px !important;
+  max-height: 22px !important;
+  margin: 0 1px;
+  vertical-align: -0.25em;
   object-fit: contain;
 }
 .composer-highlight img.discord-emoji {
-  width: 1.2em;
-  height: 1.2em;
+  width: 20px !important;
+  height: 20px !important;
+  max-width: 20px !important;
+  max-height: 20px !important;
+}
+.post-content img.discord-emoji,
+.conversation-bubble img.discord-emoji,
+.reel-meta img.discord-emoji,
+.reel-comment img.discord-emoji {
+  width: 22px !important;
+  height: 22px !important;
+  max-width: 22px !important;
+  max-height: 22px !important;
 }
 .internet-view[data-view="home"] .composer .composer-tools [data-emoji-button] {
   width: 34px !important;
