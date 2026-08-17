@@ -219,6 +219,66 @@ export async function holdVoiceChat(source, config = {}, explicitChannel = null)
   };
 }
 
+function trackMuted(hold, guildId, memberId) {
+  if (!hold.mutedIds.includes(memberId)) {
+    hold.mutedIds.push(memberId);
+    activeHolds.set(guildId, hold);
+  }
+}
+
+function untrackMuted(hold, guildId, memberId) {
+  const next = hold.mutedIds.filter((id) => id !== memberId);
+  if (next.length !== hold.mutedIds.length) {
+    hold.mutedIds = next;
+    activeHolds.set(guildId, hold);
+  }
+}
+
+/**
+ * While a hold is active: server-mute non-Ownership members who join the held
+ * channel, and unmute them again when they leave that channel.
+ */
+export async function handleHoldVoiceStateUpdate(oldState, newState, config = {}) {
+  const guild = newState.guild || oldState.guild;
+  if (!guild) return;
+
+  const hold = activeHolds.get(guild.id);
+  if (!hold) return;
+
+  const member = newState.member || oldState.member;
+  if (!member || member.user?.bot) return;
+
+  const wasInHold = oldState.channelId === hold.channelId;
+  const isInHold = newState.channelId === hold.channelId;
+  if (wasInHold === isInHold) return;
+
+  if (isInHold && !wasInHold) {
+    if (isOwnershipMember(member, config)) return;
+    if (member.voice?.serverMute) {
+      trackMuted(hold, guild.id, member.id);
+      return;
+    }
+    try {
+      await member.voice.setMute(true, 'Joined voice channel while Hold VC is active');
+      trackMuted(hold, guild.id, member.id);
+    } catch (error) {
+      logger.warn(`Could not server-mute ${member.id} joining hold VC: ${error?.message || error}`);
+    }
+    return;
+  }
+
+  if (wasInHold && !isInHold) {
+    if (!hold.mutedIds.includes(member.id)) return;
+    try {
+      // Persist unmute even after disconnect so rejoining elsewhere is not muted.
+      await member.edit({ mute: false, reason: 'Left held voice channel' });
+      untrackMuted(hold, guild.id, member.id);
+    } catch (error) {
+      logger.warn(`Could not unmute ${member.id} leaving hold VC: ${error?.message || error}`);
+    }
+  }
+}
+
 /** Undo a hold: unmute members this bot muted, then leave the voice channel. */
 export async function releaseVoiceChat(source) {
   const { guild, user } = actorFrom(source);

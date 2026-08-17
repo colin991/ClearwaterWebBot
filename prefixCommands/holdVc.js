@@ -9,7 +9,7 @@ import { v2Card } from '../utils/v2Message.js';
 
 export const holdvc = {
   name: 'holdvc',
-  description: 'Ownership-only: join a voice channel, play the hold announcement for everyone, then mute non-Ownership.',
+  description: 'Ownership-only: join a voice channel, play the hold announcement, mute non-Ownership, and auto-mute anyone who joins while held.',
   async execute(message) {
     requireOwnership(message);
     const result = await holdVoiceChat(message, message.client.config);
@@ -34,7 +34,8 @@ export const holdvc = {
         `Joined ${result.voiceChannel} and played for everyone:`,
         `“${HOLD_VC_PHRASE}”`,
         `Server-muted **${result.mutedNow}** member${result.mutedNow === 1 ? '' : 's'} (Ownership skipped).`,
-        'Use `-unholdvc` to unmute and make the bot leave.',
+        'Anyone who joins this channel while it is on hold is server-muted; leaving unmutes them.',
+        'Use `-unholdvc` to unmute everyone and make the bot leave.',
       ].join('\n'),
     }));
   },
