@@ -839,6 +839,33 @@ export function startStatusServer(client, config) {
           }
         }
 
+        if (body.action === 'emojis') {
+          const guild = client.guilds.cache.get(CLEARWATER_GUILD_ID)
+            || await client.guilds.fetch(CLEARWATER_GUILD_ID).catch(() => null);
+          if (!guild) return json(response, 503, { error: 'Clearwater Discord is unavailable right now.' });
+          try {
+            await guild.emojis.fetch();
+          } catch {
+            // Fall back to whatever is already cached on the guild.
+          }
+          const emojis = [...guild.emojis.cache.values()]
+            .filter((emoji) => emoji?.id && emoji?.name)
+            .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+            .map((emoji) => {
+              const animated = Boolean(emoji.animated);
+              const url = typeof emoji.imageURL === 'function'
+                ? emoji.imageURL({ size: 64, extension: animated ? 'gif' : 'png' })
+                : '';
+              return {
+                emojiId: String(emoji.id),
+                name: String(emoji.name).slice(0, 32),
+                animated,
+                url: url || `https://cdn.discordapp.com/emojis/${emoji.id}.${animated ? 'gif' : 'png'}?size=64&quality=lossless`,
+              };
+            });
+          return json(response, 200, { emojis });
+        }
+
         if (body.action === 'findmy') {
           return json(response, 200, findMyDirectory(store, body.actor));
         }

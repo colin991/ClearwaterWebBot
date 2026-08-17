@@ -8,7 +8,7 @@ import { rejectVpnJson } from '../lib/vpn-guard.js';
 import { deleteVercelBlobUrls } from '../utils/blobStorage.js';
 
 const OFFICIAL_INTERNET_ACCOUNT_ID = '1514026810348671026';
-const INTERNET_VERSION = '20260815-api-biz-logo-url';
+const INTERNET_VERSION = '20260817-discord-emojis';
 const MAX_INTERNET_BODY = 4_400_000;
 const MAX_MEDIA_DATA_URL = 4_200_000;
 const MAX_REEL_BYTES = 2 * 1024 * 1024 * 1024;
@@ -825,6 +825,16 @@ export default async function handler(request, response) {
         owner: access.allowed || staffPanel === 'full',
         serverManagement: access.serverManagement === true,
       };
+    } else if (body.action === 'emojis') {
+      if (!allowRate(`emojis:${user.id}`, { max: 12, windowMs: 60_000 })) {
+        return sendJson(response, 429, { error: 'Too many emoji requests. Wait a moment.' });
+      }
+      const cached = getCached('discord-guild-emojis-v1');
+      if (cached) {
+        response.setHeader('Cache-Control', 'private, max-age=60');
+        return sendJson(response, 200, redactPublicPayload(cached));
+      }
+      payload = { action: 'emojis', actor: { id: user.id } };
     } else if (body.action === 'erlc-location') {
       payload = { action: 'erlc-location', actor: { id: user.id, username: user.username, displayName: user.displayName } };
     } else if (body.action === 'erlc-phone-map') {
@@ -976,6 +986,10 @@ export default async function handler(request, response) {
     if (ipHashes.hash) payload.ipHash = ipHashes.hash;
     if (ipHashes.legacy && ipHashes.legacy !== ipHashes.hash) payload.ipHashLegacy = ipHashes.legacy;
     const result = await callBot(request, payload);
+    if (result.ok && body.action === 'emojis' && Array.isArray(result.body?.emojis)) {
+      setCached('discord-guild-emojis-v1', { emojis: result.body.emojis }, 300_000);
+      response.setHeader('Cache-Control', 'private, max-age=60');
+    }
     // Older bot hosts do not understand asOfficial and would silently create a
     // normal-account post. Remove that post and give a useful update message.
     if (body.action === 'post' && asOfficial && result.ok && result.body?.post?.authorId !== OFFICIAL_INTERNET_ACCOUNT_ID) {

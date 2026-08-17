@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-17-discord-emojis-internet",
+      "title": "Discord emojis on Clearwater Internet",
+      "summary": "The emoji picker on Clearwater Internet now includes your Discord server’s custom emojis. You can add them to posts and DMs, and they show as images in the feed.",
+      "updatedBy": "justawacko",
+      "createdAt": "2026-08-17T16:20:00.000Z"
+    },
+    {
       "id": "2026-08-17-holdvc-join-mute",
       "title": "Hold VC mutes people who join",
       "summary": "While `-holdvc` is active, anyone who joins the held voice channel is server-muted (Ownership skipped). Leaving the channel unmutes them again.",
