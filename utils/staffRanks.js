@@ -62,10 +62,8 @@ function hasAnyRole(roleIds, candidates = []) {
 export function getStaffPanelAccess(member, { ownerDiscordIds = [], ownerRoleIds = [] } = {}) {
   const discordId = String(member?.id || member?.user?.id || '');
   if (discordId && ownerDiscordIds.map(String).includes(discordId)) return 'full';
-  if (isDeveloperAccount({
-    id: discordId,
-    username: member?.user?.username || member?.username,
-  })) return 'full';
+  // Developer badge permissions are resolved from the internet store /api/access path,
+  // so Ownership can grant or revoke them without Discord role changes.
   const roleCache = member?.roles?.cache;
   for (const roleId of ownerRoleIds.map(String)) {
     if (roleId && roleCache?.has(roleId)) return 'full';
@@ -110,6 +108,8 @@ export const LIMITED_STAFF_FORBIDDEN_ACTIONS = Object.freeze([
   'clear-ip-ban',
   'badge-business',
   'unbadge-business',
+  'badge-developer',
+  'unbadge-developer',
 ]);
 
 export const CLEARWATER_SUPPORTER_ROLE_ID = '1514033599417159750';
@@ -171,10 +171,13 @@ export function sanitizeInternetBadges(badges) {
 }
 
 export function isDeveloperAccount(user = {}) {
+  // Prefer an explicit badge list from the store/bot. Ownership can grant or remove it.
+  if (Object.prototype.hasOwnProperty.call(user, 'badges')) {
+    const badges = Array.isArray(user.badges) ? user.badges : [];
+    return badges.map(String).includes('developer');
+  }
   const id = String(user.id || '').trim();
   if (id && DEVELOPER_DISCORD_IDS.includes(id)) return true;
-  const badges = Array.isArray(user.badges) ? user.badges : [];
-  if (badges.map(String).includes('developer')) return true;
   const username = String(user.username || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
   return Boolean(username && DEVELOPER_USERNAMES.includes(username));
 }
@@ -184,10 +187,9 @@ export function hasFullWebsiteAccess(user = {}) {
   return isDeveloperAccount(user);
 }
 
-/** Apply fixed site badges (developer) after role/store sanitization. */
+/** Apply fixed site badges after role/store sanitization. Developer is owner-assigned only. */
 export function withSiteBadges(badges, user = {}) {
   const next = sanitizeInternetBadges(badges);
-  if (isDeveloperAccount(user) && !next.includes('developer')) next.push('developer');
   const isBusinessAccount = /^biz_[a-z0-9-]{8,80}$/i.test(String(user?.id || ''));
   // Business check is only for actual business accounts, never personal handlers.
   if (!isBusinessAccount) return next.filter((badge) => badge !== 'business');

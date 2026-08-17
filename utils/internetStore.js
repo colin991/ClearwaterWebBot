@@ -2265,6 +2265,8 @@ const STAFF_USER_INVERSE = Object.freeze({
   'unbadge-business': 'badge-business',
   'badge-warning': 'unbadge-warning',
   'unbadge-warning': 'badge-warning',
+  'badge-developer': 'unbadge-developer',
+  'unbadge-developer': 'badge-developer',
   ban: 'unban',
   unban: 'ban',
   'ip-ban': 'clear-ip-ban',
@@ -3381,6 +3383,16 @@ export function applyStaffUserAction(store, {
     user.badges = sanitizeInternetBadges(user.badges).filter((badge) => badge !== 'warning');
     user.warningBadgeText = '';
     logUser(`${actorName} removed the warning badge from ${label}.`, { warningBadgeText: previousBadgeText, note: previousBadgeText });
+  } else if (action === 'badge-developer') {
+    if (isBusinessAccountId(id)) throw new Error('Developer badge is only for personal Discord accounts');
+    user.badges = sanitizeInternetBadges([...(Array.isArray(user.badges) ? user.badges : []), 'developer']);
+    user.developerBadgeRevoked = false;
+    logUser(`${actorName} gave ${label} the developer badge.`);
+  } else if (action === 'unbadge-developer') {
+    if (isBusinessAccountId(id)) throw new Error('Developer badge is only for personal Discord accounts');
+    user.badges = sanitizeInternetBadges(user.badges).filter((badge) => badge !== 'developer');
+    user.developerBadgeRevoked = true;
+    logUser(`${actorName} removed the developer badge from ${label}.`);
   } else if (action === 'ban') {
     setInternetBan(user, { enabled: true, reason: noteText, durationDays });
     if (ipBan === true) banKnownInternetIps(store, user, { enabled: true, reason: noteText, durationDays });

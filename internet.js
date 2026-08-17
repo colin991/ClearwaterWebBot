@@ -3149,6 +3149,11 @@ function staffUserPanelMarkup(detail) {
           ${user.warningBadge
             ? `<p class="staff-action-hint">Warning hover text: ${escapeHtml(user.warningBadgeText || 'Account warning')}</p>${button('unbadge-warning', 'Remove warning tag')}`
             : `${button('badge-warning', 'Add warning tag', 'primary')}<p class="staff-action-hint">Uses the reason box above as the hover text.</p>`}
+          ${fullStaff && !isBiz
+            ? (user.developer
+              ? `${button('unbadge-developer', 'Remove developer badge')}<p class="staff-action-hint">Removes the Developer badge and full website permissions.</p>`
+              : `${button('badge-developer', 'Give developer badge', 'primary')}<p class="staff-action-hint">Ownership only. Grants every website permission.</p>`)
+            : ''}
         </div>`)}
         ${staffActionGroupMarkup('Restrictions', 'Reversible limits, shown with their expiry', `<div class="staff-toggle-grid">
           ${staffToggleMarkup({ active: user.muted === true, onAction: 'mute', offAction: 'unmute', label: 'Muted', expires: user.mutedUntil ? staffUntil(user.mutedUntil) : '', tone: 'warn' })}
@@ -3288,7 +3293,7 @@ function renderStaffDashboard() {
   const logCards = logs.filter((log) => {
     const message = String(log.message || '').toLowerCase();
     if (historyQuery && !message.includes(historyQuery)) return false;
-    if (staffHistoryFilter === 'users') return /banned|warned|unban|mute|verify|watch|shadow|badge|business|warning badge|account/i.test(message);
+    if (staffHistoryFilter === 'users') return /banned|warned|unban|mute|verify|watch|shadow|badge|business|warning badge|developer|account/i.test(message);
     if (staffHistoryFilter === 'posts') return /post|automod|deleted|hold|reel|comment/i.test(message);
     return true;
   }).map((log) => ({

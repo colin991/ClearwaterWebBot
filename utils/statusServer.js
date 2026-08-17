@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { memberHasSiteAccess } from '../lib/site-access.js';
-import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess, isDeveloperAccount, LIMITED_STAFF_FORBIDDEN_ACTIONS, withSiteBadges } from './staffRanks.js';
+import { CLEARWATER_GUILD_ID, DEVELOPER_DISCORD_IDS, getHighestStaffRank, getInternetBadges, getStaffPanelAccess, isDeveloperAccount, LIMITED_STAFF_FORBIDDEN_ACTIONS, sanitizeInternetBadges, withSiteBadges } from './staffRanks.js';
 import { dropLocationNameCandidates, fetchErlcPlayersOnMap, fetchErlcServer, findPlayerDropLocation, parseErlcPlayer, playersOnLibertyMap, runErlcModeration, runErlcRawCommand } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
@@ -583,20 +583,38 @@ export function startStatusServer(client, config) {
 
       const mainRoles = member ? [...member.roles.cache.keys()].map(String) : [];
       const discordBadges = getInternetBadges(member);
-      // Include store-kept developer badge so badge holders keep full site access.
+      // Store badge is the source of truth for developer (Ownership grant/revoke).
       let storeBadges = [];
       try {
         const store = await readInternetStore();
-        storeBadges = Array.isArray(store?.users?.[discordId]?.badges)
-          ? store.users[discordId].badges
-          : [];
+        const storeUser = store?.users?.[discordId];
+        if (storeUser) {
+          const hasDeveloper = Array.isArray(storeUser.badges) && storeUser.badges.includes('developer');
+          // One-time bootstrap for known developer Discord IDs until Ownership revokes.
+          if (
+            DEVELOPER_DISCORD_IDS.includes(discordId)
+            && storeUser.developerBadgeRevoked !== true
+            && !hasDeveloper
+          ) {
+            storeUser.badges = sanitizeInternetBadges([
+              ...(Array.isArray(storeUser.badges) ? storeUser.badges : []),
+              'developer',
+            ]);
+            await saveInternetStore(store);
+          }
+          storeBadges = Array.isArray(storeUser.badges) ? storeUser.badges : [];
+        } else if (
+          DEVELOPER_DISCORD_IDS.includes(discordId)
+        ) {
+          storeBadges = ['developer'];
+        }
       } catch {
-        storeBadges = [];
+        storeBadges = DEVELOPER_DISCORD_IDS.includes(discordId) ? ['developer'] : [];
       }
       const accessUser = {
         id: discordId,
         username: member?.user?.username || '',
-        badges: [...discordBadges, ...storeBadges],
+        badges: storeBadges,
       };
       const badges = withSiteBadges([...discordBadges, ...storeBadges], accessUser);
 
@@ -1423,6 +1441,9 @@ export function startStatusServer(client, config) {
           const staffAction = String(body.staffAction || '');
           if (body.staffPanel === 'limited' && LIMITED_STAFF_FORBIDDEN_ACTIONS.includes(staffAction)) {
             return json(response, 403, { error: 'Limited staff cannot use verification or network tools.' });
+          }
+          if (['badge-developer', 'unbadge-developer'].includes(staffAction) && body.staffPanel !== 'full') {
+            return json(response, 403, { error: 'Only Ownership can grant or remove the developer badge.' });
           }
           const staffActorId = String(body.actor?.id || '');
           if (body.staffPanel === 'limited' && staffAction === 'ban') {

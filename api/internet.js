@@ -821,9 +821,13 @@ export default async function handler(request, response) {
       };
     } else if (body.action === 'staff-user') {
       if (!canStaff) return sendJson(response, 403, { error: 'Staff access required' });
+      const staffAction = String(body.staffAction || '');
+      if (['badge-developer', 'unbadge-developer'].includes(staffAction) && staffPanel !== 'full') {
+        return sendJson(response, 403, { error: 'Only Ownership can grant or remove the developer badge.' });
+      }
       payload = {
         action: 'staff-user',
-        staffAction: String(body.staffAction || ''),
+        staffAction,
         targetId: String(body.targetId || ''),
         reason: String(body.reason || '').slice(0, 300),
         note: String(body.note || '').slice(0, 500),

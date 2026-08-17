@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-17-developer-badge-panel",
+      "title": "Ownership can grant developer badge",
+      "summary": "Ownership can give or remove the Developer badge from the staff user panel. That badge unlocks full website permissions.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-17T00:35:00.000Z"
+    },
+    {
       "id": "2026-08-17-developer-full-access",
       "title": "Developer badge unlocks full site access",
       "summary": "Accounts with the Developer badge now get every website permission: Owner Panel, staff tools, Server Management, and government access.",
