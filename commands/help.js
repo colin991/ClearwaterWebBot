@@ -15,7 +15,7 @@ export default {
         '`/help` - show this command list',
         '`/say` - Ownership only: speak text in a voice channel',
         '',
-        'Ownership VC hold uses prefix commands: `-holdvc` / `-unholdvc`',
+        'Ownership VC hold uses prefix commands: `-holdvc` / `-unholdvc` (auto-mutes joiners while held)',
         'Staff also have Circle-style prefix commands with `-`',
         'Example: `-help`, `-ban`, `-mute`, `-purge`, `-modlogs`, `-void`',
       ].join('\n'),
