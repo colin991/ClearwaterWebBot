@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "erlc-docs": {
+      "url": "https://apidocs.erlc.gg/mcp"
+    }
+  }
+}
