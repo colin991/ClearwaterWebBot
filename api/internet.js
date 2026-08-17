@@ -35,6 +35,35 @@ const STAFF_ACTIONS = new Set([
   'ad-review',
   'ad-manage',
 ]);
+// Moderation verbs that are reserved for the staff suite but are not (or are no
+// longer) wired to a handler. Without this list they fall through to the generic
+// "Unsupported action" 400, which tells an unauthenticated prober which staff
+// verbs exist and which do not. Authorization is decided before dispatch instead,
+// so a non-staff caller gets the same 403 for every staff-shaped verb.
+const RESERVED_STAFF_ACTIONS = new Set([
+  'mute',
+  'unmute',
+  'unban',
+  'shadowban',
+  'unshadowban',
+  'unverify',
+  'kick',
+  'warn',
+  'unwarn',
+  'purge',
+  'timeout',
+  'untimeout',
+  'lock',
+  'unlock',
+  'staff-user-messages',
+  'staff-user-conversation',
+  'staff-ban',
+  'staff-verify',
+  'staff-moderation',
+  'staff-panel',
+  'admin',
+  'owner',
+]);
 
 async function readBody(request) {
   if (request.body && typeof request.body === 'object') return request.body;
@@ -86,6 +115,18 @@ function safeHttpsUrl(value) {
   } catch {
     return '';
   }
+}
+
+/** #rgb / #rrggbb / #rrggbbaa only — matches the accent picker's own output. */
+function safeHexColor(value) {
+  const candidate = String(value || '').trim();
+  return /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(candidate) ? candidate : '';
+}
+
+/** Post/report identifiers are opaque slugs — keep them to a safe charset. */
+function safePostId(value) {
+  const candidate = String(value || '').trim().slice(0, 64);
+  return /^[A-Za-z0-9._-]*$/.test(candidate) ? candidate : '';
 }
 
 function safeBlobMediaUrl(value) {
@@ -353,6 +394,19 @@ export default async function handler(request, response) {
     const asBusinessId = !asOfficial && /^biz_[a-z0-9-]{8,80}$/i.test(String(body.asBusinessId || '').trim())
       ? String(body.asBusinessId).trim()
       : '';
+
+    // Authorization before dispatch: any staff-suite verb (implemented or not)
+    // answers with the same 403 for non-staff callers, so probing the action
+    // switch cannot map out which moderation verbs exist. Staff fall through to
+    // the per-action checks below, which still enforce the exact tier required.
+    const requestedAction = String(body.action || '');
+    if (
+      (STAFF_ACTIONS.has(requestedAction) || RESERVED_STAFF_ACTIONS.has(requestedAction))
+      && !canStaff
+      && !access.allowed
+    ) {
+      return sendJson(response, 403, { error: 'Staff access required' });
+    }
 
     if (body.action === 'post-interaction' && String(body.type || '') === 'like' && !allowRate(`like:${user.id}`, { max: 12, windowMs: 10_000 })) {
       return sendJson(response, 429, { error: 'Too many likes. Wait a moment.' });
@@ -642,6 +696,9 @@ export default async function handler(request, response) {
     } else if (body.action === 'ad-review') {
       if (!canStaff && !access.allowed) return sendJson(response, 403, { error: 'Staff access required' });
       const panel = staffPanel || (access.allowed ? 'full' : null);
+      // Matches verify-review / business-review / ad-manage: never dispatch with a
+      // null panel, so the bot cannot receive a staff action with no tier attached.
+      if (!panel) return sendJson(response, 403, { error: 'Staff access required' });
       payload = {
         action: 'ad-review',
         adId: String(body.adId || ''),
@@ -694,10 +751,15 @@ export default async function handler(request, response) {
       if ('bio' in submitted) profile.bio = String(submitted.bio || '').slice(0, 300);
       if ('pronouns' in submitted) profile.pronouns = String(submitted.pronouns || '').slice(0, 40);
       if ('location' in submitted) profile.location = String(submitted.location || '').slice(0, 60);
-      if ('website' in submitted) profile.website = String(submitted.website || '').slice(0, 200);
-      if ('bannerUrl' in submitted) profile.bannerUrl = String(submitted.bannerUrl || '').trim().slice(0, 500);
-      if ('accentColor' in submitted) profile.accentColor = String(submitted.accentColor || '').trim().slice(0, 9);
-      if ('pinnedPostId' in submitted) profile.pinnedPostId = String(submitted.pinnedPostId || '').slice(0, 64);
+      if ('website' in submitted) profile.website = safeHttpsUrl(submitted.website).slice(0, 200);
+      // Stored profile fields are rendered back into other members' pages, so the
+      // URL/colour fields are validated here rather than trusted to the browser.
+      // safeHttpsUrl accepts the "assets/<preset>.png" banners the editor sends and
+      // https:// links; anything else (javascript:, data:, CSS-breaking quotes)
+      // collapses to '' exactly like an unset field.
+      if ('bannerUrl' in submitted) profile.bannerUrl = safeHttpsUrl(submitted.bannerUrl);
+      if ('accentColor' in submitted) profile.accentColor = safeHexColor(submitted.accentColor);
+      if ('pinnedPostId' in submitted) profile.pinnedPostId = safePostId(submitted.pinnedPostId);
       payload = { action: 'profile-save', profile, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };
     } else if (body.action === 'account-active') {
       payload = { action: 'account-active', deactivated: body.deactivated === true, actor: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: avatarUrl(user), staffRank: access.staffRank, badges: access.badges } };

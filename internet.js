@@ -1,3 +1,20 @@
+/*
+ * Clearwater Internet frontend.
+ *
+ * The whole file runs inside this IIFE on purpose. Session state such as
+ * sessionIsOwner / sessionStaffPanel / sessionCanStaff / currentUserId used to be
+ * top-level bindings in the global lexical scope, which meant the DevTools console
+ * could reassign them and paint the staff desk on screen. Inside the IIFE they are
+ * unreachable from the console and from any other script on the page.
+ *
+ * This is UI-integrity only. Every privileged request is still re-authorized
+ * server-side against a live Discord role check, so this closes the cosmetic hole
+ * without becoming the thing that protects the data.
+ *
+ * Nothing here is exported; the file registers its own DOM and window listeners.
+ * Do not add "use strict" — the original file ran in sloppy mode.
+ */
+(function () {
 if (new URLSearchParams(window.location.search).get('embed') === 'phone') {
   document.documentElement.classList.add('cw-phone-embed');
 }
@@ -9261,3 +9278,5 @@ window.setInterval(() => {
 }, 90_000);
 window.addEventListener('scroll', queuePresenceFromScroll, { passive: true });
 window.setInterval(updateBanCountdown, 60 * 1000);
+
+})();
