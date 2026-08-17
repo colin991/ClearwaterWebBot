@@ -147,9 +147,10 @@ export function dailyCreditTierForRoles(roles = [], badges = []) {
   return { id: null, amount: BASE_DAILY_CREDITS, label: 'Member' };
 }
 
-/** Colin (owner) + Pixel — hardcoded developer badge accounts. */
+/** Hardcoded developer badge Discord accounts. */
 export const DEVELOPER_DISCORD_IDS = Object.freeze([
   '1044686997194805280',
+  '848356730256883744',
 ]);
 export const DEVELOPER_USERNAMES = Object.freeze([
   'colin',

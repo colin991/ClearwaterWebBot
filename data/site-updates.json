@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-17-developer-badge-user",
+      "title": "Developer badge assigned",
+      "summary": "Added the Developer badge for Discord user 848356730256883744 on Clearwater Internet.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-17T00:21:00.000Z"
+    },
+    {
       "id": "2026-08-16-business-logo-url-fix",
       "title": "Business logo URL preview fixed",
       "summary": "Logo image URL now converts freeimage.host and Imgur page links into direct image links, shows a clear error when a link is not an image, and allows iili.io / Imgur images through the site security policy.",
