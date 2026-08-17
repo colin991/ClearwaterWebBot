@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { buildDiscordCatalog, getOwnerConfig, saveOwnerConfig } from './ownerConfig.js';
 import { memberHasSiteAccess } from '../lib/site-access.js';
-import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess, isDeveloperAccount, LIMITED_STAFF_FORBIDDEN_ACTIONS } from './staffRanks.js';
+import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess, isDeveloperAccount, LIMITED_STAFF_FORBIDDEN_ACTIONS, withSiteBadges } from './staffRanks.js';
 import { dropLocationNameCandidates, fetchErlcPlayersOnMap, fetchErlcServer, findPlayerDropLocation, parseErlcPlayer, playersOnLibertyMap, runErlcModeration, runErlcRawCommand } from './erlc.js';
 import { getIdentityCache, rememberIdentity } from './identityStore.js';
 import { findRobloxIdentity, safeMelonlyError } from './melonly.js';
@@ -182,7 +182,7 @@ async function resolveGovernmentAccess(client, config, actor = {}) {
   const discordId = String(actor?.id || '');
   const ownerDiscordIds = (config.ownerDiscordIds || []).map(String);
   const ownership = ownerDiscordIds.includes(discordId)
-    || isDeveloperAccount({ id: discordId, username: actor?.username });
+    || isDeveloperAccount({ id: discordId, username: actor?.username, badges: actor?.badges });
 
   // Ownership on the main Clearwater guild also unlocks every government tool.
   if (!ownership) {
@@ -580,10 +580,45 @@ export function startStatusServer(client, config) {
       const staffRank = getHighestStaffRank(member);
       const ownerDiscordIds = config.ownerDiscordIds || [];
       const ownerRoleIds = config.ownerRoleIds || [];
+
+      const mainRoles = member ? [...member.roles.cache.keys()].map(String) : [];
+      const discordBadges = getInternetBadges(member);
+      // Include store-kept developer badge so badge holders keep full site access.
+      let storeBadges = [];
+      try {
+        const store = await readInternetStore();
+        storeBadges = Array.isArray(store?.users?.[discordId]?.badges)
+          ? store.users[discordId].badges
+          : [];
+      } catch {
+        storeBadges = [];
+      }
+      const accessUser = {
+        id: discordId,
+        username: member?.user?.username || '',
+        badges: [...discordBadges, ...storeBadges],
+      };
+      const badges = withSiteBadges([...discordBadges, ...storeBadges], accessUser);
+
+      // Developer badge accounts get every website permission even without Discord roles.
+      if (isDeveloperAccount(accessUser)) {
+        return json(response, 200, {
+          allowed: true,
+          panelAccess: 'full',
+          siteAccess: true,
+          member: Boolean(member),
+          staffRank: staffRank?.name || 'Developer',
+          badges,
+          roles: mainRoles,
+          governmentRoles: [],
+          governmentAccess: true,
+          governmentReview: true,
+        });
+      }
+
       const panelAccess = getStaffPanelAccess(member, { ownerDiscordIds, ownerRoleIds });
       const allowed = panelAccess === 'full';
       const siteAccess = memberHasSiteAccess(member, { ownerDiscordIds });
-      const mainRoles = member ? [...member.roles.cache.keys()].map(String) : [];
 
       // Government roles live on a separate Discord server the bot also joins.
       let governmentRoles = [];
@@ -596,7 +631,7 @@ export function startStatusServer(client, config) {
 
       const ownership = allowed
         || ownerDiscordIds.map(String).includes(discordId)
-        || isDeveloperAccount({ id: discordId });
+        || isDeveloperAccount(accessUser);
       const governmentAccess = ownership || rolesAllowGovernmentAccess(governmentRoles);
       const governmentReview = ownership || rolesAllowGovernmentReview(governmentRoles);
 
@@ -606,7 +641,7 @@ export function startStatusServer(client, config) {
         siteAccess,
         member: Boolean(member),
         staffRank: staffRank?.name || null,
-        badges: getInternetBadges(member),
+        badges,
         roles: mainRoles,
         governmentRoles,
         governmentAccess,

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-17-developer-full-access",
+      "title": "Developer badge unlocks full site access",
+      "summary": "Accounts with the Developer badge now get every website permission: Owner Panel, staff tools, Server Management, and government access.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-17T00:30:00.000Z"
+    },
+    {
       "id": "2026-08-17-developer-badge-user",
       "title": "Developer badge assigned",
       "summary": "Added the Developer badge for Discord user 848356730256883744 on Clearwater Internet.",

@@ -173,8 +173,15 @@ export function sanitizeInternetBadges(badges) {
 export function isDeveloperAccount(user = {}) {
   const id = String(user.id || '').trim();
   if (id && DEVELOPER_DISCORD_IDS.includes(id)) return true;
+  const badges = Array.isArray(user.badges) ? user.badges : [];
+  if (badges.map(String).includes('developer')) return true;
   const username = String(user.username || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
   return Boolean(username && DEVELOPER_USERNAMES.includes(username));
+}
+
+/** Developer badge accounts get full website permissions (owner-equivalent). */
+export function hasFullWebsiteAccess(user = {}) {
+  return isDeveloperAccount(user);
 }
 
 /** Apply fixed site badges (developer) after role/store sanitization. */
