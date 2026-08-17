@@ -24,20 +24,34 @@ export default async function handler(request, response) {
   const payload = await cachedJson('bot-status-v1', 20_000, async () => {
     const apiUrl = process.env.BOT_API_URL?.replace(/\/$/, '');
     const apiKey = process.env.BOT_API_KEY;
-    if (!apiUrl || !apiKey) return { online: false, configured: false };
+    if (!apiUrl || !apiKey) return { online: false, configured: false, bridgeError: 'missing_env' };
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 4000);
     try {
-      const botResponse = await fetch(`${apiUrl}/api/status`, {
-        headers: { Authorization: `Bearer ${apiKey}` },
-        signal: controller.signal,
-      });
-      if (!botResponse.ok) return { online: false, configured: true };
+      const healthResponse = await fetch(`${apiUrl}/health`, { signal: controller.signal });
+      if (!healthResponse.ok) {
+        return { online: false, configured: true, bridgeError: `http_${healthResponse.status}` };
+      }
+      const health = await healthResponse.json().catch(() => null);
+      if (!health?.ok) return { online: false, configured: true, bridgeError: 'invalid_health' };
 
-      const status = await botResponse.json();
+      const statusResponse = await fetch(`${apiUrl}/api/status`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(4000),
+      });
+      if (statusResponse.status === 401) {
+        return { online: false, configured: true, bridgeError: 'unauthorized' };
+      }
+      if (!statusResponse.ok) {
+        return { online: false, configured: true, bridgeError: `status_${statusResponse.status}` };
+      }
+
+      const status = await statusResponse.json();
       return {
         online: status.online === true,
+        configured: true,
+        bridgeError: null,
         memberCount: Number.isInteger(status.guild?.memberCount) ? status.guild.memberCount : null,
         latencyMs: Number.isFinite(status.bot?.latencyMs) ? status.bot.latencyMs : null,
         updatedAt: status.updatedAt || null,
@@ -48,8 +62,9 @@ export default async function handler(request, response) {
           queue: Number.isInteger(status.erlc?.queue) ? status.erlc.queue : 0,
         },
       };
-    } catch {
-      return { online: false, configured: true };
+    } catch (error) {
+      const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+      return { online: false, configured: true, bridgeError: timedOut ? 'timeout' : 'connect_failed' };
     } finally {
       clearTimeout(timeout);
     }

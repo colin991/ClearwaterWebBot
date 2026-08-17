@@ -827,7 +827,12 @@ function selectPostingAccount(account) {
 
 async function readApiJson(response, fallbackMessage) {
   const contentType = response.headers.get('content-type') || '';
-  if (!contentType.includes('application/json')) throw new Error(fallbackMessage);
+  if (!contentType.includes('application/json')) {
+    if (response.status === 504) {
+      throw new Error('The website timed out waiting for the bot host. Check BOT_API_URL on Vercel and restart the bot.');
+    }
+    throw new Error(fallbackMessage);
+  }
   try {
     const payload = await response.json();
     if (payload?.code === 'VPN_BLOCKED' || /vpns? and proxies are not allowed/i.test(String(payload?.error || ''))) {
@@ -6582,7 +6587,7 @@ async function loadPosts() {
       cache: 'default',
       credentials: 'same-origin',
     });
-    const result = await readApiJson(response, 'Clearwater Internet could not reach the website service.');
+    const result = await readApiJson(response, 'Clearwater Internet could not reach the bot host. Check BOT_API_URL on Vercel and restart the bot.');
     if (!response.ok) throw new Error(result.error || 'Service unavailable');
     allPosts = uniquePostsById(result.posts || []);
     internetUsers = new Map((result.users || []).map((user) => [user.id, user]));

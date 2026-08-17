@@ -265,21 +265,40 @@ async function callBot(request, payload, viewerId = '', ipHashes = null) {
   if (ipHashes?.hash) params.set('ipHash', ipHashes.hash);
   if (ipHashes?.legacy && ipHashes.legacy !== ipHashes.hash) params.set('ipHashLegacy', ipHashes.legacy);
   const query = params.toString() ? `?${params.toString()}` : '';
-  const upstream = await fetch(`${apiUrl}/api/internet${query}`, {
-    method: request.method,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      ...(payload ? { 'Content-Type': 'application/json' } : {}),
-    },
-    body: payload ? JSON.stringify(payload) : undefined,
-    signal: AbortSignal.timeout(8000),
-  });
+  let upstream;
+  try {
+    upstream = await fetch(`${apiUrl}/api/internet${query}`, {
+      method: request.method,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        ...(payload ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: payload ? JSON.stringify(payload) : undefined,
+      // Keep total bot round-trips under Vercel's serverless timeout budget.
+      signal: AbortSignal.timeout(4500),
+    });
+  } catch (error) {
+    const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+    return {
+      ok: false,
+      status: 502,
+      body: {
+        error: timedOut
+          ? 'Clearwater Internet timed out reaching the bot host. Check BOT_API_URL on Vercel and confirm the bot is online.'
+          : 'Clearwater Internet could not connect to the bot host. Check BOT_API_URL, the public port, and restart the bot.',
+      },
+    };
+  }
   const contentType = upstream.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
     return {
       ok: false,
       status: 502,
-      body: { error: 'Clearwater Internet could not reach the bot service. Restart the bot and check BOT_API_URL.' },
+      body: {
+        error: upstream.status === 401
+          ? 'The bot rejected the website bridge key. Make BOT_API_KEY identical on Vercel and the bot host.'
+          : 'The bot host returned a web page instead of JSON. BOT_API_URL is probably wrong — use your Apollo public address and port, not the panel login page.',
+      },
     };
   }
 
