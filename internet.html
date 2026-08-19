@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/assets/icon-512.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260816-logo-url" />
+    <link rel="stylesheet" href="internet.css?v=20260818-salary" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260815-vpn-block"></script>
   </head>
@@ -153,6 +153,7 @@
         <section class="internet-view wallet-view" data-view="wallet" hidden>
           <nav class="wallet-tabs" data-wallet-tabs aria-label="Wallet sections">
             <button type="button" class="selected" data-wallet-tab="home">Overview</button>
+            <button type="button" data-wallet-tab="salary">Salary</button>
             <button type="button" data-wallet-tab="advertise">Advertise</button>
             <button type="button" data-wallet-tab="market">Market</button>
             <button type="button" data-wallet-tab="levels">Levels</button>
@@ -170,6 +171,18 @@
                   <svg viewBox="0 0 24 24"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><path d="M4 9h16M8 14h.01M16 14h.01" /></svg>
                 </span>
               </article>
+              <article class="wallet-card wallet-salary-overview" data-wallet-salary-overview hidden>
+                <div class="wallet-card-copy">
+                  <p class="wallet-kicker">Department salary</p>
+                  <h2>Weekly pay</h2>
+                  <p data-wallet-salary-overview-copy>Department employee roles stack each week.</p>
+                </div>
+                <div class="wallet-salary-overview-meta">
+                  <strong data-wallet-salary-overview-total>C$0</strong>
+                  <span data-wallet-salary-overview-countdown>Loading salary status…</span>
+                </div>
+                <button type="button" class="wallet-salary-open" data-wallet-salary-open>Open salary details</button>
+              </article>
               <article class="wallet-card">
                 <div class="wallet-card-copy">
                   <h2>Daily credits</h2>
@@ -186,6 +199,27 @@
                   <span class="wallet-count" data-wallet-transaction-count>0</span>
                 </header>
                 <div class="wallet-transactions" data-wallet-transactions><p class="wallet-empty">Loading transactions…</p></div>
+              </article>
+            </div>
+            <div class="wallet-panel" data-wallet-panel="salary" hidden>
+              <article class="wallet-card wallet-salary-card" data-wallet-salary-card>
+                <div class="wallet-card-copy">
+                  <p class="wallet-kicker">Department salary</p>
+                  <h2>Weekly Clearwater pay</h2>
+                  <p data-wallet-salary-copy>Hold the employee role in a department Discord to qualify for that unit’s weekly payout.</p>
+                </div>
+                <div class="wallet-salary-hero">
+                  <div>
+                    <span>Estimated weekly total</span>
+                    <strong data-wallet-salary-total>C$0</strong>
+                  </div>
+                  <div>
+                    <span>Next payout</span>
+                    <strong data-wallet-salary-countdown>Loading…</strong>
+                  </div>
+                </div>
+                <p class="wallet-status" data-wallet-salary-status role="status">Checking your department roles…</p>
+                <div class="wallet-salary-list" data-wallet-salary-list><p class="wallet-empty">Loading departments…</p></div>
               </article>
             </div>
             <div class="wallet-panel" data-wallet-panel="advertise" hidden>
@@ -766,6 +800,6 @@
     <section class="composer-modal" data-share-modal hidden role="dialog" aria-modal="true"><div><header><h2>Share</h2><button type="button" data-close-share aria-label="Close">×</button></header><div class="share-actions"><button type="button" data-copy-post-link>Copy link</button><button type="button" data-share-to-friend>Send to a friend</button></div></div></section>
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
-    <script src="internet.js?v=20260816-logo-url"></script>
+    <script src="internet.js?v=20260818-salary"></script>
   </body>
 </html>

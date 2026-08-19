@@ -120,6 +120,8 @@ const officialProfileControls = document.querySelector('[data-official-profile-c
 const INTERNET_VERSION = '20260815-perf';
 let walletTransferType = 'send';
 let walletTransferTarget = null;
+let walletSalaryCountdownTimer = 0;
+let lastWalletSalaryTotal = null;
 let adMedia = null;
 let adLogo = null;
 let adPlacement = 'sidebar';
@@ -4283,7 +4285,7 @@ function maybeOpenWalletHubs() {
 }
 
 function setWalletTab(tab = 'home') {
-  const allowed = new Set(['home', 'advertise', 'market', 'levels', 'transfer']);
+  const allowed = new Set(['home', 'salary', 'advertise', 'market', 'levels', 'transfer']);
   const next = allowed.has(tab) ? tab : 'home';
   document.querySelectorAll('[data-wallet-tab]').forEach((button) => {
     button.classList.toggle('selected', button.dataset.walletTab === next);
@@ -4291,6 +4293,9 @@ function setWalletTab(tab = 'home') {
   document.querySelectorAll('[data-wallet-panel]').forEach((panel) => {
     panel.hidden = panel.dataset.walletPanel !== next;
   });
+  if (next === 'salary') {
+    document.querySelector('[data-wallet-salary-card]')?.classList.add('wallet-salary-enter');
+  }
   if (next === 'advertise') {
     syncAdPlacementUi();
     syncAdBoostLabels();
@@ -4302,6 +4307,174 @@ function setWalletTab(tab = 'home') {
       if (!result) return;
       if (result.needsAuth) renderWalletStore({ linked: false });
     });
+  }
+}
+
+const SALARY_WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function salaryCountdownCopy(nextPayoutAt) {
+  const nextAt = nextPayoutAt ? new Date(nextPayoutAt).getTime() : 0;
+  if (!nextAt || Number.isNaN(nextAt)) return 'Payout schedule not configured yet.';
+  const remaining = Math.max(0, nextAt - Date.now());
+  const days = Math.floor(remaining / 86_400_000);
+  const hours = Math.floor((remaining % 86_400_000) / 3_600_000);
+  const minutes = Math.max(1, Math.ceil((remaining % 3_600_000) / 60_000));
+  if (days >= 1) return `Next payout in ${days}d ${hours}h`;
+  if (hours >= 1) return `Next payout in ${hours}h ${minutes}m`;
+  return `Next payout in ${minutes}m`;
+}
+
+function salaryPaidRecently(wallet) {
+  const lastPayoutAt = wallet?.salary?.lastPayoutAt;
+  if (!lastPayoutAt) return false;
+  const last = new Date(lastPayoutAt).getTime();
+  if (Number.isNaN(last) || Date.now() - last > 10 * 60 * 1000) return false;
+  return (wallet.transactions || []).some((transaction) => (
+    transaction.type === 'salary'
+    && new Date(transaction.createdAt).getTime() >= last - 60_000
+  ));
+}
+
+function animateWalletAmount(element, nextValue, { prefix = 'C$', duration = 700 } = {}) {
+  if (!element) return;
+  const target = Math.max(0, Math.trunc(Number(nextValue) || 0));
+  const current = Math.max(0, Math.trunc(Number(String(element.dataset.amount || '0').replace(/\D/g, '')) || 0));
+  if (current === target) {
+    element.textContent = `${prefix}${target.toLocaleString()}`;
+    element.dataset.amount = String(target);
+    return;
+  }
+  const start = performance.now();
+  const step = (now) => {
+    const progress = Math.min(1, (now - start) / duration);
+    const eased = 1 - ((1 - progress) ** 3);
+    const value = Math.round(current + ((target - current) * eased));
+    element.textContent = `${prefix}${value.toLocaleString()}`;
+    if (progress < 1) requestAnimationFrame(step);
+    else {
+      element.textContent = `${prefix}${target.toLocaleString()}`;
+      element.dataset.amount = String(target);
+    }
+  };
+  requestAnimationFrame(step);
+}
+
+function startWalletSalaryCountdown(salary) {
+  if (walletSalaryCountdownTimer) window.clearInterval(walletSalaryCountdownTimer);
+  const tick = () => {
+    const copy = salaryCountdownCopy(salary?.nextPayoutAt);
+    document.querySelectorAll('[data-wallet-salary-countdown], [data-wallet-salary-overview-countdown]').forEach((element) => {
+      element.textContent = copy;
+    });
+  };
+  tick();
+  walletSalaryCountdownTimer = window.setInterval(tick, 30_000);
+}
+
+function renderWalletSalary(wallet) {
+  const salary = wallet?.salary;
+  const overview = document.querySelector('[data-wallet-salary-overview]');
+  const overviewCopy = document.querySelector('[data-wallet-salary-overview-copy]');
+  const overviewTotal = document.querySelector('[data-wallet-salary-overview-total]');
+  const salaryCopy = document.querySelector('[data-wallet-salary-copy]');
+  const salaryTotal = document.querySelector('[data-wallet-salary-total]');
+  const salaryStatus = document.querySelector('[data-wallet-salary-status]');
+  const salaryList = document.querySelector('[data-wallet-salary-list]');
+  const salaryCard = document.querySelector('[data-wallet-salary-card]');
+
+  if (!salary) {
+    overview?.setAttribute('hidden', '');
+    if (salaryList) salaryList.innerHTML = '<p class="wallet-empty">Department salaries are not configured yet.</p>';
+    if (salaryStatus) {
+      salaryStatus.dataset.tone = 'wait';
+      salaryStatus.textContent = 'Department salaries are not configured yet.';
+    }
+    return;
+  }
+
+  const departments = Array.isArray(salary.departments) ? salary.departments : [];
+  const eligible = departments.filter((department) => department.eligible);
+  const weeklyTotal = Number(salary.weeklyTotal || 0);
+  const configured = departments.length > 0;
+  const paidNow = salaryPaidRecently(wallet);
+
+  if (overview) {
+    if (configured) overview.removeAttribute('hidden');
+    else overview.setAttribute('hidden', '');
+  }
+
+  const scheduleLabel = `${SALARY_WEEKDAY_LABELS[salary.weekday] || 'Sunday'} ${salary.time || '00:00'} ET`;
+  const overviewText = eligible.length
+    ? `You qualify in ${eligible.length} department${eligible.length === 1 ? '' : 's'} · ${scheduleLabel}.`
+    : configured
+      ? `No employee roles detected yet · payouts run ${scheduleLabel}.`
+      : 'Department salaries will appear here once configured.';
+  if (overviewCopy) overviewCopy.textContent = overviewText;
+  if (salaryCopy) salaryCopy.textContent = overviewText;
+
+  if (salaryTotal) {
+    if (paidNow || lastWalletSalaryTotal == null || lastWalletSalaryTotal !== weeklyTotal) {
+      animateWalletAmount(salaryTotal, weeklyTotal);
+    } else {
+      salaryTotal.textContent = formatCredits(weeklyTotal);
+      salaryTotal.dataset.amount = String(weeklyTotal);
+    }
+  }
+  if (overviewTotal) {
+    if (paidNow || lastWalletSalaryTotal == null || lastWalletSalaryTotal !== weeklyTotal) {
+      animateWalletAmount(overviewTotal, weeklyTotal);
+    } else {
+      overviewTotal.textContent = formatCredits(weeklyTotal);
+      overviewTotal.dataset.amount = String(weeklyTotal);
+    }
+  }
+  lastWalletSalaryTotal = weeklyTotal;
+
+  if (salaryCard) {
+    salaryCard.classList.toggle('wallet-salary-paid', paidNow);
+    if (paidNow) {
+      window.setTimeout(() => salaryCard.classList.remove('wallet-salary-paid'), 2400);
+    }
+  }
+
+  startWalletSalaryCountdown(salary);
+
+  if (salaryStatus) {
+    if (paidNow) {
+      salaryStatus.dataset.tone = 'ok';
+      salaryStatus.textContent = `This week’s salary landed · ${formatCredits(weeklyTotal)} from ${eligible.length} department${eligible.length === 1 ? '' : 's'}.`;
+    } else if (eligible.length) {
+      salaryStatus.dataset.tone = 'ok';
+      salaryStatus.textContent = `You’re eligible for ${formatCredits(weeklyTotal)} each week across ${eligible.length} department${eligible.length === 1 ? '' : 's'}.`;
+    } else if (configured) {
+      salaryStatus.dataset.tone = 'wait';
+      salaryStatus.textContent = 'Join a department Discord and hold its employee role to qualify for weekly pay.';
+    } else {
+      salaryStatus.dataset.tone = 'wait';
+      salaryStatus.textContent = 'Department salaries are not configured yet.';
+    }
+  }
+
+  if (salaryList) {
+    if (!departments.length) {
+      salaryList.innerHTML = '<p class="wallet-empty">No departments are configured yet.</p>';
+      return;
+    }
+    salaryList.innerHTML = departments.map((department, index) => {
+      const eligibleClass = department.eligible ? 'is-eligible' : '';
+      const status = department.eligible
+        ? 'Eligible this week'
+        : department.botInGuild === false
+          ? 'Bot not in server'
+          : 'Employee role required';
+      return `<article class="wallet-salary-row ${eligibleClass}" style="--salary-delay:${index * 70}ms">
+        <div>
+          <b>${escapeHtml(department.name)}</b>
+          <small>${escapeHtml(status)} · ${escapeHtml(formatCredits(department.weeklyAmount))}</small>
+        </div>
+        <strong>${department.eligible ? formatCredits(department.weeklyAmount) : '—'}</strong>
+      </article>`;
+    }).join('');
   }
 }
 
@@ -5136,6 +5309,7 @@ function renderWallet(wallet) {
   }
   renderWalletStore();
   renderWalletBoost(wallet);
+  renderWalletSalary(wallet);
   renderWalletPending(wallet.pendingTransfers || []);
   const transactions = Array.isArray(wallet.transactions) ? wallet.transactions : [];
   if (count) count.textContent = String(transactions.length);
@@ -9082,6 +9256,10 @@ document.querySelector('[data-wallet-transfer-form]')?.addEventListener('submit'
 
 document.querySelectorAll('[data-wallet-tab]').forEach((button) => {
   button.addEventListener('click', () => setWalletTab(button.dataset.walletTab || 'home'));
+});
+
+document.querySelector('[data-wallet-salary-open]')?.addEventListener('click', () => {
+  setWalletTab('salary');
 });
 
 document.querySelectorAll('[data-ad-tab]').forEach((button) => {

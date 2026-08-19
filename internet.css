@@ -6293,7 +6293,7 @@ html.pref-reduce-motion *::after {
   top: 0;
   z-index: 12;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   width: 100%;
   margin: 0 0 14px;
   border: 1px solid rgba(180, 190, 205, .14);
@@ -6318,6 +6318,117 @@ html.pref-reduce-motion *::after {
 @media (max-width: 720px) {
   .wallet-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .wallet-tabs button { font-size: 12px; padding: 12px 6px; }
+}
+.wallet-salary-overview,
+.wallet-salary-card {
+  display: grid;
+  gap: 14px;
+}
+.wallet-salary-overview-meta,
+.wallet-salary-hero {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.wallet-salary-overview-meta strong,
+.wallet-salary-hero strong {
+  display: block;
+  margin-top: 4px;
+  color: #fff;
+  font-size: clamp(28px, 6vw, 36px);
+  letter-spacing: -.05em;
+}
+.wallet-salary-overview-meta span,
+.wallet-salary-hero span {
+  display: block;
+  color: #8fa3bd;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.wallet-salary-open {
+  justify-self: start;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid rgba(106, 168, 255, .24);
+  border-radius: 999px;
+  color: #eef6ff;
+  background: rgba(61, 141, 255, .12);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform .22s ease, border-color .22s ease, background .22s ease;
+}
+.wallet-salary-open:hover {
+  transform: translateY(-1px);
+  border-color: rgba(134, 184, 255, .55);
+  background: rgba(61, 141, 255, .2);
+}
+.wallet-salary-list {
+  display: grid;
+  gap: 10px;
+}
+.wallet-salary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(180, 190, 205, .12);
+  border-radius: 14px;
+  background: rgba(6, 12, 22, .55);
+  opacity: 0;
+  transform: translateY(8px);
+  animation: walletSalaryRowIn .45s ease forwards;
+  animation-delay: var(--salary-delay, 0ms);
+}
+.wallet-salary-row b {
+  display: block;
+  color: #eef5ff;
+  font-size: 14px;
+}
+.wallet-salary-row small {
+  display: block;
+  margin-top: 4px;
+  color: #8295b2;
+  font-size: 11px;
+}
+.wallet-salary-row strong {
+  color: #8ea0b8;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.wallet-salary-row.is-eligible {
+  border-color: rgba(93, 206, 160, .28);
+  background: linear-gradient(145deg, rgba(20, 58, 44, .34), rgba(6, 12, 22, .72));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+.wallet-salary-row.is-eligible strong {
+  color: #67efb8;
+}
+.wallet-salary-card.wallet-salary-enter {
+  animation: walletSalaryCardIn .42s ease;
+}
+.wallet-salary-card.wallet-salary-paid {
+  animation: walletSalaryPulse 1.4s ease;
+}
+@keyframes walletSalaryRowIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes walletSalaryCardIn {
+  from { opacity: .72; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes walletSalaryPulse {
+  0%, 100% { box-shadow: none; }
+  35% { box-shadow: 0 0 0 1px rgba(93, 206, 160, .28), 0 18px 40px rgba(20, 58, 44, .28); }
+}
+@media (max-width: 720px) {
+  .wallet-salary-overview-meta,
+  .wallet-salary-hero { grid-template-columns: 1fr; }
 }
 .wallet-pair {
   display: grid;

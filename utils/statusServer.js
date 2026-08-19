@@ -21,6 +21,15 @@ import {
   rolesAllowGovernmentReview,
 } from './governmentAccess.js';
 import { logGovernmentFine } from './governmentLog.js';
+import {
+  buildOwnerSalaryStatus,
+  buildSalaryWalletView,
+  getDepartmentSalaryConfig,
+  publicSalaryDepartments,
+  publicSalarySchedule,
+  runDepartmentSalaryPayout,
+  saveDepartmentSalaryConfig,
+} from './departmentSalary.js';
 
 const json = (response, statusCode, body) => {
   response.writeHead(statusCode, {
@@ -1009,6 +1018,8 @@ export function startStatusServer(client, config) {
 
         if (body.action === 'wallet') {
           const wallet = walletSnapshot(store, body.actor);
+          const salaryConfig = await getDepartmentSalaryConfig();
+          wallet.salary = await buildSalaryWalletView(client, body.actor?.id, salaryConfig);
           await saveInternetStore(store);
           return json(response, 200, { wallet });
         }
@@ -1570,18 +1581,65 @@ export function startStatusServer(client, config) {
     if (url.pathname === '/api/config') {
       try {
         if (request.method === 'GET') {
-          const [settings, guilds] = await Promise.all([getOwnerConfig(), buildDiscordCatalog(client)]);
-          return json(response, 200, { settings, guilds });
+          const [settings, guilds, salaryConfig, salaryStatus] = await Promise.all([
+            getOwnerConfig(),
+            buildDiscordCatalog(client),
+            getDepartmentSalaryConfig(),
+            buildOwnerSalaryStatus(client),
+          ]);
+          return json(response, 200, {
+            settings,
+            guilds,
+            salary: {
+              config: {
+                ...publicSalarySchedule(salaryConfig),
+                departments: publicSalaryDepartments(salaryConfig),
+              },
+              status: salaryStatus,
+            },
+          });
         }
         if (request.method === 'PUT') {
-          const settings = await saveOwnerConfig(await readJson(request));
+          const body = await readJson(request);
+          if (body?.salaryRunNow === true) {
+            const result = await runDepartmentSalaryPayout(client, { force: true });
+            const salaryConfig = await getDepartmentSalaryConfig();
+            const salaryStatus = await buildOwnerSalaryStatus(client, salaryConfig);
+            return json(response, 200, {
+              ok: true,
+              salaryRun: result,
+              salary: {
+                config: {
+                  ...publicSalarySchedule(salaryConfig),
+                  departments: publicSalaryDepartments(salaryConfig),
+                },
+                status: salaryStatus,
+              },
+            });
+          }
+          if (body?.salary && typeof body.salary === 'object') {
+            const salary = await saveDepartmentSalaryConfig(body.salary, { preservePayoutMeta: true });
+            const salaryStatus = await buildOwnerSalaryStatus(client, salary);
+            logger.info('Owner panel department salary configuration updated.');
+            return json(response, 200, {
+              ok: true,
+              salary: {
+                config: {
+                  ...publicSalarySchedule(salary),
+                  departments: publicSalaryDepartments(salary),
+                },
+                status: salaryStatus,
+              },
+            });
+          }
+          const settings = await saveOwnerConfig(body);
           logger.info('Owner panel configuration updated.');
           return json(response, 200, { ok: true, settings });
         }
         return json(response, 405, { error: 'Method not allowed' });
       } catch (error) {
         logger.error('Owner configuration request failed', error);
-        return json(response, 400, { error: 'Could not update configuration' });
+        return json(response, 400, { error: error.message || 'Could not update configuration' });
       }
     }
 

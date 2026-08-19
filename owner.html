@@ -55,6 +55,25 @@
           <label>Command prefix<input name="prefix" maxlength="3" value="-" /></label>
         </section>
 
+        <section class="owner-card owner-card-salary" data-owner-salary-section>
+          <div class="owner-salary-intro">
+            <p class="owner-step">05</p>
+            <h2>Department salaries</h2>
+            <p>Invite the bot to each department Discord, pick the employee role, and set the weekly Clearwater Credits payout. Members stack pay for every department they qualify in.</p>
+            <p class="owner-salary-meta" data-owner-salary-meta>Loading salary schedule…</p>
+          </div>
+          <div class="owner-salary-schedule">
+            <label>Payout day<select name="salaryWeekday" data-salary-weekday><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select></label>
+            <label>Payout time (ET)<input name="salaryTime" type="time" data-salary-time value="00:00" /></label>
+          </div>
+          <div class="owner-salary-rows" data-owner-salary-rows></div>
+          <div class="owner-salary-actions">
+            <button class="button owner-salary-add" type="button" data-owner-salary-add>Add department</button>
+            <button class="button owner-salary-run" type="button" data-owner-salary-run>Run payout now</button>
+            <p class="owner-salary-run-status" data-owner-salary-run-status role="status"></p>
+          </div>
+        </section>
+
         <div class="owner-savebar">
           <p data-save-status>Changes are saved directly to the running bot.</p>
           <button class="button button-primary" type="submit">Save configuration</button>
