@@ -14,7 +14,7 @@ async function readBody(request) {
   let raw = '';
   for await (const chunk of request) {
     raw += chunk;
-    if (raw.length > 8192) throw new Error('Request body too large');
+    if (raw.length > 200_000) throw new Error('Request body too large');
   }
   return raw ? JSON.parse(raw) : {};
 }
@@ -42,7 +42,7 @@ export default async function handler(request, response) {
         ...(request.method === 'PUT' ? { 'Content-Type': 'application/json' } : {}),
       },
       body: request.method === 'PUT' ? JSON.stringify(await readBody(request)) : undefined,
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(request.method === 'PUT' ? 45_000 : 12_000),
     });
     const result = await botResponse.json().catch(() => ({}));
     if (!botResponse.ok) return sendJson(response, 502, { error: result.error || 'Bot rejected the request' });

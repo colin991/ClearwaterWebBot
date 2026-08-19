@@ -479,16 +479,45 @@ html.leaving-for-internet body {
 .owner-hero h1 { margin: 0; font-size: clamp(54px, 9vw, 96px); line-height: .92; letter-spacing: -.075em; }
 .owner-hero > p:last-child { max-width: 610px; margin: 24px 0 0; color: var(--muted); font-size: 16px; line-height: 1.7; }
 .owner-notice { padding: 22px; border: 1px solid var(--line); border-radius: 16px; color: var(--muted); background: rgba(10,17,28,.8); }
-.owner-notice[hidden], .owner-form[hidden] { display: none; }
+.owner-notice[hidden], .owner-form[hidden], .owner-tabs[hidden] { display: none; }
 .owner-notice a { color: var(--blue-light); text-decoration: underline; }
+.owner-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(420px, 100%);
+  margin: 0 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(6, 12, 20, .88);
+}
+.owner-tabs button {
+  min-height: 46px;
+  padding: 0 16px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  color: #8ea0b8;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.owner-tabs button:hover { background: rgba(255, 255, 255, .04); }
+.owner-tabs button.selected { color: #fff; border-color: #f4f7fb; }
 .owner-form { display: grid; gap: 14px; }
 .owner-card { display: grid; grid-template-columns: minmax(260px, 1.15fr) repeat(2, minmax(210px, .85fr)); gap: 28px; align-items: start; padding: 30px; border: 1px solid var(--line); border-radius: 20px; background: linear-gradient(145deg, rgba(13,23,36,.92), rgba(7,13,22,.88)); }
 .owner-card > div:first-child { grid-row: 1 / span 3; }
+.owner-card-salary > div:first-child { grid-row: auto; }
 .owner-card h2 { margin: 5px 0 9px; font-size: 22px; letter-spacing: -.035em; }
 .owner-card p:not(.owner-step) { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
 .owner-step { margin: 0; color: var(--blue-light); font-size: 10px; font-weight: 800; letter-spacing: .12em; }
 .owner-card label { position: relative; display: grid; gap: 8px; color: #c4d0df; font-size: 11px; font-weight: 700; letter-spacing: .02em; }
-.owner-card select, .owner-card input { width: 100%; min-height: 45px; padding: 0 13px; border: 1px solid rgba(151,170,198,.2); border-radius: 11px; outline: none; color: var(--text); background: #080f19; font: inherit; font-size: 12px; }
+.owner-card input[type="checkbox"] {
+  width: auto;
+  min-height: 18px;
+  padding: 0;
+}
 .owner-card select:focus, .owner-card input:focus { border-color: var(--blue-light); box-shadow: 0 0 0 3px rgba(232,237,245,.12); }
 .owner-card option { background: #080f19; }
 .field-hint { position: absolute; right: 13px; bottom: 15px; color: var(--muted-dark); font-size: 10px; pointer-events: none; }
@@ -548,11 +577,42 @@ html.leaving-for-internet body {
   color: #c4d0df;
   font-size: 11px;
 }
+.owner-salary-payroles {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+}
+.owner-salary-payroles-label {
+  margin: 4px 0 0 !important;
+  color: #c4d0df !important;
+  font-size: 11px !important;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.owner-salary-payrole {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(210px, 1.2fr) minmax(140px, .7fr) auto;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid rgba(151,170,198,.14);
+  border-radius: 12px;
+  background: rgba(8, 14, 24, .65);
+}
+.owner-salary-payrole .owner-salary-remove {
+  grid-column: auto;
+  justify-self: start;
+  min-height: 36px;
+}
 .owner-salary-row-status {
   grid-column: 1 / -1;
   margin: 0;
   color: #93a8c3;
   font-size: 11px;
+}
+.owner-salary-row [data-owner-salary-add-role] {
+  grid-column: 1 / -1;
+  justify-self: start;
 }
 .owner-salary-remove {
   grid-column: 1 / -1;
@@ -604,7 +664,7 @@ html.leaving-for-internet body {
   .owner-hero { padding: 64px 4px 40px; }
   .owner-card, .owner-card-small, .owner-card-salary { grid-template-columns: 1fr; padding: 22px; }
   .owner-card > div:first-child { grid-column: auto; }
-  .owner-salary-row, .owner-salary-schedule { grid-template-columns: 1fr; }
+  .owner-salary-row, .owner-salary-schedule, .owner-salary-payrole { grid-template-columns: 1fr; }
   .owner-savebar { align-items: stretch; flex-direction: column; }
   .owner-savebar .button { width: 100%; }
 }

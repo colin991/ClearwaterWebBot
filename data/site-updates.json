@@ -4,7 +4,7 @@
     {
       "id": "2026-08-18-department-weekly-salaries",
       "title": "Department weekly salaries",
-      "summary": "Ownership can configure department Discord servers, employee roles, and weekly Clearwater Credits payouts in the Owner panel. Eligible members see their stacked weekly pay on the Wallet Salary tab, and the bot pays automatically on the schedule you set. Each payout also DMs a wallet update with the department name, amount, and new balance.",
+      "summary": "Ownership can configure department Discord servers, paid roles, and weekly Clearwater Credits payouts on a dedicated Owner panel Salaries tab. Eligible members see their stacked weekly pay on the Wallet Salary tab. Each department can pay different amounts per Discord role, and payouts also DM a wallet update.",
       "updatedBy": "justawacko",
       "createdAt": "2026-08-19T03:30:00.000Z"
     },

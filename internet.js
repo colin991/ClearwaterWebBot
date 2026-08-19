@@ -4395,7 +4395,7 @@ function renderWalletSalary(wallet) {
   const departments = Array.isArray(salary.departments) ? salary.departments : [];
   const eligible = departments.filter((department) => department.eligible);
   const weeklyTotal = Number(salary.weeklyTotal || 0);
-  const configured = departments.length > 0;
+  const configured = salary.configured === true || departments.length > 0;
   const paidNow = salaryPaidRecently(wallet);
 
   if (overview) {
@@ -4448,7 +4448,7 @@ function renderWalletSalary(wallet) {
       salaryStatus.textContent = `You’re eligible for ${formatCredits(weeklyTotal)} each week across ${eligible.length} department${eligible.length === 1 ? '' : 's'}.`;
     } else if (configured) {
       salaryStatus.dataset.tone = 'wait';
-      salaryStatus.textContent = 'Join a department Discord and hold its employee role to qualify for weekly pay.';
+      salaryStatus.textContent = 'Join a department Discord and hold a paid role to qualify for weekly pay.';
     } else {
       salaryStatus.dataset.tone = 'wait';
       salaryStatus.textContent = 'Department salaries are not configured yet.';
@@ -4462,11 +4462,12 @@ function renderWalletSalary(wallet) {
     }
     salaryList.innerHTML = departments.map((department, index) => {
       const eligibleClass = department.eligible ? 'is-eligible' : '';
+      const roleBit = department.roleLabel ? ` · ${department.roleLabel}` : '';
       const status = department.eligible
-        ? 'Eligible this week'
+        ? `Eligible this week${roleBit}`
         : department.botInGuild === false
           ? 'Bot not in server'
-          : 'Employee role required';
+          : 'Paid role required';
       return `<article class="wallet-salary-row ${eligibleClass}" style="--salary-delay:${index * 70}ms">
         <div>
           <b>${escapeHtml(department.name)}</b>

@@ -5,6 +5,7 @@ import {
   enabledSalaryDepartments,
   getDepartmentSalaryConfig,
   hasSalaryReceipt,
+  highestPayRoleForMember,
   isSalaryPayoutDue,
   publicSalaryDepartments,
   publicSalarySchedule,
@@ -24,13 +25,14 @@ function creditBalance(user) {
   return Math.trunc(Number(user?.credits) || 0);
 }
 
-function addSalaryTransaction(user, { amount, departmentName }) {
+function addSalaryTransaction(user, { amount, departmentName, roleLabel = '' }) {
   user.creditTransactions = Array.isArray(user.creditTransactions) ? user.creditTransactions : [];
+  const roleNote = roleLabel ? ` · ${String(roleLabel).slice(0, 80)}` : '';
   user.creditTransactions.unshift({
     id: randomUUID(),
     amount: Math.trunc(Number(amount) || 0),
     type: 'salary',
-    note: `Weekly salary · ${String(departmentName || 'Department').slice(0, 80)}`,
+    note: `Weekly salary · ${String(departmentName || 'Department').slice(0, 80)}${roleNote}`,
     actorName: 'Clearwater',
     createdAt: new Date().toISOString(),
     balanceAfter: creditBalance(user),
@@ -38,40 +40,50 @@ function addSalaryTransaction(user, { amount, departmentName }) {
   user.creditTransactions = user.creditTransactions.slice(0, 100);
 }
 
-async function memberHasEmployeeRole(client, department, discordId) {
-  if (!department?.guildId || !department?.employeeRoleId || !/^\d{16,22}$/.test(String(discordId || ''))) {
-    return { eligible: false, reason: 'missing-config' };
+async function memberPayMatch(client, department, discordId) {
+  if (!department?.guildId || !/^\d{16,22}$/.test(String(discordId || ''))) {
+    return { eligible: false, reason: 'missing-config', botInGuild: false, amount: 0, role: null };
   }
   const guild = client.guilds.cache.get(department.guildId)
     || await client.guilds.fetch(department.guildId).catch(() => null);
-  if (!guild) return { eligible: false, reason: 'guild-missing', botInGuild: false };
+  if (!guild) return { eligible: false, reason: 'guild-missing', botInGuild: false, amount: 0, role: null };
   const member = await guild.members.fetch(discordId).catch(() => null);
-  if (!member) return { eligible: false, reason: 'not-in-guild', botInGuild: true };
-  if (member.user?.bot) return { eligible: false, reason: 'bot', botInGuild: true };
+  if (!member) return { eligible: false, reason: 'not-in-guild', botInGuild: true, amount: 0, role: null };
+  if (member.user?.bot) return { eligible: false, reason: 'bot', botInGuild: true, amount: 0, role: null };
+  const role = highestPayRoleForMember(department, [...member.roles.cache.keys()]);
+  if (!role) return { eligible: false, reason: 'missing-role', botInGuild: true, amount: 0, role: null };
   return {
-    eligible: member.roles.cache.has(department.employeeRoleId),
-    reason: member.roles.cache.has(department.employeeRoleId) ? 'eligible' : 'missing-role',
+    eligible: true,
+    reason: 'eligible',
     botInGuild: true,
+    amount: role.amount,
+    role,
   };
 }
 
 export async function buildSalaryWalletView(client, actorId, config = null) {
   const salaryConfig = config || await getDepartmentSalaryConfig();
   const schedule = publicSalarySchedule(salaryConfig);
-  const departments = enabledSalaryDepartments(salaryConfig);
+  const configured = (salaryConfig.departments || []).length > 0;
+  const departments = (salaryConfig.departments || []).filter((department) => department.guildId || department.name);
   const rows = [];
   let weeklyTotal = 0;
 
   for (const department of departments) {
-    const check = client
-      ? await memberHasEmployeeRole(client, department, actorId)
-      : { eligible: false, reason: 'offline', botInGuild: false };
+    const payable = department.enabled && (department.roles || []).some((role) => role.roleId && role.amount > 0);
+    const check = client && payable
+      ? await memberPayMatch(client, department, actorId)
+      : { eligible: false, reason: payable ? 'offline' : 'disabled', botInGuild: true, amount: 0, role: null };
     const eligible = check.eligible === true;
-    if (eligible) weeklyTotal += department.weeklyAmount;
+    const weeklyAmount = eligible
+      ? check.amount
+      : Math.max(0, ...((department.roles || []).map((role) => role.amount || 0)));
+    if (eligible) weeklyTotal += check.amount;
     rows.push({
       id: department.id,
       name: department.name,
-      weeklyAmount: department.weeklyAmount,
+      weeklyAmount,
+      roleLabel: check.role?.label || '',
       eligible,
       payMode: department.payMode,
       botInGuild: check.botInGuild !== false,
@@ -80,6 +92,7 @@ export async function buildSalaryWalletView(client, actorId, config = null) {
   }
 
   return {
+    configured,
     weeklyTotal,
     nextPayoutAt: schedule.nextPayoutAt,
     lastPayoutAt: schedule.lastPayoutAt,
@@ -110,28 +123,31 @@ export async function buildOwnerSalaryStatus(client, config = null) {
   };
 }
 
-async function payMemberSalary(client, store, { discordId, department, weekKey, config, walletUrl }) {
+async function payMemberSalary(client, store, { discordId, department, weekKey, config, walletUrl, amount, roleLabel = '' }) {
   if (hasSalaryReceipt(config, weekKey, department.id, discordId)) {
     return { paid: false, skipped: true, reason: 'already-paid' };
   }
+  const payAmount = Math.trunc(Number(amount) || 0);
+  if (payAmount <= 0) return { paid: false, skipped: true, reason: 'zero-amount' };
   const storeUser = upsertInternetUser(store, { id: discordId });
-  storeUser.credits = creditBalance(storeUser) + department.weeklyAmount;
+  storeUser.credits = creditBalance(storeUser) + payAmount;
   addSalaryTransaction(storeUser, {
-    amount: department.weeklyAmount,
+    amount: payAmount,
     departmentName: department.name,
+    roleLabel,
   });
   rememberSalaryReceipt(config, weekKey, department.id, discordId);
   addInternetLog(
     store,
-    `${department.name}: paid C$${department.weeklyAmount} weekly salary to ${storeUser.displayName || 'a member'}.`,
+    `${department.name}: paid C$${payAmount} weekly salary to ${storeUser.displayName || 'a member'}.`,
   );
   void sendSalaryPaidDm(client, discordId, {
-    amount: department.weeklyAmount,
+    amount: payAmount,
     departmentName: department.name,
     balance: creditBalance(storeUser),
     walletUrl,
   });
-  return { paid: true, amount: department.weeklyAmount };
+  return { paid: true, amount: payAmount };
 }
 
 export async function runDepartmentSalaryPayout(client, { force = false } = {}) {
@@ -207,7 +223,8 @@ export async function runDepartmentSalaryPayout(client, { force = false } = {}) 
     let departmentPaid = 0;
     for (const member of guild.members.cache.values()) {
       if (member.user?.bot) continue;
-      if (!member.roles.cache.has(department.employeeRoleId)) continue;
+      const match = highestPayRoleForMember(department, [...member.roles.cache.keys()]);
+      if (!match) continue;
       try {
         const result = await payMemberSalary(client, store, {
           discordId: member.id,
@@ -215,6 +232,8 @@ export async function runDepartmentSalaryPayout(client, { force = false } = {}) 
           weekKey,
           config,
           walletUrl,
+          amount: match.amount,
+          roleLabel: match.label,
         });
         if (result.paid) {
           paidMembers += 1;

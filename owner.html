@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" href="/assets/clearwater-logo.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=20260818-salary-tab" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260815-vpn-block"></script>
   </head>
@@ -23,12 +23,17 @@
       <section class="owner-hero">
         <p class="kicker"><span></span> Private controls</p>
         <h1>Owner panel</h1>
-        <p>Choose the two Discord servers, automatic roles, and channels used by the Clearwater bot.</p>
+        <p>Configure Discord servers, automatic roles, and weekly department salaries from separate tabs.</p>
       </section>
 
       <div class="owner-notice" data-owner-notice role="status">Checking owner access…</div>
 
-      <form class="owner-form" data-owner-form hidden>
+      <nav class="owner-tabs" data-owner-tabs hidden aria-label="Owner panel sections">
+        <button type="button" class="selected" data-owner-tab="bot">Bot</button>
+        <button type="button" data-owner-tab="salaries">Salaries</button>
+      </nav>
+
+      <form class="owner-form" data-owner-form data-owner-panel="bot" hidden>
         <section class="owner-card">
           <div><p class="owner-step">01</p><h2>Discord servers</h2><p>Identify your community server and private staff server.</p></div>
           <label>Main server<select name="mainGuildId" data-guild-select><option value="">Choose a server</option></select></label>
@@ -55,16 +60,23 @@
           <label>Command prefix<input name="prefix" maxlength="3" value="-" /></label>
         </section>
 
-        <section class="owner-card owner-card-salary" data-owner-salary-section>
+        <div class="owner-savebar">
+          <p data-save-status>Changes are saved directly to the running bot.</p>
+          <button class="button button-primary" type="submit">Save bot configuration</button>
+        </div>
+      </form>
+
+      <form class="owner-form owner-salary-form" data-owner-salary-form data-owner-panel="salaries" hidden>
+        <section class="owner-card owner-card-salary">
           <div class="owner-salary-intro">
-            <p class="owner-step">05</p>
+            <p class="owner-step">01</p>
             <h2>Department salaries</h2>
-            <p>Invite the bot to each department Discord, pick the employee role, and set the weekly Clearwater Credits payout. Members stack pay for every department they qualify in.</p>
+            <p>Invite the bot to each department Discord, then set weekly pay per role. A member is paid the highest matching role in each department they qualify for. Save this tab separately from bot settings.</p>
             <p class="owner-salary-meta" data-owner-salary-meta>Loading salary schedule…</p>
           </div>
           <div class="owner-salary-schedule">
-            <label>Payout day<select name="salaryWeekday" data-salary-weekday><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select></label>
-            <label>Payout time (ET)<input name="salaryTime" type="time" data-salary-time value="00:00" /></label>
+            <label>Payout day<select data-salary-weekday><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select></label>
+            <label>Payout time (ET)<input data-salary-time type="time" value="00:00" /></label>
           </div>
           <div class="owner-salary-rows" data-owner-salary-rows></div>
           <div class="owner-salary-actions">
@@ -75,11 +87,11 @@
         </section>
 
         <div class="owner-savebar">
-          <p data-save-status>Changes are saved directly to the running bot.</p>
-          <button class="button button-primary" type="submit">Save configuration</button>
+          <p data-owner-salary-save-status>Salaries save to the bot host, not the Bot tab.</p>
+          <button class="button button-primary" type="submit" data-owner-salary-save>Save salaries</button>
         </div>
       </form>
     </main>
-    <script src="owner.js"></script>
+    <script src="owner.js?v=20260818-salary-tab"></script>
   </body>
 </html>

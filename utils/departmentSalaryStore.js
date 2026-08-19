@@ -33,14 +33,54 @@ function parseTime(value) {
   return { hour, minute };
 }
 
+function clampAmount(value) {
+  const amount = Math.trunc(Number(value ?? 0));
+  return Number.isSafeInteger(amount) && amount >= 0 ? Math.min(amount, 1_000_000) : 0;
+}
+
+function normalizePayRole(entry = {}, index = 0) {
+  const roleId = String(entry.roleId || entry.employeeRoleId || entry.id || '').trim();
+  return {
+    id: String(entry.id || randomUUID()),
+    roleId: /^\d{16,22}$/.test(roleId) ? roleId : '',
+    label: String(entry.label || entry.name || `Role ${index + 1}`).trim().slice(0, 80),
+    amount: clampAmount(entry.amount ?? entry.weeklyAmount),
+  };
+}
+
+function normalizePayRoles(entry = {}) {
+  if (Array.isArray(entry.roles) && entry.roles.length) {
+    return entry.roles.map((role, index) => normalizePayRole(role, index));
+  }
+  const legacyRoleId = String(entry.employeeRoleId || '').trim();
+  if (/^\d{16,22}$/.test(legacyRoleId)) {
+    return [normalizePayRole({
+      roleId: legacyRoleId,
+      amount: entry.weeklyAmount ?? entry.amount ?? 0,
+      label: entry.employeeRoleName || 'Employee',
+    }, 0)];
+  }
+  return [];
+}
+
+export function highestPayRoleForMember(department, roleIds = []) {
+  const held = new Set((Array.isArray(roleIds) ? roleIds : []).map(String));
+  const matches = (department?.roles || [])
+    .filter((role) => role.roleId && role.amount > 0 && held.has(String(role.roleId)))
+    .sort((a, b) => b.amount - a.amount);
+  return matches[0] || null;
+}
+
 function normalizeDepartment(entry = {}, index = 0) {
-  const amount = Math.trunc(Number(entry.weeklyAmount ?? entry.amount ?? 0));
+  const roles = normalizePayRoles(entry);
+  const top = [...roles].sort((a, b) => b.amount - a.amount)[0] || null;
   return {
     id: String(entry.id || randomUUID()),
     name: String(entry.name || `Department ${index + 1}`).trim().slice(0, 80),
     guildId: /^\d{16,22}$/.test(String(entry.guildId || '')) ? String(entry.guildId) : '',
-    employeeRoleId: /^\d{16,22}$/.test(String(entry.employeeRoleId || '')) ? String(entry.employeeRoleId) : '',
-    weeklyAmount: Number.isSafeInteger(amount) && amount >= 0 ? Math.min(amount, 1_000_000) : 0,
+    roles,
+    employeeRoleId: top?.roleId || '',
+    weeklyAmount: top?.amount || 0,
     enabled: entry.enabled !== false,
     payMode: entry.payMode === 'hours' ? 'hours' : 'flat',
   };
@@ -195,8 +235,7 @@ export function enabledSalaryDepartments(config = defaultDepartmentSalaryConfig)
   return (config.departments || []).filter((department) => (
     department.enabled
     && department.guildId
-    && department.employeeRoleId
-    && department.weeklyAmount > 0
+    && (department.roles || []).some((role) => role.roleId && role.amount > 0)
   ));
 }
 
@@ -217,6 +256,7 @@ export function publicSalaryDepartments(config = defaultDepartmentSalaryConfig) 
     id: department.id,
     name: department.name,
     guildId: department.guildId,
+    roles: (department.roles || []).map((role) => ({ ...role })),
     employeeRoleId: department.employeeRoleId,
     weeklyAmount: department.weeklyAmount,
     enabled: department.enabled,
