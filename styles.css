@@ -953,6 +953,9 @@ body.home-stage {
   text-transform: uppercase;
   animation: stageRise .9s var(--ease) .12s both;
 }
+.stage-stats span {
+  position: relative;
+}
 .stage-stats strong {
   color: #fff;
   font-weight: 800;

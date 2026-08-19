@@ -20,19 +20,32 @@ const erlcQueue = document.querySelectorAll('[data-erlc-queue]');
 let homepageInternetReady = false;
 let homepageSignedIn = false;
 
+const setLiveNumber = (element, display, numeric, offline) => {
+  if (element.hasAttribute('data-aui-live')) {
+    element.dataset.auiValue = offline ? '' : String(numeric);
+    element.dataset.auiOffline = offline ? '1' : '';
+    element.dispatchEvent(new Event('aui-value'));
+    if (!element.classList.contains('aui-live-source')) {
+      element.textContent = display;
+    }
+    return;
+  }
+  element.textContent = display;
+};
+
 const setErlcNumbers = (status) => {
   if (!status?.online) {
-    erlcCurrent.forEach((element) => { element.textContent = '—'; });
-    erlcMax.forEach((element) => { element.textContent = '—'; });
-    erlcQueue.forEach((element) => { element.textContent = '—'; });
+    erlcCurrent.forEach((element) => { setLiveNumber(element, '—', 0, true); });
+    erlcMax.forEach((element) => { setLiveNumber(element, '—', 0, true); });
+    erlcQueue.forEach((element) => { setLiveNumber(element, '—', 0, true); });
     return;
   }
   const currentPlayers = Number.isInteger(status?.currentPlayers) ? status.currentPlayers : 0;
   const maxPlayers = Number.isInteger(status?.maxPlayers) ? status.maxPlayers : 50;
   const queue = Number.isInteger(status?.queue) ? status.queue : 0;
-  erlcCurrent.forEach((element) => { element.textContent = currentPlayers.toLocaleString(); });
-  erlcMax.forEach((element) => { element.textContent = maxPlayers.toLocaleString(); });
-  erlcQueue.forEach((element) => { element.textContent = queue.toLocaleString(); });
+  erlcCurrent.forEach((element) => { setLiveNumber(element, currentPlayers.toLocaleString(), currentPlayers, false); });
+  erlcMax.forEach((element) => { setLiveNumber(element, maxPlayers.toLocaleString(), maxPlayers, false); });
+  erlcQueue.forEach((element) => { setLiveNumber(element, queue.toLocaleString(), queue, false); });
 };
 
 const loadDirectErlcStatus = async () => {

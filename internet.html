@@ -16,7 +16,8 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/assets/icon-512.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="internet.css?v=20260818-salary-roles" />
+    <link rel="stylesheet" href="internet.css?v=20260819-animate-ui" />
+    <link rel="stylesheet" href="assets/animate-ui/mount.css?v=20260819-animate-ui" />
     <style>html:not(.site-unlocked):not(.site-public) body { visibility: hidden; }</style>
     <script src="site-gate.js?v=20260815-vpn-block"></script>
   </head>
@@ -163,7 +164,7 @@
             <div class="wallet-panel" data-wallet-panel="home">
               <article class="wallet-balance-card">
                 <div>
-                  <p class="wallet-kicker">Balance</p>
+                  <p class="wallet-kicker" data-aui="wallet-kicker">Balance</p>
                   <strong data-wallet-balance>C$0</strong>
                   <small>Clearwater credits</small>
                 </div>
@@ -173,7 +174,7 @@
               </article>
               <article class="wallet-card wallet-salary-overview" data-wallet-salary-overview hidden>
                 <div class="wallet-card-copy">
-                  <p class="wallet-kicker">Department salary</p>
+                  <p class="wallet-kicker" data-aui="wallet-kicker">Department salary</p>
                   <h2>Weekly pay</h2>
                   <p data-wallet-salary-overview-copy>Department employee roles stack each week.</p>
                 </div>
@@ -204,7 +205,7 @@
             <div class="wallet-panel" data-wallet-panel="salary" hidden>
               <article class="wallet-card wallet-salary-card" data-wallet-salary-card>
                 <div class="wallet-card-copy">
-                  <p class="wallet-kicker">Department salary</p>
+                  <p class="wallet-kicker" data-aui="wallet-kicker">Department salary</p>
                   <h2>Weekly Clearwater pay</h2>
                   <p data-wallet-salary-copy>Hold the employee role in a department Discord to qualify for that unit’s weekly payout.</p>
                 </div>
@@ -801,5 +802,6 @@
     <div class="repost-popup" data-repost-popup hidden><button type="button" data-repost-choice="repost">Repost</button><button type="button" data-repost-choice="quote">Quote</button></div>
     <script src="assets/vercel-blob-client.js?v=20260811-reels-2gb"></script>
     <script src="internet.js?v=20260818-salary-roles"></script>
+    <script src="assets/animate-ui/mount.js?v=20260819-animate-ui"></script>
   </body>
 </html>

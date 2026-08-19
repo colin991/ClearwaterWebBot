@@ -5,6 +5,7 @@
 # Local tooling and dependencies
 /.vercel/
 /node_modules/
+/ui/node_modules/
 # Secrets
 .env
 .env.*

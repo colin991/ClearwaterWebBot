@@ -2,7 +2,12 @@
   "version": 1,
   "updates": [
     {
-      "id": "2026-08-18-department-weekly-salaries",
+      "id": "2026-08-19-animate-ui-motion",
+      "title": "Motion on Home, Docs, and Wallet",
+      "summary": "Home, Departments, Docs, and Wallet now use Animate UI motion for titles, numbers, buttons, and scroll progress, still on the existing dark Clearwater look.",
+      "updatedBy": "justawacko",
+      "createdAt": "2026-08-19T16:30:00.000Z"
+    },
       "title": "Department weekly salaries",
       "summary": "Ownership can configure department Discord servers, paid roles, and weekly Clearwater Credits payouts on a dedicated Owner panel Salaries tab. Eligible members see their stacked weekly pay on the Wallet Salary tab. Each department can pay different amounts per Discord role, and payouts also DM a wallet update.",
       "updatedBy": "justawacko",
