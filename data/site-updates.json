@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-22-discord-internet-moderation",
+      "title": "Discord Internet uploads and moderation",
+      "summary": "Clearwater Internet posts now accept image and GIF uploads from Discord, use the new Heart and chat emojis, and no longer show a report button. Automod holds go to a Discord staff review queue, and staff can use /internet panel to warn, mute, ban, or clear restrictions while affected users receive a DM.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-22T16:51:10.000Z"
+    },
+    {
       "id": "2026-08-21-discord-internet-panel",
       "title": "Clearwater Internet moves to Discord",
       "summary": "The new Internet Panel in Discord lets members publish forum posts, like and comment, view profiles, report or delete posts, edit profile settings, and manage notification preferences without using the website.",

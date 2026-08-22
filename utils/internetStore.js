@@ -478,7 +478,10 @@ function hostedMediaUrl(value) {
   try {
     const url = new URL(raw);
     if (url.protocol !== 'https:' || url.username || url.password) return '';
-    if (!/(^|\.)blob\.vercel-storage\.com$/i.test(url.hostname)) return '';
+    const isVercelBlob = /(^|\.)blob\.vercel-storage\.com$/i.test(url.hostname);
+    const isDiscordAttachment = /^(?:cdn|media)\.discordapp\.(?:com|net)$/i.test(url.hostname)
+      && url.pathname.startsWith('/attachments/');
+    if (!isVercelBlob && !isDiscordAttachment) return '';
     if (/["'()\\\s]/.test(raw)) return '';
     return url.href.slice(0, 500);
   } catch {
@@ -1970,7 +1973,7 @@ export function createInternetPost(store, user, content, media = {}) {
   assertCanPost(store, user, { reel: isReel });
   enforceAutomod(store, {
     actor: user,
-    kind: 'post',
+    kind: parentId ? 'comment' : 'post',
     content: [body, question, gifTitle, ...options].filter(Boolean).join('\n'),
     extra: {
       heldPayload: sanitizeHeldPayload({
@@ -1980,6 +1983,7 @@ export function createInternetPost(store, user, content, media = {}) {
         gifTitle: isGif ? gifTitle : '',
         imageUrl: isImage ? imageUrl : (hasReelPhotos ? slideshowUrls[0] : ''),
         quoteId: text(media?.quoteId, 80) || '',
+        parentId: parentId || '',
       }),
     },
   });
@@ -2388,6 +2392,7 @@ function sanitizeHeldPayload(payload) {
     imageUrl: hostedImage || '',
     hasImage: Boolean(hostedImage) || hadInlineImage,
     quoteId: text(payload.quoteId, 80) || '',
+    parentId: text(payload.parentId, 80) || '',
   };
   if (!next.content && !next.gifUrl && !next.imageUrl && !next.hasImage && !next.location && !next.quoteId) return null;
   return next;
@@ -2440,7 +2445,7 @@ function enforceAutomod(store, { actor, kind, content, extra = {} }) {
   if (!duplicate) {
     store.reports.unshift({
       id: randomUUID(),
-      kind: kind === 'message' ? 'message' : 'post',
+      kind: kind === 'message' ? 'message' : kind === 'comment' ? 'comment' : 'post',
       source: 'automod',
       postId: extra.postId || null,
       targetId: extra.targetId || null,
@@ -2491,7 +2496,7 @@ function releaseHeldInternetPost(store, report) {
     verified: author.verified === true,
     badges: withSiteBadges(author.badges, author),
     content: body,
-    parentId: null,
+    parentId: text(payload.parentId, 80) || null,
     quoteId: text(payload.quoteId, 80) || null,
     ...(isGif ? { gifUrl, gifTitle } : {}),
     ...(isImage ? { imageUrl } : {}),
@@ -2534,7 +2539,7 @@ export function reviewInternetReport(store, { reportId, decision, action, reason
   const reportRevert = { type: 'report', reportId: report.id };
   if (decision === 'deny') {
     let released = null;
-    if (report.source === 'automod' && report.kind === 'post' && !report.postId) {
+    if (report.source === 'automod' && ['post', 'comment'].includes(report.kind) && !report.postId) {
       released = releaseHeldInternetPost(store, report);
     }
     addInternetLog(store, report.source === 'automod'

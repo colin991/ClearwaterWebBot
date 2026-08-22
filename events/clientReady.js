@@ -2,6 +2,7 @@ import { ActivityType, Events } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { ensureNoticeChannel } from '../utils/noticeChannel.js';
 import { ensureInternetPanel } from '../utils/discordInternetPanel.js';
+import { ensureInternetAutomodQueue } from '../utils/discordInternetModeration.js';
 import { flushPendingUpdateLogs } from '../utils/updateLog.js';
 
 export default {
@@ -48,5 +49,11 @@ export default {
     setTimeout(() => {
       void postInternetPanel(1);
     }, 2000);
+
+    setTimeout(() => {
+      void ensureInternetAutomodQueue(client).catch((error) => {
+        logger.error('Could not prepare the Internet automod review queue', error);
+      });
+    }, 2500);
   },
 };

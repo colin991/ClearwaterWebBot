@@ -1,12 +1,14 @@
 import { Events, MessageFlags } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { handleDiscordInternetInteraction } from '../utils/discordInternetPanel.js';
+import { handleDiscordInternetModerationInteraction } from '../utils/discordInternetModeration.js';
 import { DISCORD_INTERNET_UNSUB_CUSTOM_ID } from '../utils/discordInternetNotify.js';
 import { readInternetStore, saveInternetStore, updateInternetPreference } from '../utils/internetStore.js';
 
 export default {
   name: Events.InteractionCreate,
   async execute(interaction, client) {
+    if (await handleDiscordInternetModerationInteraction(interaction)) return;
     if (await handleDiscordInternetInteraction(interaction, client)) return;
 
     if (interaction.isButton()) {

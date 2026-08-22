@@ -20,7 +20,6 @@ const INTERNET_EMOJI = '<:globeshield:1533214164955435240>';
 export const INTERNET_POST_LIKE_PREFIX = 'cw-internet-like:';
 export const INTERNET_POST_COMMENT_PREFIX = 'cw-internet-comment:';
 export const INTERNET_POST_PROFILE_PREFIX = 'cw-internet-profile:';
-export const INTERNET_POST_REPORT_PREFIX = 'cw-internet-report:';
 export const INTERNET_POST_DELETE_PREFIX = 'cw-internet-delete:';
 
 function isHttpsUrl(value) {
@@ -134,20 +133,16 @@ export function buildInternetPostPayload(post, store = null) {
       new ButtonBuilder()
         .setCustomId(`${INTERNET_POST_LIKE_PREFIX}${post.id}`)
         .setLabel(`Like${likes ? ` (${likes})` : ''}`)
-        .setEmoji('❤️')
+        .setEmoji({ id: '1517253647069614241', name: 'Heart' })
         .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId(`${INTERNET_POST_COMMENT_PREFIX}${post.id}`)
         .setLabel(`Comment${comments ? ` (${comments})` : ''}`)
-        .setEmoji('💬')
+        .setEmoji({ id: '1540761931797758013', name: 'chat' })
         .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId(`${INTERNET_POST_PROFILE_PREFIX}${post.authorId}`)
         .setLabel('Profile')
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`${INTERNET_POST_REPORT_PREFIX}${post.id}`)
-        .setLabel('Report')
         .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId(`${INTERNET_POST_DELETE_PREFIX}${post.id}`)
