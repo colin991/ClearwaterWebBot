@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-22-discord-internet-delete-permissions",
+      "title": "Internet post deletion permissions",
+      "summary": "Only a post's author or a Discord Administrator can use its Delete button. Deleting a forum post now removes the complete thread and its comments from the Internet channel.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-22T16:55:53.000Z"
+    },
+    {
       "id": "2026-08-22-discord-internet-moderation",
       "title": "Discord Internet uploads and moderation",
       "summary": "Clearwater Internet posts now accept image and GIF uploads from Discord, use the new Heart and chat emojis, and no longer show a report button. Automod holds go to a Discord staff review queue, and staff can use /internet panel to warn, mute, ban, or clear restrictions while affected users receive a DM.",

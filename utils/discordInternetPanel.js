@@ -9,6 +9,7 @@ import {
   MediaGalleryItemBuilder,
   MessageFlags,
   ModalBuilder,
+  PermissionFlagsBits,
   SeparatorBuilder,
   TextDisplayBuilder,
   TextInputBuilder,
@@ -37,7 +38,7 @@ import {
   requiredInternetForumTags,
 } from './discordInternetFeed.js';
 import { queueInternetAutomodReview } from './discordInternetModeration.js';
-import { internetActor, isInternetStaff, mutateDiscordInternetStore } from './discordInternetStore.js';
+import { internetActor, mutateDiscordInternetStore } from './discordInternetStore.js';
 import { logger } from './logger.js';
 import { v2Container, v2Message } from './v2Message.js';
 
@@ -55,8 +56,12 @@ const SETTINGS_MODAL_ID = 'cw-internet-settings-modal';
 const TOP_BANNER_URL = 'https://media.discordapp.net/attachments/1529616984755540088/1540518179158102066/Clearwater_banners_new_2.png?ex=6a8a3edb&is=6a88ed5b&hm=64d95c6a500832db72631b745e07c7c37f0c4688a129e930d87f54e552997841&=&format=webp&quality=lossless&width=512&height=161';
 const BOTTOM_BANNER_URL = 'https://media.discordapp.net/attachments/1529616984755540088/1530017826910507141/Clearwater_banners_new_10.png?ex=6a899e64&is=6a884ce4&hm=301f41ae6e9863723935b2641c3d1f583c45087e5311a80e5cd9348b140b59b3&=&format=webp&quality=lossless';
 
-function isOwnerInteraction(interaction, client) {
-  return isInternetStaff(interaction, client);
+function hasDiscordAdministrator(interaction) {
+  return interaction.memberPermissions?.has?.(PermissionFlagsBits.Administrator) === true;
+}
+
+export function canDeleteInternetPost(interaction, post) {
+  return post?.authorId === interaction.user?.id || hasDiscordAdministrator(interaction);
 }
 
 export function buildInternetPanelPayload({ includeBanners = true } = {}) {
@@ -419,17 +424,22 @@ async function removePost(interaction, client, postId) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const deleted = await mutateDiscordInternetStore((store) => {
     const existing = store.posts.find((post) => post.id === String(postId));
+    if (!existing) throw new Error('That post no longer exists.');
+    const isAdministrator = hasDiscordAdministrator(interaction);
+    if (!canDeleteInternetPost(interaction, existing)) {
+      throw new Error('Only the post author or a Discord Administrator can delete this post.');
+    }
     const ref = internetFeedDiscordRef(store, existing);
     const post = deleteInternetPost(store, {
       postId,
       actorId: interaction.user.id,
-      owner: isOwnerInteraction(interaction, client),
+      owner: isAdministrator,
     });
     store.posts = store.posts.filter((item) => item.parentId !== post.id);
     return ref || post;
   });
   await createInternetFeedController(client, client.config).markDeleted(deleted);
-  await interaction.editReply({ content: 'The post was deleted.' });
+  await interaction.editReply({ content: 'The entire post and its comments were deleted from the Internet channel.' });
 }
 
 async function showEditSettingsModal(interaction) {
@@ -473,6 +483,7 @@ async function showHelp(interaction) {
     '**Like** adds or removes your reaction from a post.',
     '**Comment** opens a form and publishes your reply inside the post.',
     '**Profile** shows a member’s Internet profile.',
+    '**Delete** removes your entire post thread. Discord Administrators can also delete any post.',
     '**Settings** lets you edit your profile and Discord notification preference.',
   ].join('\n\n'), { ephemeral: true }));
 }

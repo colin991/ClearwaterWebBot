@@ -82,13 +82,6 @@ function buildFeedText(post, store) {
   ].join('\n\n').slice(0, 4000);
 }
 
-function buildDeletedFeedText(post) {
-  return [
-    `## ${INTERNET_EMOJI} @${posterHandle(post)}`,
-    '_This post was deleted._',
-  ].join('\n\n').slice(0, 4000);
-}
-
 function resolveFeedMessageId(post) {
   const id = String(post?.discordFeedMessageId || '').trim();
   return /^\d{16,22}$/.test(id) ? id : '';
@@ -157,13 +150,6 @@ export function buildInternetPostPayload(post, store = null) {
     flags: MessageFlags.IsComponentsV2,
     allowedMentions: { parse: [], users: [] },
   };
-}
-
-function buildDeletedPayload(post) {
-  const container = new ContainerBuilder()
-    .clearAccentColor()
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(buildDeletedFeedText(post)));
-  return { components: [container], files: [], allowedMentions: { parse: [] } };
 }
 
 function buildCommentPayload(comment) {
@@ -303,18 +289,15 @@ export function createInternetFeedController(client, config = {}) {
     if (!messageId) return;
     const channel = await fetchInternetChannel(client, channelId);
     if (!channel) return;
-    const payload = buildDeletedPayload(post);
-
     try {
       if (isInternetForumChannel(channel)) {
         const thread = await fetchForumThread(channel, messageId);
-        const starter = await thread?.fetchStarterMessage?.();
-        if (starter) await starter.edit(payload);
+        if (thread) await thread.delete('Clearwater Internet post deleted');
         return;
       }
-      await channel.messages.edit(messageId, payload);
+      await channel.messages.delete(messageId);
     } catch (error) {
-      logger.error(`Could not mark Clearwater Internet post deleted ${messageId}`, error);
+      logger.error(`Could not delete Clearwater Internet post ${messageId}`, error);
     }
   }
 
