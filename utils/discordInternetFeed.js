@@ -3,17 +3,25 @@ import {
   AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ChannelFlagsBitField,
+  ChannelType,
   ContainerBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   MessageFlags,
   TextDisplayBuilder,
 } from 'discord.js';
+import { readInternetStore } from './internetStore.js';
 import { logger } from './logger.js';
 
 const MAX_ATTACH_BYTES = 8 * 1024 * 1024;
-const ANNOUNCEMENT_EMOJI = '<:Announcement:1514458339680059422>';
-const BELL_EMOJI = '<:bellring:1518378682912211195>';
+const INTERNET_EMOJI = '<:globeshield:1533214164955435240>';
+
+export const INTERNET_POST_LIKE_PREFIX = 'cw-internet-like:';
+export const INTERNET_POST_COMMENT_PREFIX = 'cw-internet-comment:';
+export const INTERNET_POST_PROFILE_PREFIX = 'cw-internet-profile:';
+export const INTERNET_POST_REPORT_PREFIX = 'cw-internet-report:';
+export const INTERNET_POST_DELETE_PREFIX = 'cw-internet-delete:';
 
 function isHttpsUrl(value) {
   try {
@@ -44,27 +52,42 @@ function posterHandle(post) {
 
 function shouldAnnounceInternetPost(post) {
   if (!post?.id || post.parentId) return false;
-  // Bare native reposts have no composition of their own.
   if (post.repostOf && !post.quoteId && !String(post.content || '').trim() && !post.imageUrl && !post.gifUrl && !post.videoUrl && !post.poll) {
     return false;
   }
   return true;
 }
 
-function buildFeedText(post) {
+function commentCount(store, postId) {
+  return Array.isArray(store?.posts)
+    ? store.posts.filter((post) => post.parentId === String(postId)).length
+    : 0;
+}
+
+function postTimestamp(post) {
+  const seconds = Math.floor(new Date(post?.createdAt || Date.now()).getTime() / 1000);
+  return Number.isFinite(seconds) ? `<t:${seconds}:R>` : 'just now';
+}
+
+function buildFeedText(post, store) {
+  const author = /^\d{16,22}$/.test(String(post?.authorId || ''))
+    ? `<@${post.authorId}>`
+    : `@${posterHandle(post)}`;
+  const body = String(post?.content || '').trim() || '_Shared a post._';
+  const likes = Array.isArray(post?.likes) ? post.likes.length : 0;
+  const comments = commentCount(store, post?.id);
   return [
-    `# ${ANNOUNCEMENT_EMOJI} Clearwater Internet`,
-    `${BELL_EMOJI} **New post notification!**`,
-    `**Poster:** @${posterHandle(post)}`,
-  ].join('\n').slice(0, 4000);
+    `## ${INTERNET_EMOJI} ${author}`,
+    body,
+    `-# @${posterHandle(post)} • ${postTimestamp(post)} • ${likes} like${likes === 1 ? '' : 's'} • ${comments} comment${comments === 1 ? '' : 's'}`,
+  ].join('\n\n').slice(0, 4000);
 }
 
 function buildDeletedFeedText(post) {
   return [
-    `# ${ANNOUNCEMENT_EMOJI} Clearwater Internet`,
-    `**Poster:** @${posterHandle(post)}`,
+    `## ${INTERNET_EMOJI} @${posterHandle(post)}`,
     '_This post was deleted._',
-  ].join('\n').slice(0, 4000);
+  ].join('\n\n').slice(0, 4000);
 }
 
 function resolveFeedMessageId(post) {
@@ -72,13 +95,12 @@ function resolveFeedMessageId(post) {
   return /^\d{16,22}$/.test(id) ? id : '';
 }
 
-function buildLivePayload(post, site) {
-  const postUrl = `${site}/internet/post/${encodeURIComponent(post.id)}`;
+function resolveMedia(post) {
   const files = [];
   let mediaUrl = '';
+  const gifUrl = String(post?.gifUrl || '');
+  const imageUrl = String(post?.imageUrl || '');
 
-  const gifUrl = String(post.gifUrl || '');
-  const imageUrl = String(post.imageUrl || '');
   if (gifUrl && isHttpsUrl(gifUrl)) {
     mediaUrl = gifUrl;
   } else if (imageUrl && isHttpsUrl(imageUrl) && !imageUrl.includes('/api/media')) {
@@ -90,10 +112,16 @@ function buildLivePayload(post, site) {
       mediaUrl = `attachment://${data.name}`;
     }
   }
+  return { files, mediaUrl };
+}
 
+export function buildInternetPostPayload(post, store = null) {
+  const { files, mediaUrl } = resolveMedia(post);
+  const likes = Array.isArray(post?.likes) ? post.likes.length : 0;
+  const comments = commentCount(store, post?.id);
   const container = new ContainerBuilder()
     .clearAccentColor()
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(buildFeedText(post)));
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(buildFeedText(post, store)));
 
   if (mediaUrl) {
     container.addMediaGalleryComponents(
@@ -104,9 +132,27 @@ function buildLivePayload(post, site) {
   container.addActionRowComponents(
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setLabel('View post')
-        .setStyle(ButtonStyle.Link)
-        .setURL(postUrl),
+        .setCustomId(`${INTERNET_POST_LIKE_PREFIX}${post.id}`)
+        .setLabel(`Like${likes ? ` (${likes})` : ''}`)
+        .setEmoji('❤️')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`${INTERNET_POST_COMMENT_PREFIX}${post.id}`)
+        .setLabel(`Comment${comments ? ` (${comments})` : ''}`)
+        .setEmoji('💬')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`${INTERNET_POST_PROFILE_PREFIX}${post.authorId}`)
+        .setLabel('Profile')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`${INTERNET_POST_REPORT_PREFIX}${post.id}`)
+        .setLabel('Report')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`${INTERNET_POST_DELETE_PREFIX}${post.id}`)
+        .setLabel('Delete')
+        .setStyle(ButtonStyle.Danger),
     ),
   );
 
@@ -114,6 +160,7 @@ function buildLivePayload(post, site) {
     components: [container],
     files,
     flags: MessageFlags.IsComponentsV2,
+    allowedMentions: { parse: [], users: [] },
   };
 }
 
@@ -121,91 +168,164 @@ function buildDeletedPayload(post) {
   const container = new ContainerBuilder()
     .clearAccentColor()
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(buildDeletedFeedText(post)));
+  return { components: [container], files: [], allowedMentions: { parse: [] } };
+}
 
+function buildCommentPayload(comment) {
+  const author = /^\d{16,22}$/.test(String(comment?.authorId || ''))
+    ? `<@${comment.authorId}>`
+    : `@${posterHandle(comment)}`;
+  const text = [
+    `**${author}**`,
+    String(comment?.content || '').trim(),
+    `-# ${postTimestamp(comment)}`,
+  ].filter(Boolean).join('\n').slice(0, 4000);
   return {
-    components: [container],
-    files: [],
+    components: [new ContainerBuilder()
+      .clearAccentColor()
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(text))],
     flags: MessageFlags.IsComponentsV2,
+    allowedMentions: { parse: [], users: [] },
   };
 }
 
-async function fetchFeedChannel(client, channelId) {
+export function isInternetForumChannel(channel) {
+  return channel?.type === ChannelType.GuildForum || channel?.type === ChannelType.GuildMedia;
+}
+
+export function requiredInternetForumTags(channel) {
+  if (!channel?.flags?.has?.(ChannelFlagsBitField.Flags.RequireTag)) return [];
+  const firstTag = channel.availableTags?.[0]?.id;
+  return firstTag ? [firstTag] : [];
+}
+
+export async function fetchInternetChannel(client, channelId) {
   if (!channelId || !client?.isReady?.()) return null;
   let channel;
   try {
     channel = await client.channels.fetch(channelId);
   } catch (error) {
-    logger.error(`Internet feed channel fetch failed (${channelId})`, error);
+    logger.error(`Internet channel fetch failed (${channelId})`, error);
     return null;
   }
-  if (!channel?.isTextBased?.()) {
-    logger.error(`Internet feed channel is not text-based (${channelId})`);
+  if (!isInternetForumChannel(channel) && !channel?.isTextBased?.()) {
+    logger.error(`Internet channel is not a forum or text channel (${channelId})`);
     return null;
   }
   return channel;
 }
 
-/**
- * Discord Components V2 cross-post for Clearwater Internet.
- * announce → returns Discord message id (or null)
- * update → edits live message to match post
- * markDeleted → edits to a deleted notice (falls back to delete)
- */
+function forumThreadName(post) {
+  const snippet = String(post?.content || 'New post').replace(/\s+/g, ' ').trim();
+  return `@${posterHandle(post)} • ${snippet || 'New post'}`.slice(0, 100);
+}
+
+function editablePayload(payload) {
+  const next = { ...payload };
+  delete next.flags;
+  return next;
+}
+
+async function fetchForumThread(channel, id) {
+  try {
+    return await channel.threads.fetch(id);
+  } catch {
+    return null;
+  }
+}
+
 export function createInternetFeedController(client, config = {}) {
   const channelId = String(config.internetFeedChannelId || '').trim();
-  const site = String(config.websiteUrl || 'https://cwrpvc.lol').replace(/\/$/, '');
 
-  async function announce(post) {
+  async function announce(post, knownStore = null) {
     if (!shouldAnnounceInternetPost(post)) return null;
-    const channel = await fetchFeedChannel(client, channelId);
+    const channel = await fetchInternetChannel(client, channelId);
     if (!channel) return null;
+    const store = knownStore || await readInternetStore().catch(() => null);
+    const payload = buildInternetPostPayload(post, store);
 
     try {
-      const message = await channel.send(buildLivePayload(post, site));
+      if (isInternetForumChannel(channel)) {
+        const appliedTags = requiredInternetForumTags(channel);
+        const thread = await channel.threads.create({
+          name: forumThreadName(post),
+          message: payload,
+          ...(appliedTags.length ? { appliedTags } : {}),
+        });
+        return thread?.id || null;
+      }
+      const message = await channel.send(payload);
       return message?.id || null;
     } catch (error) {
-      logger.error('Could not post Clearwater Internet feed to Discord', error);
+      logger.error('Could not publish Clearwater Internet post to Discord', error);
       return null;
     }
   }
 
-  async function update(post) {
+  async function update(post, knownStore = null) {
     const messageId = resolveFeedMessageId(post);
     if (!messageId || !shouldAnnounceInternetPost(post)) return;
-    const channel = await fetchFeedChannel(client, channelId);
-    if (!channel?.messages?.edit) return;
+    const channel = await fetchInternetChannel(client, channelId);
+    if (!channel) return;
+    const store = knownStore || await readInternetStore().catch(() => null);
+    const payload = editablePayload(buildInternetPostPayload(post, store));
 
     try {
-      await channel.messages.edit(messageId, buildLivePayload(post, site));
+      if (isInternetForumChannel(channel)) {
+        const thread = await fetchForumThread(channel, messageId);
+        const starter = await thread?.fetchStarterMessage?.();
+        if (starter) await starter.edit(payload);
+        return;
+      }
+      await channel.messages.edit(messageId, payload);
     } catch (error) {
-      logger.error(`Could not update Clearwater Internet feed message ${messageId}`, error);
+      logger.error(`Could not update Clearwater Internet post ${messageId}`, error);
+    }
+  }
+
+  async function addComment(parentPost, comment) {
+    const messageId = resolveFeedMessageId(parentPost);
+    if (!messageId) return;
+    const channel = await fetchInternetChannel(client, channelId);
+    if (!channel) return;
+
+    try {
+      if (isInternetForumChannel(channel)) {
+        const thread = await fetchForumThread(channel, messageId);
+        if (thread?.archived) await thread.setArchived(false, 'New Internet comment').catch(() => {});
+        if (thread) await thread.send(buildCommentPayload(comment));
+        return;
+      }
+      const message = await channel.messages.fetch(messageId);
+      if (message) await message.reply(buildCommentPayload(comment));
+    } catch (error) {
+      logger.error(`Could not publish comment for Internet post ${parentPost?.id}`, error);
     }
   }
 
   async function markDeleted(post) {
     const messageId = resolveFeedMessageId(post);
     if (!messageId) return;
-    const channel = await fetchFeedChannel(client, channelId);
-    if (!channel?.messages) return;
+    const channel = await fetchInternetChannel(client, channelId);
+    if (!channel) return;
+    const payload = buildDeletedPayload(post);
 
     try {
-      await channel.messages.edit(messageId, buildDeletedPayload(post));
-      return;
-    } catch (editError) {
-      logger.error(`Could not mark Clearwater Internet feed message deleted ${messageId}`, editError);
-    }
-
-    try {
-      await channel.messages.delete(messageId);
-    } catch (deleteError) {
-      logger.error(`Could not delete Clearwater Internet feed message ${messageId}`, deleteError);
+      if (isInternetForumChannel(channel)) {
+        const thread = await fetchForumThread(channel, messageId);
+        const starter = await thread?.fetchStarterMessage?.();
+        if (starter) await starter.edit(payload);
+        return;
+      }
+      await channel.messages.edit(messageId, payload);
+    } catch (error) {
+      logger.error(`Could not mark Clearwater Internet post deleted ${messageId}`, error);
     }
   }
 
-  return { announce, update, markDeleted };
+  return { announce, update, addComment, markDeleted };
 }
 
-/** @deprecated Prefer createInternetFeedController().announce */
 export function createInternetFeedAnnouncer(client, config = {}) {
   return createInternetFeedController(client, config).announce;
 }
@@ -214,8 +334,6 @@ export function shouldAnnounceInteractResult(body, result) {
   const post = result?.post;
   if (!shouldAnnounceInternetPost(post) || result?.duplicate || 'liked' in (result || {})) return false;
   if (body?.type === 'reply') return false;
-  if (body?.type === 'repost') {
-    return result?.reposted === true || Boolean(post.quoteId);
-  }
+  if (body?.type === 'repost') return result?.reposted === true || Boolean(post.quoteId);
   return false;
 }

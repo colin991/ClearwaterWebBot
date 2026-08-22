@@ -2,6 +2,12 @@
 
 The public homepage and Discord bot for Clearwater Roleplay.
 
+## Discord Internet Panel
+
+Clearwater Internet's social feed runs inside Discord. On startup the bot creates or refreshes the `Internet Panel` forum post in `INTERNET_PANEL_CHANNEL_ID`. Members can publish forum posts, like and comment, view profiles, report or delete posts, edit profile settings, and manage Discord notification preferences from the panel.
+
+The existing Internet store remains the source of account, moderation, post, and notification data so previous history and staff controls continue to work during the move away from the website feed.
+
 ## Files
 
 - `index.html` — page content and structure

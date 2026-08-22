@@ -304,7 +304,10 @@ function phonePlacesFromPlayers(players) {
 
 export function startStatusServer(client, config) {
   let lastInternetRoleSync = 0;
-  setDiscordInternetNotify(createDiscordInternetNotifier(client, { websiteUrl: config.websiteUrl }));
+  setDiscordInternetNotify(createDiscordInternetNotifier(client, {
+    guildId: config.guildId,
+    internetFeedChannelId: config.internetFeedChannelId,
+  }));
   const internetFeed = createInternetFeedController(client, config);
 
   const persistInternetFeedMessageId = (postId, messageId) => {

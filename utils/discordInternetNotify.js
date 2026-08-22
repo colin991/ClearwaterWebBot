@@ -34,14 +34,15 @@ function notificationLine(type, actorName) {
   }
 }
 
-function viewNotificationUrl(site, { type, postId }) {
-  if (postId) return `${site}/internet/post/${encodeURIComponent(postId)}`;
-  if (type === 'message') return `${site}/internet/messages`;
-  return `${site}/internet/notifications`;
+function internetPanelUrl(guildId, channelId) {
+  if (!/^\d{16,22}$/.test(String(guildId || '')) || !/^\d{16,22}$/.test(String(channelId || ''))) {
+    return 'https://discord.com/channels/@me';
+  }
+  return `https://discord.com/channels/${guildId}/${channelId}`;
 }
 
-export function createDiscordInternetNotifier(client, { websiteUrl = 'https://cwrpvc.lol' } = {}) {
-  const site = String(websiteUrl || 'https://cwrpvc.lol').replace(/\/$/, '');
+export function createDiscordInternetNotifier(client, { guildId = '', internetFeedChannelId = '' } = {}) {
+  const panelUrl = internetPanelUrl(guildId, internetFeedChannelId);
 
   return async function notifyInternetDiscordDm({
     recipientId,
@@ -64,16 +65,15 @@ export function createDiscordInternetNotifier(client, { websiteUrl = 'https://cw
       snippet ? `“${snippet}${String(postContent || '').trim().length > 120 ? '…' : ''}”` : '',
     ].filter(Boolean).join('\n').slice(0, 4000);
 
-    const viewUrl = viewNotificationUrl(site, { type, postId });
     const container = new ContainerBuilder()
       .clearAccentColor()
       .addTextDisplayComponents(new TextDisplayBuilder().setContent(text))
       .addActionRowComponents(
         new ActionRowBuilder().addComponents(
           new ButtonBuilder()
-            .setLabel('View notification')
+            .setLabel('Open Internet Panel')
             .setStyle(ButtonStyle.Link)
-            .setURL(viewUrl),
+            .setURL(panelUrl),
           new ButtonBuilder()
             .setCustomId(DISCORD_INTERNET_UNSUB_CUSTOM_ID)
             .setLabel('Unsubscribe')

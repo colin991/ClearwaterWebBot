@@ -2,12 +2,21 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-21-discord-internet-panel",
+      "title": "Clearwater Internet moves to Discord",
+      "summary": "The new Internet Panel in Discord lets members publish forum posts, like and comment, view profiles, report or delete posts, edit profile settings, and manage notification preferences without using the website.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-22T00:50:39.410Z"
+    },
+    {
       "id": "2026-08-19-animate-ui-motion",
       "title": "Motion on Home, Docs, and Wallet",
       "summary": "Home, Departments, Docs, and Wallet now use Animate UI motion for titles, numbers, buttons, and scroll progress, still on the existing dark Clearwater look.",
       "updatedBy": "justawacko",
       "createdAt": "2026-08-19T16:30:00.000Z"
     },
+    {
+      "id": "2026-08-19-department-weekly-salaries",
       "title": "Department weekly salaries",
       "summary": "Ownership can configure department Discord servers, paid roles, and weekly Clearwater Credits payouts on a dedicated Owner panel Salaries tab. Eligible members see their stacked weekly pay on the Wallet Salary tab. Each department can pay different amounts per Discord role, and payouts also DM a wallet update.",
       "updatedBy": "justawacko",

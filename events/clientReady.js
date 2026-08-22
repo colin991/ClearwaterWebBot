@@ -1,6 +1,7 @@
 import { ActivityType, Events } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { ensureNoticeChannel } from '../utils/noticeChannel.js';
+import { ensureInternetPanel } from '../utils/discordInternetPanel.js';
 import { flushPendingUpdateLogs } from '../utils/updateLog.js';
 
 export default {
@@ -31,5 +32,21 @@ export default {
     setTimeout(() => {
       void postNotice(1);
     }, 1500);
+
+    const postInternetPanel = async (attempt) => {
+      try {
+        await ensureInternetPanel(client);
+      } catch (error) {
+        logger.error(`Could not prepare Internet Panel (attempt ${attempt})`, error);
+        if (attempt < 3) {
+          setTimeout(() => {
+            void postInternetPanel(attempt + 1);
+          }, attempt * 2500);
+        }
+      }
+    };
+    setTimeout(() => {
+      void postInternetPanel(1);
+    }, 2000);
   },
 };
