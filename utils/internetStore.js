@@ -2244,7 +2244,7 @@ export function createInternetAdReport(store, { adId, actor, reason }) {
   return report;
 }
 
-function addInternetLog(store, message, revert = null) {
+export function addInternetLog(store, message, revert = null) {
   const entry = {
     id: randomUUID(),
     message: text(message, 400),

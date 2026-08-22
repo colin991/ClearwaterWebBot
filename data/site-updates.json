@@ -770,6 +770,13 @@
       "summary": "Clearwater Phone’s home wallpaper now shows the Clearwater logo instead of the old anchor mark. Download Phone v1.3.11 to get it.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T23:15:00.000Z"
+    },
+    {
+      "id": "2026-08-22-internet-panel-startup-hotfix",
+      "title": "Discord Internet Panel startup hotfix",
+      "summary": "Fixed the Discord bot startup import so the Clearwater Internet Panel and weekly department salary service can load together after deployment.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-22T16:20:00.000Z"
     }
   ]
 }
