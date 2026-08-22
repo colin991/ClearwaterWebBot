@@ -273,8 +273,6 @@ async function showSettings(interaction) {
     '## Internet Settings',
     `**Account:** <@${actor.id}>`,
     `**Bio:** ${profile.bio || 'Not set'}`,
-    `**Pronouns:** ${profile.pronouns || 'Not set'}`,
-    `**Location:** ${profile.location || 'Not set'}`,
     `**Discord notifications:** ${preferences.discordDmNotifications ? 'On' : 'Off'}`,
   ].join('\n');
   await interaction.reply(v2Container(text, (container) => {

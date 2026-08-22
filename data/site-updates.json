@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-22-discord-internet-settings-cleanup",
+      "title": "Cleaner Internet settings",
+      "summary": "The Discord Internet Settings card no longer shows empty Pronouns or Location rows.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-22T16:57:11.000Z"
+    },
+    {
       "id": "2026-08-22-discord-internet-delete-permissions",
       "title": "Internet post deletion permissions",
       "summary": "Only a post's author or a Discord Administrator can use its Delete button. Deleting a forum post now removes the complete thread and its comments from the Internet channel.",
