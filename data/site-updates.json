@@ -2,6 +2,20 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-08-22-holdvc-faster-mutes",
+      "title": "Hold VC mutes faster",
+      "summary": "`-holdvc` now starts server-muting members as soon as the announcement begins and processes hold VC mutes/unmutes in parallel, so large voice chats lock and release much faster.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-22T17:10:00.000Z"
+    },
+    {
+      "id": "2026-08-22-holdvc-move-unmute",
+      "title": "Hold VC unmutes on channel move",
+      "summary": "`-holdvc` still server-mutes members who join the held voice channel, and now explicitly unserver-mutes them as soon as they leave that held channel or move into another voice channel.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-08-22T17:05:00.000Z"
+    },
+    {
       "id": "2026-08-22-discord-internet-settings-cleanup",
       "title": "Cleaner Internet settings",
       "summary": "The Discord Internet Settings card no longer shows empty Pronouns or Location rows.",

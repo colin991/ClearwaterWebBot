@@ -99,11 +99,29 @@ function waitForPlayerIdle(player, timeoutMs = 30_000) {
   });
 }
 
+async function mapLimit(items, limit, task) {
+  const results = [];
+  let index = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (index < items.length) {
+      const current = index;
+      index += 1;
+      try {
+        results[current] = { ok: true, value: await task(items[current], current) };
+      } catch (error) {
+        results[current] = { ok: false, error };
+      }
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 /**
- * Join the voice channel and play the bundled hold clip so everyone hears it.
+ * Join the voice channel and start the bundled hold clip so everyone hears it.
  * Keeps the connection open afterward (until release/unhold).
  */
-async function joinAndAnnounce(voiceChannel, adapterCreator, audioPath) {
+async function joinAndStartAnnouncement(voiceChannel, adapterCreator, audioPath) {
   getVoiceConnection(voiceChannel.guild.id)?.destroy();
 
   const connection = joinVoiceChannel({
@@ -143,9 +161,15 @@ async function joinAndAnnounce(voiceChannel, adapterCreator, audioPath) {
     });
     resource.volume?.setVolume(1);
 
+    player.on('error', (error) => {
+      logger.error('Hold VC audio playback error', error);
+    });
+
     player.play(resource);
     await entersState(player, AudioPlayerStatus.Playing, 8_000);
-    await waitForPlayerIdle(player, 45_000);
+    void waitForPlayerIdle(player, 45_000).catch((error) => {
+      logger.warn(`Hold VC audio did not finish cleanly: ${error?.message || error}`);
+    });
     return connection;
   } catch (error) {
     player.stop(true);
@@ -181,27 +205,30 @@ export async function holdVoiceChat(source, config = {}, explicitChannel = null)
     throw new Error('Hold VC audio file is missing on the bot host (assets/hold-vc.mp3).');
   }
 
-  await joinAndAnnounce(voiceChannel, guild.voiceAdapterCreator, HOLD_VC_AUDIO_PATH);
+  await joinAndStartAnnouncement(voiceChannel, guild.voiceAdapterCreator, HOLD_VC_AUDIO_PATH);
 
   const previous = activeHolds.get(guild.id);
   const mutedIds = new Set(previous?.channelId === voiceChannel.id ? previous.mutedIds : []);
 
-  let mutedNow = 0;
   const channel = await guild.channels.fetch(voiceChannel.id).catch(() => voiceChannel);
-  for (const [, member] of channel.members) {
-    if (member.user.bot) continue;
-    if (isOwnershipMember(member, config)) continue;
-    if (member.voice.serverMute) {
-      mutedIds.add(member.id);
-      continue;
-    }
+  const membersToMute = [...channel.members.values()].filter((member) => (
+    !member.user.bot && !isOwnershipMember(member, config)
+  ));
+  const results = await mapLimit(membersToMute, 6, async (member) => {
+    if (member.voice.serverMute) return { member, mutedNow: false };
     try {
       await member.voice.setMute(true, `Hold VC by ${user.tag}`);
-      mutedIds.add(member.id);
-      mutedNow += 1;
+      return { member, mutedNow: true };
     } catch (error) {
       logger.warn(`Could not server-mute ${member.id} for hold VC: ${error?.message || error}`);
+      return { member, mutedNow: false, failed: true };
     }
+  });
+  let mutedNow = 0;
+  for (const result of results) {
+    if (!result?.ok || result.value?.failed) continue;
+    mutedIds.add(result.value.member.id);
+    if (result.value.mutedNow) mutedNow += 1;
   }
 
   activeHolds.set(guild.id, {
@@ -232,6 +259,14 @@ function untrackMuted(hold, guildId, memberId) {
     hold.mutedIds = next;
     activeHolds.set(guildId, hold);
   }
+}
+
+async function unmuteAfterLeavingHold(member, newState) {
+  if (newState.channelId && newState.serverMute) {
+    await newState.setMute(false, 'Left held voice channel');
+    return;
+  }
+  await member.edit({ mute: false, reason: 'Left held voice channel' });
 }
 
 /**
@@ -270,8 +305,7 @@ export async function handleHoldVoiceStateUpdate(oldState, newState, config = {}
   if (wasInHold && !isInHold) {
     if (!hold.mutedIds.includes(member.id)) return;
     try {
-      // Persist unmute even after disconnect so rejoining elsewhere is not muted.
-      await member.edit({ mute: false, reason: 'Left held voice channel' });
+      await unmuteAfterLeavingHold(member, newState);
       untrackMuted(hold, guild.id, member.id);
     } catch (error) {
       logger.warn(`Could not unmute ${member.id} leaving hold VC: ${error?.message || error}`);
@@ -288,18 +322,19 @@ export async function releaseVoiceChat(source) {
   const voiceChannel = guild.channels.cache.get(hold.channelId)
     || await guild.channels.fetch(hold.channelId).catch(() => null);
 
-  let unmuted = 0;
-  for (const userId of hold.mutedIds) {
+  const results = await mapLimit(hold.mutedIds, 6, async (userId) => {
     const member = await guild.members.fetch(userId).catch(() => null);
-    if (!member?.voice?.channel) continue;
-    if (!member.voice.serverMute) continue;
+    if (!member?.voice?.channel) return false;
+    if (!member.voice.serverMute) return false;
     try {
       await member.voice.setMute(false, `Hold VC released by ${user.tag}`);
-      unmuted += 1;
+      return true;
     } catch (error) {
       logger.warn(`Could not unmute ${userId} after hold VC: ${error?.message || error}`);
+      return false;
     }
-  }
+  });
+  const unmuted = results.filter((result) => result?.ok && result.value === true).length;
 
   activeHolds.delete(guild.id);
   getVoiceConnection(guild.id)?.destroy();
