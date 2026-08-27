@@ -75,6 +75,12 @@ export function requireOwnership(message) {
   }
 }
 
+export function requireAdministrator(message) {
+  if (!message.member?.permissions?.has(PermissionFlagsBits.Administrator)) {
+    throw new Error('You need the **Administrator** permission to use that command.');
+  }
+}
+
 export function requireBotPerms(message, permissions = []) {
   const me = message.guild?.members?.me;
   if (!me) throw new Error('Could not resolve the bot member in this server.');
