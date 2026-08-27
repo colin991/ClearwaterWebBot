@@ -5,8 +5,10 @@
       "main": true
     }
   },
+  "framework": null,
   "installCommand": "npm install && npm install --prefix ui",
   "buildCommand": "npm run build --prefix ui",
+  "outputDirectory": ".",
   "cleanUrls": false,
   "trailingSlash": false,
   "redirects": [
