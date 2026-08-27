@@ -8,13 +8,19 @@ function safeNextPath(value = '') {
   if (!raw) return '';
   if (!raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\') || /^[a-z]+:/i.test(raw)) return '';
   const path = (raw.split('?')[0].split('#')[0] || '/').replace(/\/+$/, '') || '/';
-  if (path === '/internet.html') return '/internet';
   if (path === '/owner.html') return '/owner';
   if (path === '/server-management.html') return '/server-management';
-  if (path === '/' || path === '/internet' || path === '/owner' || path === '/server-management' || path === '/departments' || path === '/phone-signed-in') return path;
-  if (/^\/internet\/(post|member|sponsored)\/[A-Za-z0-9._-]{1,120}$/.test(path)) return path;
-  if (/^\/internet\/(messages|notifications|settings|profile|wallet|staff|sponsored|bookmarks|government)$/.test(path)) return path;
-  if (/^\/profiles\/[A-Za-z0-9._-]{1,32}$/.test(path)) return path;
+  if (path === '/internet' || path === '/internet.html' || path.startsWith('/internet/') || path.startsWith('/profiles/')) {
+    return '/';
+  }
+  if (
+    path === '/'
+    || path === '/owner'
+    || path === '/server-management'
+    || path === '/departments'
+    || path === '/docs'
+    || path === '/phone-signed-in'
+  ) return path;
   return '';
 }
 

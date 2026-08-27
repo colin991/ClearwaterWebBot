@@ -10,13 +10,12 @@
   "cleanUrls": false,
   "trailingSlash": false,
   "redirects": [
-    { "source": "/coming-soon", "destination": "/", "permanent": false }
+    { "source": "/coming-soon", "destination": "/", "permanent": false },
+    { "source": "/wallet", "destination": "/", "permanent": false },
+    { "source": "/profiles/:username", "destination": "/", "permanent": false }
   ],
   "rewrites": [
     { "source": "/api/auth/(.*)", "destination": "/api/site-auth?route=$1" },
-    { "source": "/api/media", "destination": "/api/internet" },
-    { "source": "/api/internet-version", "destination": "/api/internet?meta=version" },
-    { "source": "/profiles/:username", "destination": "/internet.html" },
     { "source": "/internet", "destination": "/internet.html" },
     { "source": "/internet/(.*)", "destination": "/internet.html" },
     { "source": "/owner", "destination": "/owner.html" },
@@ -27,8 +26,7 @@
     { "source": "/signin", "destination": "/signin.html" },
     { "source": "/phone-signed-in", "destination": "/phone-signed-in.html" },
     { "source": "/newsletter", "destination": "/newsletter.html" },
-    { "source": "/docs", "destination": "/docs.html" },
-    { "source": "/wallet", "destination": "/wallet.html" }
+    { "source": "/docs", "destination": "/docs.html" }
   ],
   "headers": [
     {

@@ -19,7 +19,7 @@
     return;
   }
 
-  // Clearwater Internet and tools: any signed-in Discord member (not staff-only).
+  // Staff tools (owner / server management): any signed-in Discord member with site access.
   fetch('/api/auth/me', { credentials: 'same-origin' })
     .then((response) => (response.ok ? response.json() : null))
     .then((session) => {

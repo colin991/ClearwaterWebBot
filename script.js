@@ -17,8 +17,6 @@ const serverManagementLinks = document.querySelectorAll('[data-server-management
 const erlcCurrent = document.querySelectorAll('[data-erlc-current]');
 const erlcMax = document.querySelectorAll('[data-erlc-max]');
 const erlcQueue = document.querySelectorAll('[data-erlc-queue]');
-let homepageInternetReady = false;
-let homepageSignedIn = false;
 
 const setLiveNumber = (element, display, numeric, offline) => {
   if (element.hasAttribute('data-aui-live')) {
@@ -85,8 +83,6 @@ const loadDiscordSession = async () => {
     if (!response.ok) return;
     const session = await response.json();
     if (!session.authenticated || !session.user) {
-      homepageSignedIn = false;
-      homepageInternetReady = true;
       return;
     }
     if (discordName) discordName.textContent = session.user.displayName || session.user.username;
@@ -103,8 +99,6 @@ const loadDiscordSession = async () => {
     }
     discordLogin.hidden = true;
     discordAccount.hidden = false;
-    homepageSignedIn = true;
-    homepageInternetReady = true;
     if (ownerLink && session.user.owner) {
       ownerLink.classList.add('is-visible');
       ownerLink.removeAttribute('hidden');
@@ -115,36 +109,8 @@ const loadDiscordSession = async () => {
         link.removeAttribute('hidden');
       });
     }
-    void loadWalletBalance();
   } catch {
     // Keep login available if session check fails.
-  }
-};
-
-const cashAmount = document.querySelector('[data-cash-amount]');
-const cashBalance = document.querySelector('[data-cash-balance]');
-
-const setCashBalance = (balance) => {
-  const amount = Math.trunc(Number(balance) || 0);
-  const label = `C$${amount.toLocaleString()}`;
-  if (cashAmount) cashAmount.textContent = label;
-  if (cashBalance) cashBalance.setAttribute('aria-label', `Clearwater credits balance: ${label}`);
-};
-
-const loadWalletBalance = async () => {
-  if (!cashAmount) return;
-  try {
-    const response = await fetch('/api/internet', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'wallet' }),
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.error || 'Wallet unavailable');
-    setCashBalance(result.wallet?.balance);
-  } catch {
-    // Keep the chip visible if the bot host is briefly unavailable.
   }
 };
 
@@ -167,7 +133,7 @@ discordProfile?.addEventListener('click', () => {
   const canOpen = Boolean(
     (ownerLink && ownerLink.classList.contains('is-visible'))
     || (discordProfileMenuRank && discordProfileMenuRank.classList.contains('is-visible'))
-    || cashBalance
+    || [...serverManagementLinks].some((link) => link.classList.contains('is-visible'))
   );
   if (!canOpen) return;
   const open = discordProfile.getAttribute('aria-expanded') === 'true';
@@ -229,35 +195,6 @@ const loadDiscordMemberCount = async () => {
 loadBotStatus();
 window.setInterval(loadBotStatus, 300_000);
 
-const goToInternet = () => {
-  if (!homepageSignedIn) {
-    window.location.href = '/signin?next=/internet';
-    return;
-  }
-  document.documentElement.classList.add('leaving-for-internet');
-  window.setTimeout(() => {
-    window.location.href = '/internet';
-  }, 220);
-};
-
-document.querySelectorAll('a[href="/internet"]').forEach((link) => {
-  link.addEventListener('click', async (event) => {
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target === '_blank') return;
-    event.preventDefault();
-    if (!homepageInternetReady) {
-      try {
-        const response = await fetch('/api/auth/me', { credentials: 'same-origin' });
-        const session = await response.json();
-        homepageSignedIn = Boolean(session.authenticated && session.user);
-      } catch {
-        homepageSignedIn = false;
-      }
-      homepageInternetReady = true;
-    }
-    goToInternet();
-  });
-});
-
 const siteBannerDismissedId = () => {
   try { return localStorage.getItem('cw-site-banner-dismissed') || ''; } catch { return ''; }
 };
@@ -278,7 +215,6 @@ const applySiteBanner = (banner) => {
   if (message) message.textContent = banner.message;
   if (details) {
     const detailText = String(banner.details || '').trim();
-    // Keep linked banners (like maintenance + status) to one clean line.
     details.textContent = detailText;
     details.hidden = !detailText || Boolean(banner.linkUrl);
   }
@@ -300,17 +236,6 @@ const applySiteBanner = (banner) => {
   });
 };
 
-const loadSiteBanner = async () => {
-  try {
-    const response = await fetch('/api/internet?banner=1', { credentials: 'same-origin', cache: 'default' });
-    if (!response.ok) return;
-    const result = await response.json();
-    applySiteBanner(result.settings?.siteBanner || null);
-  } catch {
-    // Keep the homepage usable if the bot host is offline.
-  }
-};
-
 document.addEventListener('click', (event) => {
   if (event.target.closest('[data-site-banner-dismiss]')) {
     const root = document.querySelector('[data-site-banner]');
@@ -322,8 +247,6 @@ document.addEventListener('click', (event) => {
     applySiteBanner(null);
   }
 });
-
-loadSiteBanner();
 
 const revealNodes = document.querySelectorAll('.reveal');
 if (revealNodes.length) {
