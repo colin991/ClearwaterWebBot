@@ -34,7 +34,7 @@ const GROUPS = [
     title: 'Info',
     lines: [
       `\`-roles\` / \`-members\` / \`-mutes\` / \`-modstats\` / \`-inviteinfo\` / \`-id\` / \`-diagnose\` / \`${PREFIX}help\` — **${RANK_FLOOR.anyStaff}+**`,
-      `\`-vc [#channel]\` — Voice channel member count · **Administrator**`,
+      `\`-vc\` — Total members in voice across the server · **Administrator**`,
       `\`-nick\` — Nickname · **${RANK_FLOOR.administrator}+**`,
       `\`-bans\` — Timed ban cases · **${RANK_FLOOR.supervisor}+**`,
     ],

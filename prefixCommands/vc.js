@@ -1,5 +1,5 @@
 import { ChannelType } from 'discord.js';
-import { requireAdministrator, snowflakeFrom } from '../utils/prefixHelpers.js';
+import { requireAdministrator } from '../utils/prefixHelpers.js';
 import { v2Card } from '../utils/v2Message.js';
 
 function isVoiceChannel(channel) {
@@ -7,57 +7,60 @@ function isVoiceChannel(channel) {
     || channel?.type === ChannelType.GuildStageVoice;
 }
 
-function resolveVoiceChannel(message, args = []) {
-  const mentioned = message.mentions.channels.find((channel) => isVoiceChannel(channel));
-  if (mentioned) return mentioned;
+function getServerVoiceStats(guild) {
+  const voiceChannels = [...guild.channels.cache.values()].filter(isVoiceChannel);
+  const members = new Map();
+  const channelLines = [];
 
-  const id = snowflakeFrom(args[0]);
-  if (id) {
-    const channel = message.guild.channels.cache.get(id);
-    if (isVoiceChannel(channel)) return channel;
+  for (const channel of voiceChannels.sort((a, b) => a.name.localeCompare(b.name))) {
+    const count = channel.members.size;
+    if (count > 0) {
+      channelLines.push(`${channel.name}: **${count}**`);
+    }
+    for (const member of channel.members.values()) {
+      members.set(member.id, member);
+    }
   }
 
-  return message.member?.voice?.channel || null;
-}
-
-function describeVoiceCount(channel) {
-  const members = [...channel.members.values()];
-  const humans = members.filter((member) => !member.user.bot).length;
-  const bots = members.length - humans;
-  const lines = members.length
-    ? members.map((member) => member.toString()).join(', ')
-    : 'Nobody is in this channel.';
+  const allMembers = [...members.values()];
+  const humans = allMembers.filter((member) => !member.user.bot).length;
+  const bots = allMembers.length - humans;
 
   return {
-    count: members.length,
+    total: allMembers.length,
     humans,
     bots,
-    lines,
+    activeChannels: channelLines.length,
+    channelLines,
   };
 }
 
 export default {
   name: 'vc',
-  description: 'Show how many members are in a voice channel.',
-  async execute(message, args) {
+  description: 'Show how many members are in voice channels across the server.',
+  async execute(message) {
     requireAdministrator(message);
 
-    const channel = resolveVoiceChannel(message, args);
-    if (!channel) {
-      throw new Error('Join a voice channel or mention one with `-vc [#channel]`.');
+    const { total, humans, bots, activeChannels, channelLines } = getServerVoiceStats(message.guild);
+    const memberLabel = total === 1 ? 'person' : 'people';
+    const lines = [
+      `**${total}** ${memberLabel} in voice across the server.`,
+      activeChannels
+        ? `Active channels: **${activeChannels}**`
+        : 'Nobody is in a voice channel right now.',
+    ];
+
+    if (humans !== total) {
+      lines.push(`Humans: **${humans}** · Bots: **${bots}**`);
     }
 
-    const { count, humans, bots, lines } = describeVoiceCount(channel);
-    const memberLabel = count === 1 ? 'member' : 'members';
+    if (channelLines.length) {
+      lines.push('', channelLines.join('\n'));
+    }
 
     await message.reply(v2Card({
-      title: `Voice channel · ${channel.name}`,
-      description: [
-        `**${count}** ${memberLabel} in ${channel}.`,
-        humans !== count ? `Humans: **${humans}** · Bots: **${bots}**` : '',
-        '',
-        lines,
-      ].filter(Boolean).join('\n').slice(0, 4000),
+      title: `Voice activity · ${message.guild.name}`,
+      description: lines.join('\n').slice(0, 4000),
     }));
   },
 };
