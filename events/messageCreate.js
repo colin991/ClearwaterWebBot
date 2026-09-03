@@ -1,6 +1,7 @@
 import { Events } from 'discord.js';
 import { getOwnerConfig } from '../utils/ownerConfig.js';
 import { logger } from '../utils/logger.js';
+import { handleMessageForward } from '../utils/messageForward.js';
 import { handleNoticeChannelMessage } from '../utils/noticeChannel.js';
 import { parseArgs } from '../utils/prefixHelpers.js';
 
@@ -14,6 +15,12 @@ export default {
       if (handled) return;
     } catch (error) {
       logger.error('Notice channel handler failed', error);
+    }
+
+    try {
+      await handleMessageForward(message, client);
+    } catch (error) {
+      logger.error('Message forward failed', error);
     }
 
     if (message.author.bot) return;
