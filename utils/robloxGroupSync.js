@@ -140,7 +140,7 @@ async function eligibleRobloxIds(guild, allowedRoleIds) {
   for (const member of guild.members.cache.values()) {
     if (member.user.bot || !allowedRoleIds.some((roleId) => member.roles.cache.has(roleId))) continue;
     const remembered = cache.byDiscord?.[member.id];
-    // The cache is populated only from Melonly verification through -id and
+    // The cache is populated from Melonly verification and
     // the low-frequency application index refresh. Do not make one Melonly
     // call per member every minute: that triggers Melonly's rate limit.
     if (remembered?.robloxId) {

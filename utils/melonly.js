@@ -59,7 +59,7 @@ export async function fetchApplicationIdentityIndex(apiKey) {
       const responses = await melonlyFetch(`/server/applications/${encodeURIComponent(application.id)}/responses?limit=100&page=${page}`, apiKey);
       for (const entry of responses?.data || []) {
         // Melonly responses that expose the linked Discord snowflake can be indexed
-        // automatically. Other identities are added when staff use -id.
+        // automatically.
         if (/^\d{16,22}$/.test(String(entry.userId || '')) && entry.robloxId && !seenDiscordIds.has(String(entry.userId))) {
           identities.push({ discordId: String(entry.userId), robloxId: String(entry.robloxId) });
           seenDiscordIds.add(String(entry.userId));
