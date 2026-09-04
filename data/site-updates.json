@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-04-secondary-gate-rest-check",
+      "title": "Secondary gate uses REST role checks",
+      "summary": "Secondary server gate now verifies required main-server roles through Discord REST (not role cache), and the periodic mass sweep is disabled. Only confirmed missing-role members are kicked on join.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-04T22:54:37.000Z"
+    },
+    {
       "id": "2026-09-04-secondary-gate-false-kick-fix",
       "title": "Secondary gate no longer false-kicks",
       "summary": "The secondary server gate now force-checks roles on the main Clearwater server and will not kick someone if role lookup fails. Only members confirmed missing roles 1514421440890409060 / 1514744040778760252 are removed from 1514189396184793169.",
