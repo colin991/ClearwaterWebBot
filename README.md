@@ -1,45 +1,31 @@
-# Clearwater Website and Discord Bot
+# Clearwater Discord Bot
 
-The public homepage and Discord bot for Clearwater Roleplay.
+Discord bot for Clearwater Roleplay — moderation, voice tools, ER:LC sync, Roblox group join requests, and the Discord Internet Panel.
 
-## Discord Internet Panel
-
-Clearwater Internet's social feed runs inside Discord. On startup the bot creates or refreshes the `Internet Panel` forum post in `INTERNET_PANEL_CHANNEL_ID`. Members can publish forum posts, like and comment, view profiles, report or delete posts, edit profile settings, and manage Discord notification preferences from the panel.
-
-The existing Internet store remains the source of account, moderation, post, and notification data so previous history and staff controls continue to work during the move away from the website feed.
-
-## Files
-
-- `index.html` — page content and structure
-- `styles.css` — responsive design and visual styling
-- `script.js` — navigation and page interactions
-- `index.js` — Discord bot entry point
-- `commands/` — slash commands
-- `events/` — Discord event handlers
-- `utils/` — command loading and the protected website status connection
-- `anchor-phone/` — Clearwater Phone desktop overlay (Electron) for in-game Wallet, Marketplace, Find My, Messages, and Maps — see `anchor-phone/README.md`
-
-Updates pushed to the production branch are deployed automatically by Vercel.
-
-## Bot setup
+## Setup
 
 1. Copy `.env.example` to `.env` on the bot host.
-2. Add the Discord bot token, application ID, and Clearwater server ID.
-3. Create a long random `BOT_API_KEY` and keep it private.
-4. On Sparked Host, leave `PORT` unset so the bot uses the server's assigned `SERVER_PORT`, then run `npm install` and `npm start`.
-5. In Vercel, set `BOT_API_URL` to the bot host's public HTTPS address and set `BOT_API_KEY` to the same private key.
+2. Set `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, and `DISCORD_GUILD_ID`.
+3. Add optional keys (`ERLC_SERVER_KEY`, Roblox group keys, etc.) as needed.
+4. Run `npm install` and `npm start`.
 
-The bot needs the **Guilds**, **Server Members**, **Server Messages**, and **Message Content** gateway intents. Enable Server Members and Message Content in the Discord Developer Portal. Never commit or share `.env`.
+Required gateway intents: **Guilds**, **Server Members**, **Server Messages**, **Message Content**, and **Guild Voice States**. Enable Server Members and Message Content in the Discord Developer Portal. Never commit or share `.env`.
 
-## Verification, ER:LC, and owner panel
+## Layout
 
-- The ER:LC sync checks the live player list and adds/removes the configured in-game Discord role.
-- `/owner.html` is restricted server-side to Discord user `1044686997194805280` or members with role `1514033074948800683` by default. It configures the main/staff servers, roles, log channels, prefix, and sync interval.
-- Add `MELONLY_API_KEY` and `ERLC_SERVER_KEY` to the bot host. Do not add either secret to browser code or GitHub.
+- `index.js` — bot entry point
+- `commands/` — slash commands
+- `prefixCommands/` — prefix commands (e.g. `-holdvc`, `-vc`)
+- `events/` — Discord event handlers
+- `utils/` — loaders, VC, Internet panel, ER:LC, Roblox group sync
+- `data/` — host-local runtime state (gitignored) plus `site-updates.json`
 
-## Roblox group join requests
+## Notable features
 
-To automatically accept join requests for approved Discord members, add these only to the bot host's `.env` file:
+- **Hold VC** (`-holdvc` / `-unholdvc`) — Ownership-only voice hold; action logs go to channel `1514547037537046688`
+- **Discord Internet Panel** — social feed inside Discord (`INTERNET_PANEL_CHANNEL_ID`)
+- **ER:LC role sync** — in-game Discord role while players are on the server
+- **Roblox group join requests** — accept/decline using Melonly-verified identity cache
 
 ```env
 ROBLOX_GROUP_ID=your-group-id
@@ -47,7 +33,3 @@ ROBLOX_GROUP_API_KEY=your-roblox-open-cloud-key
 ROBLOX_GROUP_ALLOWED_ROLE_IDS=1514033664306974752,1514744040778760252
 ROBLOX_GROUP_LOG_CHANNEL_ID=1536517651055120514
 ```
-
-The bot uses each Discord member's **Melonly-verified Roblox identity** to decide group access; it does not rely on a server nickname. It reads the verified-identity cache rather than querying Melonly for every Discord member, which avoids rate limits. Use a Roblox **User API key** (or OAuth token), not an API Extension key, with Group permissions to **list, accept, and decline join requests**. It accepts requests from members with an allowed role and declines every other request, including older pending backlog from before this rule. Each accept/decline is logged to `ROBLOX_GROUP_LOG_CHANNEL_ID`, plus a summary when backlog is cleared. Keep both keys private and never put them in Vercel or browser code.
-
-The website-to-bot bridge accepts only explicitly allowlisted actions. The included test button sends a protected `ping` action after Discord sign-in; add future actions on both sides of the bridge rather than accepting arbitrary commands.

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Clearwater Roleplay website and Discord bot",
+  "description": "Clearwater Roleplay Discord bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.2",
-    "@vercel/blob": "^2.8.0",
     "discord.js": "^14.25.0",
     "dotenv": "^17.4.2",
     "ffmpeg-static": "^5.3.0",

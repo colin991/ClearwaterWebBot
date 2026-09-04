@@ -1,11 +1,5 @@
-# Local upload package and extracted duplicate
-/Clearwater-Homepage/
-/Clearwater-Homepage.zip
-
 # Local tooling and dependencies
-/.vercel/
 /node_modules/
-/ui/node_modules/
 # Secrets
 .env
 .env.*
@@ -26,7 +20,3 @@ Thumbs.db
 /data/site-updates-posted.json
 /data/notice-channel-state.json
 /data/*.tmp
-/downloads/clearwater-phone/node_modules/
-/downloads/clearwater-phone/dist/
-/anchor-phone/node_modules/
-/anchor-phone/dist/

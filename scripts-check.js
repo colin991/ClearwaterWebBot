@@ -2,7 +2,7 @@ import { readdirSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
-const ignored = new Set(['.git', 'Clearwater-Homepage', 'node_modules']);
+const ignored = new Set(['.git', 'node_modules']);
 
 function collectJavaScript(directory) {
   return readdirSync(directory).flatMap((entry) => {

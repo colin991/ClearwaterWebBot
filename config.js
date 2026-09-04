@@ -1,25 +1,9 @@
 import 'dotenv/config';
 
-const cleanUrl = (value, fallback) => {
-  try {
-    return new URL(value || fallback).toString().replace(/\/$/, '');
-  } catch {
-    throw new Error('WEBSITE_URL must be a valid http or https URL.');
-  }
-};
-
-const numberFromEnv = (value, fallback) => {
-  const parsed = Number.parseInt(value || '', 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
-};
-
 export const config = Object.freeze({
   token: process.env.DISCORD_TOKEN?.trim(),
   clientId: process.env.DISCORD_CLIENT_ID?.trim(),
   guildId: process.env.DISCORD_GUILD_ID?.trim(),
-  websiteUrl: cleanUrl(process.env.WEBSITE_URL, 'https://cwrpvc.lol'),
-  apiKey: process.env.BOT_API_KEY?.trim(),
-  melonlyApiKey: process.env.MELONLY_API_KEY?.trim(),
   erlcServerKey: process.env.ERLC_SERVER_KEY?.trim(),
   robloxGroupId: process.env.ROBLOX_GROUP_ID?.trim(),
   robloxGroupApiKey: process.env.ROBLOX_GROUP_API_KEY?.trim(),
@@ -29,8 +13,8 @@ export const config = Object.freeze({
   internetFeedChannelId: process.env.INTERNET_PANEL_CHANNEL_ID?.trim() || '1540510308102176908',
   internetAutomodChannelId: process.env.INTERNET_AUTOMOD_CHANNEL_ID?.trim() || '1540763074187894864',
   updateLogChannelId: process.env.UPDATE_LOG_CHANNEL_ID?.trim() || '1538007463851200583',
-  governmentLogChannelId: process.env.GOVERNMENT_LOG_CHANNEL_ID?.trim() || '1538291625447661768',
-  vcActionLogChannelId: process.env.VC_ACTION_LOG_CHANNEL_ID?.trim() || '1514547037537046688',
+  /** Hold/say logs always use utils/vcActionLog.js hardcoded channel; kept here for reference. */
+  vcActionLogChannelId: '1514547037537046688',
   noticeChannelId: process.env.NOTICE_CHANNEL_ID?.trim() || '1515038785421836479',
   verificationChannelId: process.env.VERIFICATION_CHANNEL_ID?.trim() || '1514181167145025666',
   messageForwardSourceIds: (process.env.MESSAGE_FORWARD_SOURCE_IDS || '1514667590608486400,1513609542468894877')
@@ -40,9 +24,6 @@ export const config = Object.freeze({
     .split(',').map((value) => value.trim()).filter(Boolean),
   ownerRoleIds: (process.env.OWNER_ROLE_IDS || '1514033074948800683')
     .split(',').map((value) => value.trim()).filter(Boolean),
-  // Sparked Host provides the allocated public port as SERVER_PORT. Prefer it
-  // so the website bridge is reachable after a host restart or reinstall.
-  port: numberFromEnv(process.env.SERVER_PORT || process.env.PORT, 3000),
 });
 
 export function validateConfig() {

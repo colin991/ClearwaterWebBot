@@ -14,14 +14,13 @@ export function buildSalaryPaidDmPayload({
   amount,
   departmentName,
   balance,
-  walletUrl = 'https://www.cwrpvc.lol/internet/wallet',
 } = {}) {
   const paid = formatSalaryMoney(amount);
   const available = formatSalaryMoney(balance);
   const depositor = String(departmentName || 'Department').trim().toUpperCase();
   const content = [
     `# ${SALARY_DM_WALLET_EMOJI} Wallet Update`,
-    `> Congrats, you just got paid! ${paid} has been added to your account. You can view your account [here.](${walletUrl})`,
+    `> Congrats, you just got paid! ${paid} has been added to your Clearwater Internet account.`,
     '',
     `> Deposited by: **${depositor}**`,
     '',

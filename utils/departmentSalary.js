@@ -123,7 +123,7 @@ export async function buildOwnerSalaryStatus(client, config = null) {
   };
 }
 
-async function payMemberSalary(client, store, { discordId, department, weekKey, config, walletUrl, amount, roleLabel = '' }) {
+async function payMemberSalary(client, store, { discordId, department, weekKey, config, amount, roleLabel = '' }) {
   if (hasSalaryReceipt(config, weekKey, department.id, discordId)) {
     return { paid: false, skipped: true, reason: 'already-paid' };
   }
@@ -145,7 +145,6 @@ async function payMemberSalary(client, store, { discordId, department, weekKey, 
     amount: payAmount,
     departmentName: department.name,
     balance: creditBalance(storeUser),
-    walletUrl,
   });
   return { paid: true, amount: payAmount };
 }
@@ -197,7 +196,6 @@ export async function runDepartmentSalaryPayout(client, { force = false } = {}) 
   await saveDepartmentSalaryConfig(config);
 
   const store = await readInternetStore();
-  const walletUrl = `${String(client.config?.websiteUrl || 'https://cwrpvc.lol').replace(/\/$/, '')}/internet/wallet`;
   let paidMembers = 0;
   let paidDepartments = 0;
   let totalCredits = 0;
@@ -231,7 +229,6 @@ export async function runDepartmentSalaryPayout(client, { force = false } = {}) 
           department,
           weekKey,
           config,
-          walletUrl,
           amount: match.amount,
           roleLabel: match.label,
         });

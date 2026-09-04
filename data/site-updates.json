@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-04-bot-only-repo",
+      "title": "Website removed \u2014 Discord bot only",
+      "summary": "The repository is now Discord-bot only. Website, Vercel, Phone, and the old HTTP bridge were removed. Hold VC action logs always post to channel 1514547037537046688.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-04T21:06:37.000Z"
+    },
+    {
       "id": "2026-08-27-remove-site-internet",
       "title": "Clearwater Internet removed from website",
       "summary": "The website no longer includes Clearwater Internet. Use Discord for community posts. Home, Departments, Docs, and Server Management stay on the site.",

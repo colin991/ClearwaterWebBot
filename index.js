@@ -4,7 +4,7 @@ import { loadCommands } from './utils/loadCommands.js';
 import { loadPrefixCommands } from './utils/loadPrefixCommands.js';
 import { loadEvents } from './utils/loadEvents.js';
 import { registerCommands } from './utils/registerCommands.js';
-import { startStatusServer } from './utils/statusServer.js';
+import { startBotServices } from './utils/botServices.js';
 import { logger } from './utils/logger.js';
 import { startErlcRoleSync } from './utils/erlcRoleSync.js';
 import { startRobloxGroupSync } from './utils/robloxGroupSync.js';
@@ -34,7 +34,7 @@ await loadPrefixCommands(client);
 await loadEvents(client);
 await registerCommands(commands, config);
 
-const statusServer = startStatusServer(client, config);
+const stopBotServices = startBotServices(client, config);
 let stopErlcSync = () => {};
 let stopRobloxGroupSync = () => {};
 let stopDepartmentSalary = () => {};
@@ -46,7 +46,7 @@ client.once('ready', () => {
 
 const shutDown = async (signal) => {
   logger.info(`${signal} received; shutting down.`);
-  statusServer?.close();
+  stopBotServices();
   stopErlcSync();
   stopRobloxGroupSync();
   stopDepartmentSalary();
@@ -63,4 +63,4 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-await client.login(config.token); //gjjddddssssssssddssddsa
+await client.login(config.token);

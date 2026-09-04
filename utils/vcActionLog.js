@@ -1,6 +1,9 @@
 import { logger } from './logger.js';
 import { v2Card } from './v2Message.js';
 
+/** Hardcoded so a stale host `.env` cannot keep sending hold/say logs to an old channel. */
+export const VC_ACTION_LOG_CHANNEL_ID = '1514547037537046688';
+
 async function fetchLogChannel(client, channelId) {
   const id = String(channelId || '').trim();
   if (!id || !client?.isReady?.()) return null;
@@ -18,18 +21,13 @@ async function fetchLogChannel(client, channelId) {
 /**
  * Post an Ownership VC action (say / hold / etc.) to the configured log channel.
  */
-export async function logVcAction(client, config, {
+export async function logVcAction(client, _config, {
   title,
   actor,
   voiceChannel = null,
   details = [],
 } = {}) {
-  const channelId = String(
-    config?.vcActionLogChannelId
-    || process.env.VC_ACTION_LOG_CHANNEL_ID
-    || '1514547037537046688',
-  ).trim();
-  const channel = await fetchLogChannel(client, channelId);
+  const channel = await fetchLogChannel(client, VC_ACTION_LOG_CHANNEL_ID);
   if (!channel) return false;
 
   const fields = [

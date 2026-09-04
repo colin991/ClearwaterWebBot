@@ -14,7 +14,6 @@ export default {
       fields: [
         { name: 'Discord members', value: String(guild?.memberCount ?? 'Unavailable') },
         { name: 'Bot latency', value: `${Math.max(0, Math.round(interaction.client.ws.ping || 0))}ms` },
-        { name: 'Website', value: interaction.client.config.websiteUrl },
       ],
     }));
   },

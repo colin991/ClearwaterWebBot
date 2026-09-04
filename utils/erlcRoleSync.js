@@ -22,7 +22,7 @@ async function syncOnce(client, config, previousPlayers) {
     return previousPlayers;
   }
 
-  // Keep the website's live player count working even when role syncing has
+  // Keep a live player count snapshot even when role syncing has
   // not been configured in the owner panel yet.
   const server = await fetchErlcServer(config.erlcServerKey);
   const players = (server.Players || []).map(parseErlcPlayer).filter((player) => player.robloxId);
