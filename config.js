@@ -12,7 +12,8 @@ export const config = Object.freeze({
   robloxGroupLogChannelId: process.env.ROBLOX_GROUP_LOG_CHANNEL_ID?.trim() || '1536517651055120514',
   internetFeedChannelId: process.env.INTERNET_PANEL_CHANNEL_ID?.trim() || '1540510308102176908',
   internetAutomodChannelId: process.env.INTERNET_AUTOMOD_CHANNEL_ID?.trim() || '1540763074187894864',
-  updateLogChannelId: process.env.UPDATE_LOG_CHANNEL_ID?.trim() || '1538007463851200583',
+  /** Bot update announcements; hardcoded so a stale host .env cannot keep a deleted channel. */
+  updateLogChannelId: '1514547037537046688',
   /** Hold/say logs always use utils/vcActionLog.js hardcoded channel; kept here for reference. */
   vcActionLogChannelId: '1514547037537046688',
   noticeChannelId: process.env.NOTICE_CHANNEL_ID?.trim() || '1515038785421836479',

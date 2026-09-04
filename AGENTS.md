@@ -20,5 +20,5 @@
 
 - Every completed user-facing update must be appended to `data/site-updates.json` before the final commit.
 - Each entry needs a unique `id`, short `title`, plain-language `summary`, ISO `createdAt`, `updatedBy` (the requester’s **GitHub/git username**, e.g. `colin991` — not a full legal name and not “Cursor Agent”), and optional short `commit` hash.
-- The Discord bot posts new entries to channel `1538007463851200583` on startup.
+- The Discord bot posts new entries to channel `1514547037537046688` on startup.
 - Do not edit `data/site-updates-posted.json`; that file is host-local so already-posted updates are not repeated.

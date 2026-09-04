@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-04-update-log-channel",
+      "title": "Update log channel moved",
+      "summary": "Bot update announcements now post to channel 1514547037537046688 (same channel as Hold VC action logs).",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-04T21:56:27.000Z"
+    },
+    {
       "id": "2026-09-04-bot-only-repo",
       "title": "Website removed \u2014 Discord bot only",
       "summary": "The repository is now Discord-bot only. Website, Vercel, Phone, and the old HTTP bridge were removed. Hold VC action logs always post to channel 1514547037537046688.",

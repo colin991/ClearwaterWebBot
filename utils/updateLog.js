@@ -81,9 +81,13 @@ function buildUpdateMessage(entry) {
 }
 
 async function fetchUpdateChannel(client, config) {
-  const channelId = String(config.updateLogChannelId || '').trim();
+  // Prefer config, but never keep a deleted/stale host env channel for update logs.
+  const channelId = String(
+    config?.updateLogChannelId
+    || '1514547037537046688',
+  ).trim();
   if (!/^\d{16,22}$/.test(channelId)) {
-    logger.warn('Update log channel is not configured (set UPDATE_LOG_CHANNEL_ID).');
+    logger.warn('Update log channel is not configured.');
     return null;
   }
   if (!client?.isReady?.()) return null;
