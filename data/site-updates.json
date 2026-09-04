@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-04-secondary-server-gate",
+      "title": "Secondary server role gate",
+      "summary": "Joining server 1514189396184793169 now requires role 1514744040778760252 or 1514421440890409060 in the main Clearwater Discord. Members without those roles are kicked, including a sweep of people already in that server.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-04T22:09:57.000Z"
+    },
+    {
       "id": "2026-09-04-update-log-channel",
       "title": "Update log channel moved",
       "summary": "Bot update announcements now post to channel 1514547037537046688 (same channel as Hold VC action logs).",

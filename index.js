@@ -9,6 +9,7 @@ import { logger } from './utils/logger.js';
 import { startErlcRoleSync } from './utils/erlcRoleSync.js';
 import { startRobloxGroupSync } from './utils/robloxGroupSync.js';
 import { startDepartmentSalaryJob } from './utils/departmentSalary.js';
+import { startSecondaryServerGate } from './utils/secondaryServerGate.js';
 
 validateConfig();
 
@@ -38,10 +39,12 @@ const stopBotServices = startBotServices(client, config);
 let stopErlcSync = () => {};
 let stopRobloxGroupSync = () => {};
 let stopDepartmentSalary = () => {};
+let stopSecondaryGate = () => {};
 client.once('ready', () => {
   stopErlcSync = startErlcRoleSync(client, config);
   stopRobloxGroupSync = startRobloxGroupSync(client, config);
   stopDepartmentSalary = startDepartmentSalaryJob(client);
+  stopSecondaryGate = startSecondaryServerGate(client, config);
 });
 
 const shutDown = async (signal) => {
@@ -50,6 +53,7 @@ const shutDown = async (signal) => {
   stopErlcSync();
   stopRobloxGroupSync();
   stopDepartmentSalary();
+  stopSecondaryGate();
   client.destroy();
   process.exit(0);
 };

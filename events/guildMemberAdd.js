@@ -1,11 +1,19 @@
 import { Events } from 'discord.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges } from '../utils/staffRanks.js';
 import { readInternetStore, saveInternetStore, setInternetBan, upsertInternetUser } from '../utils/internetStore.js';
+import { handleSecondaryGateJoin } from '../utils/secondaryServerGate.js';
 import { logger } from '../utils/logger.js';
 
 export default {
   name: Events.GuildMemberAdd,
-  async execute(member) {
+  async execute(member, client) {
+    try {
+      const gated = await handleSecondaryGateJoin(member, client || member.client);
+      if (gated) return;
+    } catch (error) {
+      logger.error('Secondary server gate join check failed', error);
+    }
+
     if (member.guild.id !== CLEARWATER_GUILD_ID) return;
 
     const store = await readInternetStore();

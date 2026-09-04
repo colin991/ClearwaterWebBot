@@ -1,10 +1,18 @@
 import { Events } from 'discord.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges } from '../utils/staffRanks.js';
 import { readInternetStore, saveInternetStore, upsertInternetUser } from '../utils/internetStore.js';
+import { handleSecondaryGateMainRoleUpdate } from '../utils/secondaryServerGate.js';
+import { logger } from '../utils/logger.js';
 
 export default {
   name: Events.GuildMemberUpdate,
-  async execute(_previousMember, member) {
+  async execute(previousMember, member, client) {
+    try {
+      await handleSecondaryGateMainRoleUpdate(previousMember, member, client || member.client);
+    } catch (error) {
+      logger.error('Secondary server gate role update check failed', error);
+    }
+
     if (member.guild.id !== CLEARWATER_GUILD_ID) return;
 
     const store = await readInternetStore();

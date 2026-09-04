@@ -25,6 +25,9 @@ export const config = Object.freeze({
     .split(',').map((value) => value.trim()).filter(Boolean),
   ownerRoleIds: (process.env.OWNER_ROLE_IDS || '1514033074948800683')
     .split(',').map((value) => value.trim()).filter(Boolean),
+  secondaryGateGuildId: process.env.SECONDARY_GATE_GUILD_ID?.trim() || '1514189396184793169',
+  secondaryGateRequiredRoleIds: (process.env.SECONDARY_GATE_REQUIRED_ROLE_IDS || '1514744040778760252,1514421440890409060')
+    .split(',').map((value) => value.trim()).filter(Boolean),
 });
 
 export function validateConfig() {
