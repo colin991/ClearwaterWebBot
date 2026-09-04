@@ -4,6 +4,7 @@ import { ensureNoticeChannel } from '../utils/noticeChannel.js';
 import { ensureInternetPanel } from '../utils/discordInternetPanel.js';
 import { ensureInternetAutomodQueue } from '../utils/discordInternetModeration.js';
 import { flushPendingUpdateLogs } from '../utils/updateLog.js';
+import { startSecondaryServerGate } from '../utils/secondaryServerGate.js';
 
 export default {
   name: Events.ClientReady,
@@ -11,6 +12,12 @@ export default {
   async execute(client) {
     client.user.setActivity('Clearwater Roleplay', { type: ActivityType.Watching });
     logger.info(`Logged in as ${client.user.tag}.`);
+
+    // Start the secondary-server role gate as soon as the gateway is ready.
+    if (!client.stopSecondaryGate) {
+      client.stopSecondaryGate = startSecondaryServerGate(client);
+    }
+
     try {
       await flushPendingUpdateLogs(client, client.config);
     } catch (error) {
