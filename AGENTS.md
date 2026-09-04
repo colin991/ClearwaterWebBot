@@ -16,9 +16,8 @@
 - Create a concise, descriptive Git commit and push the current branch to `origin` automatically.
 - Never force-push, rewrite published history, bypass failed checks, or commit secrets. Stop and ask the user before any destructive or history-changing Git action.
 
-## Discord update log
+## Update catalog
 
 - Every completed user-facing update must be appended to `data/site-updates.json` before the final commit.
 - Each entry needs a unique `id`, short `title`, plain-language `summary`, ISO `createdAt`, `updatedBy` (the requester’s **GitHub/git username**, e.g. `colin991` — not a full legal name and not “Cursor Agent”), and optional short `commit` hash.
-- The Discord bot posts new entries to channel `1514547037537046688` on startup.
-- Do not edit `data/site-updates-posted.json`; that file is host-local so already-posted updates are not repeated.
+- Updates are **not** posted to a Discord channel.

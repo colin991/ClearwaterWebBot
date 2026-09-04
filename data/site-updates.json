@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-04-disable-discord-update-log",
+      "title": "Discord update log disabled",
+      "summary": "The bot no longer posts update announcements to a Discord channel, which removes the Unknown Channel error on startup.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-04T22:30:21.000Z"
+    },
+    {
       "id": "2026-09-04-host-start-script",
       "title": "Host startup force-sync",
       "summary": "Added start.sh so Apollopanel can force-reset to main before launch. This fixes the stuck old bot caused by a dirty downloads/rebuild-exe.sh blocking git pull.",

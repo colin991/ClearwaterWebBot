@@ -1,15 +1,11 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
-import { logger } from './logger.js';
-import { v2Card } from './v2Message.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const UPDATES_PATH = join(__dirname, '..', 'data', 'site-updates.json');
-const POSTED_PATH = join(__dirname, '..', 'data', 'site-updates-posted.json');
 
 const emptyCatalog = () => ({ version: 1, updates: [] });
-const emptyPosted = () => ({ version: 1, postedIds: [] });
 
 function normalizeEntry(entry = {}) {
   const id = String(entry.id || '').trim();
@@ -46,105 +42,14 @@ export async function appendUpdateEntry(entry) {
   return { added: true, entry: normalized };
 }
 
-async function readPostedIds() {
-  const data = await readJsonFile(POSTED_PATH, emptyPosted());
-  return new Set(Array.isArray(data?.postedIds) ? data.postedIds.map(String) : []);
+/**
+ * Discord channel posting for updates is disabled.
+ * Kept as no-ops so older call sites fail soft.
+ */
+export async function postUpdateLog() {
+  return { ok: false, reason: 'discord_update_log_disabled' };
 }
 
-async function markPosted(ids) {
-  if (!ids.length) return;
-  const posted = await readPostedIds();
-  for (const id of ids) posted.add(String(id));
-  await writeJsonFile(POSTED_PATH, { version: 1, postedIds: [...posted] });
-}
-
-function buildUpdateMessage(entry) {
-  const fields = [];
-  if (entry.updatedBy) fields.push({ name: 'Updated by', value: entry.updatedBy });
-  if (entry.createdAt) {
-    const when = new Date(entry.createdAt);
-    if (!Number.isNaN(when.getTime())) {
-      const unix = Math.floor(when.getTime() / 1000);
-      fields.push({
-        name: 'When',
-        value: `<t:${unix}:F> · <t:${unix}:R>`,
-      });
-    }
-  }
-  if (entry.commit) fields.push({ name: 'Commit', value: `\`${entry.commit}\`` });
-  return v2Card({
-    title: entry.title,
-    description: entry.summary,
-    fields,
-    footer: 'Clearwater update log',
-  });
-}
-
-async function fetchUpdateChannel(client, config) {
-  // Prefer config, but never keep a deleted/stale host env channel for update logs.
-  const channelId = String(
-    config?.updateLogChannelId
-    || '1514547037537046688',
-  ).trim();
-  if (!/^\d{16,22}$/.test(channelId)) {
-    logger.warn('Update log channel is not configured.');
-    return null;
-  }
-  if (!client?.isReady?.()) return null;
-
-  const channel = await client.channels.fetch(channelId).catch((error) => {
-    const code = Number(error?.code);
-    if (code === 10003) {
-      logger.warn(`Update log channel ${channelId} was not found (deleted or bot cannot see it).`);
-    } else {
-      logger.error(`Update log channel fetch failed (${channelId})`, error);
-    }
-    return null;
-  });
-
-  if (!channel) return null;
-  if (!channel.isTextBased?.()) {
-    logger.warn(`Update log channel ${channelId} is not a text channel.`);
-    return null;
-  }
-  return channel;
-}
-
-/** Post one update immediately (also marks it posted so the queue will not repeat it). */
-export async function postUpdateLog(client, config, entry) {
-  const normalized = normalizeEntry(entry);
-  if (!normalized) throw new Error('Update entries need id, title, and summary.');
-
-  const channel = await fetchUpdateChannel(client, config);
-  if (!channel) return { ok: false, reason: 'channel_unavailable' };
-
-  await channel.send(buildUpdateMessage(normalized));
-  await markPosted([normalized.id]);
-  return { ok: true, id: normalized.id };
-}
-
-/** Post any catalog updates that have not been sent from this bot host yet. */
-export async function flushPendingUpdateLogs(client, config) {
-  const channel = await fetchUpdateChannel(client, config);
-  if (!channel) return { posted: 0, skipped: 0 };
-
-  const catalog = await readUpdateCatalog();
-  const posted = await readPostedIds();
-  const pending = catalog.updates.filter((entry) => !posted.has(entry.id));
-  if (!pending.length) return { posted: 0, skipped: 0 };
-
-  const sent = [];
-  for (const entry of pending) {
-    try {
-      await channel.send(buildUpdateMessage(entry));
-      sent.push(entry.id);
-    } catch (error) {
-      logger.error(`Failed to post update log ${entry.id}`, error);
-      break;
-    }
-  }
-
-  await markPosted(sent);
-  if (sent.length) logger.info(`Posted ${sent.length} update log message(s).`);
-  return { posted: sent.length, skipped: pending.length - sent.length };
+export async function flushPendingUpdateLogs() {
+  return { posted: 0, skipped: 0, disabled: true };
 }
