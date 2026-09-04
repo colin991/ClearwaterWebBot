@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-04-host-start-script",
+      "title": "Host startup force-sync",
+      "summary": "Added start.sh so Apollopanel can force-reset to main before launch. This fixes the stuck old bot caused by a dirty downloads/rebuild-exe.sh blocking git pull.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-04T22:20:58.000Z"
+    },
+    {
       "id": "2026-09-04-secondary-server-gate",
       "title": "Secondary server role gate",
       "summary": "Joining server 1514189396184793169 now requires role 1514744040778760252 or 1514421440890409060 in the main Clearwater Discord. Members without those roles are kicked, including a sweep of people already in that server.",
