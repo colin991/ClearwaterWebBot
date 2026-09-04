@@ -30,7 +30,7 @@ export const config = Object.freeze({
   internetAutomodChannelId: process.env.INTERNET_AUTOMOD_CHANNEL_ID?.trim() || '1540763074187894864',
   updateLogChannelId: process.env.UPDATE_LOG_CHANNEL_ID?.trim() || '1538007463851200583',
   governmentLogChannelId: process.env.GOVERNMENT_LOG_CHANNEL_ID?.trim() || '1538291625447661768',
-  vcActionLogChannelId: process.env.VC_ACTION_LOG_CHANNEL_ID?.trim() || '1538021552120135731',
+  vcActionLogChannelId: process.env.VC_ACTION_LOG_CHANNEL_ID?.trim() || '1514547037537046688',
   noticeChannelId: process.env.NOTICE_CHANNEL_ID?.trim() || '1515038785421836479',
   verificationChannelId: process.env.VERIFICATION_CHANNEL_ID?.trim() || '1514181167145025666',
   messageForwardSourceIds: (process.env.MESSAGE_FORWARD_SOURCE_IDS || '1514667590608486400,1513609542468894877')

@@ -27,7 +27,7 @@ export async function logVcAction(client, config, {
   const channelId = String(
     config?.vcActionLogChannelId
     || process.env.VC_ACTION_LOG_CHANNEL_ID
-    || '1538021552120135731',
+    || '1514547037537046688',
   ).trim();
   const channel = await fetchLogChannel(client, channelId);
   if (!channel) return false;
