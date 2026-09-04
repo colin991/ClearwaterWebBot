@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-04-secondary-gate-false-kick-fix",
+      "title": "Secondary gate no longer false-kicks",
+      "summary": "The secondary server gate now force-checks roles on the main Clearwater server and will not kick someone if role lookup fails. Only members confirmed missing roles 1514421440890409060 / 1514744040778760252 are removed from 1514189396184793169.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-04T22:51:16.000Z"
+    },
+    {
       "id": "2026-09-04-disable-discord-update-log",
       "title": "Discord update log disabled",
       "summary": "The bot no longer posts update announcements to a Discord channel, which removes the Unknown Channel error on startup.",

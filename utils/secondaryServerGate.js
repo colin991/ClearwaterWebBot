@@ -1,22 +1,22 @@
 import { PermissionFlagsBits } from 'discord.js';
-import { CLEARWATER_GUILD_ID } from './staffRanks.js';
 import { logger } from './logger.js';
 
 /** Server that requires a qualifying role from the main Clearwater server. */
 export const SECONDARY_GATE_GUILD_ID = '1514189396184793169';
 
 /** Main Clearwater Discord — roles are checked here. */
-export const SECONDARY_GATE_MAIN_GUILD_ID = CLEARWATER_GUILD_ID;
+export const SECONDARY_GATE_MAIN_GUILD_ID = '1514026810348671026';
 
 /** Roles on the main Clearwater server that allow access to the gated server. */
 export const SECONDARY_GATE_REQUIRED_ROLE_IDS = Object.freeze([
-  '1514744040778760252',
   '1514421440890409060',
+  '1514744040778760252',
 ]);
 
 const KICK_REASON = 'Missing required Clearwater main-server role for this server.';
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 const JOIN_RECHECK_MS = 2_500;
+const UNKNOWN_MEMBER = 10007;
 
 async function fetchGuild(client, guildId) {
   if (!/^\d{16,22}$/.test(String(guildId || ''))) return null;
@@ -32,12 +32,25 @@ export function memberHasSecondaryGateRole(member, roleIds = SECONDARY_GATE_REQU
   return roleIds.some((roleId) => member.roles.cache.has(String(roleId)));
 }
 
+/**
+ * Resolve the member on the main Clearwater server.
+ * Distinguishes "not in server" from "lookup failed" so we never kick on a failed fetch.
+ */
 async function mainMemberFor(client, userId) {
   const main = await fetchGuild(client, SECONDARY_GATE_MAIN_GUILD_ID);
-  if (!main) return { main: null, member: null };
-  const member = main.members.cache.get(String(userId))
-    || await main.members.fetch(String(userId)).catch(() => null);
-  return { main, member };
+  if (!main) return { main: null, member: null, missing: false, lookupFailed: true };
+
+  try {
+    const member = await main.members.fetch({ user: String(userId), force: true });
+    return { main, member, missing: false, lookupFailed: false };
+  } catch (error) {
+    const code = Number(error?.code ?? error?.rawError?.code);
+    if (code === UNKNOWN_MEMBER) {
+      return { main, member: null, missing: true, lookupFailed: false };
+    }
+    logger.error(`Secondary gate: could not fetch main-server member ${userId}`, error);
+    return { main, member: null, missing: false, lookupFailed: true };
+  }
 }
 
 async function maybeDmKickNotice(user) {
@@ -70,7 +83,7 @@ async function kickFromGatedGuild(gatedGuild, userId, user) {
 }
 
 /**
- * Kick a gated-server member if they lack a required role on the main server.
+ * Kick a gated-server member only when we confirmed they lack a required main-server role.
  * @returns {'kicked'|'allowed'|'skipped'|'failed'}
  */
 export async function enforceSecondaryGateMember(client, gatedMember) {
@@ -81,20 +94,22 @@ export async function enforceSecondaryGateMember(client, gatedMember) {
     return 'skipped';
   }
 
-  const { main, member: mainMember } = await mainMemberFor(client, gatedMember.id);
-  if (!main) {
-    logger.error('Secondary gate: main Clearwater guild unavailable; cannot verify roles.');
+  const { main, member: mainMember, missing, lookupFailed } = await mainMemberFor(client, gatedMember.id);
+  if (!main || lookupFailed) {
+    logger.warn(`Secondary gate: skipped ${gatedMember.user?.tag || gatedMember.id} (could not verify main-server roles).`);
     return 'failed';
   }
 
   if (mainMember && memberHasSecondaryGateRole(mainMember)) {
-    logger.info(`Secondary gate: allowed ${gatedMember.user?.tag || gatedMember.id} (has required main-server role).`);
+    const matched = SECONDARY_GATE_REQUIRED_ROLE_IDS.filter((roleId) => mainMember.roles.cache.has(roleId));
+    logger.info(`Secondary gate: allowed ${gatedMember.user?.tag || gatedMember.id} (roles: ${matched.join(', ')}).`);
     return 'allowed';
   }
 
-  const why = mainMember
-    ? 'in main server but missing required roles'
-    : 'not in main Clearwater server';
+  // Confirmed: either not in main server, or in main server without required roles.
+  const why = missing
+    ? 'not in main Clearwater server'
+    : `in main server without required roles (has: ${[...(mainMember?.roles?.cache?.keys?.() || [])].filter((id) => id !== main.id).slice(0, 8).join(', ') || 'none'})`;
   logger.info(`Secondary gate: removing ${gatedMember.user?.tag || gatedMember.id} (${why}).`);
 
   const ok = await kickFromGatedGuild(gatedMember.guild, gatedMember.id, gatedMember.user);
@@ -163,6 +178,7 @@ export async function sweepSecondaryGateServer(client) {
     logger.error('Secondary gate: bot cannot kick in the gated server. Give it Kick Members and place its role above members.');
   }
 
+  // Prefetch both member lists; individual checks still force-fetch before kicking.
   await Promise.allSettled([
     gated.members.fetch(),
     main.members.fetch(),
@@ -204,6 +220,7 @@ export function startSecondaryServerGate(client) {
   };
 
   logger.info(`Secondary gate armed for guild ${SECONDARY_GATE_GUILD_ID} (main ${SECONDARY_GATE_MAIN_GUILD_ID}).`);
+  logger.info(`Secondary gate required main roles: ${SECONDARY_GATE_REQUIRED_ROLE_IDS.join(', ')}`);
   // Short delay so guild/member caches can settle after login.
   timer = setTimeout(run, 3_000);
   return () => {
