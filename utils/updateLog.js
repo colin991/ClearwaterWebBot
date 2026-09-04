@@ -82,13 +82,25 @@ function buildUpdateMessage(entry) {
 
 async function fetchUpdateChannel(client, config) {
   const channelId = String(config.updateLogChannelId || '').trim();
-  if (!channelId || !client?.isReady?.()) return null;
+  if (!/^\d{16,22}$/.test(channelId)) {
+    logger.warn('Update log channel is not configured (set UPDATE_LOG_CHANNEL_ID).');
+    return null;
+  }
+  if (!client?.isReady?.()) return null;
+
   const channel = await client.channels.fetch(channelId).catch((error) => {
-    logger.error(`Update log channel fetch failed (${channelId})`, error);
+    const code = Number(error?.code);
+    if (code === 10003) {
+      logger.warn(`Update log channel ${channelId} was not found (deleted or bot cannot see it).`);
+    } else {
+      logger.error(`Update log channel fetch failed (${channelId})`, error);
+    }
     return null;
   });
-  if (!channel?.isTextBased?.()) {
-    logger.error(`Update log channel is not text-based (${channelId})`);
+
+  if (!channel) return null;
+  if (!channel.isTextBased?.()) {
+    logger.warn(`Update log channel ${channelId} is not a text channel.`);
     return null;
   }
   return channel;
