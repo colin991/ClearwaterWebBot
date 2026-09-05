@@ -9,6 +9,9 @@ export const CORRECTIONS_STATUS_ONLINE = 'Corrections Online';
 /** Matches callsigns like `2W-06 |` or `3W-01 |` anywhere in a name. */
 export const CORRECTIONS_CALLSIGN_PATTERN = /\dW-\d+\s*\|/;
 
+/** How often to re-scan the corrections VC for callsigns. */
+export const CORRECTIONS_STATUS_POLL_MS = 5_000;
+
 function memberTexts(member) {
   return [
     member?.nickname,
@@ -23,20 +26,21 @@ export function memberHasCorrectionsCallsign(member) {
   return memberTexts(member).some((text) => CORRECTIONS_CALLSIGN_PATTERN.test(String(text)));
 }
 
-function voiceChannelHasCorrectionsCallsign(channel) {
-  if (!channel?.members) return false;
+function listCorrectionsCallsignMembers(channel) {
+  const matches = [];
+  if (!channel?.members) return matches;
   for (const member of channel.members.values()) {
-    if (memberHasCorrectionsCallsign(member)) return true;
+    if (memberHasCorrectionsCallsign(member)) matches.push(member);
   }
-  return false;
+  return matches;
 }
 
 async function resolveCorrectionsChannel(client) {
-  const channel = client.channels.cache.get(CORRECTIONS_VOICE_CHANNEL_ID)
-    || await client.channels.fetch(CORRECTIONS_VOICE_CHANNEL_ID).catch((error) => {
-      logger.error(`Corrections status: could not fetch VC ${CORRECTIONS_VOICE_CHANNEL_ID}`, error);
-      return null;
-    });
+  // Force-fetch so voice member membership stays current for the poll loop.
+  const channel = await client.channels.fetch(CORRECTIONS_VOICE_CHANNEL_ID).catch((error) => {
+    logger.error(`Corrections status: could not fetch VC ${CORRECTIONS_VOICE_CHANNEL_ID}`, error);
+    return null;
+  });
   if (!channel || channel.type !== ChannelType.GuildVoice) {
     logger.error(`Corrections status: ${CORRECTIONS_VOICE_CHANNEL_ID} is not a voice channel.`);
     return null;
@@ -45,9 +49,9 @@ async function resolveCorrectionsChannel(client) {
 }
 
 async function setVoiceChannelStatus(client, channelId, status) {
-  // `null` clears the voice channel status.
+  // Discord accepts a string status, or null/"" to clear.
   await client.rest.put(`/channels/${channelId}/voice-status`, {
-    body: { status },
+    body: { status: status == null ? null : String(status) },
   });
 }
 
@@ -69,23 +73,44 @@ export async function syncCorrectionsChannelStatus(client, { force = false } = {
     return { ok: false, reason: 'missing_permissions' };
   }
 
-  const online = voiceChannelHasCorrectionsCallsign(channel);
+  const matched = listCorrectionsCallsignMembers(channel);
+  const online = matched.length > 0;
   const nextStatus = online ? CORRECTIONS_STATUS_ONLINE : null;
   const statusKey = online ? CORRECTIONS_STATUS_ONLINE : '__cleared__';
 
   if (!force && client._correctionsChannelStatus === statusKey) {
-    return { ok: true, status: nextStatus, changed: false, online };
+    return {
+      ok: true,
+      status: nextStatus,
+      changed: false,
+      online,
+      members: channel.members?.size || 0,
+      matched: matched.length,
+    };
   }
 
   try {
     await setVoiceChannelStatus(client, channel.id, nextStatus);
     client._correctionsChannelStatus = statusKey;
+    const matchedNames = matched
+      .map((member) => member.displayName || member.user?.username || member.id)
+      .slice(0, 5)
+      .join(', ');
     logger.info(
       online
-        ? `Corrections status → ${CORRECTIONS_STATUS_ONLINE} (channel ${channel.id}).`
-        : `Corrections status cleared (channel ${channel.id}).`,
+        ? `Corrections status → ${CORRECTIONS_STATUS_ONLINE} `
+          + `(${matched.length}/${channel.members?.size || 0} matched: ${matchedNames}).`
+        : `Corrections status cleared `
+          + `(0 matched / ${channel.members?.size || 0} in VC).`,
     );
-    return { ok: true, status: nextStatus, changed: true, online };
+    return {
+      ok: true,
+      status: nextStatus,
+      changed: true,
+      online,
+      members: channel.members?.size || 0,
+      matched: matched.length,
+    };
   } catch (error) {
     logger.error(`Corrections status: failed to set "${statusKey}"`, error);
     return { ok: false, reason: 'api_error', error: error?.message || String(error) };
@@ -113,16 +138,34 @@ export async function handleCorrectionsMemberUpdate(oldMember, newMember, client
 }
 
 export function startCorrectionsChannelStatus(client) {
-  setTimeout(() => {
-    void syncCorrectionsChannelStatus(client, { force: true }).catch((error) => {
-      logger.error('Corrections status: initial sync failed', error);
-    });
-  }, 4_500);
+  let stopped = false;
+  let timer = null;
+  let inFlight = false;
+
+  const run = async () => {
+    if (stopped || inFlight) return;
+    inFlight = true;
+    try {
+      await syncCorrectionsChannelStatus(client);
+    } catch (error) {
+      logger.error('Corrections status poll failed', error);
+    } finally {
+      inFlight = false;
+      if (!stopped) timer = setTimeout(run, CORRECTIONS_STATUS_POLL_MS);
+    }
+  };
+
+  // First check shortly after ready, then every 5s.
+  timer = setTimeout(run, 2_000);
 
   logger.info(
     `Corrections voice status armed → VC ${CORRECTIONS_VOICE_CHANNEL_ID} `
-    + `(${CORRECTIONS_STATUS_ONLINE} when a member name matches ${CORRECTIONS_CALLSIGN_PATTERN}; clear when none).`,
+    + `(poll every ${CORRECTIONS_STATUS_POLL_MS / 1000}s; `
+    + `${CORRECTIONS_STATUS_ONLINE} when a member name matches ${CORRECTIONS_CALLSIGN_PATTERN}; clear when none).`,
   );
 
-  return () => {};
+  return () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+  };
 }
