@@ -46,7 +46,7 @@ Required gateway intents: **Guilds**, **Server Members**, **Server Messages**, *
 ## Notable features
 
 - **Hold VC** (`-holdvc` / `-unholdvc`) — Ownership-only voice hold; action logs go to channel `1514547037537046688`
-- **Secondary server gate** — server `1514189396184793169` kicks members without role `1514744040778760252` or `1514421440890409060` in the main Clearwater Discord
+- **Secondary server gate** — server `1514189396184793169` kicks members without role `1053768758772109394`, `1514744040778760252`, or `1514421440890409060` in the main Clearwater Discord
 - **Discord Internet Panel** — social feed inside Discord (`INTERNET_PANEL_CHANNEL_ID`)
 - **ER:LC role sync** — in-game Discord role while players are on the server
 - **Roblox group join requests** — accept/decline using Melonly-verified identity cache

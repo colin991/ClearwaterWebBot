@@ -9,6 +9,7 @@ export const SECONDARY_GATE_MAIN_GUILD_ID = '1514026810348671026';
 
 /** Roles on the main Clearwater server that allow access to the gated server. */
 export const SECONDARY_GATE_REQUIRED_ROLE_IDS = Object.freeze([
+  '1053768758772109394',
   '1514421440890409060',
   '1514744040778760252',
 ]);
