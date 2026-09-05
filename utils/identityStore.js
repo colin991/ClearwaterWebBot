@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
 const cachePath = join(process.cwd(), 'data', 'identity-cache.json');
+const manualPath = join(process.cwd(), 'data', 'manual-identities.json');
 const emptyCache = { byDiscord: {} };
 
 function identityKey() {
@@ -27,23 +28,69 @@ function decryptCache(raw) {
   }
 }
 
+function normalizeManualEntry(entry) {
+  const discordId = String(entry?.discordId || '').trim();
+  const robloxId = String(entry?.robloxId || '').trim();
+  if (!/^\d{16,22}$/.test(discordId) || !/^\d{1,20}$/.test(robloxId)) return null;
+  return {
+    discordId,
+    robloxId,
+    robloxUsername: entry?.robloxUsername ? String(entry.robloxUsername) : null,
+    robloxDisplayName: entry?.robloxDisplayName ? String(entry.robloxDisplayName) : null,
+    checkedAt: entry?.checkedAt || new Date().toISOString(),
+    source: 'manual',
+  };
+}
+
+async function loadManualIdentities() {
+  const raw = await readJsonFile(manualPath, []);
+  const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.identities) ? raw.identities : []);
+  const byDiscord = {};
+  for (const entry of list) {
+    const normalized = normalizeManualEntry(entry);
+    if (!normalized) continue;
+    byDiscord[normalized.discordId] = normalized;
+  }
+  return byDiscord;
+}
+
+function mergeIdentityCaches(runtimeCache, manualByDiscord) {
+  return {
+    byDiscord: {
+      ...(runtimeCache?.byDiscord || {}),
+      ...manualByDiscord,
+    },
+  };
+}
+
 export async function getIdentityCache() {
   const raw = await readJsonFile(cachePath, emptyCache);
+  let runtime = emptyCache;
   if (raw?.byDiscord && typeof raw.byDiscord === 'object' && !raw.data) {
-    return { byDiscord: raw.byDiscord };
+    runtime = { byDiscord: raw.byDiscord };
+  } else {
+    runtime = decryptCache(raw) || { byDiscord: {} };
   }
-  return decryptCache(raw) || { byDiscord: {} };
+  const manual = await loadManualIdentities();
+  return mergeIdentityCaches(runtime, manual);
 }
 
 async function saveIdentityCache(cache) {
   const key = identityKey();
+  // Never persist committed manual overrides into the encrypted runtime cache blob.
+  const manual = await loadManualIdentities();
+  const runtimeOnly = { byDiscord: { ...(cache?.byDiscord || {}) } };
+  for (const discordId of Object.keys(manual)) {
+    delete runtimeOnly.byDiscord[discordId];
+  }
+
   if (!key) {
-    await writeJsonFile(cachePath, cache);
+    await writeJsonFile(cachePath, runtimeOnly);
     return;
   }
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', key, iv);
-  const encrypted = Buffer.concat([cipher.update(JSON.stringify(cache), 'utf8'), cipher.final()]);
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(runtimeOnly), 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
   await writeJsonFile(cachePath, {
     v: 1,
