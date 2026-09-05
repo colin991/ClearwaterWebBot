@@ -15,17 +15,12 @@ export const holdvc = {
     const result = await holdVoiceChat(message, message.client.config);
 
     await logVcAction(message.client, message.client.config, {
-      title: '-holdvc used',
+      tag: 'HoldVC',
+      action: 'HOLD',
+      received: '-holdvc',
       actor: message.author,
       voiceChannel: result.voiceChannel,
-      details: [
-        { name: 'Announcement', value: `“${HOLD_VC_PHRASE}”` },
-        {
-          name: 'Muted',
-          value: `${result.mutedNow} member${result.mutedNow === 1 ? '' : 's'} (Ownership skipped)`,
-          inline: true,
-        },
-      ],
+      context: `muted ${result.mutedNow}; Ownership skipped; “${HOLD_VC_PHRASE}”`,
     });
 
     await message.reply(v2Card({
@@ -49,16 +44,12 @@ export const unholdvc = {
     const result = await releaseVoiceChat(message);
 
     await logVcAction(message.client, message.client.config, {
-      title: '-unholdvc used',
+      tag: 'HoldVC',
+      action: 'UNHOLD',
+      received: '-unholdvc',
       actor: message.author,
       voiceChannel: result.voiceChannel,
-      details: [
-        {
-          name: 'Unmuted',
-          value: `${result.unmuted} member${result.unmuted === 1 ? '' : 's'}`,
-          inline: true,
-        },
-      ],
+      context: `unmuted ${result.unmuted}`,
     });
 
     await message.reply(v2Card({

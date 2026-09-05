@@ -2,6 +2,7 @@ import { ChannelType, PermissionFlagsBits } from 'discord.js';
 import { fetchErlcServer, libertyMapPoint, parseErlcPlayer } from './erlc.js';
 import { discordIdsByRobloxId } from './identityStore.js';
 import { logger } from './logger.js';
+import { postProximityLog } from './vcActionLog.js';
 import { v2Card } from './v2Message.js';
 
 /** Discord voice channel players are dragged into when they enter the zone. */
@@ -274,6 +275,11 @@ export async function syncErlcZoneVoice(client, config = {}) {
         type: 'moved',
         text: `Moved <@${discordId}> (${player.username}) from ${fromChannel} → ${voiceChannel} via ${resolved.matchSource}`,
         pin,
+        actor: member.user,
+        voiceChannel,
+        fromChannel,
+        robloxUsername: player.username || null,
+        matchSource: resolved.matchSource,
       });
       logger.info(
         `ER:LC zone voice: moved ${member.user?.tag || discordId} (${player.username}) `
@@ -285,6 +291,9 @@ export async function syncErlcZoneVoice(client, config = {}) {
         type: 'error',
         text: `Failed to move <@${discordId}> (${player.username}): ${error?.message || error}`,
         pin,
+        actor: member.user,
+        voiceChannel,
+        robloxUsername: player.username || null,
       });
       logger.error(`ER:LC zone voice: could not move ${discordId}`, error);
     }
@@ -351,9 +360,27 @@ export function startErlcZoneVoice(client, config = {}) {
         const pin = event.pin
           ? `map ${((event.pin.left || 0) * 100).toFixed(1)}%, ${((event.pin.top || 0) * 100).toFixed(1)}%`
           : 'map n/a';
-        await postZoneLog(client, {
-          title: event.type === 'moved' ? 'Zone enter → VC move' : 'Zone check',
-          description: `${event.text}\n${pin}`,
+
+        if (event.type === 'moved') {
+          const name = event.actor?.username || event.robloxUsername || 'unknown';
+          const id = event.actor?.id || '?';
+          const dest = event.voiceChannel?.name || 'unknown';
+          const from = event.fromChannel?.name ? `from #${event.fromChannel.name}; ` : '';
+          const match = event.matchSource || 'unknown match';
+          await postProximityLog(client, {
+            channelId: ERLC_ZONE_LOG_CHANNEL_ID,
+            tag: 'ZoneVC',
+            body: `MOVE — ${name} (${id}) -> #${dest} (${from}ER:LC zone enter; ${match}; ${pin})`,
+          });
+          continue;
+        }
+
+        // Skip / error stay compact but use the same teal [Tag] style.
+        const action = event.type === 'error' ? 'ERROR' : 'SKIP';
+        await postProximityLog(client, {
+          channelId: ERLC_ZONE_LOG_CHANNEL_ID,
+          tag: 'ZoneVC',
+          body: `${action} — ${String(event.text || '').replace(/\s+/g, ' ').trim()} (${pin})`,
         });
       }
 

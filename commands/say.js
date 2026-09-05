@@ -40,17 +40,12 @@ export default {
     });
 
     await logVcAction(interaction.client, interaction.client.config, {
-      title: '/say used',
+      tag: 'HoldVC',
+      action: 'SAY',
+      received: '/say',
       actor: interaction.user,
       voiceChannel: result.voiceChannel,
-      details: [
-        { name: 'Said', value: `“${result.text}”` },
-        {
-          name: 'After',
-          value: result.leftAfter ? 'Left the voice channel' : 'Stayed (hold VC active)',
-          inline: true,
-        },
-      ],
+      context: `“${result.text}”; ${result.leftAfter ? 'left after' : 'stayed (hold active)'}`,
     });
 
     await interaction.editReply(v2Card({

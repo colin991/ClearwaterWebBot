@@ -1,8 +1,30 @@
 import { logger } from './logger.js';
-import { v2Card } from './v2Message.js';
 
 /** Hardcoded so a stale host `.env` cannot keep sending hold/say logs to an old channel. */
 export const VC_ACTION_LOG_CHANNEL_ID = '1514547037537046688';
+
+/**
+ * Discord `css` code fences color a leading `[Tag]` teal — same look as ProximityVC ops logs.
+ * @param {string} tag
+ * @param {string} body
+ */
+export function proximityStyleContent(tag, body) {
+  const cleanTag = String(tag || 'Clearwater').replace(/[\[\]]/g, '');
+  const cleanBody = String(body || '').replace(/```/g, '`\u200b``');
+  return `\`\`\`css\n[${cleanTag}] ${cleanBody}\n\`\`\``;
+}
+
+function actorLabel(actor) {
+  if (!actor) return 'unknown (0)';
+  const name = actor.username || actor.tag?.split('#')[0] || actor.displayName || 'unknown';
+  return `${name} (${actor.id})`;
+}
+
+function channelLabel(voiceChannel) {
+  if (!voiceChannel) return '#unknown';
+  const name = voiceChannel.name || 'unknown';
+  return `#${name}`;
+}
 
 async function fetchLogChannel(client, channelId) {
   const id = String(channelId || '').trim();
@@ -19,46 +41,73 @@ async function fetchLogChannel(client, channelId) {
 }
 
 /**
- * Post an Ownership VC action (say / hold / etc.) to the configured log channel.
+ * Post a single ProximityVC-style line to a log channel.
+ */
+export async function postProximityLog(client, {
+  channelId = VC_ACTION_LOG_CHANNEL_ID,
+  tag = 'Clearwater',
+  body,
+} = {}) {
+  const channel = await fetchLogChannel(client, channelId);
+  if (!channel || !body) return false;
+  await channel.send({ content: proximityStyleContent(tag, body) }).catch((error) => {
+    logger.error('Failed to post proximity-style VC log', error);
+  });
+  return true;
+}
+
+/**
+ * Post an Ownership VC action (say / hold / etc.) in ProximityVC-style ops logs.
+ *
+ * Preferred shape:
+ *   action: 'HOLD' | 'UNHOLD' | 'SAY' | 'MOVE'
+ *   received: optional command string → also posts a "Received" line first
+ *
+ * Legacy title/details still work and are folded into the context suffix.
  */
 export async function logVcAction(client, _config, {
-  title,
-  actor,
+  tag = 'HoldVC',
+  action = null,
+  title = null,
+  actor = null,
   voiceChannel = null,
+  context = '',
+  received = null,
   details = [],
 } = {}) {
   const channel = await fetchLogChannel(client, VC_ACTION_LOG_CHANNEL_ID);
   if (!channel) return false;
 
-  const fields = [
-    {
-      name: 'Who',
-      value: actor
-        ? `<@${actor.id}> (\`${actor.id}\` · ${actor.tag || 'unknown'})`
-        : 'Unknown',
-    },
-  ];
+  const detailParts = details
+    .filter((detail) => detail?.name && detail?.value)
+    .map((detail) => `${detail.name}=${String(detail.value).replace(/\s+/g, ' ').trim()}`);
+  const contextParts = [context, ...detailParts].filter(Boolean);
+  const contextText = contextParts.length ? ` (${contextParts.join('; ')})` : '';
 
-  if (voiceChannel) {
-    fields.push({
-      name: 'Voice channel',
-      value: `${voiceChannel} (\`${voiceChannel.id}\`)`,
-    });
+  const resolvedAction = String(
+    action
+    || (title && /unhold/i.test(title) ? 'UNHOLD'
+      : title && /hold/i.test(title) ? 'HOLD'
+        : title && /say/i.test(title) ? 'SAY'
+          : title && /move/i.test(title) ? 'MOVE'
+            : 'ACTION'),
+  ).toUpperCase();
+
+  const lines = [];
+  if (received) {
+    lines.push(`${actorLabel(actor)}: Received \`${received}\``);
   }
+  lines.push(
+    `${resolvedAction} — ${actorLabel(actor)} -> ${channelLabel(voiceChannel)}${contextText}`,
+  );
 
-  for (const detail of details) {
-    if (!detail?.name || !detail?.value) continue;
-    fields.push({
-      name: String(detail.name).slice(0, 256),
-      value: String(detail.value).slice(0, 1024),
-    });
-  }
-
-  await channel.send(v2Card({
-    title: title || 'VC action',
-    fields,
-  })).catch((error) => {
+  try {
+    for (const line of lines) {
+      await channel.send({ content: proximityStyleContent(tag, line) });
+    }
+    return true;
+  } catch (error) {
     logger.error('Failed to post VC action log', error);
-  });
-  return true;
+    return false;
+  }
 }
