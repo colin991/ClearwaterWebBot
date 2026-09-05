@@ -51,6 +51,7 @@ const shutDown = async (signal) => {
   stopRobloxGroupSync();
   stopDepartmentSalary();
   client.stopSecondaryGate?.();
+  client.stopErlcZoneVoice?.();
   client.destroy();
   process.exit(0);
 };

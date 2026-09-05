@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-05-erlc-zone-voice-drag",
+      "title": "ER:LC map zone voice drag",
+      "summary": "Players who enter the marked grassy map zone are moved into voice channel 1545525189339774997. Leaving the zone does nothing. Zone bounds are inset from surrounding roads.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-05T17:27:59.000Z"
+    },
+    {
       "id": "2026-09-05-secondary-gate-role-1536839307766267944",
       "title": "Secondary gate allowlist expanded",
       "summary": "Main-server role 1536839307766267944 is now allowed through the secondary server gate.",

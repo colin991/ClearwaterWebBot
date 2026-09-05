@@ -4,6 +4,7 @@ import { ensureNoticeChannel } from '../utils/noticeChannel.js';
 import { ensureInternetPanel } from '../utils/discordInternetPanel.js';
 import { ensureInternetAutomodQueue } from '../utils/discordInternetModeration.js';
 import { startSecondaryServerGate } from '../utils/secondaryServerGate.js';
+import { startErlcZoneVoice } from '../utils/erlcZoneVoice.js';
 
 export default {
   name: Events.ClientReady,
@@ -15,6 +16,10 @@ export default {
     // Start the secondary-server role gate as soon as the gateway is ready.
     if (!client.stopSecondaryGate) {
       client.stopSecondaryGate = startSecondaryServerGate(client);
+    }
+
+    if (!client.stopErlcZoneVoice) {
+      client.stopErlcZoneVoice = startErlcZoneVoice(client, client.config);
     }
 
     // Guild/channel cache can still be settling right after ready.
