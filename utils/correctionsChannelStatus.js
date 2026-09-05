@@ -1,13 +1,13 @@
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
 import { logger } from './logger.js';
 
-/** Voice channel whose status tracks whether a `#W-## |` corrections callsign is present. */
+/** Voice channel whose status tracks whether a `2W-06 |`-style corrections callsign is present. */
 export const CORRECTIONS_VOICE_CHANNEL_ID = '1545525189339774997';
 
 export const CORRECTIONS_STATUS_ONLINE = 'Corrections Online';
 
-/** Matches callsigns like `#W-12 |` or `#W-1 |` anywhere in a name. */
-export const CORRECTIONS_CALLSIGN_PATTERN = /#W-\d+\s*\|/;
+/** Matches callsigns like `2W-06 |` or `3W-01 |` anywhere in a name. */
+export const CORRECTIONS_CALLSIGN_PATTERN = /\dW-\d+\s*\|/;
 
 function memberTexts(member) {
   return [
@@ -53,7 +53,7 @@ async function setVoiceChannelStatus(client, channelId, status) {
 
 /**
  * Sync corrections VC status from current members.
- * Online when any non-bot member has a `#W-## |` callsign; otherwise clear status.
+ * Online when any non-bot member has a `2W-06 |`-style callsign; otherwise clear status.
  */
 export async function syncCorrectionsChannelStatus(client, { force = false } = {}) {
   const channel = await resolveCorrectionsChannel(client);
