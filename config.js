@@ -24,7 +24,7 @@ export const config = Object.freeze({
   ownerRoleIds: (process.env.OWNER_ROLE_IDS || '1514033074948800683')
     .split(',').map((value) => value.trim()).filter(Boolean),
   secondaryGateGuildId: process.env.SECONDARY_GATE_GUILD_ID?.trim() || '1514189396184793169',
-  secondaryGateRequiredRoleIds: (process.env.SECONDARY_GATE_REQUIRED_ROLE_IDS || '1053768758772109394,1514744040778760252,1514421440890409060')
+  secondaryGateRequiredRoleIds: (process.env.SECONDARY_GATE_REQUIRED_ROLE_IDS || '1053768758772109394,1514421440890409060,1514744040778760252,1536839307766267944')
     .split(',').map((value) => value.trim()).filter(Boolean),
 });
 
