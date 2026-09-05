@@ -38,6 +38,80 @@ function pointInDragZone(x, z) {
     && pin.top <= ERLC_DRAG_ZONE.topMax;
 }
 
+/** Lowercase token used for Roblox username inclusion checks. */
+export function normalizeNameToken(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '');
+}
+
+/**
+ * True when a Discord display string contains the Roblox username
+ * (nickname / display name patterns like "Rank | Username").
+ */
+export function discordTextIncludesRobloxUsername(discordText, robloxUsername) {
+  const needle = normalizeNameToken(robloxUsername);
+  if (!needle || needle.length < 3) return false;
+  const haystack = normalizeNameToken(discordText);
+  return Boolean(haystack && haystack.includes(needle));
+}
+
+function memberSearchTexts(member) {
+  return [
+    member.nickname,
+    member.displayName,
+    member.user?.globalName,
+    member.user?.username,
+  ].filter(Boolean);
+}
+
+/**
+ * Resolve Discord member for an ER:LC player.
+ * Prefer Melonly identity cache; fall back to Roblox username in Discord nickname/name.
+ */
+export async function resolveZoneDiscordMember(guild, player, identityMap) {
+  const robloxId = String(player?.robloxId || '').trim();
+  const username = String(player?.username || '').trim();
+  const linkedId = robloxId ? identityMap.get(robloxId) : null;
+
+  if (linkedId) {
+    const member = guild.members.cache.get(linkedId)
+      || await guild.members.fetch(linkedId).catch(() => null);
+    if (member && !member.user?.bot) {
+      return { member, matchSource: 'Melonly identity' };
+    }
+  }
+
+  if (!username || normalizeNameToken(username).length < 3) {
+    return { member: null, matchSource: null };
+  }
+
+  if (guild.members.cache.size < 2) {
+    await guild.members.fetch().catch(() => null);
+  }
+
+  const matches = [];
+  for (const member of guild.members.cache.values()) {
+    if (member.user?.bot) continue;
+    if (memberSearchTexts(member).some((text) => discordTextIncludesRobloxUsername(text, username))) {
+      matches.push(member);
+    }
+  }
+
+  if (matches.length === 1) {
+    return { member: matches[0], matchSource: 'Discord name / nickname' };
+  }
+  if (matches.length > 1) {
+    return {
+      member: null,
+      matchSource: null,
+      ambiguous: matches.map((m) => m.id),
+    };
+  }
+  return { member: null, matchSource: null };
+}
+
 async function resolveTextLogChannel(client) {
   const channel = client.channels.cache.get(ERLC_ZONE_LOG_CHANNEL_ID)
     || await client.channels.fetch(ERLC_ZONE_LOG_CHANNEL_ID).catch((error) => {
@@ -124,10 +198,12 @@ export async function syncErlcZoneVoice(client, config = {}) {
   const server = await fetchErlcServer(serverKey);
   const players = (server.Players || server.players || []).map(parseErlcPlayer);
   const identityMap = await discordIdsByRobloxId();
+  const guild = voiceChannel.guild;
 
-  if (!client._erlcZoneInside) client._erlcZoneInside = new Set();
-  const previouslyInside = client._erlcZoneInside;
-  const currentlyInside = new Set();
+  if (!client._erlcZoneHandled) client._erlcZoneHandled = new Set();
+  const previouslyHandled = client._erlcZoneHandled;
+  const stillInZone = new Set();
+  const newlyHandled = new Set();
 
   let moved = 0;
   let skipped = 0;
@@ -140,43 +216,47 @@ export async function syncErlcZoneVoice(client, config = {}) {
 
     const pin = libertyMapPoint(x, z);
     const label = `${player.username || 'unknown'} (${player.robloxId || '?'})`;
-    const discordId = identityMap.get(String(player.robloxId || ''));
-    if (!discordId) {
-      skipped += 1;
-      events.push({
-        type: 'skip',
-        text: `${label} in zone but no linked Discord identity`,
-        pin,
-      });
-      continue;
-    }
+    const resolved = await resolveZoneDiscordMember(guild, player, identityMap);
+    const member = resolved.member;
 
-    currentlyInside.add(discordId);
-    if (previouslyInside.has(discordId)) continue; // already in zone — do not re-drag
-
-    const member = await voiceChannel.guild.members.fetch(discordId).catch(() => null);
     if (!member) {
       skipped += 1;
-      events.push({
-        type: 'skip',
-        text: `${label} / <@${discordId}> in zone but not in Discord guild`,
-        pin,
-      });
+      if (resolved.ambiguous?.length) {
+        events.push({
+          type: 'skip',
+          text: `${label} in zone but Roblox name matched multiple Discord members (${resolved.ambiguous.map((id) => `<@${id}>`).join(', ')})`,
+          pin,
+        });
+      } else {
+        events.push({
+          type: 'skip',
+          text: `${label} in zone but no Melonly link and no Discord nickname/name containing that Roblox username`,
+          pin,
+        });
+      }
       continue;
     }
+
+    const discordId = member.id;
+    stillInZone.add(discordId);
+
+    // Already successfully handled for this continuous stay in the zone.
+    if (previouslyHandled.has(discordId)) continue;
+
     if (!member.voice?.channelId) {
       skipped += 1;
       events.push({
         type: 'skip',
-        text: `${label} / <@${discordId}> in zone but not connected to any Discord VC`,
+        text: `${label} / <@${discordId}> in zone (${resolved.matchSource}) but not connected to any Discord VC — will retry`,
         pin,
       });
       continue;
     }
     if (member.voice.channelId === voiceChannel.id) {
+      newlyHandled.add(discordId);
       events.push({
         type: 'already',
-        text: `${label} / <@${discordId}> entered zone already in target VC`,
+        text: `${label} / <@${discordId}> entered zone already in target VC (${resolved.matchSource})`,
         pin,
       });
       continue;
@@ -189,12 +269,16 @@ export async function syncErlcZoneVoice(client, config = {}) {
         `Entered ER:LC map drag zone (${player.username || discordId})`,
       );
       moved += 1;
+      newlyHandled.add(discordId);
       events.push({
         type: 'moved',
-        text: `Moved <@${discordId}> (${player.username}) from ${fromChannel} → ${voiceChannel}`,
+        text: `Moved <@${discordId}> (${player.username}) from ${fromChannel} → ${voiceChannel} via ${resolved.matchSource}`,
         pin,
       });
-      logger.info(`ER:LC zone voice: moved ${member.user?.tag || discordId} (${player.username}) into ${voiceChannel.id}.`);
+      logger.info(
+        `ER:LC zone voice: moved ${member.user?.tag || discordId} (${player.username}) `
+        + `into ${voiceChannel.id} via ${resolved.matchSource}.`,
+      );
     } catch (error) {
       skipped += 1;
       events.push({
@@ -206,12 +290,15 @@ export async function syncErlcZoneVoice(client, config = {}) {
     }
   }
 
-  // Update membership snapshot. Leaving the zone intentionally does nothing.
-  client._erlcZoneInside = currentlyInside;
+  // Keep handled only while still in zone; add new successes. Skips (e.g. not in VC) retry next poll.
+  client._erlcZoneHandled = new Set([
+    ...[...previouslyHandled].filter((id) => stillInZone.has(id)),
+    ...newlyHandled,
+  ]);
 
   return {
     checked: players.length,
-    inside: currentlyInside.size,
+    inside: stillInZone.size,
     moved,
     skipped,
     identities: identityMap.size,
@@ -233,7 +320,8 @@ export function startErlcZoneVoice(client, config = {}) {
       `Poll: every ${POLL_MS / 1000}s`,
       `Zone (map %): left ${ERLC_DRAG_ZONE.leftMin}-${ERLC_DRAG_ZONE.leftMax}, top ${ERLC_DRAG_ZONE.topMin}-${ERLC_DRAG_ZONE.topMax}`,
       `Zone (studs): x ${ERLC_DRAG_ZONE.xMin}-${ERLC_DRAG_ZONE.xMax}, z ${ERLC_DRAG_ZONE.zMin}-${ERLC_DRAG_ZONE.zMax}`,
-      'Action: move on **enter only**. Leave = no action.',
+      'Match: Melonly identity, else Roblox username in Discord nickname / display name / username.',
+      'Action: move on **enter only**. Leave = no action. Not-in-VC skips retry until connected.',
     ].join('\n'),
   });
 
@@ -300,7 +388,7 @@ export function startErlcZoneVoice(client, config = {}) {
   logger.info(
     `ER:LC zone voice armed → VC ${ERLC_ZONE_VOICE_CHANNEL_ID}, logs ${ERLC_ZONE_LOG_CHANNEL_ID} `
     + `(zone left ${ERLC_DRAG_ZONE.leftMin}-${ERLC_DRAG_ZONE.leftMax}, `
-    + `top ${ERLC_DRAG_ZONE.topMin}-${ERLC_DRAG_ZONE.topMax}).`,
+    + `top ${ERLC_DRAG_ZONE.topMin}-${ERLC_DRAG_ZONE.topMax}; nickname fallback on).`,
   );
   timer = setTimeout(run, 5_000);
   return () => {
