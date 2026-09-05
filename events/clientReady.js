@@ -5,6 +5,7 @@ import { ensureInternetPanel } from '../utils/discordInternetPanel.js';
 import { ensureInternetAutomodQueue } from '../utils/discordInternetModeration.js';
 import { startSecondaryServerGate } from '../utils/secondaryServerGate.js';
 import { startErlcZoneVoice } from '../utils/erlcZoneVoice.js';
+import { startDispatchChannelStatus } from '../utils/dispatchChannelStatus.js';
 
 export default {
   name: Events.ClientReady,
@@ -20,6 +21,10 @@ export default {
 
     if (!client.stopErlcZoneVoice) {
       client.stopErlcZoneVoice = startErlcZoneVoice(client, client.config);
+    }
+
+    if (!client.stopDispatchChannelStatus) {
+      client.stopDispatchChannelStatus = startDispatchChannelStatus(client);
     }
 
     // Guild/channel cache can still be settling right after ready.

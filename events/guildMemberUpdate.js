@@ -2,6 +2,7 @@ import { Events } from 'discord.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges } from '../utils/staffRanks.js';
 import { readInternetStore, saveInternetStore, upsertInternetUser } from '../utils/internetStore.js';
 import { handleSecondaryGateMainRoleUpdate } from '../utils/secondaryServerGate.js';
+import { handleDispatchMemberUpdate } from '../utils/dispatchChannelStatus.js';
 import { logger } from '../utils/logger.js';
 
 export default {
@@ -11,6 +12,12 @@ export default {
       await handleSecondaryGateMainRoleUpdate(previousMember, member, client || member.client);
     } catch (error) {
       logger.error('Secondary server gate role update check failed', error);
+    }
+
+    try {
+      await handleDispatchMemberUpdate(previousMember, member, client || member.client);
+    } catch (error) {
+      logger.warn(`Dispatch status member update failed: ${error?.message || error}`);
     }
 
     if (member.guild.id !== CLEARWATER_GUILD_ID) return;

@@ -52,6 +52,7 @@ const shutDown = async (signal) => {
   stopDepartmentSalary();
   client.stopSecondaryGate?.();
   client.stopErlcZoneVoice?.();
+  client.stopDispatchChannelStatus?.();
   client.destroy();
   process.exit(0);
 };
