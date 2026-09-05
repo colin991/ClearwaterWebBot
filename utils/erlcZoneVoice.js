@@ -27,7 +27,7 @@ export const ERLC_DRAG_ZONE = Object.freeze({
   zMax: 1987,
 });
 
-const POLL_MS = 10_000;
+const POLL_MS = 7_000;
 
 function pointInDragZone(x, z) {
   const pin = libertyMapPoint(x, z);

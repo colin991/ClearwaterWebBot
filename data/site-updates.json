@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-05-erlc-zone-poll-7s",
+      "title": "ER:LC zone voice polls every 7s",
+      "summary": "The ER:LC map zone voice drag checker now polls player positions every 7 seconds instead of 10.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-05T17:29:13.000Z"
+    },
+    {
       "id": "2026-09-05-erlc-zone-voice-drag",
       "title": "ER:LC map zone voice drag",
       "summary": "Players who enter the marked grassy map zone are moved into voice channel 1545525189339774997. Leaving the zone does nothing. Zone bounds are inset from surrounding roads.",
