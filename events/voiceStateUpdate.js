@@ -1,6 +1,7 @@
 import { Events } from 'discord.js';
 import { handleHoldVoiceStateUpdate } from '../utils/holdVoiceChat.js';
 import { handleDispatchVoiceStateUpdate } from '../utils/dispatchChannelStatus.js';
+import { handleCorrectionsVoiceStateUpdate } from '../utils/correctionsChannelStatus.js';
 import { logger } from '../utils/logger.js';
 
 export default {
@@ -16,6 +17,12 @@ export default {
       await handleDispatchVoiceStateUpdate(oldState, newState, client);
     } catch (error) {
       logger.warn(`Dispatch VC status update failed: ${error?.message || error}`);
+    }
+
+    try {
+      await handleCorrectionsVoiceStateUpdate(oldState, newState, client);
+    } catch (error) {
+      logger.warn(`Corrections VC status update failed: ${error?.message || error}`);
     }
   },
 };

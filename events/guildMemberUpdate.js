@@ -3,6 +3,7 @@ import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges } from '../
 import { readInternetStore, saveInternetStore, upsertInternetUser } from '../utils/internetStore.js';
 import { handleSecondaryGateMainRoleUpdate } from '../utils/secondaryServerGate.js';
 import { handleDispatchMemberUpdate } from '../utils/dispatchChannelStatus.js';
+import { handleCorrectionsMemberUpdate } from '../utils/correctionsChannelStatus.js';
 import { logger } from '../utils/logger.js';
 
 export default {
@@ -18,6 +19,12 @@ export default {
       await handleDispatchMemberUpdate(previousMember, member, client || member.client);
     } catch (error) {
       logger.warn(`Dispatch status member update failed: ${error?.message || error}`);
+    }
+
+    try {
+      await handleCorrectionsMemberUpdate(previousMember, member, client || member.client);
+    } catch (error) {
+      logger.warn(`Corrections status member update failed: ${error?.message || error}`);
     }
 
     if (member.guild.id !== CLEARWATER_GUILD_ID) return;
