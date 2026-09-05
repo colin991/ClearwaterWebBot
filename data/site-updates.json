@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-05-locked-post-auto-delete",
+      "title": "Locked post auto-deletes messages",
+      "summary": "Any message sent in Discord post/channel 1545828641999560824 is automatically deleted.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-05T16:15:49.000Z"
+    },
+    {
       "id": "2026-09-04-secondary-gate-rest-check",
       "title": "Secondary gate uses REST role checks",
       "summary": "Secondary server gate now verifies required main-server roles through Discord REST (not role cache), and the periodic mass sweep is disabled. Only confirmed missing-role members are kicked on join.",

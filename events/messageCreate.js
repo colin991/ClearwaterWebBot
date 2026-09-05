@@ -1,6 +1,7 @@
 import { Events } from 'discord.js';
 import { getOwnerConfig } from '../utils/ownerConfig.js';
 import { logger } from '../utils/logger.js';
+import { handleLockedPostMessage } from '../utils/lockedPost.js';
 import { handleMessageForward } from '../utils/messageForward.js';
 import { handleNoticeChannelMessage } from '../utils/noticeChannel.js';
 import { parseArgs } from '../utils/prefixHelpers.js';
@@ -9,6 +10,13 @@ export default {
   name: Events.MessageCreate,
   async execute(message, client) {
     if (!message.inGuild()) return;
+
+    try {
+      const locked = await handleLockedPostMessage(message, client);
+      if (locked) return;
+    } catch (error) {
+      logger.error('Locked post handler failed', error);
+    }
 
     try {
       const handled = await handleNoticeChannelMessage(message, client);
