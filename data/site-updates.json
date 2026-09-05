@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-05-secondary-gate-role-1536839307766267944",
+      "title": "Secondary gate allowlist expanded",
+      "summary": "Main-server role 1536839307766267944 is now allowed through the secondary server gate.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-05T17:06:47.000Z"
+    },
+    {
       "id": "2026-09-05-locked-post-auto-delete",
       "title": "Locked post auto-deletes messages",
       "summary": "Any message sent in Discord post/channel 1545828641999560824 is automatically deleted.",

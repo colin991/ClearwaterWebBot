@@ -12,6 +12,7 @@ export const SECONDARY_GATE_REQUIRED_ROLE_IDS = Object.freeze([
   '1053768758772109394',
   '1514421440890409060',
   '1514744040778760252',
+  '1536839307766267944',
 ]);
 
 const KICK_REASON = 'Missing required Clearwater main-server role for this server.';
