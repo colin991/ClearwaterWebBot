@@ -10,7 +10,7 @@ export default {
     await interaction.reply(v2Card({
       title: 'Clearwater Bot Help',
       description: [
-        '`/ping` - check the bot response time',
+        '`/ping` - check the bot response time and latency',
         '`/server` - show Clearwater server information',
         '`/help` - show this command list',
         '`/say` - Ownership only: speak text in a voice channel',
