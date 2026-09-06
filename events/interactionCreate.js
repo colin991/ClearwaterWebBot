@@ -5,6 +5,7 @@ import { handleDiscordInternetModerationInteraction } from '../utils/discordInte
 import { DISCORD_INTERNET_UNSUB_CUSTOM_ID } from '../utils/discordInternetNotify.js';
 import { readInternetStore, saveInternetStore, updateInternetPreference } from '../utils/internetStore.js';
 import { handlePinellasApplyInteraction } from '../utils/pinellasApply.js';
+import { handlePinellasInfractInteraction } from '../utils/pinellasInfract.js';
 
 export default {
   name: Events.InteractionCreate,
@@ -16,6 +17,12 @@ export default {
       if (await handlePinellasApplyInteraction(interaction)) return;
     } catch (error) {
       logger.error('Pinellas apply interaction failed', error);
+    }
+
+    try {
+      if (await handlePinellasInfractInteraction(interaction)) return;
+    } catch (error) {
+      logger.error('Pinellas infract interaction failed', error);
     }
 
     if (interaction.isButton()) {

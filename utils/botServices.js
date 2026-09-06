@@ -9,6 +9,7 @@ import {
   setDiscordInternetNotify,
 } from './internetStore.js';
 import { createDiscordInternetNotifier } from './discordInternetNotify.js';
+import { startPinellasInfractionExpiry } from './pinellasInfract.js';
 
 /**
  * Discord-only background services formerly started inside the website HTTP bridge.
@@ -45,5 +46,10 @@ export function startBotServices(client, config) {
   dataCleanup.unref();
   void cleanUpInternetData();
 
-  return () => clearInterval(dataCleanup);
+  const stopInfractionExpiry = startPinellasInfractionExpiry(client);
+
+  return () => {
+    clearInterval(dataCleanup);
+    stopInfractionExpiry();
+  };
 }
