@@ -322,13 +322,12 @@ export async function sendPinellasEmployeeWelcome(member) {
   container
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent([
-        `# ${SAVE_EMOJI} Welcome`,
+        `# ${WAVE_EMOJI} Welcome`,
         '',
         `> <@${member.id}> Welcome to the **${SLOGO_EMOJI} Pinellas County Sheriff's Office!**`,
         '',
         '> We’re glad to have you here! You can find important information about the department, including resources, guidelines, and other helpful information, by using the buttons below.',
         '',
-        '> We hope you enjoy your time with PCSO and consider becoming a part of our department in the future!',
       ].join('\n')),
     )
     .addSeparatorComponents(
