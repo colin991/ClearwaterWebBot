@@ -1,6 +1,7 @@
 import {
   ActionRowBuilder,
   AttachmentBuilder,
+  AuditLogEvent,
   ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
@@ -58,6 +59,38 @@ const WAVE_EMOJI = '<:wave:1517217333234503790>';
 const SLOGO_EMOJI = '<:slogo:1546245229420744804>';
 const SAVE_EMOJI = '<:Save:1517217415098798280>';
 const MEMBER_EMOJI = { id: '1517350373671833732', name: 'member' };
+
+/** Prevent duplicate welcomes when Discord emits multiple member updates. */
+const recentEmployeeWelcomes = new Map();
+const EMPLOYEE_WELCOME_DEDUP_MS = 60_000;
+
+/**
+ * True when audit logs show this member just received the given role.
+ * Used when the old member snapshot is partial/unreliable.
+ */
+async function memberGainedRoleViaAudit(member, roleId) {
+  // Discord can lag a moment before the role-update audit entry is available.
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+
+  const logs = await member.guild.fetchAuditLogs({
+    type: AuditLogEvent.MemberRoleUpdate,
+    limit: 6,
+  }).catch((error) => {
+    logger.warn(`Pinellas: could not read Member Role Update audit logs: ${error?.message || error}`);
+    return null;
+  });
+  if (!logs) return false;
+
+  const cutoff = Date.now() - 25_000;
+  for (const entry of logs.entries.values()) {
+    if (entry.createdTimestamp < cutoff) continue;
+    if (entry.targetId !== member.id && entry.target?.id !== member.id) continue;
+    const added = entry.changes?.find((change) => change.key === '$add');
+    if (!Array.isArray(added?.new)) continue;
+    if (added.new.some((role) => String(role.id) === String(roleId))) return true;
+  }
+  return false;
+}
 
 let cachedLogo = null;
 let cachedBanner = null;
@@ -218,21 +251,59 @@ export async function sendPinellasWelcome(member) {
 
 /**
  * When a member receives the employee welcome role, post the PCSO welcome card.
+ *
+ * Important: never fetch() the previous member for this check — that loads the
+ * post-update member and makes it look like they already had the role.
  */
 export async function handlePinellasEmployeeRoleWelcome(previousMember, member) {
   if (String(member.guild?.id) !== PINELLAS_GUILD_ID) return false;
   if (member.user?.bot) return false;
 
-  let before = previousMember;
-  if (before?.partial) {
-    before = await before.fetch().catch(() => previousMember);
+  const roleId = PINELLAS_EMPLOYEE_WELCOME_ROLE_ID;
+  const hasRole = Boolean(member.roles?.cache?.has(roleId));
+  if (!hasRole) return false;
+
+  // Use the pre-update snapshot only. Do not fetch partials here.
+  const knownBefore = Boolean(
+    previousMember
+    && !previousMember.partial
+    && previousMember.roles?.cache,
+  );
+  let gained = false;
+  if (knownBefore) {
+    const hadRole = previousMember.roles.cache.has(roleId);
+    if (hadRole) {
+      logger.info(`Pinellas: skip employee welcome for ${member.id} (already had role).`);
+      return false;
+    }
+    gained = true;
+  } else {
+    gained = await memberGainedRoleViaAudit(member, roleId);
   }
 
-  const hadRole = Boolean(before?.roles?.cache?.has(PINELLAS_EMPLOYEE_WELCOME_ROLE_ID));
-  const hasRole = Boolean(member.roles?.cache?.has(PINELLAS_EMPLOYEE_WELCOME_ROLE_ID));
-  if (hadRole || !hasRole) return false;
+  if (!gained) {
+    logger.info(
+      `Pinellas: skip employee welcome for ${member.id} (role ${roleId} not newly added).`,
+    );
+    return false;
+  }
 
-  return sendPinellasEmployeeWelcome(member);
+  const last = recentEmployeeWelcomes.get(member.id) || 0;
+  if (Date.now() - last < EMPLOYEE_WELCOME_DEDUP_MS) {
+    logger.info(`Pinellas: skip duplicate employee welcome for ${member.id}.`);
+    return false;
+  }
+  recentEmployeeWelcomes.set(member.id, Date.now());
+
+  try {
+    return await sendPinellasEmployeeWelcome(member);
+  } catch (error) {
+    recentEmployeeWelcomes.delete(member.id);
+    logger.error(
+      `Pinellas: failed to post employee welcome for ${member.id}: ${error?.message || error}`,
+    );
+    throw error;
+  }
 }
 
 /** Post the Components V2 employee welcome message for a newly role-granted member. */
