@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-offline-boot-no-git",
+      "title": "Boot works without git on Apollo",
+      "summary": "Host sync is skipped when .git is missing, credit-store packs are inlined into internetStore, and an emergency no-git console fix script can repair a broken zip-upload host.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T20:41:00.000Z"
+    },
+    {
       "id": "2026-09-06-credit-store-boot-heal",
       "title": "Self-heal missing credit-store on boot",
       "summary": "Hosts without .git were crashing because lib/credit-store.js could not be restored. Boot now writes the missing credit-store files automatically, and pack data also lives under utils/creditStore.js.",

@@ -1,4 +1,4 @@
-/** Roblox catalog packs that grant Clearwater Credits after inventory verification. */
+/** Pack catalog — kept for compatibility; canonical copy is also inlined in internetStore.js. */
 export const CREDIT_STORE_PACKS = Object.freeze([
   {
     id: '109005087621617',

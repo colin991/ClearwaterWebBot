@@ -1,6 +1,41 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { CREDIT_STORE_PACKS } from './creditStore.js';
+/** Inlined so hosts without git/lib still boot. */
+export const CREDIT_STORE_PACKS = Object.freeze([
+  {
+    id: '109005087621617',
+    assetId: '109005087621617',
+    robux: 500,
+    credits: 1000,
+    label: 'Starter pack',
+    url: 'https://www.roblox.com/catalog/109005087621617',
+  },
+  {
+    id: '123843071072106',
+    assetId: '123843071072106',
+    robux: 1000,
+    credits: 2200,
+    label: 'Boost pack',
+    url: 'https://www.roblox.com/catalog/123843071072106',
+  },
+  {
+    id: '85562318217896',
+    assetId: '85562318217896',
+    robux: 1500,
+    credits: 2750,
+    label: 'Plus pack',
+    url: 'https://www.roblox.com/catalog/85562318217896',
+  },
+  {
+    id: '116068796281105',
+    assetId: '116068796281105',
+    robux: 2000,
+    credits: 3400,
+    label: 'City pack',
+    url: 'https://www.roblox.com/catalog/116068796281105',
+  },
+]);
+
 import { AUTOMOD_HOLD_MESSAGE, AutomodHoldError, scanInternetContent } from './internetAutomod.js';
 import { JsonStoreCorruptError, readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
