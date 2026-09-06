@@ -30,7 +30,7 @@ const PINELLAS_LOGO_PATH = path.join(ROOT, 'assets', 'pinellas-ops-logo.png');
 const PINELLAS_BANNER_PATH = path.join(ROOT, 'assets', 'pinellas-ops-banner.webp');
 const PROFILE_STATE_PATH = path.join(ROOT, 'data', 'pinellas-profile.json');
 
-const WAVE_EMOJI = '<:wave:1538668950420725840>';
+const WAVE_EMOJI = '<:wave:1517217333234503790>';
 const SLOGO_EMOJI = '<:slogo:1546245229420744804>';
 const MEMBER_EMOJI = { id: '1517350373671833732', name: 'member' };
 
