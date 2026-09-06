@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-pinellas-animated-avatar",
+      "title": "Animated Pinellas Operations avatar",
+      "summary": "The Pinellas per-server bot avatar is now an animated GIF of the sheriff badge with a subtle shine and glow loop.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T19:55:00.000Z"
+    },
+    {
       "id": "2026-09-06-pinellas-banner-bio",
       "title": "Pinellas Operations banner and bio",
       "summary": "The Pinellas per-server bot profile now sets a PCSO collage banner and the Pinellas County Sheriff's Office operations bio, in addition to the nickname and badge avatar.",
