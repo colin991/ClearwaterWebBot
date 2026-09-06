@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-pinellas-banner-bio",
+      "title": "Pinellas Operations banner and bio",
+      "summary": "The Pinellas per-server bot profile now sets a PCSO collage banner and the Pinellas County Sheriff's Office operations bio, in addition to the nickname and badge avatar.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T19:45:00.000Z"
+    },
+    {
       "id": "2026-09-06-pinellas-logo-transparent",
       "title": "Pinellas server logo refreshed (transparent)",
       "summary": "Replaced the Pinellas Operations per-server avatar with the new five-point sheriff star badge on a transparent background.",

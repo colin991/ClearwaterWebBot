@@ -16,20 +16,35 @@ export const PINELLAS_APPLICATIONS_CHANNEL_URL =
 
 export const PINELLAS_NICKNAME = 'Pinellas Operations';
 
+export const PINELLAS_BIO =
+  "<:unlock:1517217312489472030> **Pinellas County** Sheriff's Office internal utilities and operations manager.";
+
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PINELLAS_LOGO_PATH = path.join(ROOT, 'assets', 'pinellas-ops-logo.png');
+const PINELLAS_BANNER_PATH = path.join(ROOT, 'assets', 'pinellas-ops-banner.png');
 const PROFILE_STATE_PATH = path.join(ROOT, 'data', 'pinellas-profile.json');
 
 const PCSO_LOGO_EMOJI = '<:PCSO_Logo:1514651787984900288>';
 
 let cachedLogo = null;
+let cachedBanner = null;
+
+async function loadAsset(filePath, cacheRef) {
+  if (cacheRef.value) return cacheRef.value;
+  const buffer = await readFile(filePath);
+  const sha256 = createHash('sha256').update(buffer).digest('hex');
+  cacheRef.value = { buffer, sha256 };
+  return cacheRef.value;
+}
 
 async function loadPinellasLogo() {
-  if (cachedLogo) return cachedLogo;
-  const buffer = await readFile(PINELLAS_LOGO_PATH);
-  const sha256 = createHash('sha256').update(buffer).digest('hex');
-  cachedLogo = { buffer, sha256 };
-  return cachedLogo;
+  cachedLogo ||= { value: null };
+  return loadAsset(PINELLAS_LOGO_PATH, cachedLogo);
+}
+
+async function loadPinellasBanner() {
+  cachedBanner ||= { value: null };
+  return loadAsset(PINELLAS_BANNER_PATH, cachedBanner);
 }
 
 async function readProfileState() {
@@ -46,8 +61,8 @@ async function writeProfileState(state) {
 }
 
 /**
- * Apply the Pinellas per-server nickname + avatar (guild member profile).
- * Re-uploads the logo only when the asset hash changes so restarts stay quiet.
+ * Apply the Pinellas per-server nickname, avatar, banner, and bio.
+ * Re-uploads images only when asset hashes change so restarts stay quiet.
  */
 export async function ensurePinellasServerProfile(client) {
   const guild = client.guilds.cache.get(PINELLAS_GUILD_ID)
@@ -67,10 +82,13 @@ export async function ensurePinellasServerProfile(client) {
   }
 
   const logo = await loadPinellasLogo();
+  const banner = await loadPinellasBanner();
   const state = await readProfileState();
   const needsNick = me.nickname !== PINELLAS_NICKNAME;
   const needsAvatar = state.logoSha256 !== logo.sha256 || !me.avatar;
-  if (!needsNick && !needsAvatar) {
+  const needsBanner = state.bannerSha256 !== banner.sha256 || !me.banner;
+  const needsBio = state.bio !== PINELLAS_BIO;
+  if (!needsNick && !needsAvatar && !needsBanner && !needsBio) {
     logger.info(`Pinellas: server profile already set (${PINELLAS_NICKNAME}).`);
     return true;
   }
@@ -79,29 +97,43 @@ export async function ensurePinellasServerProfile(client) {
     const options = { reason: 'Pinellas Operations server profile' };
     if (needsNick) options.nick = PINELLAS_NICKNAME;
     if (needsAvatar) options.avatar = logo.buffer;
+    if (needsBanner) options.banner = banner.buffer;
+    if (needsBio) options.bio = PINELLAS_BIO;
 
     await guild.members.editMe(options);
     await writeProfileState({
       logoSha256: logo.sha256,
+      bannerSha256: banner.sha256,
+      bio: PINELLAS_BIO,
       nick: PINELLAS_NICKNAME,
       updatedAt: new Date().toISOString(),
     });
     logger.info(
       `Pinellas: updated server profile`
       + `${needsNick ? ` nick="${PINELLAS_NICKNAME}"` : ''}`
-      + `${needsAvatar ? ' avatar' : ''}.`,
+      + `${needsAvatar ? ' avatar' : ''}`
+      + `${needsBanner ? ' banner' : ''}`
+      + `${needsBio ? ' bio' : ''}.`,
     );
     return true;
   } catch (error) {
-    if (needsNick) {
+    // Fall back to smaller edits so a banner/avatar rate-limit does not block nick/bio.
+    const fallback = { reason: 'Pinellas Operations server profile (partial)' };
+    if (needsNick) fallback.nick = PINELLAS_NICKNAME;
+    if (needsBio) fallback.bio = PINELLAS_BIO;
+    if (fallback.nick || fallback.bio) {
       try {
-        await guild.members.editMe({
+        await guild.members.editMe(fallback);
+        const nextState = {
+          ...state,
           nick: PINELLAS_NICKNAME,
-          reason: 'Pinellas Operations nickname',
-        });
-        logger.info(`Pinellas: set nickname to "${PINELLAS_NICKNAME}" (avatar update failed).`);
-      } catch (nickError) {
-        logger.error('Pinellas: failed to set nickname', nickError);
+          updatedAt: new Date().toISOString(),
+        };
+        if (needsBio) nextState.bio = PINELLAS_BIO;
+        await writeProfileState(nextState);
+        logger.info('Pinellas: applied nick/bio after a partial profile failure.');
+      } catch (fallbackError) {
+        logger.error('Pinellas: fallback nick/bio update failed', fallbackError);
       }
     }
     logger.error('Pinellas: failed to update server profile', error);
