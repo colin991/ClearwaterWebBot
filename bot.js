@@ -8,6 +8,7 @@ import { logger } from './utils/logger.js';
 import { startErlcRoleSync } from './utils/erlcRoleSync.js';
 import { startRobloxGroupSync } from './utils/robloxGroupSync.js';
 import { startDepartmentSalaryJob } from './utils/departmentSalary.js';
+import { PINELLAS_GUILD_ID } from './utils/pinellasServer.js';
 
 // Keep boot loaders in the entry module so an incomplete host upload cannot
 // fail before the bot has a chance to start.
@@ -84,8 +85,15 @@ async function loadEvents(client) {
 
 async function registerCommands(commands, settings) {
   const rest = new REST({ version: '10' }).setToken(settings.token);
-  await rest.put(Routes.applicationGuildCommands(settings.clientId, settings.guildId), { body: commands });
-  logger.info(`Registered ${commands.length} commands in the Clearwater server.`);
+  const guildIds = [...new Set([
+    settings.guildId,
+    PINELLAS_GUILD_ID,
+  ].filter(Boolean))];
+
+  for (const guildId of guildIds) {
+    await rest.put(Routes.applicationGuildCommands(settings.clientId, guildId), { body: commands });
+    logger.info(`Registered ${commands.length} commands in guild ${guildId}.`);
+  }
 }
 
 validateConfig();
