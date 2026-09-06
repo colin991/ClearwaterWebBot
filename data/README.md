@@ -1,16 +1,25 @@
 # Bot data
 
-This folder is reserved for non-secret bot data on the bot host.
+This folder holds bot runtime files on the **bot host**.
 
-- `owner-config.json` — Discord sync settings (host-local)
-- `department-salaries.json` — weekly department salary configuration and payout receipts (host-local)
-- `clearwater-internet.json` — Clearwater Internet users, posts, wallets, messages, and related state
-- `clearwater-internet.json.bak` / `.bak.1` — rotating backups written before each save
-- `site-updates.json` — tracked catalog of bot updates (committed to git; not posted to Discord)
-- `site-updates-posted.json` — obsolete host-local file from when updates were Discord-posted (safe to delete)
-- `manual-identities.json` — committed Discord ↔ Roblox links that always merge into the identity cache (overrides Melonly for those Discord IDs)
-- `identity-cache.json` — host-local Melonly identity cache (encrypted when a bot secret is present; do not commit)
+## Committed (safe to ship in git)
 
-If the live file is ever wiped or corrupt, restore from `.bak` or `.bak.1` on the host before restarting the bot.
+- `site-updates.json` — catalog of bot updates
+- `manual-identities.json` — Discord ↔ Roblox links that always merge into the identity cache
+- `README.md` — this file
+
+## Host-only (gitignored — never delete when updating)
+
+- `owner-config.json` — Discord sync settings
+- `department-salaries.json` — weekly department salary config and payout receipts
+- `clearwater-internet.json` — Clearwater Internet users, posts, wallets, messages
+- `clearwater-internet.json.bak` / `.bak.1` — rotating backups before each save
+- `identity-cache.json` — Melonly identity cache (may be encrypted)
+- `circle-moderation.json` — moderation store
+- other `data/*.json` created by the live bot
+
+**Updating the bot:** click Restart with `bash start.sh`. Do **not** delete all files and re-upload a zip — that wipes this host-only data.
+
+If a live file is wiped or corrupt, restore from `.bak` / `.bak.1` on the host before restarting.
 
 Do not store tokens, passwords, or private credentials here.

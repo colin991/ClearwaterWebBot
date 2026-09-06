@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-preserve-host-data-on-restart",
+      "title": "Restart updates code without wiping data",
+      "summary": "start.sh now force-syncs bot code from main while preserving host-only data/ and .env. Do not delete-all and re-upload a zip to update — that wipes Clearwater Internet, salaries, and identity cache. Use Restart with bash start.sh.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T18:16:00.000Z"
+    },
+    {
       "id": "2026-09-05-erlc-zone-discord-logs",
       "title": "ER:LC zone voice logs to Discord",
       "summary": "ER:LC map zone voice now posts enter/skip/error/heartbeat logs to channel 1514547037537046688 so staff can see whether the drag is running and why moves are skipped.",
