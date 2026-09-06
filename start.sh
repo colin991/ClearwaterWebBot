@@ -63,6 +63,11 @@ if [[ -f package.json ]]; then
   npm install --omit=dev
 fi
 
+if [[ ! -f lib/credit-store.js ]]; then
+  echo "[start] ERROR: lib/credit-store.js is missing after sync. Host update failed."
+  exit 1
+fi
+
 if [[ ! -f utils/secondaryServerGate.js ]]; then
   echo "[start] ERROR: utils/secondaryServerGate.js is missing. Update failed."
   exit 1

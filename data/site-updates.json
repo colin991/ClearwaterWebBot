@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-host-sync-before-imports",
+      "title": "Host sync runs before bot imports",
+      "summary": "Fixed Apollo boot crashes when a tracked file like lib/credit-store.js was missing: index.js now force-syncs from main before loading Discord/bot modules, so the missing file can be restored.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T20:32:00.000Z"
+    },
+    {
       "id": "2026-09-06-pinellas-welcome-buttons",
       "title": "Pinellas welcome message with member count",
       "summary": "Pinellas join welcomes now use the PCSO branding copy, a disabled member-count button, and an Information link button to the info channel.",
