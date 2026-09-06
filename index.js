@@ -54,6 +54,7 @@ const shutDown = async (signal) => {
   client.stopErlcZoneVoice?.();
   client.stopDispatchChannelStatus?.();
   client.stopCorrectionsChannelStatus?.();
+  client.stopFrequencyChangeGreeting?.();
   client.destroy();
   process.exit(0);
 };

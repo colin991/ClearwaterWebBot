@@ -7,6 +7,7 @@ import { startSecondaryServerGate } from '../utils/secondaryServerGate.js';
 import { startErlcZoneVoice } from '../utils/erlcZoneVoice.js';
 import { startDispatchChannelStatus } from '../utils/dispatchChannelStatus.js';
 import { startCorrectionsChannelStatus } from '../utils/correctionsChannelStatus.js';
+import { startFrequencyChangeGreeting } from '../utils/frequencyChangeGreeting.js';
 
 export default {
   name: Events.ClientReady,
@@ -30,6 +31,10 @@ export default {
 
     if (!client.stopCorrectionsChannelStatus) {
       client.stopCorrectionsChannelStatus = startCorrectionsChannelStatus(client);
+    }
+
+    if (!client.stopFrequencyChangeGreeting) {
+      client.stopFrequencyChangeGreeting = startFrequencyChangeGreeting(client);
     }
 
     // Guild/channel cache can still be settling right after ready.

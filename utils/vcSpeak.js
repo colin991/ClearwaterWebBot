@@ -75,6 +75,8 @@ export async function synthesizeSpeechMp3(text, voice = SAY_VOICE) {
  */
 export async function playMp3InVoiceChannel(voiceChannel, adapterCreator, mp3PathOrBuffer, {
   leaveAfter = true,
+  /** Extra wait after joining so Discord voice is audible before playback. */
+  speakDelayMs = 500,
 } = {}) {
   const existing = getVoiceConnection(voiceChannel.guild.id);
   const sameChannel = existing?.joinConfig?.channelId === voiceChannel.id;
@@ -98,7 +100,8 @@ export async function playMp3InVoiceChannel(voiceChannel, adapterCreator, mp3Pat
       connection.destroy();
       throw new Error(`Could not join the voice channel: ${error?.message || error}`);
     }
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    const delay = Math.max(0, Number(speakDelayMs) || 0);
+    if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
   }
 
   const player = createAudioPlayer({
