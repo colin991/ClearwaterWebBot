@@ -2,7 +2,13 @@
   "version": 1,
   "updates": [
     {
-<<<<<<< HEAD
+      "id": "2026-09-06-pinellas-welcome-apply-art",
+      "title": "Pinellas welcome emoji and apply banners",
+      "summary": "Updated the Pinellas welcome wave emoji and replaced the PCSO application panel top/bottom banners with the new APPLICATION artwork.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T21:26:00.000Z"
+    },
+    {
       "id": "2026-09-06-update-pinellas-flag-banner",
       "title": "Updated the Pinellas flag banner",
       "summary": "Changed the bot's server-specific banner in the Pinellas County Sheriff's Office server to the supplied black-and-white PCSO flag image.",
@@ -50,13 +56,6 @@
       "summary": "Moved the slash-command loading logic into bot.js so an Apollo upload missing utils/loadCommands.js no longer crashes immediately after the boot message.",
       "updatedBy": "colin991",
       "createdAt": "2026-09-06T21:05:00.000Z"
-=======
-      "id": "2026-09-06-pinellas-welcome-apply-art",
-      "title": "Pinellas welcome emoji and apply banners",
-      "summary": "Updated the Pinellas welcome wave emoji and replaced the PCSO application panel top/bottom banners with the new APPLICATION artwork.",
-      "updatedBy": "colin991",
-      "createdAt": "2026-09-06T21:26:00.000Z"
->>>>>>> 8927645 (Update Pinellas welcome emoji and apply panel banners)
     },
     {
       "id": "2026-09-06-zip-upload-boot",
