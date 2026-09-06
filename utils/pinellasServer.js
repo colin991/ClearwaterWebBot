@@ -17,7 +17,7 @@ export const PINELLAS_APPLICATIONS_CHANNEL_URL =
 export const PINELLAS_NICKNAME = 'Pinellas Operations';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const PINELLAS_LOGO_PATH = path.join(ROOT, 'assets', 'pinellas-ops-logo.webp');
+const PINELLAS_LOGO_PATH = path.join(ROOT, 'assets', 'pinellas-ops-logo.png');
 const PROFILE_STATE_PATH = path.join(ROOT, 'data', 'pinellas-profile.json');
 
 const PCSO_LOGO_EMOJI = '<:PCSO_Logo:1514651787984900288>';
