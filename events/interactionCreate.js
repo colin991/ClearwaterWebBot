@@ -6,6 +6,7 @@ import { DISCORD_INTERNET_UNSUB_CUSTOM_ID } from '../utils/discordInternetNotify
 import { readInternetStore, saveInternetStore, updateInternetPreference } from '../utils/internetStore.js';
 import { handlePinellasApplyInteraction } from '../utils/pinellasApply.js';
 import { handlePinellasInfractInteraction } from '../utils/pinellasInfract.js';
+import { handlePinellasMassShiftInteraction } from '../utils/pinellasMassShift.js';
 
 export default {
   name: Events.InteractionCreate,
@@ -23,6 +24,12 @@ export default {
       if (await handlePinellasInfractInteraction(interaction)) return;
     } catch (error) {
       logger.error('Pinellas infract interaction failed', error);
+    }
+
+    try {
+      if (await handlePinellasMassShiftInteraction(interaction)) return;
+    } catch (error) {
+      logger.error('Pinellas mass shift interaction failed', error);
     }
 
     if (interaction.isButton()) {
