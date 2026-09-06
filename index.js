@@ -9,6 +9,28 @@ import { logger } from './utils/logger.js';
 import { startErlcRoleSync } from './utils/erlcRoleSync.js';
 import { startRobloxGroupSync } from './utils/robloxGroupSync.js';
 import { startDepartmentSalaryJob } from './utils/departmentSalary.js';
+import { reexecIfUpdated, syncHostCodeFromMain } from './utils/hostCodeSync.js';
+
+// Apollopanel startup is locked to `git pull; npm install; node index.js`.
+// When `git pull` fails (dirty downloads/), this still force-syncs code without
+// wiping host-only data/ or .env, then restarts onto the new commit if needed.
+if (process.env.CLEARWATER_SKIP_HOST_SYNC !== '1') {
+  try {
+    const sync = syncHostCodeFromMain();
+    if (sync.reason && sync.reason !== 'already_current' && sync.reason !== 'no_git' && sync.reason !== 'updated') {
+      logger.warn(`Host code sync skipped/failed: ${sync.reason}`);
+    } else if (sync.commit) {
+      logger.info(
+        sync.updated
+          ? `Host code updated to ${sync.commit.slice(0, 7)}; re-executing onto new files.`
+          : `Host code already at ${sync.commit.slice(0, 7)}.`,
+      );
+    }
+    reexecIfUpdated(sync);
+  } catch (error) {
+    logger.warn(`Host code sync error: ${error?.message || error}`);
+  }
+}
 
 validateConfig();
 
