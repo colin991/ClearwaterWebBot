@@ -1,4 +1,4 @@
-import { ActivityType, Events } from 'discord.js';
+import { Events } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { ensureNoticeChannel } from '../utils/noticeChannel.js';
 import { ensureInternetPanel } from '../utils/discordInternetPanel.js';
@@ -14,7 +14,8 @@ export default {
   name: Events.ClientReady,
   once: true,
   async execute(client) {
-    client.user.setActivity('Clearwater Roleplay', { type: ActivityType.Watching });
+    // No global Watching activity — keep the profile status clear.
+    await client.user.setPresence({ activities: [], status: 'online' }).catch(() => null);
     logger.info(`Logged in as ${client.user.tag}.`);
 
     setTimeout(() => {

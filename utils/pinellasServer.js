@@ -20,8 +20,9 @@ export const PINELLAS_BIO =
   "<:unlock:1517217312489472030> **Pinellas County** Sheriff's Office internal utilities and operations manager.";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-/** Animated GIF — Discord only animates GIF/APNG guild avatars. */
-const PINELLAS_LOGO_PATH = path.join(ROOT, 'assets', 'pinellas-ops-logo-animated.gif');
+/** Per-server avatar (PCSO badge branding). */
+const PINELLAS_LOGO_PATH = path.join(ROOT, 'assets', 'pinellas-ops-logo.png');
+/** Per-server banner (PCSO application / ops branding). */
 const PINELLAS_BANNER_PATH = path.join(ROOT, 'assets', 'pinellas-ops-banner.png');
 const PROFILE_STATE_PATH = path.join(ROOT, 'data', 'pinellas-profile.json');
 

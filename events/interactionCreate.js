@@ -4,12 +4,19 @@ import { handleDiscordInternetInteraction } from '../utils/discordInternetPanel.
 import { handleDiscordInternetModerationInteraction } from '../utils/discordInternetModeration.js';
 import { DISCORD_INTERNET_UNSUB_CUSTOM_ID } from '../utils/discordInternetNotify.js';
 import { readInternetStore, saveInternetStore, updateInternetPreference } from '../utils/internetStore.js';
+import { handlePinellasApplyInteraction } from '../utils/pinellasApply.js';
 
 export default {
   name: Events.InteractionCreate,
   async execute(interaction, client) {
     if (await handleDiscordInternetModerationInteraction(interaction)) return;
     if (await handleDiscordInternetInteraction(interaction, client)) return;
+
+    try {
+      if (await handlePinellasApplyInteraction(interaction)) return;
+    } catch (error) {
+      logger.error('Pinellas apply interaction failed', error);
+    }
 
     if (interaction.isButton()) {
       if (interaction.customId !== DISCORD_INTERNET_UNSUB_CUSTOM_ID) return;

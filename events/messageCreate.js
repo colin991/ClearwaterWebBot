@@ -5,10 +5,17 @@ import { handleLockedPostMessage } from '../utils/lockedPost.js';
 import { handleMessageForward } from '../utils/messageForward.js';
 import { handleNoticeChannelMessage } from '../utils/noticeChannel.js';
 import { parseArgs } from '../utils/prefixHelpers.js';
+import { handlePinellasApplyDm } from '../utils/pinellasApply.js';
 
 export default {
   name: Events.MessageCreate,
   async execute(message, client) {
+    try {
+      if (await handlePinellasApplyDm(message)) return;
+    } catch (error) {
+      logger.error('Pinellas apply DM handler failed', error);
+    }
+
     if (!message.inGuild()) return;
 
     try {
