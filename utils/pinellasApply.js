@@ -66,7 +66,7 @@ const REQUIREMENTS_BODY = [
   '• Must **not** be in FHP inside of Clearwater Roleplay.',
   '• Must be okay with completing the **training** and **R/A** after approval.',
   '',
-  'Reply in this DM with your answers. Type `cancel` anytime to stop.',
+  'Reply in this DM with your answer to each question. After you send an answer, I will send the next question. Type `cancel` anytime to stop.',
 ].join('\n');
 
 function newId() {
