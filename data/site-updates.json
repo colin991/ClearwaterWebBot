@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-restore-pinellas-banner",
+      "title": "Restored the Pinellas bot banner",
+      "summary": "Restored the supplied PCSO operations image as the bot's server-specific banner in the Pinellas County Sheriff's Office server while keeping the sheriff badge avatar.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T21:14:00.000Z"
+    },
+    {
       "id": "2026-09-06-optional-application-artwork",
       "title": "Applications work without optional artwork",
       "summary": "The Pinellas application panel now posts its text and buttons even when the banner or footer image is missing from an Apollo upload.",

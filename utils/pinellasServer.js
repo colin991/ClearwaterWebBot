@@ -27,7 +27,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 /** Per-server avatar (PCSO badge branding). */
 const PINELLAS_LOGO_PATH = path.join(ROOT, 'assets', 'pinellas-ops-logo.png');
 /** Per-server banner (PCSO application / ops branding). */
-const PINELLAS_BANNER_PATH = path.join(ROOT, 'assets', 'pinellas-ops-banner.png');
+const PINELLAS_BANNER_PATH = path.join(ROOT, 'assets', 'pinellas-ops-banner.webp');
 const PROFILE_STATE_PATH = path.join(ROOT, 'data', 'pinellas-profile.json');
 
 const WAVE_EMOJI = '<:wave:1538668950420725840>';
@@ -105,7 +105,9 @@ export async function ensurePinellasServerProfile(client) {
     const options = { reason: 'Pinellas Operations server profile' };
     if (needsNick) options.nick = PINELLAS_NICKNAME;
     if (needsAvatar) options.avatar = logo.buffer;
-    if (needsBanner) options.banner = banner.buffer;
+    if (needsBanner) {
+      options.banner = `data:image/webp;base64,${banner.buffer.toString('base64')}`;
+    }
     if (needsBio) options.bio = PINELLAS_BIO;
 
     await guild.members.editMe(options);
