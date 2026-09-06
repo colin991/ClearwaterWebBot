@@ -1,3 +1,4 @@
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -11,8 +12,11 @@ export const PINELLAS_GUILD_ID = '1514100977920245760';
 export const PINELLAS_WELCOME_CHANNEL_ID = '1514100979711217706';
 
 /** Applications channel linked in the welcome message. */
-export const PINELLAS_APPLICATIONS_CHANNEL_URL =
-  'https://discord.com/channels/1514100977920245760/1514443793607295058';
+export const PINELLAS_APPLICATIONS_CHANNEL_ID = '1514443793607295058';
+
+/** Information channel linked from the welcome message. */
+export const PINELLAS_INFORMATION_CHANNEL_URL =
+  'https://discord.com/channels/1514100977920245760/1514436767980454060';
 
 export const PINELLAS_NICKNAME = 'Pinellas Operations';
 
@@ -26,7 +30,9 @@ const PINELLAS_LOGO_PATH = path.join(ROOT, 'assets', 'pinellas-ops-logo.png');
 const PINELLAS_BANNER_PATH = path.join(ROOT, 'assets', 'pinellas-ops-banner.png');
 const PROFILE_STATE_PATH = path.join(ROOT, 'data', 'pinellas-profile.json');
 
-const PCSO_LOGO_EMOJI = '<:PCSO_Logo:1514651787984900288>';
+const WAVE_EMOJI = '<:wave:1538668950420725840>';
+const SLOGO_EMOJI = '<:slogo:1546245229420744804>';
+const MEMBER_EMOJI = { id: '1517350373671833732', name: 'member' };
 
 let cachedLogo = null;
 let cachedBanner = null;
@@ -155,13 +161,28 @@ export async function sendPinellasWelcome(member) {
     return false;
   }
 
+  const memberCount = Number(member.guild.memberCount) || member.guild.members.cache.size || 0;
   const content = [
-    `Welcome to **${PCSO_LOGO_EMOJI} Pinellas County Sheriff's Office** <@${member.id}>`,
-    `you can find the application to join in ${PINELLAS_APPLICATIONS_CHANNEL_URL}`,
-  ].join(' ');
+    `${WAVE_EMOJI} **Welcome** <@${member.id}> to the ${SLOGO_EMOJI} **Pinellas County Sheriff's Office**, protecting Clearwater & Pinellas County since 1912.`,
+    `-# We are always in search of additional personnel, please apply in <#${PINELLAS_APPLICATIONS_CHANNEL_ID}>. We hope you enjoy your stay.`,
+  ].join('\n');
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('pinellas:welcome:members')
+      .setEmoji(MEMBER_EMOJI)
+      .setLabel(String(memberCount))
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(true),
+    new ButtonBuilder()
+      .setLabel('Information')
+      .setStyle(ButtonStyle.Link)
+      .setURL(PINELLAS_INFORMATION_CHANNEL_URL),
+  );
 
   await channel.send({
     content,
+    components: [row],
     allowedMentions: { users: [member.id] },
   });
   logger.info(`Pinellas: welcomed ${member.user?.tag || member.id}.`);

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-pinellas-welcome-buttons",
+      "title": "Pinellas welcome message with member count",
+      "summary": "Pinellas join welcomes now use the PCSO branding copy, a disabled member-count button, and an Information link button to the info channel.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T20:26:00.000Z"
+    },
+    {
       "id": "2026-09-06-pinellas-apply-system",
       "title": "PCSO entry applications and clear status",
       "summary": "Removed the Watching Clearwater Roleplay status. Added -apply (Administrator) to post the PCSO Components V2 entry panel, DM question flow, and staff approve/deny review with role assignment. Updated the Pinellas per-server avatar/banner branding.",
