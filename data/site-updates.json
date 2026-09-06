@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-roblox-moderated-pause",
+      "title": "Pause Roblox group sync when API account is moderated",
+      "summary": "When Roblox returns 403 User is moderated for the Open Cloud API key, group sync now posts one clear pause notice and waits 6 hours instead of spamming the log channel every minute. Fix by unmoderating that Roblox account or creating a new API key on an unmoderated account.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T19:06:00.000Z"
+    },
+    {
       "id": "2026-09-06-skip-freq-greeting-on-bot-drag",
       "title": "Frequency Change greeting skips bot drags",
       "summary": "If a bot (including Clearwater zone drag or another bot) moves someone into a Frequency Change VC, the bot no longer joins to play the welcome TTS. Manual joins by players still get the greeting when they are first in the channel.",

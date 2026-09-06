@@ -4,8 +4,11 @@ import { v2Card } from './v2Message.js';
 
 const ROBLOX_CLOUD = 'https://apis.roblox.com/cloud/v2';
 const TRANSIENT_HTTP = new Set([408, 425, 429, 500, 502, 503, 504]);
+/** How long to pause sync after Roblox says the API-key account is moderated. */
+const MODERATED_PAUSE_MS = 6 * 60 * 60 * 1000;
 let lastEmptyRequestDiagnostic = 0;
 let lastTransientDiscordAlertAt = 0;
+let moderatedUntil = 0;
 const robloxUsernameCache = new Map();
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -16,6 +19,14 @@ function isTransientFetchError(error) {
   if (/TimeoutError|AbortError|network|fetch failed|ECONNRESET|ETIMEDOUT|UND_ERR/i.test(message)) return true;
   if (/Request Context Failure/i.test(message)) return true;
   return error?.name === 'TimeoutError' || error?.name === 'AbortError';
+}
+
+function isRobloxModeratedError(error) {
+  const message = String(error?.message || error || '');
+  // Roblox returns 403 with body {"errors":[{"code":0,"message":"User is moderated"}]}
+  // Match the message even if status was lost through wrapping.
+  return /User is moderated/i.test(message)
+    && (error?.status === 403 || /\(403\)/.test(message) || !error?.status);
 }
 
 async function groupFetch(path, apiKey, options = {}, { retries = 3 } = {}) {
@@ -265,34 +276,75 @@ export function startRobloxGroupSync(client, config) {
   let timer;
   let lastError = '';
   const run = async () => {
+    let nextDelayMs = 60_000;
     try {
-      await syncGroupJoinRequests(client, config);
-      lastError = '';
+      if (Date.now() < moderatedUntil) {
+        nextDelayMs = Math.max(60_000, moderatedUntil - Date.now());
+        logger.warn(
+          `Roblox group sync paused until ${new Date(moderatedUntil).toISOString()} `
+          + '(API key account is moderated).',
+        );
+      } else {
+        // After a moderation pause ends, allow one fresh Discord notice if still broken.
+        if (moderatedUntil) {
+          lastError = '';
+          moderatedUntil = 0;
+        }
+        await syncGroupJoinRequests(client, config);
+        lastError = '';
+      }
     } catch (error) {
       logger.error('Roblox group join-request sync failed', error);
       const message = String(error?.message || 'Unknown error');
-      const transient = isTransientFetchError(error);
+      const moderated = isRobloxModeratedError(error);
+      const transient = !moderated && isTransientFetchError(error);
       const now = Date.now();
-      // Transient Roblox outages (502/503/etc.) often clear on their own — only
-      // ping Discord at most once per 30 minutes for the same class of failure.
-      const shouldAlert = transient
-        ? (message !== lastError || now - lastTransientDiscordAlertAt > 30 * 60 * 1000)
-        : message !== lastError;
-      lastError = message;
-      if (shouldAlert) {
-        if (transient) lastTransientDiscordAlertAt = now;
-        const prefix = transient
-          ? 'Roblox had a temporary outage and the sync will retry automatically.\n'
-          : 'The group sync could not run.\n';
-        await sendGroupLog(
-          client,
-          config,
-          'Roblox group sync error',
-          `${prefix}\`${message.slice(0, 850)}\``,
-        );
+
+      if (moderated) {
+        moderatedUntil = now + MODERATED_PAUSE_MS;
+        nextDelayMs = MODERATED_PAUSE_MS;
+        const shouldAlert = message !== lastError;
+        lastError = message;
+        if (shouldAlert) {
+          const resumeAt = Math.floor(moderatedUntil / 1000);
+          await sendGroupLog(
+            client,
+            config,
+            'Roblox group sync paused',
+            [
+              'Roblox returned **User is moderated** for the Open Cloud API key account.',
+              'Group join accept/decline cannot run until that Roblox account is unmoderated,',
+              'or you create a new Open Cloud API key on an **unmoderated** Roblox account',
+              'with Groups permission and update `ROBLOX_GROUP_API_KEY` on the host.',
+              '',
+              `Sync is paused until <t:${resumeAt}:f> to avoid spamming this channel.`,
+              '',
+              `\`${message.slice(0, 700)}\``,
+            ].join('\n'),
+          );
+        }
+      } else {
+        // Transient Roblox outages (502/503/etc.) often clear on their own — only
+        // ping Discord at most once per 30 minutes for the same class of failure.
+        const shouldAlert = transient
+          ? (message !== lastError || now - lastTransientDiscordAlertAt > 30 * 60 * 1000)
+          : message !== lastError;
+        lastError = message;
+        if (shouldAlert) {
+          if (transient) lastTransientDiscordAlertAt = now;
+          const prefix = transient
+            ? 'Roblox had a temporary outage and the sync will retry automatically.\n'
+            : 'The group sync could not run.\n';
+          await sendGroupLog(
+            client,
+            config,
+            'Roblox group sync error',
+            `${prefix}\`${message.slice(0, 850)}\``,
+          );
+        }
       }
     } finally {
-      if (!stopped) timer = setTimeout(run, 60_000);
+      if (!stopped) timer = setTimeout(run, nextDelayMs);
     }
   };
   void run();
