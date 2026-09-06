@@ -403,7 +403,7 @@ function buildInfractionBody(entry, { struck = false } = {}) {
   }
 
   body.push(
-    '-# If you have any questions or concerns, please contact our Professional Standards Bureau.',
+    '-# If you have any questions or concerns, please contact our Command Team.',
     `-# ID: \`${entry.id}\` | Issued by: <@${entry.issuerId}>`,
   );
 
