@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-skip-freq-greeting-on-bot-drag",
+      "title": "Frequency Change greeting skips bot drags",
+      "summary": "If a bot (including Clearwater zone drag or another bot) moves someone into a Frequency Change VC, the bot no longer joins to play the welcome TTS. Manual joins by players still get the greeting when they are first in the channel.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T18:58:00.000Z"
+    },
+    {
       "id": "2026-09-06-host-repair-one-liner",
       "title": "Clearer Spark/Apollo host repair steps",
       "summary": "Added a noisy one-line Apollo console repair command and louder [host-sync] boot logs so stuck hosts show whether .git exists, fetch worked, and which commit is running. Still preserves data/ and .env.",

@@ -1,5 +1,6 @@
-import { ChannelType, PermissionFlagsBits } from 'discord.js';
+import { AuditLogEvent, ChannelType, PermissionFlagsBits } from 'discord.js';
 import { getVoiceConnection } from '@discordjs/voice';
+import { wasMovedByBot } from './botVoiceMoves.js';
 import { getActiveHold } from './holdVoiceChat.js';
 import { logger } from './logger.js';
 import { playMp3InVoiceChannel, synthesizeSpeechMp3 } from './vcSpeak.js';
@@ -47,6 +48,33 @@ function enqueueGuildJob(guildId, job) {
     });
   guildQueues.set(key, next);
   return next;
+}
+
+/**
+ * True when this member was dragged into the VC by a bot (ours or another),
+ * not when they joined/switched channels themselves.
+ */
+async function wasDraggedInByBot(guild, userId) {
+  if (wasMovedByBot(userId)) return true;
+
+  try {
+    const logs = await guild.fetchAuditLogs({
+      type: AuditLogEvent.MemberMove,
+      limit: 8,
+    });
+    const cutoff = Date.now() - 10_000;
+    for (const entry of logs.entries.values()) {
+      if (entry.createdTimestamp < cutoff) continue;
+      if (!entry.executor?.bot) continue;
+      if (entry.targetId === userId || entry.target?.id === userId) return true;
+    }
+  } catch (error) {
+    // Missing View Audit Log — still honor our own drag marks above.
+    logger.warn(
+      `Frequency change: could not check Member Move audit log: ${error?.message || error}`,
+    );
+  }
+  return false;
 }
 
 async function announceFrequencyChange(channel) {
@@ -98,8 +126,9 @@ async function announceFrequencyChange(channel) {
 }
 
 /**
- * When the first human joins a Frequency Change VC, join → wait 2s → speak → leave.
- * Later joiners while the channel is occupied do not re-trigger the greeting.
+ * When the first human joins a Frequency Change VC on their own, join → wait 2s → speak → leave.
+ * Bot-dragged joins (zone drag / other bots) do not trigger the greeting.
+ * Later joiners while the channel is occupied also do not re-trigger.
  */
 export async function handleFrequencyChangeVoiceStateUpdate(oldState, newState) {
   const joinedId = newState?.channelId;
@@ -117,8 +146,24 @@ export async function handleFrequencyChangeVoiceStateUpdate(oldState, newState) 
   if (humans.length !== 1) return null;
   if (announcingByChannel.has(channel.id)) return null;
 
+  const userId = newState.id || newState.member?.id;
+  if (await wasDraggedInByBot(newState.guild, userId)) {
+    logger.info(
+      `Frequency change greeting skipped for #${channel.name}: `
+      + `${newState.member?.user?.tag || userId} was dragged in by a bot.`,
+    );
+    return { ok: false, reason: 'bot_dragged' };
+  }
+
   const job = enqueueGuildJob(channel.guild.id, async () => {
     try {
+      // Re-check in case a bot drag landed while we were queued.
+      if (await wasDraggedInByBot(channel.guild, userId)) {
+        logger.info(
+          `Frequency change greeting skipped for #${channel.name}: bot drag detected before speak.`,
+        );
+        return { ok: false, reason: 'bot_dragged' };
+      }
       return await announceFrequencyChange(channel);
     } catch (error) {
       logger.error(`Frequency change greeting failed in #${channel.name}`, error);
@@ -135,7 +180,7 @@ export function startFrequencyChangeGreeting(client) {
   logger.info(
     'Frequency change greeting armed '
     + `(channels matching ${FREQUENCY_CHANGE_NAME_PATTERN}; `
-    + `${FREQUENCY_CHANGE_SPEAK_DELAY_MS / 1000}s speak delay; leave after TTS).`,
+    + `${FREQUENCY_CHANGE_SPEAK_DELAY_MS / 1000}s speak delay; skip bot-dragged joins; leave after TTS).`,
   );
   return () => {
     announcingByChannel.clear();

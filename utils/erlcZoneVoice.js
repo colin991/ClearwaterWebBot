@@ -1,6 +1,7 @@
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
 import { fetchErlcServer, libertyMapPoint, parseErlcPlayer } from './erlc.js';
 import { discordIdsByRobloxId } from './identityStore.js';
+import { markBotVoiceMove } from './botVoiceMoves.js';
 import { logger } from './logger.js';
 import { postProximityLog } from './vcActionLog.js';
 import { v2Card } from './v2Message.js';
@@ -265,6 +266,8 @@ export async function syncErlcZoneVoice(client, config = {}) {
 
     try {
       const fromChannel = member.voice.channel;
+      // Mark before setChannel so Frequency Change TTS skips this bot-dragged join.
+      markBotVoiceMove(discordId);
       await member.voice.setChannel(
         voiceChannel,
         `Entered ER:LC map drag zone (${player.username || discordId})`,
