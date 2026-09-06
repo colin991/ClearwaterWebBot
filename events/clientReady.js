@@ -15,7 +15,11 @@ export default {
   once: true,
   async execute(client) {
     // No global Watching activity — keep the profile status clear.
-    await client.user.setPresence({ activities: [], status: 'online' }).catch(() => null);
+    try {
+      client.user.setPresence({ activities: [], status: 'online' });
+    } catch (error) {
+      logger.warn('Could not clear bot presence; continuing startup.', error);
+    }
     logger.info(`Logged in as ${client.user.tag}.`);
 
     setTimeout(() => {

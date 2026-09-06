@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-ready-services-startup",
+      "title": "Ready services start normally",
+      "summary": "Fixed the Discord presence call that stopped the ready handler before the secondary gate, ER:LC zone voice, status channels, frequency greeting, notice channel, and Internet panel could start.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T21:03:00.000Z"
+    },
+    {
       "id": "2026-09-06-inline-command-loader",
       "title": "Bot boots without the command-loader helper",
       "summary": "Moved the slash-command loading logic into bot.js so an Apollo upload missing utils/loadCommands.js no longer crashes immediately after the boot message.",
