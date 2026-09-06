@@ -11,6 +11,14 @@ Discord bot for Clearwater Roleplay — moderation, voice tools, ER:LC sync, Rob
 
 ### Apollopanel / Pterodactyl (important)
 
+Your panel may lock the startup command to something like:
+
+```bash
+if [[ -d .git ]]; then git pull; fi; ...; node /home/container/index.js
+```
+
+**You do not need to change that.** On boot, `index.js` force-syncs code from `origin/main` and keeps host-only `data/` + `.env`.
+
 **Do not delete all files and re-upload a zip.** That wipes host-only data:
 
 - `data/clearwater-internet.json` (Internet panel users/posts/wallets)
@@ -19,28 +27,20 @@ Discord bot for Clearwater Roleplay — moderation, voice tools, ER:LC sync, Rob
 - `data/owner-config.json`
 - `.env` (token and secrets)
 
-Those files live only on the bot host. They are gitignored on purpose so updates do not overwrite them.
+#### Safe update
 
-#### Safe update (what “just Restart” used to do)
+Just click **Restart**.
 
-1. Set the panel **Startup Command** to:
+What happens:
 
-```bash
-bash start.sh
-```
+1. Panel runs its locked `git pull` (may fail if `downloads/` is dirty — that’s OK)
+2. Panel starts `node index.js`
+3. Bot removes `downloads/`, resets tracked files to `origin/main`, keeps `data/` + `.env`
+4. If code changed, it restarts itself onto the new commit
 
-2. Click **Restart** (or Stop → Start).
+#### One-time fix if the host is still stuck on old code
 
-`start.sh` will:
-
-- pull latest code from `origin/main`
-- leave `data/` and `.env` alone
-- run `npm install`
-- start the bot
-
-#### One-time fix if the panel is stuck on old code
-
-Stop the server, then paste in the console:
+Stop the server, paste this in the console **once**, then Start:
 
 ```bash
 cd /home/container
@@ -48,17 +48,18 @@ rm -rf downloads
 git fetch origin main
 git reset --hard origin/main
 # Do NOT run: git clean -fdx
-# Do NOT delete the data/ folder or .env
+# Do NOT delete data/ or .env
 ```
 
-Then Restart with `bash start.sh` as the startup command.
+After that, normal **Restart** is enough (no startup-command change required).
 
 Required gateway intents: **Guilds**, **Server Members**, **Server Messages**, **Message Content**, and **Guild Voice States**. Enable Server Members and Message Content in the Discord Developer Portal. Never commit or share `.env`.
 
 ## Layout
 
-- `index.js` — bot entry point
-- `start.sh` — host startup (code sync + bot; preserves `data/` + `.env`)
+- `index.js` — bot entry point (includes host code sync for locked panel startups)
+- `utils/hostCodeSync.js` — force-sync to `origin/main` without wiping `data/` / `.env`
+- `start.sh` — optional helper only if your panel *can* change the startup command
 - `commands/` — slash commands
 - `prefixCommands/` — prefix commands (e.g. `-holdvc`, `-vc`)
 - `events/` — Discord event handlers
@@ -68,7 +69,7 @@ Required gateway intents: **Guilds**, **Server Members**, **Server Messages**, *
 ## Notable features
 
 - **Hold VC** (`-holdvc` / `-unholdvc`) — Ownership-only voice hold; action logs go to channel `1514547037537046688`
-- **Secondary server gate** — server `1514189396184793169` kicks members without one of the allowed main-server roles (`1053768758772109394`, `1514421440890409060`, `1514744040778760252`, `1536839307766267944`)
+- **Secondary server gate** — server `1514189396184793169` kicks members without one of the allowed main-server roles
 - **Discord Internet Panel** — social feed inside Discord (`INTERNET_PANEL_CHANNEL_ID`)
 - **ER:LC role sync** — in-game Discord role while players are on the server
 - **Roblox group join requests** — accept/decline using Melonly-verified identity cache
