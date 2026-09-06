@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-pinellas-server-avatar",
+      "title": "Updated the Pinellas bot avatar",
+      "summary": "Changed the bot's server-specific avatar in the Pinellas County Sheriff's Office server to the supplied black-and-white sheriff badge image.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T21:08:00.000Z"
+    },
+    {
       "id": "2026-09-06-inline-boot-loaders",
       "title": "Boot loaders no longer depend on helper files",
       "summary": "Moved slash, prefix, event, and registration loaders into bot.js so incomplete Apollo uploads do not crash on one missing loader helper after another.",
