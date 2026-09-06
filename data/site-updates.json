@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-locked-startup-host-sync",
+      "title": "Works with locked Apollopanel startup",
+      "summary": "You no longer need to change the panel startup command. index.js force-syncs code from main on boot while preserving data/ and .env, then restarts onto the new commit if needed. Do not wipe-and-reupload to update — just Restart (one-time console reset if still stuck on old code).",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T18:22:00.000Z"
+    },
+    {
       "id": "2026-09-06-preserve-host-data-on-restart",
       "title": "Restart updates code without wiping data",
       "summary": "start.sh now force-syncs bot code from main while preserving host-only data/ and .env. Do not delete-all and re-upload a zip to update — that wipes Clearwater Internet, salaries, and identity cache. Use Restart with bash start.sh.",
