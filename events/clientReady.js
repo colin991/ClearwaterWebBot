@@ -8,6 +8,7 @@ import { startErlcZoneVoice } from '../utils/erlcZoneVoice.js';
 import { startDispatchChannelStatus } from '../utils/dispatchChannelStatus.js';
 import { startCorrectionsChannelStatus } from '../utils/correctionsChannelStatus.js';
 import { startFrequencyChangeGreeting } from '../utils/frequencyChangeGreeting.js';
+import { ensurePinellasServerProfile } from '../utils/pinellasServer.js';
 
 export default {
   name: Events.ClientReady,
@@ -15,6 +16,12 @@ export default {
   async execute(client) {
     client.user.setActivity('Clearwater Roleplay', { type: ActivityType.Watching });
     logger.info(`Logged in as ${client.user.tag}.`);
+
+    setTimeout(() => {
+      void ensurePinellasServerProfile(client).catch((error) => {
+        logger.error('Pinellas server profile setup failed', error);
+      });
+    }, 1200);
 
     // Start the secondary-server role gate as soon as the gateway is ready.
     if (!client.stopSecondaryGate) {

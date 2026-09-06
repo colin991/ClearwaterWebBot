@@ -2,6 +2,7 @@ import { Events } from 'discord.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges } from '../utils/staffRanks.js';
 import { readInternetStore, saveInternetStore, setInternetBan, upsertInternetUser } from '../utils/internetStore.js';
 import { handleSecondaryGateJoin } from '../utils/secondaryServerGate.js';
+import { sendPinellasWelcome } from '../utils/pinellasServer.js';
 import { logger } from '../utils/logger.js';
 
 export default {
@@ -12,6 +13,13 @@ export default {
       if (gated) return;
     } catch (error) {
       logger.error('Secondary server gate join check failed', error);
+    }
+
+    try {
+      const welcomed = await sendPinellasWelcome(member);
+      if (welcomed) return;
+    } catch (error) {
+      logger.error('Pinellas welcome message failed', error);
     }
 
     if (member.guild.id !== CLEARWATER_GUILD_ID) return;
