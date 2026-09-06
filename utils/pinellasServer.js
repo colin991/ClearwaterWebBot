@@ -1,4 +1,16 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import {
+  ActionRowBuilder,
+  AttachmentBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ContainerBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  MessageFlags,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
+  TextDisplayBuilder,
+} from 'discord.js';
 import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -14,9 +26,20 @@ export const PINELLAS_WELCOME_CHANNEL_ID = '1514100979711217706';
 /** Applications channel linked in the welcome message. */
 export const PINELLAS_APPLICATIONS_CHANNEL_ID = '1514443793607295058';
 
+/** Channel for employee-role welcome messages. */
+export const PINELLAS_EMPLOYEE_WELCOME_CHANNEL_ID = '1514108033720909894';
+
+/** Role that triggers the employee welcome message when granted. */
+export const PINELLAS_EMPLOYEE_WELCOME_ROLE_ID = '1514363218754142218';
+
 /** Information channel linked from the welcome message. */
 export const PINELLAS_INFORMATION_CHANNEL_URL =
   'https://discord.com/channels/1514100977920245760/1514436767980454060';
+
+const EMPLOYEE_INFO_CHANNEL_URL =
+  'https://discord.com/channels/1514100977920245760/1514128260102099016';
+const DIVISIONS_CHANNEL_URL =
+  'https://discord.com/channels/1514100977920245760/1514666220538957994';
 
 export const PINELLAS_NICKNAME = 'Pinellas Operations';
 
@@ -28,10 +51,12 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PINELLAS_LOGO_PATH = path.join(ROOT, 'assets', 'pinellas-ops-logo.png');
 /** Per-server banner (PCSO application / ops branding). */
 const PINELLAS_BANNER_PATH = path.join(ROOT, 'assets', 'pinellas-ops-banner.webp');
+const EMPLOYEE_FOOTER_PATH = path.join(ROOT, 'assets', 'pcso-application-footer.png');
 const PROFILE_STATE_PATH = path.join(ROOT, 'data', 'pinellas-profile.json');
 
 const WAVE_EMOJI = '<:wave:1517217333234503790>';
 const SLOGO_EMOJI = '<:slogo:1546245229420744804>';
+const SAVE_EMOJI = '<:Save:1517217415098798280>';
 const MEMBER_EMOJI = { id: '1517350373671833732', name: 'member' };
 
 let cachedLogo = null;
@@ -188,5 +213,93 @@ export async function sendPinellasWelcome(member) {
     allowedMentions: { users: [member.id] },
   });
   logger.info(`Pinellas: welcomed ${member.user?.tag || member.id}.`);
+  return true;
+}
+
+/**
+ * When a member receives the employee welcome role, post the PCSO welcome card.
+ */
+export async function handlePinellasEmployeeRoleWelcome(previousMember, member) {
+  if (String(member.guild?.id) !== PINELLAS_GUILD_ID) return false;
+  if (member.user?.bot) return false;
+
+  let before = previousMember;
+  if (before?.partial) {
+    before = await before.fetch().catch(() => previousMember);
+  }
+
+  const hadRole = Boolean(before?.roles?.cache?.has(PINELLAS_EMPLOYEE_WELCOME_ROLE_ID));
+  const hasRole = Boolean(member.roles?.cache?.has(PINELLAS_EMPLOYEE_WELCOME_ROLE_ID));
+  if (hadRole || !hasRole) return false;
+
+  return sendPinellasEmployeeWelcome(member);
+}
+
+/** Post the Components V2 employee welcome message for a newly role-granted member. */
+export async function sendPinellasEmployeeWelcome(member) {
+  if (String(member.guild?.id) !== PINELLAS_GUILD_ID) return false;
+  if (member.user?.bot) return false;
+
+  const channel = member.guild.channels.cache.get(PINELLAS_EMPLOYEE_WELCOME_CHANNEL_ID)
+    || await member.guild.channels.fetch(PINELLAS_EMPLOYEE_WELCOME_CHANNEL_ID).catch(() => null);
+  if (!channel?.isTextBased?.()) {
+    logger.warn(`Pinellas: employee welcome channel ${PINELLAS_EMPLOYEE_WELCOME_CHANNEL_ID} unavailable.`);
+    return false;
+  }
+
+  const container = new ContainerBuilder().clearAccentColor();
+  container
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent([
+        `# ${SAVE_EMOJI} Welcome`,
+        '',
+        `> <@${member.id}> Welcome to the **${SLOGO_EMOJI} Pinellas County Sheriff's Office!**`,
+        '',
+        '> We’re glad to have you here! You can find important information about the department, including resources, guidelines, and other helpful information, by using the buttons below.',
+        '',
+        '> We hope you enjoy your time with PCSO and consider becoming a part of our department in the future!',
+      ].join('\n')),
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large),
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setLabel('Employee Information')
+          .setStyle(ButtonStyle.Link)
+          .setURL(EMPLOYEE_INFO_CHANNEL_URL),
+        new ButtonBuilder()
+          .setLabel('Divisions')
+          .setStyle(ButtonStyle.Link)
+          .setURL(DIVISIONS_CHANNEL_URL),
+      ),
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large),
+    );
+
+  const files = [];
+  try {
+    const footer = await readFile(EMPLOYEE_FOOTER_PATH);
+    files.push(new AttachmentBuilder(footer, { name: 'pcso-application-footer.png' }));
+    container.addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(
+        new MediaGalleryItemBuilder().setURL('attachment://pcso-application-footer.png'),
+      ),
+    );
+  } catch (error) {
+    logger.warn(
+      `Pinellas: employee welcome footer unavailable; posting without it (${error?.message || error}).`,
+    );
+  }
+
+  await channel.send({
+    components: [container],
+    flags: MessageFlags.IsComponentsV2,
+    files,
+    allowedMentions: { parse: [], users: [member.id] },
+  });
+  logger.info(`Pinellas: posted employee welcome for ${member.user?.tag || member.id}.`);
   return true;
 }

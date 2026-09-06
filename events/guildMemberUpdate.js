@@ -4,6 +4,7 @@ import { readInternetStore, saveInternetStore, upsertInternetUser } from '../uti
 import { handleSecondaryGateMainRoleUpdate } from '../utils/secondaryServerGate.js';
 import { handleDispatchMemberUpdate } from '../utils/dispatchChannelStatus.js';
 import { handleCorrectionsMemberUpdate } from '../utils/correctionsChannelStatus.js';
+import { handlePinellasEmployeeRoleWelcome } from '../utils/pinellasServer.js';
 import { logger } from '../utils/logger.js';
 
 export default {
@@ -25,6 +26,12 @@ export default {
       await handleCorrectionsMemberUpdate(previousMember, member, client || member.client);
     } catch (error) {
       logger.warn(`Corrections status member update failed: ${error?.message || error}`);
+    }
+
+    try {
+      await handlePinellasEmployeeRoleWelcome(previousMember, member);
+    } catch (error) {
+      logger.warn(`Pinellas employee welcome failed: ${error?.message || error}`);
     }
 
     if (member.guild.id !== CLEARWATER_GUILD_ID) return;

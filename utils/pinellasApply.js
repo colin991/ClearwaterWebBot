@@ -22,6 +22,8 @@ import { logger } from './logger.js';
 export const PINELLAS_APPLY_CHANNEL_ID = '1514443793607295058';
 export const PINELLAS_APPLY_REVIEW_CHANNEL_ID = '1546250122713767966';
 export const PINELLAS_APPLY_APPROVED_ROLE_ID = '1514362658227490989';
+/** Role pinged in the review channel when an application is submitted. */
+export const PINELLAS_APPLY_REVIEW_PING_ROLE_ID = '1514361105244356639';
 
 export const PINELLAS_APPLY_START_ID = 'pinellas:apply:start';
 export const PINELLAS_APPLY_OPEN_ID = 'pinellas:apply:open';
@@ -183,13 +185,14 @@ function validateAnswer(question, raw) {
   return { ok: true, value: text };
 }
 
-function v2Payload(decorate, { files, ephemeral = false } = {}) {
+function v2Payload(decorate, { files, ephemeral = false, allowedMentions } = {}) {
   const container = new ContainerBuilder().clearAccentColor();
   decorate(container);
   let flags = MessageFlags.IsComponentsV2;
   if (ephemeral) flags |= MessageFlags.Ephemeral;
   const payload = { components: [container], flags };
   if (files?.length) payload.files = files;
+  if (allowedMentions) payload.allowedMentions = allowedMentions;
   return payload;
 }
 
@@ -379,6 +382,7 @@ async function submitApplication(client, user, session) {
       .addTextDisplayComponents(
         new TextDisplayBuilder().setContent([
           `# ${SAVE_EMOJI} Application Review`,
+          `<@&${PINELLAS_APPLY_REVIEW_PING_ROLE_ID}> — new entry application ready for review.`,
           `Applicant: <@${user.id}> (\`${user.id}\` / **${user.username}**)`,
           `Application ID: \`${application.id}\``,
         ].join('\n')),
@@ -407,6 +411,12 @@ async function submitApplication(client, user, session) {
             .setStyle(ButtonStyle.Danger),
         ),
       );
+  }, {
+    allowedMentions: {
+      parse: [],
+      roles: [PINELLAS_APPLY_REVIEW_PING_ROLE_ID],
+      users: [user.id],
+    },
   });
 
   await reviewChannel.send(payload);
