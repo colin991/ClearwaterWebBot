@@ -48,19 +48,19 @@ or:
 
 #### One-time fix if Restart still boots old code
 
-Stop the server, paste this in the console **once**, then Start:
+Stop the server. In the Apollo console, paste this **as one single line**, then press Enter:
 
 ```bash
-cd /home/container
-rm -rf downloads tmp
-# Keep the existing origin (do NOT git remote set-url ...)
-git fetch origin main
-git reset --hard origin/main
-# Do NOT run: git clean -fdx
-# Do NOT delete data/ or .env
+cd /home/container; echo "PWD=$(pwd)"; echo "GIT=$([ -d .git ] && echo YES || echo NO)"; rm -rf downloads tmp; git remote -v | sed 's/\/\/[^@/]*@/\/\/***@/g'; echo "BEFORE=$(git log -1 --oneline 2>/dev/null || echo none)"; git fetch origin main; git reset --hard origin/main; echo "AFTER=$(git log -1 --oneline)"; ls utils/hostCodeSync.js; npm install --omit=dev; echo DONE
 ```
 
-After that, normal **Restart** keeps the latest code.
+You should see `PWD=...`, `GIT=YES`, `BEFORE=...`, `AFTER=...`, and `DONE`.
+
+- If you see `GIT=NO`, the host is not a GitHub install (zip upload). Reinstall from the GitHub repo in Apollo without wiping `data/` / `.env`.
+- If `fetch` errors, Apollo’s GitHub login is broken — reconnect the repo in the panel.
+- If `AFTER` shows a new commit, click **Start**. Watch for `[host-sync]` lines.
+
+After that works once, normal **Restart** keeps the latest code.
 Required gateway intents: **Guilds**, **Server Members**, **Server Messages**, **Message Content**, and **Guild Voice States**. Enable Server Members and Message Content in the Discord Developer Portal. Never commit or share `.env`.
 
 ## Layout

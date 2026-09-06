@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-host-repair-one-liner",
+      "title": "Clearer Spark/Apollo host repair steps",
+      "summary": "Added a noisy one-line Apollo console repair command and louder [host-sync] boot logs so stuck hosts show whether .git exists, fetch worked, and which commit is running. Still preserves data/ and .env.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T18:28:00.000Z"
+    },
+    {
       "id": "2026-09-06-fix-private-repo-host-sync",
       "title": "Spark/Apollo host sync keeps git login",
       "summary": "Host code sync no longer replaces Apollo’s private-repo git remote with a public URL (which made fetch fail and kept old code). It preserves the panel token, force-syncs main, refreshes npm deps after updates, and leaves data/ + .env alone. Startup command can stay locked.",

@@ -11,26 +11,34 @@ import { startRobloxGroupSync } from './utils/robloxGroupSync.js';
 import { startDepartmentSalaryJob } from './utils/departmentSalary.js';
 import { reexecIfUpdated, syncHostCodeFromMain } from './utils/hostCodeSync.js';
 
-// Apollopanel startup is locked to `git pull; npm install; node index.js`.
+// Spark / Apollo startup is locked to `git pull; npm install; node index.js`.
 // When `git pull` fails (dirty downloads/), this still force-syncs code without
 // wiping host-only data/ or .env, then restarts onto the new commit if needed.
+console.log('[host-sync] boot check starting...');
 if (process.env.CLEARWATER_SKIP_HOST_SYNC !== '1') {
   try {
     const sync = syncHostCodeFromMain();
     if (sync.reason && sync.reason !== 'already_current' && sync.reason !== 'no_git' && sync.reason !== 'updated') {
+      console.log(`[host-sync] WARN ${sync.reason}`);
       logger.warn(`Host code sync skipped/failed: ${sync.reason}`);
     } else if (sync.commit) {
-      logger.info(
-        sync.updated
-          ? `Host code updated to ${sync.commit.slice(0, 7)}; re-executing onto new files.`
-          : `Host code already at ${sync.commit.slice(0, 7)}.`,
-      );
+      const msg = sync.updated
+        ? `Host code updated to ${sync.commit.slice(0, 7)}; re-executing onto new files.`
+        : `Host code already at ${sync.commit.slice(0, 7)}.`;
+      console.log(`[host-sync] ${msg}`);
+      logger.info(msg);
+    } else {
+      console.log(`[host-sync] no commit result (reason=${sync.reason || 'unknown'})`);
     }
     reexecIfUpdated(sync);
   } catch (error) {
+    console.log(`[host-sync] ERROR ${error?.message || error}`);
     logger.warn(`Host code sync error: ${error?.message || error}`);
   }
+} else {
+  console.log('[host-sync] skipped (CLEARWATER_SKIP_HOST_SYNC=1)');
 }
+console.log('[host-sync] boot check finished; starting bot...');
 
 validateConfig();
 
