@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-credit-store-boot-heal",
+      "title": "Self-heal missing credit-store on boot",
+      "summary": "Hosts without .git were crashing because lib/credit-store.js could not be restored. Boot now writes the missing credit-store files automatically, and pack data also lives under utils/creditStore.js.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T20:37:00.000Z"
+    },
+    {
       "id": "2026-09-06-host-sync-before-imports",
       "title": "Host sync runs before bot imports",
       "summary": "Fixed Apollo boot crashes when a tracked file like lib/credit-store.js was missing: index.js now force-syncs from main before loading Discord/bot modules, so the missing file can be restored.",

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { CREDIT_STORE_PACKS } from '../lib/credit-store.js';
+import { CREDIT_STORE_PACKS } from './creditStore.js';
 import { AUTOMOD_HOLD_MESSAGE, AutomodHoldError, scanInternetContent } from './internetAutomod.js';
 import { JsonStoreCorruptError, readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
