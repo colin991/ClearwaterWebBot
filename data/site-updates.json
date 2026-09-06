@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-inline-boot-loaders",
+      "title": "Boot loaders no longer depend on helper files",
+      "summary": "Moved slash, prefix, event, and registration loaders into bot.js so incomplete Apollo uploads do not crash on one missing loader helper after another.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T21:06:00.000Z"
+    },
+    {
       "id": "2026-09-06-ready-services-startup",
       "title": "Ready services start normally",
       "summary": "Fixed the Discord presence call that stopped the ready handler before the secondary gate, ER:LC zone voice, status channels, frequency greeting, notice channel, and Internet panel could start.",
