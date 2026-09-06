@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-pinellas-ops-branding",
+      "title": "Pinellas Operations nickname, logo, and welcome",
+      "summary": "In the Pinellas County Sheriff's Office Discord, the bot sets its per-server nickname to Pinellas Operations and uses the PCSO badge as its server avatar. New joins get a welcome ping in the configured channel with a link to applications.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T19:32:00.000Z"
+    },
+    {
       "id": "2026-09-06-skip-freq-greeting-on-bot-drag",
       "title": "Frequency Change greeting skips bot drags",
       "summary": "If a bot (including Clearwater zone drag or another bot) moves someone into a Frequency Change VC, the bot no longer joins to play the welcome TTS. Manual joins by players still get the greeting when they are first in the channel.",
