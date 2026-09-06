@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-optional-application-artwork",
+      "title": "Applications work without optional artwork",
+      "summary": "The Pinellas application panel now posts its text and buttons even when the banner or footer image is missing from an Apollo upload.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T21:11:00.000Z"
+    },
+    {
       "id": "2026-09-06-pinellas-server-avatar",
       "title": "Updated the Pinellas bot avatar",
       "summary": "Changed the bot's server-specific avatar in the Pinellas County Sheriff's Office server to the supplied black-and-white sheriff badge image.",

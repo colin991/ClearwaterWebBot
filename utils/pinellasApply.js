@@ -156,26 +156,43 @@ function questionPayload(question, index, total) {
 }
 
 async function loadPanelFiles() {
-  const banner = await readFile(BANNER_PATH);
-  const footer = await readFile(FOOTER_PATH);
-  return [
-    new AttachmentBuilder(banner, { name: 'pcso-application-banner.png' }),
-    new AttachmentBuilder(footer, { name: 'pcso-application-footer.png' }),
+  const files = [];
+  const available = new Set();
+  const assets = [
+    [BANNER_PATH, 'pcso-application-banner.png'],
+    [FOOTER_PATH, 'pcso-application-footer.png'],
   ];
+
+  for (const [filePath, name] of assets) {
+    try {
+      const buffer = await readFile(filePath);
+      files.push(new AttachmentBuilder(buffer, { name }));
+      available.add(name);
+    } catch (error) {
+      logger.warn(
+        `Pinellas apply: optional artwork ${name} is unavailable; posting the panel without it (${error?.message || error}).`,
+      );
+    }
+  }
+
+  return { files, available };
 }
 
 export async function buildPinellasApplyPanel() {
-  const files = await loadPanelFiles();
+  const { files, available } = await loadPanelFiles();
   return v2Payload((container) => {
-    container
-      .addMediaGalleryComponents(
+    if (available.has('pcso-application-banner.png')) {
+      container.addMediaGalleryComponents(
         new MediaGalleryBuilder().addItems(
           new MediaGalleryItemBuilder().setURL('attachment://pcso-application-banner.png'),
         ),
-      )
-      .addSeparatorComponents(
+      );
+      container.addSeparatorComponents(
         new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
-      )
+      );
+    }
+
+    container
       .addTextDisplayComponents(
         new TextDisplayBuilder().setContent([
           `# ${SAVE_EMOJI} Entry Application`,
@@ -202,12 +219,15 @@ export async function buildPinellasApplyPanel() {
       )
       .addSeparatorComponents(
         new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large),
-      )
-      .addMediaGalleryComponents(
+      );
+
+    if (available.has('pcso-application-footer.png')) {
+      container.addMediaGalleryComponents(
         new MediaGalleryBuilder().addItems(
           new MediaGalleryItemBuilder().setURL('attachment://pcso-application-footer.png'),
         ),
       );
+    }
   }, { files });
 }
 
