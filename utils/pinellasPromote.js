@@ -12,7 +12,7 @@ import {
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PINELLAS_GUILD_ID } from './pinellasServer.js';
+import { PINELLAS_GUILD_ID, requirePinellasCommandAccess } from './pinellasServer.js';
 import { logger } from './logger.js';
 
 /** Channel where PCSO promotion announcements are posted. */
@@ -176,16 +176,10 @@ export async function promotePinellasMember({
     throw new Error('You cannot promote yourself.');
   }
 
-  const issuerIsAdmin = issuerMember.permissions?.has(PermissionFlagsBits.Administrator);
-  if (!issuerIsAdmin && !issuerMember.permissions?.has(PermissionFlagsBits.ManageRoles)) {
-    throw new Error('You need **Manage Roles** (or Administrator) to promote members.');
-  }
+  requirePinellasCommandAccess(issuerMember);
 
   const issuerRank = getHighestPinellasRank(issuerMember);
-  if (!issuerIsAdmin) {
-    if (!issuerRank) {
-      throw new Error('You need a PCSO rank above the target rank to promote someone.');
-    }
+  if (issuerRank) {
     if (rankIndex(issuerRank) >= rankIndex(rank)) {
       throw new Error(
         `You can only promote members to ranks below your own (**${issuerRank.name}**).`,

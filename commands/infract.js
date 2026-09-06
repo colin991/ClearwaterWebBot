@@ -4,7 +4,10 @@ import {
   SlashCommandBuilder,
 } from 'discord.js';
 import { buildInitialInfractPanel } from '../utils/pinellasInfract.js';
-import { PINELLAS_GUILD_ID } from '../utils/pinellasServer.js';
+import {
+  PINELLAS_GUILD_ID,
+  requirePinellasCommandAccess,
+} from '../utils/pinellasServer.js';
 
 export default {
   data: new SlashCommandBuilder()
@@ -18,10 +21,9 @@ export default {
       throw new Error('This command can only be used in the Pinellas County Sheriff\'s Office server.');
     }
 
-    const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator);
-    if (!isAdmin && !interaction.memberPermissions?.has(PermissionFlagsBits.ManageRoles)) {
-      throw new Error('You need **Manage Roles** (or Administrator) to use this command.');
-    }
+    const issuerMember = interaction.member
+      || await interaction.guild.members.fetch(interaction.user.id);
+    requirePinellasCommandAccess(issuerMember);
 
     await interaction.reply(await buildInitialInfractPanel());
   },

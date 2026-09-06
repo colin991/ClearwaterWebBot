@@ -33,6 +33,19 @@ export const PINELLAS_EMPLOYEE_WELCOME_CHANNEL_ID = '1514108033720909894';
 /** Role that triggers the employee welcome message when granted. */
 export const PINELLAS_EMPLOYEE_WELCOME_ROLE_ID = '1514363218754142218';
 
+/** Role required to run /promote and infraction commands. */
+export const PINELLAS_COMMAND_ACCESS_ROLE_ID = '1514361105244356639';
+
+/** True when the member has the PCSO command-access role. */
+export function memberHasPinellasCommandAccess(member) {
+  return Boolean(member?.roles?.cache?.has(PINELLAS_COMMAND_ACCESS_ROLE_ID));
+}
+
+export function requirePinellasCommandAccess(member) {
+  if (memberHasPinellasCommandAccess(member)) return true;
+  throw new Error('You need the required PCSO command role to use this.');
+}
+
 /** Information channel linked from the welcome message. */
 export const PINELLAS_INFORMATION_CHANNEL_URL =
   'https://discord.com/channels/1514100977920245760/1514436767980454060';

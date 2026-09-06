@@ -7,7 +7,10 @@ import {
   PINELLAS_RANKS,
   promotePinellasMember,
 } from '../utils/pinellasPromote.js';
-import { PINELLAS_GUILD_ID } from '../utils/pinellasServer.js';
+import {
+  PINELLAS_GUILD_ID,
+  requirePinellasCommandAccess,
+} from '../utils/pinellasServer.js';
 
 const rankChoices = PINELLAS_RANKS.map((rank) => ({
   name: rank.name,
@@ -41,6 +44,10 @@ export default {
       throw new Error('This command can only be used in the Pinellas County Sheriff\'s Office server.');
     }
 
+    const issuerMember = interaction.member
+      || await interaction.guild.members.fetch(interaction.user.id);
+    requirePinellasCommandAccess(issuerMember);
+
     const targetUser = interaction.options.getUser('user', true);
     const reason = interaction.options.getString('reason', true);
     const rankName = interaction.options.getString('rank', true);
@@ -51,9 +58,6 @@ export default {
     if (!targetMember) {
       throw new Error('That user is not in this server.');
     }
-
-    const issuerMember = interaction.member
-      || await interaction.guild.members.fetch(interaction.user.id);
 
     const result = await promotePinellasMember({
       guild: interaction.guild,

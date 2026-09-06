@@ -32,6 +32,8 @@ import {
 import {
   PINELLAS_EMPLOYEE_WELCOME_ROLE_ID,
   PINELLAS_GUILD_ID,
+  memberHasPinellasCommandAccess,
+  requirePinellasCommandAccess,
 } from './pinellasServer.js';
 import { logger } from './logger.js';
 
@@ -475,30 +477,22 @@ function assertCanInfract(issuerMember, targetMember, { demoteRank = null } = {}
   if (targetMember.user?.bot) throw new Error('You cannot infract a bot.');
   if (targetMember.id === issuerMember.id) throw new Error('You cannot infract yourself.');
 
-  const isAdmin = issuerMember.permissions?.has(PermissionFlagsBits.Administrator);
-  if (!isAdmin && !issuerMember.permissions?.has(PermissionFlagsBits.ManageRoles)) {
-    throw new Error('You need **Manage Roles** (or Administrator) to issue infractions.');
-  }
+  requirePinellasCommandAccess(issuerMember);
 
-  if (!isAdmin) {
-    const issuerRank = getHighestPinellasRank(issuerMember);
-    const targetRank = getHighestPinellasRank(targetMember);
-    if (!issuerRank) {
-      throw new Error('You need a PCSO rank to issue infractions.');
+  const issuerRank = getHighestPinellasRank(issuerMember);
+  const targetRank = getHighestPinellasRank(targetMember);
+  if (issuerRank && targetRank) {
+    const issuerIdx = PINELLAS_RANKS.findIndex((rank) => rank.roleId === issuerRank.roleId);
+    const targetIdx = PINELLAS_RANKS.findIndex((rank) => rank.roleId === targetRank.roleId);
+    if (issuerIdx >= targetIdx) {
+      throw new Error('You can only infract members below your own PCSO rank.');
     }
-    if (targetRank) {
-      const issuerIdx = PINELLAS_RANKS.findIndex((rank) => rank.roleId === issuerRank.roleId);
-      const targetIdx = PINELLAS_RANKS.findIndex((rank) => rank.roleId === targetRank.roleId);
-      if (issuerIdx >= targetIdx) {
-        throw new Error('You can only infract members below your own PCSO rank.');
-      }
-    }
-    if (demoteRank) {
-      const demoteIdx = PINELLAS_RANKS.findIndex((rank) => rank.roleId === demoteRank.roleId);
-      const issuerIdx = PINELLAS_RANKS.findIndex((rank) => rank.roleId === issuerRank.roleId);
-      if (issuerIdx >= demoteIdx) {
-        throw new Error('You can only demote members to ranks below your own.');
-      }
+  }
+  if (demoteRank && issuerRank) {
+    const demoteIdx = PINELLAS_RANKS.findIndex((rank) => rank.roleId === demoteRank.roleId);
+    const issuerIdx = PINELLAS_RANKS.findIndex((rank) => rank.roleId === issuerRank.roleId);
+    if (issuerIdx >= demoteIdx) {
+      throw new Error('You can only demote members to ranks below your own.');
     }
   }
 }
@@ -692,10 +686,7 @@ export async function editPinellasInfraction({
   if (String(issuerMember.guild?.id) !== PINELLAS_GUILD_ID) {
     throw new Error('This command can only be used in the Pinellas County Sheriff\'s Office server.');
   }
-  const isAdmin = issuerMember.permissions?.has(PermissionFlagsBits.Administrator);
-  if (!isAdmin && !issuerMember.permissions?.has(PermissionFlagsBits.ManageRoles)) {
-    throw new Error('You need **Manage Roles** (or Administrator) to edit infractions.');
-  }
+  requirePinellasCommandAccess(issuerMember);
 
   const store = await readStore();
   const entry = (store.infractions || []).find((item) => item.id === String(id));
@@ -829,6 +820,16 @@ export async function handlePinellasInfractInteraction(interaction) {
   if (String(interaction.guildId) !== PINELLAS_GUILD_ID) {
     await interaction.reply({
       content: 'Infractions are only available in the Pinellas County Sheriff\'s Office server.',
+      flags: MessageFlags.Ephemeral,
+    }).catch(() => null);
+    return true;
+  }
+
+  const issuerMember = interaction.member
+    || await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+  if (!memberHasPinellasCommandAccess(issuerMember)) {
+    await interaction.reply({
+      content: 'You need the required PCSO command role to use this.',
       flags: MessageFlags.Ephemeral,
     }).catch(() => null);
     return true;

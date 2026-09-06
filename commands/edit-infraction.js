@@ -7,7 +7,10 @@ import {
   INFRACTION_TYPES,
   editPinellasInfraction,
 } from '../utils/pinellasInfract.js';
-import { PINELLAS_GUILD_ID } from '../utils/pinellasServer.js';
+import {
+  PINELLAS_GUILD_ID,
+  requirePinellasCommandAccess,
+} from '../utils/pinellasServer.js';
 
 const typeChoices = INFRACTION_TYPES.map((type) => ({
   name: type.charAt(0).toUpperCase() + type.slice(1),
@@ -58,6 +61,10 @@ export default {
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+    const issuerMember = interaction.member
+      || await interaction.guild.members.fetch(interaction.user.id);
+    requirePinellasCommandAccess(issuerMember);
+
     const id = interaction.options.getString('id', true).trim();
     const voidInfraction = interaction.options.getBoolean('void') || false;
     const type = interaction.options.getString('type');
@@ -68,9 +75,6 @@ export default {
     if (!voidInfraction && !type && !policy && !description && !expires) {
       throw new Error('Provide at least one change: void, type, policy, description, or expires.');
     }
-
-    const issuerMember = interaction.member
-      || await interaction.guild.members.fetch(interaction.user.id);
 
     const entry = await editPinellasInfraction({
       client: interaction.client,
