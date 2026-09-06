@@ -61,7 +61,7 @@ You should see `PWD=...`, `GIT=YES`, `BEFORE=...`, `AFTER=...`, and `DONE`.
 - If `AFTER` shows a new commit, click **Start**. Watch for `[host-sync]` lines.
 
 After that works once, normal **Restart** keeps the latest code.
-Required gateway intents: **Guilds**, **Server Members**, **Server Messages**, **Message Content**, and **Guild Voice States**. Enable Server Members and Message Content in the Discord Developer Portal. Never commit or share `.env`.
+Required gateway intents: **Guilds**, **Server Members**, **Server Messages**, **Direct Messages**, **Message Content**, and **Guild Voice States**. Enable Server Members, Message Content, and Direct Messages in the Discord Developer Portal. Never commit or share `.env`.
 
 ## Layout
 

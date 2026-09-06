@@ -95,6 +95,7 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.DirectMessages,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildModeration,
     GatewayIntentBits.MessageContent,

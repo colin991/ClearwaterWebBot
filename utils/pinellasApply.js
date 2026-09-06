@@ -75,15 +75,74 @@ function newId() {
 
 async function readStore() {
   try {
-    return JSON.parse(await readFile(STORE_PATH, 'utf8'));
+    const store = JSON.parse(await readFile(STORE_PATH, 'utf8'));
+    return {
+      applications: Array.isArray(store.applications) ? store.applications : [],
+      denials: store.denials && typeof store.denials === 'object' ? store.denials : {},
+      sessions: store.sessions && typeof store.sessions === 'object' ? store.sessions : {},
+    };
   } catch {
-    return { applications: [], denials: {} };
+    return { applications: [], denials: {}, sessions: {} };
   }
 }
 
 async function writeStore(store) {
   await mkdir(path.dirname(STORE_PATH), { recursive: true });
   await writeFile(STORE_PATH, `${JSON.stringify(store, null, 2)}\n`, 'utf8');
+}
+
+async function persistSession(userId, session) {
+  const store = await readStore();
+  store.sessions = store.sessions || {};
+  if (session) {
+    store.sessions[userId] = {
+      applicationId: session.applicationId,
+      index: session.index,
+      answers: session.answers,
+      updatedAt: session.updatedAt,
+    };
+    activeSessions.set(userId, store.sessions[userId]);
+  } else {
+    delete store.sessions[userId];
+    activeSessions.delete(userId);
+  }
+  await writeStore(store);
+}
+
+async function loadSession(userId) {
+  const cached = activeSessions.get(userId);
+  if (cached) return cached;
+
+  const store = await readStore();
+  const session = store.sessions?.[userId];
+  if (!session) return null;
+
+  if (Date.now() - Number(session.updatedAt || 0) > ANSWER_TIMEOUT_MS) {
+    await persistSession(userId, null);
+    return null;
+  }
+
+  activeSessions.set(userId, session);
+  return session;
+}
+
+async function sendDmQuestion(target, question, index) {
+  const payload = questionPayload(question, index, PINELLAS_APPLY_QUESTIONS.length);
+  try {
+    if (typeof target.reply === 'function') {
+      return await target.reply(payload);
+    }
+    return await target.send(payload);
+  } catch (error) {
+    logger.error('Pinellas apply: failed to send question DM', error);
+    if (target.channel?.send) {
+      return target.channel.send(payload);
+    }
+    if (typeof target.send === 'function') {
+      return target.send(payload);
+    }
+    throw error;
+  }
 }
 
 function sentenceCount(text) {
@@ -253,20 +312,22 @@ async function beginApplicationSession(user) {
   if (existingPending) {
     throw new Error('You already have a pending application under review.');
   }
-  if (activeSessions.has(user.id)) {
+  const existingSession = await loadSession(user.id);
+  if (existingSession) {
     throw new Error('You already have an application in progress in DMs. Finish it or type `cancel`.');
   }
 
   const applicationId = newId();
-  activeSessions.set(user.id, {
+  const session = {
     applicationId,
     index: 0,
     answers: [],
     updatedAt: Date.now(),
-  });
+  };
+  await persistSession(user.id, session);
 
   await user.send(dmCard('Entry Application', REQUIREMENTS_BODY));
-  await user.send(questionPayload(PINELLAS_APPLY_QUESTIONS[0], 0, PINELLAS_APPLY_QUESTIONS.length));
+  await sendDmQuestion(user, PINELLAS_APPLY_QUESTIONS[0], 0);
   return applicationId;
 }
 
@@ -287,6 +348,7 @@ async function submitApplication(client, user, session) {
     createdAt: new Date().toISOString(),
   };
   store.applications = [application, ...(store.applications || [])].slice(0, 500);
+  if (store.sessions) delete store.sessions[user.id];
   await writeStore(store);
   activeSessions.delete(user.id);
 
@@ -498,11 +560,11 @@ export async function handlePinellasApplyInteraction(interaction) {
 
 export async function handlePinellasApplyDm(message) {
   if (message.guild || message.author.bot) return false;
-  const session = activeSessions.get(message.author.id);
+  const session = await loadSession(message.author.id);
   if (!session) return false;
 
   if (Date.now() - session.updatedAt > ANSWER_TIMEOUT_MS) {
-    activeSessions.delete(message.author.id);
+    await persistSession(message.author.id, null);
     await message.reply(dmCard(
       'Application Timed Out',
       'Your application session expired. Click **Start Entry Process** again in the applications channel.',
@@ -512,7 +574,7 @@ export async function handlePinellasApplyDm(message) {
 
   const text = String(message.content || '').trim();
   if (/^cancel$/i.test(text)) {
-    activeSessions.delete(message.author.id);
+    await persistSession(message.author.id, null);
     await message.reply(dmCard(
       'Application Cancelled',
       'Your entry application was cancelled. You can start again anytime.',
@@ -521,6 +583,11 @@ export async function handlePinellasApplyDm(message) {
   }
 
   const question = PINELLAS_APPLY_QUESTIONS[session.index];
+  if (!question) {
+    await persistSession(message.author.id, null);
+    return true;
+  }
+
   const validated = validateAnswer(question, text);
   if (!validated.ok) {
     await message.reply(dmCard('Invalid Answer', validated.error)).catch(() => null);
@@ -530,12 +597,13 @@ export async function handlePinellasApplyDm(message) {
   session.answers[session.index] = validated.value;
   session.index += 1;
   session.updatedAt = Date.now();
+  await persistSession(message.author.id, session);
 
   if (session.index >= PINELLAS_APPLY_QUESTIONS.length) {
     try {
       await submitApplication(message.client, message.author, session);
     } catch (error) {
-      activeSessions.delete(message.author.id);
+      await persistSession(message.author.id, null);
       logger.error('Pinellas apply submit failed', error);
       await message.reply(dmCard(
         'Submit Failed',
@@ -545,8 +613,10 @@ export async function handlePinellasApplyDm(message) {
     return true;
   }
 
-  await message.reply(
-    questionPayload(PINELLAS_APPLY_QUESTIONS[session.index], session.index, PINELLAS_APPLY_QUESTIONS.length),
-  ).catch(() => null);
+  await sendDmQuestion(
+    message,
+    PINELLAS_APPLY_QUESTIONS[session.index],
+    session.index,
+  );
   return true;
 }
