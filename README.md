@@ -9,15 +9,17 @@ Discord bot for Clearwater Roleplay — moderation, voice tools, ER:LC sync, Rob
 3. Add optional keys (`ERLC_SERVER_KEY`, Roblox group keys, etc.) as needed.
 4. Run `npm install` and `npm start`.
 
-### Apollopanel / Pterodactyl (important)
+### Spark Hosting / Apollo panel (important)
 
-Your panel may lock the startup command to something like:
+Your startup command is locked (that’s fine), usually like:
 
 ```bash
 if [[ -d .git ]]; then git pull; fi; ...; node /home/container/index.js
 ```
 
-**You do not need to change that.** On boot, `index.js` force-syncs code from `origin/main` and keeps host-only `data/` + `.env`.
+**Leave it alone.** On boot, `index.js` force-syncs code from `origin/main` while keeping host-only `data/` + `.env`.
+
+Because this GitHub repo is **private**, the bot keeps Apollo’s existing git remote/token. It will not replace it with a public URL.
 
 **Do not delete all files and re-upload a zip.** That wipes host-only data:
 
@@ -31,28 +33,34 @@ if [[ -d .git ]]; then git pull; fi; ...; node /home/container/index.js
 
 Just click **Restart**.
 
-What happens:
+In the console you should see lines like:
 
-1. Panel runs its locked `git pull` (may fail if `downloads/` is dirty — that’s OK)
-2. Panel starts `node index.js`
-3. Bot removes `downloads/`, resets tracked files to `origin/main`, keeps `data/` + `.env`
-4. If code changed, it restarts itself onto the new commit
+```text
+[host-sync] Using existing origin https://***@github.com/...
+[host-sync] Updated abc1234 -> def5678
+```
 
-#### One-time fix if the host is still stuck on old code
+or:
+
+```text
+[host-sync] Already on latest (def5678)
+```
+
+#### One-time fix if Restart still boots old code
 
 Stop the server, paste this in the console **once**, then Start:
 
 ```bash
 cd /home/container
-rm -rf downloads
+rm -rf downloads tmp
+# Keep the existing origin (do NOT git remote set-url ...)
 git fetch origin main
 git reset --hard origin/main
 # Do NOT run: git clean -fdx
 # Do NOT delete data/ or .env
 ```
 
-After that, normal **Restart** is enough (no startup-command change required).
-
+After that, normal **Restart** keeps the latest code.
 Required gateway intents: **Guilds**, **Server Members**, **Server Messages**, **Message Content**, and **Guild Voice States**. Enable Server Members and Message Content in the Discord Developer Portal. Never commit or share `.env`.
 
 ## Layout

@@ -18,12 +18,18 @@ preserve_paths=(
 if [[ -d .git ]]; then
   echo "[start] Syncing repository to origin/main (preserving data/ and .env)..."
   # Remove the file that keeps blocking panel git pull on this host.
-  rm -rf downloads
-  git remote set-url origin https://github.com/colin991/ClearwaterWebBot.git 2>/dev/null || true
-  git fetch origin main
-  git checkout -B main origin/main
+  rm -rf downloads tmp
+  # Keep Apollo/Spark origin URL (it usually includes deploy credentials).
+  # Do NOT replace origin with a public GitHub URL — this repo is private.
+  if ! git remote get-url origin >/dev/null 2>&1; then
+    echo "[start] WARNING: git origin is missing; fetch may fail on this private repo."
+  else
+    echo "[start] Using existing git origin (credentials preserved)."
+  fi
+  git fetch origin main || git fetch origin
+  git checkout -B main origin/main 2>/dev/null || git checkout -B main origin/master
   # Reset tracked files only. Does NOT delete gitignored host data.
-  git reset --hard origin/main
+  git reset --hard origin/main 2>/dev/null || git reset --hard origin/master
   # Clean leftover untracked junk, but never touch data/, .env, or node_modules.
   # Important: do NOT use `git clean -fdx` — that would wipe gitignored data files.
   clean_excludes=()
