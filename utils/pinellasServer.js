@@ -12,7 +12,7 @@ export const PINELLAS_WELCOME_CHANNEL_ID = '1514100979711217706';
 
 /** Applications channel linked in the welcome message. */
 export const PINELLAS_APPLICATIONS_CHANNEL_URL =
-  'https://discord.com/channels/1514100977920245760/1514436767980454060';
+  'https://discord.com/channels/1514100977920245760/1514443793607295058';
 
 export const PINELLAS_NICKNAME = 'Pinellas Operations';
 
