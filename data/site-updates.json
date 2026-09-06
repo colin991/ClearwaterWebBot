@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-06-zip-upload-boot",
+      "title": "Zip-upload boot without host sync",
+      "summary": "index.js now only starts bot.js and no longer imports hostCodeSync, so Apollo zip uploads without .git or sync helpers can boot.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-06T20:43:00.000Z"
+    },
+    {
       "id": "2026-09-06-offline-boot-no-git",
       "title": "Boot works without git on Apollo",
       "summary": "Host sync is skipped when .git is missing, credit-store packs are inlined into internetStore, and an emergency no-git console fix script can repair a broken zip-upload host.",
