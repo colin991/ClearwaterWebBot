@@ -17,8 +17,9 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
-import { fetchErlcServer, parseErlcPlayer } from './erlc.js';
+import { fetchErlcServer, libertyMapPoint, parseErlcPlayer } from './erlc.js';
 import { getIdentityCache } from './identityStore.js';
+import { renderLibertyLocationMap } from './libertyMapImage.js';
 import { logger } from './logger.js';
 import {
   fetchMelonlyMemberDiscordId,
@@ -55,7 +56,6 @@ const FOOTER_PATH = path.join(ROOT, 'assets', 'pcso-shift-footer.webp');
 const SLOGO_EMOJI = '<:slogo:1546245229420744804>';
 const ATIME_EMOJI = '<:atime:1546336942785044490>';
 const SHEET_EMOJI = '<:sheet:1546293540827701329>';
-const CLICK_EMOJI = '<:click:1517217194067628062>';
 
 /** Melonly memberId → discordId */
 const memberDiscordCache = new Map();
@@ -476,6 +476,9 @@ export async function collectOnDutyDeputies(client, {
 
     // Only treat as in-game for role sync when on Sheriff (or found via callsign).
     const inGame = Boolean(player && (isSheriffTeam(player.team) || sheriffByCallsign.has(normalizeCallsign(callsign))));
+    const mapPin = inGame && player?.location
+      ? libertyMapPoint(player.location.x, player.location.z)
+      : null;
 
     const rank = getHighestPinellasRank(pinellasMember);
     const startedMs = shiftCreatedMs(shift) || nowMs;
@@ -497,6 +500,8 @@ export async function collectOnDutyDeputies(client, {
       totalWaveMs,
       inGame,
       locationLabel: formatInGameLocation(inGame ? player : null),
+      mapLeft: mapPin?.left ?? null,
+      mapTop: mapPin?.top ?? null,
       voiceLabel: voice ? `<#${voice.id}>` : 'Not in VC',
       voiceChannelId: voice?.id || null,
     });
@@ -655,7 +660,6 @@ async function buildShiftPanelPayload(snapshot, { includeFiles = true } = {}) {
 }
 
 async function buildLookupPayload(deputy, {
-  apiKey = config.melonlyApiKey,
   includeFiles = true,
 } = {}) {
   const files = [];
@@ -668,11 +672,20 @@ async function buildLookupPayload(deputy, {
   if (banner) files.push(banner);
   if (footer) files.push(footer);
 
-  let cad = null;
-  try {
-    cad = await fetchMelonlyCadForDiscord(apiKey, deputy.discordId);
-  } catch (error) {
-    logger.warn(`Pinellas shift lookup CAD failed: ${error?.message || error}`);
+  let mapAttachment = null;
+  if (
+    includeFiles
+    && Number.isFinite(deputy.mapLeft)
+    && Number.isFinite(deputy.mapTop)
+  ) {
+    const mapBuffer = await renderLibertyLocationMap({
+      left: deputy.mapLeft,
+      top: deputy.mapTop,
+    });
+    if (mapBuffer) {
+      mapAttachment = new AttachmentBuilder(mapBuffer, { name: 'pcso-shift-location-map.png' });
+      files.push(mapAttachment);
+    }
   }
 
   const container = new ContainerBuilder().clearAccentColor();
@@ -697,15 +710,21 @@ async function buildLookupPayload(deputy, {
         '',
         `**In-Game Location:** ${deputy.locationLabel}`,
         `**Voice Chat:** ${deputy.voiceLabel}`,
-        '',
-        `## ${CLICK_EMOJI} CAD Information`,
-        `**Current status:** ${formatCadStatus(cad)}`,
-        `**Attached Calls:** ${formatCadAttachedCalls(cad)}`,
       ].join('\n').slice(0, 4000)),
-    )
-    .addSeparatorComponents(
-      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large),
     );
+
+  // In-game map sits above the last divider (before the footer).
+  if (mapAttachment || (!includeFiles && Number.isFinite(deputy.mapLeft))) {
+    container.addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(
+        new MediaGalleryItemBuilder().setURL('attachment://pcso-shift-location-map.png'),
+      ),
+    );
+  }
+
+  container.addSeparatorComponents(
+    new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large),
+  );
 
   if (footer || !includeFiles) {
     container.addMediaGalleryComponents(
