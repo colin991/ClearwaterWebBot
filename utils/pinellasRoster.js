@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { batchUpdateGoogleSheetValues, isGoogleSheetsConfigured, readGoogleSheetValues } from './googleSheets.js';
 import { listPinellasInfractions } from './pinellasInfract.js';
 import { getHighestPinellasRank } from './pinellasPromote.js';
-import { PINELLAS_GUILD_ID } from './pinellasServer.js';
+import { PINELLAS_EMPLOYEE_WELCOME_ROLE_ID, PINELLAS_GUILD_ID } from './pinellasServer.js';
 import { logger } from './logger.js';
 import {
   fetchMelonlyLoas,
@@ -28,7 +28,6 @@ import {
 } from './melonly.js';
 import {
   isPinellasDepartmentShift,
-  isPinellasDiscordStaff,
   PINELLAS_MELONLY_DEPARTMENT_ID,
   resolvePinellasMelonlyMemberDiscordId,
 } from './pinellasShiftPanel.js';
@@ -60,6 +59,14 @@ function rankKey(value) {
 
 function text(value) {
   return String(value ?? '').trim();
+}
+
+function isPinellasDiscordStaff(member) {
+  if (!member || member.user?.bot) return false;
+  return Boolean(
+    member.roles?.cache?.has(PINELLAS_EMPLOYEE_WELCOME_ROLE_ID)
+    || getHighestPinellasRank(member),
+  );
 }
 
 function rosterCell(column, rowNumber) {
