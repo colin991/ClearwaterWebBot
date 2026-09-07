@@ -25,7 +25,7 @@ export default {
         `Posted/refreshed in <#${result?.message?.channelId || '1546298062568165396'}>.`,
         `On duty shown: **${count}** (Melonly active: **${active}**`
           + `${unresolved ? `, unresolved: **${unresolved}**` : ''})`,
-        '-# Use an API token from the Pinellas Melonly department (Settings → Panel → API Tokens).',
+        '-# Uses the main Melonly API token; PCSO deputies are filtered by Pinellas roles.',
         '-# Updates automatically every 30 seconds from Melonly.',
       ].join('\n'),
     }));

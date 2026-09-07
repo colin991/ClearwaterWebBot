@@ -200,6 +200,20 @@ export async function fetchMelonlyMember(apiKey, memberId) {
   });
 }
 
+/**
+ * Official Melonly mapping: internal memberId → Discord snowflake.
+ * GET /server/members/{memberId}/discord → { discordId }
+ */
+export async function fetchMelonlyMemberDiscordId(apiKey, memberId) {
+  const id = String(memberId || '').trim();
+  if (!id) return null;
+  const result = await melonlyFetch(apiKey, `/server/members/${encodeURIComponent(id)}/discord`, {
+    cacheTtlMs: 10 * 60_000,
+  });
+  const discordId = String(result?.discordId || result?.discord_id || result?.id || '').trim();
+  return /^\d{16,22}$/.test(discordId) ? discordId : null;
+}
+
 export async function fetchMelonlyMemberByDiscordId(apiKey, discordId) {
   return melonlyFetch(apiKey, `/server/members/discord/${encodeURIComponent(discordId)}`, {
     cacheTtlMs: 10 * 60_000,
