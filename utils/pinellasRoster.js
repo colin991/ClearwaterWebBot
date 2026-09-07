@@ -33,7 +33,7 @@ import {
 } from './pinellasShiftPanel.js';
 
 export const PINELLAS_ROSTER_SHEET = 'PCSO I Main Database';
-export const PINELLAS_ROSTER_RANGE = `'${PINELLAS_ROSTER_SHEET}'!E11:Q1380`;
+export const PINELLAS_ROSTER_RANGE = `'${PINELLAS_ROSTER_SHEET}'!D11:P1380`;
 export const PINELLAS_ROSTER_SYNC_MS = 2 * 60 * 1000;
 export const PINELLAS_INACTIVE_AFTER_MS = 4 * 24 * 60 * 60 * 1000;
 export const PINELLAS_CALLSIGN_OPEN_PREFIX = 'pcs:cs:open:';
@@ -376,20 +376,20 @@ export async function assignPinellasCallsign(client, member, roleplayName) {
     if (nickname.length > 32) throw new Error('That roleplay name is too long for the Discord nickname.');
 
     const updates = [
-      { range: rosterCell('I', target.rowNumber), value: name },
-      { range: rosterCell('K', target.rowNumber), value: member.id },
-      { range: rosterCell('O', target.rowNumber), value: status.activity },
-      { range: rosterCell('Q', target.rowNumber), value: status.punishment },
+      { range: rosterCell('H', target.rowNumber), value: name },
+      { range: rosterCell('J', target.rowNumber), value: member.id },
+      { range: rosterCell('N', target.rowNumber), value: status.activity },
+      { range: rosterCell('P', target.rowNumber), value: status.punishment },
     ];
 
     if (current && current.rowNumber !== target.rowNumber) {
-      if (current.notes) updates.push({ range: rosterCell('M', target.rowNumber), value: current.notes });
+      if (current.notes) updates.push({ range: rosterCell('L', target.rowNumber), value: current.notes });
       updates.push(
-        { range: rosterCell('I', current.rowNumber), value: '' },
-        { range: rosterCell('K', current.rowNumber), value: '' },
-        { range: rosterCell('M', current.rowNumber), value: '' },
-        { range: rosterCell('O', current.rowNumber), value: 'N/A' },
-        { range: rosterCell('Q', current.rowNumber), value: 'Clean Record' },
+        { range: rosterCell('H', current.rowNumber), value: '' },
+        { range: rosterCell('J', current.rowNumber), value: '' },
+        { range: rosterCell('L', current.rowNumber), value: '' },
+        { range: rosterCell('N', current.rowNumber), value: 'N/A' },
+        { range: rosterCell('P', current.rowNumber), value: 'Clean Record' },
       );
     }
 
@@ -425,10 +425,10 @@ export async function syncPinellasRoster(client) {
       members += 1;
       const desired = resolvePinellasRosterMemberStatus(state, row.discordId, row.activity);
       if (desired.activity !== row.activity) {
-        updates.push({ range: rosterCell('O', row.rowNumber), value: desired.activity });
+        updates.push({ range: rosterCell('N', row.rowNumber), value: desired.activity });
       }
       if (desired.punishment !== row.punishment) {
-        updates.push({ range: rosterCell('Q', row.rowNumber), value: desired.punishment });
+        updates.push({ range: rosterCell('P', row.rowNumber), value: desired.punishment });
       }
     }
 
@@ -532,31 +532,36 @@ export async function handlePinellasCallsignInteraction(interaction, client) {
   if (!target) throw new Error('That member is no longer in this server.');
   if (target.user.bot) throw new Error('Bots cannot receive a PCSO callsign.');
 
-  const me = interaction.guild.members.me || await interaction.guild.members.fetchMe();
-  if (!me.permissions.has(PermissionFlagsBits.ManageNicknames)) {
-    throw new Error('I need **Manage Nicknames** before I can assign this callsign.');
-  }
-  if (!target.manageable) {
-    throw new Error('My bot role must be above that member\'s highest role before I can change their nickname.');
-  }
-
   const roleplayName = interaction.fields.getTextInputValue(ROLEPLAY_NAME_INPUT_ID);
   const result = await assignPinellasCallsign(client, target, roleplayName);
-  await target.setNickname(
-    result.nickname,
-    `PCSO callsign assigned by ${interaction.user.tag || interaction.user.id}`,
-  );
+  let nicknameUpdated = true;
+  try {
+    const me = interaction.guild.members.me || await interaction.guild.members.fetchMe();
+    if (!me.permissions.has(PermissionFlagsBits.ManageNicknames) || !target.manageable) {
+      nicknameUpdated = false;
+    } else {
+      await target.setNickname(
+        result.nickname,
+        `PCSO callsign assigned by ${interaction.user.tag || interaction.user.id}`,
+      );
+    }
+  } catch (error) {
+    nicknameUpdated = false;
+    logger.warn(`PCSO callsign: database updated but nickname could not be changed: ${error?.message || error}`);
+  }
 
   await interaction.editReply({
     embeds: [
       new EmbedBuilder()
         .setTitle('Callsign assigned')
         .setDescription([
-          `<@${target.id}> is now **${result.nickname}**.`,
+          nicknameUpdated
+            ? `<@${target.id}> is now **${result.nickname}**.`
+            : `<@${target.id}> was added to the database as **${result.nickname}**. Unable to update nickname.`,
           `**Rank:** ${result.rank}`,
           `**Activity:** ${result.activity}`,
           `**Punishments:** ${result.punishment}`,
-          `-# Roster row ${result.rowNumber}${result.moved ? ' · previous manual notes were carried to the new rank row' : ''}`,
+          `-# Roster row ${result.rowNumber}${result.moved ? ' Â· previous manual notes were carried to the new rank row' : ''}`,
         ].join('\n'))
         .setColor(0x3ba55d),
     ],
