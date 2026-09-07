@@ -21,13 +21,11 @@ import { fetchErlcServer, parseErlcPlayer } from './erlc.js';
 import { getIdentityCache } from './identityStore.js';
 import { logger } from './logger.js';
 import {
-  fetchActiveMelonlyShifts,
-  fetchAllMelonlyShifts,
   fetchMelonlyCadForDiscord,
-  fetchMelonlyMember,
-  fetchMelonlyMemberByDiscordId,
+  fetchRecentMelonlyShifts,
   formatCadAttachedCalls,
   formatCadStatus,
+  isMelonlyRateLimited,
   resolveMelonlyDiscordId,
   shiftCreatedMs,
 } from './melonly.js';
@@ -39,7 +37,7 @@ import { PINELLAS_EMPLOYEE_WELCOME_ROLE_ID, PINELLAS_GUILD_ID } from './pinellas
 
 export const PINELLAS_SHIFT_PANEL_CHANNEL_ID = '1546298062568165396';
 export const PINELLAS_ON_DUTY_ROLE_ID = '1514462780575715418';
-/** Guild used for “Voice Chat” lookup on the deputy card. */
+/** Guild used for “Voice Chat” lookup on the deputy card (Clearwater main). */
 export const PINELLAS_SHIFT_VC_GUILD_ID = '1514026810348671026';
 export const PINELLAS_SHIFT_REFRESH_MS = 30_000;
 
@@ -59,9 +57,8 @@ const CLICK_EMOJI = '<:click:1517217194067628062>';
 
 /** In-memory Melonly memberId → discordId */
 const memberDiscordCache = new Map();
-/** Cached wave shift list */
-let waveShiftCache = { at: 0, shifts: [] };
-const WAVE_CACHE_MS = 5 * 60_000;
+/** Last successful on-duty snapshot (used when Melonly 429s). */
+let lastSnapshot = null;
 
 const REPORT_OPTIONS = Object.freeze([
   { label: 'OIS Report', value: 'ois' },
@@ -107,71 +104,21 @@ async function rememberMemberDiscord(memberId, discordId) {
   await saveMemberDiscordMap().catch(() => {});
 }
 
-async function resolveDiscordIdForShift(apiKey, shift, pinellasGuild) {
+/**
+ * Main Melonly uses Discord snowflakes as shift.memberId — no extra Melonly member calls.
+ */
+async function resolveDiscordIdForShift(shift) {
   const memberId = String(shift?.memberId || '');
   if (!memberId) return null;
 
   if (memberDiscordCache.has(memberId)) return memberDiscordCache.get(memberId);
-  if (/^\d{16,22}$/.test(memberId)) {
-    await rememberMemberDiscord(memberId, memberId);
-    return memberId;
-  }
 
-  let melonlyMember = null;
-  try {
-    melonlyMember = await fetchMelonlyMember(apiKey, memberId);
-  } catch {
-    melonlyMember = null;
-  }
-
-  let discordId = resolveMelonlyDiscordId(melonlyMember, null)
-    || resolveMelonlyDiscordId(shift, null);
+  const discordId = resolveMelonlyDiscordId(shift, memberId);
   if (discordId) {
     await rememberMemberDiscord(memberId, discordId);
     return discordId;
   }
-
-  // Reverse lookup: Melonly member-by-discord for PCSO employees until we find this memberId.
-  if (pinellasGuild?.members?.cache?.size) {
-    const candidates = [...pinellasGuild.members.cache.values()].filter((member) => (
-      !member.user?.bot
-      && (
-        member.roles.cache.has(PINELLAS_EMPLOYEE_WELCOME_ROLE_ID)
-        || getHighestPinellasRank(member)
-        || member.roles.cache.has(PINELLAS_ON_DUTY_ROLE_ID)
-      )
-    ));
-    for (const member of candidates) {
-      if (memberDiscordCache.has(memberId) && memberDiscordCache.get(memberId) === member.id) {
-        return member.id;
-      }
-      try {
-        const linked = await fetchMelonlyMemberByDiscordId(apiKey, member.id);
-        const linkedId = String(linked?.id || '');
-        const linkedDiscord = resolveMelonlyDiscordId(linked, member.id) || member.id;
-        if (linkedId) await rememberMemberDiscord(linkedId, linkedDiscord);
-        if (linkedId && linkedId === memberId) return linkedDiscord;
-      } catch {
-        // not linked / rate limited
-      }
-    }
-  }
-
   return null;
-}
-
-async function getWaveShifts(apiKey) {
-  if (Date.now() - waveShiftCache.at < WAVE_CACHE_MS && waveShiftCache.shifts.length) {
-    return waveShiftCache.shifts;
-  }
-  try {
-    const shifts = await fetchAllMelonlyShifts(apiKey, { maxPages: 10 });
-    waveShiftCache = { at: Date.now(), shifts };
-    return shifts;
-  } catch (error) {
-    logger.warn(`Pinellas shift panel: wave shift fetch failed (${error?.message || error})`);
-    return waveShiftCache.shifts || [];
-  }
 }
 
 async function readStore() {
@@ -298,7 +245,47 @@ function waveDurationMs(allShifts, memberId, wave, nowMs) {
 }
 
 /**
- * Build enriched on-duty deputy rows from Melonly + Discord + ER:LC.
+ * Prefer callsign|name from Pinellas nick, then Clearwater nick, then display name.
+ */
+function resolveDeputyIdentity(pinellasMember, clearwaterMember, player) {
+  const candidates = [
+    pinellasMember?.nickname,
+    clearwaterMember?.nickname,
+    pinellasMember?.displayName,
+    clearwaterMember?.displayName,
+    pinellasMember?.user?.globalName,
+    clearwaterMember?.user?.globalName,
+    pinellasMember?.user?.username,
+    clearwaterMember?.user?.username,
+  ].filter(Boolean);
+
+  let parsed = { callsign: '—', roleplayName: '—' };
+  for (const candidate of candidates) {
+    parsed = parseDeputyNickname(candidate);
+    if (parsed.callsign !== '—') break;
+  }
+
+  const callsign = parsed.callsign !== '—'
+    ? parsed.callsign
+    : (player?.callsign || '—');
+  const roleplayName = parsed.roleplayName !== '—'
+    ? parsed.roleplayName
+    : (player?.username || candidates[0] || 'Unknown');
+
+  return { callsign, roleplayName };
+}
+
+function isPinellasDeputy(member) {
+  if (!member || member.user?.bot) return false;
+  return Boolean(
+    member.roles.cache.has(PINELLAS_EMPLOYEE_WELCOME_ROLE_ID)
+    || member.roles.cache.has(PINELLAS_ON_DUTY_ROLE_ID)
+    || getHighestPinellasRank(member),
+  );
+}
+
+/**
+ * Build enriched on-duty deputy rows from main Melonly + Discord + ER:LC.
  */
 export async function collectOnDutyDeputies(client, {
   apiKey = config.melonlyApiKey,
@@ -310,9 +297,15 @@ export async function collectOnDutyDeputies(client, {
 
   await loadMemberDiscordMap();
 
-  const [activeShifts, allShifts, identityCache, erlcByRoblox] = await Promise.all([
-    fetchActiveMelonlyShifts(apiKey),
-    getWaveShifts(apiKey),
+  // One light Melonly pull (cached ~25s). Active list is filtered client-side.
+  const recentShifts = await fetchRecentMelonlyShifts(apiKey, { cacheTtlMs: 25_000 });
+  const activeShifts = recentShifts.filter((shift) => {
+    // fetchActiveMelonlyShifts is equivalent; keep one network path.
+    const ended = shift?.endedAt;
+    return ended == null || ended === '' || ended === 0 || ended === '0';
+  });
+
+  const [identityCache, erlcByRoblox] = await Promise.all([
     getIdentityCache().catch(() => ({ byDiscord: {} })),
     loadErlcPlayersByRobloxId(erlcServerKey),
   ]);
@@ -321,10 +314,12 @@ export async function collectOnDutyDeputies(client, {
     || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
   const vcGuild = client.guilds.cache.get(PINELLAS_SHIFT_VC_GUILD_ID)
     || await client.guilds.fetch(PINELLAS_SHIFT_VC_GUILD_ID).catch(() => null);
+  const clearwater = config.guildId
+    ? (client.guilds.cache.get(config.guildId)
+      || await client.guilds.fetch(config.guildId).catch(() => null))
+    : null;
 
-  if (pinellas) {
-    await pinellas.members.fetch().catch(() => null);
-  }
+  if (pinellas) await pinellas.members.fetch().catch(() => null);
 
   const nowMs = Date.now();
   const byDiscord = new Map();
@@ -333,35 +328,32 @@ export async function collectOnDutyDeputies(client, {
     const memberId = String(shift.memberId || '');
     if (!memberId) continue;
 
-    const discordId = await resolveDiscordIdForShift(apiKey, shift, pinellas);
-    if (!discordId) {
-      logger.warn(`Pinellas shift panel: could not resolve Discord ID for Melonly member ${memberId}`);
-      continue;
-    }
+    const discordId = await resolveDiscordIdForShift(shift);
+    if (!discordId) continue;
     if (byDiscord.has(discordId)) continue;
 
-    const discordMember = pinellas?.members?.cache?.get(discordId)
+    const pinellasMember = pinellas?.members?.cache?.get(discordId)
       || await pinellas?.members?.fetch(discordId).catch(() => null);
+    // Pinellas panel: only PCSO deputies (main Melonly includes all departments).
+    if (!pinellasMember || !isPinellasDeputy(pinellasMember)) continue;
 
-    const nick = discordMember?.nickname
-      || discordMember?.displayName
-      || discordMember?.user?.globalName
-      || discordMember?.user?.username
-      || '';
-    const parsed = parseDeputyNickname(nick);
-    const rank = getHighestPinellasRank(discordMember);
+    const clearwaterMember = clearwater?.members?.cache?.get(discordId)
+      || vcGuild?.members?.cache?.get(discordId)
+      || null;
+
+    const rank = getHighestPinellasRank(pinellasMember);
     const startedMs = shiftCreatedMs(shift) || nowMs;
     const thisShiftMs = Math.max(0, nowMs - startedMs);
-    const totalWaveMs = waveDurationMs(allShifts, memberId, shift.wave, nowMs) || thisShiftMs;
+    const totalWaveMs = waveDurationMs(recentShifts, memberId, shift.wave, nowMs) || thisShiftMs;
 
     const identity = identityCache?.byDiscord?.[discordId] || null;
     const robloxId = identity?.robloxId ? String(identity.robloxId) : null;
-    const erlcPlayer = robloxId ? erlcByRoblox.get(robloxId) : null;
-    // Also try matching ER:LC callsign / username when identity is missing.
-    let player = erlcPlayer;
-    if (!player && parsed.callsign && parsed.callsign !== '—') {
+    let player = robloxId ? erlcByRoblox.get(robloxId) : null;
+
+    const { callsign, roleplayName } = resolveDeputyIdentity(pinellasMember, clearwaterMember, player);
+    if (!player && callsign !== '—') {
       for (const entry of erlcByRoblox.values()) {
-        if (String(entry.callsign || '').toLowerCase() === parsed.callsign.toLowerCase()) {
+        if (String(entry.callsign || '').toLowerCase() === callsign.toLowerCase()) {
           player = entry;
           break;
         }
@@ -373,10 +365,8 @@ export async function collectOnDutyDeputies(client, {
     byDiscord.set(discordId, {
       discordId,
       memberId,
-      callsign: parsed.callsign !== '—'
-        ? parsed.callsign
-        : (player?.callsign || '—'),
-      roleplayName: parsed.roleplayName,
+      callsign,
+      roleplayName,
       rankName: rank?.name || 'Deputy',
       rank,
       isSupervisor: isSupervisorRank(rank),
@@ -397,11 +387,14 @@ export async function collectOnDutyDeputies(client, {
     return left.localeCompare(right);
   });
 
-  return {
+  const snapshot = {
     deputies,
     activeShiftCount: activeShifts.length,
     supervisorCount: deputies.filter((entry) => entry.isSupervisor).length,
+    fetchedAt: new Date().toISOString(),
   };
+  lastSnapshot = snapshot;
+  return snapshot;
 }
 
 function onDutyLines(deputies) {
@@ -672,7 +665,24 @@ export async function refreshPinellasShiftPanel(client, { forceResend = false } 
     return null;
   }
 
-  const snapshot = await collectOnDutyDeputies(client);
+  let snapshot;
+  try {
+    snapshot = await collectOnDutyDeputies(client);
+  } catch (error) {
+    if (error?.status === 429 || error?.rateLimited || isMelonlyRateLimited()) {
+      if (lastSnapshot) {
+        logger.warn(`Pinellas shift panel: Melonly 429 — reusing last snapshot (${error?.message || error})`);
+        snapshot = lastSnapshot;
+      } else {
+        throw new Error(
+          'Melonly is rate limiting the main API right now. Wait a minute and try `-shiftpanel` again.',
+        );
+      }
+    } else {
+      throw error;
+    }
+  }
+
   await syncPinellasOnDutyRoles(client, snapshot).catch((error) => {
     logger.warn(`Pinellas on-duty role sync failed: ${error?.message || error}`);
   });

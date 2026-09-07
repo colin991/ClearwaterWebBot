@@ -1,18 +1,54 @@
 import { logger } from './logger.js';
 
+/** Clearwater main Melonly API (server-scoped Bearer token). */
 export const MELONLY_API_BASE = 'https://api.melonly.xyz/api/v1';
 
+/** Soft client-side cache so 30s panel refreshes do not spam Melonly. */
+const responseCache = new Map();
+/** After a 429, pause Melonly calls until this timestamp. */
+let rateLimitedUntil = 0;
+
+function formatMelonlyErrorDetail(json, text, statusText) {
+  const raw = json?.error ?? json?.message ?? null;
+  if (raw == null || raw === '') {
+    return String(text || statusText || 'request failed').slice(0, 240);
+  }
+  if (typeof raw === 'string') return raw.slice(0, 240);
+  try {
+    return JSON.stringify(raw).slice(0, 240);
+  } catch {
+    return String(raw).slice(0, 240);
+  }
+}
+
+export function melonlyRateLimitedUntil() {
+  return rateLimitedUntil;
+}
+
+export function isMelonlyRateLimited() {
+  return Date.now() < rateLimitedUntil;
+}
+
 /**
- * Low-level Melonly Open Cloud client (Bearer token, server-scoped).
+ * Low-level Melonly client for the main Clearwater Melonly server.
  */
 export async function melonlyFetch(apiKey, path, {
   method = 'GET',
   query = null,
   body = null,
   timeoutMs = 12_000,
+  cacheTtlMs = 0,
 } = {}) {
   const key = String(apiKey || '').trim();
   if (!key) throw new Error('MELONLY_API_KEY is not configured.');
+
+  if (isMelonlyRateLimited()) {
+    const waitSec = Math.ceil((rateLimitedUntil - Date.now()) / 1000);
+    const error = new Error(`Melonly rate limited — try again in ~${waitSec}s.`);
+    error.status = 429;
+    error.rateLimited = true;
+    throw error;
+  }
 
   const url = new URL(path.replace(/^\//, ''), `${MELONLY_API_BASE}/`);
   if (query && typeof query === 'object') {
@@ -20,6 +56,12 @@ export async function melonlyFetch(apiKey, path, {
       if (value == null || value === '') continue;
       url.searchParams.set(name, String(value));
     }
+  }
+
+  const cacheKey = `${method}:${url.toString()}`;
+  if (method === 'GET' && cacheTtlMs > 0) {
+    const hit = responseCache.get(cacheKey);
+    if (hit && hit.expiresAt > Date.now()) return hit.value;
   }
 
   const headers = {
@@ -49,23 +91,52 @@ export async function melonlyFetch(apiKey, path, {
     }
   }
 
+  const retryAfterHeader = Number(response.headers.get('retry-after'));
+  const resetHeader = Number(response.headers.get('x-ratelimit-reset'));
+  if (response.status === 429) {
+    const retrySec = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+      ? retryAfterHeader
+      : (Number.isFinite(resetHeader) && resetHeader > 0 ? Math.min(resetHeader, 3600) : 60);
+    rateLimitedUntil = Date.now() + (retrySec * 1000);
+    const detail = formatMelonlyErrorDetail(json, text, response.statusText);
+    const error = new Error(`Melonly rate limited (${detail}). Wait ~${retrySec}s.`);
+    error.status = 429;
+    error.rateLimited = true;
+    error.body = json;
+    throw error;
+  }
+
   if (!response.ok) {
-    const detail = json?.error || json?.message || text?.slice(0, 200) || response.statusText;
+    const detail = formatMelonlyErrorDetail(json, text, response.statusText);
     const error = new Error(`Melonly ${method} ${url.pathname} failed (${response.status}): ${detail}`);
     error.status = response.status;
     error.body = json;
     throw error;
   }
 
+  if (method === 'GET' && cacheTtlMs > 0) {
+    responseCache.set(cacheKey, { value: json, expiresAt: Date.now() + cacheTtlMs });
+  }
   return json;
 }
 
-async function listAllPages(apiKey, path, { limit = 100, maxPages = 20 } = {}) {
+/**
+ * Fetch a small number of newest shift pages (main Melonly).
+ * Open shifts are recent — do not walk the whole history (that causes 429s).
+ */
+async function listRecentShiftPages(apiKey, {
+  limit = 100,
+  maxPages = 2,
+  cacheTtlMs = 25_000,
+} = {}) {
   const items = [];
   let page = 1;
   let totalPages = 1;
   while (page <= totalPages && page <= maxPages) {
-    const result = await melonlyFetch(apiKey, path, { query: { page, limit } });
+    const result = await melonlyFetch(apiKey, '/server/shifts', {
+      query: { page, limit },
+      cacheTtlMs,
+    });
     const batch = Array.isArray(result?.data) ? result.data : (Array.isArray(result) ? result : []);
     items.push(...batch);
     totalPages = Math.max(1, Number(result?.totalPages) || 1);
@@ -89,32 +160,57 @@ export function shiftCreatedMs(shift) {
   return raw > 1e12 ? raw : raw * 1000;
 }
 
-/** Active (open) shifts for the Melonly department linked to the API key. */
-export async function fetchActiveMelonlyShifts(apiKey) {
-  const shifts = await listAllPages(apiKey, '/server/shifts', { limit: 100, maxPages: 30 });
+/**
+ * Active (open) shifts from the main Melonly server.
+ * Uses a short cache so panel refresh + command share one Melonly pull.
+ */
+export async function fetchActiveMelonlyShifts(apiKey, { cacheTtlMs = 25_000 } = {}) {
+  const shifts = await listRecentShiftPages(apiKey, {
+    limit: 100,
+    maxPages: 2,
+    cacheTtlMs,
+  });
   return shifts.filter(isActiveMelonlyShift);
 }
 
-/** All shifts (used for wave totals). */
-export async function fetchAllMelonlyShifts(apiKey, { maxPages = 15 } = {}) {
-  return listAllPages(apiKey, '/server/shifts', { limit: 100, maxPages });
+/**
+ * Recent shifts (same light pull) — enough for current-wave totals without paging history.
+ */
+export async function fetchRecentMelonlyShifts(apiKey, { cacheTtlMs = 25_000 } = {}) {
+  return listRecentShiftPages(apiKey, {
+    limit: 100,
+    maxPages: 2,
+    cacheTtlMs,
+  });
+}
+
+/** @deprecated Use fetchRecentMelonlyShifts — full history walks cause Melonly 429s. */
+export async function fetchAllMelonlyShifts(apiKey, options = {}) {
+  return fetchRecentMelonlyShifts(apiKey, options);
 }
 
 export async function fetchMelonlyMember(apiKey, memberId) {
-  return melonlyFetch(apiKey, `/server/members/${encodeURIComponent(memberId)}`);
+  return melonlyFetch(apiKey, `/server/members/${encodeURIComponent(memberId)}`, {
+    cacheTtlMs: 5 * 60_000,
+  });
 }
 
 export async function fetchMelonlyMemberByDiscordId(apiKey, discordId) {
-  return melonlyFetch(apiKey, `/server/members/discord/${encodeURIComponent(discordId)}`);
+  return melonlyFetch(apiKey, `/server/members/discord/${encodeURIComponent(discordId)}`, {
+    cacheTtlMs: 5 * 60_000,
+  });
 }
 
 export async function fetchMelonlyRoles(apiKey) {
-  return listAllPages(apiKey, '/server/roles', { limit: 100, maxPages: 10 });
+  return melonlyFetch(apiKey, '/server/roles', {
+    query: { page: 1, limit: 100 },
+    cacheTtlMs: 15 * 60_000,
+  }).then((result) => (Array.isArray(result?.data) ? result.data : []));
 }
 
 /**
  * Best-effort Discord ID from a Melonly member / shift memberId.
- * Public schemas are sparse; real payloads often include discord/user ids.
+ * On the main Melonly server, shift.memberId is typically the Discord snowflake.
  */
 export function resolveMelonlyDiscordId(memberOrShift, fallbackMemberId = null) {
   const sources = [
@@ -143,43 +239,10 @@ export function resolveMelonlyDiscordId(memberOrShift, fallbackMemberId = null) 
 }
 
 /**
- * Probe Melonly CAD endpoints (not publicly documented). Returns null when unavailable.
+ * Melonly CAD is not part of the public main API docs.
+ * Do not probe multiple endpoints (burns rate limit). Return null.
  */
-export async function fetchMelonlyCadForDiscord(apiKey, discordId) {
-  const id = String(discordId || '').trim();
-  if (!apiKey || !id) return null;
-
-  const candidates = [
-    `/server/cad/units/discord/${encodeURIComponent(id)}`,
-    `/server/cad/units/${encodeURIComponent(id)}`,
-    `/cad/units/discord/${encodeURIComponent(id)}`,
-    `/cad/units/${encodeURIComponent(id)}`,
-  ];
-
-  for (const path of candidates) {
-    try {
-      const data = await melonlyFetch(apiKey, path, { timeoutMs: 6_000 });
-      if (data && typeof data === 'object') {
-        return {
-          status: data.status || data.currentStatus || data.unitStatus || data.state || null,
-          attachedCalls: data.attachedCalls || data.calls || data.activeCalls || data.callAttachments || null,
-          raw: data,
-          path,
-        };
-      }
-    } catch (error) {
-      if (error?.status === 404 || error?.status === 400) continue;
-      if (error?.status === 401 || error?.status === 403) {
-        logger.warn(`Melonly CAD probe unauthorized at ${path}`);
-        return null;
-      }
-      // 429 / 5xx — stop probing this cycle
-      if (error?.status === 429 || (error?.status >= 500)) {
-        logger.warn(`Melonly CAD probe stopped (${error?.message || error})`);
-        return null;
-      }
-    }
-  }
+export async function fetchMelonlyCadForDiscord() {
   return null;
 }
 
