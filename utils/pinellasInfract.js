@@ -15,7 +15,6 @@ import {
   TextDisplayBuilder,
   TextInputBuilder,
   TextInputStyle,
-  ThreadAutoArchiveDuration,
   UserSelectMenuBuilder,
   LabelBuilder,
 } from 'discord.js';
@@ -391,9 +390,9 @@ function detailsModal(type) {
 function buildInfractionBody(entry, { struck = false } = {}) {
   const createdTs = Math.floor(new Date(entry.createdAt).getTime() / 1000);
   const statusPrefix = entry.status === 'voided'
-    ? '**VOIDED** — '
+    ? '**VOIDED** â€” '
     : entry.status === 'expired'
-      ? '**EXPIRED** — '
+      ? '**EXPIRED** â€” '
       : '';
 
   let body = [
@@ -406,6 +405,9 @@ function buildInfractionBody(entry, { struck = false } = {}) {
 
   if (entry.type === 'demotion' && entry.rankAfter) {
     body.splice(2, 0, `**Demoted to:** **${entry.rankAfter}**`);
+    body.splice(3, 0, entry.callsign
+      ? `**New callsign:** ${entry.callsign}`
+      : '**New callsign:** Set your name in the callsign panel to receive one.');
   }
 
   body.push(
@@ -461,28 +463,6 @@ async function buildInfractionMessagePayload(entry, { struck = false } = {}) {
     files,
     allowedMentions: { parse: [], users: [entry.userId, entry.issuerId] },
   };
-}
-
-/**
- * Open a Proof thread on the posted infraction and ask the issuer to upload evidence.
- */
-async function createInfractionProofThread(message, issuerId) {
-  if (!message?.startThread || !issuerId) return null;
-  try {
-    const thread = await message.startThread({
-      name: 'Proof',
-      autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
-      reason: 'Infraction proof uploads',
-    });
-    await thread.send({
-      content: `<@${issuerId}> upload proof if there is any`,
-      allowedMentions: { users: [String(issuerId)] },
-    });
-    return thread.id;
-  } catch (error) {
-    logger.warn(`Pinellas infract: could not create Proof thread (${error?.message || error})`);
-    return null;
-  }
 }
 
 async function editInfractionMessage(client, entry, { struck = false } = {}) {
@@ -637,6 +617,16 @@ export async function createPinellasInfraction({
     demoteRankName,
   });
 
+  let callsign = null;
+  if (type === 'demotion') {
+    const { refreshPinellasCallsignAfterRankChange } = await import('./pinellasRoster.js');
+    callsign = await refreshPinellasCallsignAfterRankChange(client, targetMember);
+  }
+  if (type === 'termination') {
+    const { removePinellasCallsign } = await import('./pinellasRoster.js');
+    await removePinellasCallsign(client, targetMember, { resetNickname: true });
+  }
+
   const createdAt = new Date().toISOString();
   const expiresAt = durationMs
     ? new Date(Date.now() + durationMs).toISOString()
@@ -655,11 +645,11 @@ export async function createPinellasInfraction({
     status: 'active',
     previousRanks: sideEffects.previousRanks,
     rankAfter: sideEffects.rankAfter,
+    callsign: callsign?.nickname || null,
     removedRoleIds: sideEffects.removedRoleIds,
     messageId: null,
     channelId: channel.id,
     guildId: guild.id,
-    threadId: null,
     voidedAt: null,
     voidedBy: null,
     expiredAt: null,
@@ -668,7 +658,6 @@ export async function createPinellasInfraction({
   const payload = await buildInfractionMessagePayload(entry);
   const message = await channel.send(payload);
   entry.messageId = message.id;
-  entry.threadId = await createInfractionProofThread(message, issuerMember.id);
 
   const store = await readStore();
   store.infractions = [entry, ...(store.infractions || [])].slice(0, 2000);
@@ -921,7 +910,7 @@ export async function handlePinellasInfractInteraction(interaction) {
         }));
         return true;
       }
-      // termination → modal
+      // termination â†’ modal
       await interaction.showModal(detailsModal(type));
       return true;
     }
