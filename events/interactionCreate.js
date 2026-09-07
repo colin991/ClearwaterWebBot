@@ -7,6 +7,7 @@ import { readInternetStore, saveInternetStore, updateInternetPreference } from '
 import { handlePinellasApplyInteraction } from '../utils/pinellasApply.js';
 import { handlePinellasInfractInteraction } from '../utils/pinellasInfract.js';
 import { handlePinellasMassShiftInteraction } from '../utils/pinellasMassShift.js';
+import { handlePinellasShiftPanelInteraction } from '../utils/pinellasShiftPanel.js';
 
 export default {
   name: Events.InteractionCreate,
@@ -30,6 +31,12 @@ export default {
       if (await handlePinellasMassShiftInteraction(interaction)) return;
     } catch (error) {
       logger.error('Pinellas mass shift interaction failed', error);
+    }
+
+    try {
+      if (await handlePinellasShiftPanelInteraction(interaction)) return;
+    } catch (error) {
+      logger.error('Pinellas shift panel interaction failed', error);
     }
 
     if (interaction.isButton()) {

@@ -5,6 +5,7 @@ export const config = Object.freeze({
   clientId: process.env.DISCORD_CLIENT_ID?.trim(),
   guildId: process.env.DISCORD_GUILD_ID?.trim(),
   erlcServerKey: process.env.ERLC_SERVER_KEY?.trim(),
+  melonlyApiKey: process.env.MELONLY_API_KEY?.trim(),
   robloxGroupId: process.env.ROBLOX_GROUP_ID?.trim(),
   robloxGroupApiKey: process.env.ROBLOX_GROUP_API_KEY?.trim(),
   robloxGroupAllowedRoleIds: (process.env.ROBLOX_GROUP_ALLOWED_ROLE_IDS || '1514033664306974752,1514744040778760252')

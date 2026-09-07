@@ -10,6 +10,7 @@ import {
 } from './internetStore.js';
 import { createDiscordInternetNotifier } from './discordInternetNotify.js';
 import { startPinellasInfractionExpiry } from './pinellasInfract.js';
+import { startPinellasShiftPanel } from './pinellasShiftPanel.js';
 
 /**
  * Discord-only background services formerly started inside the website HTTP bridge.
@@ -47,9 +48,11 @@ export function startBotServices(client, config) {
   void cleanUpInternetData();
 
   const stopInfractionExpiry = startPinellasInfractionExpiry(client);
+  const stopShiftPanel = startPinellasShiftPanel(client);
 
   return () => {
     clearInterval(dataCleanup);
     stopInfractionExpiry();
+    stopShiftPanel();
   };
 }
