@@ -35,7 +35,7 @@ import {
   getHighestPinellasRank,
   PINELLAS_RANKS,
 } from './pinellasPromote.js';
-import { PINELLAS_EMPLOYEE_WELCOME_ROLE_ID, PINELLAS_GUILD_ID } from './pinellasServer.js';
+import { PINELLAS_GUILD_ID } from './pinellasServer.js';
 
 export const PINELLAS_SHIFT_PANEL_CHANNEL_ID = '1546298062568165396';
 export const PINELLAS_ON_DUTY_ROLE_ID = '1514462780575715418';
@@ -350,7 +350,8 @@ function resolveDeputyIdentity(pinellasMember, clearwaterMember, player) {
 
 /**
  * Build enriched on-duty deputy rows from main Melonly + Discord + ER:LC.
- * API token comes from the main Melonly panel; Pinellas deputies are filtered via PCSO Discord roles.
+ * API token comes from the main Melonly panel. Anyone with an active Melonly shift
+ * that resolves to Discord is listed; Pinellas ranks are used when available.
  */
 export async function collectOnDutyDeputies(client, {
   apiKey = config.melonlyApiKey,
@@ -415,9 +416,6 @@ export async function collectOnDutyDeputies(client, {
     const clearwaterMember = clearwater?.members?.cache?.get(discordId)
       || vcGuild?.members?.cache?.get(discordId)
       || null;
-
-    // Pinellas panel: only PCSO staff (main Melonly includes every department / staff type).
-    if (!isPcsoMember(pinellasMember)) continue;
 
     const rank = getHighestPinellasRank(pinellasMember);
     const startedMs = shiftCreatedMs(shift) || nowMs;
