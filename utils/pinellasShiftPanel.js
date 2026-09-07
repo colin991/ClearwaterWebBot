@@ -21,11 +21,8 @@ import { fetchErlcServer, parseErlcPlayer } from './erlc.js';
 import { getIdentityCache } from './identityStore.js';
 import { logger } from './logger.js';
 import {
-  fetchMelonlyCadForDiscord,
   fetchMelonlyMemberDiscordId,
   fetchRecentMelonlyShifts,
-  formatCadAttachedCalls,
-  formatCadStatus,
   isActiveMelonlyShift,
   isMelonlyRateLimited,
   resolveMelonlyDiscordId,
