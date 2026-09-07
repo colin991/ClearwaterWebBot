@@ -18,6 +18,14 @@ export const FREQUENCY_CHANGE_SPEAK_DELAY_MS = 2_000;
 /** Channel names like "Frequency Change 1", "frequency change 2", etc. */
 export const FREQUENCY_CHANGE_NAME_PATTERN = /frequency\s*change/i;
 
+/**
+ * Other bots that drag members into Frequency Change VCs.
+ * When they move the first human in, we must not join/speak.
+ */
+export const FREQUENCY_CHANGE_SKIP_DRAG_BOT_IDS = Object.freeze([
+  '1514096313547886673',
+]);
+
 /** channelId -> in-flight announcement promise */
 const announcingByChannel = new Map();
 
@@ -50,23 +58,42 @@ function enqueueGuildJob(guildId, job) {
   return next;
 }
 
+function isSkipDragBotId(executorId) {
+  return FREQUENCY_CHANGE_SKIP_DRAG_BOT_IDS.includes(String(executorId || ''));
+}
+
 /**
  * True when this member was dragged into the VC by a bot (ours or another),
  * not when they joined/switched channels themselves.
  */
-async function wasDraggedInByBot(guild, userId) {
+async function wasDraggedInByBot(guild, userId, { waitForAuditMs = 0 } = {}) {
   if (wasMovedByBot(userId)) return true;
+
+  if (waitForAuditMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, waitForAuditMs));
+  }
 
   try {
     const logs = await guild.fetchAuditLogs({
       type: AuditLogEvent.MemberMove,
-      limit: 8,
+      limit: 15,
     });
-    const cutoff = Date.now() - 10_000;
+    const cutoff = Date.now() - 15_000;
     for (const entry of logs.entries.values()) {
       if (entry.createdTimestamp < cutoff) continue;
-      if (!entry.executor?.bot) continue;
-      if (entry.targetId === userId || entry.target?.id === userId) return true;
+      const targetId = entry.targetId || entry.target?.id;
+      if (String(targetId) !== String(userId)) continue;
+
+      const executorId = String(entry.executorId || entry.executor?.id || '');
+      // Explicit proximity / zone bots (executor User may be uncached).
+      if (isSkipDragBotId(executorId)) return true;
+      if (entry.executor?.bot) return true;
+
+      // Executor object may be missing from cache — fetch when needed.
+      if (executorId && !entry.executor) {
+        const user = await guild.client.users.fetch(executorId).catch(() => null);
+        if (user?.bot || isSkipDragBotId(executorId)) return true;
+      }
     }
   } catch (error) {
     // Missing View Audit Log — still honor our own drag marks above.
@@ -127,7 +154,7 @@ async function announceFrequencyChange(channel) {
 
 /**
  * When the first human joins a Frequency Change VC on their own, join → wait 2s → speak → leave.
- * Bot-dragged joins (zone drag / other bots) do not trigger the greeting.
+ * Bot-dragged joins (including bot 1514096313547886673) do not trigger the greeting.
  * Later joiners while the channel is occupied also do not re-trigger.
  */
 export async function handleFrequencyChangeVoiceStateUpdate(oldState, newState) {
@@ -147,7 +174,8 @@ export async function handleFrequencyChangeVoiceStateUpdate(oldState, newState) 
   if (announcingByChannel.has(channel.id)) return null;
 
   const userId = newState.id || newState.member?.id;
-  if (await wasDraggedInByBot(newState.guild, userId)) {
+  // Wait briefly so other-bot Member Move audit entries are queryable.
+  if (await wasDraggedInByBot(newState.guild, userId, { waitForAuditMs: 900 })) {
     logger.info(
       `Frequency change greeting skipped for #${channel.name}: `
       + `${newState.member?.user?.tag || userId} was dragged in by a bot.`,
@@ -157,8 +185,8 @@ export async function handleFrequencyChangeVoiceStateUpdate(oldState, newState) 
 
   const job = enqueueGuildJob(channel.guild.id, async () => {
     try {
-      // Re-check in case a bot drag landed while we were queued.
-      if (await wasDraggedInByBot(channel.guild, userId)) {
+      // Re-check in case a bot drag audit entry landed while we were queued.
+      if (await wasDraggedInByBot(channel.guild, userId, { waitForAuditMs: 400 })) {
         logger.info(
           `Frequency change greeting skipped for #${channel.name}: bot drag detected before speak.`,
         );
@@ -180,7 +208,8 @@ export function startFrequencyChangeGreeting(client) {
   logger.info(
     'Frequency change greeting armed '
     + `(channels matching ${FREQUENCY_CHANGE_NAME_PATTERN}; `
-    + `${FREQUENCY_CHANGE_SPEAK_DELAY_MS / 1000}s speak delay; skip bot-dragged joins; leave after TTS).`,
+    + `${FREQUENCY_CHANGE_SPEAK_DELAY_MS / 1000}s speak delay; `
+    + `skip bot-dragged joins incl. ${FREQUENCY_CHANGE_SKIP_DRAG_BOT_IDS.join(', ')}; leave after TTS).`,
   );
   return () => {
     announcingByChannel.clear();
