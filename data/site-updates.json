@@ -2,6 +2,20 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-07-pinellas-four-day-inactivity",
+      "title": "PCSO four-day inactivity tracking",
+      "summary": "The PCSO roster now marks members Inactive when their latest Pinellas Melonly shift is more than four days old, then returns automatically marked members to Active after a new shift while preserving Activity Exempt, LOA, and suspension priority.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-07T13:18:00.000Z"
+    },
+    {
+      "id": "2026-09-07-pinellas-infraction-channel",
+      "title": "PCSO infractions use one record channel",
+      "summary": "Permanent PCSO infraction embeds now always post in the designated infractions channel instead of the channel where staff opened the panel.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-07T13:19:00.000Z"
+    },
+    {
       "id": "2026-09-07-pinellas-application-review-role",
       "title": "PCSO application reviewer role access",
       "summary": "Members with the designated PCSO employee role can now approve or deny entry applications even when they do not have Administrator or Manage Roles permissions.",

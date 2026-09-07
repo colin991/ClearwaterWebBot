@@ -43,6 +43,9 @@ const PANEL_BANNER_PATH = path.join(ROOT, 'assets', 'pcso-promotions.png');
 const INFRACTION_BANNER_PATH = path.join(ROOT, 'assets', 'pcso-infractions.png');
 const FOOTER_PATH = path.join(ROOT, 'assets', 'pcso-application-footer.png');
 
+/** Permanent PCSO infraction records are always posted here. */
+export const PINELLAS_INFRACTION_CHANNEL_ID = '1514666061033902230';
+
 const UNLOCK_EMOJI = '<:unlock:1517217312489472030>';
 const CLOCK_EMOJI = '<:clock:1517217161246932992>';
 const BOOKMARK_EMOJI = '<:bookmark:1517217548108693627>';
@@ -946,8 +949,11 @@ export async function handlePinellasInfractInteraction(interaction) {
       const targetMember = await guild.members.fetch(session.targetId);
       const issuerMember = interaction.member
         || await guild.members.fetch(interaction.user.id);
-      const channel = interaction.channel
-        || await interaction.client.channels.fetch(session.channelId);
+      const channel = guild.channels.cache.get(PINELLAS_INFRACTION_CHANNEL_ID)
+        || await guild.channels.fetch(PINELLAS_INFRACTION_CHANNEL_ID).catch(() => null);
+      if (!channel?.isTextBased?.()) {
+        throw new Error(`The PCSO infraction channel <#${PINELLAS_INFRACTION_CHANNEL_ID}> is unavailable.`);
+      }
 
       const entry = await createPinellasInfraction({
         client: interaction.client,

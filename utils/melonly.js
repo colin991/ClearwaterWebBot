@@ -167,6 +167,15 @@ export function shiftCreatedMs(shift) {
   return raw > 1e12 ? raw : raw * 1000;
 }
 
+/** Last moment a shift represented activity (end time when present, otherwise start). */
+export function shiftLastActivityMs(shift) {
+  const values = [shift?.endedAt, shift?.createdAt, shift?.startedAt, shift?.startAt]
+    .map(Number)
+    .filter((value) => Number.isFinite(value) && value > 0)
+    .map((value) => (value > 1e12 ? value : value * 1000));
+  return values.length ? Math.max(...values) : null;
+}
+
 /**
  * Recent shifts for the Melonly server/department the API key belongs to.
  * Create the token on the Pinellas Melonly department (Settings → Panel → API Tokens).
@@ -177,6 +186,50 @@ export async function fetchRecentMelonlyShifts(apiKey, { cacheTtlMs = 25_000, ma
     maxPages,
     cacheTtlMs,
   });
+}
+
+/**
+ * Load enough newest-first shift pages to cover a time window.
+ * `complete` is false if the safety page cap is reached before the window is covered.
+ */
+export async function fetchMelonlyShiftsSince(apiKey, sinceMs, {
+  cacheTtlMs = 60_000,
+  maxPages = 10,
+} = {}) {
+  const shifts = [];
+  let page = 1;
+  let totalPages = 1;
+  let coveredWindow = false;
+  let pagesFetched = 0;
+
+  while (page <= totalPages && page <= maxPages) {
+    const result = await melonlyFetch(apiKey, '/server/shifts', {
+      query: { page, limit: 100 },
+      cacheTtlMs,
+    });
+    pagesFetched += 1;
+    const batch = Array.isArray(result?.data) ? result.data : (Array.isArray(result) ? result : []);
+    totalPages = Math.max(1, Number(result?.totalPages) || 1);
+    shifts.push(...batch);
+    if (!batch.length) {
+      coveredWindow = true;
+      break;
+    }
+
+    const timestamps = batch.map(shiftLastActivityMs).filter(Boolean);
+    if (timestamps.length && Math.min(...timestamps) < sinceMs) {
+      coveredWindow = true;
+      break;
+    }
+    page += 1;
+  }
+
+  return {
+    shifts: shifts.filter((shift) => (shiftLastActivityMs(shift) || 0) >= sinceMs),
+    complete: coveredWindow || page > totalPages,
+    pagesFetched,
+    totalPages,
+  };
 }
 
 export async function fetchActiveMelonlyShifts(apiKey, options = {}) {

@@ -5,9 +5,10 @@ import {
   activityForPinellasRoster,
   assignPinellasCallsign,
   parsePinellasRosterRows,
+  resolvePinellasRosterMemberStatus,
   summarizePinellasPunishments,
 } from '../utils/pinellasRoster.js';
-import { isActiveMelonlyLoa } from '../utils/melonly.js';
+import { isActiveMelonlyLoa, shiftLastActivityMs } from '../utils/melonly.js';
 
 test('roster status values follow sheet dropdown choices', () => {
   const now = Date.now();
@@ -25,6 +26,55 @@ test('roster status values follow sheet dropdown choices', () => {
     startAt: Math.floor(now / 1000) - 10,
     endAt: Math.floor(now / 1000) + 60,
   }, now), true);
+  assert.equal(shiftLastActivityMs({
+    createdAt: Math.floor((now - 60_000) / 1000),
+    endedAt: Math.floor(now / 1000),
+  }), Math.floor(now / 1000) * 1000);
+});
+
+function rosterState({ recent = [], complete = true, loa = [], infractions = [] } = {}) {
+  return {
+    infractionsByUser: new Map(infractions),
+    loaIds: new Set(loa),
+    recentShiftState: { discordIds: new Set(recent), complete },
+    activityState: { baseByUser: {}, inactiveByUser: {} },
+    activityStateChanged: false,
+  };
+}
+
+test('four days without a shift marks inactive and a new shift restores active', () => {
+  const discordId = '123456789012345678';
+  const state = rosterState();
+  assert.equal(resolvePinellasRosterMemberStatus(state, discordId, 'Active').activity, 'Inactive');
+  assert.equal(state.activityState.inactiveByUser[discordId], true);
+
+  state.recentShiftState.discordIds.add(discordId);
+  assert.equal(resolvePinellasRosterMemberStatus(state, discordId, 'Inactive').activity, 'Active');
+  assert.equal(state.activityState.inactiveByUser[discordId], undefined);
+});
+
+test('manual inactivity and Activity Exempt are not automatically cleared', () => {
+  const discordId = '123456789012345678';
+  const recent = rosterState({ recent: [discordId] });
+  assert.equal(resolvePinellasRosterMemberStatus(recent, discordId, 'Inactive').activity, 'Inactive');
+
+  const exempt = rosterState();
+  assert.equal(resolvePinellasRosterMemberStatus(exempt, discordId, 'Activity Exempt').activity, 'Activity Exempt');
+});
+
+test('suspension and LOA take priority over inactivity', () => {
+  const discordId = '123456789012345678';
+  const loa = rosterState({ loa: [discordId] });
+  assert.equal(resolvePinellasRosterMemberStatus(loa, discordId, 'Inactive').activity, 'LOA');
+
+  const suspension = rosterState({
+    loa: [discordId],
+    infractions: [[discordId, [{ type: 'suspension', status: 'active', expiresAt: null }]]],
+  });
+  assert.equal(resolvePinellasRosterMemberStatus(suspension, discordId, 'Inactive').activity, 'Suspension');
+
+  const incomplete = rosterState({ complete: false });
+  assert.equal(resolvePinellasRosterMemberStatus(incomplete, discordId, 'Active').activity, 'Active');
 });
 test('rank change selects an open callsign row and carries manual notes', async () => {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });

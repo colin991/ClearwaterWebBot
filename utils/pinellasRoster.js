@@ -21,14 +21,21 @@ import { logger } from './logger.js';
 import {
   fetchMelonlyLoas,
   fetchMelonlyMemberDiscordId,
+  fetchMelonlyShiftsSince,
   isActiveMelonlyLoa,
   resolveMelonlyDiscordId,
+  shiftLastActivityMs,
 } from './melonly.js';
-import { PINELLAS_MELONLY_DEPARTMENT_ID } from './pinellasShiftPanel.js';
+import {
+  isPinellasDepartmentShift,
+  PINELLAS_MELONLY_DEPARTMENT_ID,
+  resolvePinellasMelonlyMemberDiscordId,
+} from './pinellasShiftPanel.js';
 
 export const PINELLAS_ROSTER_SHEET = 'PCSO I Main Database';
 export const PINELLAS_ROSTER_RANGE = `'${PINELLAS_ROSTER_SHEET}'!E11:Q1380`;
 export const PINELLAS_ROSTER_SYNC_MS = 2 * 60 * 1000;
+export const PINELLAS_INACTIVE_AFTER_MS = 4 * 24 * 60 * 60 * 1000;
 export const PINELLAS_CALLSIGN_OPEN_PREFIX = 'pcs:cs:open:';
 export const PINELLAS_CALLSIGN_MODAL_PREFIX = 'pcs:cs:modal:';
 
@@ -102,7 +109,7 @@ export function activityForPinellasRoster(current, { suspended = false, onLoa = 
   const existing = text(current);
   if (existing === 'LOA' && onLoa == null) return existing;
   if (!existing || existing === 'N/A' || AUTOMATED_ACTIVITY_VALUES.has(existing)) return 'Active';
-  // Inactive and Activity Exempt are staff-managed states and are preserved.
+  // Preserve manual states; the four-day inactivity overlay is applied below.
   return existing;
 }
 
@@ -113,15 +120,21 @@ async function readActivityState() {
       baseByUser: stored?.baseByUser && typeof stored.baseByUser === 'object'
         ? { ...stored.baseByUser }
         : {},
+      inactiveByUser: stored?.inactiveByUser && typeof stored.inactiveByUser === 'object'
+        ? { ...stored.inactiveByUser }
+        : {},
     };
   } catch {
-    return { baseByUser: {} };
+    return { baseByUser: {}, inactiveByUser: {} };
   }
 }
 
 async function writeActivityState(state) {
   await mkdir(path.dirname(ACTIVITY_STATE_PATH), { recursive: true });
-  await writeFile(ACTIVITY_STATE_PATH, `${JSON.stringify({ baseByUser: state.baseByUser }, null, 2)}\n`, 'utf8');
+  await writeFile(ACTIVITY_STATE_PATH, `${JSON.stringify({
+    baseByUser: state.baseByUser,
+    inactiveByUser: state.inactiveByUser,
+  }, null, 2)}\n`, 'utf8');
 }
 
 function groupInfractionsByUser(infractions) {
@@ -171,13 +184,63 @@ async function activePinellasLoaDiscordIds(settings) {
   return discordIds;
 }
 
+async function recentPinellasShiftDiscordIds(client, settings, now = Date.now()) {
+  if (!settings?.melonlyApiKey) return null;
+  const cutoff = now - PINELLAS_INACTIVE_AFTER_MS;
+  const result = await fetchMelonlyShiftsSince(settings.melonlyApiKey, cutoff, {
+    cacheTtlMs: 60_000,
+    maxPages: 10,
+  });
+  const shifts = result.shifts.filter((shift) => (
+    isPinellasDepartmentShift(shift)
+    && (shiftLastActivityMs(shift) || 0) >= cutoff
+  ));
+  const discordIds = new Set();
+  let unresolved = 0;
+  const byMember = new Map();
+
+  for (const shift of shifts) {
+    const memberId = text(shift?.memberId);
+    if (!memberId || byMember.has(memberId)) continue;
+    let discordId = resolveMelonlyDiscordId(shift);
+    if (!discordId) {
+      discordId = await resolvePinellasMelonlyMemberDiscordId(settings.melonlyApiKey, memberId)
+        .catch((error) => {
+          logger.warn(`PCSO roster: could not resolve recent-shift member ${memberId}: ${error?.message || error}`);
+          return null;
+        });
+    }
+    if (!discordId && /^\d{16,22}$/.test(memberId)) {
+      const guild = client.guilds.cache.get(PINELLAS_GUILD_ID)
+        || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
+      const member = guild?.members.cache.get(memberId)
+        || await guild?.members.fetch(memberId).catch(() => null);
+      if (member) discordId = memberId;
+    }
+    byMember.set(memberId, discordId || null);
+    if (discordId) discordIds.add(discordId);
+    else unresolved += 1;
+  }
+
+  return {
+    discordIds,
+    complete: Boolean(result.complete && unresolved === 0),
+    unresolved,
+    cutoff,
+  };
+}
+
 async function loadRosterState(client) {
   const settings = client.config;
-  const [values, infractions, loaIds, activityState] = await Promise.all([
+  const [values, infractions, loaIds, recentShiftState, activityState] = await Promise.all([
     readGoogleSheetValues(settings, settings.pcsoRosterSpreadsheetId, PINELLAS_ROSTER_RANGE),
     listPinellasInfractions(),
     activePinellasLoaDiscordIds(settings).catch((error) => {
       logger.warn(`PCSO roster: Melonly LOA refresh failed; preserving existing LOA cells (${error?.message || error}).`);
+      return null;
+    }),
+    recentPinellasShiftDiscordIds(client, settings).catch((error) => {
+      logger.warn(`PCSO roster: recent Melonly shift refresh failed; preserving inactivity cells (${error?.message || error}).`);
       return null;
     }),
     readActivityState(),
@@ -186,12 +249,13 @@ async function loadRosterState(client) {
     rows: parsePinellasRosterRows(values),
     infractionsByUser: groupInfractionsByUser(infractions),
     loaIds,
+    recentShiftState,
     activityState,
     activityStateChanged: false,
   };
 }
 
-function memberStatus(state, discordId, currentActivity) {
+export function resolvePinellasRosterMemberStatus(state, discordId, currentActivity) {
   const entries = state.infractionsByUser.get(discordId) || [];
   const punishment = summarizePinellasPunishments(entries);
   const suspended = punishment === 'Suspended';
@@ -199,9 +263,10 @@ function memberStatus(state, discordId, currentActivity) {
   const current = text(currentActivity);
   const overlay = suspended ? 'Suspension' : onLoa === true ? 'LOA' : null;
   const savedBase = text(state.activityState.baseByUser[discordId]);
+  const autoInactive = Boolean(state.activityState.inactiveByUser[discordId]);
 
   if (overlay) {
-    if (current && !AUTOMATED_ACTIVITY_VALUES.has(current) && current !== 'Active') {
+    if (current && !autoInactive && !AUTOMATED_ACTIVITY_VALUES.has(current) && current !== 'Active') {
       if (savedBase !== current) {
         state.activityState.baseByUser[discordId] = current;
         state.activityStateChanged = true;
@@ -213,21 +278,51 @@ function memberStatus(state, discordId, currentActivity) {
   if (current === 'LOA' && onLoa == null) {
     return { punishment, activity: current };
   }
+  let baseActivity = current;
   if (current === 'LOA' || current === 'Suspension') {
     if (savedBase) {
       delete state.activityState.baseByUser[discordId];
       state.activityStateChanged = true;
-      return { punishment, activity: savedBase };
+      baseActivity = savedBase;
+    } else {
+      baseActivity = autoInactive ? 'Inactive' : 'Active';
     }
-    return { punishment, activity: 'Active' };
-  }
-  if (savedBase) {
+  } else if (savedBase) {
     delete state.activityState.baseByUser[discordId];
     state.activityStateChanged = true;
   }
+
+  const shiftState = state.recentShiftState;
+  if (!shiftState?.complete) {
+    return {
+      punishment,
+      activity: activityForPinellasRoster(baseActivity, { suspended, onLoa }),
+    };
+  }
+
+  const shiftedRecently = shiftState.discordIds.has(discordId);
+  if (baseActivity === 'Activity Exempt') {
+    if (autoInactive) {
+      delete state.activityState.inactiveByUser[discordId];
+      state.activityStateChanged = true;
+    }
+    return { punishment, activity: baseActivity };
+  }
+  if (!shiftedRecently) {
+    if (baseActivity !== 'Inactive') {
+      state.activityState.inactiveByUser[discordId] = true;
+      state.activityStateChanged = true;
+    }
+    return { punishment, activity: 'Inactive' };
+  }
+  if (autoInactive) {
+    delete state.activityState.inactiveByUser[discordId];
+    state.activityStateChanged = true;
+    if (baseActivity === 'Inactive') baseActivity = 'Active';
+  }
   return {
     punishment,
-    activity: activityForPinellasRoster(current, { suspended, onLoa }),
+    activity: activityForPinellasRoster(baseActivity, { suspended, onLoa }),
   };
 }
 
@@ -276,7 +371,7 @@ export async function assignPinellasCallsign(client, member, roleplayName) {
       throw new Error(`No open **${rank.name}** callsign row is available in the roster.`);
     }
 
-    const status = memberStatus(state, member.id, current?.activity || target.activity);
+    const status = resolvePinellasRosterMemberStatus(state, member.id, current?.activity || target.activity);
     const nickname = `${target.callsign} | ${name}`;
     if (nickname.length > 32) throw new Error('That roleplay name is too long for the Discord nickname.');
 
@@ -328,7 +423,7 @@ export async function syncPinellasRoster(client) {
     for (const row of state.rows) {
       if (!/^\d{16,22}$/.test(row.discordId)) continue;
       members += 1;
-      const desired = memberStatus(state, row.discordId, row.activity);
+      const desired = resolvePinellasRosterMemberStatus(state, row.discordId, row.activity);
       if (desired.activity !== row.activity) {
         updates.push({ range: rosterCell('O', row.rowNumber), value: desired.activity });
       }

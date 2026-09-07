@@ -113,6 +113,18 @@ async function rememberMemberDiscord(memberId, discordId) {
   if (changed) await saveMemberDiscordMap().catch(() => {});
 }
 
+/** Resolve and persist Melonly's internal member ID to its linked Discord ID. */
+export async function resolvePinellasMelonlyMemberDiscordId(apiKey, memberId) {
+  const id = String(memberId || '').trim();
+  if (!id) return null;
+  await loadMemberDiscordMap();
+  if (memberDiscordCache.has(id)) return memberDiscordCache.get(id);
+
+  const discordId = await fetchMelonlyMemberDiscordId(apiKey, id);
+  if (discordId) await rememberMemberDiscord(id, discordId);
+  return discordId;
+}
+
 /**
  * Build Melonly memberId ↔ Discord map from active shift member IDs.
  * Uses official GET /server/members/{id}/discord (main Melonly API).
@@ -126,7 +138,7 @@ async function ensureMelonlyDiscordIndex(apiKey, neededMemberIds = []) {
   let linked = 0;
   for (const memberId of missing) {
     try {
-      const discordId = await fetchMelonlyMemberDiscordId(apiKey, memberId);
+      const discordId = await resolvePinellasMelonlyMemberDiscordId(apiKey, memberId);
       if (discordId) {
         await rememberMemberDiscord(memberId, discordId);
         linked += 1;
@@ -160,7 +172,7 @@ async function resolveDiscordIdForShift(apiKey, shift, guilds = []) {
   }
 
   try {
-    const discordId = await fetchMelonlyMemberDiscordId(apiKey, memberId);
+    const discordId = await resolvePinellasMelonlyMemberDiscordId(apiKey, memberId);
     if (discordId) {
       await rememberMemberDiscord(memberId, discordId);
       return discordId;
