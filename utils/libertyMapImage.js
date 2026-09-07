@@ -15,9 +15,10 @@ export const LIBERTY_MAP_PATH = path.join(ROOT, 'assets', 'liberty-county-map.jp
 export const LIBERTY_MAP_PIN_PATH = path.join(ROOT, 'assets', 'liberty-map-pin.png');
 
 const MAP_SIZE = 1536;
-const CROP_SIZE = 640;
+/** Smaller crop = tighter zoom around the deputy's pin. */
+const CROP_SIZE = 320;
 const OUTPUT_SIZE = 768;
-const PIN_DISPLAY = 48;
+const PIN_DISPLAY = 56;
 /** Tip of the pin graphic (bottom point), relative to the scaled pin image. */
 const PIN_TIP_X = Math.round(PIN_DISPLAY * 0.5);
 const PIN_TIP_Y = Math.round(PIN_DISPLAY * 0.84);
