@@ -1,6 +1,6 @@
 import { logger } from './logger.js';
 
-/** Clearwater main Melonly API (server-scoped Bearer token). */
+/** Melonly API — token is server/department-scoped (create it on the Pinellas Melonly). */
 export const MELONLY_API_BASE = 'https://api.melonly.xyz/api/v1';
 
 /** Soft client-side cache so 30s panel refreshes do not spam Melonly. */
@@ -29,8 +29,12 @@ export function isMelonlyRateLimited() {
   return Date.now() < rateLimitedUntil;
 }
 
+export function clearMelonlyResponseCache() {
+  responseCache.clear();
+}
+
 /**
- * Low-level Melonly client for the main Clearwater Melonly server.
+ * Low-level Melonly client. Token scope = whatever Melonly server/department created it.
  */
 export async function melonlyFetch(apiKey, path, {
   method = 'GET',
@@ -120,21 +124,18 @@ export async function melonlyFetch(apiKey, path, {
   return json;
 }
 
-/**
- * Fetch a small number of newest shift pages (main Melonly).
- * Open shifts are recent — do not walk the whole history (that causes 429s).
- */
-async function listRecentShiftPages(apiKey, {
+async function listPages(apiKey, path, {
   limit = 100,
-  maxPages = 2,
+  maxPages = 3,
   cacheTtlMs = 25_000,
+  query = {},
 } = {}) {
   const items = [];
   let page = 1;
   let totalPages = 1;
   while (page <= totalPages && page <= maxPages) {
-    const result = await melonlyFetch(apiKey, '/server/shifts', {
-      query: { page, limit },
+    const result = await melonlyFetch(apiKey, path, {
+      query: { page, limit, ...query },
       cacheTtlMs,
     });
     const batch = Array.isArray(result?.data) ? result.data : (Array.isArray(result) ? result : []);
@@ -148,112 +149,86 @@ async function listRecentShiftPages(apiKey, {
 
 export function isActiveMelonlyShift(shift) {
   if (!shift || typeof shift !== 'object') return false;
+  const status = String(shift.status || shift.state || '').toLowerCase();
+  if (status && ['ended', 'complete', 'completed', 'closed', 'inactive'].includes(status)) {
+    return false;
+  }
+  if (status && ['active', 'ongoing', 'on_duty', 'onduty', 'open'].includes(status)) {
+    return true;
+  }
   const ended = shift.endedAt;
   if (ended == null || ended === '' || ended === 0 || ended === '0') return true;
   return false;
 }
 
 export function shiftCreatedMs(shift) {
-  const raw = Number(shift?.createdAt);
+  const raw = Number(shift?.createdAt ?? shift?.startedAt ?? shift?.startAt);
   if (!Number.isFinite(raw) || raw <= 0) return null;
-  // Melonly docs use Unix epoch integers; tolerate ms.
   return raw > 1e12 ? raw : raw * 1000;
 }
 
 /**
- * Active (open) shifts from the main Melonly server.
- * Uses a short cache so panel refresh + command share one Melonly pull.
+ * Recent shifts for the Melonly server/department the API key belongs to.
+ * Create the token on the Pinellas Melonly department (Settings → Panel → API Tokens).
  */
-export async function fetchActiveMelonlyShifts(apiKey, { cacheTtlMs = 25_000 } = {}) {
-  const shifts = await listRecentShiftPages(apiKey, {
+export async function fetchRecentMelonlyShifts(apiKey, { cacheTtlMs = 25_000, maxPages = 3 } = {}) {
+  return listPages(apiKey, '/server/shifts', {
     limit: 100,
-    maxPages: 2,
+    maxPages,
     cacheTtlMs,
   });
+}
+
+export async function fetchActiveMelonlyShifts(apiKey, options = {}) {
+  const shifts = await fetchRecentMelonlyShifts(apiKey, options);
   return shifts.filter(isActiveMelonlyShift);
 }
 
-/**
- * Active (open) shifts — prefer Pinellas department scope when available,
- * otherwise the Melonly server shifts endpoint.
- */
-export async function fetchPinellasDepartmentShifts(apiKey, departmentId, { cacheTtlMs = 25_000 } = {}) {
-  const id = String(departmentId || '').trim();
-  if (!apiKey || !id) return fetchRecentMelonlyShifts(apiKey, { cacheTtlMs });
-
-  const candidates = [
-    { path: `/server/shifts`, query: { page: 1, limit: 100, departmentId: id } },
-    { path: `/departments/${encodeURIComponent(id)}/shifts`, query: { page: 1, limit: 100 } },
-    { path: `/department/${encodeURIComponent(id)}/shifts`, query: { page: 1, limit: 100 } },
-  ];
-
-  for (const candidate of candidates) {
-    try {
-      const result = await melonlyFetch(apiKey, candidate.path, {
-        query: candidate.query,
-        cacheTtlMs,
-      });
-      const batch = Array.isArray(result?.data) ? result.data : (Array.isArray(result) ? result : []);
-      if (batch.length || result?.total === 0 || Array.isArray(result?.data)) {
-        // If department filter is accepted, also pull page 2 lightly.
-        let items = [...batch];
-        if ((Number(result?.totalPages) || 1) > 1) {
-          try {
-            const page2 = await melonlyFetch(apiKey, candidate.path, {
-              query: { ...candidate.query, page: 2 },
-              cacheTtlMs,
-            });
-            const more = Array.isArray(page2?.data) ? page2.data : [];
-            items = items.concat(more);
-          } catch {
-            // one page is enough
-          }
-        }
-        return items;
-      }
-    } catch (error) {
-      if (error?.status === 404 || error?.status === 400) continue;
-      if (error?.status === 429) throw error;
-      logger.warn(`Melonly department shifts probe failed (${candidate.path}): ${error?.message || error}`);
-    }
-  }
-
-  return fetchRecentMelonlyShifts(apiKey, { cacheTtlMs });
+/** @deprecated */
+export async function fetchAllMelonlyShifts(apiKey, options = {}) {
+  return fetchRecentMelonlyShifts(apiKey, options);
 }
 
-/** @deprecated Use fetchRecentMelonlyShifts — full history walks cause Melonly 429s. */
-export async function fetchAllMelonlyShifts(apiKey, options = {}) {
+/** @deprecated department probe removed — use a Pinellas-department API token instead. */
+export async function fetchPinellasDepartmentShifts(apiKey, _departmentId, options = {}) {
   return fetchRecentMelonlyShifts(apiKey, options);
 }
 
 export async function fetchMelonlyMember(apiKey, memberId) {
   return melonlyFetch(apiKey, `/server/members/${encodeURIComponent(memberId)}`, {
-    cacheTtlMs: 5 * 60_000,
+    cacheTtlMs: 10 * 60_000,
   });
 }
 
 export async function fetchMelonlyMemberByDiscordId(apiKey, discordId) {
   return melonlyFetch(apiKey, `/server/members/discord/${encodeURIComponent(discordId)}`, {
-    cacheTtlMs: 5 * 60_000,
+    cacheTtlMs: 10 * 60_000,
   });
 }
 
+export async function fetchMelonlyMembers(apiKey, { maxPages = 5, cacheTtlMs = 10 * 60_000 } = {}) {
+  return listPages(apiKey, '/server/members', { limit: 100, maxPages, cacheTtlMs });
+}
+
 export async function fetchMelonlyRoles(apiKey) {
-  return melonlyFetch(apiKey, '/server/roles', {
-    query: { page: 1, limit: 100 },
+  return listPages(apiKey, '/server/roles', {
+    limit: 100,
+    maxPages: 3,
     cacheTtlMs: 15 * 60_000,
-  }).then((result) => (Array.isArray(result?.data) ? result.data : []));
+  });
 }
 
 /**
- * Best-effort Discord ID from a Melonly member / shift memberId.
- * On the main Melonly server, shift.memberId is typically the Discord snowflake.
+ * Extract an explicit Discord snowflake from a Melonly payload.
+ * Do NOT treat Melonly `id` / `memberId` as Discord — Melonly docs say IDs are internal.
  */
-export function resolveMelonlyDiscordId(memberOrShift, fallbackMemberId = null) {
+export function resolveMelonlyDiscordId(memberOrShift) {
   const sources = [
     memberOrShift,
     memberOrShift?.member,
     memberOrShift?.user,
+    memberOrShift?.account,
+    memberOrShift?.discord,
   ].filter(Boolean);
 
   for (const source of sources) {
@@ -261,23 +236,22 @@ export function resolveMelonlyDiscordId(memberOrShift, fallbackMemberId = null) 
       'discordId',
       'discordUserId',
       'discord_id',
+      'discordID',
       'userId',
       'user_id',
-      'id',
     ]) {
       const value = String(source?.[key] || '').trim();
       if (/^\d{16,22}$/.test(value)) return value;
     }
+    // Nested discord object: { id: "..." }
+    const nested = source?.discord?.id || source?.discordUser?.id;
+    if (/^\d{16,22}$/.test(String(nested || ''))) return String(nested);
   }
-
-  const fallback = String(fallbackMemberId || memberOrShift?.memberId || '').trim();
-  if (/^\d{16,22}$/.test(fallback)) return fallback;
   return null;
 }
 
 /**
- * Melonly CAD is not part of the public main API docs.
- * Do not probe multiple endpoints (burns rate limit). Return null.
+ * Melonly CAD is not part of the public API docs.
  */
 export async function fetchMelonlyCadForDiscord() {
   return null;
