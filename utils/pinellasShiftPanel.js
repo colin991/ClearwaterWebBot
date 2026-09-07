@@ -244,23 +244,62 @@ export function formatShiftDuration(ms) {
  * Supports:
  * - `1A-12 | John Doe`
  * - `On Duty | 1A-12 | John Doe`
+ * - `1111 | 3W-05 | Andre Terrance` (unit | radio callsign | name)
  */
 export function parseDeputyNickname(nickname) {
   const raw = String(nickname || '').trim();
-  if (!raw) return { callsign: '—', roleplayName: '—' };
+  if (!raw) return { callsign: '—', roleplayName: '—', altCallsigns: [] };
 
   let parts = raw.split('|').map((part) => part.trim()).filter(Boolean);
-  if (!parts.length) return { callsign: '—', roleplayName: '—' };
+  if (!parts.length) return { callsign: '—', roleplayName: '—', altCallsigns: [] };
 
   // Strip leading duty/status prefixes.
-  while (parts.length >= 3 && /^(on\s*duty|off\s*duty|on\s*break|duty)$/i.test(parts[0])) {
+  while (parts.length >= 2 && /^(on\s*duty|off\s*duty|on\s*break|duty)$/i.test(parts[0])) {
     parts = parts.slice(1);
   }
 
-  if (parts.length >= 2) {
-    return { callsign: parts[0], roleplayName: parts.slice(1).join(' | ') };
+  if (parts.length >= 3 && looksLikeCallsignToken(parts[1])) {
+    return {
+      callsign: parts[0],
+      roleplayName: parts.slice(2).join(' | '),
+      altCallsigns: [parts[1]],
+    };
   }
-  return { callsign: '—', roleplayName: parts[0] };
+
+  if (parts.length >= 2) {
+    return { callsign: parts[0], roleplayName: parts.slice(1).join(' | '), altCallsigns: [] };
+  }
+  return { callsign: '—', roleplayName: parts[0], altCallsigns: [] };
+}
+
+/** Tokens that look like unit/radio callsigns (not a person's name). */
+export function looksLikeCallsignToken(value) {
+  const raw = String(value || '').trim();
+  if (!raw || /\s/.test(raw)) return false;
+  if (/^(on\s*duty|off\s*duty|on\s*break|duty)$/i.test(raw)) return false;
+  return /^(?:\d{2,5}|\d{1,4}[A-Za-z]\d{0,4}|[A-Za-z]?\d+[A-Za-z]?-\d+|\d+[A-Za-z]+-\d+)$/i.test(raw);
+}
+
+function nicknameCallsignCandidates(...nicknames) {
+  const found = [];
+  const seen = new Set();
+  for (const nickname of nicknames) {
+    const parsed = parseDeputyNickname(nickname);
+    for (const value of [parsed.callsign, ...(parsed.altCallsigns || [])]) {
+      const key = normalizeCallsign(value);
+      if (!key || value === '—' || seen.has(key)) continue;
+      seen.add(key);
+      found.push(value);
+    }
+    for (const part of String(nickname || '').split('|').map((entry) => entry.trim()).filter(Boolean)) {
+      if (!looksLikeCallsignToken(part)) continue;
+      const key = normalizeCallsign(part);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      found.push(part);
+    }
+  }
+  return found;
 }
 
 function memberVoiceChannel(guild, userId) {
@@ -393,7 +432,7 @@ function resolveDeputyIdentity(pinellasMember, clearwaterMember, player) {
     clearwaterMember?.displayName,
   ].filter(Boolean);
 
-  let parsed = { callsign: '—', roleplayName: '—' };
+  let parsed = { callsign: '—', roleplayName: '—', altCallsigns: [] };
   for (const candidate of candidates) {
     const next = parseDeputyNickname(candidate);
     if (next.callsign !== '—') {
@@ -417,7 +456,43 @@ function resolveDeputyIdentity(pinellasMember, clearwaterMember, player) {
       || 'Unknown'
     );
 
-  return { callsign, roleplayName };
+  const callsignCandidates = nicknameCallsignCandidates(
+    ...candidates,
+    callsign,
+    ...(parsed.altCallsigns || []),
+    player?.callsign,
+  );
+
+  return { callsign, roleplayName, callsignCandidates };
+}
+
+function findErlcPlayerForDeputy({
+  robloxId,
+  callsign,
+  callsignCandidates = [],
+  erlcByRoblox,
+  erlcByCallsign,
+  sheriffByCallsign,
+}) {
+  if (robloxId) {
+    const byId = erlcByRoblox.get(String(robloxId));
+    if (byId) return byId;
+  }
+  const tried = new Set();
+  for (const value of [callsign, ...callsignCandidates]) {
+    const key = normalizeCallsign(value);
+    if (!key || tried.has(key)) continue;
+    tried.add(key);
+    const player = sheriffByCallsign.get(key) || erlcByCallsign.get(key);
+    if (player) return player;
+  }
+  return null;
+}
+
+function locationMapPin(player) {
+  if (!player?.location) return null;
+  if (!Number.isFinite(player.location.x) || !Number.isFinite(player.location.z)) return null;
+  return libertyMapPoint(player.location.x, player.location.z);
 }
 
 /**
@@ -486,30 +561,40 @@ export async function collectOnDutyDeputies(client, {
     fromMelonly = false,
     fromOnDutyRole = false,
   }) {
-    let player = null;
     const identity = identityCache?.byDiscord?.[discordId] || null;
     const robloxId = identity?.robloxId ? String(identity.robloxId) : null;
-    if (robloxId) player = erlcByRoblox.get(robloxId) || null;
 
-    let { callsign, roleplayName } = resolveDeputyIdentity(pinellasMember, clearwaterMember, player);
+    let { callsign, roleplayName, callsignCandidates } = resolveDeputyIdentity(
+      pinellasMember,
+      clearwaterMember,
+      null,
+    );
 
-    if (!player && callsign !== '—') {
-      const key = normalizeCallsign(callsign);
-      player = sheriffByCallsign.get(key) || erlcByCallsign.get(key) || null;
-      if (player?.callsign) callsign = player.callsign;
-    }
+    let player = findErlcPlayerForDeputy({
+      robloxId,
+      callsign,
+      callsignCandidates,
+      erlcByRoblox,
+      erlcByCallsign,
+      sheriffByCallsign,
+    });
+
+    // Re-resolve name fields once we know the in-game player (fills gaps).
+    ({ callsign, roleplayName, callsignCandidates } = resolveDeputyIdentity(
+      pinellasMember,
+      clearwaterMember,
+      player,
+    ));
+    if (player?.callsign && callsign === '—') callsign = player.callsign;
 
     if (isOtherDepartmentCallsign(callsign)) {
       skippedOtherDept += 1;
       return null;
     }
 
-    const inGame = Boolean(
-      player && (isSheriffTeam(player.team) || sheriffByCallsign.has(normalizeCallsign(callsign))),
-    );
-    const mapPin = inGame && player?.location
-      ? libertyMapPoint(player.location.x, player.location.z)
-      : null;
+    // Any matched ER:LC player counts as in-game for location/map (already PCSO-filtered).
+    const inGame = Boolean(player);
+    const mapPin = locationMapPin(player);
 
     const rank = getHighestPinellasRank(pinellasMember);
     const startedMs = shift ? (shiftCreatedMs(shift) || nowMs) : nowMs;
@@ -522,7 +607,9 @@ export async function collectOnDutyDeputies(client, {
     return {
       discordId,
       memberId,
+      robloxId,
       callsign,
+      callsignCandidates,
       roleplayName,
       rankName: rank?.name || 'Deputy',
       rank,
@@ -534,7 +621,7 @@ export async function collectOnDutyDeputies(client, {
       inGame,
       fromMelonly,
       fromOnDutyRole,
-      locationLabel: formatInGameLocation(inGame ? player : null),
+      locationLabel: formatInGameLocation(player),
       mapLeft: mapPin?.left ?? null,
       mapTop: mapPin?.top ?? null,
       voiceLabel: voice ? `<#${voice.id}>` : 'Not in VC',
@@ -769,6 +856,58 @@ async function buildShiftPanelPayload(snapshot, { includeFiles = true } = {}) {
   };
   if (includeFiles && files.length) payload.files = files;
   return payload;
+}
+
+/**
+ * Re-fetch ER:LC right when Deputy Lookup opens so the map uses a live pin.
+ */
+export async function enrichDeputyLiveLocation(deputy, {
+  erlcServerKey = config.erlcServerKey,
+} = {}) {
+  if (!deputy) return deputy;
+  if (!erlcServerKey) {
+    return {
+      ...deputy,
+      inGame: false,
+      locationLabel: 'Not in game',
+      mapLeft: null,
+      mapTop: null,
+    };
+  }
+
+  try {
+    const indexes = await loadErlcPlayerIndexes(erlcServerKey);
+    const player = findErlcPlayerForDeputy({
+      robloxId: deputy.robloxId,
+      callsign: deputy.callsign,
+      callsignCandidates: deputy.callsignCandidates || [],
+      erlcByRoblox: indexes.byRobloxId,
+      erlcByCallsign: indexes.byCallsign,
+      sheriffByCallsign: indexes.sheriffByCallsign,
+    });
+
+    if (!player) {
+      return {
+        ...deputy,
+        inGame: false,
+        locationLabel: 'Not in game',
+        mapLeft: null,
+        mapTop: null,
+      };
+    }
+
+    const mapPin = locationMapPin(player);
+    return {
+      ...deputy,
+      inGame: true,
+      locationLabel: formatInGameLocation(player),
+      mapLeft: mapPin?.left ?? null,
+      mapTop: mapPin?.top ?? null,
+    };
+  } catch (error) {
+    logger.warn(`Pinellas shift lookup: live ER:LC location failed (${error?.message || error})`);
+    return deputy;
+  }
 }
 
 async function buildLookupPayload(deputy, {
@@ -1073,7 +1212,8 @@ export async function handlePinellasShiftPanelInteraction(interaction) {
       await interaction.editReply({ content: 'That deputy is no longer on shift.' });
       return true;
     }
-    const payload = await buildLookupPayload(deputy);
+    const liveDeputy = await enrichDeputyLiveLocation(deputy);
+    const payload = await buildLookupPayload(liveDeputy);
     await interaction.editReply(payload);
   } catch (error) {
     logger.error('Pinellas shift lookup failed', error);
