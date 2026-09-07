@@ -28,14 +28,16 @@ import {
 } from './melonly.js';
 import {
   isPinellasDepartmentShift,
+  isPinellasDiscordStaff,
   PINELLAS_MELONLY_DEPARTMENT_ID,
   resolvePinellasMelonlyMemberDiscordId,
 } from './pinellasShiftPanel.js';
 
 export const PINELLAS_ROSTER_SHEET = 'PCSO I Main Database';
 export const PINELLAS_ROSTER_RANGE = `'${PINELLAS_ROSTER_SHEET}'!D11:P1380`;
-export const PINELLAS_ROSTER_SYNC_MS = 2 * 60 * 1000;
+export const PINELLAS_ROSTER_SYNC_MS = 60 * 1000;
 export const PINELLAS_INACTIVE_AFTER_MS = 4 * 24 * 60 * 60 * 1000;
+export const PINELLAS_WARNING_HISTORY_AFTER_MS = 4 * 24 * 60 * 60 * 1000;
 export const PINELLAS_CALLSIGN_OPEN_PREFIX = 'pcs:cs:open:';
 export const PINELLAS_CALLSIGN_MODAL_PREFIX = 'pcs:cs:modal:';
 
@@ -96,7 +98,12 @@ export function summarizePinellasPunishments(entries = [], now = Date.now()) {
   if (valid.some((entry) => entry.type === 'demotion' || entry.type === 'termination')) {
     return 'Previously Demoted';
   }
-  if (valid.some((entry) => entry.type === 'warning' || entry.type === 'strike')) {
+  const recentWarningOrStrike = valid.some((entry) => {
+    if (entry.type !== 'warning' && entry.type !== 'strike') return false;
+    const createdAt = new Date(entry.createdAt).getTime();
+    return Number.isFinite(createdAt) && now - createdAt < PINELLAS_WARNING_HISTORY_AFTER_MS;
+  });
+  if (recentWarningOrStrike) {
     return 'Previously Warned/Striked';
   }
   return 'Clean Record';
@@ -191,10 +198,20 @@ async function recentPinellasShiftDiscordIds(client, settings, now = Date.now())
     cacheTtlMs: 60_000,
     maxPages: 10,
   });
-  const shifts = result.shifts.filter((shift) => (
-    isPinellasDepartmentShift(shift)
-    && (shiftLastActivityMs(shift) || 0) >= cutoff
+  const recentShifts = result.shifts.filter((shift) => (
+    (shiftLastActivityMs(shift) || 0) >= cutoff
   ));
+  // Melonly's main-panel API often omits the Pinellas department id. When
+  // that happens, use the member's current Pinellas employee/rank role to
+  // distinguish Pinellas shifts from other departments on the same panel.
+  const labelsPinellasDepartment = recentShifts.some(isPinellasDepartmentShift);
+  const shifts = labelsPinellasDepartment
+    ? recentShifts.filter(isPinellasDepartmentShift)
+    : recentShifts;
+  const pinellas = !labelsPinellasDepartment
+    ? (client.guilds.cache.get(PINELLAS_GUILD_ID)
+      || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null))
+    : null;
   const discordIds = new Set();
   let unresolved = 0;
   const byMember = new Map();
@@ -211,11 +228,14 @@ async function recentPinellasShiftDiscordIds(client, settings, now = Date.now())
         });
     }
     if (!discordId && /^\d{16,22}$/.test(memberId)) {
-      const guild = client.guilds.cache.get(PINELLAS_GUILD_ID)
-        || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
-      const member = guild?.members.cache.get(memberId)
-        || await guild?.members.fetch(memberId).catch(() => null);
+      const member = pinellas?.members.cache.get(memberId)
+        || await pinellas?.members.fetch(memberId).catch(() => null);
       if (member) discordId = memberId;
+    }
+    if (discordId && !labelsPinellasDepartment) {
+      const member = pinellas?.members.cache.get(discordId)
+        || await pinellas?.members.fetch(discordId).catch(() => null);
+      if (!isPinellasDiscordStaff(member)) discordId = null;
     }
     byMember.set(memberId, discordId || null);
     if (discordId) discordIds.add(discordId);
@@ -419,10 +439,34 @@ export async function syncPinellasRoster(client) {
     const state = await loadRosterState(client);
     const updates = [];
     let members = 0;
+    const guild = client.guilds.cache.get(PINELLAS_GUILD_ID)
+      || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
+    let roleStateAvailable = false;
+    if (guild) {
+      try {
+        await guild.members.fetch();
+        roleStateAvailable = true;
+      } catch (error) {
+        logger.warn(`PCSO roster: could not refresh member roles; preserving roster assignments (${error?.message || error}).`);
+      }
+    }
 
     for (const row of state.rows) {
       if (!/^\d{16,22}$/.test(row.discordId)) continue;
       members += 1;
+      if (roleStateAvailable) {
+        const member = guild.members.cache.get(row.discordId);
+        const rank = getHighestPinellasRank(member);
+        if (!rank || rankKey(rank.name) !== rankKey(row.rank)) {
+          updates.push(
+            { range: rosterCell('H', row.rowNumber), value: '' },
+            { range: rosterCell('J', row.rowNumber), value: '' },
+            { range: rosterCell('N', row.rowNumber), value: 'N/A' },
+            { range: rosterCell('P', row.rowNumber), value: 'Clean Record' },
+          );
+          continue;
+        }
+      }
       const desired = resolvePinellasRosterMemberStatus(state, row.discordId, row.activity);
       if (desired.activity !== row.activity) {
         updates.push({ range: rosterCell('N', row.rowNumber), value: desired.activity });
@@ -438,7 +482,7 @@ export async function syncPinellasRoster(client) {
         client.config.pcsoRosterSpreadsheetId,
         updates,
       );
-      logger.info(`PCSO roster: synchronized ${updates.length} Activity/Punishments cell(s) across ${members} members.`);
+      logger.info(`PCSO roster: synchronized ${updates.length} roster cell(s) across ${members} members.`);
     }
     if (state.activityStateChanged) await writeActivityState(state.activityState);
     return { members, cellsUpdated: updates.length };
