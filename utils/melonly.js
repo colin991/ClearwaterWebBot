@@ -210,7 +210,14 @@ export async function fetchMelonlyMemberDiscordId(apiKey, memberId) {
   const result = await melonlyFetch(apiKey, `/server/members/${encodeURIComponent(id)}/discord`, {
     cacheTtlMs: 10 * 60_000,
   });
-  const discordId = String(result?.discordId || result?.discord_id || result?.id || '').trim();
+  // Only accept explicit discordId fields — never fall back to Melonly `id`.
+  const discordId = String(
+    result?.discordId
+    || result?.discord_id
+    || result?.discordUserId
+    || result?.userId
+    || '',
+  ).trim();
   return /^\d{16,22}$/.test(discordId) ? discordId : null;
 }
 

@@ -51,7 +51,7 @@ export const PINELLAS_MELONLY_DEPARTMENT_ID = '7470323914464301056';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const STORE_PATH = path.join(ROOT, 'data', 'pinellas-shift-panel.json');
-const MEMBER_MAP_PATH = path.join(ROOT, 'data', 'pinellas-melonly-members.json');
+const MEMBER_MAP_PATH = path.join(ROOT, 'data', 'pinellas-melonly-members-v2.json');
 const BANNER_PATH = path.join(ROOT, 'assets', 'pcso-shift-banner.webp');
 const FOOTER_PATH = path.join(ROOT, 'assets', 'pcso-shift-footer.webp');
 
@@ -238,16 +238,27 @@ export function formatShiftDuration(ms) {
 }
 
 /**
- * Parse callsign / roleplay name from a Discord nickname like `1A-12 | John Doe`.
+ * Parse callsign / roleplay name from a Discord server nickname.
+ * Supports:
+ * - `1A-12 | John Doe`
+ * - `On Duty | 1A-12 | John Doe`
  */
 export function parseDeputyNickname(nickname) {
   const raw = String(nickname || '').trim();
   if (!raw) return { callsign: '—', roleplayName: '—' };
-  const parts = raw.split('|').map((part) => part.trim()).filter(Boolean);
+
+  let parts = raw.split('|').map((part) => part.trim()).filter(Boolean);
+  if (!parts.length) return { callsign: '—', roleplayName: '—' };
+
+  // Strip leading duty/status prefixes.
+  while (parts.length >= 3 && /^(on\s*duty|off\s*duty|on\s*break|duty)$/i.test(parts[0])) {
+    parts = parts.slice(1);
+  }
+
   if (parts.length >= 2) {
     return { callsign: parts[0], roleplayName: parts.slice(1).join(' | ') };
   }
-  return { callsign: '—', roleplayName: raw };
+  return { callsign: '—', roleplayName: parts[0] };
 }
 
 function memberVoiceChannel(guild, userId) {
@@ -274,19 +285,37 @@ function formatInGameLocation(player) {
   return 'In game';
 }
 
-async function loadErlcPlayersByRobloxId(serverKey) {
-  if (!serverKey) return new Map();
+function isSheriffTeam(team) {
+  return /sheriff/i.test(String(team || ''));
+}
+
+function normalizeCallsign(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, '');
+}
+
+/**
+ * Load ER:LC players indexed by Roblox id and by callsign (Sheriff team preferred).
+ */
+async function loadErlcPlayerIndexes(serverKey) {
+  const empty = { byRobloxId: new Map(), byCallsign: new Map(), sheriffByCallsign: new Map() };
+  if (!serverKey) return empty;
   try {
     const server = await fetchErlcServer(serverKey);
     const players = (server.Players || server.players || []).map(parseErlcPlayer);
-    const map = new Map();
+    const byRobloxId = new Map();
+    const byCallsign = new Map();
+    const sheriffByCallsign = new Map();
     for (const player of players) {
-      if (player.robloxId) map.set(String(player.robloxId), player);
+      if (player.robloxId) byRobloxId.set(String(player.robloxId), player);
+      const key = normalizeCallsign(player.callsign);
+      if (!key) continue;
+      byCallsign.set(key, player);
+      if (isSheriffTeam(player.team)) sheriffByCallsign.set(key, player);
     }
-    return map;
+    return { byRobloxId, byCallsign, sheriffByCallsign };
   } catch (error) {
     logger.warn(`Pinellas shift panel: ER:LC fetch failed (${error?.message || error})`);
-    return new Map();
+    return empty;
   }
 }
 
@@ -309,24 +338,26 @@ function waveDurationMs(allShifts, memberId, wave, nowMs) {
 }
 
 /**
- * Prefer callsign|name from Pinellas nick, then Clearwater nick, then display name.
+ * Prefer callsign|name from server nicknames:
+ * `On Duty | 1A-12 | John Doe` or `1A-12 | John Doe`.
  */
 function resolveDeputyIdentity(pinellasMember, clearwaterMember, player) {
   const candidates = [
     pinellasMember?.nickname,
     clearwaterMember?.nickname,
+    // displayName includes nick when set
     pinellasMember?.displayName,
     clearwaterMember?.displayName,
-    pinellasMember?.user?.globalName,
-    clearwaterMember?.user?.globalName,
-    pinellasMember?.user?.username,
-    clearwaterMember?.user?.username,
   ].filter(Boolean);
 
   let parsed = { callsign: '—', roleplayName: '—' };
   for (const candidate of candidates) {
-    parsed = parseDeputyNickname(candidate);
-    if (parsed.callsign !== '—') break;
+    const next = parseDeputyNickname(candidate);
+    if (next.callsign !== '—') {
+      parsed = next;
+      break;
+    }
+    if (parsed.roleplayName === '—' && next.roleplayName !== '—') parsed = next;
   }
 
   const callsign = parsed.callsign !== '—'
@@ -334,7 +365,14 @@ function resolveDeputyIdentity(pinellasMember, clearwaterMember, player) {
     : (player?.callsign || '—');
   const roleplayName = parsed.roleplayName !== '—'
     ? parsed.roleplayName
-    : (player?.username || candidates[0] || 'Unknown');
+    : (
+      player?.username
+      || pinellasMember?.user?.globalName
+      || clearwaterMember?.user?.globalName
+      || pinellasMember?.user?.username
+      || clearwaterMember?.user?.username
+      || 'Unknown'
+    );
 
   return { callsign, roleplayName };
 }
@@ -377,14 +415,19 @@ export async function collectOnDutyDeputies(client, {
     : null;
 
   if (pinellas) await pinellas.members.fetch().catch(() => null);
+  if (clearwater) await clearwater.members.fetch().catch(() => null);
+  if (vcGuild && vcGuild.id !== clearwater?.id && vcGuild.id !== pinellas?.id) {
+    await vcGuild.members.fetch().catch(() => null);
+  }
 
   const neededIds = activeShifts.map((shift) => String(shift?.memberId || '')).filter(Boolean);
   await ensureMelonlyDiscordIndex(apiKey, neededIds);
 
-  const [identityCache, erlcByRoblox] = await Promise.all([
+  const [identityCache, erlcIndexes] = await Promise.all([
     getIdentityCache().catch(() => ({ byDiscord: {} })),
-    loadErlcPlayersByRobloxId(erlcServerKey),
+    loadErlcPlayerIndexes(erlcServerKey),
   ]);
+  const { byRobloxId: erlcByRoblox, byCallsign: erlcByCallsign, sheriffByCallsign } = erlcIndexes;
 
   const guilds = [pinellas, clearwater, vcGuild].filter(Boolean);
   const nowMs = Date.now();
@@ -405,28 +448,32 @@ export async function collectOnDutyDeputies(client, {
     const pinellasMember = pinellas?.members?.cache?.get(discordId)
       || await pinellas?.members?.fetch(discordId).catch(() => null);
     const clearwaterMember = clearwater?.members?.cache?.get(discordId)
-      || vcGuild?.members?.cache?.get(discordId)
-      || null;
+      || (vcGuild && vcGuild.id !== clearwater?.id ? vcGuild.members.cache.get(discordId) : null)
+      || await clearwater?.members?.fetch(discordId).catch(() => null)
+      || await vcGuild?.members?.fetch(discordId).catch(() => null);
+
+    // Resolve identity from nicknames first so we can match ER:LC sheriff callsigns.
+    let player = null;
+    const identity = identityCache?.byDiscord?.[discordId] || null;
+    const robloxId = identity?.robloxId ? String(identity.robloxId) : null;
+    if (robloxId) player = erlcByRoblox.get(robloxId) || null;
+
+    let { callsign, roleplayName } = resolveDeputyIdentity(pinellasMember, clearwaterMember, player);
+
+    if (!player && callsign !== '—') {
+      const key = normalizeCallsign(callsign);
+      player = sheriffByCallsign.get(key) || erlcByCallsign.get(key) || null;
+      // If ER:LC has the callsign, prefer that callsign spelling and confirm sheriff team.
+      if (player?.callsign) callsign = player.callsign;
+    }
+
+    // Only treat as in-game for role sync when on Sheriff (or found via callsign).
+    const inGame = Boolean(player && (isSheriffTeam(player.team) || sheriffByCallsign.has(normalizeCallsign(callsign))));
 
     const rank = getHighestPinellasRank(pinellasMember);
     const startedMs = shiftCreatedMs(shift) || nowMs;
     const thisShiftMs = Math.max(0, nowMs - startedMs);
     const totalWaveMs = waveDurationMs(recentShifts, memberId, shift.wave, nowMs) || thisShiftMs;
-
-    const identity = identityCache?.byDiscord?.[discordId] || null;
-    const robloxId = identity?.robloxId ? String(identity.robloxId) : null;
-    let player = robloxId ? erlcByRoblox.get(robloxId) : null;
-
-    const { callsign, roleplayName } = resolveDeputyIdentity(pinellasMember, clearwaterMember, player);
-    if (!player && callsign !== '—') {
-      for (const entry of erlcByRoblox.values()) {
-        if (String(entry.callsign || '').toLowerCase() === callsign.toLowerCase()) {
-          player = entry;
-          break;
-        }
-      }
-    }
-
     const voice = vcGuild ? memberVoiceChannel(vcGuild, discordId) : null;
 
     byDiscord.set(discordId, {
@@ -441,8 +488,8 @@ export async function collectOnDutyDeputies(client, {
       startedMs,
       thisShiftMs,
       totalWaveMs,
-      inGame: Boolean(player),
-      locationLabel: formatInGameLocation(player),
+      inGame,
+      locationLabel: formatInGameLocation(inGame ? player : null),
       voiceLabel: voice ? `<#${voice.id}>` : 'Not in VC',
       voiceChannelId: voice?.id || null,
     });
@@ -574,11 +621,6 @@ async function buildShiftPanelPayload(snapshot, { includeFiles = true } = {}) {
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true)
           .setLabel(`On Shift: ${deputies.length}`),
-        new ButtonBuilder()
-          .setCustomId('pcs:shift:count:sup')
-          .setStyle(ButtonStyle.Secondary)
-          .setDisabled(true)
-          .setLabel(`Supervisors: ${snapshot.supervisorCount || 0}`),
       ),
     )
     .addSeparatorComponents(
