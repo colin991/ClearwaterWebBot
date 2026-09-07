@@ -18,9 +18,11 @@ export default {
     const count = result?.snapshot?.deputies?.length || 0;
     const active = result?.snapshot?.activeShiftCount || 0;
     const unresolved = result?.snapshot?.unresolvedCount || 0;
+    const skippedMain = result?.snapshot?.skippedMainStaffCount || 0;
     const skippedOther = result?.snapshot?.skippedOtherDeptCount || 0;
     const extras = [
       unresolved ? `unresolved: **${unresolved}**` : '',
+      skippedMain ? `main staff skipped: **${skippedMain}**` : '',
       skippedOther ? `other dept: **${skippedOther}**` : '',
     ].filter(Boolean);
 
@@ -30,7 +32,7 @@ export default {
         `Posted/refreshed in <#${result?.message?.channelId || '1546298062568165396'}>.`,
         `On duty shown: **${count}** (Melonly active: **${active}**`
           + `${extras.length ? `, ${extras.join(', ')}` : ''})`,
-        '-# Uses the main Melonly API token.',
+        '-# Shows Pinellas department Melonly shifts and the on-duty role.',
         '-# Updates automatically every 30 seconds from Melonly.',
       ].join('\n'),
     }));

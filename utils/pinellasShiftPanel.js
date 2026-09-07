@@ -33,7 +33,10 @@ import {
   getHighestPinellasRank,
   PINELLAS_RANKS,
 } from './pinellasPromote.js';
-import { PINELLAS_GUILD_ID } from './pinellasServer.js';
+import {
+  PINELLAS_EMPLOYEE_WELCOME_ROLE_ID,
+  PINELLAS_GUILD_ID,
+} from './pinellasServer.js';
 
 export const PINELLAS_SHIFT_PANEL_CHANNEL_ID = '1546298062568165396';
 export const PINELLAS_ON_DUTY_ROLE_ID = '1514462780575715418';
@@ -44,7 +47,7 @@ export const PINELLAS_SHIFT_REFRESH_MS = 30_000;
 export const PINELLAS_SHIFT_REPORTS_ID = 'pcs:shift:reports';
 export const PINELLAS_SHIFT_LOOKUP_ID = 'pcs:shift:lookup';
 
-/** Melonly department id — create the API token on this Melonly (Settings → Panel). */
+/** Melonly department id for Pinellas County Sheriff’s Office. */
 export const PINELLAS_MELONLY_DEPARTMENT_ID = '7470323914464301056';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -63,6 +66,8 @@ const memberDiscordCache = new Map();
 const discordMemberCache = new Map();
 /** Last successful on-duty snapshot (used when Melonly 429s). */
 let lastSnapshot = null;
+/** Discord IDs last known on a Pinellas Melonly shift (for on-duty role cleanup). */
+let lastMelonlyOnDutyIds = new Set();
 
 const REPORT_OPTIONS = Object.freeze([
   { label: 'OIS Report', value: 'ois' },
@@ -302,6 +307,35 @@ export function isPcsoCallsign(callsign) {
   return !isOtherDepartmentCallsign(callsign);
 }
 
+function shiftDepartmentIds(shift) {
+  return [
+    shift?.serverId,
+    shift?.departmentId,
+    shift?.deptId,
+    shift?.melonlyServerId,
+    shift?.server?.id,
+    shift?.department?.id,
+  ].map((value) => String(value || '').trim()).filter(Boolean);
+}
+
+export function isPinellasDepartmentShift(shift) {
+  return shiftDepartmentIds(shift).includes(PINELLAS_MELONLY_DEPARTMENT_ID);
+}
+
+/** Pinellas Discord staff (employee / rank / on-duty). */
+export function isPinellasDiscordStaff(member) {
+  if (!member || member.user?.bot) return false;
+  return Boolean(
+    member.roles.cache.has(PINELLAS_ON_DUTY_ROLE_ID)
+    || member.roles.cache.has(PINELLAS_EMPLOYEE_WELCOME_ROLE_ID)
+    || getHighestPinellasRank(member),
+  );
+}
+
+function hasPinellasOnDutyRole(member) {
+  return Boolean(member?.roles?.cache?.has(PINELLAS_ON_DUTY_ROLE_ID));
+}
+
 /**
  * Load ER:LC players indexed by Roblox id and by callsign (Sheriff team preferred).
  */
@@ -387,9 +421,12 @@ function resolveDeputyIdentity(pinellasMember, clearwaterMember, player) {
 }
 
 /**
- * Build enriched on-duty deputy rows from main Melonly + Discord + ER:LC.
- * API token comes from the main Melonly panel. Anyone with an active Melonly shift
- * that resolves to Discord is listed; Pinellas ranks are used when available.
+ * Build on-duty deputy rows for the Pinellas shift panel.
+ *
+ * Shows people who are:
+ * - on an active Melonly shift for the Pinellas department, or
+ * - holding the Pinellas on-duty Discord role,
+ * and never lists unrelated main-server Melonly staff.
  */
 export async function collectOnDutyDeputies(client, {
   apiKey = config.melonlyApiKey,
@@ -404,15 +441,10 @@ export async function collectOnDutyDeputies(client, {
 
   await loadMemberDiscordMap();
 
-  // Main Melonly API (department has no API tokens).
+  // Main Melonly API (department Melonly has no API tokens).
   const recentShifts = await fetchRecentMelonlyShifts(apiKey, { cacheTtlMs: 25_000, maxPages: 3 });
-  let activeShifts = recentShifts.filter(isActiveMelonlyShift);
-
-  // If Melonly returns shifts tagged with the Pinellas department serverId, prefer those.
-  const deptTagged = activeShifts.filter(
-    (shift) => String(shift?.serverId || '') === PINELLAS_MELONLY_DEPARTMENT_ID,
-  );
-  if (deptTagged.length) activeShifts = deptTagged;
+  const activeShifts = recentShifts.filter(isActiveMelonlyShift);
+  const melonlyTagsDepartments = recentShifts.some((shift) => shiftDepartmentIds(shift).length > 0);
 
   const pinellas = client.guilds.cache.get(PINELLAS_GUILD_ID)
     || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
@@ -442,7 +474,73 @@ export async function collectOnDutyDeputies(client, {
   const nowMs = Date.now();
   const byDiscord = new Map();
   let unresolved = 0;
+  let skippedMainStaff = 0;
   let skippedOtherDept = 0;
+
+  async function buildDeputyRow({
+    discordId,
+    memberId = null,
+    shift = null,
+    pinellasMember = null,
+    clearwaterMember = null,
+    fromMelonly = false,
+    fromOnDutyRole = false,
+  }) {
+    let player = null;
+    const identity = identityCache?.byDiscord?.[discordId] || null;
+    const robloxId = identity?.robloxId ? String(identity.robloxId) : null;
+    if (robloxId) player = erlcByRoblox.get(robloxId) || null;
+
+    let { callsign, roleplayName } = resolveDeputyIdentity(pinellasMember, clearwaterMember, player);
+
+    if (!player && callsign !== '—') {
+      const key = normalizeCallsign(callsign);
+      player = sheriffByCallsign.get(key) || erlcByCallsign.get(key) || null;
+      if (player?.callsign) callsign = player.callsign;
+    }
+
+    if (isOtherDepartmentCallsign(callsign)) {
+      skippedOtherDept += 1;
+      return null;
+    }
+
+    const inGame = Boolean(
+      player && (isSheriffTeam(player.team) || sheriffByCallsign.has(normalizeCallsign(callsign))),
+    );
+    const mapPin = inGame && player?.location
+      ? libertyMapPoint(player.location.x, player.location.z)
+      : null;
+
+    const rank = getHighestPinellasRank(pinellasMember);
+    const startedMs = shift ? (shiftCreatedMs(shift) || nowMs) : nowMs;
+    const thisShiftMs = shift ? Math.max(0, nowMs - startedMs) : 0;
+    const totalWaveMs = shift
+      ? (waveDurationMs(recentShifts, memberId, shift.wave, nowMs) || thisShiftMs)
+      : 0;
+    const voice = vcGuild ? memberVoiceChannel(vcGuild, discordId) : null;
+
+    return {
+      discordId,
+      memberId,
+      callsign,
+      roleplayName,
+      rankName: rank?.name || 'Deputy',
+      rank,
+      isSupervisor: isSupervisorRank(rank),
+      shift,
+      startedMs: shift ? startedMs : null,
+      thisShiftMs,
+      totalWaveMs,
+      inGame,
+      fromMelonly,
+      fromOnDutyRole,
+      locationLabel: formatInGameLocation(inGame ? player : null),
+      mapLeft: mapPin?.left ?? null,
+      mapTop: mapPin?.top ?? null,
+      voiceLabel: voice ? `<#${voice.id}>` : 'Not in VC',
+      voiceChannelId: voice?.id || null,
+    };
+  }
 
   for (const shift of activeShifts) {
     const memberId = String(shift.memberId || '');
@@ -462,59 +560,52 @@ export async function collectOnDutyDeputies(client, {
       || await clearwater?.members?.fetch(discordId).catch(() => null)
       || await vcGuild?.members?.fetch(discordId).catch(() => null);
 
-    // Resolve identity from nicknames first so we can match ER:LC sheriff callsigns.
-    let player = null;
-    const identity = identityCache?.byDiscord?.[discordId] || null;
-    const robloxId = identity?.robloxId ? String(identity.robloxId) : null;
-    if (robloxId) player = erlcByRoblox.get(robloxId) || null;
+    const deptShift = isPinellasDepartmentShift(shift);
+    const onDuty = hasPinellasOnDutyRole(pinellasMember);
+    // When Melonly does not tag departments at all, treat Pinellas Discord staff
+    // on an active Melonly shift as department members (never dump all main staff).
+    const staffProxy = !melonlyTagsDepartments && isPinellasDiscordStaff(pinellasMember);
 
-    let { callsign, roleplayName } = resolveDeputyIdentity(pinellasMember, clearwaterMember, player);
-
-    if (!player && callsign !== '—') {
-      const key = normalizeCallsign(callsign);
-      player = sheriffByCallsign.get(key) || erlcByCallsign.get(key) || null;
-      // If ER:LC has the callsign, prefer that callsign spelling and confirm sheriff team.
-      if (player?.callsign) callsign = player.callsign;
-    }
-
-    // Other departments use callsigns starting with 2 or 3 — exclude from PCSO panel.
-    // Unknown / unparsed callsigns ("—") still show so Melonly-active deputies are not dropped.
-    if (isOtherDepartmentCallsign(callsign)) {
-      skippedOtherDept += 1;
+    if (!deptShift && !onDuty && !staffProxy) {
+      skippedMainStaff += 1;
       continue;
     }
 
-    // Only treat as in-game for role sync when on Sheriff (or found via callsign).
-    const inGame = Boolean(player && (isSheriffTeam(player.team) || sheriffByCallsign.has(normalizeCallsign(callsign))));
-    const mapPin = inGame && player?.location
-      ? libertyMapPoint(player.location.x, player.location.z)
-      : null;
-
-    const rank = getHighestPinellasRank(pinellasMember);
-    const startedMs = shiftCreatedMs(shift) || nowMs;
-    const thisShiftMs = Math.max(0, nowMs - startedMs);
-    const totalWaveMs = waveDurationMs(recentShifts, memberId, shift.wave, nowMs) || thisShiftMs;
-    const voice = vcGuild ? memberVoiceChannel(vcGuild, discordId) : null;
-
-    byDiscord.set(discordId, {
+    const row = await buildDeputyRow({
       discordId,
       memberId,
-      callsign,
-      roleplayName,
-      rankName: rank?.name || 'Deputy',
-      rank,
-      isSupervisor: isSupervisorRank(rank),
       shift,
-      startedMs,
-      thisShiftMs,
-      totalWaveMs,
-      inGame,
-      locationLabel: formatInGameLocation(inGame ? player : null),
-      mapLeft: mapPin?.left ?? null,
-      mapTop: mapPin?.top ?? null,
-      voiceLabel: voice ? `<#${voice.id}>` : 'Not in VC',
-      voiceChannelId: voice?.id || null,
+      pinellasMember,
+      clearwaterMember,
+      fromMelonly: true,
+      fromOnDutyRole: onDuty,
     });
+    if (row) byDiscord.set(discordId, row);
+  }
+
+  // Also list anyone currently holding the Pinellas on-duty role.
+  if (pinellas) {
+    for (const member of pinellas.members.cache.values()) {
+      if (member.user?.bot) continue;
+      if (!hasPinellasOnDutyRole(member)) continue;
+      if (byDiscord.has(member.id)) {
+        byDiscord.get(member.id).fromOnDutyRole = true;
+        continue;
+      }
+
+      const clearwaterMember = clearwater?.members?.cache?.get(member.id)
+        || vcGuild?.members?.cache?.get(member.id)
+        || null;
+
+      const row = await buildDeputyRow({
+        discordId: member.id,
+        pinellasMember: member,
+        clearwaterMember,
+        fromMelonly: false,
+        fromOnDutyRole: true,
+      });
+      if (row) byDiscord.set(member.id, row);
+    }
   }
 
   const deputies = [...byDiscord.values()].sort((a, b) => {
@@ -525,14 +616,18 @@ export async function collectOnDutyDeputies(client, {
 
   logger.info(
     `Pinellas shift panel Melonly: recent=${recentShifts.length} active=${activeShifts.length} `
-    + `shown=${deputies.length} unresolved=${unresolved} skippedOtherDept=${skippedOtherDept} `
+    + `shown=${deputies.length} unresolved=${unresolved} skippedMainStaff=${skippedMainStaff} `
+    + `skippedOtherDept=${skippedOtherDept} tags=${melonlyTagsDepartments} `
     + `linked=${memberDiscordCache.size}`,
   );
 
   const snapshot = {
     deputies,
     activeShiftCount: activeShifts.length,
+    departmentShiftCount: deputies.filter((entry) => entry.fromMelonly).length,
+    onDutyRoleCount: deputies.filter((entry) => entry.fromOnDutyRole).length,
     unresolvedCount: unresolved,
+    skippedMainStaffCount: skippedMainStaff,
     skippedOtherDeptCount: skippedOtherDept,
     supervisorCount: deputies.filter((entry) => entry.isSupervisor).length,
     fetchedAt: new Date().toISOString(),
@@ -543,10 +638,15 @@ export async function collectOnDutyDeputies(client, {
 
 function onDutyLines(deputies) {
   if (!deputies.length) return '- Nobody is currently on shift.';
-  return deputies.map((entry) => (
-    `- ${entry.callsign}, ${entry.roleplayName}, ${entry.rankName}`
-    + `  | <@${entry.discordId}> | ${formatShiftDuration(entry.thisShiftMs)}`
-  )).join('\n');
+  return deputies.map((entry) => {
+    const timeLabel = entry.fromMelonly
+      ? formatShiftDuration(entry.thisShiftMs)
+      : 'On Duty role';
+    return (
+      `- ${entry.callsign}, ${entry.roleplayName}, ${entry.rankName}`
+      + `  | <@${entry.discordId}> | ${timeLabel}`
+    );
+  }).join('\n');
 }
 
 function lookupOptions(deputies) {
@@ -756,8 +856,9 @@ async function buildLookupPayload(deputy, {
 }
 
 /**
- * Sync Discord on-duty role from Melonly active shifts + in-game presence.
- * Role is granted when on Melonly shift and in ER:LC; removed when off shift or left game.
+ * Sync Discord on-duty role from Melonly department shifts + in-game presence.
+ * Role is granted when on a Pinellas Melonly shift and in ER:LC; removed when that
+ * Melonly shift ends or they leave game. Pure on-duty role holders (no Melonly) are left alone.
  */
 export async function syncPinellasOnDutyRoles(client, snapshot) {
   const guild = client.guilds.cache.get(PINELLAS_GUILD_ID)
@@ -774,9 +875,14 @@ export async function syncPinellasOnDutyRoles(client, snapshot) {
   await guild.members.fetch().catch(() => null);
 
   const erlcConfigured = Boolean(config.erlcServerKey);
+  const melonlyIds = new Set(
+    (snapshot.deputies || [])
+      .filter((entry) => entry.fromMelonly)
+      .map((entry) => entry.discordId),
+  );
   const shouldHave = new Set(
     (snapshot.deputies || [])
-      .filter((entry) => (erlcConfigured ? entry.inGame : true))
+      .filter((entry) => entry.fromMelonly && (erlcConfigured ? entry.inGame : true))
       .map((entry) => entry.discordId),
   );
 
@@ -798,6 +904,11 @@ export async function syncPinellasOnDutyRoles(client, snapshot) {
   for (const member of guild.members.cache.values()) {
     if (!member.roles.cache.has(PINELLAS_ON_DUTY_ROLE_ID)) continue;
     if (shouldHave.has(member.id)) continue;
+
+    // Keep roles that were never Melonly-managed by this sync (manual / other systems).
+    const melonlyManaged = melonlyIds.has(member.id) || lastMelonlyOnDutyIds.has(member.id);
+    if (!melonlyManaged) continue;
+
     try {
       await member.roles.remove(PINELLAS_ON_DUTY_ROLE_ID, 'Pinellas Melonly shift ended or left game');
       removed += 1;
@@ -806,6 +917,7 @@ export async function syncPinellasOnDutyRoles(client, snapshot) {
     }
   }
 
+  lastMelonlyOnDutyIds = melonlyIds;
   return { added, removed };
 }
 
