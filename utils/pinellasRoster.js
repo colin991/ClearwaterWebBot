@@ -42,6 +42,7 @@ import {
 export const PINELLAS_ROSTER_SHEET = 'PCSO I Main Database';
 export const PINELLAS_CALLSIGN_CHANNEL_ID = '1514659568435859546';
 export const PINELLAS_CALLSIGN_PUBLIC_ID = 'pcs:cs:public';
+export const PINELLAS_CALLSIGN_PUBLIC_MODAL_PREFIX = 'pcs:cs:public-modal:';
 export const PINELLAS_ROSTER_RANGE = `'${PINELLAS_ROSTER_SHEET}'!D11:P1380`;
 export const PINELLAS_ROSTER_SYNC_MS = 60 * 1000;
 export const PINELLAS_INACTIVE_AFTER_MS = 4 * 24 * 60 * 60 * 1000;
@@ -662,9 +663,11 @@ export async function sendPinellasCallsignPanel(channel) {
   });
 }
 
-function callsignModal(ownerId, targetId) {
+function callsignModal(ownerId, targetId, publicFlow = false) {
   return new ModalBuilder()
-    .setCustomId(`${PINELLAS_CALLSIGN_MODAL_PREFIX}${ownerId}:${targetId}`)
+    .setCustomId(publicFlow
+      ? `${PINELLAS_CALLSIGN_PUBLIC_MODAL_PREFIX}${targetId}`
+      : `${PINELLAS_CALLSIGN_MODAL_PREFIX}${ownerId}:${targetId}`)
     .setTitle('PCSO Callsign')
     .addComponents(
       new ActionRowBuilder().addComponents(
@@ -684,21 +687,27 @@ export async function handlePinellasCallsignInteraction(interaction, client) {
   const isButton = interaction.isButton?.();
   const isModal = interaction.isModalSubmit?.();
   const isPublicButton = isButton && interaction.customId === PINELLAS_CALLSIGN_PUBLIC_ID;
+  const isPublicModal = isModal && interaction.customId.startsWith(PINELLAS_CALLSIGN_PUBLIC_MODAL_PREFIX);
+  const publicModalTargetId = isPublicModal
+    ? interaction.customId.slice(PINELLAS_CALLSIGN_PUBLIC_MODAL_PREFIX.length)
+    : null;
   const parsed = isButton
     ? parseInteractionIds(interaction.customId, PINELLAS_CALLSIGN_OPEN_PREFIX)
     : isModal
       ? parseInteractionIds(interaction.customId, PINELLAS_CALLSIGN_MODAL_PREFIX)
       : null;
-  if (!parsed && !isPublicButton) return false;
+  if (!parsed && !isPublicButton && !/^\d{16,22}$/.test(publicModalTargetId || '')) return false;
+  const publicFlow = isPublicButton || isPublicModal;
+  const targetId = isPublicButton ? interaction.user.id : isPublicModal ? publicModalTargetId : parsed.targetId;
 
   if (String(interaction.guildId) !== PINELLAS_GUILD_ID) {
     throw new Error('This callsign panel only works in the PCSO server.');
   }
-  if (!isPublicButton && interaction.user.id !== parsed?.ownerId) {
+  if (!publicFlow && interaction.user.id !== parsed?.ownerId) {
     throw new Error('Only the administrator who opened this panel can use it.');
   }
 
-  if (!isPublicButton) {
+  if (!publicFlow) {
     const issuer = interaction.member
       || await interaction.guild.members.fetch(interaction.user.id);
     requireCallsignAdmin(issuer);
@@ -708,12 +717,13 @@ export async function handlePinellasCallsignInteraction(interaction, client) {
     await interaction.showModal(callsignModal(
       isPublicButton ? interaction.user.id : parsed.ownerId,
       isPublicButton ? interaction.user.id : parsed.targetId,
+      isPublicButton,
     ));
     return true;
   }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const target = await interaction.guild.members.fetch(parsed.targetId).catch(() => null);
+  const target = await interaction.guild.members.fetch(targetId).catch(() => null);
   if (!target) throw new Error('That member is no longer in this server.');
   if (target.user.bot) throw new Error('Bots cannot receive a PCSO callsign.');
 
