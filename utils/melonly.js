@@ -174,14 +174,51 @@ export async function fetchActiveMelonlyShifts(apiKey, { cacheTtlMs = 25_000 } =
 }
 
 /**
- * Recent shifts (same light pull) — enough for current-wave totals without paging history.
+ * Active (open) shifts — prefer Pinellas department scope when available,
+ * otherwise the Melonly server shifts endpoint.
  */
-export async function fetchRecentMelonlyShifts(apiKey, { cacheTtlMs = 25_000 } = {}) {
-  return listRecentShiftPages(apiKey, {
-    limit: 100,
-    maxPages: 2,
-    cacheTtlMs,
-  });
+export async function fetchPinellasDepartmentShifts(apiKey, departmentId, { cacheTtlMs = 25_000 } = {}) {
+  const id = String(departmentId || '').trim();
+  if (!apiKey || !id) return fetchRecentMelonlyShifts(apiKey, { cacheTtlMs });
+
+  const candidates = [
+    { path: `/server/shifts`, query: { page: 1, limit: 100, departmentId: id } },
+    { path: `/departments/${encodeURIComponent(id)}/shifts`, query: { page: 1, limit: 100 } },
+    { path: `/department/${encodeURIComponent(id)}/shifts`, query: { page: 1, limit: 100 } },
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const result = await melonlyFetch(apiKey, candidate.path, {
+        query: candidate.query,
+        cacheTtlMs,
+      });
+      const batch = Array.isArray(result?.data) ? result.data : (Array.isArray(result) ? result : []);
+      if (batch.length || result?.total === 0 || Array.isArray(result?.data)) {
+        // If department filter is accepted, also pull page 2 lightly.
+        let items = [...batch];
+        if ((Number(result?.totalPages) || 1) > 1) {
+          try {
+            const page2 = await melonlyFetch(apiKey, candidate.path, {
+              query: { ...candidate.query, page: 2 },
+              cacheTtlMs,
+            });
+            const more = Array.isArray(page2?.data) ? page2.data : [];
+            items = items.concat(more);
+          } catch {
+            // one page is enough
+          }
+        }
+        return items;
+      }
+    } catch (error) {
+      if (error?.status === 404 || error?.status === 400) continue;
+      if (error?.status === 429) throw error;
+      logger.warn(`Melonly department shifts probe failed (${candidate.path}): ${error?.message || error}`);
+    }
+  }
+
+  return fetchRecentMelonlyShifts(apiKey, { cacheTtlMs });
 }
 
 /** @deprecated Use fetchRecentMelonlyShifts — full history walks cause Melonly 429s. */

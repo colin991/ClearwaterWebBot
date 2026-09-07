@@ -22,7 +22,8 @@ import { getIdentityCache } from './identityStore.js';
 import { logger } from './logger.js';
 import {
   fetchMelonlyCadForDiscord,
-  fetchRecentMelonlyShifts,
+  fetchMelonlyMember,
+  fetchPinellasDepartmentShifts,
   formatCadAttachedCalls,
   formatCadStatus,
   isMelonlyRateLimited,
@@ -33,7 +34,7 @@ import {
   getHighestPinellasRank,
   PINELLAS_RANKS,
 } from './pinellasPromote.js';
-import { PINELLAS_EMPLOYEE_WELCOME_ROLE_ID, PINELLAS_GUILD_ID } from './pinellasServer.js';
+import { PINELLAS_GUILD_ID } from './pinellasServer.js';
 
 export const PINELLAS_SHIFT_PANEL_CHANNEL_ID = '1546298062568165396';
 export const PINELLAS_ON_DUTY_ROLE_ID = '1514462780575715418';
@@ -68,7 +69,10 @@ const REPORT_OPTIONS = Object.freeze([
   { label: 'Warrant Log', value: 'warrant' },
 ]);
 
-const SERGEANT_INDEX = PINELLAS_RANKS.findIndex((rank) => rank.name === 'Sergeant');
+const CORPORAL_INDEX = PINELLAS_RANKS.findIndex((rank) => rank.name === 'Corporal');
+
+/** Melonly department id for Pinellas County Sheriff's Office (dashboard). */
+export const PINELLAS_MELONLY_DEPARTMENT_ID = '7470323914464301056';
 
 /** @type {ReturnType<typeof setInterval> | null} */
 let refreshTimer = null;
@@ -105,20 +109,43 @@ async function rememberMemberDiscord(memberId, discordId) {
 }
 
 /**
- * Main Melonly uses Discord snowflakes as shift.memberId — no extra Melonly member calls.
+ * Resolve Discord ID for a Melonly shift member.
+ * Prefer snowflake memberIds; otherwise one cached Melonly member lookup.
  */
-async function resolveDiscordIdForShift(shift) {
+async function resolveDiscordIdForShift(apiKey, shift) {
   const memberId = String(shift?.memberId || '');
   if (!memberId) return null;
 
   if (memberDiscordCache.has(memberId)) return memberDiscordCache.get(memberId);
 
-  const discordId = resolveMelonlyDiscordId(shift, memberId);
-  if (discordId) {
-    await rememberMemberDiscord(memberId, discordId);
-    return discordId;
+  const direct = resolveMelonlyDiscordId(shift, memberId);
+  if (direct) {
+    await rememberMemberDiscord(memberId, direct);
+    return direct;
+  }
+
+  // Department Melonly member ids are often not Discord snowflakes.
+  try {
+    const melonlyMember = await fetchMelonlyMember(apiKey, memberId);
+    const discordId = resolveMelonlyDiscordId(melonlyMember, null);
+    if (discordId) {
+      await rememberMemberDiscord(memberId, discordId);
+      return discordId;
+    }
+  } catch (error) {
+    if (error?.status !== 404) {
+      logger.warn(`Melonly member lookup failed for ${memberId}: ${error?.message || error}`);
+    }
   }
   return null;
+}
+
+function isSupervisorRank(rank) {
+  if (!rank) return false;
+  const index = PINELLAS_RANKS.findIndex((entry) => entry.roleId === rank.roleId);
+  if (index < 0) return false;
+  // Corporal and above (higher ranks have lower index).
+  return CORPORAL_INDEX < 0 ? false : index <= CORPORAL_INDEX;
 }
 
 async function readStore() {
@@ -176,14 +203,6 @@ export function parseDeputyNickname(nickname) {
     return { callsign: parts[0], roleplayName: parts.slice(1).join(' | ') };
   }
   return { callsign: '—', roleplayName: raw };
-}
-
-function isSupervisorRank(rank) {
-  if (!rank) return false;
-  const index = PINELLAS_RANKS.findIndex((entry) => entry.roleId === rank.roleId);
-  if (index < 0) return false;
-  // Sergeant and above (higher ranks have lower index).
-  return SERGEANT_INDEX < 0 ? false : index <= SERGEANT_INDEX;
 }
 
 function memberVoiceChannel(guild, userId) {
@@ -275,15 +294,6 @@ function resolveDeputyIdentity(pinellasMember, clearwaterMember, player) {
   return { callsign, roleplayName };
 }
 
-function isPinellasDeputy(member) {
-  if (!member || member.user?.bot) return false;
-  return Boolean(
-    member.roles.cache.has(PINELLAS_EMPLOYEE_WELCOME_ROLE_ID)
-    || member.roles.cache.has(PINELLAS_ON_DUTY_ROLE_ID)
-    || getHighestPinellasRank(member),
-  );
-}
-
 /**
  * Build enriched on-duty deputy rows from main Melonly + Discord + ER:LC.
  */
@@ -297,10 +307,11 @@ export async function collectOnDutyDeputies(client, {
 
   await loadMemberDiscordMap();
 
-  // One light Melonly pull (cached ~25s). Active list is filtered client-side.
-  const recentShifts = await fetchRecentMelonlyShifts(apiKey, { cacheTtlMs: 25_000 });
+  // One light Melonly pull (cached ~25s), scoped to the Pinellas department when possible.
+  const recentShifts = await fetchPinellasDepartmentShifts(apiKey, PINELLAS_MELONLY_DEPARTMENT_ID, {
+    cacheTtlMs: 25_000,
+  });
   const activeShifts = recentShifts.filter((shift) => {
-    // fetchActiveMelonlyShifts is equivalent; keep one network path.
     const ended = shift?.endedAt;
     return ended == null || ended === '' || ended === 0 || ended === '0';
   });
@@ -328,14 +339,14 @@ export async function collectOnDutyDeputies(client, {
     const memberId = String(shift.memberId || '');
     if (!memberId) continue;
 
-    const discordId = await resolveDiscordIdForShift(shift);
+    const discordId = await resolveDiscordIdForShift(apiKey, shift);
     if (!discordId) continue;
     if (byDiscord.has(discordId)) continue;
 
     const pinellasMember = pinellas?.members?.cache?.get(discordId)
       || await pinellas?.members?.fetch(discordId).catch(() => null);
-    // Pinellas panel: only PCSO deputies (main Melonly includes all departments).
-    if (!pinellasMember || !isPinellasDeputy(pinellasMember)) continue;
+    // Prefer PCSO staff; still show Pinellas members on Melonly department shift.
+    if (!pinellasMember) continue;
 
     const clearwaterMember = clearwater?.members?.cache?.get(discordId)
       || vcGuild?.members?.cache?.get(discordId)
