@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-07-pinellas-application-review-role",
+      "title": "PCSO application reviewer role access",
+      "summary": "Members with the designated PCSO employee role can now approve or deny entry applications even when they do not have Administrator or Manage Roles permissions.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-07T13:05:00.000Z"
+    },
+    {
       "id": "2026-09-07-pinellas-callsign-roster-sync",
       "title": "PCSO callsign and roster sync",
       "summary": "Added the Administrator-only -callsign panel for assigning rank-based callsigns, updating PCSO roster records and nicknames, and synchronizing Melonly LOA, suspension, and infraction status every two minutes without overwriting Appointment / Notes.",

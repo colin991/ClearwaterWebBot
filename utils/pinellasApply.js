@@ -16,7 +16,10 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PINELLAS_GUILD_ID } from './pinellasServer.js';
+import {
+  PINELLAS_EMPLOYEE_WELCOME_ROLE_ID,
+  PINELLAS_GUILD_ID,
+} from './pinellasServer.js';
 import { logger } from './logger.js';
 
 export const PINELLAS_APPLY_CHANNEL_ID = '1514443793607295058';
@@ -43,6 +46,21 @@ const ANSWER_TIMEOUT_MS = 20 * 60 * 1000;
 
 /** @type {Map<string, { applicationId: string, index: number, answers: string[], updatedAt: number }>} */
 const activeSessions = new Map();
+
+function memberHasRole(member, roleId) {
+  if (member?.roles?.cache?.has?.(roleId)) return true;
+  if (Array.isArray(member?.roles)) return member.roles.map(String).includes(roleId);
+  return false;
+}
+
+/** Review access comes from staff permissions or the designated PCSO employee role. */
+export function memberCanReviewPinellasApplications(member, permissions = member?.permissions) {
+  return Boolean(
+    memberHasRole(member, PINELLAS_EMPLOYEE_WELCOME_ROLE_ID)
+    || permissions?.has?.(PermissionFlagsBits.Administrator)
+    || permissions?.has?.(PermissionFlagsBits.ManageRoles),
+  );
+}
 
 export const PINELLAS_APPLY_QUESTIONS = Object.freeze([
   { key: 'roblox', prompt: '**1.** What is your Roblox username?', writing: false },
@@ -467,12 +485,9 @@ export async function handlePinellasApplyInteraction(interaction) {
       (approve ? PINELLAS_APPLY_APPROVE_PREFIX : PINELLAS_APPLY_DENY_PREFIX).length,
     );
 
-    if (
-      !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)
-      && !interaction.memberPermissions?.has(PermissionFlagsBits.ManageRoles)
-    ) {
+    if (!memberCanReviewPinellasApplications(interaction.member, interaction.memberPermissions)) {
       await interaction.reply({
-        content: 'You need **Administrator** or **Manage Roles** to review applications.',
+        content: `You need **Administrator**, **Manage Roles**, or <@&${PINELLAS_EMPLOYEE_WELCOME_ROLE_ID}> to review applications.`,
         flags: MessageFlags.Ephemeral,
       }).catch(() => null);
       return true;
