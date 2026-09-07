@@ -41,6 +41,7 @@ import {
 
 export const PINELLAS_ROSTER_SHEET = 'PCSO I Main Database';
 export const PINELLAS_CALLSIGN_CHANNEL_ID = '1514659568435859546';
+export const PINELLAS_CALLSIGN_LOG_CHANNEL_ID = '1546668194171981874';
 export const PINELLAS_CALLSIGN_PUBLIC_ID = 'pcs:cs:public';
 export const PINELLAS_CALLSIGN_PUBLIC_MODAL_PREFIX = 'pcs:cs:public-modal:';
 export const PINELLAS_ROSTER_RANGE = `'${PINELLAS_ROSTER_SHEET}'!D11:P1380`;
@@ -81,6 +82,26 @@ function isPinellasDiscordStaff(member) {
 
 function rosterCell(column, rowNumber) {
   return `'${PINELLAS_ROSTER_SHEET}'!${column}${rowNumber}`;
+}
+
+async function logPinellasCallsignDatabaseChange(client, {
+  title,
+  description,
+  color = 0x5865f2,
+}) {
+  const channel = client.channels.cache.get(PINELLAS_CALLSIGN_LOG_CHANNEL_ID)
+    || await client.channels.fetch(PINELLAS_CALLSIGN_LOG_CHANNEL_ID).catch(() => null);
+  if (!channel?.isTextBased?.()) return;
+  await channel.send({
+    embeds: [new EmbedBuilder()
+      .setTitle(title)
+      .setDescription(description)
+      .setColor(color)
+      .setTimestamp()],
+    allowedMentions: { parse: [] },
+  }).catch((error) => {
+    logger.warn(`PCSO callsign database log failed: ${error?.message || error}`);
+  });
 }
 
 export function parsePinellasRosterRows(values = []) {
@@ -437,6 +458,12 @@ export async function assignPinellasCallsign(client, member, roleplayName) {
     );
     if (state.activityStateChanged) await writeActivityState(state.activityState);
 
+    await logPinellasCallsignDatabaseChange(client, {
+      title: 'Callsign database updated',
+      description: `<@${member.id}> assigned **${nickname}** to the **${rank.name}** roster spot (row ${target.rowNumber}).`,
+      color: 0x3ba55d,
+    });
+
     return {
       callsign: target.callsign,
       rank: rank.name,
@@ -479,6 +506,11 @@ export async function removePinellasCallsign(client, member, { resetNickname = f
         { range: rosterCell('N', row.rowNumber), value: 'N/A' },
         { range: rosterCell('P', row.rowNumber), value: 'Clean Record' },
       ]);
+      await logPinellasCallsignDatabaseChange(client, {
+        title: 'Callsign database entry removed',
+        description: `Removed <@${member.id}> from the **${row.rank}** roster spot (row ${row.rowNumber}).`,
+        color: 0xed4245,
+      });
     }
     if (resetNickname) await member.setNickname(null, 'PCSO callsign reset').catch(() => {});
     return { rowNumber: row?.rowNumber || null, removed: Boolean(row) };
@@ -519,6 +551,11 @@ export async function resetPinellasCallsignRoster(client, guild) {
     await member.setNickname(null, 'PCSO callsign database reset').catch(() => {});
     await member.user.send(`The PCSO callsign database was reset. Click here to set your callsign again: ${updateUrl}`).then(() => { dmsSent += 1; }).catch(() => {});
   }
+  await logPinellasCallsignDatabaseChange(client, {
+    title: 'Callsign database reset',
+    description: `An administrator reset ${updates.length / 5} roster row(s), reset nicknames, and sent the callsign panel link to ${dmsSent} member(s).`,
+    color: 0xed4245,
+  });
   return { rowsReset: updates.length / 5, dmsSent };
 }
 
