@@ -29,6 +29,7 @@ const CONFETTI_EMOJI = '<:pc_confetti:1514355064804872262>';
  * @type {ReadonlyArray<{ name: string, roleId: string }>}
  */
 export const PINELLAS_RANKS = Object.freeze([
+  { name: 'Superintendent', roleId: '1531488529505456168' },
   { name: 'Sheriff', roleId: '1514323734100574361' },
   { name: 'Undersheriff', roleId: '1514324116662915112' },
   { name: 'Assistant Sheriff', roleId: '1514324416375423098' },
