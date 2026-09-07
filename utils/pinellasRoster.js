@@ -1,12 +1,19 @@
 import {
+  AttachmentBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ContainerBuilder,
   EmbedBuilder,
   Events,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
   MessageFlags,
   ModalBuilder,
   PermissionFlagsBits,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
+  TextDisplayBuilder,
   TextInputBuilder,
   TextInputStyle,
 } from 'discord.js';
@@ -33,6 +40,8 @@ import {
 } from './pinellasShiftPanel.js';
 
 export const PINELLAS_ROSTER_SHEET = 'PCSO I Main Database';
+export const PINELLAS_CALLSIGN_CHANNEL_ID = '1514659568435859546';
+export const PINELLAS_CALLSIGN_PUBLIC_ID = 'pcs:cs:public';
 export const PINELLAS_ROSTER_RANGE = `'${PINELLAS_ROSTER_SHEET}'!D11:P1380`;
 export const PINELLAS_ROSTER_SYNC_MS = 60 * 1000;
 export const PINELLAS_INACTIVE_AFTER_MS = 4 * 24 * 60 * 60 * 1000;
@@ -440,6 +449,78 @@ export async function assignPinellasCallsign(client, member, roleplayName) {
   });
 }
 
+export async function refreshPinellasCallsignAfterRankChange(client, member) {
+  const nickname = text(member?.nickname);
+  const roleplayName = nickname.includes('|')
+    ? nickname.split('|').slice(1).join('|').trim()
+    : '';
+  if (!roleplayName) return null;
+  return assignPinellasCallsign(client, member, roleplayName).catch((error) => {
+    logger.warn(`PCSO callsign: could not assign a new rank callsign for ${member.id}: ${error?.message || error}`);
+    return null;
+  });
+}
+
+export async function removePinellasCallsign(client, member, { resetNickname = false } = {}) {
+  assertRosterConfigured(client);
+  return serializeRosterWork(async () => {
+    const values = await readGoogleSheetValues(
+      client.config,
+      client.config.pcsoRosterSpreadsheetId,
+      PINELLAS_ROSTER_RANGE,
+    );
+    const row = parsePinellasRosterRows(values).find((entry) => entry.discordId === member.id);
+    if (row) {
+      await batchUpdateGoogleSheetValues(client.config, client.config.pcsoRosterSpreadsheetId, [
+        { range: rosterCell('H', row.rowNumber), value: '' },
+        { range: rosterCell('J', row.rowNumber), value: '' },
+        { range: rosterCell('L', row.rowNumber), value: '' },
+        { range: rosterCell('N', row.rowNumber), value: 'N/A' },
+        { range: rosterCell('P', row.rowNumber), value: 'Clean Record' },
+      ]);
+    }
+    if (resetNickname) await member.setNickname(null, 'PCSO callsign reset').catch(() => {});
+    return { rowNumber: row?.rowNumber || null, removed: Boolean(row) };
+  });
+}
+
+export async function resetPinellasCallsignRoster(client, guild) {
+  assertRosterConfigured(client);
+  const values = await readGoogleSheetValues(
+    client.config,
+    client.config.pcsoRosterSpreadsheetId,
+    PINELLAS_ROSTER_RANGE,
+  );
+  const rows = parsePinellasRosterRows(values);
+  const updates = [];
+  const members = [];
+  for (const row of rows) {
+    if (row.roleplayName || row.discordId || row.activity !== 'N/A' || row.punishment !== 'Clean Record') {
+      updates.push(
+        { range: rosterCell('H', row.rowNumber), value: '' },
+        { range: rosterCell('J', row.rowNumber), value: '' },
+        { range: rosterCell('L', row.rowNumber), value: '' },
+        { range: rosterCell('N', row.rowNumber), value: 'N/A' },
+        { range: rosterCell('P', row.rowNumber), value: 'Clean Record' },
+      );
+    }
+    if (/^\d{16,22}$/.test(row.discordId)) {
+      const member = await guild.members.fetch(row.discordId).catch(() => null);
+      if (member) members.push(member);
+    }
+  }
+  if (updates.length) {
+    await batchUpdateGoogleSheetValues(client.config, client.config.pcsoRosterSpreadsheetId, updates);
+  }
+  const updateUrl = `https://discord.com/channels/${PINELLAS_GUILD_ID}/${PINELLAS_CALLSIGN_CHANNEL_ID}`;
+  let dmsSent = 0;
+  for (const member of members) {
+    await member.setNickname(null, 'PCSO callsign database reset').catch(() => {});
+    await member.user.send(`The PCSO callsign database was reset. Click here to set your callsign again: ${updateUrl}`).then(() => { dmsSent += 1; }).catch(() => {});
+  }
+  return { rowsReset: updates.length / 5, dmsSent };
+}
+
 export async function syncPinellasRoster(client) {
   assertRosterConfigured(client);
   return serializeRosterWork(async () => {
@@ -448,21 +529,26 @@ export async function syncPinellasRoster(client) {
     let members = 0;
     const guild = client.guilds.cache.get(PINELLAS_GUILD_ID)
       || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
-    let roleStateAvailable = false;
-    if (guild) {
-      try {
-        await guild.members.fetch();
-        roleStateAvailable = true;
-      } catch (error) {
-        logger.warn(`PCSO roster: could not refresh member roles; preserving roster assignments (${error?.message || error}).`);
-      }
-    }
+    // Fetch each roster member directly so role changes are current even when
+    // the bot cannot perform a full guild-member refresh.
+    const roleStateAvailable = Boolean(guild);
+    let removed = 0;
 
     for (const row of state.rows) {
       if (!/^\d{16,22}$/.test(row.discordId)) continue;
       members += 1;
       if (roleStateAvailable) {
-        const member = guild.members.cache.get(row.discordId);
+        let member = null;
+        try {
+          member = await guild.members.fetch(row.discordId);
+        } catch (error) {
+          // Discord error 10007 means the member left. Other failures are
+          // transient and should not erase a valid roster assignment.
+          if (Number(error?.code) !== 10007) {
+            logger.warn(`PCSO roster: could not refresh member ${row.discordId}; preserving assignment (${error?.message || error}).`);
+            continue;
+          }
+        }
         const rank = getHighestPinellasRank(member);
         if (!rank || rankKey(rank.name) !== rankKey(row.rank)) {
           updates.push(
@@ -471,6 +557,7 @@ export async function syncPinellasRoster(client) {
             { range: rosterCell('N', row.rowNumber), value: 'N/A' },
             { range: rosterCell('P', row.rowNumber), value: 'Clean Record' },
           );
+          removed += 1;
           continue;
         }
       }
@@ -489,7 +576,7 @@ export async function syncPinellasRoster(client) {
         client.config.pcsoRosterSpreadsheetId,
         updates,
       );
-      logger.info(`PCSO roster: synchronized ${updates.length} roster cell(s) across ${members} members.`);
+      logger.info(`PCSO roster: synchronized ${updates.length} roster cell(s) across ${members} members; cleared ${removed} missing or mismatched rank assignment(s).`);
     }
     if (state.activityStateChanged) await writeActivityState(state.activityState);
     return { members, cellsUpdated: updates.length };
@@ -534,6 +621,47 @@ export function buildPinellasCallsignPrompt(ownerId, target) {
   };
 }
 
+export async function sendPinellasCallsignPanel(channel) {
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const files = [];
+  const container = new ContainerBuilder().clearAccentColor();
+  for (const [fileName, attachmentName] of [
+    ['pcso-application-banner.png', 'pcso-application-banner.png'],
+    ['pcso-application-footer.png', 'pcso-application-footer.png'],
+  ]) {
+    try {
+      files.push(new AttachmentBuilder(await readFile(path.join(root, 'assets', fileName)), { name: attachmentName }));
+      container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(
+        new MediaGalleryItemBuilder().setURL(`attachment://${attachmentName}`),
+      ));
+    } catch (error) {
+      logger.warn(`PCSO callsign panel: ${fileName} unavailable (${error?.message || error}).`);
+    }
+    if (fileName === 'pcso-application-banner.png') {
+      container.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large));
+    }
+  }
+  container
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent([
+      '# <:Save:1517217415098798280> Callsign Request',
+      '> Click **Set Name** to set your roleplay name. Click it again later to change your name and receive your callsign.',
+    ].join('\n')))
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large))
+    .addActionRowComponents(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(PINELLAS_CALLSIGN_PUBLIC_ID)
+        .setLabel('Set Name')
+        .setEmoji({ id: '1517217487165460591', name: 'rightarrow' })
+        .setStyle(ButtonStyle.Secondary),
+    ));
+  return channel.send({
+    components: [container],
+    flags: MessageFlags.IsComponentsV2,
+    files,
+    allowedMentions: { parse: [] },
+  });
+}
+
 function callsignModal(ownerId, targetId) {
   return new ModalBuilder()
     .setCustomId(`${PINELLAS_CALLSIGN_MODAL_PREFIX}${ownerId}:${targetId}`)
@@ -555,26 +683,32 @@ function callsignModal(ownerId, targetId) {
 export async function handlePinellasCallsignInteraction(interaction, client) {
   const isButton = interaction.isButton?.();
   const isModal = interaction.isModalSubmit?.();
+  const isPublicButton = isButton && interaction.customId === PINELLAS_CALLSIGN_PUBLIC_ID;
   const parsed = isButton
     ? parseInteractionIds(interaction.customId, PINELLAS_CALLSIGN_OPEN_PREFIX)
     : isModal
       ? parseInteractionIds(interaction.customId, PINELLAS_CALLSIGN_MODAL_PREFIX)
       : null;
-  if (!parsed) return false;
+  if (!parsed && !isPublicButton) return false;
 
   if (String(interaction.guildId) !== PINELLAS_GUILD_ID) {
     throw new Error('This callsign panel only works in the PCSO server.');
   }
-  if (interaction.user.id !== parsed.ownerId) {
+  if (!isPublicButton && interaction.user.id !== parsed?.ownerId) {
     throw new Error('Only the administrator who opened this panel can use it.');
   }
 
-  const issuer = interaction.member
-    || await interaction.guild.members.fetch(interaction.user.id);
-  requireCallsignAdmin(issuer);
+  if (!isPublicButton) {
+    const issuer = interaction.member
+      || await interaction.guild.members.fetch(interaction.user.id);
+    requireCallsignAdmin(issuer);
+  }
 
   if (isButton) {
-    await interaction.showModal(callsignModal(parsed.ownerId, parsed.targetId));
+    await interaction.showModal(callsignModal(
+      isPublicButton ? interaction.user.id : parsed.ownerId,
+      isPublicButton ? interaction.user.id : parsed.targetId,
+    ));
     return true;
   }
 
