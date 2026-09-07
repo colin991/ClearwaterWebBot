@@ -87,6 +87,7 @@ export async function sendPinellasPromotionAnnouncement({
   guild,
   target,
   rank,
+  callsign = null,
   reason,
   issuer,
 }) {
@@ -120,6 +121,7 @@ export async function sendPinellasPromotionAnnouncement({
         `# ${CONFETTI_EMOJI} Promotion`,
         '',
         `> Congrats, <@${target.id}>! We would like to thank you for your hard work, professionalism, dedication, and more. With this, you've been promoted to **${rank.name}**!`,
+        callsign ? `**New callsign:** ${callsign}` : '**New callsign:** Set your name in the callsign panel to receive one.',
         '',
         `**Reason:** ${reason}`,
         `-# **Issued By:** <@${issuer.id}>`,
@@ -246,6 +248,10 @@ export async function promotePinellasMember({
     guild,
     target: targetMember.user,
     rank,
+    callsign: await (async () => {
+      const { refreshPinellasCallsignAfterRankChange } = await import('./pinellasRoster.js');
+      return refreshPinellasCallsignAfterRankChange(guild.client, targetMember);
+    })(),
     reason: cleanReason,
     issuer: issuerMember.user,
   });
