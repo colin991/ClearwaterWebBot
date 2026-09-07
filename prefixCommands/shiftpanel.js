@@ -32,7 +32,7 @@ export default {
         `Posted/refreshed in <#${result?.message?.channelId || '1546298062568165396'}>.`,
         `On duty shown: **${count}** (Melonly active: **${active}**`
           + `${extras.length ? `, ${extras.join(', ')}` : ''})`,
-        '-# Shows Pinellas department Melonly shifts only.',
+        '-# Shows Pinellas Melonly department shifts (or Pinellas Discord staff when Melonly does not tag departments).',
         '-# Removes the on-duty role when Melonly department shift ends.',
         '-# Updates automatically every 30 seconds from Melonly.',
       ].join('\n'),

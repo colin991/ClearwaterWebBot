@@ -359,14 +359,22 @@ export function isPinellasDepartmentShift(shift) {
   return shiftDepartmentIds(shift).includes(PINELLAS_MELONLY_DEPARTMENT_ID);
 }
 
-/** Pinellas Discord staff (employee / rank / on-duty). */
+/** Pinellas Discord staff via employee role or PCSO rank (not the on-duty role). */
 export function isPinellasDiscordStaff(member) {
   if (!member || member.user?.bot) return false;
   return Boolean(
-    member.roles.cache.has(PINELLAS_ON_DUTY_ROLE_ID)
-    || member.roles.cache.has(PINELLAS_EMPLOYEE_WELCOME_ROLE_ID)
+    member.roles.cache.has(PINELLAS_EMPLOYEE_WELCOME_ROLE_ID)
     || getHighestPinellasRank(member),
   );
+}
+
+/**
+ * Whether Melonly is labeling shifts with the Pinellas department id.
+ * Note: every Melonly shift has *some* serverId (usually the main panel), so we
+ * must look specifically for the Pinellas department id — not "any serverId".
+ */
+export function melonlyLabelsPinellasDepartment(shifts = []) {
+  return (Array.isArray(shifts) ? shifts : []).some(isPinellasDepartmentShift);
 }
 
 /**
@@ -511,7 +519,9 @@ export async function collectOnDutyDeputies(client, {
   // Main Melonly API (department Melonly has no API tokens).
   const recentShifts = await fetchRecentMelonlyShifts(apiKey, { cacheTtlMs: 25_000, maxPages: 3 });
   const activeShifts = recentShifts.filter(isActiveMelonlyShift);
-  const melonlyTagsDepartments = recentShifts.some((shift) => shiftDepartmentIds(shift).length > 0);
+  // Only treat Melonly as department-tagged when the Pinellas department id appears.
+  // Plain serverId on every shift is the main panel id and must not disable the staff fallback.
+  const labelsPinellasDept = melonlyLabelsPinellasDepartment(recentShifts);
 
   const pinellas = client.guilds.cache.get(PINELLAS_GUILD_ID)
     || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
@@ -637,11 +647,17 @@ export async function collectOnDutyDeputies(client, {
       || await vcGuild?.members?.fetch(discordId).catch(() => null);
 
     const deptShift = isPinellasDepartmentShift(shift);
-    // When Melonly does not tag departments at all, treat Pinellas Discord staff
-    // on an active Melonly shift as department members (never dump all main staff).
-    const staffProxy = !melonlyTagsDepartments && isPinellasDiscordStaff(pinellasMember);
+    // When Melonly never labels Pinellas department shifts, treat Melonly-active
+    // Pinellas Discord staff (employee/rank) as department members.
+    // Do NOT use the on-duty Discord role as an inclusion source.
+    const staffProxy = !labelsPinellasDept && isPinellasDiscordStaff(pinellasMember);
 
-    if (!deptShift && !staffProxy) {
+    if (labelsPinellasDept) {
+      if (!deptShift) {
+        skippedMainStaff += 1;
+        continue;
+      }
+    } else if (!staffProxy) {
       skippedMainStaff += 1;
       continue;
     }
@@ -662,11 +678,15 @@ export async function collectOnDutyDeputies(client, {
     return left.localeCompare(right);
   });
 
+  const sampleServerIds = [...new Set(
+    activeShifts.flatMap((shift) => shiftDepartmentIds(shift)).slice(0, 8),
+  )];
+
   logger.info(
     `Pinellas shift panel Melonly: recent=${recentShifts.length} active=${activeShifts.length} `
     + `shown=${deputies.length} unresolved=${unresolved} skippedMainStaff=${skippedMainStaff} `
-    + `skippedOtherDept=${skippedOtherDept} tags=${melonlyTagsDepartments} `
-    + `linked=${memberDiscordCache.size}`,
+    + `skippedOtherDept=${skippedOtherDept} pinellasTags=${labelsPinellasDept} `
+    + `serverIds=[${sampleServerIds.join(',')}] linked=${memberDiscordCache.size}`,
   );
 
   const snapshot = {
