@@ -6,19 +6,99 @@ const ROBLOX_CLOUD = 'https://apis.roblox.com/cloud/v2';
 const TRANSIENT_HTTP = new Set([408, 425, 429, 500, 502, 503, 504]);
 /** How long to pause sync after Roblox says the API-key account is moderated. */
 const MODERATED_PAUSE_MS = 6 * 60 * 60 * 1000;
+/** Avoid Discord gateway opcode 8 (Request Guild Members) every minute. */
+const MEMBER_FETCH_TTL_MS = 5 * 60 * 1000;
 let lastEmptyRequestDiagnostic = 0;
 let lastTransientDiscordAlertAt = 0;
 let moderatedUntil = 0;
+let lastMemberFetchAt = 0;
+let memberFetchCooldownUntil = 0;
 const robloxUsernameCache = new Map();
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Discord.js: "Request with opcode 8 was rate limited. Retry after N seconds." */
+function isDiscordMemberFetchRateLimit(error) {
+  const message = String(error?.message || error || '');
+  return /opcode\s*8/i.test(message) && /rate limited/i.test(message);
+}
+
+function discordRetryAfterMs(error) {
+  const message = String(error?.message || error || '');
+  const match = message.match(/Retry after\s+([\d.]+)\s*seconds?/i);
+  if (match) {
+    const seconds = Number(match[1]);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return Math.min(120_000, Math.ceil(seconds * 1000) + 750);
+    }
+  }
+  if (Number.isFinite(error?.retryAfter)) {
+    return Math.min(120_000, Math.ceil(Number(error.retryAfter) * 1000) + 750);
+  }
+  return 30_000;
+}
+
+/** Stable key so changing "Retry after 29.048" does not spam Discord alerts. */
+function errorFingerprint(message) {
+  return String(message || '')
+    .replace(/Retry after\s+[\d.]+\s*seconds?/gi, 'Retry after N seconds')
+    .replace(/\b\d+(\.\d+)?\s*ms\b/gi, 'Nms')
+    .slice(0, 400);
+}
+
 function isTransientFetchError(error) {
   const message = String(error?.message || error || '');
+  if (isDiscordMemberFetchRateLimit(error)) return true;
   if (/failed \((408|425|429|500|502|503|504)\)/i.test(message)) return true;
   if (/TimeoutError|AbortError|network|fetch failed|ECONNRESET|ETIMEDOUT|UND_ERR/i.test(message)) return true;
   if (/Request Context Failure/i.test(message)) return true;
+  if (/rate limited/i.test(message)) return true;
   return error?.name === 'TimeoutError' || error?.name === 'AbortError';
+}
+
+/**
+ * Fetch guild members, but reuse Discord's cache most of the time.
+ * Opcode 8 is heavily rate-limited; falling back to cache keeps sync running.
+ */
+async function ensureGuildMembers(guild) {
+  const cacheSize = guild.members.cache.size;
+  const now = Date.now();
+  const fresh = now - lastMemberFetchAt < MEMBER_FETCH_TTL_MS;
+  const coolingDown = now < memberFetchCooldownUntil;
+
+  if (cacheSize > 1 && (fresh || coolingDown)) {
+    return guild.members.cache;
+  }
+
+  try {
+    await guild.members.fetch();
+    lastMemberFetchAt = Date.now();
+    memberFetchCooldownUntil = 0;
+  } catch (error) {
+    if (!isDiscordMemberFetchRateLimit(error)) throw error;
+
+    const waitMs = discordRetryAfterMs(error);
+    memberFetchCooldownUntil = Date.now() + waitMs;
+
+    if (cacheSize > 1) {
+      logger.warn(
+        `Discord member fetch rate-limited (opcode 8); using cached roster `
+        + `(${cacheSize} members). Next full fetch in ~${Math.ceil(waitMs / 1000)}s.`,
+      );
+      return guild.members.cache;
+    }
+
+    logger.warn(
+      `Discord member fetch rate-limited (opcode 8) with empty cache; `
+      + `waiting ${Math.ceil(waitMs / 1000)}s then retrying once.`,
+    );
+    await sleep(waitMs);
+    await guild.members.fetch();
+    lastMemberFetchAt = Date.now();
+    memberFetchCooldownUntil = 0;
+  }
+
+  return guild.members.cache;
 }
 
 function isRobloxModeratedError(error) {
@@ -143,7 +223,7 @@ async function robloxUsername(robloxId) {
 }
 
 async function eligibleRobloxIds(guild, allowedRoleIds) {
-  await guild.members.fetch();
+  await ensureGuildMembers(guild);
   const cache = await getIdentityCache();
   const allowed = new Map();
   const nicknameFallbacks = [];
@@ -296,15 +376,22 @@ export function startRobloxGroupSync(client, config) {
     } catch (error) {
       logger.error('Roblox group join-request sync failed', error);
       const message = String(error?.message || 'Unknown error');
+      const fingerprint = errorFingerprint(message);
       const moderated = isRobloxModeratedError(error);
+      const memberRateLimit = isDiscordMemberFetchRateLimit(error);
       const transient = !moderated && isTransientFetchError(error);
       const now = Date.now();
+
+      if (memberRateLimit) {
+        nextDelayMs = Math.max(60_000, discordRetryAfterMs(error));
+        memberFetchCooldownUntil = now + nextDelayMs;
+      }
 
       if (moderated) {
         moderatedUntil = now + MODERATED_PAUSE_MS;
         nextDelayMs = MODERATED_PAUSE_MS;
-        const shouldAlert = message !== lastError;
-        lastError = message;
+        const shouldAlert = fingerprint !== lastError;
+        lastError = fingerprint;
         if (shouldAlert) {
           const resumeAt = Math.floor(moderatedUntil / 1000);
           await sendGroupLog(
@@ -324,17 +411,19 @@ export function startRobloxGroupSync(client, config) {
           );
         }
       } else {
-        // Transient Roblox outages (502/503/etc.) often clear on their own — only
+        // Transient Discord/Roblox outages often clear on their own — only
         // ping Discord at most once per 30 minutes for the same class of failure.
         const shouldAlert = transient
-          ? (message !== lastError || now - lastTransientDiscordAlertAt > 30 * 60 * 1000)
-          : message !== lastError;
-        lastError = message;
+          ? (fingerprint !== lastError || now - lastTransientDiscordAlertAt > 30 * 60 * 1000)
+          : fingerprint !== lastError;
+        lastError = fingerprint;
         if (shouldAlert) {
           if (transient) lastTransientDiscordAlertAt = now;
-          const prefix = transient
-            ? 'Roblox had a temporary outage and the sync will retry automatically.\n'
-            : 'The group sync could not run.\n';
+          const prefix = memberRateLimit
+            ? 'Discord rate-limited a member roster refresh (opcode 8). Sync will retry automatically and reuse the cached roster when possible.\n'
+            : transient
+              ? 'Roblox had a temporary outage and the sync will retry automatically.\n'
+              : 'The group sync could not run.\n';
           await sendGroupLog(
             client,
             config,
