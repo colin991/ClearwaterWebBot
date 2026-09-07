@@ -2,6 +2,20 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-07-pinellas-roster-cleanup",
+      "title": "PCSO roster cleanup checks",
+      "summary": "The PCSO roster now checks member rank roles every minute, removes assignments when a member no longer has the recorded rank, and expires warning or strike history after four days.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-07T18:00:00.000Z"
+    },
+    {
+      "id": "2026-09-07-pinellas-callsign-sheet-fix",
+      "title": "PCSO callsigns update the live roster",
+      "summary": "The -callsign roster workflow now reads and writes the PCSO databaseâ€™s actual rank, callsign, roleplay name, Discord ID, activity, and punishment columns, using the shared operations database.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-07T17:00:00.000Z"
+    },
+    {
       "id": "2026-09-07-pinellas-four-day-inactivity",
       "title": "PCSO four-day inactivity tracking",
       "summary": "The PCSO roster now marks members Inactive when their latest Pinellas Melonly shift is more than four days old, then returns automatically marked members to Active after a new shift while preserving Activity Exempt, LOA, and suspension priority.",
