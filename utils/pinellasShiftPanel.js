@@ -290,11 +290,16 @@ function normalizeCallsign(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, '');
 }
 
-/** PCSO callsigns do not start with 2 or 3 (those are other departments). */
-export function isPcsoCallsign(callsign) {
+/** Other departments use callsigns starting with 2 or 3 — exclude those only. */
+export function isOtherDepartmentCallsign(callsign) {
   const raw = String(callsign || '').trim();
   if (!raw || raw === '—') return false;
-  return !/^[23]/.test(raw);
+  return /^[23]/.test(raw);
+}
+
+/** @deprecated use isOtherDepartmentCallsign (unknown callsigns should still show). */
+export function isPcsoCallsign(callsign) {
+  return !isOtherDepartmentCallsign(callsign);
 }
 
 /**
@@ -437,6 +442,7 @@ export async function collectOnDutyDeputies(client, {
   const nowMs = Date.now();
   const byDiscord = new Map();
   let unresolved = 0;
+  let skippedOtherDept = 0;
 
   for (const shift of activeShifts) {
     const memberId = String(shift.memberId || '');
@@ -472,7 +478,11 @@ export async function collectOnDutyDeputies(client, {
     }
 
     // Other departments use callsigns starting with 2 or 3 — exclude from PCSO panel.
-    if (!isPcsoCallsign(callsign)) continue;
+    // Unknown / unparsed callsigns ("—") still show so Melonly-active deputies are not dropped.
+    if (isOtherDepartmentCallsign(callsign)) {
+      skippedOtherDept += 1;
+      continue;
+    }
 
     // Only treat as in-game for role sync when on Sheriff (or found via callsign).
     const inGame = Boolean(player && (isSheriffTeam(player.team) || sheriffByCallsign.has(normalizeCallsign(callsign))));
@@ -515,13 +525,15 @@ export async function collectOnDutyDeputies(client, {
 
   logger.info(
     `Pinellas shift panel Melonly: recent=${recentShifts.length} active=${activeShifts.length} `
-    + `shown=${deputies.length} unresolved=${unresolved} linked=${memberDiscordCache.size}`,
+    + `shown=${deputies.length} unresolved=${unresolved} skippedOtherDept=${skippedOtherDept} `
+    + `linked=${memberDiscordCache.size}`,
   );
 
   const snapshot = {
     deputies,
     activeShiftCount: activeShifts.length,
     unresolvedCount: unresolved,
+    skippedOtherDeptCount: skippedOtherDept,
     supervisorCount: deputies.filter((entry) => entry.isSupervisor).length,
     fetchedAt: new Date().toISOString(),
   };

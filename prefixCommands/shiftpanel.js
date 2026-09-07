@@ -18,13 +18,18 @@ export default {
     const count = result?.snapshot?.deputies?.length || 0;
     const active = result?.snapshot?.activeShiftCount || 0;
     const unresolved = result?.snapshot?.unresolvedCount || 0;
+    const skippedOther = result?.snapshot?.skippedOtherDeptCount || 0;
+    const extras = [
+      unresolved ? `unresolved: **${unresolved}**` : '',
+      skippedOther ? `other dept: **${skippedOther}**` : '',
+    ].filter(Boolean);
 
     await message.reply(v2Card({
       title: 'Shift panel updated',
       description: [
         `Posted/refreshed in <#${result?.message?.channelId || '1546298062568165396'}>.`,
         `On duty shown: **${count}** (Melonly active: **${active}**`
-          + `${unresolved ? `, unresolved: **${unresolved}**` : ''})`,
+          + `${extras.length ? `, ${extras.join(', ')}` : ''})`,
         '-# Uses the main Melonly API token.',
         '-# Updates automatically every 30 seconds from Melonly.',
       ].join('\n'),
