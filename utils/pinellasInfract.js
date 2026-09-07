@@ -15,6 +15,7 @@ import {
   TextDisplayBuilder,
   TextInputBuilder,
   TextInputStyle,
+  ThreadAutoArchiveDuration,
   UserSelectMenuBuilder,
   LabelBuilder,
 } from 'discord.js';
@@ -462,6 +463,28 @@ async function buildInfractionMessagePayload(entry, { struck = false } = {}) {
   };
 }
 
+/**
+ * Open a Proof thread on the posted infraction and ask the issuer to upload evidence.
+ */
+async function createInfractionProofThread(message, issuerId) {
+  if (!message?.startThread || !issuerId) return null;
+  try {
+    const thread = await message.startThread({
+      name: 'Proof',
+      autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
+      reason: 'Infraction proof uploads',
+    });
+    await thread.send({
+      content: `<@${issuerId}> upload proof if there is any`,
+      allowedMentions: { users: [String(issuerId)] },
+    });
+    return thread.id;
+  } catch (error) {
+    logger.warn(`Pinellas infract: could not create Proof thread (${error?.message || error})`);
+    return null;
+  }
+}
+
 async function editInfractionMessage(client, entry, { struck = false } = {}) {
   if (!entry.channelId || !entry.messageId) return false;
   const channel = await client.channels.fetch(entry.channelId).catch(() => null);
@@ -636,6 +659,7 @@ export async function createPinellasInfraction({
     messageId: null,
     channelId: channel.id,
     guildId: guild.id,
+    threadId: null,
     voidedAt: null,
     voidedBy: null,
     expiredAt: null,
@@ -644,6 +668,7 @@ export async function createPinellasInfraction({
   const payload = await buildInfractionMessagePayload(entry);
   const message = await channel.send(payload);
   entry.messageId = message.id;
+  entry.threadId = await createInfractionProofThread(message, issuerMember.id);
 
   const store = await readStore();
   store.infractions = [entry, ...(store.infractions || [])].slice(0, 2000);
