@@ -66,8 +66,6 @@ const memberDiscordCache = new Map();
 const discordMemberCache = new Map();
 /** Last successful on-duty snapshot (used when Melonly 429s). */
 let lastSnapshot = null;
-/** Discord IDs last known on a Pinellas Melonly shift (for on-duty role cleanup). */
-let lastMelonlyOnDutyIds = new Set();
 
 const REPORT_OPTIONS = Object.freeze([
   { label: 'OIS Report', value: 'ois' },
@@ -498,10 +496,8 @@ function locationMapPin(player) {
 /**
  * Build on-duty deputy rows for the Pinellas shift panel.
  *
- * Shows people who are:
- * - on an active Melonly shift for the Pinellas department, or
- * - holding the Pinellas on-duty Discord role,
- * and never lists unrelated main-server Melonly staff.
+ * Shows people on an active Melonly shift for the Pinellas department only.
+ * The Discord on-duty role is never used as a panel inclusion source.
  */
 export async function collectOnDutyDeputies(client, {
   apiKey = config.melonlyApiKey,
@@ -558,8 +554,6 @@ export async function collectOnDutyDeputies(client, {
     shift = null,
     pinellasMember = null,
     clearwaterMember = null,
-    fromMelonly = false,
-    fromOnDutyRole = false,
   }) {
     const identity = identityCache?.byDiscord?.[discordId] || null;
     const robloxId = identity?.robloxId ? String(identity.robloxId) : null;
@@ -619,8 +613,7 @@ export async function collectOnDutyDeputies(client, {
       thisShiftMs,
       totalWaveMs,
       inGame,
-      fromMelonly,
-      fromOnDutyRole,
+      fromMelonly: true,
       locationLabel: formatInGameLocation(player),
       mapLeft: mapPin?.left ?? null,
       mapTop: mapPin?.top ?? null,
@@ -648,12 +641,11 @@ export async function collectOnDutyDeputies(client, {
       || await vcGuild?.members?.fetch(discordId).catch(() => null);
 
     const deptShift = isPinellasDepartmentShift(shift);
-    const onDuty = hasPinellasOnDutyRole(pinellasMember);
     // When Melonly does not tag departments at all, treat Pinellas Discord staff
     // on an active Melonly shift as department members (never dump all main staff).
     const staffProxy = !melonlyTagsDepartments && isPinellasDiscordStaff(pinellasMember);
 
-    if (!deptShift && !onDuty && !staffProxy) {
+    if (!deptShift && !staffProxy) {
       skippedMainStaff += 1;
       continue;
     }
@@ -664,35 +656,8 @@ export async function collectOnDutyDeputies(client, {
       shift,
       pinellasMember,
       clearwaterMember,
-      fromMelonly: true,
-      fromOnDutyRole: onDuty,
     });
     if (row) byDiscord.set(discordId, row);
-  }
-
-  // Also list anyone currently holding the Pinellas on-duty role.
-  if (pinellas) {
-    for (const member of pinellas.members.cache.values()) {
-      if (member.user?.bot) continue;
-      if (!hasPinellasOnDutyRole(member)) continue;
-      if (byDiscord.has(member.id)) {
-        byDiscord.get(member.id).fromOnDutyRole = true;
-        continue;
-      }
-
-      const clearwaterMember = clearwater?.members?.cache?.get(member.id)
-        || vcGuild?.members?.cache?.get(member.id)
-        || null;
-
-      const row = await buildDeputyRow({
-        discordId: member.id,
-        pinellasMember: member,
-        clearwaterMember,
-        fromMelonly: false,
-        fromOnDutyRole: true,
-      });
-      if (row) byDiscord.set(member.id, row);
-    }
   }
 
   const deputies = [...byDiscord.values()].sort((a, b) => {
@@ -711,8 +676,7 @@ export async function collectOnDutyDeputies(client, {
   const snapshot = {
     deputies,
     activeShiftCount: activeShifts.length,
-    departmentShiftCount: deputies.filter((entry) => entry.fromMelonly).length,
-    onDutyRoleCount: deputies.filter((entry) => entry.fromOnDutyRole).length,
+    departmentShiftCount: deputies.length,
     unresolvedCount: unresolved,
     skippedMainStaffCount: skippedMainStaff,
     skippedOtherDeptCount: skippedOtherDept,
@@ -725,15 +689,10 @@ export async function collectOnDutyDeputies(client, {
 
 function onDutyLines(deputies) {
   if (!deputies.length) return '- Nobody is currently on shift.';
-  return deputies.map((entry) => {
-    const timeLabel = entry.fromMelonly
-      ? formatShiftDuration(entry.thisShiftMs)
-      : 'On Duty role';
-    return (
-      `- ${entry.callsign}, ${entry.roleplayName}, ${entry.rankName}`
-      + `  | <@${entry.discordId}> | ${timeLabel}`
-    );
-  }).join('\n');
+  return deputies.map((entry) => (
+    `- ${entry.callsign}, ${entry.roleplayName}, ${entry.rankName}`
+    + `  | <@${entry.discordId}> | ${formatShiftDuration(entry.thisShiftMs)}`
+  )).join('\n');
 }
 
 function lookupOptions(deputies) {
@@ -995,9 +954,9 @@ async function buildLookupPayload(deputy, {
 }
 
 /**
- * Sync Discord on-duty role from Melonly department shifts + in-game presence.
- * Role is granted when on a Pinellas Melonly shift and in ER:LC; removed when that
- * Melonly shift ends or they leave game. Pure on-duty role holders (no Melonly) are left alone.
+ * Sync Discord on-duty role from Melonly department shifts.
+ * Grant when on a Pinellas Melonly department shift; remove from anyone who has
+ * the role but is not on a Melonly department shift.
  */
 export async function syncPinellasOnDutyRoles(client, snapshot) {
   const guild = client.guilds.cache.get(PINELLAS_GUILD_ID)
@@ -1013,15 +972,10 @@ export async function syncPinellasOnDutyRoles(client, snapshot) {
 
   await guild.members.fetch().catch(() => null);
 
-  const erlcConfigured = Boolean(config.erlcServerKey);
-  const melonlyIds = new Set(
-    (snapshot.deputies || [])
-      .filter((entry) => entry.fromMelonly)
-      .map((entry) => entry.discordId),
-  );
+  // On-duty role tracks Melonly department shift only (not Discord role as a source).
   const shouldHave = new Set(
     (snapshot.deputies || [])
-      .filter((entry) => entry.fromMelonly && (erlcConfigured ? entry.inGame : true))
+      .filter((entry) => entry.fromMelonly)
       .map((entry) => entry.discordId),
   );
 
@@ -1033,7 +987,7 @@ export async function syncPinellasOnDutyRoles(client, snapshot) {
     if (!member) continue;
     if (member.roles.cache.has(PINELLAS_ON_DUTY_ROLE_ID)) continue;
     try {
-      await member.roles.add(PINELLAS_ON_DUTY_ROLE_ID, 'Pinellas Melonly shift started (in game)');
+      await member.roles.add(PINELLAS_ON_DUTY_ROLE_ID, 'Pinellas Melonly department shift started');
       added += 1;
     } catch (error) {
       logger.warn(`Could not add on-duty role to ${discordId}: ${error?.message || error}`);
@@ -1044,19 +998,17 @@ export async function syncPinellasOnDutyRoles(client, snapshot) {
     if (!member.roles.cache.has(PINELLAS_ON_DUTY_ROLE_ID)) continue;
     if (shouldHave.has(member.id)) continue;
 
-    // Keep roles that were never Melonly-managed by this sync (manual / other systems).
-    const melonlyManaged = melonlyIds.has(member.id) || lastMelonlyOnDutyIds.has(member.id);
-    if (!melonlyManaged) continue;
-
     try {
-      await member.roles.remove(PINELLAS_ON_DUTY_ROLE_ID, 'Pinellas Melonly shift ended or left game');
+      await member.roles.remove(
+        PINELLAS_ON_DUTY_ROLE_ID,
+        'Not on Pinellas Melonly department shift',
+      );
       removed += 1;
     } catch (error) {
       logger.warn(`Could not remove on-duty role from ${member.id}: ${error?.message || error}`);
     }
   }
 
-  lastMelonlyOnDutyIds = melonlyIds;
   return { added, removed };
 }
 
