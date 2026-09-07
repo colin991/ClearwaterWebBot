@@ -232,8 +232,31 @@ export async function fetchMelonlyShiftsSince(apiKey, sinceMs, {
   };
 }
 
+/** @deprecated Prefer fetchPinellasDepartmentShifts for the PCSO panel. */
 export async function fetchActiveMelonlyShifts(apiKey, options = {}) {
   const shifts = await fetchRecentMelonlyShifts(apiKey, options);
+  return shifts.filter(isActiveMelonlyShift);
+}
+
+/**
+ * Shifts for a Melonly department (not main/staff panel shifts).
+ * Official endpoint: GET /server/departments/{departmentId}/shifts
+ */
+export async function fetchPinellasDepartmentShifts(apiKey, departmentId, {
+  cacheTtlMs = 25_000,
+  maxPages = 3,
+} = {}) {
+  const id = String(departmentId || '').trim();
+  if (!id) throw new Error('Melonly department id is required.');
+  return listPages(apiKey, `/server/departments/${encodeURIComponent(id)}/shifts`, {
+    limit: 100,
+    maxPages,
+    cacheTtlMs,
+  });
+}
+
+export async function fetchActivePinellasDepartmentShifts(apiKey, departmentId, options = {}) {
+  const shifts = await fetchPinellasDepartmentShifts(apiKey, departmentId, options);
   return shifts.filter(isActiveMelonlyShift);
 }
 
@@ -271,13 +294,8 @@ export function isActiveMelonlyLoa(loa, now = Date.now()) {
   return Boolean(epochMs(loa.startedAt) || epochMs(loa.reviewedAt));
 }
 
-/** @deprecated */
+/** @deprecated Use fetchRecentMelonlyShifts / fetchPinellasDepartmentShifts. */
 export async function fetchAllMelonlyShifts(apiKey, options = {}) {
-  return fetchRecentMelonlyShifts(apiKey, options);
-}
-
-/** @deprecated department probe removed — use a Pinellas-department API token instead. */
-export async function fetchPinellasDepartmentShifts(apiKey, _departmentId, options = {}) {
   return fetchRecentMelonlyShifts(apiKey, options);
 }
 
@@ -289,23 +307,44 @@ export async function fetchMelonlyMember(apiKey, memberId) {
 
 /**
  * Official Melonly mapping: internal memberId → Discord snowflake.
- * GET /server/members/{memberId}/discord → { discordId }
+ * Prefers department-scoped lookup when departmentId is provided.
  */
-export async function fetchMelonlyMemberDiscordId(apiKey, memberId) {
+export async function fetchMelonlyMemberDiscordId(apiKey, memberId, {
+  departmentId = null,
+} = {}) {
   const id = String(memberId || '').trim();
   if (!id) return null;
-  const result = await melonlyFetch(apiKey, `/server/members/${encodeURIComponent(id)}/discord`, {
-    cacheTtlMs: 10 * 60_000,
-  });
-  // Only accept explicit discordId fields — never fall back to Melonly `id`.
-  const discordId = String(
-    result?.discordId
-    || result?.discord_id
-    || result?.discordUserId
-    || result?.userId
-    || '',
-  ).trim();
-  return /^\d{16,22}$/.test(discordId) ? discordId : null;
+
+  const paths = [];
+  const dept = String(departmentId || '').trim();
+  if (dept) {
+    paths.push(`/server/departments/${encodeURIComponent(dept)}/members/${encodeURIComponent(id)}/discord`);
+  }
+  paths.push(`/server/members/${encodeURIComponent(id)}/discord`);
+
+  let lastError = null;
+  for (const path of paths) {
+    try {
+      const result = await melonlyFetch(apiKey, path, { cacheTtlMs: 10 * 60_000 });
+      // Only accept explicit discordId fields — never fall back to Melonly `id`.
+      const discordId = String(
+        result?.discordId
+        || result?.discord_id
+        || result?.discordUserId
+        || result?.userId
+        || '',
+      ).trim();
+      if (/^\d{16,22}$/.test(discordId)) return discordId;
+    } catch (error) {
+      lastError = error;
+      if (error?.status === 429) throw error;
+      if (error?.status && error.status !== 404) {
+        logger.warn(`Melonly discord lookup failed (${path}): ${error?.message || error}`);
+      }
+    }
+  }
+  if (lastError?.status === 429) throw lastError;
+  return null;
 }
 
 export async function fetchMelonlyMemberByDiscordId(apiKey, discordId) {

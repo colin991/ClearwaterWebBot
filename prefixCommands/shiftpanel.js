@@ -18,11 +18,9 @@ export default {
     const count = result?.snapshot?.deputies?.length || 0;
     const active = result?.snapshot?.activeShiftCount || 0;
     const unresolved = result?.snapshot?.unresolvedCount || 0;
-    const skippedMain = result?.snapshot?.skippedMainStaffCount || 0;
     const skippedOther = result?.snapshot?.skippedOtherDeptCount || 0;
     const extras = [
       unresolved ? `unresolved: **${unresolved}**` : '',
-      skippedMain ? `main staff skipped: **${skippedMain}**` : '',
       skippedOther ? `other dept: **${skippedOther}**` : '',
     ].filter(Boolean);
 
@@ -30,9 +28,9 @@ export default {
       title: 'Shift panel updated',
       description: [
         `Posted/refreshed in <#${result?.message?.channelId || '1546298062568165396'}>.`,
-        `On duty shown: **${count}** (Melonly active: **${active}**`
+        `On duty shown: **${count}** (department Melonly active: **${active}**`
           + `${extras.length ? `, ${extras.join(', ')}` : ''})`,
-        '-# Shows Pinellas Melonly department shifts (or Pinellas Discord staff when Melonly does not tag departments).',
+        '-# Shows Pinellas Melonly department shifts only (not main/staff).',
         '-# Removes the on-duty role when Melonly department shift ends.',
         '-# Updates automatically every 30 seconds from Melonly.',
       ].join('\n'),
