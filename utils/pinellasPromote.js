@@ -248,10 +248,10 @@ export async function promotePinellasMember({
     guild,
     target: targetMember.user,
     rank,
-    callsign: await (async () => {
+    callsign: (await (async () => {
       const { refreshPinellasCallsignAfterRankChange } = await import('./pinellasRoster.js');
       return refreshPinellasCallsignAfterRankChange(guild.client, targetMember);
-    })(),
+    })())?.nickname || null,
     reason: cleanReason,
     issuer: issuerMember.user,
   });
