@@ -1,0 +1,504 @@
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+  Events,
+  MessageFlags,
+  ModalBuilder,
+  PermissionFlagsBits,
+  TextInputBuilder,
+  TextInputStyle,
+} from 'discord.js';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { batchUpdateGoogleSheetValues, isGoogleSheetsConfigured, readGoogleSheetValues } from './googleSheets.js';
+import { listPinellasInfractions } from './pinellasInfract.js';
+import { getHighestPinellasRank } from './pinellasPromote.js';
+import { PINELLAS_GUILD_ID } from './pinellasServer.js';
+import { logger } from './logger.js';
+import {
+  fetchMelonlyLoas,
+  fetchMelonlyMemberDiscordId,
+  isActiveMelonlyLoa,
+  resolveMelonlyDiscordId,
+} from './melonly.js';
+import { PINELLAS_MELONLY_DEPARTMENT_ID } from './pinellasShiftPanel.js';
+
+export const PINELLAS_ROSTER_SHEET = 'PCSO I Main Database';
+export const PINELLAS_ROSTER_RANGE = `'${PINELLAS_ROSTER_SHEET}'!E11:Q1380`;
+export const PINELLAS_ROSTER_SYNC_MS = 2 * 60 * 1000;
+export const PINELLAS_CALLSIGN_OPEN_PREFIX = 'pcs:cs:open:';
+export const PINELLAS_CALLSIGN_MODAL_PREFIX = 'pcs:cs:modal:';
+
+const ROLEPLAY_NAME_INPUT_ID = 'roleplay-name';
+const AUTOMATED_ACTIVITY_VALUES = new Set(['N/A', 'LOA', 'Suspension']);
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ACTIVITY_STATE_PATH = path.join(ROOT, 'data', 'pinellas-roster-activity.json');
+
+let rosterQueue = Promise.resolve();
+
+function serializeRosterWork(work) {
+  const run = rosterQueue.then(work, work);
+  rosterQueue = run.catch(() => {});
+  return run;
+}
+
+function rankKey(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function text(value) {
+  return String(value ?? '').trim();
+}
+
+function rosterCell(column, rowNumber) {
+  return `'${PINELLAS_ROSTER_SHEET}'!${column}${rowNumber}`;
+}
+
+export function parsePinellasRosterRows(values = []) {
+  return values.map((row, index) => ({
+    rowNumber: index + 11,
+    rank: text(row?.[0]),
+    callsign: text(row?.[2]),
+    roleplayName: text(row?.[4]),
+    discordId: text(row?.[6]),
+    notes: text(row?.[8]),
+    activity: text(row?.[10]),
+    punishment: text(row?.[12]),
+  }));
+}
+
+function infractionIsActive(entry, now = Date.now()) {
+  if (entry?.status !== 'active') return false;
+  if (!entry.expiresAt) return true;
+  const expires = new Date(entry.expiresAt).getTime();
+  return Number.isFinite(expires) && expires > now;
+}
+
+export function summarizePinellasPunishments(entries = [], now = Date.now()) {
+  const valid = entries.filter((entry) => entry && entry.status !== 'voided');
+  const active = valid.filter((entry) => infractionIsActive(entry, now));
+  if (active.some((entry) => entry.type === 'suspension')) return 'Suspended';
+
+  const activeStrikes = active.filter((entry) => entry.type === 'strike').length;
+  if (activeStrikes >= 2) return 'Strike 2';
+  if (activeStrikes === 1) return 'Strike 1';
+  if (valid.some((entry) => entry.type === 'suspension')) return 'Previously Suspended';
+  if (valid.some((entry) => entry.type === 'demotion' || entry.type === 'termination')) {
+    return 'Previously Demoted';
+  }
+  if (valid.some((entry) => entry.type === 'warning' || entry.type === 'strike')) {
+    return 'Previously Warned/Striked';
+  }
+  return 'Clean Record';
+}
+
+export function activityForPinellasRoster(current, { suspended = false, onLoa = false } = {}) {
+  if (suspended) return 'Suspension';
+  if (onLoa === true) return 'LOA';
+
+  const existing = text(current);
+  if (existing === 'LOA' && onLoa == null) return existing;
+  if (!existing || existing === 'N/A' || AUTOMATED_ACTIVITY_VALUES.has(existing)) return 'Active';
+  // Inactive and Activity Exempt are staff-managed states and are preserved.
+  return existing;
+}
+
+async function readActivityState() {
+  try {
+    const stored = JSON.parse(await readFile(ACTIVITY_STATE_PATH, 'utf8'));
+    return {
+      baseByUser: stored?.baseByUser && typeof stored.baseByUser === 'object'
+        ? { ...stored.baseByUser }
+        : {},
+    };
+  } catch {
+    return { baseByUser: {} };
+  }
+}
+
+async function writeActivityState(state) {
+  await mkdir(path.dirname(ACTIVITY_STATE_PATH), { recursive: true });
+  await writeFile(ACTIVITY_STATE_PATH, `${JSON.stringify({ baseByUser: state.baseByUser }, null, 2)}\n`, 'utf8');
+}
+
+function groupInfractionsByUser(infractions) {
+  const byUser = new Map();
+  for (const entry of infractions || []) {
+    const id = text(entry?.userId);
+    if (!id) continue;
+    const list = byUser.get(id) || [];
+    list.push(entry);
+    byUser.set(id, list);
+  }
+  return byUser;
+}
+
+function loaServerId(loa) {
+  return text(
+    loa?.departmentId
+    || loa?.serverId
+    || loa?.department?.id
+    || loa?.server?.id,
+  );
+}
+
+async function activePinellasLoaDiscordIds(settings) {
+  if (!settings?.melonlyApiKey) return null;
+  const loas = await fetchMelonlyLoas(settings.melonlyApiKey, {
+    cacheTtlMs: 60_000,
+    maxPages: 5,
+  });
+  const active = loas.filter((loa) => (
+    loaServerId(loa) === PINELLAS_MELONLY_DEPARTMENT_ID
+    && isActiveMelonlyLoa(loa)
+  ));
+  const discordIds = new Set();
+
+  for (const loa of active) {
+    let discordId = resolveMelonlyDiscordId(loa);
+    if (!discordId && loa?.memberId) {
+      discordId = await fetchMelonlyMemberDiscordId(settings.melonlyApiKey, loa.memberId)
+        .catch((error) => {
+          logger.warn(`PCSO roster: could not resolve Melonly LOA member ${loa.memberId}: ${error?.message || error}`);
+          return null;
+        });
+    }
+    if (discordId) discordIds.add(discordId);
+  }
+  return discordIds;
+}
+
+async function loadRosterState(client) {
+  const settings = client.config;
+  const [values, infractions, loaIds, activityState] = await Promise.all([
+    readGoogleSheetValues(settings, settings.pcsoRosterSpreadsheetId, PINELLAS_ROSTER_RANGE),
+    listPinellasInfractions(),
+    activePinellasLoaDiscordIds(settings).catch((error) => {
+      logger.warn(`PCSO roster: Melonly LOA refresh failed; preserving existing LOA cells (${error?.message || error}).`);
+      return null;
+    }),
+    readActivityState(),
+  ]);
+  return {
+    rows: parsePinellasRosterRows(values),
+    infractionsByUser: groupInfractionsByUser(infractions),
+    loaIds,
+    activityState,
+    activityStateChanged: false,
+  };
+}
+
+function memberStatus(state, discordId, currentActivity) {
+  const entries = state.infractionsByUser.get(discordId) || [];
+  const punishment = summarizePinellasPunishments(entries);
+  const suspended = punishment === 'Suspended';
+  const onLoa = state.loaIds == null ? null : state.loaIds.has(discordId);
+  const current = text(currentActivity);
+  const overlay = suspended ? 'Suspension' : onLoa === true ? 'LOA' : null;
+  const savedBase = text(state.activityState.baseByUser[discordId]);
+
+  if (overlay) {
+    if (current && !AUTOMATED_ACTIVITY_VALUES.has(current) && current !== 'Active') {
+      if (savedBase !== current) {
+        state.activityState.baseByUser[discordId] = current;
+        state.activityStateChanged = true;
+      }
+    }
+    return { punishment, activity: overlay };
+  }
+
+  if (current === 'LOA' && onLoa == null) {
+    return { punishment, activity: current };
+  }
+  if (current === 'LOA' || current === 'Suspension') {
+    if (savedBase) {
+      delete state.activityState.baseByUser[discordId];
+      state.activityStateChanged = true;
+      return { punishment, activity: savedBase };
+    }
+    return { punishment, activity: 'Active' };
+  }
+  if (savedBase) {
+    delete state.activityState.baseByUser[discordId];
+    state.activityStateChanged = true;
+  }
+  return {
+    punishment,
+    activity: activityForPinellasRoster(current, { suspended, onLoa }),
+  };
+}
+
+function assertRosterConfigured(client) {
+  if (!isGoogleSheetsConfigured(client.config)) {
+    throw new Error(
+      'The PCSO roster connection is not configured on the bot host yet. Add the Google service-account email and private key, then restart.',
+    );
+  }
+}
+
+function cleanRoleplayName(value) {
+  const name = String(value || '').replace(/[\r\n|]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (name.length < 2) throw new Error('Enter a roleplay name with at least 2 characters.');
+  if (name.length > 25) throw new Error('Keep the roleplay name to 25 characters or fewer.');
+  return name;
+}
+
+export async function assignPinellasCallsign(client, member, roleplayName) {
+  assertRosterConfigured(client);
+  if (String(member?.guild?.id) !== PINELLAS_GUILD_ID) {
+    throw new Error('Callsigns can only be assigned in the Pinellas County Sheriff\'s Office server.');
+  }
+
+  const rank = getHighestPinellasRank(member);
+  if (!rank) throw new Error('That member does not have a supported PCSO rank role.');
+  const name = cleanRoleplayName(roleplayName);
+
+  return serializeRosterWork(async () => {
+    const state = await loadRosterState(client);
+    const current = state.rows.find((row) => row.discordId === member.id) || null;
+    const sameRank = current
+      && rankKey(current.rank) === rankKey(rank.name)
+      && current.callsign;
+    const target = sameRank
+      ? current
+      : state.rows.find((row) => (
+        rankKey(row.rank) === rankKey(rank.name)
+        && row.callsign
+        && !row.roleplayName
+        && !row.discordId
+        && !row.notes
+      ));
+
+    if (!target) {
+      throw new Error(`No open **${rank.name}** callsign row is available in the roster.`);
+    }
+
+    const status = memberStatus(state, member.id, current?.activity || target.activity);
+    const nickname = `${target.callsign} | ${name}`;
+    if (nickname.length > 32) throw new Error('That roleplay name is too long for the Discord nickname.');
+
+    const updates = [
+      { range: rosterCell('I', target.rowNumber), value: name },
+      { range: rosterCell('K', target.rowNumber), value: member.id },
+      { range: rosterCell('O', target.rowNumber), value: status.activity },
+      { range: rosterCell('Q', target.rowNumber), value: status.punishment },
+    ];
+
+    if (current && current.rowNumber !== target.rowNumber) {
+      if (current.notes) updates.push({ range: rosterCell('M', target.rowNumber), value: current.notes });
+      updates.push(
+        { range: rosterCell('I', current.rowNumber), value: '' },
+        { range: rosterCell('K', current.rowNumber), value: '' },
+        { range: rosterCell('M', current.rowNumber), value: '' },
+        { range: rosterCell('O', current.rowNumber), value: 'N/A' },
+        { range: rosterCell('Q', current.rowNumber), value: 'Clean Record' },
+      );
+    }
+
+    await batchUpdateGoogleSheetValues(
+      client.config,
+      client.config.pcsoRosterSpreadsheetId,
+      updates,
+    );
+    if (state.activityStateChanged) await writeActivityState(state.activityState);
+
+    return {
+      callsign: target.callsign,
+      rank: rank.name,
+      roleplayName: name,
+      nickname,
+      rowNumber: target.rowNumber,
+      moved: Boolean(current && current.rowNumber !== target.rowNumber),
+      activity: status.activity,
+      punishment: status.punishment,
+    };
+  });
+}
+
+export async function syncPinellasRoster(client) {
+  assertRosterConfigured(client);
+  return serializeRosterWork(async () => {
+    const state = await loadRosterState(client);
+    const updates = [];
+    let members = 0;
+
+    for (const row of state.rows) {
+      if (!/^\d{16,22}$/.test(row.discordId)) continue;
+      members += 1;
+      const desired = memberStatus(state, row.discordId, row.activity);
+      if (desired.activity !== row.activity) {
+        updates.push({ range: rosterCell('O', row.rowNumber), value: desired.activity });
+      }
+      if (desired.punishment !== row.punishment) {
+        updates.push({ range: rosterCell('Q', row.rowNumber), value: desired.punishment });
+      }
+    }
+
+    if (updates.length) {
+      await batchUpdateGoogleSheetValues(
+        client.config,
+        client.config.pcsoRosterSpreadsheetId,
+        updates,
+      );
+      logger.info(`PCSO roster: synchronized ${updates.length} Activity/Punishments cell(s) across ${members} members.`);
+    }
+    if (state.activityStateChanged) await writeActivityState(state.activityState);
+    return { members, cellsUpdated: updates.length };
+  });
+}
+
+function requireCallsignAdmin(member) {
+  if (!member?.permissions?.has(PermissionFlagsBits.Administrator)) {
+    throw new Error('You must have Administrator permission to use `-callsign`.');
+  }
+}
+
+function parseInteractionIds(customId, prefix) {
+  if (!customId.startsWith(prefix)) return null;
+  const [ownerId, targetId] = customId.slice(prefix.length).split(':');
+  if (!/^\d{16,22}$/.test(ownerId) || !/^\d{16,22}$/.test(targetId)) return null;
+  return { ownerId, targetId };
+}
+
+export function buildPinellasCallsignPrompt(ownerId, target) {
+  return {
+    embeds: [
+      new EmbedBuilder()
+        .setTitle('PCSO Callsign Database')
+        .setDescription([
+          `Assign or update the roster record for <@${target.id}>.`,
+          '',
+          'Click below, enter the roleplay name, and submit. The callsign is selected from the first open row for the member\'s current PCSO rank.',
+          '-# Appointment / Notes stays under manual document-editor control.',
+        ].join('\n'))
+        .setColor(0x1f2937),
+    ],
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${PINELLAS_CALLSIGN_OPEN_PREFIX}${ownerId}:${target.id}`)
+          .setLabel('Enter roleplay name')
+          .setStyle(ButtonStyle.Primary),
+      ),
+    ],
+    allowedMentions: { parse: [] },
+  };
+}
+
+function callsignModal(ownerId, targetId) {
+  return new ModalBuilder()
+    .setCustomId(`${PINELLAS_CALLSIGN_MODAL_PREFIX}${ownerId}:${targetId}`)
+    .setTitle('PCSO Callsign')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId(ROLEPLAY_NAME_INPUT_ID)
+          .setLabel('Roleplay name')
+          .setPlaceholder('First Last')
+          .setStyle(TextInputStyle.Short)
+          .setMinLength(2)
+          .setMaxLength(25)
+          .setRequired(true),
+      ),
+    );
+}
+
+export async function handlePinellasCallsignInteraction(interaction, client) {
+  const isButton = interaction.isButton?.();
+  const isModal = interaction.isModalSubmit?.();
+  const parsed = isButton
+    ? parseInteractionIds(interaction.customId, PINELLAS_CALLSIGN_OPEN_PREFIX)
+    : isModal
+      ? parseInteractionIds(interaction.customId, PINELLAS_CALLSIGN_MODAL_PREFIX)
+      : null;
+  if (!parsed) return false;
+
+  if (String(interaction.guildId) !== PINELLAS_GUILD_ID) {
+    throw new Error('This callsign panel only works in the PCSO server.');
+  }
+  if (interaction.user.id !== parsed.ownerId) {
+    throw new Error('Only the administrator who opened this panel can use it.');
+  }
+
+  const issuer = interaction.member
+    || await interaction.guild.members.fetch(interaction.user.id);
+  requireCallsignAdmin(issuer);
+
+  if (isButton) {
+    await interaction.showModal(callsignModal(parsed.ownerId, parsed.targetId));
+    return true;
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const target = await interaction.guild.members.fetch(parsed.targetId).catch(() => null);
+  if (!target) throw new Error('That member is no longer in this server.');
+  if (target.user.bot) throw new Error('Bots cannot receive a PCSO callsign.');
+
+  const me = interaction.guild.members.me || await interaction.guild.members.fetchMe();
+  if (!me.permissions.has(PermissionFlagsBits.ManageNicknames)) {
+    throw new Error('I need **Manage Nicknames** before I can assign this callsign.');
+  }
+  if (!target.manageable) {
+    throw new Error('My bot role must be above that member\'s highest role before I can change their nickname.');
+  }
+
+  const roleplayName = interaction.fields.getTextInputValue(ROLEPLAY_NAME_INPUT_ID);
+  const result = await assignPinellasCallsign(client, target, roleplayName);
+  await target.setNickname(
+    result.nickname,
+    `PCSO callsign assigned by ${interaction.user.tag || interaction.user.id}`,
+  );
+
+  await interaction.editReply({
+    embeds: [
+      new EmbedBuilder()
+        .setTitle('Callsign assigned')
+        .setDescription([
+          `<@${target.id}> is now **${result.nickname}**.`,
+          `**Rank:** ${result.rank}`,
+          `**Activity:** ${result.activity}`,
+          `**Punishments:** ${result.punishment}`,
+          `-# Roster row ${result.rowNumber}${result.moved ? ' · previous manual notes were carried to the new rank row' : ''}`,
+        ].join('\n'))
+        .setColor(0x3ba55d),
+    ],
+    allowedMentions: { parse: [] },
+  });
+  return true;
+}
+
+export function startPinellasRosterSync(client) {
+  if (!isGoogleSheetsConfigured(client.config)) {
+    logger.warn('PCSO roster sync disabled: GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_PRIVATE_KEY missing.');
+    return () => {};
+  }
+
+  let timer = null;
+  let stopped = false;
+  const tick = async () => {
+    if (stopped) return;
+    try {
+      await syncPinellasRoster(client);
+    } catch (error) {
+      logger.error('PCSO roster two-minute sync failed', error);
+    }
+  };
+  const begin = () => {
+    if (stopped || timer) return;
+    void tick();
+    timer = setInterval(() => { void tick(); }, PINELLAS_ROSTER_SYNC_MS);
+    timer.unref?.();
+  };
+
+  if (client.isReady()) begin();
+  else client.once(Events.ClientReady, begin);
+
+  return () => {
+    stopped = true;
+    client.off(Events.ClientReady, begin);
+    if (timer) clearInterval(timer);
+  };
+}

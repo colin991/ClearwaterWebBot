@@ -7,6 +7,7 @@ import { readInternetStore, saveInternetStore, updateInternetPreference } from '
 import { handlePinellasApplyInteraction } from '../utils/pinellasApply.js';
 import { handlePinellasInfractInteraction } from '../utils/pinellasInfract.js';
 import { handlePinellasMassShiftInteraction } from '../utils/pinellasMassShift.js';
+import { handlePinellasCallsignInteraction } from '../utils/pinellasRoster.js';
 import { handlePinellasShiftPanelInteraction } from '../utils/pinellasShiftPanel.js';
 
 export default {
@@ -31,6 +32,24 @@ export default {
       if (await handlePinellasMassShiftInteraction(interaction)) return;
     } catch (error) {
       logger.error('Pinellas mass shift interaction failed', error);
+    }
+
+    try {
+      if (await handlePinellasCallsignInteraction(interaction, client)) return;
+    } catch (error) {
+      logger.error('Pinellas callsign interaction failed', error);
+      const reply = {
+        content: String(error?.message || 'The callsign could not be assigned.').slice(0, 1800),
+        flags: MessageFlags.Ephemeral,
+      };
+      if (interaction.deferred) {
+        await interaction.editReply({ content: reply.content });
+      } else if (interaction.replied) {
+        await interaction.followUp(reply);
+      } else {
+        await interaction.reply(reply);
+      }
+      return;
     }
 
     try {

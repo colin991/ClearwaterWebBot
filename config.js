@@ -6,6 +6,10 @@ export const config = Object.freeze({
   guildId: process.env.DISCORD_GUILD_ID?.trim(),
   erlcServerKey: process.env.ERLC_SERVER_KEY?.trim(),
   melonlyApiKey: process.env.MELONLY_API_KEY?.trim(),
+  googleServiceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim(),
+  googlePrivateKey: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n').trim(),
+  pcsoRosterSpreadsheetId: process.env.PCSO_ROSTER_SPREADSHEET_ID?.trim()
+    || '1tyRVzHSIuwMCz3i-Z3KAAy3mxZRFtVDBQPzmdlwlTh0',
   robloxGroupId: process.env.ROBLOX_GROUP_ID?.trim(),
   robloxGroupApiKey: process.env.ROBLOX_GROUP_API_KEY?.trim(),
   robloxGroupAllowedRoleIds: (process.env.ROBLOX_GROUP_ALLOWED_ROLE_IDS || '1514033664306974752,1514744040778760252')

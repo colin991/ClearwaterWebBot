@@ -10,6 +10,7 @@ import {
 } from './internetStore.js';
 import { createDiscordInternetNotifier } from './discordInternetNotify.js';
 import { startPinellasInfractionExpiry } from './pinellasInfract.js';
+import { startPinellasRosterSync } from './pinellasRoster.js';
 import { startPinellasShiftPanel } from './pinellasShiftPanel.js';
 
 /**
@@ -48,11 +49,13 @@ export function startBotServices(client, config) {
   void cleanUpInternetData();
 
   const stopInfractionExpiry = startPinellasInfractionExpiry(client);
+  const stopRosterSync = startPinellasRosterSync(client);
   const stopShiftPanel = startPinellasShiftPanel(client);
 
   return () => {
     clearInterval(dataCleanup);
     stopInfractionExpiry();
+    stopRosterSync();
     stopShiftPanel();
   };
 }

@@ -673,6 +673,12 @@ export async function getInfractionById(id) {
     || null;
 }
 
+/** Read-only snapshot used by the PCSO roster synchronizer. */
+export async function listPinellasInfractions() {
+  const store = await readStore();
+  return (store.infractions || []).map((entry) => ({ ...entry }));
+}
+
 export async function editPinellasInfraction({
   client,
   issuerMember,

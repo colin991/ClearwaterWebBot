@@ -184,6 +184,40 @@ export async function fetchActiveMelonlyShifts(apiKey, options = {}) {
   return shifts.filter(isActiveMelonlyShift);
 }
 
+/** Paginated Leave of Absence records for the token's server and departments. */
+export async function fetchMelonlyLoas(apiKey, { cacheTtlMs = 60_000, maxPages = 5 } = {}) {
+  return listPages(apiKey, '/server/loas', {
+    limit: 100,
+    maxPages,
+    cacheTtlMs,
+  });
+}
+
+function epochMs(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  return numeric > 1e12 ? numeric : numeric * 1000;
+}
+
+/** True only while an approved Melonly LOA is currently in effect. */
+export function isActiveMelonlyLoa(loa, now = Date.now()) {
+  if (!loa || typeof loa !== 'object') return false;
+  if (epochMs(loa.cancelledAt) || epochMs(loa.endedAt) || epochMs(loa.expiredAt)) return false;
+  if (String(loa.denyReason || '').trim()) return false;
+
+  const status = String(loa.status ?? '').trim().toLowerCase();
+  if (['denied', 'rejected', 'cancelled', 'canceled', 'ended', 'expired'].includes(status)) return false;
+
+  const start = epochMs(loa.startedAt) || epochMs(loa.startAt);
+  const end = epochMs(loa.endAt);
+  if (start && start > now) return false;
+  if (end && end <= now) return false;
+
+  // Melonly supplies reviewedAt for approved requests and startedAt once active.
+  // Pending requests must not mark a roster row as LOA.
+  return Boolean(epochMs(loa.startedAt) || epochMs(loa.reviewedAt));
+}
+
 /** @deprecated */
 export async function fetchAllMelonlyShifts(apiKey, options = {}) {
   return fetchRecentMelonlyShifts(apiKey, options);

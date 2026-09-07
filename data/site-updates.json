@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-07-pinellas-callsign-roster-sync",
+      "title": "PCSO callsign and roster sync",
+      "summary": "Added the Administrator-only -callsign panel for assigning rank-based callsigns, updating PCSO roster records and nicknames, and synchronizing Melonly LOA, suspension, and infraction status every two minutes without overwriting Appointment / Notes.",
+      "updatedBy": "colin991",
+      "createdAt": "2026-09-07T10:00:00.000Z"
+    },
+    {
       "id": "2026-09-06-pinellas-welcome-apply-art",
       "title": "Pinellas welcome emoji and apply banners",
       "summary": "Updated the Pinellas welcome wave emoji and replaced the PCSO application panel top/bottom banners with the new APPLICATION artwork.",
