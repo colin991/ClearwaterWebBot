@@ -15,6 +15,15 @@ export const FREQUENCY_CHANGE_GREETING = (
 /** Wait after joining so Discord voice audio is actually audible. */
 export const FREQUENCY_CHANGE_SPEAK_DELAY_MS = 2_000;
 
+/**
+ * After the first human joins, wait this long then re-scan the VC.
+ * If Operations is present, do not join/speak.
+ */
+export const FREQUENCY_CHANGE_OPERATIONS_SCAN_MS = 5_000;
+
+/** Match usernames / nicknames like "Operations", "Pinellas Operations", etc. */
+export const FREQUENCY_CHANGE_OPERATIONS_NAME_PATTERN = /operations/i;
+
 /** Channel names like "Frequency Change 1", "frequency change 2", etc. */
 export const FREQUENCY_CHANGE_NAME_PATTERN = /frequency\s*change/i;
 
@@ -32,6 +41,8 @@ const announcingByChannel = new Map();
 /** guildId -> serial queue so the bot only uses one VC at a time */
 const guildQueues = new Map();
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export function isFrequencyChangeChannel(channel) {
   if (!channel) return false;
   if (channel.type !== ChannelType.GuildVoice && channel.type !== ChannelType.GuildStageVoice) {
@@ -43,6 +54,27 @@ export function isFrequencyChangeChannel(channel) {
 function humanMembersInChannel(channel) {
   if (!channel?.members) return [];
   return [...channel.members.values()].filter((member) => !member.user?.bot);
+}
+
+/**
+ * True when a member named Operations (not this bot) is already in the VC.
+ */
+export function channelHasOperationsMember(channel) {
+  if (!channel?.members) return false;
+  const selfId = String(channel.client?.user?.id || channel.guild?.members?.me?.id || '');
+  for (const member of channel.members.values()) {
+    if (selfId && String(member.id) === selfId) continue;
+    const names = [
+      member.user?.username,
+      member.user?.globalName,
+      member.nickname,
+      member.displayName,
+    ].filter(Boolean);
+    if (names.some((name) => FREQUENCY_CHANGE_OPERATIONS_NAME_PATTERN.test(String(name)))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function enqueueGuildJob(guildId, job) {
@@ -139,6 +171,13 @@ async function announceFrequencyChange(channel) {
     return { ok: false, reason: 'channel_empty' };
   }
 
+  if (channelHasOperationsMember(channel)) {
+    logger.info(
+      `Frequency change greeting skipped for #${channel.name}: Operations is in the channel.`,
+    );
+    return { ok: false, reason: 'operations_present' };
+  }
+
   const mp3 = await synthesizeSpeechMp3(FREQUENCY_CHANGE_GREETING);
   await playMp3InVoiceChannel(channel, channel.guild.voiceAdapterCreator, mp3, {
     leaveAfter: true,
@@ -153,7 +192,8 @@ async function announceFrequencyChange(channel) {
 }
 
 /**
- * When the first human joins a Frequency Change VC on their own, join → wait 2s → speak → leave.
+ * When the first human joins a Frequency Change VC on their own, wait 5s, scan for
+ * Operations, then join → wait 2s → speak → leave (unless Operations is present).
  * Bot-dragged joins (including bot 1514096313547886673) do not trigger the greeting.
  * Later joiners while the channel is occupied also do not re-trigger.
  */
@@ -192,7 +232,27 @@ export async function handleFrequencyChangeVoiceStateUpdate(oldState, newState) 
         );
         return { ok: false, reason: 'bot_dragged' };
       }
-      return await announceFrequencyChange(channel);
+
+      // Give Operations time to land in the VC before we decide to join.
+      await sleep(FREQUENCY_CHANGE_OPERATIONS_SCAN_MS);
+
+      const liveChannel = channel.guild.channels.cache.get(channel.id)
+        || await channel.guild.channels.fetch(channel.id).catch(() => channel);
+      if (!isFrequencyChangeChannel(liveChannel)) {
+        return { ok: false, reason: 'channel_gone' };
+      }
+      if (humanMembersInChannel(liveChannel).length === 0) {
+        return { ok: false, reason: 'channel_empty' };
+      }
+      if (channelHasOperationsMember(liveChannel)) {
+        logger.info(
+          `Frequency change greeting skipped for #${liveChannel.name}: `
+          + `Operations present after ${FREQUENCY_CHANGE_OPERATIONS_SCAN_MS / 1000}s scan.`,
+        );
+        return { ok: false, reason: 'operations_present' };
+      }
+
+      return await announceFrequencyChange(liveChannel);
     } catch (error) {
       logger.error(`Frequency change greeting failed in #${channel.name}`, error);
       return { ok: false, reason: 'error', error: error?.message || String(error) };
@@ -208,6 +268,7 @@ export function startFrequencyChangeGreeting(client) {
   logger.info(
     'Frequency change greeting armed '
     + `(channels matching ${FREQUENCY_CHANGE_NAME_PATTERN}; `
+    + `${FREQUENCY_CHANGE_OPERATIONS_SCAN_MS / 1000}s Operations scan; `
     + `${FREQUENCY_CHANGE_SPEAK_DELAY_MS / 1000}s speak delay; `
     + `skip bot-dragged joins incl. ${FREQUENCY_CHANGE_SKIP_DRAG_BOT_IDS.join(', ')}; leave after TTS).`,
   );
