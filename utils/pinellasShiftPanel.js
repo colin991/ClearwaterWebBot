@@ -293,6 +293,13 @@ function normalizeCallsign(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, '');
 }
 
+/** PCSO callsigns do not start with 2 or 3 (those are other departments). */
+export function isPcsoCallsign(callsign) {
+  const raw = String(callsign || '').trim();
+  if (!raw || raw === '—') return false;
+  return !/^[23]/.test(raw);
+}
+
 /**
  * Load ER:LC players indexed by Roblox id and by callsign (Sheriff team preferred).
  */
@@ -466,6 +473,9 @@ export async function collectOnDutyDeputies(client, {
       // If ER:LC has the callsign, prefer that callsign spelling and confirm sheriff team.
       if (player?.callsign) callsign = player.callsign;
     }
+
+    // Other departments use callsigns starting with 2 or 3 — exclude from PCSO panel.
+    if (!isPcsoCallsign(callsign)) continue;
 
     // Only treat as in-game for role sync when on Sheriff (or found via callsign).
     const inGame = Boolean(player && (isSheriffTeam(player.team) || sheriffByCallsign.has(normalizeCallsign(callsign))));
