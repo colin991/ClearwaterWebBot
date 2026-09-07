@@ -369,10 +369,6 @@ export function isPinellasDiscordStaff(member) {
   );
 }
 
-function hasPinellasOnDutyRole(member) {
-  return Boolean(member?.roles?.cache?.has(PINELLAS_ON_DUTY_ROLE_ID));
-}
-
 /**
  * Load ER:LC players indexed by Roblox id and by callsign (Sheriff team preferred).
  */
