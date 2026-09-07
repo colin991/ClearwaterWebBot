@@ -113,15 +113,6 @@ async function rememberMemberDiscord(memberId, discordId) {
   if (changed) await saveMemberDiscordMap().catch(() => {});
 }
 
-function isPcsoMember(member) {
-  if (!member || member.user?.bot) return false;
-  return Boolean(
-    member.roles.cache.has(PINELLAS_EMPLOYEE_WELCOME_ROLE_ID)
-    || member.roles.cache.has(PINELLAS_ON_DUTY_ROLE_ID)
-    || getHighestPinellasRank(member),
-  );
-}
-
 /**
  * Build Melonly memberId ↔ Discord map from active shift member IDs.
  * Uses official GET /server/members/{id}/discord (main Melonly API).
