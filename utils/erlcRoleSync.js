@@ -7,6 +7,10 @@ import { v2Card } from './v2Message.js';
 const WRONG_VEHICLE_PLAYER = 'PlainCreeek';
 const REQUIRED_TEAM = 'Sheriff';
 const APPROVED_VEHICLE = '2003 Falcon Prime Eques Interceptor';
+const APPROVED_VEHICLE_NAMES = new Set([
+  '2003 falcon prime eques interceptor',
+  'falcon prime eques interceptor 2003',
+]);
 const WRONG_VEHICLE_REMINDER_MS = 5 * 60 * 1000;
 const WRONG_VEHICLE_JAIL_COOLDOWN_MS = 5 * 60 * 1000;
 const WRONG_VEHICLE_NOTICE_RECIPIENTS = [
@@ -16,6 +20,10 @@ const WRONG_VEHICLE_NOTICE_RECIPIENTS = [
   '1128547120304095272',
   '547417724381429761',
 ];
+
+function isApprovedVehicleName(value) {
+  return APPROVED_VEHICLE_NAMES.has(String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim());
+}
 
 async function sendGameLog(client, settings, description) {
   if (!settings.gameLogChannelId) return;
@@ -55,7 +63,7 @@ async function syncOnce(client, config, previousState) {
     && player.team.toLowerCase() === REQUIRED_TEAM.toLowerCase());
   const wrongVehicle = sheriffPlayer
     ? vehicles.find((vehicle) => String(vehicle.Owner || vehicle.owner || '').toLowerCase() === sheriffPlayer.username.toLowerCase()
-      && String(vehicle.Name || vehicle.name || '').toLowerCase() !== APPROVED_VEHICLE.toLowerCase())
+      && !isApprovedVehicleName(vehicle.Name || vehicle.name))
     : null;
   const wrongVehicleName = String(wrongVehicle?.Name || wrongVehicle?.name || '').trim();
   const wrongVehicleKey = wrongVehicle
