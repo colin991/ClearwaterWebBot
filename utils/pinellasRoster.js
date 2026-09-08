@@ -1,5 +1,4 @@
 import {
-  AttachmentBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -724,29 +723,16 @@ export function buildPinellasCallsignPrompt(ownerId, target) {
 }
 
 export async function sendPinellasCallsignPanel(channel) {
-  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const files = [];
   const container = new ContainerBuilder().clearAccentColor();
-  for (const [fileName, attachmentName] of [
-    ['pcso-application-banner.png', 'pcso-application-banner.png'],
-    ['pcso-application-footer.png', 'pcso-application-footer.png'],
-  ]) {
-    try {
-      files.push(new AttachmentBuilder(await readFile(path.join(root, 'assets', fileName)), { name: attachmentName }));
-      container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(
-        new MediaGalleryItemBuilder().setURL(`attachment://${attachmentName}`),
-      ));
-    } catch (error) {
-      logger.warn(`PCSO callsign panel: ${fileName} unavailable (${error?.message || error}).`);
-    }
-    if (fileName === 'pcso-application-banner.png') {
-      container.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large));
-    }
-  }
+  container
+    .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(
+      new MediaGalleryItemBuilder().setURL('https://media.discordapp.net/attachments/1514131887914745906/1546695632587202610/pcso_banner_1_1.png?ex=6aa0b80f&is=6a9f668f&hm=a649d2aed6b4212c098d8c6ee1275b494efc04cc0d523d16243d8ea411515638&=&format=webp&quality=lossless'),
+    ))
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large));
   container
     .addTextDisplayComponents(new TextDisplayBuilder().setContent([
       '# <:Save:1517217415098798280> Callsign Request',
-      '> Click **Set Name** to set your roleplay name. Click it again later to change your name and receive your callsign.',
+      '> Below click the "Set Name" button to set your roleplay name. If you want to change your roleplay name, click it again and then the "Change Name" button to update your name. It will tell you your callsign once you set your name.',
     ].join('\n')))
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large))
     .addActionRowComponents(new ActionRowBuilder().addComponents(
@@ -756,10 +742,14 @@ export async function sendPinellasCallsignPanel(channel) {
         .setEmoji({ id: '1517217487165460591', name: 'rightarrow' })
         .setStyle(ButtonStyle.Secondary),
     ));
+  container
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large))
+    .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(
+      new MediaGalleryItemBuilder().setURL('https://cdn.discordapp.com/attachments/1514443793607295058/1546271578147524618/pcso-application-footer.png?ex=6aa07ea0&is=6a9f2d20&hm=c57d1c77ef57a419089fd63ef73cf4668cbe0bdffd25feae85dbf4a9adbd9ebf'),
+    ));
   return channel.send({
     components: [container],
     flags: MessageFlags.IsComponentsV2,
-    files,
     allowedMentions: { parse: [] },
   });
 }
