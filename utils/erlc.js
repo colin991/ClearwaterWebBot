@@ -3,7 +3,7 @@ import { attachPlayerAvatars, robloxAvatarProxyPath } from '../lib/roblox-avatar
 export async function fetchErlcServer(serverKey) {
   if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
   const url = new URL('https://api.erlc.gg/v2/server');
-  for (const field of ['Players', 'Queue', 'Vehicles']) url.searchParams.set(field, 'true');
+  for (const field of ['Players', 'Queue']) url.searchParams.set(field, 'true');
   const response = await fetch(url, {
     headers: { 'server-key': serverKey },
     signal: AbortSignal.timeout(8000),
