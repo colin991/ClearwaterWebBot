@@ -4,6 +4,18 @@ import { getOwnerConfig } from './ownerConfig.js';
 import { logger } from './logger.js';
 import { v2Card } from './v2Message.js';
 
+const WRONG_VEHICLE_PLAYER = 'PlainCreeek';
+const REQUIRED_TEAM = 'Sheriff';
+const APPROVED_VEHICLE = '2003 Falcon Prime Eques Interceptor';
+const WRONG_VEHICLE_REMINDER_MS = 5 * 60 * 1000;
+const WRONG_VEHICLE_NOTICE_RECIPIENTS = [
+  '1169457690066558988',
+  '1440520629349515274',
+  '1074411240757137589',
+  '1044686997194805280',
+  '547417724381429761',
+];
+
 async function sendGameLog(client, settings, description) {
   if (!settings.gameLogChannelId) return;
   const channel = await client.channels.fetch(settings.gameLogChannelId).catch(() => null);
@@ -15,17 +27,48 @@ async function sendGameLog(client, settings, description) {
   }
 }
 
-async function syncOnce(client, config, previousPlayers) {
+async function notifyWrongVehicle(client, vehicleName) {
+  const message = `${WRONG_VEHICLE_PLAYER} is driving the wrong car: **${vehicleName || 'Unknown vehicle'}**. The approved Sheriff vehicle is **${APPROVED_VEHICLE}**.`;
+  let sent = 0;
+  for (const userId of WRONG_VEHICLE_NOTICE_RECIPIENTS) {
+    const user = await client.users.fetch(userId).catch(() => null);
+    if (!user) continue;
+    await user.send(message).then(() => { sent += 1; }).catch(() => {});
+  }
+  return sent;
+}
+
+async function syncOnce(client, config, previousState) {
   const settings = await getOwnerConfig();
   if (!config.erlcServerKey) {
     client.erlcStatus = { online: false, updatedAt: new Date().toISOString() };
-    return previousPlayers;
+    return previousState;
   }
 
   // Keep a live player count snapshot even when role syncing has
   // not been configured in the owner panel yet.
   const server = await fetchErlcServer(config.erlcServerKey);
   const players = (server.Players || []).map(parseErlcPlayer).filter((player) => player.robloxId);
+  const vehicles = server.Vehicles || server.vehicles || [];
+  const sheriffPlayer = players.find((player) => player.username.toLowerCase() === WRONG_VEHICLE_PLAYER.toLowerCase()
+    && player.team.toLowerCase() === REQUIRED_TEAM.toLowerCase());
+  const wrongVehicle = sheriffPlayer
+    ? vehicles.find((vehicle) => String(vehicle.Owner || vehicle.owner || '').toLowerCase() === sheriffPlayer.username.toLowerCase()
+      && String(vehicle.Name || vehicle.name || '').toLowerCase() !== APPROVED_VEHICLE.toLowerCase())
+    : null;
+  const wrongVehicleName = String(wrongVehicle?.Name || wrongVehicle?.name || '').trim();
+  const wrongVehicleKey = wrongVehicle
+    ? `${sheriffPlayer.username.toLowerCase()}|${wrongVehicleName.toLowerCase()}|${String(wrongVehicle.Plate || wrongVehicle.plate || '')}`
+    : '';
+  const reminderDue = wrongVehicleKey
+    && (previousState?.wrongVehicleKey !== wrongVehicleKey
+      || Date.now() - Number(previousState?.wrongVehicleNoticeAt || 0) >= WRONG_VEHICLE_REMINDER_MS);
+  let wrongVehicleNoticeAt = wrongVehicleKey ? Number(previousState?.wrongVehicleNoticeAt || 0) : 0;
+  if (reminderDue) {
+    const sent = await notifyWrongVehicle(client, wrongVehicleName);
+    logger.info(`ER:LC vehicle check: warned ${sent} recipient(s) about ${WRONG_VEHICLE_PLAYER}'s unapproved vehicle.`);
+    wrongVehicleNoticeAt = Date.now();
+  }
   client.erlcStatus = {
     online: true,
     name: server.Name || 'Clearwater Roleplay',
@@ -37,7 +80,11 @@ async function syncOnce(client, config, previousPlayers) {
   };
 
   if (!settings.inGameGuildId || !settings.inGameRoleId) {
-    return new Set(players.map((player) => player.robloxId));
+    return {
+      playerIds: new Set(players.map((player) => player.robloxId)),
+      wrongVehicleKey,
+      wrongVehicleNoticeAt,
+    };
   }
 
   const identityMap = await discordIdsByRobloxId();
@@ -64,17 +111,21 @@ async function syncOnce(client, config, previousPlayers) {
     }
   }
 
-  return new Set(players.map((player) => player.robloxId));
+  return {
+    playerIds: new Set(players.map((player) => player.robloxId)),
+    wrongVehicleKey,
+    wrongVehicleNoticeAt,
+  };
 }
 
 export function startErlcRoleSync(client, config) {
   let stopped = false;
   let timer;
-  let previousPlayers = new Set();
+  let previousState = { playerIds: new Set(), wrongVehicleKey: '', wrongVehicleNoticeAt: 0 };
 
   const run = async () => {
     try {
-      previousPlayers = await syncOnce(client, config, previousPlayers);
+      previousState = await syncOnce(client, config, previousState);
     } catch (error) {
       logger.error('ER:LC role sync failed', error);
     } finally {
