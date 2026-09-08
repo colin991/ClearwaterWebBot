@@ -639,7 +639,7 @@ export async function syncPinellasRoster(client) {
           }
         }
         const rank = getHighestPinellasRank(member);
-        if (!rank || rankKey(rank.name) !== rankKey(row.rank)) {
+        if (!rank) {
           updates.push(
             { range: rosterCell('H', row.rowNumber), value: '' },
             { range: rosterCell('J', row.rowNumber), value: '' },
@@ -647,6 +647,10 @@ export async function syncPinellasRoster(client) {
             { range: rosterCell('P', row.rowNumber), value: 'Clean Record' },
           );
           removed += 1;
+          continue;
+        }
+        if (rankKey(rank.name) !== rankKey(row.rank)) {
+          logger.info(`PCSO roster: preserving row ${row.rowNumber} for ${row.discordId} while rank changes from ${row.rank} to ${rank.name}.`);
           continue;
         }
         const expectedNickname = row.roleplayName && row.callsign
