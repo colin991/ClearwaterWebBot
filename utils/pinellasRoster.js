@@ -55,6 +55,8 @@ const ROLEPLAY_NAME_INPUT_ID = 'roleplay-name';
 const AUTOMATED_ACTIVITY_VALUES = new Set(['N/A', 'LOA', 'Suspension']);
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ACTIVITY_STATE_PATH = path.join(ROOT, 'data', 'pinellas-roster-activity.json');
+const CALLSIGN_UPDATE_NOTICE_PATH = path.join(ROOT, 'data', 'pinellas-callsign-update-notice.json');
+const CALLSIGN_UPDATE_NOTICE_VERSION = 2;
 
 let rosterQueue = Promise.resolve();
 
@@ -109,6 +111,45 @@ async function dmPinellasCallsignChange(member, nickname, reason = 'your PCSO ra
   await member?.user?.send(
     `Your PCSO callsign was changed to **${nickname}** because ${reason}. Update your roleplay name here: ${updateUrl}`,
   ).catch(() => {});
+}
+
+async function notifyAssignedPinellasCallsigns(client, guild, rows) {
+  if (!guild) return 0;
+  let stored = {};
+  try {
+    stored = JSON.parse(await readFile(CALLSIGN_UPDATE_NOTICE_PATH, 'utf8')) || {};
+  } catch {
+    // The first sync after this update notifies all assigned members.
+  }
+
+  let dmsSent = 0;
+  const currentAssignments = {};
+  for (const row of rows) {
+    if (!/^\d{16,22}$/.test(row.discordId) || !row.callsign) continue;
+    currentAssignments[row.discordId] = row.callsign;
+    if (stored?.version === CALLSIGN_UPDATE_NOTICE_VERSION
+      && stored.assignments?.[row.discordId] === row.callsign) continue;
+    const member = await guild.members.fetch(row.discordId).catch(() => null);
+    if (!member) continue;
+    await member.user.send(
+      `Your PCSO callsign has been updated to **${row.callsign}**. If your roleplay name needs updating, use the callsign panel here: https://discord.com/channels/${PINELLAS_GUILD_ID}/${PINELLAS_CALLSIGN_CHANNEL_ID}`,
+    ).then(() => { dmsSent += 1; }).catch(() => {});
+  }
+
+  await mkdir(path.dirname(CALLSIGN_UPDATE_NOTICE_PATH), { recursive: true });
+  await writeFile(CALLSIGN_UPDATE_NOTICE_PATH, JSON.stringify({
+    version: CALLSIGN_UPDATE_NOTICE_VERSION,
+    sentAt: new Date().toISOString(),
+    assignments: currentAssignments,
+  }, null, 2));
+  if (dmsSent) {
+    await logPinellasCallsignDatabaseChange(client, {
+      title: 'Callsign update notices sent',
+      description: `Sent the callsign update notice to ${dmsSent} assigned roster member(s).`,
+      color: 0x5865f2,
+    });
+  }
+  return dmsSent;
 }
 
 export function parsePinellasRosterRows(values = []) {
@@ -628,7 +669,8 @@ export async function syncPinellasRoster(client) {
       logger.info(`PCSO roster: synchronized ${updates.length} roster cell(s) across ${members} members; cleared ${removed} missing or mismatched rank assignment(s).`);
     }
     if (state.activityStateChanged) await writeActivityState(state.activityState);
-    return { members, cellsUpdated: updates.length };
+    const noticesSent = await notifyAssignedPinellasCallsigns(client, guild, state.rows);
+    return { members, cellsUpdated: updates.length, noticesSent };
   });
 }
 
