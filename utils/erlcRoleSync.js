@@ -1,4 +1,4 @@
-import { fetchErlcServer, parseErlcPlayer } from './erlc.js';
+import { executeErlcCommand, fetchErlcServer, parseErlcPlayer } from './erlc.js';
 import { discordIdsByRobloxId } from './identityStore.js';
 import { getOwnerConfig } from './ownerConfig.js';
 import { logger } from './logger.js';
@@ -60,6 +60,15 @@ async function syncOnce(client, config, previousState) {
   const wrongVehicleKey = wrongVehicle
     ? `${sheriffPlayer.username.toLowerCase()}|${wrongVehicleName.toLowerCase()}|${String(wrongVehicle.Plate || wrongVehicle.plate || '')}`
     : '';
+  let wrongVehicleJailKey = wrongVehicleKey ? String(previousState?.wrongVehicleJailKey || '') : '';
+  if (wrongVehicleKey && wrongVehicleJailKey !== wrongVehicleKey) {
+    await executeErlcCommand(config.erlcServerKey, `:jail ${WRONG_VEHICLE_PLAYER}`).then(() => {
+      logger.info(`ER:LC vehicle check: jailed ${WRONG_VEHICLE_PLAYER} for using ${wrongVehicleName || 'an unapproved vehicle'}.`);
+    }).catch((error) => {
+      logger.warn(`ER:LC vehicle check: could not jail ${WRONG_VEHICLE_PLAYER} (${error?.message || error}).`);
+    });
+    wrongVehicleJailKey = wrongVehicleKey;
+  }
   const reminderDue = wrongVehicleKey
     && (previousState?.wrongVehicleKey !== wrongVehicleKey
       || Date.now() - Number(previousState?.wrongVehicleNoticeAt || 0) >= WRONG_VEHICLE_REMINDER_MS);
@@ -84,6 +93,7 @@ async function syncOnce(client, config, previousState) {
       playerIds: new Set(players.map((player) => player.robloxId)),
       wrongVehicleKey,
       wrongVehicleNoticeAt,
+      wrongVehicleJailKey,
     };
   }
 
@@ -115,13 +125,19 @@ async function syncOnce(client, config, previousState) {
     playerIds: new Set(players.map((player) => player.robloxId)),
     wrongVehicleKey,
     wrongVehicleNoticeAt,
+    wrongVehicleJailKey,
   };
 }
 
 export function startErlcRoleSync(client, config) {
   let stopped = false;
   let timer;
-  let previousState = { playerIds: new Set(), wrongVehicleKey: '', wrongVehicleNoticeAt: 0 };
+  let previousState = {
+    playerIds: new Set(),
+    wrongVehicleKey: '',
+    wrongVehicleNoticeAt: 0,
+    wrongVehicleJailKey: '',
+  };
 
   const run = async () => {
     try {
