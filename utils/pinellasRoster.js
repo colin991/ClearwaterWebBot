@@ -627,8 +627,8 @@ export async function syncPinellasRoster(client) {
     for (const row of state.rows) {
       if (!/^\d{16,22}$/.test(row.discordId)) continue;
       members += 1;
+      let member = null;
       if (roleStateAvailable) {
-        let member = null;
         try {
           member = await guild.members.fetch(row.discordId);
         } catch (error) {
@@ -649,6 +649,17 @@ export async function syncPinellasRoster(client) {
           );
           removed += 1;
           continue;
+        }
+        const expectedNickname = row.roleplayName && row.callsign
+          ? `${row.callsign} | ${row.roleplayName}`
+          : null;
+        if (expectedNickname && member.nickname !== expectedNickname) {
+          const me = guild.members.me || await guild.members.fetchMe().catch(() => null);
+          if (me?.permissions?.has(PermissionFlagsBits.ManageNicknames) && member.manageable) {
+            await member.setNickname(expectedNickname, 'PCSO callsign database synchronization').catch((error) => {
+              logger.warn(`PCSO roster: database updated but nickname could not be changed for ${member.id} (${error?.message || error}).`);
+            });
+          }
         }
       }
       const desired = resolvePinellasRosterMemberStatus(state, row.discordId, row.activity);
