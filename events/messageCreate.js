@@ -42,9 +42,12 @@ export default {
 
     const settings = await getOwnerConfig();
     const prefix = settings.prefix || '-';
-    if (!message.content.startsWith(prefix)) return;
+    const commandPrefix = message.content.startsWith(prefix)
+      ? prefix
+      : message.content.startsWith(';') ? ';' : null;
+    if (!commandPrefix) return;
 
-    const { name, args } = parseArgs(message.content, prefix);
+    const { name, args } = parseArgs(message.content, commandPrefix);
     if (!name) return;
 
     const command = client.prefixCommands?.get(name);
