@@ -8,11 +8,12 @@ const WRONG_VEHICLE_PLAYER = 'PlainCreeek';
 const REQUIRED_TEAM = 'Sheriff';
 const APPROVED_VEHICLE = '2003 Falcon Prime Eques Interceptor';
 const WRONG_VEHICLE_REMINDER_MS = 5 * 60 * 1000;
+const WRONG_VEHICLE_JAIL_COOLDOWN_MS = 5 * 60 * 1000;
 const WRONG_VEHICLE_NOTICE_RECIPIENTS = [
   '1169457690066558988',
   '1440520629349515274',
   '1074411240757137589',
-  '1044686997194805280',
+  '1128547120304095272',
   '547417724381429761',
 ];
 
@@ -61,13 +62,20 @@ async function syncOnce(client, config, previousState) {
     ? `${sheriffPlayer.username.toLowerCase()}|${wrongVehicleName.toLowerCase()}|${String(wrongVehicle.Plate || wrongVehicle.plate || '')}`
     : '';
   let wrongVehicleJailKey = wrongVehicleKey ? String(previousState?.wrongVehicleJailKey || '') : '';
-  if (wrongVehicleKey && wrongVehicleJailKey !== wrongVehicleKey) {
+  let wrongVehicleJailAttemptAt = wrongVehicleKey
+    ? Number(previousState?.wrongVehicleJailAttemptAt || 0)
+    : 0;
+  const jailDue = wrongVehicleKey
+    && wrongVehicleJailKey !== wrongVehicleKey
+    && Date.now() - wrongVehicleJailAttemptAt >= WRONG_VEHICLE_JAIL_COOLDOWN_MS;
+  if (jailDue) {
+    wrongVehicleJailAttemptAt = Date.now();
     await executeErlcCommand(config.erlcServerKey, `:jail ${WRONG_VEHICLE_PLAYER}`).then(() => {
+      wrongVehicleJailKey = wrongVehicleKey;
       logger.info(`ER:LC vehicle check: jailed ${WRONG_VEHICLE_PLAYER} for using ${wrongVehicleName || 'an unapproved vehicle'}.`);
     }).catch((error) => {
       logger.warn(`ER:LC vehicle check: could not jail ${WRONG_VEHICLE_PLAYER} (${error?.message || error}).`);
     });
-    wrongVehicleJailKey = wrongVehicleKey;
   }
   const reminderDue = wrongVehicleKey
     && (previousState?.wrongVehicleKey !== wrongVehicleKey
@@ -94,6 +102,7 @@ async function syncOnce(client, config, previousState) {
       wrongVehicleKey,
       wrongVehicleNoticeAt,
       wrongVehicleJailKey,
+      wrongVehicleJailAttemptAt,
     };
   }
 
@@ -126,6 +135,7 @@ async function syncOnce(client, config, previousState) {
     wrongVehicleKey,
     wrongVehicleNoticeAt,
     wrongVehicleJailKey,
+    wrongVehicleJailAttemptAt,
   };
 }
 
@@ -137,6 +147,7 @@ export function startErlcRoleSync(client, config) {
     wrongVehicleKey: '',
     wrongVehicleNoticeAt: 0,
     wrongVehicleJailKey: '',
+    wrongVehicleJailAttemptAt: 0,
   };
 
   const run = async () => {
