@@ -104,6 +104,13 @@ async function logPinellasCallsignDatabaseChange(client, {
   });
 }
 
+async function dmPinellasCallsignChange(member, nickname, reason = 'your PCSO rank changed') {
+  const updateUrl = `https://discord.com/channels/${PINELLAS_GUILD_ID}/${PINELLAS_CALLSIGN_CHANNEL_ID}`;
+  await member?.user?.send(
+    `Your PCSO callsign was changed to **${nickname}** because ${reason}. Update your roleplay name here: ${updateUrl}`,
+  ).catch(() => {});
+}
+
 export function parsePinellasRosterRows(values = []) {
   return values.map((row, index) => ({
     rowNumber: index + 11,
@@ -463,6 +470,10 @@ export async function assignPinellasCallsign(client, member, roleplayName) {
       description: `<@${member.id}> assigned **${nickname}** to the **${rank.name}** roster spot (row ${target.rowNumber}).`,
       color: 0x3ba55d,
     });
+
+    if (current && current.callsign !== target.callsign) {
+      await dmPinellasCallsignChange(member, nickname, 'your roster callsign changed');
+    }
 
     return {
       callsign: target.callsign,
