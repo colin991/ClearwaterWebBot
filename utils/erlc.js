@@ -3,7 +3,7 @@ import { attachPlayerAvatars, robloxAvatarProxyPath } from '../lib/roblox-avatar
 export async function fetchErlcServer(serverKey) {
   if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
   const url = new URL('https://api.erlc.gg/v2/server');
-  for (const field of ['Players', 'Queue']) url.searchParams.set(field, 'true');
+  for (const field of ['Players', 'Queue', 'Vehicles']) url.searchParams.set(field, 'true');
   const response = await fetch(url, {
     headers: { 'server-key': serverKey },
     signal: AbortSignal.timeout(8000),
@@ -44,7 +44,7 @@ export function parseErlcPlayer(player) {
   };
 }
 
-// Official map images are 3121² and cover the in-game 3120² stud plane.
+// Official map images are 3121Â² and cover the in-game 3120Â² stud plane.
 // Live /v2/server player payloads use northwest-origin studs (0..3120):
 // +X east/right, +Z south/down. Docs also describe a centre-origin variant
 // (negative values allowed); support both so pins never fall off the map.
