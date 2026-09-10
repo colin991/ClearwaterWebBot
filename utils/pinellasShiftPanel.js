@@ -7,12 +7,16 @@ import {
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   MessageFlags,
+  ModalBuilder,
   PermissionFlagsBits,
   SeparatorBuilder,
   SeparatorSpacingSize,
   StringSelectMenuBuilder,
   TextDisplayBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } from 'discord.js';
+import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,7 +27,7 @@ import { renderLibertyLocationMap } from './libertyMapImage.js';
 import { logger } from './logger.js';
 import {
   fetchMelonlyMemberDiscordId,
-  fetchPinellasDepartmentShifts,
+  fetchRecentMelonlyShifts,
   isActiveMelonlyShift,
   isMelonlyRateLimited,
   resolveMelonlyDiscordId,
@@ -33,18 +37,29 @@ import {
   getHighestPinellasRank,
   PINELLAS_RANKS,
 } from './pinellasPromote.js';
-import { PINELLAS_GUILD_ID } from './pinellasServer.js';
+import {
+  PINELLAS_EMPLOYEE_WELCOME_ROLE_ID,
+  PINELLAS_GUILD_ID,
+} from './pinellasServer.js';
 
 export const PINELLAS_SHIFT_PANEL_CHANNEL_ID = '1546298062568165396';
 export const PINELLAS_ON_DUTY_ROLE_ID = '1514462780575715418';
-/** Guild used for “Voice Chat” lookup on the deputy card (Clearwater main). */
+/** Guild used for â€œVoice Chatâ€ lookup on the deputy card (Clearwater main). */
 export const PINELLAS_SHIFT_VC_GUILD_ID = '1514026810348671026';
 export const PINELLAS_SHIFT_REFRESH_MS = 30_000;
 
 export const PINELLAS_SHIFT_REPORTS_ID = 'pcs:shift:reports';
 export const PINELLAS_SHIFT_LOOKUP_ID = 'pcs:shift:lookup';
 
-/** Melonly department id for Pinellas County Sheriff’s Office. */
+export const PINELLAS_SHIFT_REPORT_CHANNELS = Object.freeze({
+  ois: '1514667548468314242',
+  mva: '1514667590608486400',
+  arrest: '1514667694920827000',
+  citation: '1514667738516295680',
+  warrant: '1524493216555208744',
+});
+
+/** Melonly department id for Pinellas County Sheriffâ€™s Office. */
 export const PINELLAS_MELONLY_DEPARTMENT_ID = '7470323914464301056';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -57,10 +72,11 @@ const SLOGO_EMOJI = '<:slogo:1546245229420744804>';
 const ATIME_EMOJI = '<:atime:1546336942785044490>';
 const SHEET_EMOJI = '<:sheet:1546293540827701329>';
 
-/** Melonly memberId → discordId */
+/** Melonly memberId â†’ discordId */
 const memberDiscordCache = new Map();
-/** discordId → Melonly memberId */
+/** discordId â†’ Melonly memberId */
 const discordMemberCache = new Map();
+const reportSessions = new Map();
 /** Last successful on-duty snapshot (used when Melonly 429s). */
 let lastSnapshot = null;
 
@@ -71,6 +87,55 @@ const REPORT_OPTIONS = Object.freeze([
   { label: 'Citation Report', value: 'citation' },
   { label: 'Warrant Log', value: 'warrant' },
 ]);
+
+const REPORT_DEFINITIONS = Object.freeze({
+  ois: {
+    title: 'OIS Report',
+    heading: 'Pinellas County Sheriff Office OIS Report',
+    steps: [
+      [['caseNumber', 'Case #', false], ['date', 'Date', false], ['time', 'Time (in game)', false], ['location', 'Location', true], ['weather', 'Weather conditions', false]],
+      [['deputy', 'Involved Deputy', true], ['badge', 'Badge #', false], ['suspectDescription', 'Suspect Description', true], ['vehicle', 'Vehicle Involved', false], ['weapon', 'Suspect weapon', false]],
+      [['roundsAmount', 'Amount of rounds fired', false], ['roundsFired', 'Rounds Fired', false], ['direction', 'Direction of fire', false], ['weaponUsed', 'Weapon Used', false], ['subjectInjuries', 'Subject Injuries', true]],
+      [['deputyInjuries', 'Deputy Injuries', true], ['propertyDamage', 'Property Damage', true], ['narrative', 'Narrative Scene Summary', true], ['signed', 'Signed (Deputy Name)', false]],
+    ],
+  },
+  mva: {
+    title: 'MVA Report',
+    heading: 'Pinellas County Sheriff Office MVA Report',
+    steps: [
+      [['caseNumber', 'Case #', false], ['date', 'Date', false], ['time', 'Time (in game)', false], ['location', 'Location', true], ['weather', 'Weather conditions', false]],
+      [['badge', 'Deputy Reporting Badge #', false], ['citation', 'Any Citation given?', false], ['arrest', 'Any Arrest made?', false], ['person1', 'Person 1: name and DOB', true], ['person1Vehicle', 'Person 1: plate and license #', true]],
+      [['person2', 'Person 2: name and DOB', true], ['person2Vehicle', 'Person 2: plate and license #', true], ['injuriesDamage', 'Injuries and vehicle damage', true], ['narrative', 'Narrative Scene Summary', true], ['signed', 'Signed (Deputy Name)', false]],
+    ],
+  },
+  arrest: {
+    title: 'Arrest Report',
+    heading: 'PCSO Arrest Log',
+    steps: [
+      [['officer', 'Officer', true], ['assisting', 'Assisting Officer(s)', true], ['date', 'Date', false], ['time', 'Time of Arrest', false], ['suspect', 'Suspect', true]],
+      [['suspectDescription', 'Suspect Description', true], ['background', 'Background clear', false], ['cad', 'Registered in CAD', false], ['charges', 'Charges', true], ['vehicleColor', 'Vehicle Color', false]],
+      [['vehicleModel', 'Vehicle Exact Model', false], ['vehiclePlate', 'Vehicle Plate', false], ['narrative', 'Detailed Scene Narrative', true]],
+    ],
+  },
+  citation: {
+    title: 'Citation Report',
+    heading: 'PCSO Citation Log',
+    steps: [
+      [['officer', 'Officer', true], ['assisting', 'Assisting Officer(s)', true], ['date', 'Date', false], ['time', 'Time of Citation', false], ['location', 'Location', true]],
+      [['citedFor', 'Cited for', true], ['suspect', 'Suspect', true], ['background', 'Background clear', false], ['cad', 'Registered in CAD', false], ['vehicleColor', 'Vehicle Color', false]],
+      [['vehicleModel', 'Vehicle Exact Model', false], ['vehiclePlate', 'Vehicle Plate', false], ['narrative', 'Detailed Scene Narrative', true]],
+    ],
+  },
+  warrant: {
+    title: 'Warrant Arrest Log',
+    heading: 'PCSO Warrant Arrest Log',
+    steps: [
+      [['deputy', 'Deputy', true], ['assisting', 'Assisting Deputy(s)', true], ['date', 'Date', false], ['time', 'Time of Arrest', false], ['warrantType', 'Warrant Type (Search / Arrest)', false]],
+      [['warrantNumber', 'Warrant Number', false], ['charges', 'Charge(s)', true], ['suspect', 'Suspect', true], ['background', 'Background clear (Y / N)', false], ['cad', 'Registered in CAD (Y / N)', false]],
+      [['gang', 'Gang Documented (Y / N)', false], ['vehicleColor', 'Vehicle Color', false], ['vehicleModel', 'Vehicle Exact Model', false], ['vehiclePlate', 'Vehicle Plate', false], ['narrative', 'Detailed Scene Narrative', true]],
+    ],
+  },
+});
 
 const CORPORAL_INDEX = PINELLAS_RANKS.findIndex((rank) => rank.name === 'Corporal');
 
@@ -117,15 +182,13 @@ export async function resolvePinellasMelonlyMemberDiscordId(apiKey, memberId) {
   await loadMemberDiscordMap();
   if (memberDiscordCache.has(id)) return memberDiscordCache.get(id);
 
-  const discordId = await fetchMelonlyMemberDiscordId(apiKey, id, {
-    departmentId: PINELLAS_MELONLY_DEPARTMENT_ID,
-  });
+  const discordId = await fetchMelonlyMemberDiscordId(apiKey, id);
   if (discordId) await rememberMemberDiscord(id, discordId);
   return discordId;
 }
 
 /**
- * Build Melonly memberId ↔ Discord map from active shift member IDs.
+ * Build Melonly memberId â†” Discord map from active shift member IDs.
  * Uses official GET /server/members/{id}/discord (main Melonly API).
  */
 async function ensureMelonlyDiscordIndex(apiKey, neededMemberIds = []) {
@@ -257,10 +320,10 @@ export function formatShiftDuration(ms) {
  */
 export function parseDeputyNickname(nickname) {
   const raw = String(nickname || '').trim();
-  if (!raw) return { callsign: '—', roleplayName: '—', altCallsigns: [] };
+  if (!raw) return { callsign: 'â€”', roleplayName: 'â€”', altCallsigns: [] };
 
   let parts = raw.split('|').map((part) => part.trim()).filter(Boolean);
-  if (!parts.length) return { callsign: '—', roleplayName: '—', altCallsigns: [] };
+  if (!parts.length) return { callsign: 'â€”', roleplayName: 'â€”', altCallsigns: [] };
 
   // Strip leading duty/status prefixes.
   while (parts.length >= 2 && /^(on\s*duty|off\s*duty|on\s*break|duty)$/i.test(parts[0])) {
@@ -278,7 +341,7 @@ export function parseDeputyNickname(nickname) {
   if (parts.length >= 2) {
     return { callsign: parts[0], roleplayName: parts.slice(1).join(' | '), altCallsigns: [] };
   }
-  return { callsign: '—', roleplayName: parts[0], altCallsigns: [] };
+  return { callsign: 'â€”', roleplayName: parts[0], altCallsigns: [] };
 }
 
 /** Tokens that look like unit/radio callsigns (not a person's name). */
@@ -296,7 +359,7 @@ function nicknameCallsignCandidates(...nicknames) {
     const parsed = parseDeputyNickname(nickname);
     for (const value of [parsed.callsign, ...(parsed.altCallsigns || [])]) {
       const key = normalizeCallsign(value);
-      if (!key || value === '—' || seen.has(key)) continue;
+      if (!key || value === 'â€”' || seen.has(key)) continue;
       seen.add(key);
       found.push(value);
     }
@@ -343,10 +406,10 @@ function normalizeCallsign(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, '');
 }
 
-/** Other departments use callsigns starting with 2 or 3 — exclude those only. */
+/** Other departments use callsigns starting with 2 or 3 â€” exclude those only. */
 export function isOtherDepartmentCallsign(callsign) {
   const raw = String(callsign || '').trim();
-  if (!raw || raw === '—') return false;
+  if (!raw || raw === 'â€”') return false;
   return /^[23]/.test(raw);
 }
 
@@ -368,6 +431,24 @@ function shiftDepartmentIds(shift) {
 
 export function isPinellasDepartmentShift(shift) {
   return shiftDepartmentIds(shift).includes(PINELLAS_MELONLY_DEPARTMENT_ID);
+}
+
+/** Pinellas Discord staff via employee role or PCSO rank (not the on-duty role). */
+export function isPinellasDiscordStaff(member) {
+  if (!member || member.user?.bot) return false;
+  return Boolean(
+    member.roles.cache.has(PINELLAS_EMPLOYEE_WELCOME_ROLE_ID)
+    || getHighestPinellasRank(member),
+  );
+}
+
+/**
+ * Whether Melonly is labeling shifts with the Pinellas department id.
+ * Note: every Melonly shift has *some* serverId (usually the main panel), so we
+ * must look specifically for the Pinellas department id â€” not "any serverId".
+ */
+export function melonlyLabelsPinellasDepartment(shifts = []) {
+  return (Array.isArray(shifts) ? shifts : []).some(isPinellasDepartmentShift);
 }
 
 /**
@@ -427,20 +508,20 @@ function resolveDeputyIdentity(pinellasMember, clearwaterMember, player) {
     clearwaterMember?.displayName,
   ].filter(Boolean);
 
-  let parsed = { callsign: '—', roleplayName: '—', altCallsigns: [] };
+  let parsed = { callsign: 'â€”', roleplayName: 'â€”', altCallsigns: [] };
   for (const candidate of candidates) {
     const next = parseDeputyNickname(candidate);
-    if (next.callsign !== '—') {
+    if (next.callsign !== 'â€”') {
       parsed = next;
       break;
     }
-    if (parsed.roleplayName === '—' && next.roleplayName !== '—') parsed = next;
+    if (parsed.roleplayName === 'â€”' && next.roleplayName !== 'â€”') parsed = next;
   }
 
-  const callsign = parsed.callsign !== '—'
+  const callsign = parsed.callsign !== 'â€”'
     ? parsed.callsign
-    : (player?.callsign || '—');
-  const roleplayName = parsed.roleplayName !== '—'
+    : (player?.callsign || 'â€”');
+  const roleplayName = parsed.roleplayName !== 'â€”'
     ? parsed.roleplayName
     : (
       player?.username
@@ -493,8 +574,8 @@ function locationMapPin(player) {
 /**
  * Build on-duty deputy rows for the Pinellas shift panel.
  *
- * Uses Melonly department shifts only (`/server/departments/{id}/shifts`).
- * Main/staff Melonly shifts are never listed.
+ * Shows people on an active Melonly shift for the Pinellas department only.
+ * The Discord on-duty role is never used as a panel inclusion source.
  */
 export async function collectOnDutyDeputies(client, {
   apiKey = config.melonlyApiKey,
@@ -503,19 +584,18 @@ export async function collectOnDutyDeputies(client, {
   if (!apiKey) {
     throw new Error(
       'MELONLY_API_KEY is not configured. Create a token on the main Melonly panel '
-      + '(Settings → Panel → API Tokens).',
+      + '(Settings â†’ Panel â†’ API Tokens).',
     );
   }
 
   await loadMemberDiscordMap();
 
-  // Department shifts only — not main/staff panel shifts.
-  const recentShifts = await fetchPinellasDepartmentShifts(
-    apiKey,
-    PINELLAS_MELONLY_DEPARTMENT_ID,
-    { cacheTtlMs: 25_000, maxPages: 3 },
-  );
+  // Main Melonly API (department Melonly has no API tokens).
+  const recentShifts = await fetchRecentMelonlyShifts(apiKey, { cacheTtlMs: 25_000, maxPages: 3 });
   const activeShifts = recentShifts.filter(isActiveMelonlyShift);
+  // Only treat Melonly as department-tagged when the Pinellas department id appears.
+  // Plain serverId on every shift is the main panel id and must not disable the staff fallback.
+  const labelsPinellasDept = melonlyLabelsPinellasDepartment(recentShifts);
 
   const pinellas = client.guilds.cache.get(PINELLAS_GUILD_ID)
     || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
@@ -545,6 +625,7 @@ export async function collectOnDutyDeputies(client, {
   const nowMs = Date.now();
   const byDiscord = new Map();
   let unresolved = 0;
+  let skippedMainStaff = 0;
   let skippedOtherDept = 0;
 
   async function buildDeputyRow({
@@ -578,7 +659,7 @@ export async function collectOnDutyDeputies(client, {
       clearwaterMember,
       player,
     ));
-    if (player?.callsign && callsign === '—') callsign = player.callsign;
+    if (player?.callsign && callsign === 'â€”') callsign = player.callsign;
 
     if (isOtherDepartmentCallsign(callsign)) {
       skippedOtherDept += 1;
@@ -639,7 +720,22 @@ export async function collectOnDutyDeputies(client, {
       || await clearwater?.members?.fetch(discordId).catch(() => null)
       || await vcGuild?.members?.fetch(discordId).catch(() => null);
 
-    // Already sourced from /server/departments/{pinellasId}/shifts — no staff proxy.
+    const deptShift = isPinellasDepartmentShift(shift);
+    // When Melonly never labels Pinellas department shifts, treat Melonly-active
+    // Pinellas Discord staff (employee/rank) as department members.
+    // Do NOT use the on-duty Discord role as an inclusion source.
+    const staffProxy = !labelsPinellasDept && isPinellasDiscordStaff(pinellasMember);
+
+    if (labelsPinellasDept) {
+      if (!deptShift) {
+        skippedMainStaff += 1;
+        continue;
+      }
+    } else if (!staffProxy) {
+      skippedMainStaff += 1;
+      continue;
+    }
+
     const row = await buildDeputyRow({
       discordId,
       memberId,
@@ -656,10 +752,15 @@ export async function collectOnDutyDeputies(client, {
     return left.localeCompare(right);
   });
 
+  const sampleServerIds = [...new Set(
+    activeShifts.flatMap((shift) => shiftDepartmentIds(shift)).slice(0, 8),
+  )];
+
   logger.info(
-    `Pinellas shift panel Melonly department: recent=${recentShifts.length} active=${activeShifts.length} `
-    + `shown=${deputies.length} unresolved=${unresolved} skippedOtherDept=${skippedOtherDept} `
-    + `linked=${memberDiscordCache.size}`,
+    `Pinellas shift panel Melonly: recent=${recentShifts.length} active=${activeShifts.length} `
+    + `shown=${deputies.length} unresolved=${unresolved} skippedMainStaff=${skippedMainStaff} `
+    + `skippedOtherDept=${skippedOtherDept} pinellasTags=${labelsPinellasDept} `
+    + `serverIds=[${sampleServerIds.join(',')}] linked=${memberDiscordCache.size}`,
   );
 
   const snapshot = {
@@ -667,6 +768,7 @@ export async function collectOnDutyDeputies(client, {
     activeShiftCount: activeShifts.length,
     departmentShiftCount: deputies.length,
     unresolvedCount: unresolved,
+    skippedMainStaffCount: skippedMainStaff,
     skippedOtherDeptCount: skippedOtherDept,
     supervisorCount: deputies.filter((entry) => entry.isSupervisor).length,
     fetchedAt: new Date().toISOString(),
@@ -803,6 +905,77 @@ async function buildShiftPanelPayload(snapshot, { includeFiles = true } = {}) {
   };
   if (includeFiles && files.length) payload.files = files;
   return payload;
+}
+
+function reportModalId(type, step, token) {
+  return `pcs:shift:report:${type}:${step}:${token}`;
+}
+
+function buildReportModal(type, step, token) {
+  const definition = REPORT_DEFINITIONS[type];
+  const modal = new ModalBuilder()
+    .setCustomId(reportModalId(type, step, token))
+    .setTitle(`${definition.title} (${step + 1}/${definition.steps.length})`);
+
+  for (const [fieldId, label, paragraph] of definition.steps[step]) {
+    modal.addComponents(new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId(fieldId)
+        .setLabel(label.slice(0, 45))
+        .setStyle(paragraph ? TextInputStyle.Paragraph : TextInputStyle.Short)
+        .setRequired(true)
+        .setMaxLength(paragraph ? 1000 : 200),
+    ));
+  }
+  return modal;
+}
+
+function reportText(value, maxLength = 1000) {
+  const cleaned = String(value || '').replace(/[`]/g, '').trim();
+  if (!cleaned) return 'N/A';
+  return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength - 1)}â€¦` : cleaned;
+}
+
+function buildReportEmbed(type, values, submitter) {
+  const definition = REPORT_DEFINITIONS[type];
+  const fields = [];
+  for (const step of definition.steps) {
+    for (const [fieldId, label] of step) {
+      fields.push({
+        name: label,
+        value: reportText(values[fieldId]),
+        inline: !['narrative', 'injuriesDamage', 'suspectDescription', 'charges'].includes(fieldId),
+      });
+    }
+  }
+
+  return new EmbedBuilder()
+    .setColor(0x1f2937)
+    .setTitle(definition.heading)
+    .setDescription(`**Report submitted by:** ${submitter}`)
+    .addFields(fields.slice(0, 25))
+    .setFooter({ text: 'Pinellas County Sheriff Office â€¢ Official Report' })
+    .setTimestamp();
+}
+
+async function submitShiftReport(interaction, type, values) {
+  const channelId = PINELLAS_SHIFT_REPORT_CHANNELS[type];
+  const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
+  if (!channel?.isTextBased?.()) throw new Error('The report log channel is unavailable.');
+
+  const logo = await loadAttachment(
+    path.join(ROOT, 'assets', 'pinellas-ops-logo.png'),
+    'pcso-ops-logo.png',
+  );
+  const embed = buildReportEmbed(type, values, `<@${interaction.user.id}>`);
+  if (logo) embed.setThumbnail('attachment://pcso-ops-logo.png');
+  const payload = {
+    embeds: [embed],
+    allowedMentions: { parse: [] },
+  };
+  if (logo) payload.files = [logo];
+  const message = await channel.send(payload);
+  return { channel, message };
 }
 
 /**
@@ -1015,7 +1188,7 @@ export async function refreshPinellasShiftPanel(client, { forceResend = false } 
   } catch (error) {
     if (error?.status === 429 || error?.rateLimited || isMelonlyRateLimited()) {
       if (lastSnapshot) {
-        logger.warn(`Pinellas shift panel: Melonly 429 — reusing last snapshot (${error?.message || error})`);
+        logger.warn(`Pinellas shift panel: Melonly 429 â€” reusing last snapshot (${error?.message || error})`);
         snapshot = lastSnapshot;
       } else {
         throw new Error(
@@ -1123,14 +1296,67 @@ export function startPinellasShiftPanel(client) {
 
 export async function handlePinellasShiftPanelInteraction(interaction) {
   const id = String(interaction.customId || '');
+  const reportModalMatch = /^pcs:shift:report:(ois|mva|arrest|citation|warrant):(\d+):([a-f0-9]+)$/.exec(id);
+
+  if (reportModalMatch && interaction.isModalSubmit()) {
+    const [, type, stepToken, token] = reportModalMatch;
+    const step = Number(stepToken);
+    const definition = REPORT_DEFINITIONS[type];
+    const session = reportSessions.get(token);
+    if (!session || session.userId !== interaction.user.id || session.type !== type || session.step !== step) {
+      await interaction.reply({
+        content: 'That report form expired. Please choose the report again from the shift panel.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return true;
+    }
+
+    for (const [fieldId] of definition.steps[step]) {
+      session.values[fieldId] = interaction.fields.getTextInputValue(fieldId);
+    }
+    session.updatedAt = Date.now();
+
+    if (step + 1 < definition.steps.length) {
+      session.step += 1;
+      await interaction.showModal(buildReportModal(type, session.step, token));
+      return true;
+    }
+
+    reportSessions.delete(token);
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      const result = await submitShiftReport(interaction, type, session.values);
+      await interaction.editReply({
+        content: `Your **${definition.title}** was submitted to <#${result.channel.id}>.`,
+        allowedMentions: { parse: [] },
+      });
+    } catch (error) {
+      logger.error(`Pinellas ${type} report submission failed`, error);
+      await interaction.editReply({
+        content: 'The report could not be submitted. Please try again or contact command staff.',
+      }).catch(() => {});
+    }
+    return true;
+  }
+
   if (id !== PINELLAS_SHIFT_REPORTS_ID && id !== PINELLAS_SHIFT_LOOKUP_ID) return false;
   if (!interaction.isStringSelectMenu()) return false;
 
   if (id === PINELLAS_SHIFT_REPORTS_ID) {
-    await interaction.reply({
-      content: 'Reports are not set up yet.',
-      flags: MessageFlags.Ephemeral,
+    const type = interaction.values?.[0];
+    if (!REPORT_DEFINITIONS[type]) {
+      await interaction.reply({ content: 'That report type is unavailable.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    const token = randomBytes(5).toString('hex');
+    reportSessions.set(token, {
+      userId: interaction.user.id,
+      type,
+      step: 0,
+      values: {},
+      updatedAt: Date.now(),
     });
+    await interaction.showModal(buildReportModal(type, 0, token));
     return true;
   }
 
