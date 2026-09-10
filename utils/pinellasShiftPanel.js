@@ -17,6 +17,8 @@ import {
   TextInputStyle,
 } from 'discord.js';
 import { randomBytes } from 'node:crypto';
+import PDFDocument from 'pdfkit';
+import sharp from 'sharp';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -958,22 +960,111 @@ function buildReportEmbed(type, values, submitter) {
     .setTimestamp();
 }
 
+function reportLines(type, values) {
+  const definition = REPORT_DEFINITIONS[type];
+  return definition.steps.flatMap((step) => step.map(([fieldId, label]) => ({
+    label,
+    value: reportText(values[fieldId]),
+  })));
+}
+
+function wrapDocumentText(value, width = 62) {
+  const words = String(value || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    if (line && `${line} ${word}`.length > width) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = line ? `${line} ${word}` : word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : ['N/A'];
+}
+
+function escapeSvg(value) {
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+async function buildReportDocuments(type, values, submitter) {
+  const definition = REPORT_DEFINITIONS[type];
+  const lines = reportLines(type, values);
+  const width = 1200;
+  const height = Math.max(1500, 250 + lines.reduce((total, entry) => total + 92 + (wrapDocumentText(entry.value).length - 1) * 28, 0));
+  let y = 210;
+  const svgRows = [];
+  for (const entry of lines) {
+    const wrapped = wrapDocumentText(entry.value);
+    const rowHeight = 72 + (wrapped.length - 1) * 28;
+    svgRows.push(`<rect x="70" y="${y - 38}" width="1060" height="${rowHeight}" rx="8" fill="#f5f6f8" stroke="#c6cbd3"/>`);
+    svgRows.push(`<text x="100" y="${y}" class="label">${escapeSvg(entry.label)}</text>`);
+    wrapped.forEach((line, index) => {
+      svgRows.push(`<text x="100" y="${y + 32 + index * 28}" class="value">${escapeSvg(line)}</text>`);
+    });
+    y += rowHeight + 18;
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <rect width="100%" height="100%" fill="#ffffff"/>
+    <rect x="0" y="0" width="${width}" height="145" fill="#1f2937"/>
+    <rect x="70" y="172" width="1060" height="4" fill="#d4a017"/>
+    <text x="70" y="62" class="title">PINELLAS COUNTY SHERIFF OFFICE</text>
+    <text x="70" y="112" class="subtitle">${escapeSvg(definition.heading)}</text>
+    <text x="1130" y="62" text-anchor="end" class="small">OFFICIAL REPORT</text>
+    <text x="1130" y="105" text-anchor="end" class="small">Submitted by ${escapeSvg(submitter)}</text>
+    ${svgRows.join('\n')}
+    <text x="70" y="${height - 45}" class="small">Pinellas County Sheriff Office â€¢ Official Report</text>
+  <style>
+    .title { font: 700 30px Arial; fill: #e7b329; letter-spacing: 1px; }
+    .subtitle { font: 700 25px Arial; fill: #ffffff; }
+    .small { font: 16px Arial; fill: #e5e7eb; }
+    .label { font: 700 18px Arial; fill: #1f2937; }
+    .value { font: 17px Arial; fill: #374151; }
+  </style></svg>`;
+
+  const png = await sharp(Buffer.from(svg)).png().toBuffer();
+  const pdf = await new Promise((resolve, reject) => {
+    const document = new PDFDocument({ size: 'LETTER', margin: 45 });
+    const chunks = [];
+    document.on('data', (chunk) => chunks.push(chunk));
+    document.on('end', () => resolve(Buffer.concat(chunks)));
+    document.on('error', reject);
+    document.fillColor('#1f2937').fontSize(18).font('Helvetica-Bold').text('PINELLAS COUNTY SHERIFF OFFICE');
+    document.moveDown(0.3).fillColor('#374151').fontSize(15).text(definition.heading);
+    document.moveDown(0.2).font('Helvetica').fontSize(9).fillColor('#6b7280').text(`Submitted by ${submitter}`);
+    document.moveDown(0.8);
+    for (const entry of lines) {
+      document.font('Helvetica-Bold').fontSize(10).fillColor('#1f2937').text(entry.label);
+      document.font('Helvetica').fontSize(10).fillColor('#374151').text(entry.value, { width: 510 });
+      document.moveDown(0.35);
+    }
+    document.end();
+  });
+  return { png, pdf };
+}
+
 async function submitShiftReport(interaction, type, values) {
   const channelId = PINELLAS_SHIFT_REPORT_CHANNELS[type];
   const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
   if (!channel?.isTextBased?.()) throw new Error('The report log channel is unavailable.');
 
-  const logo = await loadAttachment(
-    path.join(ROOT, 'assets', 'pinellas-ops-logo.png'),
-    'pcso-ops-logo.png',
-  );
-  const embed = buildReportEmbed(type, values, `<@${interaction.user.id}>`);
-  if (logo) embed.setThumbnail('attachment://pcso-ops-logo.png');
+  const submitter = `<@${interaction.user.id}>`;
+  const documents = await buildReportDocuments(type, values, submitter);
+  const embed = buildReportEmbed(type, values, submitter)
+    .setImage('attachment://pcso-report.png');
   const payload = {
     embeds: [embed],
     allowedMentions: { parse: [] },
+    files: [
+      new AttachmentBuilder(documents.png, { name: 'pcso-report.png' }),
+      new AttachmentBuilder(documents.pdf, { name: 'pcso-report.pdf' }),
+    ],
   };
-  if (logo) payload.files = [logo];
   const message = await channel.send(payload);
   return { channel, message };
 }
