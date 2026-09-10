@@ -67,6 +67,8 @@ export const PINELLAS_MELONLY_DEPARTMENT_ID = '7470323914464301056';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const STORE_PATH = path.join(ROOT, 'data', 'pinellas-shift-panel.json');
 const MEMBER_MAP_PATH = path.join(ROOT, 'data', 'pinellas-melonly-members-v2.json');
+const REPORT_SESSION_PATH = path.join(ROOT, 'data', 'pinellas-report-sessions.json');
+const REPORT_CASE_NUMBER_PATH = path.join(ROOT, 'data', 'pinellas-report-case-number.json');
 const BANNER_PATH = path.join(ROOT, 'assets', 'pcso-shift-banner.webp');
 const FOOTER_PATH = path.join(ROOT, 'assets', 'pcso-shift-footer.webp');
 
@@ -79,6 +81,7 @@ const memberDiscordCache = new Map();
 /** discordId â†’ Melonly memberId */
 const discordMemberCache = new Map();
 const reportSessions = new Map();
+let reportCaseQueue = Promise.resolve();
 /** Last successful on-duty snapshot (used when Melonly 429s). */
 let lastSnapshot = null;
 
@@ -95,26 +98,26 @@ const REPORT_DEFINITIONS = Object.freeze({
     title: 'OIS Report',
     heading: 'Pinellas County Sheriff Office OIS Report',
     steps: [
-      [['caseNumber', 'Case #', false], ['date', 'Date', false], ['time', 'Time (in game)', false], ['location', 'Location', true], ['weather', 'Weather conditions', false]],
-      [['deputy', 'Involved Deputy', true], ['badge', 'Badge #', false], ['suspectDescription', 'Suspect Description', true], ['vehicle', 'Vehicle Involved', false], ['weapon', 'Suspect weapon', false]],
+      [['date', 'Date', false], ['time', 'Time (in game)', false], ['location', 'Location', true], ['weather', 'Weather conditions', false]],
+      [['badge', 'Badge #', false], ['suspectDescription', 'Suspect Description', true], ['vehicle', 'Vehicle Involved', false], ['weapon', 'Suspect weapon', false]],
       [['roundsAmount', 'Amount of rounds fired', false], ['roundsFired', 'Rounds Fired', false], ['direction', 'Direction of fire', false], ['weaponUsed', 'Weapon Used', false], ['subjectInjuries', 'Subject Injuries', true]],
-      [['deputyInjuries', 'Deputy Injuries', true], ['propertyDamage', 'Property Damage', true], ['narrative', 'Narrative Scene Summary', true], ['signed', 'Signed (Deputy Name)', false]],
+      [['deputyInjuries', 'Deputy Injuries', true], ['propertyDamage', 'Property Damage', true], ['narrative', 'Narrative Scene Summary', true]],
     ],
   },
   mva: {
     title: 'MVA Report',
     heading: 'Pinellas County Sheriff Office MVA Report',
     steps: [
-      [['caseNumber', 'Case #', false], ['date', 'Date', false], ['time', 'Time (in game)', false], ['location', 'Location', true], ['weather', 'Weather conditions', false]],
+      [['date', 'Date', false], ['time', 'Time (in game)', false], ['location', 'Location', true], ['weather', 'Weather conditions', false]],
       [['badge', 'Deputy Reporting Badge #', false], ['citation', 'Any Citation given?', false], ['arrest', 'Any Arrest made?', false], ['person1', 'Person 1: name and DOB', true], ['person1Vehicle', 'Person 1: plate and license #', true]],
-      [['person2', 'Person 2: name and DOB', true], ['person2Vehicle', 'Person 2: plate and license #', true], ['injuriesDamage', 'Injuries and vehicle damage', true], ['narrative', 'Narrative Scene Summary', true], ['signed', 'Signed (Deputy Name)', false]],
+      [['person2', 'Person 2: name and DOB', true], ['person2Vehicle', 'Person 2: plate and license #', true], ['injuriesDamage', 'Injuries and vehicle damage', true], ['narrative', 'Narrative Scene Summary', true]],
     ],
   },
   arrest: {
     title: 'Arrest Report',
     heading: 'PCSO Arrest Log',
     steps: [
-      [['officer', 'Officer', true], ['assisting', 'Assisting Officer(s)', true], ['date', 'Date', false], ['time', 'Time of Arrest', false], ['suspect', 'Suspect', true]],
+      [['assisting', 'Assisting Officer(s)', true], ['date', 'Date', false], ['time', 'Time of Arrest', false], ['suspect', 'Suspect', true]],
       [['suspectDescription', 'Suspect Description', true], ['background', 'Background clear', false], ['cad', 'Registered in CAD', false], ['charges', 'Charges', true], ['vehicleColor', 'Vehicle Color', false]],
       [['vehicleModel', 'Vehicle Exact Model', false], ['vehiclePlate', 'Vehicle Plate', false], ['narrative', 'Detailed Scene Narrative', true]],
     ],
@@ -123,7 +126,7 @@ const REPORT_DEFINITIONS = Object.freeze({
     title: 'Citation Report',
     heading: 'PCSO Citation Log',
     steps: [
-      [['officer', 'Officer', true], ['assisting', 'Assisting Officer(s)', true], ['date', 'Date', false], ['time', 'Time of Citation', false], ['location', 'Location', true]],
+      [['assisting', 'Assisting Officer(s)', true], ['date', 'Date', false], ['time', 'Time of Citation', false], ['location', 'Location', true]],
       [['citedFor', 'Cited for', true], ['suspect', 'Suspect', true], ['background', 'Background clear', false], ['cad', 'Registered in CAD', false], ['vehicleColor', 'Vehicle Color', false]],
       [['vehicleModel', 'Vehicle Exact Model', false], ['vehiclePlate', 'Vehicle Plate', false], ['narrative', 'Detailed Scene Narrative', true]],
     ],
@@ -132,7 +135,7 @@ const REPORT_DEFINITIONS = Object.freeze({
     title: 'Warrant Arrest Log',
     heading: 'PCSO Warrant Arrest Log',
     steps: [
-      [['deputy', 'Deputy', true], ['assisting', 'Assisting Deputy(s)', true], ['date', 'Date', false], ['time', 'Time of Arrest', false], ['warrantType', 'Warrant Type (Search / Arrest)', false]],
+      [['assisting', 'Assisting Deputy(s)', true], ['date', 'Date', false], ['time', 'Time of Arrest', false], ['warrantType', 'Warrant Type (Search / Arrest)', false]],
       [['warrantNumber', 'Warrant Number', false], ['charges', 'Charge(s)', true], ['suspect', 'Suspect', true], ['background', 'Background clear (Y / N)', false], ['cad', 'Registered in CAD (Y / N)', false]],
       [['gang', 'Gang Documented (Y / N)', false], ['vehicleColor', 'Vehicle Color', false], ['vehicleModel', 'Vehicle Exact Model', false], ['vehiclePlate', 'Vehicle Plate', false], ['narrative', 'Detailed Scene Narrative', true]],
     ],
@@ -913,6 +916,47 @@ function reportModalId(type, step, token) {
   return `pcs:shift:report:${type}:${step}:${token}`;
 }
 
+async function persistReportSessions() {
+  const now = Date.now();
+  const stored = Object.fromEntries([...reportSessions.entries()]
+    .filter(([, session]) => now - session.updatedAt < 30 * 60 * 1000));
+  await mkdir(path.dirname(REPORT_SESSION_PATH), { recursive: true });
+  await writeFile(REPORT_SESSION_PATH, `${JSON.stringify(stored)}\n`, 'utf8');
+}
+
+async function restoreReportSession(token) {
+  const existing = reportSessions.get(token);
+  if (existing) return existing;
+  try {
+    const stored = JSON.parse(await readFile(REPORT_SESSION_PATH, 'utf8')) || {};
+    const session = stored[token];
+    if (session && Date.now() - Number(session.updatedAt || 0) < 30 * 60 * 1000) {
+      reportSessions.set(token, session);
+      return session;
+    }
+  } catch {
+    // No saved form state yet.
+  }
+  return null;
+}
+
+async function nextReportCaseNumber() {
+  const run = reportCaseQueue.then(async () => {
+    let next = 1;
+    try {
+      const stored = JSON.parse(await readFile(REPORT_CASE_NUMBER_PATH, 'utf8')) || {};
+      next = Math.max(1, Number(stored.next) || 1);
+    } catch {
+      // Start the case number sequence at PCSO-0001.
+    }
+    await mkdir(path.dirname(REPORT_CASE_NUMBER_PATH), { recursive: true });
+    await writeFile(REPORT_CASE_NUMBER_PATH, `${JSON.stringify({ next: next + 1 })}\n`, 'utf8');
+    return `PCSO-${String(next).padStart(4, '0')}`;
+  });
+  reportCaseQueue = run.catch(() => {});
+  return run;
+}
+
 function buildReportModal(type, step, token) {
   const definition = REPORT_DEFINITIONS[type];
   const modal = new ModalBuilder()
@@ -940,16 +984,11 @@ function reportText(value, maxLength = 1000) {
 
 function buildReportEmbed(type, values, submitter) {
   const definition = REPORT_DEFINITIONS[type];
-  const fields = [];
-  for (const step of definition.steps) {
-    for (const [fieldId, label] of step) {
-      fields.push({
-        name: label,
-        value: reportText(values[fieldId]),
-        inline: !['narrative', 'injuriesDamage', 'suspectDescription', 'charges'].includes(fieldId),
-      });
-    }
-  }
+  const fields = reportLines(type, values).map(({ label, value, fieldId }) => ({
+    name: label,
+    value,
+    inline: !['narrative', 'injuriesDamage', 'suspectDescription', 'charges'].includes(fieldId),
+  }));
 
   return new EmbedBuilder()
     .setColor(0x1f2937)
@@ -962,10 +1001,18 @@ function buildReportEmbed(type, values, submitter) {
 
 function reportLines(type, values) {
   const definition = REPORT_DEFINITIONS[type];
-  return definition.steps.flatMap((step) => step.map(([fieldId, label]) => ({
+  const automatic = type === 'ois'
+    ? [{ fieldId: 'officerName', label: 'Involved Deputy', value: values.officerName }, { fieldId: 'signed', label: 'Signed (Deputy Name)', value: values.officerName }]
+    : type === 'mva'
+      ? [{ fieldId: 'officerName', label: 'Deputy Reporting', value: values.officerName }, { fieldId: 'signed', label: 'Signed (Deputy Name)', value: values.officerName }]
+      : type === 'warrant'
+        ? [{ fieldId: 'officerName', label: 'Deputy', value: values.officerName }]
+        : [{ fieldId: 'officerName', label: 'Officer', value: values.officerName }];
+  return [{ fieldId: 'caseNumber', label: 'Case #', value: reportText(values.caseNumber, 40) }, ...automatic, ...definition.steps.flatMap((step) => step.map(([fieldId, label]) => ({
+    fieldId,
     label,
     value: reportText(values[fieldId]),
-  })));
+  })) )];
 }
 
 function wrapDocumentText(value, width = 62) {
@@ -1393,7 +1440,7 @@ export async function handlePinellasShiftPanelInteraction(interaction) {
     const [, type, stepToken, token] = reportModalMatch;
     const step = Number(stepToken);
     const definition = REPORT_DEFINITIONS[type];
-    const session = reportSessions.get(token);
+    const session = await restoreReportSession(token);
     if (!session || session.userId !== interaction.user.id || session.type !== type || session.step !== step) {
       await interaction.reply({
         content: 'That report form expired. Please choose the report again from the shift panel.',
@@ -1409,13 +1456,19 @@ export async function handlePinellasShiftPanelInteraction(interaction) {
 
     if (step + 1 < definition.steps.length) {
       session.step += 1;
+      await persistReportSessions();
       await interaction.showModal(buildReportModal(type, session.step, token));
       return true;
     }
 
     reportSessions.delete(token);
+    await persistReportSessions();
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
+      session.values.caseNumber = await nextReportCaseNumber();
+      session.values.officerName = interaction.member?.displayName
+        || interaction.user.globalName
+        || interaction.user.username;
       const result = await submitShiftReport(interaction, type, session.values);
       await interaction.editReply({
         content: `Your **${definition.title}** was submitted to <#${result.channel.id}>.`,
@@ -1447,6 +1500,7 @@ export async function handlePinellasShiftPanelInteraction(interaction) {
       values: {},
       updatedAt: Date.now(),
     });
+    await persistReportSessions();
     await interaction.showModal(buildReportModal(type, 0, token));
     return true;
   }
