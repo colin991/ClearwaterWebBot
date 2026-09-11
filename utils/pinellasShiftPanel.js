@@ -1141,7 +1141,14 @@ async function sendNextReportQuestion(message, session) {
   const questions = reportQuestions(session.type);
   const question = questions[session.step];
   if (!question) return false;
-  await message.author.send(`**${REPORT_DEFINITIONS[session.type].title}** â€” Question ${session.step + 1} of ${questions.length}\n**${question.label}:**\nReply with your answer, or type \`cancel\` to stop.`);
+  await message.author.send([
+    `**PCSO ${REPORT_DEFINITIONS[session.type].title}**`,
+    `Question **${session.step + 1} of ${questions.length}**`,
+    '',
+    `**${question.label}**`,
+    'Please reply with your answer below.',
+    'Type `cancel` at any time to stop, or type `N/A` if the question does not apply.',
+  ].join('\n'));
   return true;
 }
 
@@ -1200,7 +1207,10 @@ export async function handlePinellasShiftReportDm(message) {
     await message.reply(`Your **${REPORT_DEFINITIONS[session.type].title}** was submitted to <#${result.channel.id}>. Case number: **${session.values.caseNumber}**`);
   } catch (error) {
     logger.error(`Pinellas ${session.type} DM report submission failed`, error);
-    await message.reply('Your answers were received, but the report could not be posted. Please contact command staff.');
+    await message.reply([
+      'Your answers were received, but I could not post the report to its log channel.',
+      'No report was successfully submitted. Please contact command staff and tell them which report type you were completing.',
+    ].join('\n'));
   }
   return true;
 }
