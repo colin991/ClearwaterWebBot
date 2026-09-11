@@ -13,9 +13,8 @@ import {
   SeparatorSpacingSize,
   TextDisplayBuilder,
 } from 'discord.js';
-import { PINELLAS_GUILD_ID } from './pinellasServer.js';
-
 export const PINELLAS_SUPPORT_PANEL_CHANNEL_ID = '1514256566105276437';
+export const PINELLAS_SUPPORT_GUILD_ID = '1514100977920245760';
 export const PINELLAS_SUPPORT_CATEGORY_IDS = Object.freeze({
   general: '1514848054724005938',
   compliance: '1514851966629711952',
@@ -92,7 +91,7 @@ function ticketName(member, type) {
 }
 
 export async function createPinellasSupportTicket(interaction, type) {
-  if (String(interaction.guildId) !== PINELLAS_GUILD_ID) {
+  if (String(interaction.guildId) !== PINELLAS_SUPPORT_GUILD_ID) {
     throw new Error('Tickets can only be opened in the Pinellas County Sheriff\'s Office server.');
   }
   const categoryId = PINELLAS_SUPPORT_CATEGORY_IDS[type];
