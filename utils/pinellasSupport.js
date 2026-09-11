@@ -7,11 +7,14 @@ import {
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   MessageFlags,
+  ModalBuilder,
   PermissionFlagsBits,
   SectionBuilder,
   SeparatorBuilder,
   SeparatorSpacingSize,
   TextDisplayBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } from 'discord.js';
 import { config } from '../config.js';
 import { fetchMelonlyMemberByDiscordId } from './melonly.js';
@@ -28,6 +31,7 @@ export const PINELLAS_SUPPORT_TRANSCRIPT_CHANNEL_ID = '1542631874684526663';
 const PINELLAS_SUPPORT_CLOSE_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}close`;
 const PINELLAS_SUPPORT_CLAIM_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}claim`;
 const PINELLAS_SUPPORT_STAFF_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}staff`;
+const PINELLAS_SUPPORT_INQUIRY_FIELD_ID = 'ticket-inquiry';
 
 const SUPPORT_OPTIONS = Object.freeze([
   {
@@ -63,6 +67,22 @@ function supportButton(option) {
     .setStyle(ButtonStyle.Secondary)
     .setLabel(option.label)
     .setEmoji(option.emoji);
+}
+
+function buildInquiryModal(type) {
+  const option = SUPPORT_OPTIONS.find((entry) => entry.type === type);
+  return new ModalBuilder()
+    .setCustomId(`${PINELLAS_SUPPORT_BUTTON_PREFIX}inquiry:${type}`)
+    .setTitle(`${option?.title || 'Support'} Inquiry`.slice(0, 45))
+    .addComponents(new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId(PINELLAS_SUPPORT_INQUIRY_FIELD_ID)
+        .setLabel('What do you need help with?')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('Explain your request with as much detail as possible.')
+        .setRequired(true)
+        .setMaxLength(1000),
+    ));
 }
 
 export function buildPinellasSupportPanel() {
@@ -109,7 +129,7 @@ function melonlyValue(member, ...keys) {
   return 'Not linked';
 }
 
-async function buildTicketPayload(member, type) {
+async function buildTicketPayload(member, type, inquiry = '') {
   let melonly = null;
   if (config.melonlyApiKey) {
     melonly = await fetchMelonlyMemberByDiscordId(config.melonlyApiKey, member.id).catch(() => null);
@@ -119,7 +139,6 @@ async function buildTicketPayload(member, type) {
   const robloxProfile = /^\d+$/.test(robloxId) ? `https://www.roblox.com/users/${robloxId}/profile` : 'Not linked';
   const option = SUPPORT_OPTIONS.find((entry) => entry.type === type);
   const container = new ContainerBuilder().clearAccentColor()
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`<@${member.id}>`))
     .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(
       new MediaGalleryItemBuilder().setURL('https://media.discordapp.net/attachments/1546222659824787596/1546222760991129671/pcso_support.png?ex=6aa59729&is=6aa445a9&hm=f343493334e16de182b31c98e8ef35b5d7ce90bee5a54130711067d733ae7455&=&format=webp&quality=lossless'),
     ))
@@ -142,7 +161,7 @@ async function buildTicketPayload(member, type) {
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
     .addTextDisplayComponents(new TextDisplayBuilder().setContent([
       `**Inquiry - ${option?.title || 'Support'}**`,
-      '```Please explain your request below.```',
+      `\`\`\`${String(inquiry || 'No inquiry provided').replace(/`/g, '')}\`\`\``,
     ].join('\n')))
     .addActionRowComponents(new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(PINELLAS_SUPPORT_CLAIM_ID).setStyle(ButtonStyle.Secondary).setLabel('Claim'),
@@ -248,7 +267,7 @@ async function archiveAndDmTicketTranscript(interaction, channel, ownerId) {
   return transcript;
 }
 
-export async function createPinellasSupportTicket(interaction, type) {
+export async function createPinellasSupportTicket(interaction, type, inquiry = '') {
   if (String(interaction.guildId) !== PINELLAS_SUPPORT_GUILD_ID) {
     throw new Error('Tickets can only be opened in the Pinellas County Sheriff\'s Office server.');
   }
@@ -274,12 +293,36 @@ export async function createPinellasSupportTicket(interaction, type) {
       { id: botMember.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages] },
     ],
   });
-  await channel.send(await buildTicketPayload(member, type));
+  await channel.send({
+    content: `<@${member.id}>`,
+    allowedMentions: { users: [member.id] },
+  });
+  await channel.send(await buildTicketPayload(member, type, inquiry));
   return { channel, existing: false };
 }
 
 export async function handlePinellasSupportInteraction(interaction) {
   const id = String(interaction.customId || '');
+  const inquiryType = id.startsWith(`${PINELLAS_SUPPORT_BUTTON_PREFIX}inquiry:`)
+    ? id.slice(`${PINELLAS_SUPPORT_BUTTON_PREFIX}inquiry:`.length)
+    : null;
+  if (inquiryType && interaction.isModalSubmit()) {
+    if (!SUPPORT_OPTIONS.some((option) => option.type === inquiryType)) return false;
+    const inquiry = interaction.fields.getTextInputValue(PINELLAS_SUPPORT_INQUIRY_FIELD_ID).trim();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      const result = await createPinellasSupportTicket(interaction, inquiryType, inquiry);
+      await interaction.editReply({
+        content: result.existing
+          ? `You already have an open ticket: <#${result.channel.id}>`
+          : `Your ticket has been created: <#${result.channel.id}>`,
+        allowedMentions: { parse: [] },
+      });
+    } catch (error) {
+      await interaction.editReply({ content: String(error?.message || 'Could not create the ticket.').slice(0, 1800) });
+    }
+    return true;
+  }
   if (!interaction.isButton() || !id.startsWith(PINELLAS_SUPPORT_BUTTON_PREFIX)) return false;
   const channel = interaction.channel;
   const ownerId = channel?.topic?.match(/ticket-owner:(\d{16,22})/)?.[1] || null;
@@ -330,18 +373,6 @@ export async function handlePinellasSupportInteraction(interaction) {
 
   const type = id.slice(PINELLAS_SUPPORT_BUTTON_PREFIX.length);
   if (!SUPPORT_OPTIONS.some((option) => option.type === type)) return false;
-
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  try {
-    const result = await createPinellasSupportTicket(interaction, type);
-    await interaction.editReply({
-      content: result.existing
-        ? `You already have an open ticket: <#${result.channel.id}>`
-        : `Your ticket has been created: <#${result.channel.id}>`,
-      allowedMentions: { parse: [] },
-    });
-  } catch (error) {
-    await interaction.editReply({ content: String(error?.message || 'Could not create the ticket.').slice(0, 1800) });
-  }
+  await interaction.showModal(buildInquiryModal(type));
   return true;
 }
