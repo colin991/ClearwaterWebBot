@@ -390,9 +390,9 @@ function detailsModal(type) {
 function buildInfractionBody(entry, { struck = false } = {}) {
   const createdTs = Math.floor(new Date(entry.createdAt).getTime() / 1000);
   const statusPrefix = entry.status === 'voided'
-    ? '**VOIDED** â€” '
+    ? '**VOIDED** — '
     : entry.status === 'expired'
-      ? '**EXPIRED** â€” '
+      ? '**EXPIRED** — '
       : '';
 
   let body = [
@@ -910,7 +910,7 @@ export async function handlePinellasInfractInteraction(interaction) {
         }));
         return true;
       }
-      // termination â†’ modal
+      // termination → modal
       await interaction.showModal(detailsModal(type));
       return true;
     }
