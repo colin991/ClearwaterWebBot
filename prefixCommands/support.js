@@ -1,16 +1,16 @@
 import { requireAdministrator } from '../utils/prefixHelpers.js';
 import {
   buildPinellasSupportPanel,
+  PINELLAS_SUPPORT_GUILD_ID,
   PINELLAS_SUPPORT_PANEL_CHANNEL_ID,
 } from '../utils/pinellasSupport.js';
-import { PINELLAS_GUILD_ID } from '../utils/pinellasServer.js';
 
 export default {
   name: 'support',
   description: 'Post the PCSO support ticket panel (Administrator only).',
   async execute(message) {
     requireAdministrator(message);
-    if (String(message.guild?.id) !== PINELLAS_GUILD_ID) {
+    if (String(message.guild?.id) !== PINELLAS_SUPPORT_GUILD_ID) {
       throw new Error('This command can only be used in the Pinellas County Sheriff\'s Office server.');
     }
     const channel = message.guild.channels.cache.get(PINELLAS_SUPPORT_PANEL_CHANNEL_ID)
