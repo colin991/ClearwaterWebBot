@@ -12,6 +12,7 @@ import { createDiscordInternetNotifier } from './discordInternetNotify.js';
 import { startPinellasInfractionExpiry } from './pinellasInfract.js';
 import { startPinellasRosterSync } from './pinellasRoster.js';
 import { startPinellasShiftPanel } from './pinellasShiftPanel.js';
+import { startPinellasMelonlyReports } from './pinellasMelonlyReports.js';
 
 /**
  * Discord-only background services formerly started inside the website HTTP bridge.
@@ -51,11 +52,13 @@ export function startBotServices(client, config) {
   const stopInfractionExpiry = startPinellasInfractionExpiry(client);
   const stopRosterSync = startPinellasRosterSync(client);
   const stopShiftPanel = startPinellasShiftPanel(client);
+  const stopMelonlyReports = startPinellasMelonlyReports(client);
 
   return () => {
     clearInterval(dataCleanup);
     stopInfractionExpiry();
     stopRosterSync();
     stopShiftPanel();
+    stopMelonlyReports();
   };
 }
