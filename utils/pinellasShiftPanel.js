@@ -940,6 +940,23 @@ async function restoreReportSession(token) {
   return null;
 }
 
+async function restoreReportSessionForUser(userId) {
+  for (const session of reportSessions.values()) {
+    if (session.mode === 'dm' && session.userId === userId) return session;
+  }
+  try {
+    const stored = JSON.parse(await readFile(REPORT_SESSION_PATH, 'utf8')) || {};
+    const found = Object.entries(stored).find(([, session]) => session.mode === 'dm' && session.userId === userId);
+    if (found) {
+      reportSessions.set(found[0], found[1]);
+      return found[1];
+    }
+  } catch {
+    // No saved form state yet.
+  }
+  return null;
+}
+
 async function nextReportCaseNumber() {
   const run = reportCaseQueue.then(async () => {
     let next = 1;
@@ -1114,6 +1131,78 @@ async function submitShiftReport(interaction, type, values) {
   };
   const message = await channel.send(payload);
   return { channel, message };
+}
+
+function reportQuestions(type) {
+  return REPORT_DEFINITIONS[type].steps.flatMap((step) => step.map(([fieldId, label]) => ({ fieldId, label })));
+}
+
+async function sendNextReportQuestion(message, session) {
+  const questions = reportQuestions(session.type);
+  const question = questions[session.step];
+  if (!question) return false;
+  await message.author.send(`**${REPORT_DEFINITIONS[session.type].title}** â€” Question ${session.step + 1} of ${questions.length}\n**${question.label}:**\nReply with your answer, or type \`cancel\` to stop.`);
+  return true;
+}
+
+export async function startPinellasShiftReportDm(interaction, type) {
+  const existing = await restoreReportSessionForUser(interaction.user.id);
+  if (existing) throw new Error('You already have a report questionnaire open in your DMs. Finish it or type `cancel`.');
+  const token = randomBytes(5).toString('hex');
+  const session = {
+    mode: 'dm',
+    userId: interaction.user.id,
+    type,
+    step: 0,
+    values: {},
+    updatedAt: Date.now(),
+  };
+  try {
+    await interaction.user.send('Your PCSO report questionnaire is starting. I will ask each question one at a time.');
+    await sendNextReportQuestion({ author: interaction.user }, session);
+  } catch {
+    throw new Error('I could not DM you. Please enable direct messages from server members and try again.');
+  }
+  reportSessions.set(token, session);
+  await persistReportSessions();
+}
+
+export async function handlePinellasShiftReportDm(message) {
+  if (!message?.author || message.author.bot || !message.channel?.isDMBased?.()) return false;
+  const session = await restoreReportSessionForUser(message.author.id);
+  if (!session) return false;
+  const token = [...reportSessions.entries()].find(([, value]) => value === session)?.[0];
+  const answer = String(message.content || '').trim();
+  if (answer.toLowerCase() === 'cancel') {
+    if (token) reportSessions.delete(token);
+    await persistReportSessions();
+    await message.reply('Your PCSO report questionnaire was cancelled.');
+    return true;
+  }
+  const questions = reportQuestions(session.type);
+  const question = questions[session.step];
+  if (!question) return false;
+  session.values[question.fieldId] = answer.slice(0, 1000);
+  session.step += 1;
+  session.updatedAt = Date.now();
+  if (session.step < questions.length) {
+    await persistReportSessions();
+    await sendNextReportQuestion(message, session);
+    return true;
+  }
+
+  if (token) reportSessions.delete(token);
+  await persistReportSessions();
+  session.values.caseNumber = await nextReportCaseNumber();
+  session.values.officerName = message.author.globalName || message.author.username;
+  try {
+    const result = await submitShiftReport({ client: message.client, user: message.author }, session.type, session.values);
+    await message.reply(`Your **${REPORT_DEFINITIONS[session.type].title}** was submitted to <#${result.channel.id}>. Case number: **${session.values.caseNumber}**`);
+  } catch (error) {
+    logger.error(`Pinellas ${session.type} DM report submission failed`, error);
+    await message.reply('Your answers were received, but the report could not be posted. Please contact command staff.');
+  }
+  return true;
 }
 
 /**
@@ -1492,16 +1581,16 @@ export async function handlePinellasShiftPanelInteraction(interaction) {
       await interaction.reply({ content: 'That report type is unavailable.', flags: MessageFlags.Ephemeral });
       return true;
     }
-    const token = randomBytes(5).toString('hex');
-    reportSessions.set(token, {
-      userId: interaction.user.id,
-      type,
-      step: 0,
-      values: {},
-      updatedAt: Date.now(),
-    });
-    await persistReportSessions();
-    await interaction.showModal(buildReportModal(type, 0, token));
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      await startPinellasShiftReportDm(interaction, type);
+      await interaction.editReply({
+        content: 'I sent the report questions to your DMs. Answer each question there; type `cancel` to stop.',
+        allowedMentions: { parse: [] },
+      });
+    } catch (error) {
+      await interaction.editReply({ content: String(error?.message || 'I could not start the report questionnaire.').slice(0, 1800) });
+    }
     return true;
   }
 
