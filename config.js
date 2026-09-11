@@ -6,6 +6,7 @@ export const config = Object.freeze({
   guildId: process.env.DISCORD_GUILD_ID?.trim(),
   erlcServerKey: process.env.ERLC_SERVER_KEY?.trim(),
   melonlyApiKey: process.env.MELONLY_API_KEY?.trim(),
+  cookieApiKey: process.env.COOKIE_API_KEY?.trim(),
   googleServiceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim(),
   googlePrivateKey: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n').trim(),
   pcsoRosterSpreadsheetId: process.env.PCSO_ROSTER_SPREADSHEET_ID?.trim()
