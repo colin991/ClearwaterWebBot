@@ -119,6 +119,7 @@ async function buildTicketPayload(member, type) {
   const robloxProfile = /^\d+$/.test(robloxId) ? `https://www.roblox.com/users/${robloxId}/profile` : 'Not linked';
   const option = SUPPORT_OPTIONS.find((entry) => entry.type === type);
   const container = new ContainerBuilder().clearAccentColor()
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`<@${member.id}>`))
     .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(
       new MediaGalleryItemBuilder().setURL('https://media.discordapp.net/attachments/1546222659824787596/1546222760991129671/pcso_support.png?ex=6aa59729&is=6aa445a9&hm=f343493334e16de182b31c98e8ef35b5d7ce90bee5a54130711067d733ae7455&=&format=webp&quality=lossless'),
     ))
@@ -153,7 +154,6 @@ async function buildTicketPayload(member, type) {
       new MediaGalleryItemBuilder().setURL('https://media.discordapp.net/attachments/1546222659824787596/1546222852494069920/PCSO_footer.png?ex=6aa5973f&is=6aa445bf&hm=d9751d9b7106e11e781252aea478019f27d5f5c82b744828e56b932c073bf0c7&=&format=webp&quality=lossless'),
     ));
   return {
-    content: `<@${member.id}>`,
     components: [container],
     flags: MessageFlags.IsComponentsV2,
     allowedMentions: { users: [member.id] },
