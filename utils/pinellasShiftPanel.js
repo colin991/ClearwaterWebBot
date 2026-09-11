@@ -1115,10 +1115,18 @@ async function buildReportDocuments(type, values, submitter) {
 async function submitShiftReport(interaction, type, values) {
   const channelId = PINELLAS_SHIFT_REPORT_CHANNELS[type];
   const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
-  if (!channel?.isTextBased?.()) throw new Error('The report log channel is unavailable.');
+  if (!channel?.isTextBased?.()) {
+    throw new Error(`The ${REPORT_DEFINITIONS[type].title} log channel (${channelId}) could not be accessed.`);
+  }
 
   const submitter = `<@${interaction.user.id}>`;
-  const documents = await buildReportDocuments(type, values, submitter);
+  let documents;
+  try {
+    documents = await buildReportDocuments(type, values, submitter);
+  } catch (error) {
+    logger.error(`Pinellas ${type} report document generation failed`, error);
+    throw new Error('The report document could not be generated. Please contact command staff.');
+  }
   const embed = buildReportEmbed(type, values, submitter)
     .setImage('attachment://pcso-report.png');
   const payload = {
@@ -1129,7 +1137,13 @@ async function submitShiftReport(interaction, type, values) {
       new AttachmentBuilder(documents.pdf, { name: 'pcso-report.pdf' }),
     ],
   };
-  const message = await channel.send(payload);
+  let message;
+  try {
+    message = await channel.send(payload);
+  } catch (error) {
+    logger.error(`Pinellas ${type} report could not be posted to channel ${channelId}`, error);
+    throw new Error('The report channel rejected the upload. The bot needs View Channel, Send Messages, and Attach Files permissions there.');
+  }
   return { channel, message };
 }
 
@@ -1209,7 +1223,8 @@ export async function handlePinellasShiftReportDm(message) {
     logger.error(`Pinellas ${session.type} DM report submission failed`, error);
     await message.reply([
       'Your answers were received, but I could not post the report to its log channel.',
-      'No report was successfully submitted. Please contact command staff and tell them which report type you were completing.',
+      `Reason: ${error?.message || 'unknown posting error'}`,
+      'Please contact command staff if the problem continues.',
     ].join('\n'));
   }
   return true;
