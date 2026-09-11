@@ -9,6 +9,7 @@ import { handlePinellasInfractInteraction } from '../utils/pinellasInfract.js';
 import { handlePinellasMassShiftInteraction } from '../utils/pinellasMassShift.js';
 import { handlePinellasCallsignInteraction } from '../utils/pinellasRoster.js';
 import { handlePinellasShiftPanelInteraction } from '../utils/pinellasShiftPanel.js';
+import { handlePinellasSupportInteraction } from '../utils/pinellasSupport.js';
 
 export default {
   name: Events.InteractionCreate,
@@ -50,6 +51,12 @@ export default {
         await interaction.reply(reply);
       }
       return;
+    }
+
+    try {
+      if (await handlePinellasSupportInteraction(interaction)) return;
+    } catch (error) {
+      logger.error('Pinellas support interaction failed', error);
     }
 
     try {
