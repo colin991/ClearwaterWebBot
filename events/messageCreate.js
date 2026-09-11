@@ -6,6 +6,7 @@ import { handleMessageForward } from '../utils/messageForward.js';
 import { handleNoticeChannelMessage } from '../utils/noticeChannel.js';
 import { parseArgs } from '../utils/prefixHelpers.js';
 import { handlePinellasApplyDm } from '../utils/pinellasApply.js';
+import { handlePinellasShiftReportDm } from '../utils/pinellasShiftPanel.js';
 
 export default {
   name: Events.MessageCreate,
@@ -14,6 +15,12 @@ export default {
       if (await handlePinellasApplyDm(message)) return;
     } catch (error) {
       logger.error('Pinellas apply DM handler failed', error);
+    }
+
+    try {
+      if (await handlePinellasShiftReportDm(message)) return;
+    } catch (error) {
+      logger.error('Pinellas shift report DM handler failed', error);
     }
 
     if (!message.inGuild()) return;
