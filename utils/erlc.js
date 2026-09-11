@@ -44,7 +44,7 @@ export function parseErlcPlayer(player) {
   };
 }
 
-// Official map images are 3121Â² and cover the in-game 3120Â² stud plane.
+// Official map images are 3121² and cover the in-game 3120² stud plane.
 // Live /v2/server player payloads use northwest-origin studs (0..3120):
 // +X east/right, +Z south/down. Docs also describe a centre-origin variant
 // (negative values allowed); support both so pins never fall off the map.
