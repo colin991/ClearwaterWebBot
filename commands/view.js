@@ -26,7 +26,7 @@ function discordTimestamp(value) {
 function cleanField(value, maxLength) {
   const text = String(value || '').replace(/[`\r\n]/g, ' ').trim();
   if (!text) return 'None provided';
-  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}â€¦` : text;
+  return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
 }
 
 function buildInfractionEmbeds(targetUser, entries) {
@@ -43,7 +43,7 @@ function buildInfractionEmbeds(targetUser, entries) {
         `Total records: **${entries.length}**${entries.length > 25 ? ' (showing the 25 most recent)' : ''}`,
       ].join('\n'))
       .addFields(page.map((entry) => ({
-        name: `${TYPE_LABELS[entry.type] || 'Infraction'} Â· ${entry.status || 'unknown'} Â· ${entry.id}`,
+        name: `${TYPE_LABELS[entry.type] || 'Infraction'} - ${String(entry.status || 'unknown').toUpperCase()} - ID ${entry.id}`,
         value: [
           `**Policy:** ${cleanField(entry.policy, 160)}`,
           `**Description:** ${cleanField(entry.description, 500)}`,
