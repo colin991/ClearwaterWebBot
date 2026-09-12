@@ -1,85 +1,35 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="Clearwater Roleplay is a serious emergency-services roleplay community set on Florida's Gulf Coast."
-    />
-    <meta name="theme-color" content="#03070d" />
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="Clearwater Roleplay" />
-    <meta
-      property="og:description"
-      content="Departments, training, and a community that shows up for every shift."
-    />
-    <meta property="og:image" content="https://cwrpvc.lol/assets/clearwater-home.png" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <title>Clearwater Roleplay</title>
-    <link rel="icon" type="image/png" href="assets/clearwater-logo.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@450;550;650;750;850&display=swap" rel="stylesheet" />
-    <script>document.documentElement.classList.add('js');</script>
-    <link rel="stylesheet" href="styles.css?v=20260813-stage" />
-  </head>
-  <body class="home-stage">
-    <a class="skip-link" href="#main">Skip to content</a>
-    <aside class="site-update-banner" data-site-banner hidden>
-      <div class="site-update-banner-bar">
-        <div class="site-update-banner-copy">
-          <p data-site-banner-message></p>
-          <p class="site-update-banner-details" data-site-banner-details hidden></p>
-        </div>
-        <a data-site-banner-link hidden href="https://status.cwrpvc.lol/" target="_blank" rel="noopener">View status</a>
-        <button type="button" class="site-update-banner-dismiss" data-site-banner-dismiss aria-label="Dismiss update">×</button>
-      </div>
-    </aside>
-
-    <header class="stage-chrome" data-header>
-      <a class="stage-link" href="/internet">Internet</a>
-      <div class="stage-chrome-actions">
-        <a class="stage-link" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord</a>
-        <a class="stage-link stage-link-strong" href="/signin" data-discord-login>Sign in</a>
-        <div class="discord-account" data-discord-account hidden>
-          <button class="discord-profile" type="button" data-discord-profile aria-expanded="false" aria-controls="discord-profile-menu">
-            <img class="discord-avatar" data-discord-avatar src="assets/clearwater-logo.png" alt="" />
-            <span class="discord-profile-copy"><span class="discord-name" data-discord-name>Discord user</span><span class="discord-rank" data-discord-rank hidden></span></span>
-          </button>
-          <button class="discord-logout" type="button" data-discord-logout>Logout</button>
-          <div class="discord-profile-menu" id="discord-profile-menu" data-discord-profile-menu hidden>
-            <span class="discord-profile-menu-rank" data-discord-profile-menu-rank hidden></span>
-            <a href="/owner" data-owner-link hidden>Owner Panel</a>
-            <a href="/internet/wallet" data-cash-balance>Wallet <span data-cash-amount>C$0</span></a>
-          </div>
-        </div>
-      </div>
-    </header>
-
-    <main id="main" class="stage">
-      <div class="stage-photo" aria-hidden="true">
-        <img src="assets/clearwater-police-night.png" alt="" width="1920" height="1080" />
-      </div>
-      <div class="stage-veil" aria-hidden="true"></div>
-
-      <div class="stage-content">
-        <img class="stage-logo" src="assets/clearwater-logo.png" alt="" width="120" height="120" />
-        <h1>Clearwater Roleplay</h1>
-        <p class="stage-stats" aria-live="polite">
-          <span class="stage-live" aria-hidden="true"></span>
-          <span><strong data-erlc-current>0</strong> / <strong data-erlc-max>50</strong> in-game</span>
-          <span class="stage-stats-sep" aria-hidden="true"></span>
-          <span>Queue <strong data-erlc-queue>0</strong></span>
-        </p>
-        <p class="stage-status"><span data-bot-connection>Checking server…</span> · <span data-time>Updated now</span></p>
-        <div class="stage-actions">
-          <a class="button button-primary" href="https://erlc.gg/join/cwrpvc" target="_blank" rel="noopener">Play now</a>
-          <a class="button button-secondary" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a>
-        </div>
-      </div>
-    </main>
-
-    <script src="script.js?v=20260813-stage"></script>
-  </body>
-</html>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="Pinellas County Sheriff's Office roleplay community." />
+<meta name="theme-color" content="#092d55" />
+<meta property="og:title" content="Pinellas County Sheriff's Office" />
+<meta property="og:description" content="Serving Pinellas County with professionalism, integrity, and pride." />
+<title>Pinellas County Sheriff's Office</title>
+<link rel="icon" type="image/png" href="assets/pinellas-ops-logo.png" />
+<link rel="stylesheet" href="styles.css?v=20260912-pcso" />
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body class="pcso-home">
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="pcso-alert"><div class="pcso-wrap"><strong>Emergency:</strong> Call 911 for emergencies. For general assistance, contact the department through Discord.</div></div>
+<header class="pcso-header"><div class="pcso-wrap pcso-nav">
+<a class="pcso-brand" href="/"><img src="assets/pinellas-ops-logo.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a>
+<button class="pcso-menu" type="button" aria-expanded="false" aria-controls="pcso-navigation">Menu</button>
+<nav id="pcso-navigation" class="pcso-links" aria-label="Primary navigation"><a href="#services">Services</a><a href="#news">News &amp; Events</a><a href="#about">About PCSO</a><a class="pcso-button pcso-button-red" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a></nav>
+</div></header>
+<main id="main">
+<section class="pcso-hero"><div class="pcso-hero-shade"></div><div class="pcso-wrap pcso-hero-content"><p class="pcso-eyebrow">Professionalism · Integrity · Service</p><h1>Serving Pinellas County<br /><em>with pride.</em></h1><p class="pcso-hero-copy">The Pinellas County Sheriff's Office is dedicated to protecting our community, supporting our members, and making every shift count.</p><div class="pcso-hero-actions"><a class="pcso-button pcso-button-red" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Connect with PCSO</a><a class="pcso-button pcso-button-light" href="#services">Explore services</a></div></div></section>
+<section id="services" class="pcso-section pcso-services"><div class="pcso-wrap"><div class="pcso-section-heading"><div><p class="pcso-eyebrow">Resources &amp; assistance</p><h2>How can we help?</h2></div><p>Find the right place for questions, reports, and department resources.</p></div><div class="pcso-service-grid">
+<a class="pcso-card" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener"><span class="pcso-icon">✦</span><h3>Contact PCSO</h3><p>Connect with our team and get help with your questions.</p><span class="pcso-arrow">Learn more →</span></a>
+<a class="pcso-card" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener"><span class="pcso-icon">▣</span><h3>Submit a report</h3><p>Use our support system to submit a report or request review.</p><span class="pcso-arrow">Submit report →</span></a>
+<a class="pcso-card" href="/signin"><span class="pcso-icon">★</span><h3>Member resources</h3><p>Access department tools, training, and member information.</p><span class="pcso-arrow">Member access →</span></a>
+</div></div></section>
+<section id="news" class="pcso-section pcso-news"><div class="pcso-wrap"><div class="pcso-section-heading"><div><p class="pcso-eyebrow">PCSO updates</p><h2>News &amp; events</h2></div><p>Stay informed about what is happening across the department.</p></div><div class="pcso-news-grid"><article><div class="pcso-news-image pcso-news-image-one"></div><div class="pcso-news-body"><p class="pcso-date">Department update</p><h3>Serving our community every shift</h3><p>Our members work together to create a professional and welcoming roleplay experience.</p></div></article><article><div class="pcso-news-image pcso-news-image-two"></div><div class="pcso-news-body"><p class="pcso-date">Community event</p><h3>Join the next PCSO operation</h3><p>Connect with the department through Discord for schedules and announcements.</p></div></article><article><div class="pcso-news-image pcso-news-image-three"></div><div class="pcso-news-body"><p class="pcso-date">Public notice</p><h3>Resources are available online</h3><p>Find applications, support, and department information in one place.</p></div></article></div></div></section>
+<section id="about" class="pcso-about"><div class="pcso-wrap pcso-about-grid"><div><p class="pcso-eyebrow">About the department</p><h2>One team. One mission.</h2></div><div><p>Pinellas County Sheriff's Office is a community-focused roleplay department built around accountability, teamwork, and service. Whether you are looking for assistance or ready to join the team, we are here to help.</p><a class="pcso-text-link" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Learn about PCSO →</a></div></div></section>
+</main>
+<footer class="pcso-footer"><div class="pcso-wrap pcso-footer-grid"><a class="pcso-brand" href="/"><img src="assets/pinellas-ops-logo.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a><p>Professionalism · Integrity · Service<br /><small>© 2026 Pinellas County Sheriff's Office Roleplay</small></p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord →</a></div></footer>
+<script src="script.js?v=20260912-pcso"></script><script>const menu=document.querySelector('.pcso-menu'),links=document.querySelector('.pcso-links');menu?.addEventListener('click',()=>{const open=menu.getAttribute('aria-expanded')==='true';menu.setAttribute('aria-expanded',String(!open));links?.classList.toggle('open',!open);});</script>
+</body></html>
