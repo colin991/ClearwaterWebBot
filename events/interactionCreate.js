@@ -10,12 +10,19 @@ import { handlePinellasMassShiftInteraction } from '../utils/pinellasMassShift.j
 import { handlePinellasCallsignInteraction } from '../utils/pinellasRoster.js';
 import { handlePinellasShiftPanelInteraction } from '../utils/pinellasShiftPanel.js';
 import { handlePinellasSupportInteraction } from '../utils/pinellasSupport.js';
+import { handleMarketInteraction } from '../utils/market.js';
 
 export default {
   name: Events.InteractionCreate,
   async execute(interaction, client) {
     if (await handleDiscordInternetModerationInteraction(interaction)) return;
     if (await handleDiscordInternetInteraction(interaction, client)) return;
+
+    try {
+      if (await handleMarketInteraction(interaction)) return;
+    } catch (error) {
+      logger.error('Marketplace interaction failed', error);
+    }
 
     try {
       if (await handlePinellasApplyInteraction(interaction)) return;
