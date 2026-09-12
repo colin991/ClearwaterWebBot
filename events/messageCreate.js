@@ -7,6 +7,7 @@ import { handleNoticeChannelMessage } from '../utils/noticeChannel.js';
 import { parseArgs } from '../utils/prefixHelpers.js';
 import { handlePinellasApplyDm } from '../utils/pinellasApply.js';
 import { handlePinellasShiftReportDm } from '../utils/pinellasShiftPanel.js';
+import { handleAutoReply } from '../utils/autoReplies.js';
 
 export default {
   name: Events.MessageCreate,
@@ -46,6 +47,12 @@ export default {
     }
 
     if (message.author.bot) return;
+
+    try {
+      if (await handleAutoReply(message)) return;
+    } catch (error) {
+      logger.error('Automatic reply failed', error);
+    }
 
     const settings = await getOwnerConfig();
     const prefix = settings.prefix || '-';
