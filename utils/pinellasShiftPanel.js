@@ -4,7 +4,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
-  EmbedBuilder,
+  FileBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   MessageFlags,
@@ -1004,21 +1004,41 @@ function reportText(value, maxLength = 1000) {
   return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength - 1)}…` : cleaned;
 }
 
-function buildReportEmbed(type, values, submitter) {
-  const definition = REPORT_DEFINITIONS[type];
-  const fields = reportLines(type, values).map(({ label, value, fieldId }) => ({
-    name: label,
-    value,
-    inline: !['narrative', 'injuriesDamage', 'suspectDescription', 'charges'].includes(fieldId),
-  }));
+const PCSO_REPORT_BANNER_URL = 'https://media.discordapp.net/attachments/1546222659824787596/1548460178737995816/pcso_banner_2.png?format=webp&quality=lossless&width=1536&height=478';
+const PCSO_REPORT_FOOTER_URL = 'https://cdn.discordapp.com/attachments/1514443793607295058/1546271578147524618/pcso-application-footer.png';
 
-  return new EmbedBuilder()
-    .setColor(0x1f2937)
-    .setTitle(definition.heading)
-    .setDescription(`**Report submitted by:** ${submitter}`)
-    .addFields(fields.slice(0, 25))
-    .setFooter({ text: 'Pinellas County Sheriff Office • Official Report' })
-    .setTimestamp();
+function reportBody(type, values, submitter) {
+  const definition = REPORT_DEFINITIONS[type];
+  const lines = reportLines(type, values);
+  const common = `> Case ID: ${reportText(values.caseNumber, 40)}\n> Date: ${reportText(values.date, 120)}\n> Time (In game): ${reportText(values.time, 120)}\n> Location: ${reportText(values.location, 250)}`;
+  const sections = {
+    mva: `# <:info:1517217516706074634> MVA Report\n\n${common}\n\n> Deputy Reporting Badge #: ${reportText(values.badge, 120)}\n> Any Citation given: ${reportText(values.citation, 120)}\n> Any Arrest made: ${reportText(values.arrest, 120)}\n\n**Person 1 Information**\n\n> Name and DOB: ${reportText(values.person1)}\n> Plate and license #: ${reportText(values.person1Vehicle)}\n\n**Person 2 Information**\n\n> Name and DOB: ${reportText(values.person2)}\n> Plate and license #: ${reportText(values.person2Vehicle)}\n\n**Scene Summary**\n\n> Injuries and vehicle damage: ${reportText(values.injuriesDamage)}\n> Narrative Scene Summary: ${reportText(values.narrative)}\n\n*Signed:* ${reportText(values.officerName, 120)}`,
+    arrest: `# <:info:1517217516706074634> Arrest Report\n\n${common}\n\n> Suspect Name: ${reportText(values.suspect)}\n> Charges: ${reportText(values.charges)}\n\n> Suspect Description: ${reportText(values.suspectDescription)}\n> Vehicle: ${reportText(values.vehicleColor)} ${reportText(values.vehicleModel)}\n> Vehicle Plate: ${reportText(values.vehiclePlate)}\n> Background clear: ${reportText(values.background)}\n> Registered in CAD: ${reportText(values.cad)}\n\n**Scene Summary**\n\n> ${reportText(values.narrative)}\n\n*Signed:* ${reportText(values.officerName, 120)}`,
+  };
+  if (sections[type]) return sections[type].slice(0, 3900);
+  const details = lines.map(({ label, value }) => `> **${label}:** ${value}`).join('\n');
+  return `# <:info:1517217516706074634> ${definition.title}\n\n${details}\n\n*Submitted by:* ${submitter}`.slice(0, 3900);
+}
+
+function buildReportPayload(type, values, submitter, documents) {
+  const container = new ContainerBuilder()
+    .clearAccentColor()
+    .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(PCSO_REPORT_BANNER_URL)))
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(reportBody(type, values, submitter)))
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+    .addFileComponents(new FileBuilder().setURL('attachment://pcso-report.pdf'))
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+    .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(PCSO_REPORT_FOOTER_URL)));
+  return {
+    components: [container],
+    flags: MessageFlags.IsComponentsV2,
+    allowedMentions: { parse: [] },
+    files: [
+      new AttachmentBuilder(documents.png, { name: 'pcso-report.png' }),
+      new AttachmentBuilder(documents.pdf, { name: 'pcso-report.pdf' }),
+    ],
+  };
 }
 
 function reportLines(type, values) {
@@ -1132,16 +1152,7 @@ async function submitShiftReport(interaction, type, values) {
     logger.error(`Pinellas ${type} report document generation failed`, error);
     throw new Error('The report document could not be generated. Please contact command staff.');
   }
-  const embed = buildReportEmbed(type, values, submitter)
-    .setImage('attachment://pcso-report.png');
-  const payload = {
-    embeds: [embed],
-    allowedMentions: { parse: [] },
-    files: [
-      new AttachmentBuilder(documents.png, { name: 'pcso-report.png' }),
-      new AttachmentBuilder(documents.pdf, { name: 'pcso-report.pdf' }),
-    ],
-  };
+  const payload = buildReportPayload(type, values, submitter, documents);
   let message;
   try {
     message = await channel.send(payload);
