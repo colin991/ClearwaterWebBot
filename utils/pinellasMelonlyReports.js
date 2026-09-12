@@ -88,7 +88,7 @@ function recordFields(record) {
 
 function safe(value, max = 1024) {
   const text = String(value ?? 'N/A').replace(/[<>`]/g, '').trim() || 'N/A';
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  return text.length > max ? `${text.slice(0, max - 1)}â€¦` : text;
 }
 
 function buildReportEmbed(record, type) {
