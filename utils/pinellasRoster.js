@@ -809,7 +809,7 @@ export async function handlePinellasCallsignInteraction(interaction, client) {
           `**Rank:** ${result.rank}`,
           `**Activity:** ${result.activity}`,
           `**Punishments:** ${result.punishment}`,
-          `-# Roster row ${result.rowNumber}${result.moved ? ' · previous manual notes were carried to the new rank row' : ''}`,
+          `-# Roster row ${result.rowNumber}${result.moved ? ' Â· previous manual notes were carried to the new rank row' : ''}`,
         ].join('\n'))
         .setColor(0x3ba55d),
     ],
