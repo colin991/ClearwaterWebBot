@@ -75,10 +75,14 @@ export function syncHostCodeFromMain({
     return { updated: false, commit: null, reason: 'no_git' };
   }
 
-  // Leftover path that blocks panel `git pull` on this host.
+  // Leftover paths that block panel `git pull` on this host.
   rmSync(join(cwd, 'downloads'), { recursive: true, force: true });
-  // Common Spark/Apollo junk that also dirties the tree.
   rmSync(join(cwd, 'tmp'), { recursive: true, force: true });
+
+  // Clear interrupted merge/rebase so reset can proceed.
+  runGit(['merge', '--abort'], cwd);
+  runGit(['rebase', '--abort'], cwd);
+  runGit(['cherry-pick', '--abort'], cwd);
 
   const before = runGit(['rev-parse', 'HEAD'], cwd);
   const beforeSha = gitOk(before) ? gitLine(before) : null;
@@ -108,6 +112,9 @@ export function syncHostCodeFromMain({
     const masterCheck = runGit(['rev-parse', '--verify', 'origin/master'], cwd);
     if (gitOk(masterCheck)) targetRef = 'origin/master';
   }
+
+  // Prefer staying on a real branch named main (helps later panel `git pull`).
+  runGit(['checkout', '-B', 'main', targetRef], cwd);
 
   // Reset tracked files only. Does not delete gitignored host data/ or .env.
   const reset = runGit(['reset', '--hard', targetRef], cwd);

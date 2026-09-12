@@ -12,3 +12,6 @@ Thumbs.db
 !/data/README.md
 !/data/site-updates.json
 !/data/manual-identities.json
+# Panel / egg junk that dirties the tree and breaks `git pull`
+/downloads/
+/tmp/

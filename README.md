@@ -11,13 +11,14 @@ Discord bot for Clearwater Roleplay — moderation, voice tools, ER:LC sync, Rob
 
 ### Spark Hosting / Apollo panel (important)
 
-Your startup command is locked (that’s fine), usually like:
+Your startup command is **locked and should stay locked**, for example:
 
 ```bash
-if [[ -d .git ]]; then git pull; fi; ...; node /home/container/index.js
+if [[ -d .git ]]; then git pull; fi; if [[ ! -z ${NODE_PACKAGES} ]]; then npm install ${NODE_PACKAGES}; fi; if [ -f /home/container/package.json ]; then npm install --production; fi; node /home/container/index.js
 ```
 
-**Leave it alone.** On boot, `index.js` force-syncs code from `origin/main` while keeping host-only `data/` + `.env`.
+Do **not** change it. Panel `git pull` often fails on a dirty tree and is ignored; that is OK.  
+`node index.js` runs next and force-syncs from `origin/main` while keeping host-only `data/` + `.env`.
 
 Because this GitHub repo is **private**, the bot keeps Apollo’s existing git remote/token. It will not replace it with a public URL.
 
@@ -48,19 +49,19 @@ or:
 
 #### One-time fix if Restart still boots old code
 
-Stop the server. In the Apollo console, paste this **as one single line**, then press Enter:
+This is **not** changing the startup command. Stop the server, open the Apollo **console**, paste this **as one single line**, press Enter, then click **Start**:
 
 ```bash
-cd /home/container; echo "PWD=$(pwd)"; echo "GIT=$([ -d .git ] && echo YES || echo NO)"; rm -rf downloads tmp; git remote -v | sed 's/\/\/[^@/]*@/\/\/***@/g'; echo "BEFORE=$(git log -1 --oneline 2>/dev/null || echo none)"; git fetch origin main; git reset --hard origin/main; echo "AFTER=$(git log -1 --oneline)"; ls utils/hostCodeSync.js; npm install --omit=dev; echo DONE
+cd /home/container; echo "PWD=$(pwd)"; echo "GIT=$([ -d .git ] && echo YES || echo NO)"; rm -rf downloads tmp; git remote -v | sed 's/\/\/[^@/]*@/\/\/***@/g'; echo "BEFORE=$(git log -1 --oneline 2>/dev/null || echo none)"; git fetch origin main; git reset --hard origin/main; echo "AFTER=$(git log -1 --oneline)"; ls utils/hostCodeSync.js index.js; npm install --omit=dev; echo DONE
 ```
 
 You should see `PWD=...`, `GIT=YES`, `BEFORE=...`, `AFTER=...`, and `DONE`.
 
 - If you see `GIT=NO`, the host is not a GitHub install (zip upload). Reinstall from the GitHub repo in Apollo without wiping `data/` / `.env`.
 - If `fetch` errors, Apollo’s GitHub login is broken — reconnect the repo in the panel.
-- If `AFTER` shows a new commit, click **Start**. Watch for `[host-sync]` lines.
+- If `AFTER` shows a new commit, click **Start**. Watch for `[boot] starting...` then `[host-sync]` lines (not only `[boot] starting bot...`).
 
-After that works once, normal **Restart** keeps the latest code.
+After that works once, leave the locked startup as-is; normal **Restart** keeps the latest code.
 Required gateway intents: **Guilds**, **Server Members**, **Server Messages**, **Direct Messages**, **Message Content**, and **Guild Voice States**. Enable Server Members, Message Content, and Direct Messages in the Discord Developer Portal. Never commit or share `.env`.
 
 ## Layout
