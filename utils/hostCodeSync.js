@@ -58,7 +58,12 @@ function redactUrl(url) {
  * GITHUB_TOKEN / GH_TOKEN + the public HTTPS repo URL.
  */
 function resolveBootstrapRemote(fallbackRemoteUrl = DEFAULT_REPO_HTTPS) {
-  const fromEnv = String(process.env.CLEARWATER_GIT_REMOTE || '').trim();
+  // Accept the common Apollo typo CLEARWATER_GIT__REMOTE (double underscore).
+  const fromEnv = String(
+    process.env.CLEARWATER_GIT_REMOTE
+    || process.env.CLEARWATER_GIT__REMOTE
+    || '',
+  ).trim();
   if (fromEnv) return fromEnv;
 
   const token = String(process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '').trim();
