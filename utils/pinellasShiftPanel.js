@@ -48,7 +48,7 @@ import {
 
 export const PINELLAS_SHIFT_PANEL_CHANNEL_ID = '1546298062568165396';
 export const PINELLAS_ON_DUTY_ROLE_ID = '1514462780575715418';
-/** Guild used for “Voice Chat” lookup on the deputy card (Clearwater main). */
+/** Guild used for â€œVoice Chatâ€ lookup on the deputy card (Clearwater main). */
 export const PINELLAS_SHIFT_VC_GUILD_ID = '1514026810348671026';
 export const PINELLAS_SHIFT_REFRESH_MS = 30_000;
 
@@ -63,7 +63,7 @@ export const PINELLAS_SHIFT_REPORT_CHANNELS = Object.freeze({
   warrant: '1524493216555208744',
 });
 
-/** Melonly department id for Pinellas County Sheriff’s Office. */
+/** Melonly department id for Pinellas County Sheriffâ€™s Office. */
 export const PINELLAS_MELONLY_DEPARTMENT_ID = '7470323914464301056';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -78,9 +78,9 @@ const SLOGO_EMOJI = '<:slogo:1546245229420744804>';
 const ATIME_EMOJI = '<:atime:1546336942785044490>';
 const SHEET_EMOJI = '<:sheet:1546293540827701329>';
 
-/** Melonly memberId → discordId */
+/** Melonly memberId â†’ discordId */
 const memberDiscordCache = new Map();
-/** discordId → Melonly memberId */
+/** discordId â†’ Melonly memberId */
 const discordMemberCache = new Map();
 const reportSessions = new Map();
 let reportCaseQueue = Promise.resolve();
@@ -195,7 +195,7 @@ export async function resolvePinellasMelonlyMemberDiscordId(apiKey, memberId) {
 }
 
 /**
- * Build Melonly memberId ↔ Discord map from active shift member IDs.
+ * Build Melonly memberId â†” Discord map from active shift member IDs.
  * Uses official GET /server/members/{id}/discord (main Melonly API).
  */
 async function ensureMelonlyDiscordIndex(apiKey, neededMemberIds = []) {
@@ -327,10 +327,10 @@ export function formatShiftDuration(ms) {
  */
 export function parseDeputyNickname(nickname) {
   const raw = String(nickname || '').trim();
-  if (!raw) return { callsign: '—', roleplayName: '—', altCallsigns: [] };
+  if (!raw) return { callsign: 'â€”', roleplayName: 'â€”', altCallsigns: [] };
 
   let parts = raw.split('|').map((part) => part.trim()).filter(Boolean);
-  if (!parts.length) return { callsign: '—', roleplayName: '—', altCallsigns: [] };
+  if (!parts.length) return { callsign: 'â€”', roleplayName: 'â€”', altCallsigns: [] };
 
   // Strip leading duty/status prefixes.
   while (parts.length >= 2 && /^(on\s*duty|off\s*duty|on\s*break|duty)$/i.test(parts[0])) {
@@ -348,7 +348,7 @@ export function parseDeputyNickname(nickname) {
   if (parts.length >= 2) {
     return { callsign: parts[0], roleplayName: parts.slice(1).join(' | '), altCallsigns: [] };
   }
-  return { callsign: '—', roleplayName: parts[0], altCallsigns: [] };
+  return { callsign: 'â€”', roleplayName: parts[0], altCallsigns: [] };
 }
 
 /** Tokens that look like unit/radio callsigns (not a person's name). */
@@ -366,7 +366,7 @@ function nicknameCallsignCandidates(...nicknames) {
     const parsed = parseDeputyNickname(nickname);
     for (const value of [parsed.callsign, ...(parsed.altCallsigns || [])]) {
       const key = normalizeCallsign(value);
-      if (!key || value === '—' || seen.has(key)) continue;
+      if (!key || value === 'â€”' || seen.has(key)) continue;
       seen.add(key);
       found.push(value);
     }
@@ -413,10 +413,10 @@ function normalizeCallsign(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, '');
 }
 
-/** Other departments use callsigns starting with 2 or 3 — exclude those only. */
+/** Other departments use callsigns starting with 2 or 3 â€” exclude those only. */
 export function isOtherDepartmentCallsign(callsign) {
   const raw = String(callsign || '').trim();
-  if (!raw || raw === '—') return false;
+  if (!raw || raw === 'â€”') return false;
   return /^[23]/.test(raw);
 }
 
@@ -452,7 +452,7 @@ export function isPinellasDiscordStaff(member) {
 /**
  * Whether Melonly is labeling shifts with the Pinellas department id.
  * Note: every Melonly shift has *some* serverId (usually the main panel), so we
- * must look specifically for the Pinellas department id — not "any serverId".
+ * must look specifically for the Pinellas department id â€” not "any serverId".
  */
 export function melonlyLabelsPinellasDepartment(shifts = []) {
   return (Array.isArray(shifts) ? shifts : []).some(isPinellasDepartmentShift);
@@ -515,20 +515,20 @@ function resolveDeputyIdentity(pinellasMember, clearwaterMember, player) {
     clearwaterMember?.displayName,
   ].filter(Boolean);
 
-  let parsed = { callsign: '—', roleplayName: '—', altCallsigns: [] };
+  let parsed = { callsign: 'â€”', roleplayName: 'â€”', altCallsigns: [] };
   for (const candidate of candidates) {
     const next = parseDeputyNickname(candidate);
-    if (next.callsign !== '—') {
+    if (next.callsign !== 'â€”') {
       parsed = next;
       break;
     }
-    if (parsed.roleplayName === '—' && next.roleplayName !== '—') parsed = next;
+    if (parsed.roleplayName === 'â€”' && next.roleplayName !== 'â€”') parsed = next;
   }
 
-  const callsign = parsed.callsign !== '—'
+  const callsign = parsed.callsign !== 'â€”'
     ? parsed.callsign
-    : (player?.callsign || '—');
-  const roleplayName = parsed.roleplayName !== '—'
+    : (player?.callsign || 'â€”');
+  const roleplayName = parsed.roleplayName !== 'â€”'
     ? parsed.roleplayName
     : (
       player?.username
@@ -591,7 +591,7 @@ export async function collectOnDutyDeputies(client, {
   if (!apiKey) {
     throw new Error(
       'MELONLY_API_KEY is not configured. Create a token on the main Melonly panel '
-      + '(Settings → Panel → API Tokens).',
+      + '(Settings â†’ Panel â†’ API Tokens).',
     );
   }
 
@@ -666,7 +666,7 @@ export async function collectOnDutyDeputies(client, {
       clearwaterMember,
       player,
     ));
-    if (player?.callsign && callsign === '—') callsign = player.callsign;
+    if (player?.callsign && callsign === 'â€”') callsign = player.callsign;
 
     if (isOtherDepartmentCallsign(callsign)) {
       skippedOtherDept += 1;
@@ -1001,7 +1001,7 @@ function buildReportModal(type, step, token) {
 function reportText(value, maxLength = 1000) {
   const cleaned = String(value || '').replace(/[`]/g, '').trim();
   if (!cleaned) return 'N/A';
-  return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength - 1)}…` : cleaned;
+  return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength - 1)}â€¦` : cleaned;
 }
 
 function buildReportEmbed(type, values, submitter) {
@@ -1017,7 +1017,7 @@ function buildReportEmbed(type, values, submitter) {
     .setTitle(definition.heading)
     .setDescription(`**Report submitted by:** ${submitter}`)
     .addFields(fields.slice(0, 25))
-    .setFooter({ text: 'Pinellas County Sheriff Office • Official Report' })
+    .setFooter({ text: 'Pinellas County Sheriff Office â€¢ Official Report' })
     .setTimestamp();
 }
 
@@ -1087,7 +1087,7 @@ async function buildReportDocuments(type, values, submitter) {
     <text x="1130" y="62" text-anchor="end" class="small">OFFICIAL REPORT</text>
     <text x="1130" y="105" text-anchor="end" class="small">Submitted by ${escapeSvg(submitter)}</text>
     ${svgRows.join('\n')}
-    <text x="70" y="${height - 45}" class="small">Pinellas County Sheriff Office • Official Report</text>
+    <text x="70" y="${height - 45}" class="small">Pinellas County Sheriff Office â€¢ Official Report</text>
   <style>
     .title { font: 700 30px Arial; fill: #e7b329; letter-spacing: 1px; }
     .subtitle { font: 700 25px Arial; fill: #ffffff; }
@@ -1445,7 +1445,7 @@ export async function refreshPinellasShiftPanel(client, { forceResend = false } 
   } catch (error) {
     if (error?.status === 429 || error?.rateLimited || isMelonlyRateLimited()) {
       if (lastSnapshot) {
-        logger.warn(`Pinellas shift panel: Melonly 429 — reusing last snapshot (${error?.message || error})`);
+        logger.warn(`Pinellas shift panel: Melonly 429 â€” reusing last snapshot (${error?.message || error})`);
         snapshot = lastSnapshot;
       } else {
         throw new Error(
