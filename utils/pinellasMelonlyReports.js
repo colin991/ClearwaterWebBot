@@ -88,24 +88,19 @@ function recordFields(record) {
 
 function safe(value, max = 1024) {
   const text = String(value ?? 'N/A').replace(/[<>`]/g, '').trim() || 'N/A';
-  return text.length > max ? `${text.slice(0, max - 1)}â€¦` : text;
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
 function buildReportEmbed(record, type) {
   const fields = recordFields(record).map(([name, value]) => ({ name: safe(name, 256), value: safe(value), inline: false }));
   const creator = record.createdByUserId ? `Melonly user ${record.createdByUserId}` : 'Melonly';
-  const rawCreatedAt = record.createdAt;
-  const createdAt = typeof rawCreatedAt === 'number' || /^\d+(?:\.\d+)?$/.test(String(rawCreatedAt || '').trim())
-    ? new Date(Number(rawCreatedAt) * 1000)
-    : new Date(String(rawCreatedAt || ''));
-  const timestamp = Number.isNaN(createdAt.getTime()) ? new Date() : createdAt;
   return new EmbedBuilder()
     .setColor(0x1f2937)
     .setTitle(`PCSO ${type.toUpperCase()} Report - ${safe(record.label || record.id, 180)}`)
     .setDescription(`Automatically imported from Melonly.\n**Submitted by:** ${creator}`)
     .addFields(fields.length ? fields : [{ name: 'Details', value: 'No report details were supplied by Melonly.' }])
     .setFooter({ text: 'Pinellas County Sheriff Office - Melonly CAD' })
-    .setTimestamp(timestamp);
+    .setTimestamp();
 }
 
 export async function fetchMelonlyCadRecords(apiKey) {
