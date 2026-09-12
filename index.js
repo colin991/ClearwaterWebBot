@@ -1,35 +1,43 @@
 /**
  * Apollopanel / Pterodactyl entrypoint.
  *
- * Locked startup (do not change — this is expected):
+ * Locked startup (leave unchanged):
  *   if [[ -d .git ]]; then git pull; fi;
  *   npm install --production;
  *   node /home/container/index.js
  *
- * Panel `git pull` often fails on a dirty tree (downloads/, tmp/, etc.) and is
- * ignored by the shell `if`. This file force-syncs from origin/main next, then
- * starts the bot. Host-only data/ and .env are preserved. Origin URL/token is
- * never rewritten (private repo).
+ * Host sync runs first, but MUST NOT block the bot forever. Sync failures are
+ * logged and ignored so Discord commands keep working.
+ *
+ * Emergency: set CLEARWATER_SKIP_HOST_SYNC=1 in Apollo Variables to skip sync.
  */
 console.log('[boot] starting...');
-console.log('[boot] locked panel startup is fine — sync runs here after git pull/npm');
 
-if (process.env.CLEARWATER_SKIP_HOST_SYNC !== '1') {
+const skipSync = process.env.CLEARWATER_SKIP_HOST_SYNC === '1';
+
+if (!skipSync) {
   try {
     const { syncHostCodeFromMain, reexecIfUpdated } = await import('./utils/hostCodeSync.js');
     const result = syncHostCodeFromMain();
-    if (result?.reason === 'no_git') {
-      console.log('[host-sync] No .git — zip upload host. Set CLEARWATER_GIT_REMOTE (PAT URL) or run the README console repair.');
-    } else if (result?.reason && !['already_current', 'updated', 'bootstrapped'].includes(result.reason)) {
-      console.log(`[host-sync] WARN ${result.reason}`);
-      console.log('[host-sync] Stop → README console repair (not startup command) → Start.');
+    const reason = result?.reason || 'unknown';
+    console.log(`[host-sync] result: ${reason}${result?.commit ? ` (${String(result.commit).slice(0, 7)})` : ''}`);
+
+    if (reason === 'no_git' || reason === 'incomplete_git') {
+      console.log('[host-sync] No usable .git. Set CLEARWATER_GIT_REMOTE or run console repair. Starting bot with local files.');
+    } else if (!['already_current', 'updated', 'bootstrapped'].includes(reason)) {
+      console.log(`[host-sync] WARN ${reason}`);
+      console.log('[host-sync] Continuing with local files so commands still work.');
     }
-    // If code changed, replace this process so the new files actually run.
-    reexecIfUpdated(result);
+
+    // Only re-exec when sync clearly updated code. Never hang the bot on sync.
+    if (result?.updated) {
+      reexecIfUpdated(result);
+    }
   } catch (error) {
-    console.log(`[host-sync] skipped (${error?.message || error})`);
-    console.log('[host-sync] Stop the server and paste the README repair one-liner in the Apollo console, then Start.');
+    console.log(`[host-sync] skipped (${error?.message || error}) — starting bot anyway`);
   }
+} else {
+  console.log('[boot] CLEARWATER_SKIP_HOST_SYNC=1 — skipping git sync');
 }
 
 console.log('[boot] starting bot...');

@@ -16,7 +16,7 @@ import { join } from 'node:path';
  */
 
 const DEFAULT_REPO_HTTPS = 'https://github.com/colin991/ClearwaterWebBot.git';
-const FETCH_TIMEOUT_MS = 180_000;
+const FETCH_TIMEOUT_MS = 45_000;
 const SHORT_TIMEOUT_MS = 30_000;
 
 function gitEnv(extra = {}) {
@@ -219,6 +219,13 @@ export function syncHostCodeFromMain({
 
     const boot = bootstrapGitCheckout(cwd, bootstrapRemote);
     if (!boot.ok) {
+      // Leave the host runnable: wipe a half-made .git so the next boot can
+      // start the bot from local files instead of hanging forever on fetch.
+      if (existsSync(gitDir) && !hasUsableHead(cwd)) {
+        log('Bootstrap failed — removing incomplete .git so the bot can start.');
+        rmSync(gitDir, { recursive: true, force: true });
+      }
+      log('Starting with local files (commands should still work). Fix CLEARWATER_GIT_REMOTE / network later.');
       return { updated: false, commit: null, reason: boot.reason || 'bootstrap_failed' };
     }
 
