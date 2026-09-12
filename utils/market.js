@@ -62,7 +62,7 @@ function buildMerchPage(options, page, totalPages) {
   for (const [label, url, image] of options) {
     container
       .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
-      .addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${label}**\nPurchase →`))
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${label}**`))
       .addActionRowComponents(new ActionRowBuilder().addComponents(
         new ButtonBuilder().setLabel('Purchase').setStyle(ButtonStyle.Link).setURL(url),
       ))
