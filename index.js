@@ -19,10 +19,10 @@ if (process.env.CLEARWATER_SKIP_HOST_SYNC !== '1') {
     const { syncHostCodeFromMain, reexecIfUpdated } = await import('./utils/hostCodeSync.js');
     const result = syncHostCodeFromMain();
     if (result?.reason === 'no_git') {
-      console.log('[host-sync] No .git folder — using uploaded files. Reinstall from GitHub to enable updates.');
-    } else if (result?.reason && result.reason !== 'already_current' && result.reason !== 'updated') {
+      console.log('[host-sync] No .git — zip upload host. Set CLEARWATER_GIT_REMOTE (PAT URL) or run the README console repair.');
+    } else if (result?.reason && !['already_current', 'updated', 'bootstrapped'].includes(result.reason)) {
       console.log(`[host-sync] WARN ${result.reason}`);
-      console.log('[host-sync] If this keeps failing, Stop the server and run the one-line repair from README (console only — not the startup command).');
+      console.log('[host-sync] Stop → README console repair (not startup command) → Start.');
     }
     // If code changed, replace this process so the new files actually run.
     reexecIfUpdated(result);
