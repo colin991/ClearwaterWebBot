@@ -3,33 +3,46 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
 /**
- * Spark Hosting / Apollo panel locks startup to roughly:
+ * Spark / Apollo locks startup to roughly:
  *   git pull; npm install; node /home/container/index.js
  *
- * `git pull` often fails because of a dirty `downloads/` folder, so the panel
- * keeps launching old code. This helper runs at the top of index.js.
+ * Panel `git pull` often fails on a dirty downloads/ tree, so old code keeps
+ * running. This helper runs at the top of index.js and force-syncs to main.
  *
- * Important: this repo is private. Never replace `origin` with a public HTTPS
- * URL when a credentialed remote already exists — stripping that token makes
- * fetch fail and the bot stays on an old commit forever.
+ * Private repo: never strip a credentialed origin URL.
  *
- * Zip uploads have no `.git`. Set CLEARWATER_GIT_REMOTE (HTTPS URL with a
- * GitHub PAT) or GITHUB_TOKEN so we can bootstrap a checkout once, keeping
- * data/ and .env.
+ * Zip hosts have no .git. Set CLEARWATER_GIT_REMOTE (HTTPS + GitHub PAT) or
+ * GITHUB_TOKEN to bootstrap once while keeping data/ and .env.
  */
 
 const DEFAULT_REPO_HTTPS = 'https://github.com/colin991/ClearwaterWebBot.git';
+const FETCH_TIMEOUT_MS = 180_000;
+const SHORT_TIMEOUT_MS = 30_000;
 
-function run(command, args, cwd, { inherit = false } = {}) {
+function gitEnv(extra = {}) {
+  return {
+    ...process.env,
+    // Fail fast instead of hanging on a password prompt in Apollo.
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_ASKPASS: 'echo',
+    GCM_INTERACTIVE: 'never',
+    ...extra,
+  };
+}
+
+function run(command, args, cwd, { inherit = false, timeoutMs = SHORT_TIMEOUT_MS } = {}) {
   return spawnSync(command, args, {
     cwd,
     encoding: 'utf8',
     stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'],
+    timeout: timeoutMs,
+    env: gitEnv(),
+    killSignal: 'SIGKILL',
   });
 }
 
-function runGit(args, cwd) {
-  return run('git', args, cwd);
+function runGit(args, cwd, timeoutMs = SHORT_TIMEOUT_MS) {
+  return run('git', args, cwd, { timeoutMs });
 }
 
 function gitOk(result) {
@@ -41,11 +54,14 @@ function gitLine(result) {
 }
 
 function gitText(result) {
-  return String(result?.stderr || result?.stdout || '').trim();
+  if (!result) return 'unknown';
+  if (result.error?.code === 'ETIMEDOUT' || result.signal) {
+    return `timed out / killed (${result.error?.code || result.signal})`;
+  }
+  return String(result.stderr || result.stdout || '').trim();
 }
 
 function log(message) {
-  // Use console so Apollo panel console always shows sync status.
   console.log(`[host-sync] ${message}`);
 }
 
@@ -53,12 +69,8 @@ function redactUrl(url) {
   return String(url || '').replace(/\/\/[^@/]+@/g, '//***@');
 }
 
-/**
- * Prefer an explicit remote with embedded credentials. Otherwise build one from
- * GITHUB_TOKEN / GH_TOKEN + the public HTTPS repo URL.
- */
 function resolveBootstrapRemote(fallbackRemoteUrl = DEFAULT_REPO_HTTPS) {
-  // Accept the common Apollo typo CLEARWATER_GIT__REMOTE (double underscore).
+  // Accept CLEARWATER_GIT__REMOTE typo (double underscore).
   const fromEnv = String(
     process.env.CLEARWATER_GIT_REMOTE
     || process.env.CLEARWATER_GIT__REMOTE
@@ -74,10 +86,6 @@ function resolveBootstrapRemote(fallbackRemoteUrl = DEFAULT_REPO_HTTPS) {
   return `https://${encodeURIComponent(token)}@${https.slice('https://'.length)}`;
 }
 
-/**
- * Keep Apollo's existing origin URL (with token). Only set a fallback if origin
- * is missing entirely.
- */
 function ensureOrigin(cwd, fallbackUrl) {
   const current = runGit(['remote', 'get-url', 'origin'], cwd);
   if (gitOk(current)) {
@@ -87,7 +95,6 @@ function ensureOrigin(cwd, fallbackUrl) {
       return url;
     }
   }
-
   log(`origin missing; adding remote ${redactUrl(fallbackUrl)}`);
   runGit(['remote', 'add', 'origin', fallbackUrl], cwd);
   return fallbackUrl;
@@ -103,10 +110,36 @@ function setOrigin(cwd, remoteUrl) {
   log(`Origin set to ${redactUrl(remoteUrl)}`);
 }
 
-/**
- * Turn a zip-upload host (no .git) into a real checkout without wiping data/ or .env.
- * @returns {{ ok: boolean, reason?: string }}
- */
+function hasUsableHead(cwd) {
+  const head = runGit(['rev-parse', 'HEAD'], cwd);
+  return gitOk(head) && Boolean(gitLine(head));
+}
+
+function fetchMain(cwd) {
+  log(`Fetching origin/main (shallow, timeout ${FETCH_TIMEOUT_MS / 1000}s)...`);
+  let fetch = runGit(
+    ['fetch', '--depth', '1', '--no-tags', 'origin', 'main'],
+    cwd,
+    FETCH_TIMEOUT_MS,
+  );
+  if (gitOk(fetch)) {
+    log('Fetch ok (origin/main).');
+    return fetch;
+  }
+
+  log(`Shallow main fetch failed: ${gitText(fetch) || 'unknown'}; trying origin...`);
+  fetch = runGit(['fetch', '--depth', '1', '--no-tags', 'origin'], cwd, FETCH_TIMEOUT_MS);
+  if (gitOk(fetch)) {
+    log('Fetch ok (origin).');
+    return fetch;
+  }
+
+  log(`Shallow fetch failed: ${gitText(fetch) || 'unknown'}; trying full main fetch...`);
+  fetch = runGit(['fetch', 'origin', 'main'], cwd, FETCH_TIMEOUT_MS);
+  if (gitOk(fetch)) log('Fetch ok (full main).');
+  return fetch;
+}
+
 function bootstrapGitCheckout(cwd, remoteUrl) {
   log('No .git — bootstrapping git checkout (keeps data/ + .env)...');
 
@@ -114,9 +147,7 @@ function bootstrapGitCheckout(cwd, remoteUrl) {
   rmSync(join(cwd, 'tmp'), { recursive: true, force: true });
 
   let init = runGit(['init', '-b', 'main'], cwd);
-  if (!gitOk(init)) {
-    init = runGit(['init'], cwd);
-  }
+  if (!gitOk(init)) init = runGit(['init'], cwd);
   if (!gitOk(init)) {
     const detail = gitText(init) || 'unknown';
     log(`git init failed: ${detail}`);
@@ -125,25 +156,22 @@ function bootstrapGitCheckout(cwd, remoteUrl) {
 
   setOrigin(cwd, remoteUrl);
 
-  let fetch = runGit(['fetch', 'origin', 'main'], cwd);
-  if (!gitOk(fetch)) {
-    fetch = runGit(['fetch', 'origin'], cwd);
-  }
+  const fetch = fetchMain(cwd);
   if (!gitOk(fetch)) {
     const detail = gitText(fetch) || 'unknown';
     log(`Bootstrap fetch failed: ${detail}`);
-    // Leave a broken .git so the next attempt can retry with a fixed token,
-    // but surface the error clearly.
+    log('Check PAT has repo read access, and that this host can reach github.com.');
     return { ok: false, reason: `bootstrap_fetch_failed: ${detail}` };
   }
 
   let targetRef = 'origin/main';
-  const mainCheck = runGit(['rev-parse', '--verify', 'origin/main'], cwd);
-  if (!gitOk(mainCheck)) {
-    const masterCheck = runGit(['rev-parse', '--verify', 'origin/master'], cwd);
-    if (gitOk(masterCheck)) targetRef = 'origin/master';
+  if (!gitOk(runGit(['rev-parse', '--verify', 'origin/main'], cwd))) {
+    if (gitOk(runGit(['rev-parse', '--verify', 'origin/master'], cwd))) {
+      targetRef = 'origin/master';
+    }
   }
 
+  log(`Checking out ${targetRef}...`);
   const checkout = runGit(['checkout', '-f', '-B', 'main', targetRef], cwd);
   if (!gitOk(checkout)) {
     const reset = runGit(['reset', '--hard', targetRef], cwd);
@@ -154,13 +182,7 @@ function bootstrapGitCheckout(cwd, remoteUrl) {
     }
   }
 
-  runGit([
-    'clean',
-    '-fd',
-    '-e', 'data',
-    '-e', '.env',
-    '-e', 'node_modules',
-  ], cwd);
+  runGit(['clean', '-fd', '-e', 'data', '-e', '.env', '-e', 'node_modules'], cwd);
 
   const head = runGit(['rev-parse', 'HEAD'], cwd);
   const sha = gitOk(head) ? gitLine(head) : null;
@@ -176,12 +198,22 @@ export function syncHostCodeFromMain({
   fallbackRemoteUrl = DEFAULT_REPO_HTTPS,
 } = {}) {
   const bootstrapRemote = resolveBootstrapRemote(fallbackRemoteUrl);
+  const gitDir = join(cwd, '.git');
 
-  if (!existsSync(join(cwd, '.git'))) {
+  // Hung bootstrap leaves .git with no HEAD — wipe and retry.
+  if (existsSync(gitDir) && !hasUsableHead(cwd)) {
+    log('Incomplete .git (no HEAD) — removing and re-bootstrapping...');
     if (!bootstrapRemote) {
-      log('No .git folder — this host is a zip upload, not a GitHub checkout.');
-      log('Fix: set Apollo env CLEARWATER_GIT_REMOTE=https://<PAT>@github.com/colin991/ClearwaterWebBot.git');
-      log('Or: Stop → console repair one-liner in README → Start. Keeps data/ + .env.');
+      log('Set CLEARWATER_GIT_REMOTE=https://<PAT>@github.com/colin991/ClearwaterWebBot.git');
+      return { updated: false, commit: null, reason: 'incomplete_git' };
+    }
+    rmSync(gitDir, { recursive: true, force: true });
+  }
+
+  if (!existsSync(gitDir)) {
+    if (!bootstrapRemote) {
+      log('No .git folder — zip upload host, not a GitHub checkout.');
+      log('Fix: set CLEARWATER_GIT_REMOTE=https://<PAT>@github.com/colin991/ClearwaterWebBot.git');
       return { updated: false, commit: null, reason: 'no_git' };
     }
 
@@ -190,9 +222,11 @@ export function syncHostCodeFromMain({
       return { updated: false, commit: null, reason: boot.reason || 'bootstrap_failed' };
     }
 
-    // Fresh checkout from main — always re-exec so the new tree actually runs.
     log('Running npm install --omit=dev after bootstrap...');
-    const npm = run('npm', ['install', '--omit=dev'], cwd, { inherit: true });
+    const npm = run('npm', ['install', '--omit=dev'], cwd, {
+      inherit: true,
+      timeoutMs: FETCH_TIMEOUT_MS,
+    });
     if (npm.status !== 0) {
       log('npm install after bootstrap failed; continuing with existing node_modules');
     }
@@ -204,11 +238,9 @@ export function syncHostCodeFromMain({
     };
   }
 
-  // Leftover paths that block panel `git pull` on this host.
   rmSync(join(cwd, 'downloads'), { recursive: true, force: true });
   rmSync(join(cwd, 'tmp'), { recursive: true, force: true });
 
-  // Clear interrupted merge/rebase so reset can proceed.
   runGit(['merge', '--abort'], cwd);
   runGit(['rebase', '--abort'], cwd);
   runGit(['cherry-pick', '--abort'], cwd);
@@ -217,77 +249,40 @@ export function syncHostCodeFromMain({
   const beforeSha = gitOk(before) ? gitLine(before) : null;
   if (beforeSha) log(`Current commit ${beforeSha.slice(0, 7)}`);
 
-  // If origin is missing/broken but the user provided credentials, use them.
   if (bootstrapRemote) {
-    const current = runGit(['remote', 'get-url', 'origin'], cwd);
-    if (!gitOk(current) || !gitLine(current)) {
-      setOrigin(cwd, bootstrapRemote);
-    } else {
-      ensureOrigin(cwd, bootstrapRemote);
-    }
+    setOrigin(cwd, bootstrapRemote);
   } else {
     ensureOrigin(cwd, fallbackRemoteUrl);
   }
 
-  // Fetch all heads; some panels track main as master or have odd refspecs.
-  let fetch = runGit(['fetch', 'origin', 'main'], cwd);
-  if (!gitOk(fetch)) {
-    fetch = runGit(['fetch', 'origin'], cwd);
+  let fetch = fetchMain(cwd);
+  if (!gitOk(fetch) && bootstrapRemote) {
+    log('Retrying fetch with CLEARWATER_GIT_REMOTE...');
+    setOrigin(cwd, bootstrapRemote);
+    fetch = fetchMain(cwd);
   }
   if (!gitOk(fetch)) {
     const detail = gitText(fetch) || 'unknown';
     log(`Fetch failed: ${detail}`);
-    if (bootstrapRemote) {
-      log('Retrying fetch with CLEARWATER_GIT_REMOTE / GITHUB_TOKEN...');
-      setOrigin(cwd, bootstrapRemote);
-      fetch = runGit(['fetch', 'origin', 'main'], cwd);
-      if (!gitOk(fetch)) {
-        fetch = runGit(['fetch', 'origin'], cwd);
-      }
+    return { updated: false, commit: beforeSha, reason: `fetch_failed: ${detail}` };
+  }
+
+  let targetRef = 'origin/main';
+  if (!gitOk(runGit(['rev-parse', '--verify', 'origin/main'], cwd))) {
+    if (gitOk(runGit(['rev-parse', '--verify', 'origin/master'], cwd))) {
+      targetRef = 'origin/master';
     }
   }
-  if (!gitOk(fetch)) {
-    const detail = gitText(fetch) || 'unknown';
-    log(`Fetch failed: ${detail}`);
-    return {
-      updated: false,
-      commit: beforeSha,
-      reason: `fetch_failed: ${detail}`,
-    };
-  }
 
-  // Prefer origin/main, fall back to origin/master.
-  let targetRef = 'origin/main';
-  const mainCheck = runGit(['rev-parse', '--verify', 'origin/main'], cwd);
-  if (!gitOk(mainCheck)) {
-    const masterCheck = runGit(['rev-parse', '--verify', 'origin/master'], cwd);
-    if (gitOk(masterCheck)) targetRef = 'origin/master';
-  }
-
-  // Prefer staying on a real branch named main (helps later panel `git pull`).
   runGit(['checkout', '-B', 'main', targetRef], cwd);
-
-  // Reset tracked files only. Does not delete gitignored host data/ or .env.
   const reset = runGit(['reset', '--hard', targetRef], cwd);
   if (!gitOk(reset)) {
     const detail = gitText(reset) || 'unknown';
     log(`Reset failed: ${detail}`);
-    return {
-      updated: false,
-      commit: beforeSha,
-      reason: `reset_failed: ${detail}`,
-    };
+    return { updated: false, commit: beforeSha, reason: `reset_failed: ${detail}` };
   }
 
-  // Remove untracked junk, but never wipe data/, .env, or node_modules.
-  // Do NOT use `git clean -fdx` — that deletes gitignored data files.
-  runGit([
-    'clean',
-    '-fd',
-    '-e', 'data',
-    '-e', '.env',
-    '-e', 'node_modules',
-  ], cwd);
+  runGit(['clean', '-fd', '-e', 'data', '-e', '.env', '-e', 'node_modules'], cwd);
 
   const after = runGit(['rev-parse', 'HEAD'], cwd);
   const afterSha = gitOk(after) ? gitLine(after) : beforeSha;
@@ -295,10 +290,11 @@ export function syncHostCodeFromMain({
 
   if (updated) {
     log(`Updated ${beforeSha.slice(0, 7)} -> ${afterSha.slice(0, 7)}`);
-    // Panel already ran npm install on the *old* package.json. Refresh deps
-    // before re-exec so new dependencies exist.
     log('Running npm install --omit=dev after code update...');
-    const npm = run('npm', ['install', '--omit=dev'], cwd, { inherit: true });
+    const npm = run('npm', ['install', '--omit=dev'], cwd, {
+      inherit: true,
+      timeoutMs: FETCH_TIMEOUT_MS,
+    });
     if (npm.status !== 0) {
       log('npm install after update failed; continuing with existing node_modules');
     }
@@ -313,21 +309,13 @@ export function syncHostCodeFromMain({
   };
 }
 
-/**
- * If sync pulled newer code, replace this process with a fresh node index.js
- * so the newly downloaded files are what actually run.
- */
 export function reexecIfUpdated(syncResult) {
   if (!syncResult?.updated) return false;
 
   log('Re-executing onto updated files...');
   const child = spawnSync(process.execPath, process.argv.slice(1), {
     cwd: process.cwd(),
-    env: {
-      ...process.env,
-      // Prevent infinite re-exec loops if reset somehow flaps.
-      CLEARWATER_SKIP_HOST_SYNC: '1',
-    },
+    env: gitEnv({ CLEARWATER_SKIP_HOST_SYNC: '1' }),
     stdio: 'inherit',
   });
   process.exit(child.status ?? 0);
