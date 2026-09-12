@@ -70,14 +70,6 @@ function flatten(value, prefix = '', output = []) {
     return output;
   }
   if (typeof value === 'object') {
-    // Melonly form answers are objects containing presentation metadata plus
-    // the actual answer. Keep the readable field name and answer only.
-    if (Object.prototype.hasOwnProperty.call(value, 'name')
-      && Object.prototype.hasOwnProperty.call(value, 'value')) {
-      const name = String(value.name || '').replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').trim();
-      if (name) flatten(value.value, name, output);
-      return output;
-    }
     for (const [key, entry] of Object.entries(value)) flatten(entry, prefix ? `${prefix} / ${key}` : key, output);
     return output;
   }
@@ -96,7 +88,7 @@ function recordFields(record) {
 
 function safe(value, max = 1024) {
   const text = String(value ?? 'N/A').replace(/[<>`]/g, '').trim() || 'N/A';
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  return text.length > max ? `${text.slice(0, max - 1)}â€¦` : text;
 }
 
 function buildReportEmbed(record, type) {
