@@ -77,9 +77,9 @@ const PCSO_STAR_LOGO_PATH = path.join(ROOT, 'assets', 'pcso-sheriff-star.png');
 
 /** Official-records style palette (CIS-like, PCSO branded). */
 const REPORT_DOC = Object.freeze({
-  titleBlue: '#1a4a8c',
+  titleBlue: '#5b6470', // agency title — gray
   barDark: '#4a4a4a',
-  barOlive: '#6b7c3d',
+  barOlive: '#b0b5bc', // status bar — lighter gray
   barSubject: '#3d3d3d',
   rowAlt: '#f3f4f6',
   border: '#c5c9d0',
@@ -1186,8 +1186,8 @@ async function buildReportDocuments(type, values, submitter) {
     <text x="1160" y="164" text-anchor="end" class="bar-right">${escapeSvg(meta.slice(0, 90))}</text>
 
     <rect x="0" y="176" width="${width}" height="36" fill="${REPORT_DOC.barOlive}"/>
-    <text x="40" y="200" class="bar-left-light">Official ${escapeSvg(definition.title)} record generated for PCSO operations.</text>
-    <text x="1160" y="200" text-anchor="end" class="bar-right-light">${escapeSvg(generatedAt)}</text>
+    <text x="40" y="200" class="bar-left">Official ${escapeSvg(definition.title)} record generated for PCSO operations.</text>
+    <text x="1160" y="200" text-anchor="end" class="bar-right">${escapeSvg(generatedAt)}</text>
 
     <rect x="0" y="220" width="${width}" height="72" fill="${REPORT_DOC.barSubject}"/>
     <text x="40" y="246" class="subj-head">NAME</text>
@@ -1214,8 +1214,6 @@ async function buildReportDocuments(type, values, submitter) {
     .tagline-sub { font: 11px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.muted}; }
     .bar-left { font: 700 14px Arial, Helvetica, sans-serif; fill: #ffffff; }
     .bar-right { font: 12px Arial, Helvetica, sans-serif; fill: #f3f4f6; }
-    .bar-left-light { font: 700 14px Arial, Helvetica, sans-serif; fill: #1f2937; }
-    .bar-right-light { font: 12px Arial, Helvetica, sans-serif; fill: #374151; }
     .subj-head { font: 700 12px Arial, Helvetica, sans-serif; fill: #d1d5db; }
     .subj-val { font: 700 16px Arial, Helvetica, sans-serif; fill: #ffffff; }
     .grid-label { font: 700 12px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.label}; }
@@ -1264,9 +1262,9 @@ async function buildReportDocuments(type, values, submitter) {
 
     y += 22;
     doc.rect(0, y, pageW, 22).fill(REPORT_DOC.barOlive);
-    doc.fillColor('#1f2937').font('Helvetica-Bold').fontSize(8)
+    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(8)
       .text(`Official ${definition.title} record generated for PCSO operations.`, left, y + 7);
-    doc.fillColor('#374151').font('Helvetica').fontSize(7).text(generatedAt, left, y + 7, { width: contentW, align: 'right' });
+    doc.font('Helvetica').fontSize(7).text(generatedAt, left, y + 7, { width: contentW, align: 'right' });
 
     y += 22;
     doc.rect(0, y, pageW, 44).fill(REPORT_DOC.barSubject);
