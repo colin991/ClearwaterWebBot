@@ -18,6 +18,8 @@ import { relayDispatchStream } from './dispatchLiveAudio.js';
 const MIN_TALK_MS = 150;
 /** Short recovery delay after an announcement or unexpected disconnect. */
 const REJOIN_DELAY_MS = 2_000;
+/** Discord can emit UDP and WebSocket end events for one transmission. */
+const TALK_END_DEBOUNCE_MS = 650;
 
 let clientRef = null;
 let connection = null;
@@ -37,6 +39,7 @@ let talkSavedCount = 0;
 
 /** userId -> { startedAt: number, memberSnapshot } */
 const activeTalk = new Map();
+const talkEndTimers = new Map();
 
 /** True while radio monitoring is paused so another VC feature can speak. */
 export function isDispatchRadioMonitorPaused() {
@@ -182,6 +185,11 @@ async function beginTalk(voiceConnection, guild, userId, source = 'udp') {
   if (stopping || paused) return;
   const id = String(userId);
   if (activeTalk.has(id)) return;
+  const pendingEnd = talkEndTimers.get(id);
+  if (pendingEnd) {
+    clearTimeout(pendingEnd);
+    talkEndTimers.delete(id);
+  }
 
   const member = guild.members.cache.get(id)
     || await guild.members.fetch(id).catch(() => null);
@@ -207,7 +215,7 @@ async function beginTalk(voiceConnection, guild, userId, source = 'udp') {
   );
 }
 
-async function finalizeTalk(userId, member = null, endedAt = Date.now()) {
+async function finalizeTalkNow(userId, member = null, endedAt = Date.now()) {
   const active = activeTalk.get(String(userId));
   if (!active) return null;
   activeTalk.delete(String(userId));
@@ -249,6 +257,20 @@ async function finalizeTalk(userId, member = null, endedAt = Date.now()) {
   return entry;
 }
 
+function scheduleTalkEnd(userId, member = null) {
+  const id = String(userId);
+  const pendingEnd = talkEndTimers.get(id);
+  if (pendingEnd) clearTimeout(pendingEnd);
+  const timer = setTimeout(() => {
+    talkEndTimers.delete(id);
+    void finalizeTalkNow(id, member).catch((error) => {
+      logger.warn(`Radio talk: debounced speak-end failed: ${error?.message || error}`);
+    });
+  }, TALK_END_DEBOUNCE_MS);
+  timer.unref?.();
+  talkEndTimers.set(id, timer);
+}
+
 function bindSpeakingListeners(voiceConnection, guild) {
   const receiver = voiceConnection.receiver;
   const speaking = receiver?.speaking;
@@ -265,11 +287,7 @@ function bindSpeakingListeners(voiceConnection, guild) {
       logger.warn(`Radio talk monitor: speak-start failed: ${error?.message || error}`);
     });
   });
-  speaking.on('end', (userId) => {
-    void finalizeTalk(userId).catch((error) => {
-      logger.warn(`Radio talk monitor: speak-end failed: ${error?.message || error}`);
-    });
-  });
+  speaking.on('end', (userId) => scheduleTalkEnd(userId));
 
   // Voice websocket Speaking opcode (op 5). This works even when UDP receive is
   // blocked/broken on the bot host — the common reason logs stay empty while Ready.
@@ -288,9 +306,7 @@ function bindSpeakingListeners(voiceConnection, guild) {
             logger.warn(`Radio talk monitor: WS speak-start failed: ${error?.message || error}`);
           });
         } else {
-          void finalizeTalk(userId).catch((error) => {
-            logger.warn(`Radio talk monitor: WS speak-end failed: ${error?.message || error}`);
-          });
+          scheduleTalkEnd(userId);
         }
       } catch (error) {
         logger.warn(`Radio talk monitor: WS speaking hook failed: ${error?.message || error}`);
@@ -449,7 +465,12 @@ export async function handleRadioTalkVoiceStateUpdate(oldState, newState) {
   const leftRadio = oldState?.channelId === DISPATCH_VOICE_CHANNEL_ID
     && newState?.channelId !== DISPATCH_VOICE_CHANNEL_ID;
   if (!leftRadio) return null;
-  return finalizeTalk(userId, oldState.member || newState.member);
+  const pendingEnd = talkEndTimers.get(String(userId));
+  if (pendingEnd) {
+    clearTimeout(pendingEnd);
+    talkEndTimers.delete(String(userId));
+  }
+  return finalizeTalkNow(userId, oldState.member || newState.member);
 }
 
 export function startDispatchRadioTalkMonitor(client) {
@@ -477,7 +498,7 @@ export function startDispatchRadioTalkMonitor(client) {
     replacingConnection = true;
     clearRejoinTimer();
     for (const userId of [...activeTalk.keys()]) {
-      void finalizeTalk(userId);
+      void finalizeTalkNow(userId);
     }
     try { connection?.destroy(); } catch { /* ignore */ }
     connection = null;
