@@ -85,10 +85,6 @@
     {
       "source": "/news",
       "destination": "/news.html"
-    },
-    {
-      "source": "/admin",
-      "destination": "/admin.html"
     }
   ],
   "headers": [

@@ -1,0 +1,98 @@
+import { createServer } from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
+import { logger } from './logger.js';
+import { formatTalkDuration, getRadioTalkLogs } from './pcsoRadioTalkLogs.js';
+
+function sendJson(response, status, body) {
+  response.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  response.end(JSON.stringify(body));
+}
+
+function authorized(request, apiKey) {
+  const header = String(request.headers.authorization || '');
+  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+  if (!apiKey || !token) return false;
+  const left = Buffer.from(token);
+  const right = Buffer.from(apiKey);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+/**
+ * Tiny bot-host HTTP surface so the website can read radio talk logs via BOT_API_URL.
+ * Listens on SERVER_PORT / PORT (Spark/Apollo assigned port) when configured.
+ */
+export function startBotApiServer(client, {
+  port = Number(process.env.SERVER_PORT || process.env.PORT || 0),
+  apiKey = process.env.BOT_API_KEY || '',
+} = {}) {
+  const listenPort = Number(port);
+  if (!Number.isInteger(listenPort) || listenPort <= 0) {
+    logger.info('Bot API server skipped (no SERVER_PORT/PORT). Radio logs stay on local disk only.');
+    return () => {};
+  }
+  if (!apiKey) {
+    logger.warn('Bot API server skipped (BOT_API_KEY missing).');
+    return () => {};
+  }
+
+  const server = createServer(async (request, response) => {
+    try {
+      const url = new URL(request.url || '/', `http://127.0.0.1:${listenPort}`);
+      if (!authorized(request, apiKey)) {
+        return sendJson(response, 401, { error: 'Unauthorized' });
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/status') {
+        return sendJson(response, 200, {
+          online: Boolean(client?.isReady?.()),
+          updatedAt: new Date().toISOString(),
+          guild: {
+            memberCount: client?.guilds?.cache?.first()?.memberCount ?? null,
+          },
+          bot: {
+            latencyMs: Math.round(client?.ws?.ping || 0),
+          },
+        });
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/pcso/radio-logs') {
+        const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit')) || 50));
+        const store = await getRadioTalkLogs();
+        const entries = store.entries.slice(0, limit).map((entry) => ({
+          ...entry,
+          durationLabel: formatTalkDuration(entry.durationMs),
+        }));
+        return sendJson(response, 200, {
+          ok: true,
+          updatedAt: store.updatedAt,
+          entries,
+        });
+      }
+
+      return sendJson(response, 404, { error: 'Not found' });
+    } catch (error) {
+      logger.error('Bot API server request failed', error);
+      return sendJson(response, 500, { error: error?.message || 'Server error' });
+    }
+  });
+
+  server.on('error', (error) => {
+    if (error?.code === 'EADDRINUSE') {
+      logger.warn(`Bot API server port ${listenPort} is already in use; radio-log HTTP endpoint not bound.`);
+      return;
+    }
+    logger.error('Bot API server error', error);
+  });
+
+  server.listen(listenPort, '0.0.0.0', () => {
+    logger.info(`Bot API server listening on :${listenPort} (radio logs + status).`);
+  });
+
+  return () => {
+    try { server.close(); } catch { /* ignore */ }
+  };
+}

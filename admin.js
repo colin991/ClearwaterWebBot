@@ -5,10 +5,14 @@ const wrapEl = document.querySelector('[data-admin-table-wrap]');
 const bodyEl = document.querySelector('[data-admin-body]');
 const searchEl = document.querySelector('[data-admin-search]');
 const contentEl = document.querySelector('[data-admin-content]');
+const radioEl = document.querySelector('[data-admin-radio]');
 const newsListEl = document.querySelector('[data-news-list]');
 const eventListEl = document.querySelector('[data-event-list]');
 const newsForm = document.querySelector('[data-news-form]');
 const eventForm = document.querySelector('[data-event-form]');
+const radioBodyEl = document.querySelector('[data-radio-body]');
+const radioMetaEl = document.querySelector('[data-radio-meta]');
+const refreshBtn = document.querySelector('[data-radio-refresh]');
 
 let people = [];
 
@@ -17,6 +21,19 @@ const escapeHtml = (value) => String(value ?? '')
   .replaceAll('<', '&lt;')
   .replaceAll('>', '&gt;')
   .replaceAll('"', '&quot;');
+
+function formatWhen(iso) {
+  const date = iso ? new Date(iso) : null;
+  if (!date || Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
 
 function renderRows(list) {
   if (!list.length) {
@@ -48,6 +65,24 @@ function renderRows(list) {
       <td class="admin-actions">
         <a href="/api/pcso/weekly-report?discordId=${id}">Download PDF</a>
       </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderRadioLogs(entries) {
+  if (!radioBodyEl) return;
+  if (!entries.length) {
+    radioBodyEl.innerHTML = '<tr><td colspan="4">None</td></tr>';
+    return;
+  }
+  radioBodyEl.innerHTML = entries.map((entry) => {
+    const unit = entry.callsign || '—';
+    const name = entry.displayName || entry.username || entry.userId || 'Unknown';
+    return `<tr>
+      <td><strong>${escapeHtml(unit)}</strong></td>
+      <td>${escapeHtml(name)}</td>
+      <td>${escapeHtml(formatWhen(entry.startedAt))}</td>
+      <td>${escapeHtml(entry.durationLabel || `${Math.round((entry.durationMs || 0) / 1000)}s`)}</td>
     </tr>`;
   }).join('');
 }
@@ -132,6 +167,19 @@ async function loadPersonnel() {
   applySearch();
 }
 
+async function loadRadioLogs() {
+  const response = await fetch('/api/pcso/radio-logs?limit=75', { cache: 'no-store' });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'Radio logs could not be loaded.');
+  const entries = Array.isArray(payload.entries) ? payload.entries : [];
+  renderRadioLogs(entries);
+  if (radioMetaEl) {
+    radioMetaEl.textContent = entries.length
+      ? `${entries.length} recent PCSO radio transmit${entries.length === 1 ? '' : 's'}${payload.updatedAt ? ` · updated ${formatWhen(payload.updatedAt)}` : ''}`
+      : 'No PCSO radio transmits logged yet.';
+  }
+}
+
 async function boot() {
   try {
     const sessionResponse = await fetch('/api/auth/me', { cache: 'no-store' });
@@ -147,6 +195,7 @@ async function boot() {
 
     if (personnelEl) personnelEl.hidden = false;
     if (contentEl) contentEl.hidden = false;
+    if (radioEl) radioEl.hidden = false;
     statusEl.textContent = 'Loading admin tools…';
 
     await Promise.all([
@@ -159,10 +208,15 @@ async function boot() {
       loadContent().catch((error) => {
         statusEl.textContent = error.message || 'News and events could not be loaded.';
       }),
+      loadRadioLogs().catch((error) => {
+        if (radioMetaEl) {
+          radioMetaEl.textContent = error.message || 'Radio logs could not be loaded.';
+        }
+      }),
     ]);
 
     if (statusEl.textContent === 'Loading admin tools…') {
-      statusEl.textContent = 'Signed in. Manage weekly PDFs below, and news/events for the homepage.';
+      statusEl.textContent = 'Signed in. Manage weekly PDFs, news/events, and dispatch radio talk logs below.';
     }
   } catch {
     statusEl.textContent = 'Admin panel could not be loaded right now.';
@@ -221,6 +275,16 @@ document.addEventListener('click', async (event) => {
     statusEl.textContent = 'Item removed.';
   } catch (error) {
     statusEl.textContent = error.message || 'Could not delete item.';
+  }
+});
+
+refreshBtn?.addEventListener('click', async () => {
+  try {
+    statusEl.textContent = 'Refreshing radio logs…';
+    await loadRadioLogs();
+    statusEl.textContent = 'Radio logs refreshed.';
+  } catch (error) {
+    statusEl.textContent = error.message || 'Could not refresh radio logs.';
   }
 });
 
