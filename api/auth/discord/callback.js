@@ -79,10 +79,53 @@ export default async function handler(request, response) {
       ]);
     }
 
+    // Pinellas member roles + Discord Administrator bit for the PCSO admin panel.
+    const PINELLAS_GUILD_ID = '1514100977920245760';
+    const ADMINISTRATOR = 0x8n;
+    let pinellasRoles = [];
+    let discordAdmin = false;
+    try {
+      const pinellasMemberResponse = await fetch(
+        `https://discord.com/api/v10/users/@me/guilds/${PINELLAS_GUILD_ID}/member`,
+        { headers: { Authorization: `Bearer ${token.access_token}` } },
+      );
+      if (pinellasMemberResponse.ok) {
+        const pinellasMember = await pinellasMemberResponse.json();
+        pinellasRoles = Array.isArray(pinellasMember.roles) ? pinellasMember.roles.map(String) : [];
+      }
+    } catch {
+      // Pinellas membership is optional for site access; admin panel checks it later.
+    }
+    try {
+      const guildsResponse = await fetch('https://discord.com/api/v10/users/@me/guilds', {
+        headers: { Authorization: `Bearer ${token.access_token}` },
+      });
+      if (guildsResponse.ok) {
+        const guilds = await guildsResponse.json();
+        const list = Array.isArray(guilds) ? guilds : [];
+        for (const guild of list) {
+          const id = String(guild?.id || '');
+          if (id !== PINELLAS_GUILD_ID && id !== '1514026810348671026') continue;
+          try {
+            if ((BigInt(guild.permissions || 0) & ADMINISTRATOR) === ADMINISTRATOR) {
+              discordAdmin = true;
+              break;
+            }
+          } catch {
+            // Ignore malformed permission bitfields.
+          }
+        }
+      }
+    } catch {
+      // Guild permission lookup is best-effort.
+    }
+
     const session = createSessionToken({
       ...user,
       guildBanner: guildMember?.banner || null,
       guildRoles,
+      pinellasRoles,
+      discordAdmin,
     }, sessionSecret);
     const next = safeNextPath(cookies[NEXT_COOKIE] || '');
     const destination = next === '/' ? '/?login=success' : next;
