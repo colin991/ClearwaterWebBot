@@ -1047,24 +1047,27 @@ async function dmSubjectReportPng(client, record, type, submitterLabel) {
   }
 
   const png = await buildMelonlyReportPng(record, type, submitterLabel);
+  const files = [new AttachmentBuilder(png, { name: 'pcso-report.png' })];
+  if (type === 'arrest') {
+    const pdf = await buildMelonlyReportPdf(record, type, submitterLabel);
+    files.push(new AttachmentBuilder(pdf, { name: 'pcso-arrest-report.pdf' }));
+  }
   try {
     const user = await client.users.fetch(discordId);
-    await user.send({
-      files: [new AttachmentBuilder(png, { name: 'pcso-report.png' })],
-    });
+    await user.send({ files });
   } catch (error) {
     const code = error?.code || error?.rawError?.code;
     if (code === 50007) {
       logger.warn(
         `Melonly ${type} report ${record?.id || 'unknown'}: subject Discord ${discordId} `
-        + `(${subject.fullName || 'unknown'}) has DMs closed — could not deliver PNG`,
+        + `(${subject.fullName || 'unknown'}) has DMs closed — could not deliver report files`,
       );
       return { sent: false, reason: 'dms_closed', discordId };
     }
     throw error;
   }
   logger.info(
-    `DMed Melonly ${type} report PNG to subject Discord ${discordId} `
+    `DMed Melonly ${type} report ${type === 'arrest' ? 'PNG and PDF' : 'PNG'} to subject Discord ${discordId} `
     + `(${subject.fullName || 'unknown'}) for case ${record?.id || 'unknown'}`,
   );
   return { sent: true, discordId };
