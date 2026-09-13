@@ -2,6 +2,14 @@
   "version": 1,
   "updates": [
     {
+      "id": "pcso-quick-links-active-calls",
+      "title": "PCSO quick links + Melonly active calls",
+      "summary": "Added the PCSO quick-links bar under the homepage hero (without Obtain Fingerprints), linked each item to its own page, and wired Active Calls to Melonly CAD calls that have a PCSO unit assigned.",
+      "createdAt": "2026-09-13T01:54:56Z",
+      "updatedBy": "colin991",
+      "commit": "4fff427"
+    },
+    {
       "id": "2026-09-07-pinellas-roster-cleanup",
       "title": "PCSO roster cleanup checks",
       "summary": "The PCSO roster now checks member rank roles every minute, removes assignments when a member no longer has the recorded rank, and expires warning or strike history after four days.",
@@ -11,7 +19,7 @@
     {
       "id": "2026-09-07-pinellas-callsign-sheet-fix",
       "title": "PCSO callsigns update the live roster",
-      "summary": "The -callsign roster workflow now reads and writes the PCSO databaseâ€™s actual rank, callsign, roleplay name, Discord ID, activity, and punishment columns, using the shared operations database.",
+      "summary": "The -callsign roster workflow now reads and writes the PCSO database\u00e2\u20ac\u2122s actual rank, callsign, roleplay name, Discord ID, activity, and punishment columns, using the shared operations database.",
       "updatedBy": "colin991",
       "createdAt": "2026-09-07T17:00:00.000Z"
     },
