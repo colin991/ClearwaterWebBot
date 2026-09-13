@@ -1322,7 +1322,7 @@ body.home-stage {
   background: transparent;
   color: #c4c7ce;
 }
-.admin-item > div {
+.admin-item > div:not(.admin-item-thumb) {
   flex: 1;
   min-width: 0;
 }
