@@ -7,6 +7,7 @@ import { writeDispatchWebTalk, stopDispatchWebTalk } from './dispatchWebTalk.js'
 import { fetchPcsoAssignedMelonlyCalls } from './melonly.js';
 import { readDispatchAudio } from './dispatchLiveAudio.js';
 import { DISPATCH_VOICE_CHANNEL_ID } from './dispatchChannelStatus.js';
+import { noteWebListener, noteWebTalk } from './dispatchActivityLog.js';
 
 /** Pinellas County Sheriff's Office Melonly department id. */
 const PINELLAS_MELONLY_DEPARTMENT_ID = '7470323914464301056';
@@ -82,6 +83,11 @@ export function startBotApiServer(client, {
       }
 
       if (request.method === 'GET' && url.pathname === '/api/pcso/radio-audio') {
+        noteWebListener(client, {
+          id: request.headers['x-admin-id'],
+          displayName: request.headers['x-admin-name'],
+          username: request.headers['x-admin-username'],
+        });
         const status = getDispatchRadioMonitorStatus();
         const ready = !status.paused && !status.stopping
           && status.connectionStatus === 'ready' && status.channelId === DISPATCH_VOICE_CHANNEL_ID;
@@ -90,12 +96,19 @@ export function startBotApiServer(client, {
 
       if (request.method === 'POST' && url.pathname === '/api/pcso/radio-talk') {
         const action = String(request.headers['x-talk-action'] || 'audio').toLowerCase();
+        const actor = {
+          id: request.headers['x-admin-id'],
+          displayName: request.headers['x-admin-name'],
+          username: request.headers['x-admin-username'],
+        };
         if (action === 'stop') {
+          noteWebTalk(client, actor, 'stop');
           stopDispatchWebTalk();
           return sendJson(response, 200, { ok: true, talking: false });
         }
         const body = await readBinaryBody(request);
         if (!body.length) return sendJson(response, 400, { error: 'Audio data is required.' });
+        noteWebTalk(client, actor, 'audio');
         const result = writeDispatchWebTalk(body);
         return sendJson(response, result.ok ? 200 : 409, result);
       }
