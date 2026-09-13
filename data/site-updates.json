@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-13-radio-vc-rejoin-loop",
+      "title": "Stabilize PCSO radio VC logging",
+      "summary": "Stopped the dispatch radio monitor from destroying and recreating its voice connection on a loop, and skipped rejoins when already connected so talk logs can stay online for the admin panel.",
+      "createdAt": "2026-09-13T15:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-13-pcso-signin-gray-black",
       "title": "PCSO sign-in gray and black theme",
       "summary": "Restyled the Discord sign-in page to the site gray/black theme, replacing the blue glow, checkbox, and Discord button accents.",

@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { formatTalkDuration, getRadioTalkLogs } from './pcsoRadioTalkLogs.js';
+import { getDispatchRadioMonitorStatus } from './dispatchRadioTalkMonitor.js';
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -56,6 +57,7 @@ export function startBotApiServer(client, {
           bot: {
             latencyMs: Math.round(client?.ws?.ping || 0),
           },
+          radioMonitor: getDispatchRadioMonitorStatus(),
         });
       }
 
