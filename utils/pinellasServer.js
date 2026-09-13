@@ -33,17 +33,44 @@ export const PINELLAS_EMPLOYEE_WELCOME_CHANNEL_ID = '1514108033720909894';
 /** Role that triggers the employee welcome message when granted. */
 export const PINELLAS_EMPLOYEE_WELCOME_ROLE_ID = '1514363218754142218';
 
-/** Role required to run /promote and infraction commands. */
+/** Role required to run /promote and other PCSO command tools. */
 export const PINELLAS_COMMAND_ACCESS_ROLE_ID = '1514361105244356639';
+
+/**
+ * Roles allowed to run /infract and /edit-infraction.
+ * Includes the general PCSO command-access role plus additional supervisor ranks.
+ */
+export const PINELLAS_INFRACTION_ACCESS_ROLE_IDS = Object.freeze([
+  PINELLAS_COMMAND_ACCESS_ROLE_ID,
+  '1514851283817725962',
+  '1514851216679632906',
+  '1514850974127100007',
+]);
+
+function memberHasAnyRole(member, roleIds) {
+  const cache = member?.roles?.cache;
+  if (!cache) return false;
+  return roleIds.some((roleId) => cache.has(String(roleId)));
+}
 
 /** True when the member has the PCSO command-access role. */
 export function memberHasPinellasCommandAccess(member) {
-  return Boolean(member?.roles?.cache?.has(PINELLAS_COMMAND_ACCESS_ROLE_ID));
+  return memberHasAnyRole(member, [PINELLAS_COMMAND_ACCESS_ROLE_ID]);
 }
 
 export function requirePinellasCommandAccess(member) {
   if (memberHasPinellasCommandAccess(member)) return true;
   throw new Error('You need the required PCSO command role to use this.');
+}
+
+/** True when the member can issue or edit PCSO infractions. */
+export function memberHasPinellasInfractionAccess(member) {
+  return memberHasAnyRole(member, PINELLAS_INFRACTION_ACCESS_ROLE_IDS);
+}
+
+export function requirePinellasInfractionAccess(member) {
+  if (memberHasPinellasInfractionAccess(member)) return true;
+  throw new Error('You need a PCSO supervisor/command role to use infractions.');
 }
 
 /** Information channel linked from the welcome message. */

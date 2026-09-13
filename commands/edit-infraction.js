@@ -9,7 +9,7 @@ import {
 } from '../utils/pinellasInfract.js';
 import {
   PINELLAS_GUILD_ID,
-  requirePinellasCommandAccess,
+  requirePinellasInfractionAccess,
 } from '../utils/pinellasServer.js';
 
 const typeChoices = INFRACTION_TYPES.map((type) => ({
@@ -63,7 +63,7 @@ export default {
 
     const issuerMember = interaction.member
       || await interaction.guild.members.fetch(interaction.user.id);
-    requirePinellasCommandAccess(issuerMember);
+    requirePinellasInfractionAccess(issuerMember);
 
     const id = interaction.options.getString('id', true).trim();
     const voidInfraction = interaction.options.getBoolean('void') || false;
