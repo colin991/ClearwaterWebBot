@@ -22,25 +22,20 @@ fi
 # Paths that affect the Clearwater website / Vercel APIs.
 WEBSITE_PATHS=(
   index.html
-  internet.html
   signin.html
   coming-soon.html
   privacy.html
   terms.html
-  wallet.html
   active-calls.js
   active-calls.html
   jail.html
   admin.js
   admin.html
-  manifest.webmanifest
   styles.css
-  internet.css
   legal.css
   signin.css
   coming-soon.css
   script.js
-  internet.js
   signin.js
   coming-soon.js
   site-gate.js

@@ -7,22 +7,6 @@
   "trailingSlash": false,
   "rewrites": [
     {
-      "source": "/api/media",
-      "destination": "/api/internet"
-    },
-    {
-      "source": "/api/internet-version",
-      "destination": "/api/internet?meta=version"
-    },
-    {
-      "source": "/internet",
-      "destination": "/internet.html"
-    },
-    {
-      "source": "/internet/(.*)",
-      "destination": "/internet.html"
-    },
-    {
       "source": "/admin",
       "destination": "/admin.html"
     },
@@ -41,10 +25,6 @@
     {
       "source": "/coming-soon",
       "destination": "/coming-soon.html"
-    },
-    {
-      "source": "/wallet",
-      "destination": "/wallet.html"
     },
     {
       "source": "/jail",
