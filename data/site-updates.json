@@ -2,6 +2,14 @@
   "version": 1,
   "updates": [
     {
+      "id": "pcso-afk-alert-timings",
+      "title": "PCSO AFK alert timings",
+      "summary": "AFK stationarity alerts now fire at 10 minutes for the first warning and 15 minutes for the second warning.",
+      "createdAt": "2026-09-13T13:24:32Z",
+      "updatedBy": "colin991",
+      "commit": "5ee9dbd"
+    },
+    {
       "id": "pcso-quicklinks-dark-theme",
       "title": "PCSO quick-links dark theme",
       "summary": "Restyled the homepage quick-links bar to the site gray/black theme with matching gray accent lines on top and bottom.",
