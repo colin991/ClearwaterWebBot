@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-13-radio-logs-latest-10",
+      "title": "Radio talk logs show latest 10",
+      "summary": "Admin dispatch radio talk logs now show the latest 10 transmits and auto-refresh every 3 seconds.",
+      "createdAt": "2026-09-13T20:42:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-13-active-calls-melonly-bridge",
       "title": "Fix Active Calls Melonly configuration",
       "summary": "Active Calls now loads PCSO Melonly CAD data through the bot host bridge (BOT_API_URL), so the page works when Melonly is configured on the bot even if Vercel has no MELONLY_API_KEY.",

@@ -209,14 +209,18 @@ async function loadPersonnel() {
   applySearch();
 }
 
+const RADIO_LOG_LIMIT = 10;
+const RADIO_LOG_REFRESH_MS = 3_000;
+let radioRefreshTimer = null;
+
 async function loadRadioLogs() {
-  const response = await fetch('/api/pcso/radio-logs?limit=75', { cache: 'no-store' });
+  const response = await fetch(`/api/pcso/radio-logs?limit=${RADIO_LOG_LIMIT}`, { cache: 'no-store' });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     renderRadioLogs([]);
     throw new Error(payload.error || 'Radio logs could not be loaded.');
   }
-  const entries = Array.isArray(payload.entries) ? payload.entries : [];
+  const entries = Array.isArray(payload.entries) ? payload.entries.slice(0, RADIO_LOG_LIMIT) : [];
   renderRadioLogs(entries);
   if (radioMetaEl) {
     const sourceLabel = payload.source === 'bot'
@@ -237,9 +241,21 @@ async function loadRadioLogs() {
     }
     const monitorLabel = monitorParts.length ? ` · ${monitorParts.join(' · ')}` : '';
     radioMetaEl.textContent = entries.length
-      ? `${entries.length} recent PCSO radio transmit${entries.length === 1 ? '' : 's'}${payload.updatedAt ? ` · updated ${formatWhen(payload.updatedAt)}` : ''} · ${sourceLabel}${monitorLabel}`
+      ? `Latest ${entries.length} PCSO radio transmit${entries.length === 1 ? '' : 's'}${payload.updatedAt ? ` · updated ${formatWhen(payload.updatedAt)}` : ''} · ${sourceLabel}${monitorLabel}`
       : `No PCSO radio transmits logged yet · ${sourceLabel}${monitorLabel}`;
   }
+}
+
+function startRadioLogAutoRefresh() {
+  if (radioRefreshTimer || !radioEl || radioEl.hidden) return;
+  radioRefreshTimer = setInterval(() => {
+    loadRadioLogs().catch((error) => {
+      if (radioMetaEl) {
+        radioMetaEl.textContent = error.message || 'Radio logs could not be loaded.';
+      }
+    });
+  }, RADIO_LOG_REFRESH_MS);
+  radioRefreshTimer.unref?.();
 }
 
 async function boot() {
@@ -281,6 +297,7 @@ async function boot() {
     if (statusEl.textContent === 'Loading admin tools…') {
       statusEl.textContent = 'Signed in. Manage weekly PDFs, news/events, and dispatch radio talk logs below.';
     }
+    startRadioLogAutoRefresh();
   } catch {
     statusEl.textContent = 'Admin panel could not be loaded right now.';
   }
