@@ -826,11 +826,11 @@ body.home-stage {
 
 /* Dark embed inspired homepage theme */
 
-/* PCSO homepage quick-links bar (below hero) */
+/* PCSO homepage quick-links bar (below hero) — matches dark gray/black site theme */
 .pcso-quick-links {
-  background: var(--pcso-navy, #092d55);
-  border-top: 3px solid var(--pcso-red, #c62835);
-  border-bottom: 3px solid var(--pcso-red, #c62835);
+  background: #0d0e10;
+  border-top: 3px solid #676b74;
+  border-bottom: 3px solid #676b74;
   padding: 28px 0 22px;
 }
 .pcso-quick-links-inner {
@@ -848,7 +848,7 @@ body.home-stage {
   width: 100%;
   max-width: 140px;
   text-align: center;
-  color: #fff !important;
+  color: #f1f2f4 !important;
   font-size: 14px;
   font-weight: 600;
   line-height: 1.25;
@@ -861,12 +861,12 @@ body.home-stage {
   display: block;
 }
 .pcso-quick-link:hover {
-  color: #f5b5b9 !important;
+  color: #fff !important;
 }
 .pcso-quick-link:hover img {
   transform: translateY(-2px);
   transition: transform .15s ease;
-  filter: brightness(1.05);
+  filter: brightness(1.12);
 }
 
 /* Shared PCSO subpage shell */
@@ -922,12 +922,3 @@ body.home-stage {
 @media(max-width:760px){.pcso-links{background:#0d0e10;box-shadow:0 12px 20px rgba(0,0,0,.45)}.pcso-menu{background:#17181b;color:#e8e9eb;border-color:#44474e}}
 
 
-
-/* Keep quick-links on official PCSO navy/red even if page theme shifts */
-.pcso-home .pcso-quick-links {
-  background: #092d55;
-  border-top-color: #c62835;
-  border-bottom-color: #c62835;
-}
-.pcso-home .pcso-quick-link { color: #fff !important; }
-.pcso-home .pcso-quick-link:hover { color: #f5b5b9 !important; }

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "pcso-quicklinks-dark-theme",
+      "title": "PCSO quick-links dark theme",
+      "summary": "Restyled the homepage quick-links bar to the site gray/black theme with matching gray accent lines on top and bottom.",
+      "createdAt": "2026-09-13T02:13:54Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "pcso-quicklinks-brand-colors",
       "title": "PCSO quick-links brand colors",
       "summary": "Restyled the homepage quick-links bar to PCSO navy and red branding, and added a matching accent line above the bar.",
