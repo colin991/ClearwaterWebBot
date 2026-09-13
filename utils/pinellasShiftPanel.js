@@ -1080,6 +1080,51 @@ function reportSubjectName(type, values) {
   return String(raw).replace(/\s+/g, ' ').trim().toUpperCase() || 'UNKNOWN';
 }
 
+/** Calendar date for the report header strip (Eastern). */
+function reportHeaderDate() {
+  return new Date().toLocaleDateString('en-US', {
+    timeZone: 'America/New_York',
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+  });
+}
+
+/** Prefer nickname roleplay name over Discord username/global name. */
+function reportOfficerRoleplayName(values) {
+  const explicit = String(values?.roleplayName || '').trim();
+  if (explicit) return explicit;
+  const parsed = parseDeputyNickname(values?.officerName);
+  if (parsed.roleplayName && parsed.roleplayName !== '—') return parsed.roleplayName;
+  const fallback = String(values?.officerName || '').trim();
+  return fallback || 'UNKNOWN';
+}
+
+async function resolveSubmitterRoleplayName(client, userId, fallbackName = '') {
+  const pinellas = client?.guilds?.cache?.get(PINELLAS_GUILD_ID)
+    || await client?.guilds?.fetch(PINELLAS_GUILD_ID).catch(() => null);
+  const clearwater = config.guildId
+    ? (client?.guilds?.cache?.get(config.guildId)
+      || await client?.guilds?.fetch(config.guildId).catch(() => null))
+    : null;
+
+  const uid = String(userId || '');
+  const pinellasMember = pinellas
+    ? (pinellas.members.cache.get(uid) || await pinellas.members.fetch(uid).catch(() => null))
+    : null;
+  const clearwaterMember = clearwater
+    ? (clearwater.members.cache.get(uid) || await clearwater.members.fetch(uid).catch(() => null))
+    : null;
+
+  const { roleplayName } = resolveDeputyIdentity(pinellasMember, clearwaterMember, null);
+  if (roleplayName && roleplayName !== '—' && roleplayName !== 'Unknown') {
+    return roleplayName;
+  }
+  const parsed = parseDeputyNickname(fallbackName);
+  if (parsed.roleplayName && parsed.roleplayName !== '—') return parsed.roleplayName;
+  return String(fallbackName || 'Unknown').trim() || 'Unknown';
+}
+
 function reportMetaLine(type, values) {
   const bits = [
     `Ref: ${reportText(values.caseNumber, 40)}`,
@@ -1126,9 +1171,10 @@ async function buildReportDocuments(type, values, submitter) {
   const lines = reportLines(type, values);
   const { grid, blocks } = partitionReportFields(lines);
   const [leftLines, rightLines] = splitReportColumns(grid);
-  const subject = reportSubjectName(type, values);
   const meta = reportMetaLine(type, values);
   const generatedAt = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+  const headerDate = reportHeaderDate();
+  const officerRoleplayName = reportOfficerRoleplayName(values);
   const logoPng = await loadPcsoStarLogoPng();
   const logoDataUri = logoPng
     ? `data:image/png;base64,${logoPng.toString('base64')}`
@@ -1224,14 +1270,12 @@ async function buildReportDocuments(type, values, submitter) {
     <text x="1160" y="200" text-anchor="end" class="bar-right-light">${escapeSvg(generatedAt)}</text>
 
     <rect x="0" y="220" width="${width}" height="72" fill="${REPORT_DOC.barSubject}"/>
-    <text x="40" y="246" class="subj-head">NAME</text>
-    <text x="320" y="246" class="subj-head">CASE #</text>
-    <text x="560" y="246" class="subj-head">DATE</text>
-    <text x="780" y="246" class="subj-head">OFFICER / DEPUTY</text>
-    <text x="40" y="276" class="subj-val">${escapeSvg(subject.slice(0, 28))}</text>
-    <text x="320" y="276" class="subj-val">${escapeSvg(reportText(values.caseNumber, 28).toUpperCase())}</text>
-    <text x="560" y="276" class="subj-val">${escapeSvg(reportText(values.date, 28).toUpperCase())}</text>
-    <text x="780" y="276" class="subj-val">${escapeSvg(reportText(values.officerName, 28).toUpperCase())}</text>
+    <text x="40" y="246" class="subj-head">CASE #</text>
+    <text x="360" y="246" class="subj-head">DATE</text>
+    <text x="640" y="246" class="subj-head">OFFICER / DEPUTY</text>
+    <text x="40" y="276" class="subj-val">${escapeSvg(reportText(values.caseNumber, 28).toUpperCase())}</text>
+    <text x="360" y="276" class="subj-val">${escapeSvg(String(headerDate).toUpperCase())}</text>
+    <text x="640" y="276" class="subj-val">${escapeSvg(reportText(officerRoleplayName, 36).toUpperCase())}</text>
 
     ${svgRows.join('\n')}
     ${blockSvg.join('\n')}
@@ -1262,7 +1306,11 @@ async function buildReportDocuments(type, values, submitter) {
   const png = await sharp(Buffer.from(svg)).png().toBuffer();
 
   const pdf = await new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'LETTER', margin: 36 });
+    // Keep reports on a single letter page — no auto/manual page breaks.
+    const doc = new PDFDocument({
+      size: 'LETTER',
+      margins: { top: 36, left: 36, right: 36, bottom: 0 },
+    });
     const chunks = [];
     doc.on('data', (chunk) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -1305,15 +1353,13 @@ async function buildReportDocuments(type, values, submitter) {
     y += 22;
     doc.rect(0, y, pageW, 44).fill(REPORT_DOC.barSubject);
     doc.fillColor('#d1d5db').font('Helvetica-Bold').fontSize(7);
-    doc.text('NAME', left, y + 8);
-    doc.text('CASE #', left + 190, y + 8);
-    doc.text('DATE', left + 320, y + 8);
-    doc.text('OFFICER / DEPUTY', left + 430, y + 8);
+    doc.text('CASE #', left, y + 8);
+    doc.text('DATE', left + 180, y + 8);
+    doc.text('OFFICER / DEPUTY', left + 340, y + 8);
     doc.fillColor('#ffffff').fontSize(10);
-    doc.text(subject.slice(0, 28), left, y + 24);
-    doc.text(reportText(values.caseNumber, 24).toUpperCase(), left + 190, y + 24);
-    doc.text(reportText(values.date, 24).toUpperCase(), left + 320, y + 24);
-    doc.text(reportText(values.officerName, 24).toUpperCase(), left + 430, y + 24);
+    doc.text(reportText(values.caseNumber, 24).toUpperCase(), left, y + 24);
+    doc.text(String(headerDate).toUpperCase(), left + 180, y + 24);
+    doc.text(reportText(officerRoleplayName, 28).toUpperCase(), left + 340, y + 24);
 
     y += 52;
     const colGap = 12;
@@ -1341,10 +1387,6 @@ async function buildReportDocuments(type, values, submitter) {
       // Padding above/below so wrapped lines and glyph descenders are not clipped by the row box.
       const pdfRowH = Math.ceil(contentH + 16);
 
-      if (y + pdfRowH > doc.page.height - 120) {
-        doc.addPage();
-        y = 36;
-      }
       const fill = i % 2 === 0 ? '#ffffff' : REPORT_DOC.rowAlt;
       doc.rect(left, y, contentW, pdfRowH).fill(fill).strokeColor(REPORT_DOC.border).lineWidth(0.4).stroke();
 
@@ -1353,9 +1395,9 @@ async function buildReportDocuments(type, values, submitter) {
         const label = String(entry.label || '').toUpperCase();
         const value = String(entry.value || '').toUpperCase();
         doc.fillColor(REPORT_DOC.label).font('Helvetica-Bold').fontSize(7)
-          .text(label, x + 4, y + 8, { width: labelW, ...textOpts });
+          .text(label, x + 4, y + 8, { width: labelW, height: pdfRowH - 10, ellipsis: true, ...textOpts });
         doc.fillColor(REPORT_DOC.value).font('Helvetica').fontSize(7)
-          .text(value, x + labelW + 4, y + 8, { width: valueW, ...textOpts });
+          .text(value, x + labelW + 4, y + 8, { width: valueW, height: pdfRowH - 10, ellipsis: true, ...textOpts });
       };
 
       drawSide(leftEntry, left);
@@ -1372,37 +1414,41 @@ async function buildReportDocuments(type, values, submitter) {
       doc.font('Helvetica').fontSize(8);
       const valueH = doc.heightOfString(value, { width: contentW - 16, lineGap: 2 });
       const blockH = Math.ceil(16 + labelH + 6 + valueH);
-      if (y + blockH > doc.page.height - 110) {
-        doc.addPage();
-        y = 36;
-      }
-      doc.rect(left, y, contentW, blockH).fill('#ffffff').strokeColor(REPORT_DOC.border).lineWidth(0.5).stroke();
+      const maxBlockBottom = doc.page.height - 100;
+      const cappedBlockH = Math.min(blockH, Math.max(36, maxBlockBottom - y));
+      doc.rect(left, y, contentW, cappedBlockH).fill('#ffffff').strokeColor(REPORT_DOC.border).lineWidth(0.5).stroke();
       doc.fillColor(REPORT_DOC.label).font('Helvetica-Bold').fontSize(8)
-        .text(label, left + 8, y + 8, { width: contentW - 16, lineGap: 2 });
+        .text(label, left + 8, y + 8, { width: contentW - 16, height: 14, ellipsis: true, lineGap: 2 });
       doc.fillColor(REPORT_DOC.value).font('Helvetica').fontSize(8)
-        .text(value, left + 8, y + 8 + labelH + 4, { width: contentW - 16, lineGap: 2 });
-      y += blockH + 10;
+        .text(value, left + 8, y + 8 + Math.min(labelH, 14) + 4, {
+          width: contentW - 16,
+          height: Math.max(12, cappedBlockH - 28),
+          ellipsis: true,
+          lineGap: 2,
+        });
+      y += cappedBlockH + 10;
     }
 
-    y += 10;
-    if (y > doc.page.height - 100) {
-      doc.addPage();
-      y = 36;
-    }
-    doc.rect(left, y, contentW, 70).fill('#fafafa').strokeColor(REPORT_DOC.border).lineWidth(0.6).stroke();
-    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8).text('IMPORTANT NOTE AND DISCLAIMER', left + 8, y + 10);
+    // Pin disclaimer + end mark to the remaining space on page 1 (never spill to page 2).
+    const footerH = 64;
+    const endMarkH = 18;
+    const maxFooterY = doc.page.height - footerH - endMarkH - 12;
+    y = Math.min(y + 10, maxFooterY);
+    doc.rect(left, y, contentW, footerH).fill('#fafafa').strokeColor(REPORT_DOC.border).lineWidth(0.6).stroke();
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8)
+      .text('IMPORTANT NOTE AND DISCLAIMER', left + 8, y + 8, { width: contentW - 16, lineBreak: false });
     doc.fillColor('#374151').font('Helvetica').fontSize(7)
       .text(
         "This document is an official Pinellas County Sheriff's Office operations record for Clearwater Roleplay. "
         + 'Information is as reported by the submitting deputy/officer. Verify against CAD before any enforcement action. '
         + `Generated ${generatedAt}.`,
         left + 8,
-        y + 26,
-        { width: contentW - 16 },
+        y + 22,
+        { width: contentW - 16, height: footerH - 28, ellipsis: true },
       );
 
     doc.fillColor(REPORT_DOC.muted).fontSize(8)
-      .text('— End Report —', left, doc.page.height - 42, { width: contentW, align: 'center' });
+      .text('— End Report —', left, y + footerH + 8, { width: contentW, align: 'center', lineBreak: false });
 
     doc.end();
   });
@@ -1418,14 +1464,29 @@ async function submitShiftReport(interaction, type, values) {
   }
 
   const submitter = `<@${interaction.user.id}>`;
+  const fallbackOfficer = values.officerName
+    || interaction.member?.displayName
+    || interaction.user?.globalName
+    || interaction.user?.username
+    || '';
+  const roleplayName = await resolveSubmitterRoleplayName(
+    interaction.client,
+    interaction.user.id,
+    fallbackOfficer,
+  );
+  const documentValues = {
+    ...values,
+    roleplayName,
+    officerName: roleplayName,
+  };
   let documents;
   try {
-    documents = await buildReportDocuments(type, values, submitter);
+    documents = await buildReportDocuments(type, documentValues, submitter);
   } catch (error) {
     logger.error(`Pinellas ${type} report document generation failed`, error);
     throw new Error('The report document could not be generated. Please contact command staff.');
   }
-  const payload = buildReportPayload(type, values, submitter, documents);
+  const payload = buildReportPayload(type, documentValues, submitter, documents);
   let message;
   try {
     message = await channel.send(payload);
