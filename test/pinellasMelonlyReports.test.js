@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   buildMelonlyReportPdf,
+  buildMelonlyReportPng,
+  extractReportSubject,
   recordFields,
+  resolveReportSubjectDiscordId,
   resolveReportSubmitter,
 } from '../utils/pinellasMelonlyReports.js';
 
@@ -59,4 +62,26 @@ test('resolveReportSubmitter pings Discord id nested on createdBy', async () => 
   });
   assert.equal(result.discordId, '987654321098765432');
   assert.equal(result.label, '<@987654321098765432>');
+});
+
+test('extractReportSubject reads first and last name', () => {
+  const subject = extractReportSubject(sampleArrest);
+  assert.equal(subject.firstName, 'Betty');
+  assert.equal(subject.lastName, 'Sanchez');
+  assert.equal(subject.fullName, 'Betty Sanchez');
+});
+
+test('resolveReportSubjectDiscordId uses nested civilian discord id', async () => {
+  const discordId = await resolveReportSubjectDiscordId('key', {
+    ...sampleArrest,
+    civilian: { discordId: '112233445566778899' },
+  }, null);
+  assert.equal(discordId, '112233445566778899');
+});
+
+test('buildMelonlyReportPng returns a PNG buffer', async () => {
+  const png = await buildMelonlyReportPng(sampleArrest, 'arrest', '<@123456789012345678>');
+  assert.ok(Buffer.isBuffer(png));
+  assert.ok(png.length > 500);
+  assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
 });

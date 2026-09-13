@@ -18,9 +18,13 @@ import { config } from '../config.js';
 import {
   fetchMelonlyMember,
   fetchMelonlyMemberByDiscordId,
+  fetchMelonlyMembers,
   melonlyFetch,
   resolveMelonlyDiscordId,
 } from './melonly.js';
+import { getIdentityCache } from './identityStore.js';
+import { PINELLAS_GUILD_ID } from './pinellasServer.js';
+import { CLEARWATER_GUILD_ID } from './staffRanks.js';
 import { logger } from './logger.js';
 import {
   PINELLAS_SHIFT_REPORT_CHANNELS,
@@ -33,6 +37,14 @@ const PCSO_STAR_LOGO_PATH = path.join(ROOT, 'assets', 'pcso-sheriff-star.png');
 const POLL_MS = 60_000;
 const PAGE_SIZE = 100;
 const MAX_SEEN = 2_000;
+const SUBJECT_DM_TYPES = new Set(['arrest', 'citation']);
+const CAD_CHARACTER_PATHS = Object.freeze([
+  '/server/cad/characters',
+  '/server/cad/civilians',
+  '/server/cad/profiles',
+  '/server/characters',
+  '/server/civilians',
+]);
 
 const REPORT_DOC = Object.freeze({
   titleBlue: '#5b6470',
@@ -486,6 +498,366 @@ export async function buildMelonlyReportPdf(record, type, submitterLabel = 'Melo
   });
 }
 
+
+function normalizePersonName(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function asObjectList(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return [];
+  for (const key of ['data', 'characters', 'civilians', 'profiles', 'results', 'items', 'members']) {
+    if (Array.isArray(payload[key])) return payload[key];
+  }
+  return [];
+}
+
+function pickText(...values) {
+  for (const value of values) {
+    const text = String(value ?? '').trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function characterFullName(entry) {
+  if (!entry || typeof entry !== 'object') return '';
+  const first = pickText(entry.firstName, entry.first_name, entry.givenName);
+  const last = pickText(entry.lastName, entry.last_name, entry.surname, entry.familyName);
+  const combined = [first, last].filter(Boolean).join(' ').trim();
+  return pickText(
+    entry.roleplayName,
+    entry.roleplay_name,
+    entry.rpName,
+    entry.characterName,
+    entry.fullName,
+    entry.displayName,
+    combined,
+    entry.name,
+  );
+}
+
+/** Pull the civilian / subject name from a Melonly CAD report. */
+export function extractReportSubject(record) {
+  const fields = recordFields(record);
+  const byLabel = new Map(
+    fields.map(([name, value]) => [displayFieldName(name).toLowerCase(), String(value ?? '').trim()]),
+  );
+  const read = (...needles) => {
+    for (const needle of needles) {
+      for (const [label, value] of byLabel) {
+        if (!value) continue;
+        if (label === needle || label.includes(needle)) return value;
+      }
+    }
+    return '';
+  };
+  const firstName = read('first name', 'firstname', 'given name');
+  const lastName = read('last name', 'lastname', 'surname', 'family name');
+  const fullFromParts = [firstName, lastName].filter(Boolean).join(' ').trim();
+  const fullName = fullFromParts
+    || read('suspect', 'subject', 'defendant', 'cited person', 'violator', 'full name', 'name');
+  return {
+    firstName: firstName || null,
+    lastName: lastName || null,
+    fullName: fullName || null,
+  };
+}
+
+function subjectDiscordFromRecord(record) {
+  const pools = [
+    record?.subject,
+    record?.civilian,
+    record?.character,
+    record?.suspect,
+    record?.defendant,
+    record?.person,
+    record?.target,
+    record?.cited,
+    ...(Array.isArray(record?.subjects) ? record.subjects : []),
+    ...(Array.isArray(record?.civilians) ? record.civilians : []),
+  ].filter((value) => value && typeof value === 'object');
+
+  for (const entry of pools) {
+    const discordId = resolveMelonlyDiscordId(entry)
+      || resolveMelonlyDiscordId(entry.owner)
+      || resolveMelonlyDiscordId(entry.user)
+      || resolveMelonlyDiscordId(entry.member)
+      || resolveMelonlyDiscordId(entry.account);
+    if (discordId) return discordId;
+  }
+
+  for (const [name, value] of recordFields(record)) {
+    const label = displayFieldName(name).toLowerCase();
+    const text = String(value ?? '').trim();
+    if (!/^\d{16,22}$/.test(text)) continue;
+    if (/discord/.test(label) && /(subject|civilian|suspect|defendant|cited|person|violator)/.test(label)) {
+      return text;
+    }
+  }
+  return null;
+}
+
+function discordFromCharacterRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  return resolveMelonlyDiscordId(row)
+    || resolveMelonlyDiscordId(row.owner)
+    || resolveMelonlyDiscordId(row.user)
+    || resolveMelonlyDiscordId(row.member)
+    || resolveMelonlyDiscordId(row.account)
+    || null;
+}
+
+async function resolveDiscordFromCadCharacters(apiKey, fullName) {
+  const needle = normalizePersonName(fullName);
+  if (!apiKey || !needle) return null;
+
+  for (const pathName of CAD_CHARACTER_PATHS) {
+    try {
+      const payload = await melonlyFetch(apiKey, pathName, { cacheTtlMs: 60_000 });
+      const rows = asObjectList(payload);
+      if (!rows.length) continue;
+      for (const row of rows) {
+        if (normalizePersonName(characterFullName(row)) !== needle) continue;
+        const direct = discordFromCharacterRow(row);
+        if (direct) return direct;
+        const ownerId = pickText(
+          row.ownerId,
+          row.owner_id,
+          row.userId,
+          row.user_id,
+          row.memberId,
+          row.member_id,
+          row.createdByUserId,
+          row.created_by_user_id,
+        );
+        if (ownerId) {
+          const mapped = await resolvePinellasMelonlyMemberDiscordId(apiKey, ownerId);
+          if (mapped) return mapped;
+        }
+      }
+      // Path existed with data; no need to try other aliases.
+      break;
+    } catch (error) {
+      if (error?.status === 429) throw error;
+    }
+  }
+  return null;
+}
+
+async function resolveDiscordFromIdentityName(fullName) {
+  const needle = normalizePersonName(fullName);
+  if (!needle) return null;
+  try {
+    const cache = await getIdentityCache();
+    for (const entry of Object.values(cache?.byDiscord || {})) {
+      const names = [
+        entry?.robloxDisplayName,
+        entry?.robloxUsername,
+        entry?.nickname,
+        entry?.displayName,
+      ].map(normalizePersonName).filter(Boolean);
+      if (names.some((name) => name === needle || name.includes(needle) || needle.includes(name))) {
+        const discordId = String(entry?.discordId || '').trim();
+        if (/^\d{16,22}$/.test(discordId)) return discordId;
+      }
+    }
+  } catch {
+    // optional
+  }
+  return null;
+}
+
+async function resolveDiscordFromGuildNicknames(client, fullName) {
+  const needle = normalizePersonName(fullName);
+  if (!client || !needle) return null;
+  for (const guildId of [PINELLAS_GUILD_ID, CLEARWATER_GUILD_ID]) {
+    if (!guildId) continue;
+    const guild = client.guilds.cache.get(guildId)
+      || await client.guilds.fetch(guildId).catch(() => null);
+    if (!guild) continue;
+    if (guild.members.cache.size < 25) {
+      await guild.members.fetch().catch(() => null);
+    }
+    for (const member of guild.members.cache.values()) {
+      if (member.user?.bot) continue;
+      const names = [
+        member.displayName,
+        member.nickname,
+        member.user?.globalName,
+        member.user?.username,
+      ].map(normalizePersonName).filter(Boolean);
+      if (names.some((name) => name === needle || name.includes(needle))) {
+        return member.id;
+      }
+    }
+  }
+  return null;
+}
+
+/** Resolve arrest/citation subject → Discord snowflake when possible. */
+export async function resolveReportSubjectDiscordId(apiKey, record, client = null) {
+  const direct = subjectDiscordFromRecord(record);
+  if (direct) return direct;
+
+  const subject = extractReportSubject(record);
+  if (!subject.fullName) return null;
+
+  const fromCad = await resolveDiscordFromCadCharacters(apiKey, subject.fullName).catch((error) => {
+    logger.warn(`CAD character subject lookup failed: ${error?.message || error}`);
+    return null;
+  });
+  if (fromCad) return fromCad;
+
+  const fromIdentity = await resolveDiscordFromIdentityName(subject.fullName);
+  if (fromIdentity) return fromIdentity;
+
+  const fromGuild = await resolveDiscordFromGuildNicknames(client, subject.fullName).catch((error) => {
+    logger.warn(`Guild nickname subject lookup failed: ${error?.message || error}`);
+    return null;
+  });
+  return fromGuild || null;
+}
+
+function escapeXml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function wrapSvgLines(value, width = 42) {
+  const words = String(value || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > width && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : ['N/A'];
+}
+
+/** Build a PNG copy of the Melonly report for subject DMs. */
+export async function buildMelonlyReportPng(record, type, submitterLabel = 'Melonly') {
+  const title = reportTitle(type, record);
+  const fields = recordFields(record);
+  const caseId = String(record?.id || 'N/A');
+  const generatedAt = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+  const submitterPlain = String(submitterLabel || 'Melonly').replace(/<@!?(\d+)>/g, 'Discord:$1');
+  const logoPng = await loadStarLogo();
+  const logoDataUri = logoPng
+    ? `data:image/png;base64,${logoPng.toString('base64')}`
+    : null;
+
+  const rows = fields.length
+    ? fields.map(([name, value]) => ({
+      label: displayFieldName(name),
+      value: String(value ?? 'N/A'),
+    }))
+    : [{ label: 'Details', value: 'No report details were supplied by Melonly.' }];
+
+  const width = 1200;
+  let y = 320;
+  const rowSvg = [];
+  for (let i = 0; i < rows.length; i += 1) {
+    const labelLines = wrapSvgLines(String(rows[i].label).toUpperCase(), 28);
+    const valueLines = wrapSvgLines(String(rows[i].value).toUpperCase(), 70);
+    const lineCount = Math.max(labelLines.length, valueLines.length, 1);
+    const rowH = Math.max(52, 24 + lineCount * 18);
+    const fill = i % 2 === 0 ? '#ffffff' : REPORT_DOC.rowAlt;
+    rowSvg.push(`<rect x="40" y="${y}" width="1120" height="${rowH}" fill="${fill}" stroke="${REPORT_DOC.border}"/>`);
+    labelLines.forEach((line, index) => {
+      rowSvg.push(`<text x="56" y="${y + 22 + index * 18}" class="label">${escapeXml(line)}</text>`);
+    });
+    valueLines.forEach((line, index) => {
+      rowSvg.push(`<text x="280" y="${y + 22 + index * 18}" class="value">${escapeXml(line)}</text>`);
+    });
+    y += rowH;
+  }
+
+  const footerY = y + 24;
+  const height = Math.max(900, footerY + 160);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <rect width="100%" height="100%" fill="#ffffff"/>
+    ${logoDataUri ? `<image href="${logoDataUri}" x="40" y="28" width="88" height="88"/>` : ''}
+    <text x="${logoDataUri ? 150 : 40}" y="58" class="agency">PINELLAS COUNTY SHERIFF'S OFFICE</text>
+    <text x="${logoDataUri ? 150 : 40}" y="88" class="title">${escapeXml(title)} — Official Record</text>
+    <text x="1160" y="48" text-anchor="end" class="tag">CLEARWATER ROLEPLAY</text>
+    <text x="1160" y="74" text-anchor="end" class="tag-sub">ONE COUNTY • ONE STANDARD</text>
+    <rect x="0" y="140" width="${width}" height="36" fill="${REPORT_DOC.barDark}"/>
+    <text x="40" y="164" class="bar">Search Results</text>
+    <text x="1160" y="164" text-anchor="end" class="bar-right">Case ${escapeXml(caseId.slice(0, 90))}</text>
+    <rect x="0" y="176" width="${width}" height="36" fill="${REPORT_DOC.barOlive}"/>
+    <text x="40" y="200" class="bar-dark">Official ${escapeXml(title)} for the cited / arrested person.</text>
+    <text x="1160" y="200" text-anchor="end" class="bar-dark-right">${escapeXml(generatedAt)}</text>
+    <rect x="0" y="220" width="${width}" height="72" fill="${REPORT_DOC.barSubject}"/>
+    <text x="40" y="246" class="subj-h">CASE #</text>
+    <text x="360" y="246" class="subj-h">REPORT</text>
+    <text x="720" y="246" class="subj-h">SUBMITTED BY</text>
+    <text x="40" y="276" class="subj-v">${escapeXml(caseId.slice(0, 28).toUpperCase())}</text>
+    <text x="360" y="276" class="subj-v">${escapeXml(String(title).slice(0, 28).toUpperCase())}</text>
+    <text x="720" y="276" class="subj-v">${escapeXml(submitterPlain.slice(0, 28).toUpperCase())}</text>
+    ${rowSvg.join('\n')}
+    <rect x="40" y="${footerY}" width="1120" height="110" fill="#fafafa" stroke="${REPORT_DOC.border}"/>
+    <text x="56" y="${footerY + 32}" class="disc-t">IMPORTANT NOTE AND DISCLAIMER</text>
+    <text x="56" y="${footerY + 58}" class="disc">This document is an official Pinellas County Sheriff's Office operations record for Clearwater Roleplay.</text>
+    <text x="56" y="${footerY + 80}" class="disc">A copy was delivered to the report subject. Generated ${escapeXml(generatedAt)}.</text>
+    <text x="600" y="${height - 28}" text-anchor="middle" class="end">— End Report —</text>
+    <style>
+      .agency { font: 700 28px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.titleBlue}; }
+      .title { font: 700 20px Arial, Helvetica, sans-serif; fill: #111827; }
+      .tag { font: 700 12px Arial, Helvetica, sans-serif; fill: #111827; }
+      .tag-sub { font: 11px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.muted}; }
+      .bar { font: 700 14px Arial, Helvetica, sans-serif; fill: #ffffff; }
+      .bar-right { font: 12px Arial, Helvetica, sans-serif; fill: #f3f4f6; }
+      .bar-dark { font: 700 14px Arial, Helvetica, sans-serif; fill: #1f2937; }
+      .bar-dark-right { font: 12px Arial, Helvetica, sans-serif; fill: #374151; }
+      .subj-h { font: 700 12px Arial, Helvetica, sans-serif; fill: #d1d5db; }
+      .subj-v { font: 700 16px Arial, Helvetica, sans-serif; fill: #ffffff; }
+      .label { font: 700 11px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.label}; }
+      .value { font: 11px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.value}; }
+      .disc-t { font: 700 12px Arial, Helvetica, sans-serif; fill: #111827; }
+      .disc { font: 11px Arial, Helvetica, sans-serif; fill: #374151; }
+      .end { font: 12px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.muted}; }
+    </style>
+  </svg>`;
+
+  return sharp(Buffer.from(svg)).png().toBuffer();
+}
+
+async function dmSubjectReportPng(client, record, type, submitterLabel) {
+  if (!SUBJECT_DM_TYPES.has(type)) return { sent: false, reason: 'type' };
+  const discordId = await resolveReportSubjectDiscordId(config.melonlyApiKey, record, client);
+  if (!discordId) {
+    const subject = extractReportSubject(record);
+    logger.info(
+      `Melonly ${type} report ${record?.id || 'unknown'}: no Discord match for subject `
+      + `"${subject.fullName || 'unknown'}" — skipping subject DM`,
+    );
+    return { sent: false, reason: 'unresolved', discordId: null };
+  }
+
+  const png = await buildMelonlyReportPng(record, type, submitterLabel);
+  const user = await client.users.fetch(discordId);
+  await user.send({
+    files: [new AttachmentBuilder(png, { name: 'pcso-report.png' })],
+  });
+  logger.info(`DMed Melonly ${type} report PNG to subject Discord ${discordId} for case ${record?.id || 'unknown'}`);
+  return { sent: true, discordId };
+}
+
 async function buildReportPayload(record, type, submitter) {
   const fields = recordFields(record);
   const details = fields.length
@@ -537,6 +909,16 @@ async function importRecord(client, record, type) {
     + `with PDF (${payload.files[0].attachment?.length || payload.files[0].size || 'buffer'} bytes)`,
   );
   await channel.send(payload);
+
+  // Arrest / citation subjects get a PNG-only DM copy when Discord can be resolved.
+  try {
+    await dmSubjectReportPng(client, record, type, submitter.label);
+  } catch (error) {
+    logger.warn(
+      `Could not DM Melonly ${type} report PNG for case ${record?.id || 'unknown'}: `
+      + `${error?.message || error}`,
+    );
+  }
 }
 
 export async function syncPinellasMelonlyReports(client) {
