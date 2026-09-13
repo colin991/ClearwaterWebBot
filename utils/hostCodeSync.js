@@ -281,7 +281,9 @@ export function syncHostCodeFromMain({
     }
   }
 
+  // Panel `git pull` fails with "no tracking information" unless upstream is set.
   runGit(['checkout', '-B', 'main', targetRef], cwd);
+  runGit(['branch', '--set-upstream-to=' + targetRef, 'main'], cwd);
   const reset = runGit(['reset', '--hard', targetRef], cwd);
   if (!gitOk(reset)) {
     const detail = gitText(reset) || 'unknown';
