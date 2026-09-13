@@ -119,7 +119,9 @@ export async function resolvePinellasMelonlyMemberDiscordId(apiKey, memberId) {
   await loadMemberDiscordMap();
   if (memberDiscordCache.has(id)) return memberDiscordCache.get(id);
 
-  const discordId = await fetchMelonlyMemberDiscordId(apiKey, id);
+  const discordId = await fetchMelonlyMemberDiscordId(apiKey, id, {
+    departmentId: PINELLAS_MELONLY_DEPARTMENT_ID,
+  });
   if (discordId) await rememberMemberDiscord(id, discordId);
   return discordId;
 }
