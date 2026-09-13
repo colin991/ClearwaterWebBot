@@ -2,8 +2,8 @@ import { logger } from './logger.js';
 
 export const PINELLAS_AFK_CHANNEL_ID = '1548356647347429404';
 
-const FIVE_MINUTES_MS = 5 * 60 * 1000;
 const TEN_MINUTES_MS = 10 * 60 * 1000;
+const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 const MOVEMENT_THRESHOLD = 5;
 const states = new Map();
 
@@ -36,9 +36,9 @@ async function clearState(channel, state) {
 
 async function sendWarning(channel, discordId, minutes, name) {
   const label = name ? ` (${name})` : '';
-  const content = minutes === 5
-    ? `âš ï¸ <@${discordId}>${label} has been stationary in ER:LC for more than **5 minutes** while on shift.`
-    : `ðŸš¨ <@${discordId}>${label} has been stationary in ER:LC for more than **10 minutes** while on shift.`;
+  const content = minutes === 10
+    ? `⚠️ <@${discordId}>${label} has been stationary in ER:LC for more than **10 minutes** while on shift.`
+    : `🚨 <@${discordId}>${label} has been stationary in ER:LC for more than **15 minutes** while on shift.`;
   return channel.send({ content, allowedMentions: { users: [discordId] } });
 }
 
@@ -76,16 +76,16 @@ export async function syncPinellasAfkWarnings(client, snapshot) {
     }
 
     const inactiveFor = now - state.afkSince;
-    if (inactiveFor >= FIVE_MINUTES_MS && !state.warningMessageId) {
-      const message = await sendWarning(channel, discordId, 5, deputy.roleplayName || deputy.callsign).catch((error) => {
-        logger.warn(`Pinellas 5-minute AFK warning failed: ${error?.message || error}`);
+    if (inactiveFor >= TEN_MINUTES_MS && !state.warningMessageId) {
+      const message = await sendWarning(channel, discordId, 10, deputy.roleplayName || deputy.callsign).catch((error) => {
+        logger.warn(`Pinellas 10-minute AFK warning failed: ${error?.message || error}`);
         return null;
       });
       state.warningMessageId = message?.id || null;
     }
-    if (inactiveFor >= TEN_MINUTES_MS && !state.escalationMessageId) {
-      const message = await sendWarning(channel, discordId, 10, deputy.roleplayName || deputy.callsign).catch((error) => {
-        logger.warn(`Pinellas 10-minute AFK warning failed: ${error?.message || error}`);
+    if (inactiveFor >= FIFTEEN_MINUTES_MS && !state.escalationMessageId) {
+      const message = await sendWarning(channel, discordId, 15, deputy.roleplayName || deputy.callsign).catch((error) => {
+        logger.warn(`Pinellas 15-minute AFK warning failed: ${error?.message || error}`);
         return null;
       });
       state.escalationMessageId = message?.id || null;
