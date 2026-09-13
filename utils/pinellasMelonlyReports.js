@@ -1,5 +1,7 @@
 import {
+  AttachmentBuilder,
   ContainerBuilder,
+  FileBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   MessageFlags,
@@ -7,19 +9,44 @@ import {
   SeparatorSpacingSize,
   TextDisplayBuilder,
 } from 'discord.js';
+import PDFDocument from 'pdfkit';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
 import { melonlyFetch } from './melonly.js';
 import { logger } from './logger.js';
-import { PINELLAS_SHIFT_REPORT_CHANNELS } from './pinellasShiftPanel.js';
+import {
+  PINELLAS_SHIFT_REPORT_CHANNELS,
+  resolvePinellasMelonlyMemberDiscordId,
+} from './pinellasShiftPanel.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const STORE_PATH = path.join(ROOT, 'data', 'pinellas-melonly-reports.json');
+const PCSO_STAR_LOGO_PATH = path.join(ROOT, 'assets', 'pcso-sheriff-star.png');
 const POLL_MS = 60_000;
 const PAGE_SIZE = 100;
 const MAX_SEEN = 2_000;
+
+const REPORT_DOC = Object.freeze({
+  titleBlue: '#5b6470',
+  barDark: '#4a4a4a',
+  barOlive: '#b0b5bc',
+  barSubject: '#3d3d3d',
+  rowAlt: '#f3f4f6',
+  border: '#c5c9d0',
+  label: '#1f2937',
+  value: '#111827',
+  muted: '#6b7280',
+});
+
+const REPORT_TYPE_TITLES = Object.freeze({
+  ois: 'OIS Report',
+  mva: 'MVA Report',
+  arrest: 'Arrest Report',
+  citation: 'Citation Report',
+  warrant: 'Warrant Arrest Log',
+});
 
 const reportTypeAliases = [
   ['ois', ['ois', 'officer involved shooting', 'officer-involved shooting', 'shooting']],
@@ -221,21 +248,204 @@ function displayFieldName(value) {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
-function buildReportPayload(record, type) {
-  const creator = record.createdByUserId ? `Melonly user ${record.createdByUserId}` : 'Melonly';
+function recordCreatorId(record) {
+  return String(
+    record?.createdByUserId
+    || record?.createdBy
+    || record?.authorId
+    || record?.userId
+    || record?.memberId
+    || '',
+  ).trim();
+}
+
+/** Resolve Melonly CAD creator → Discord mention text + snowflake (when linked). */
+export async function resolveReportSubmitter(apiKey, record) {
+  const melonlyId = recordCreatorId(record);
+  if (!melonlyId) {
+    return { label: 'Melonly', discordId: null };
+  }
+  if (!apiKey) {
+    return { label: `Melonly user ${melonlyId}`, discordId: null };
+  }
+  try {
+    const discordId = await resolvePinellasMelonlyMemberDiscordId(apiKey, melonlyId);
+    if (discordId) {
+      return { label: `<@${discordId}>`, discordId };
+    }
+  } catch (error) {
+    logger.warn(`Could not resolve Melonly reporter ${melonlyId} to Discord: ${error?.message || error}`);
+  }
+  return { label: `Melonly user ${melonlyId}`, discordId: null };
+}
+
+function reportTitle(type, record) {
+  return REPORT_TYPE_TITLES[type] || record?.label || `${String(type || 'CAD').toUpperCase()} Report`;
+}
+
+async function loadStarLogo() {
+  try {
+    return await readFile(PCSO_STAR_LOGO_PATH);
+  } catch {
+    return null;
+  }
+}
+
+/** Build the official-record PDF attached to Melonly CAD imports. */
+export async function buildMelonlyReportPdf(record, type, submitterLabel = 'Melonly') {
+  const title = reportTitle(type, record);
+  const fields = recordFields(record);
+  const caseId = String(record?.id || 'N/A');
+  const generatedAt = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+  const submitterPlain = String(submitterLabel || 'Melonly').replace(/<@!?(\d+)>/g, 'Discord:$1');
+  const logoPng = await loadStarLogo();
+
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: 'LETTER',
+      margins: { top: 36, left: 36, right: 36, bottom: 36 },
+    });
+    const chunks = [];
+    doc.on('data', (chunk) => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const pageW = doc.page.width;
+    const left = 36;
+    const contentW = pageW - 72;
+    let y = 36;
+
+    if (logoPng) {
+      try {
+        doc.image(logoPng, left, y, { width: 52, height: 52 });
+      } catch {
+        // continue without logo
+      }
+    }
+
+    const textLeft = logoPng ? left + 64 : left;
+    doc.fillColor(REPORT_DOC.titleBlue).font('Helvetica-Bold').fontSize(16)
+      .text("PINELLAS COUNTY SHERIFF'S OFFICE", textLeft, y + 4, { width: contentW - 70 });
+    doc.fillColor('#111827').fontSize(12)
+      .text(`${title} — Official Record`, textLeft, y + 26, { width: contentW - 70 });
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8)
+      .text('CLEARWATER ROLEPLAY', left, y + 8, { width: contentW, align: 'right' });
+    doc.fillColor(REPORT_DOC.muted).font('Helvetica').fontSize(7)
+      .text('ONE COUNTY • ONE STANDARD', left, y + 22, { width: contentW, align: 'right' });
+
+    y = 100;
+    doc.rect(0, y, pageW, 22).fill(REPORT_DOC.barDark);
+    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(9).text('Search Results', left, y + 6);
+    doc.font('Helvetica').fontSize(7).text(`Case ${caseId}`.slice(0, 95), left, y + 7, { width: contentW, align: 'right' });
+
+    y += 22;
+    doc.rect(0, y, pageW, 22).fill(REPORT_DOC.barOlive);
+    doc.fillColor('#1f2937').font('Helvetica-Bold').fontSize(8)
+      .text(`Official ${title} imported from Melonly CAD.`, left, y + 7);
+    doc.fillColor('#374151').font('Helvetica').fontSize(7).text(generatedAt, left, y + 7, { width: contentW, align: 'right' });
+
+    y += 22;
+    doc.rect(0, y, pageW, 44).fill(REPORT_DOC.barSubject);
+    doc.fillColor('#d1d5db').font('Helvetica-Bold').fontSize(7);
+    doc.text('CASE #', left, y + 8);
+    doc.text('REPORT', left + 180, y + 8);
+    doc.text('SUBMITTED BY', left + 340, y + 8);
+    doc.fillColor('#ffffff').fontSize(10);
+    doc.text(caseId.slice(0, 24).toUpperCase(), left, y + 24);
+    doc.text(String(title).slice(0, 28).toUpperCase(), left + 180, y + 24);
+    doc.text(submitterPlain.slice(0, 28).toUpperCase(), left + 340, y + 24);
+
+    y += 52;
+    const rows = fields.length
+      ? fields.map(([name, value]) => ({
+        label: displayFieldName(name),
+        value: String(value ?? 'N/A'),
+      }))
+      : [{ label: 'Details', value: 'No report details were supplied by Melonly.' }];
+
+    const labelW = 150;
+    const valueW = contentW - labelW - 12;
+    const textOpts = { lineGap: 2 };
+
+    for (let i = 0; i < rows.length; i += 1) {
+      const entry = rows[i];
+      const label = String(entry.label || '').toUpperCase();
+      const value = String(entry.value || '').toUpperCase();
+      doc.font('Helvetica-Bold').fontSize(7);
+      const labelH = doc.heightOfString(label, { width: labelW, ...textOpts });
+      doc.font('Helvetica').fontSize(7);
+      const valueH = doc.heightOfString(value, { width: valueW, ...textOpts });
+      const rowH = Math.ceil(Math.max(labelH, valueH, 9) + 16);
+
+      if (y + rowH > doc.page.height - 90) {
+        doc.addPage();
+        y = 36;
+      }
+
+      const fill = i % 2 === 0 ? '#ffffff' : REPORT_DOC.rowAlt;
+      doc.rect(left, y, contentW, rowH).fill(fill).strokeColor(REPORT_DOC.border).lineWidth(0.4).stroke();
+      doc.fillColor(REPORT_DOC.label).font('Helvetica-Bold').fontSize(7)
+        .text(label, left + 4, y + 8, { width: labelW, height: rowH - 10, ellipsis: true, ...textOpts });
+      doc.fillColor(REPORT_DOC.value).font('Helvetica').fontSize(7)
+        .text(value, left + labelW + 4, y + 8, { width: valueW, height: rowH - 10, ellipsis: true, ...textOpts });
+      y += rowH;
+    }
+
+    if (y + 80 > doc.page.height - 36) {
+      doc.addPage();
+      y = 36;
+    } else {
+      y += 14;
+    }
+
+    const footerH = 64;
+    doc.rect(left, y, contentW, footerH).fill('#fafafa').strokeColor(REPORT_DOC.border).lineWidth(0.6).stroke();
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8)
+      .text('IMPORTANT NOTE AND DISCLAIMER', left + 8, y + 8, { width: contentW - 16, lineBreak: false });
+    doc.fillColor('#374151').font('Helvetica').fontSize(7)
+      .text(
+        "This document is an official Pinellas County Sheriff's Office operations record for Clearwater Roleplay. "
+        + `Automatically imported from Melonly CAD as reported by ${submitterPlain}. `
+        + 'Verify against CAD before any enforcement action. '
+        + `Generated ${generatedAt}.`,
+        left + 8,
+        y + 22,
+        { width: contentW - 16, height: footerH - 28, ellipsis: true },
+      );
+
+    doc.fillColor(REPORT_DOC.muted).fontSize(8)
+      .text('— End Report —', left, y + footerH + 8, { width: contentW, align: 'center', lineBreak: false });
+
+    doc.end();
+  });
+}
+
+async function buildReportPayload(record, type, submitter) {
   const fields = recordFields(record);
   const details = fields.length
     ? fields.map(([name, value]) => `**${displayFieldName(name)}:** ${safe(value, 700)}`).join('\n')
     : 'No report details were supplied by Melonly.';
-  const text = `# <:info:1517217516706074634> PCSO ${type.toUpperCase()} Report\n\n> **Case ID:** ${safe(record.id, 80)}\n> **Report:** ${safe(record.label || type, 180)}\n> **Submitted by:** ${creator}\n\n${details}\n\n-# Automatically imported from Melonly CAD`;
+  const text = `# <:info:1517217516706074634> PCSO ${type.toUpperCase()} Report\n\n> **Case ID:** ${safe(record.id, 80)}\n> **Report:** ${safe(record.label || type, 180)}\n> **Submitted by:** ${submitter.label}\n\n${details}\n\n-# Automatically imported from Melonly CAD`;
+  const pdf = await buildMelonlyReportPdf(record, type, submitter.label);
   const container = new ContainerBuilder()
     .clearAccentColor()
     .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(PCSO_REPORT_BANNER_URL)))
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(text.slice(0, 3900)))
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+    .addFileComponents(new FileBuilder().setURL('attachment://pcso-report.pdf'))
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
     .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(PCSO_REPORT_FOOTER_URL)));
-  return { components: [container], flags: MessageFlags.IsComponentsV2, allowedMentions: { parse: [] } };
+  return {
+    components: [container],
+    flags: MessageFlags.IsComponentsV2,
+    allowedMentions: submitter.discordId
+      ? { parse: [], users: [submitter.discordId] }
+      : { parse: [] },
+    files: [
+      new AttachmentBuilder(pdf, { name: 'pcso-report.pdf' }),
+    ],
+  };
 }
 
 export async function fetchMelonlyCadRecords(apiKey) {
@@ -250,7 +460,8 @@ async function importRecord(client, record, type) {
   const channelId = PINELLAS_SHIFT_REPORT_CHANNELS[type];
   const channel = await client.channels.fetch(channelId).catch(() => null);
   if (!channel?.isTextBased?.()) throw new Error(`Report channel ${channelId} is unavailable.`);
-  await channel.send(buildReportPayload(record, type));
+  const submitter = await resolveReportSubmitter(config.melonlyApiKey, record);
+  await channel.send(await buildReportPayload(record, type, submitter));
 }
 
 export async function syncPinellasMelonlyReports(client) {
