@@ -47,3 +47,16 @@ test('buildMelonlyReportPdf returns a PDF buffer', async () => {
   assert.ok(pdf.length > 500);
   assert.equal(pdf.subarray(0, 4).toString('utf8'), '%PDF');
 });
+
+test('resolveReportSubmitter pings Discord id nested on createdBy', async () => {
+  const result = await resolveReportSubmitter('key', {
+    id: '2026-001452',
+    createdByUserId: '7401840545355534336',
+    createdBy: {
+      id: '7401840545355534336',
+      discordId: '987654321098765432',
+    },
+  });
+  assert.equal(result.discordId, '987654321098765432');
+  assert.equal(result.label, '<@987654321098765432>');
+});

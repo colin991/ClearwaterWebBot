@@ -10,11 +10,17 @@ import {
   TextDisplayBuilder,
 } from 'discord.js';
 import PDFDocument from 'pdfkit';
+import sharp from 'sharp';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
-import { melonlyFetch } from './melonly.js';
+import {
+  fetchMelonlyMember,
+  fetchMelonlyMemberByDiscordId,
+  melonlyFetch,
+  resolveMelonlyDiscordId,
+} from './melonly.js';
 import { logger } from './logger.js';
 import {
   PINELLAS_SHIFT_REPORT_CHANNELS,
@@ -248,19 +254,51 @@ function displayFieldName(value) {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
+function creatorObjects(record) {
+  return [
+    record,
+    record?.createdBy,
+    record?.author,
+    record?.user,
+    record?.member,
+    record?.creator,
+    record?.submittedBy,
+  ].filter((value) => value && typeof value === 'object');
+}
+
+function recordCreatorDiscordId(record) {
+  for (const source of creatorObjects(record)) {
+    const discordId = resolveMelonlyDiscordId(source);
+    if (discordId) return discordId;
+  }
+  return null;
+}
+
 function recordCreatorId(record) {
-  return String(
-    record?.createdByUserId
-    || record?.createdBy
-    || record?.authorId
-    || record?.userId
-    || record?.memberId
-    || '',
-  ).trim();
+  for (const source of creatorObjects(record)) {
+    for (const key of ['memberId', 'userId', 'id', 'createdByUserId', 'authorId']) {
+      const value = String(source?.[key] || '').trim();
+      if (/^\d{10,22}$/.test(value)) return value;
+    }
+  }
+  for (const key of ['createdByUserId', 'createdBy', 'authorId', 'userId', 'memberId']) {
+    const raw = record?.[key];
+    if (raw == null || typeof raw === 'object') continue;
+    const value = String(raw).trim();
+    if (/^\d{10,22}$/.test(value)) return value;
+  }
+  return '';
+}
+
+function mentionSubmitter(discordId) {
+  return { label: `<@${discordId}>`, discordId: String(discordId) };
 }
 
 /** Resolve Melonly CAD creator → Discord mention text + snowflake (when linked). */
 export async function resolveReportSubmitter(apiKey, record) {
+  const directDiscordId = recordCreatorDiscordId(record);
+  if (directDiscordId) return mentionSubmitter(directDiscordId);
+
   const melonlyId = recordCreatorId(record);
   if (!melonlyId) {
     return { label: 'Melonly', discordId: null };
@@ -268,14 +306,37 @@ export async function resolveReportSubmitter(apiKey, record) {
   if (!apiKey) {
     return { label: `Melonly user ${melonlyId}`, discordId: null };
   }
+
   try {
     const discordId = await resolvePinellasMelonlyMemberDiscordId(apiKey, melonlyId);
-    if (discordId) {
-      return { label: `<@${discordId}>`, discordId };
-    }
+    if (discordId) return mentionSubmitter(discordId);
   } catch (error) {
     logger.warn(`Could not resolve Melonly reporter ${melonlyId} to Discord: ${error?.message || error}`);
   }
+
+  try {
+    const member = await fetchMelonlyMember(apiKey, melonlyId);
+    const discordId = resolveMelonlyDiscordId(member);
+    if (discordId) return mentionSubmitter(discordId);
+  } catch (error) {
+    if (error?.status !== 404) {
+      logger.warn(`Melonly member fetch failed for reporter ${melonlyId}: ${error?.message || error}`);
+    }
+  }
+
+  // CAD sometimes stores a Discord snowflake in createdByUserId.
+  try {
+    const member = await fetchMelonlyMemberByDiscordId(apiKey, melonlyId);
+    if (member) {
+      const discordId = resolveMelonlyDiscordId(member) || melonlyId;
+      if (/^\d{16,22}$/.test(String(discordId))) return mentionSubmitter(discordId);
+    }
+  } catch (error) {
+    if (error?.status !== 404) {
+      logger.warn(`Melonly discord reverse lookup failed for ${melonlyId}: ${error?.message || error}`);
+    }
+  }
+
   return { label: `Melonly user ${melonlyId}`, discordId: null };
 }
 
@@ -285,7 +346,12 @@ function reportTitle(type, record) {
 
 async function loadStarLogo() {
   try {
-    return await readFile(PCSO_STAR_LOGO_PATH);
+    const raw = await readFile(PCSO_STAR_LOGO_PATH);
+    // Keep the PDF small — the source star asset is ~2MB at full resolution.
+    return await sharp(raw)
+      .resize(96, 96, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png()
+      .toBuffer();
   } catch {
     return null;
   }
@@ -443,7 +509,7 @@ async function buildReportPayload(record, type, submitter) {
       ? { parse: [], users: [submitter.discordId] }
       : { parse: [] },
     files: [
-      new AttachmentBuilder(pdf, { name: 'pcso-report.pdf' }),
+      new AttachmentBuilder(Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf), { name: 'pcso-report.pdf' }),
     ],
   };
 }
@@ -461,7 +527,16 @@ async function importRecord(client, record, type) {
   const channel = await client.channels.fetch(channelId).catch(() => null);
   if (!channel?.isTextBased?.()) throw new Error(`Report channel ${channelId} is unavailable.`);
   const submitter = await resolveReportSubmitter(config.melonlyApiKey, record);
-  await channel.send(await buildReportPayload(record, type, submitter));
+  const payload = await buildReportPayload(record, type, submitter);
+  if (!payload.files?.length) {
+    throw new Error(`Melonly ${type} report PDF was not attached for case ${record?.id || 'unknown'}.`);
+  }
+  logger.info(
+    `Posting Melonly ${type} report ${record?.id || 'unknown'} `
+    + `submitted by ${submitter.discordId ? `Discord ${submitter.discordId}` : submitter.label} `
+    + `with PDF (${payload.files[0].attachment?.length || payload.files[0].size || 'buffer'} bytes)`,
+  );
+  await channel.send(payload);
 }
 
 export async function syncPinellasMelonlyReports(client) {
