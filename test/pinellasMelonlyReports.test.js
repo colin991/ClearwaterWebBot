@@ -6,6 +6,7 @@ import {
   extractReportSubject,
   personNameMatches,
   recordFields,
+  reportTypeFor,
   resolveReportSubjectDiscordId,
   resolveReportSubmitter,
 } from '../utils/pinellasMelonlyReports.js';
@@ -25,6 +26,14 @@ const sampleArrest = {
     ],
   },
 };
+
+test('report type trusts an explicit citation label over nested MVA text', () => {
+  assert.equal(reportTypeFor({
+    label: 'General Citation',
+    agency: 'Pinellas County Sheriff',
+    previewData: { vehicle: 'motor vehicle collision evidence' },
+  }), 'citation');
+});
 
 test('recordFields flattens Melonly arrest preview data', () => {
   const fields = recordFields(sampleArrest);

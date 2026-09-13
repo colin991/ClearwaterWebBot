@@ -111,7 +111,15 @@ function recordText(record) {
     .toLowerCase();
 }
 
-function reportTypeFor(record) {
+export function reportTypeFor(record) {
+  const explicitText = [record?.label, record?.type, record?.templateId]
+    .filter((value) => typeof value === 'string')
+    .join(' ')
+    .toLowerCase();
+  const explicitType = reportTypeAliases.find(([, aliases]) => (
+    aliases.some((alias) => explicitText.includes(alias))
+  ))?.[0];
+  if (explicitType) return explicitType;
   const text = recordText(record);
   return reportTypeAliases.find(([, aliases]) => aliases.some((alias) => text.includes(alias)))?.[0] || null;
 }
