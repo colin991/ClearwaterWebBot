@@ -199,9 +199,12 @@ function scheduleRejoin(reason = 'disconnected') {
   rejoinTimer = setTimeout(() => {
     rejoinTimer = null;
     if (stopping || paused || replacingConnection) return;
-    // Already healthy in the radio VC — do not destroy/recreate.
+    // Already healthy in the radio VC — do not destroy/recreate, but keep listeners wired.
     if (isHealthyRadioConnection()) {
-      logger.info('Radio talk monitor: skip scheduled rejoin; already Ready in radio VC.');
+      const guildId = connection?.joinConfig?.guildId;
+      const guild = guildId ? clientRef?.guilds?.cache?.get(guildId) : null;
+      if (connection && guild) wireConnectionLifecycle(connection, guild);
+      logger.info('Radio talk monitor: skip scheduled rejoin; already Ready — rebound talk listeners.');
       return;
     }
     void joinDispatchRadio(clientRef, { force: true }).catch((error) => {
@@ -271,6 +274,10 @@ export async function joinDispatchRadio(client, { force = false } = {}) {
   if (existing && existing.joinConfig?.channelId === channel.id && isHealthyRadioConnection(existing) && !force) {
     connection = existing;
     clearRejoinTimer();
+    // Always re-bind speaking listeners on reuse — another feature may have owned
+    // this Ready connection without radio talk hooks, which left the admin log empty.
+    wireConnectionLifecycle(existing, channel.guild);
+    logger.info('Radio talk monitor: reused Ready radio VC and rebound talk listeners.');
     return { ok: true, reused: true };
   }
 
@@ -278,7 +285,8 @@ export async function joinDispatchRadio(client, { force = false } = {}) {
   if (force && existing && isHealthyRadioConnection(existing)) {
     connection = existing;
     clearRejoinTimer();
-    logger.info('Radio talk monitor: force join skipped; connection already Ready in radio VC.');
+    wireConnectionLifecycle(existing, channel.guild);
+    logger.info('Radio talk monitor: force join skipped; already Ready — rebound talk listeners.');
     return { ok: true, reused: true };
   }
 

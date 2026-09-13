@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-13-radio-logs-bridge",
+      "title": "Fix empty dispatch radio talk logs",
+      "summary": "Admin radio logs no longer silently show empty when the website cannot reach the bot. Reused radio VC connections now rebind talk listeners, and the admin panel surfaces bot bridge/monitor status.",
+      "createdAt": "2026-09-13T17:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-13-discord-embed-gray",
       "title": "Gray Discord link embed color",
       "summary": "Discord link previews for the PCSO site now use a gray theme-color accent instead of blue.",

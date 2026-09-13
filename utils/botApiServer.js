@@ -71,6 +71,7 @@ export function startBotApiServer(client, {
         return sendJson(response, 200, {
           ok: true,
           updatedAt: store.updatedAt,
+          radioMonitor: getDispatchRadioMonitorStatus(),
           entries,
         });
       }

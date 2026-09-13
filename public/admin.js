@@ -212,13 +212,23 @@ async function loadPersonnel() {
 async function loadRadioLogs() {
   const response = await fetch('/api/pcso/radio-logs?limit=75', { cache: 'no-store' });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || 'Radio logs could not be loaded.');
+  if (!response.ok) {
+    renderRadioLogs([]);
+    throw new Error(payload.error || 'Radio logs could not be loaded.');
+  }
   const entries = Array.isArray(payload.entries) ? payload.entries : [];
   renderRadioLogs(entries);
   if (radioMetaEl) {
+    const sourceLabel = payload.source === 'bot'
+      ? 'bot'
+      : (payload.source === 'local' ? 'local' : payload.source || 'unknown');
+    const monitor = payload.radioMonitor;
+    const monitorLabel = monitor?.connectionStatus
+      ? ` · monitor ${monitor.connectionStatus}${monitor.paused ? ' (paused)' : ''}`
+      : '';
     radioMetaEl.textContent = entries.length
-      ? `${entries.length} recent PCSO radio transmit${entries.length === 1 ? '' : 's'}${payload.updatedAt ? ` · updated ${formatWhen(payload.updatedAt)}` : ''}`
-      : 'No PCSO radio transmits logged yet.';
+      ? `${entries.length} recent PCSO radio transmit${entries.length === 1 ? '' : 's'}${payload.updatedAt ? ` · updated ${formatWhen(payload.updatedAt)}` : ''} · ${sourceLabel}${monitorLabel}`
+      : `No PCSO radio transmits logged yet · ${sourceLabel}${monitorLabel}`;
   }
 }
 
