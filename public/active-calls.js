@@ -34,7 +34,11 @@ const loadCalls = async () => {
     const response = await fetch('/api/pcso/active-calls', { cache: 'no-store' });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      statusEl.textContent = payload?.error || 'Active calls could not be loaded right now.';
+      statusEl.textContent = payload?.message || payload?.error || 'Active calls could not be loaded right now.';
+      return;
+    }
+    if (payload?.configured === false) {
+      statusEl.textContent = payload?.message || 'Melonly is not configured.';
       return;
     }
     renderCalls(payload);

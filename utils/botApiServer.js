@@ -3,6 +3,10 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { formatTalkDuration, getRadioTalkLogs } from './pcsoRadioTalkLogs.js';
 import { getDispatchRadioMonitorStatus } from './dispatchRadioTalkMonitor.js';
+import { fetchPcsoAssignedMelonlyCalls } from './melonly.js';
+
+/** Pinellas County Sheriff's Office Melonly department id. */
+const PINELLAS_MELONLY_DEPARTMENT_ID = '7470323914464301056';
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -23,8 +27,8 @@ function authorized(request, apiKey) {
 }
 
 /**
- * Tiny bot-host HTTP surface so the website can read radio talk logs via BOT_API_URL.
- * Listens on SERVER_PORT / PORT (Spark/Apollo assigned port) when configured.
+ * Tiny bot-host HTTP surface so the website can read radio talk logs and Melonly
+ * active calls via BOT_API_URL. Listens on SERVER_PORT / PORT when configured.
  */
 export function startBotApiServer(client, {
   port = Number(process.env.SERVER_PORT || process.env.PORT || 0),
@@ -32,7 +36,7 @@ export function startBotApiServer(client, {
 } = {}) {
   const listenPort = Number(port);
   if (!Number.isInteger(listenPort) || listenPort <= 0) {
-    logger.info('Bot API server skipped (no SERVER_PORT/PORT). Radio logs stay on local disk only.');
+    logger.info('Bot API server skipped (no SERVER_PORT/PORT). Website bridge stays offline.');
     return () => {};
   }
   if (!apiKey) {
@@ -58,6 +62,7 @@ export function startBotApiServer(client, {
             latencyMs: Math.round(client?.ws?.ping || 0),
           },
           radioMonitor: getDispatchRadioMonitorStatus(),
+          melonlyConfigured: Boolean(process.env.MELONLY_API_KEY?.trim()),
         });
       }
 
@@ -76,6 +81,39 @@ export function startBotApiServer(client, {
         });
       }
 
+      if (request.method === 'GET' && url.pathname === '/api/pcso/active-calls') {
+        const melonlyApiKey = process.env.MELONLY_API_KEY?.trim() || '';
+        if (!melonlyApiKey) {
+          return sendJson(response, 503, {
+            configured: false,
+            calls: [],
+            error: 'Melonly is not configured.',
+            message: 'Set MELONLY_API_KEY on the bot host to enable active calls.',
+          });
+        }
+        try {
+          const result = await fetchPcsoAssignedMelonlyCalls(melonlyApiKey, {
+            pinellasDepartmentId: PINELLAS_MELONLY_DEPARTMENT_ID,
+          });
+          return sendJson(response, 200, {
+            configured: true,
+            updatedAt: new Date().toISOString(),
+            calls: result.calls,
+            message: result.calls.length
+              ? undefined
+              : 'No active Melonly calls currently have a PCSO unit assigned.',
+          });
+        } catch (error) {
+          const status = error?.status === 429 ? 429 : 502;
+          return sendJson(response, status, {
+            configured: true,
+            calls: [],
+            error: error?.message || 'Melonly CAD calls could not be loaded.',
+            message: 'Active calls could not be loaded from Melonly right now.',
+          });
+        }
+      }
+
       return sendJson(response, 404, { error: 'Not found' });
     } catch (error) {
       logger.error('Bot API server request failed', error);
@@ -85,14 +123,14 @@ export function startBotApiServer(client, {
 
   server.on('error', (error) => {
     if (error?.code === 'EADDRINUSE') {
-      logger.warn(`Bot API server port ${listenPort} is already in use; radio-log HTTP endpoint not bound.`);
+      logger.warn(`Bot API server port ${listenPort} is already in use; website bridge HTTP endpoint not bound.`);
       return;
     }
     logger.error('Bot API server error', error);
   });
 
   server.listen(listenPort, '0.0.0.0', () => {
-    logger.info(`Bot API server listening on :${listenPort} (radio logs + status).`);
+    logger.info(`Bot API server listening on :${listenPort} (radio logs + active calls + status).`);
   });
 
   return () => {
