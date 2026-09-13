@@ -4,11 +4,11 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="description" content="PCSO admin panel — weekly reports, news, events, and radio talk logs." />
-<meta name="theme-color" content="#092d55" />
+<meta name="theme-color" content="#6b7078" />
 <meta name="robots" content="noindex,nofollow" />
 <title>Admin Panel | Pinellas County Sheriff's Office</title>
 <link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
-<link rel="stylesheet" href="styles.css?v=20260913-admin-radio" />
+<link rel="stylesheet" href="styles.css?v=20260913-content-images" />
 <style>
   .admin-toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:18px; }
   .admin-toolbar input { min-width:min(100%,280px); padding:10px 12px; border:1px solid #d0d5db; border-radius:4px; background:#fff; color:#1d2b38; }
@@ -77,7 +77,8 @@
     <form class="admin-form" data-news-form>
       <label>Title<input name="title" required maxlength="160" placeholder="Headline" /></label>
       <label>Summary<textarea name="summary" maxlength="400" placeholder="Short preview shown on the homepage card"></textarea></label>
-      <label>Image URL<input name="imageUrl" maxlength="500" placeholder="https://…" /></label>
+      <label>Image<input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" /></label>
+      <label>Image URL<input name="imageUrl" maxlength="800" placeholder="Optional if uploading a file — https://…" /></label>
       <label>Link URL<input name="linkUrl" maxlength="500" placeholder="Optional read-more link" /></label>
       <button type="submit">Add news</button>
     </form>
@@ -93,6 +94,8 @@
       <label>When label<input name="whenLabel" maxlength="160" placeholder="Monday, September 14, 2026 10:00 AM - 02:00 PM" /></label>
       <label>Location<input name="location" maxlength="240" placeholder="Venue / address" /></label>
       <label>Description<textarea name="description" maxlength="1000" placeholder="Optional details"></textarea></label>
+      <label>Image<input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" /></label>
+      <label>Image URL<input name="imageUrl" maxlength="800" placeholder="Optional if uploading a file — https://…" /></label>
       <button type="submit">Add event</button>
     </form>
     <div class="admin-item-list" data-event-list>
@@ -128,6 +131,7 @@
 
 <p style="margin-top:28px"><a class="pcso-text-link" href="/">← Back to home</a></p>
 </div></main>
-<script src="admin.js?v=20260913-admin-radio"></script>
+<script src="assets/vercel-blob-client.js?v=20260913-content-images"></script>
+<script src="admin.js?v=20260913-radio-logs"></script>
 </body>
 </html>

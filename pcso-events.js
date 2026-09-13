@@ -47,13 +47,21 @@ export function renderUpcomingEventsHtml(events, { limit = 3 } = {}) {
   if (!list.length) {
     return `<p class="pcso-events-empty">None</p>`;
   }
-  return list.map((event) => `
-    <article class="pcso-upcoming-item">
-      <h3>${escapeHtml(event.title || 'Untitled event')}</h3>
-      <p class="pcso-upcoming-when">${escapeHtml(formatEventWhen(event))}</p>
-      <p class="pcso-upcoming-where">${escapeHtml(event.location || 'Location TBA')}</p>
+  return list.map((event) => {
+    const image = event.imageUrl
+      ? `<div class="pcso-upcoming-image" style="background-image:url('${escapeHtml(event.imageUrl)}')" aria-hidden="true"></div>`
+      : '';
+    return `
+    <article class="pcso-upcoming-item${event.imageUrl ? ' pcso-upcoming-item-has-image' : ''}">
+      ${image}
+      <div class="pcso-upcoming-copy">
+        <h3>${escapeHtml(event.title || 'Untitled event')}</h3>
+        <p class="pcso-upcoming-when">${escapeHtml(formatEventWhen(event))}</p>
+        <p class="pcso-upcoming-where">${escapeHtml(event.location || 'Location TBA')}</p>
+      </div>
     </article>
-  `).join('');
+  `;
+  }).join('');
 }
 
 export function renderNewsCarouselHtml(news, { limit = 12 } = {}) {
@@ -102,12 +110,18 @@ export function renderNewsDirectoryHtml(news, { query = '' } = {}) {
 
   return `<div class="pcso-news-directory">${list.map((item) => {
     const href = item.linkUrl || '#';
+    const image = item.imageUrl
+      ? `<div class="pcso-news-row-image" style="background-image:url('${escapeHtml(item.imageUrl)}')" role="img" aria-label=""></div>`
+      : '';
     return `
-      <article class="pcso-news-row">
-        <h2>${escapeHtml(item.title || 'Untitled news')}</h2>
-        ${item.publishedAt ? `<p class="pcso-news-row-date">${escapeHtml(new Date(item.publishedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }))}</p>` : ''}
-        <p class="pcso-news-row-summary">${escapeHtml(item.summary || item.body || '')}</p>
-        ${item.linkUrl ? `<p><a class="pcso-text-link" href="${escapeHtml(href)}">Read more →</a></p>` : ''}
+      <article class="pcso-news-row${item.imageUrl ? ' pcso-news-row-has-image' : ''}">
+        ${image}
+        <div class="pcso-news-row-body">
+          <h2>${escapeHtml(item.title || 'Untitled news')}</h2>
+          ${item.publishedAt ? `<p class="pcso-news-row-date">${escapeHtml(new Date(item.publishedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }))}</p>` : ''}
+          <p class="pcso-news-row-summary">${escapeHtml(item.summary || item.body || '')}</p>
+          ${item.linkUrl ? `<p><a class="pcso-text-link" href="${escapeHtml(href)}">Read more →</a></p>` : ''}
+        </div>
       </article>
     `;
   }).join('')}</div>`;
@@ -131,14 +145,22 @@ export function renderEventsDirectoryHtml(events, { query = '' } = {}) {
     return `<p class="pcso-events-empty">${needle ? 'No events matched your search.' : 'None'}</p>`;
   }
 
-  return `<div class="pcso-events-directory">${list.map((event) => `
-    <article class="pcso-events-row">
-      <h2>${escapeHtml(event.title || 'Untitled event')}</h2>
-      <p class="pcso-events-when">${escapeHtml(formatEventWhen(event))}</p>
-      <p class="pcso-events-where">${escapeHtml(event.location || 'Location TBA')}</p>
-      ${event.description ? `<p class="pcso-events-desc">${escapeHtml(event.description)}</p>` : ''}
+  return `<div class="pcso-events-directory">${list.map((event) => {
+    const image = event.imageUrl
+      ? `<div class="pcso-events-row-image" style="background-image:url('${escapeHtml(event.imageUrl)}')" role="img" aria-label=""></div>`
+      : '';
+    return `
+    <article class="pcso-events-row${event.imageUrl ? ' pcso-events-row-has-image' : ''}">
+      ${image}
+      <div class="pcso-events-row-body">
+        <h2>${escapeHtml(event.title || 'Untitled event')}</h2>
+        <p class="pcso-events-when">${escapeHtml(formatEventWhen(event))}</p>
+        <p class="pcso-events-where">${escapeHtml(event.location || 'Location TBA')}</p>
+        ${event.description ? `<p class="pcso-events-desc">${escapeHtml(event.description)}</p>` : ''}
+      </div>
     </article>
-  `).join('')}</div>`;
+  `;
+  }).join('')}</div>`;
 }
 
 function bindNewsCarousel(root) {

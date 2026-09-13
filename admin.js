@@ -16,11 +16,47 @@ const refreshBtn = document.querySelector('[data-radio-refresh]');
 
 let people = [];
 
+const MAX_CONTENT_IMAGE_BYTES = 5 * 1024 * 1024;
+
 const escapeHtml = (value) => String(value ?? '')
   .replaceAll('&', '&amp;')
   .replaceAll('<', '&lt;')
   .replaceAll('>', '&gt;')
   .replaceAll('"', '&quot;');
+
+function safeContentImageName(file, fallback = 'image.jpg') {
+  return String(file?.name || fallback)
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '') || fallback;
+}
+
+async function resolveContentImageUrl(form, folder) {
+  const fileInput = form?.querySelector('input[name="image"]');
+  const file = fileInput?.files?.[0];
+  const typedUrl = String(new FormData(form).get('imageUrl') || '').trim();
+  if (!file) return typedUrl;
+
+  if (file.size > MAX_CONTENT_IMAGE_BYTES) {
+    throw new Error('Image must be 5 MB or smaller.');
+  }
+  if (!/^image\/(png|jpeg|jpg|webp|gif)$/i.test(file.type || '')) {
+    throw new Error('Use a PNG, JPEG, WebP, or GIF image.');
+  }
+
+  const upload = globalThis.VercelBlob?.upload;
+  if (typeof upload !== 'function') {
+    throw new Error('Image upload is unavailable. Paste an Image URL instead, or configure Vercel Blob.');
+  }
+
+  const blob = await upload(`pcso-content/${folder}/${safeContentImageName(file)}`, file, {
+    access: 'public',
+    handleUploadUrl: '/api/pcso/content-upload',
+    contentType: file.type || 'image/jpeg',
+  });
+  if (!blob?.url) throw new Error('Image upload failed.');
+  return blob.url;
+}
 
 function formatWhen(iso) {
   const date = iso ? new Date(iso) : null;
@@ -110,15 +146,21 @@ function renderList(mount, items, kind) {
     mount.innerHTML = '<p class="admin-status">None</p>';
     return;
   }
-  mount.innerHTML = items.map((item) => `
+  mount.innerHTML = items.map((item) => {
+    const thumb = item.imageUrl
+      ? `<div class="admin-item-thumb" style="background-image:url('${escapeHtml(item.imageUrl)}')" aria-hidden="true"></div>`
+      : '';
+    return `
     <div class="admin-item">
+      ${thumb}
       <div>
         <strong>${escapeHtml(item.title || 'Untitled')}</strong>
         <span>${escapeHtml(item.summary || item.whenLabel || item.location || item.description || '')}</span>
       </div>
       <button type="button" class="admin-item-delete" data-delete-kind="${kind}" data-delete-id="${escapeHtml(item.id)}">Delete</button>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 async function loadContent() {
@@ -170,13 +212,23 @@ async function loadPersonnel() {
 async function loadRadioLogs() {
   const response = await fetch('/api/pcso/radio-logs?limit=75', { cache: 'no-store' });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || 'Radio logs could not be loaded.');
+  if (!response.ok) {
+    renderRadioLogs([]);
+    throw new Error(payload.error || 'Radio logs could not be loaded.');
+  }
   const entries = Array.isArray(payload.entries) ? payload.entries : [];
   renderRadioLogs(entries);
   if (radioMetaEl) {
+    const sourceLabel = payload.source === 'bot'
+      ? 'bot'
+      : (payload.source === 'local' ? 'local' : payload.source || 'unknown');
+    const monitor = payload.radioMonitor;
+    const monitorLabel = monitor?.connectionStatus
+      ? ` · monitor ${monitor.connectionStatus}${monitor.paused ? ' (paused)' : ''}`
+      : '';
     radioMetaEl.textContent = entries.length
-      ? `${entries.length} recent PCSO radio transmit${entries.length === 1 ? '' : 's'}${payload.updatedAt ? ` · updated ${formatWhen(payload.updatedAt)}` : ''}`
-      : 'No PCSO radio transmits logged yet.';
+      ? `${entries.length} recent PCSO radio transmit${entries.length === 1 ? '' : 's'}${payload.updatedAt ? ` · updated ${formatWhen(payload.updatedAt)}` : ''} · ${sourceLabel}${monitorLabel}`
+      : `No PCSO radio transmits logged yet · ${sourceLabel}${monitorLabel}`;
   }
 }
 
@@ -185,11 +237,12 @@ async function boot() {
     const sessionResponse = await fetch('/api/auth/me', { cache: 'no-store' });
     const session = await sessionResponse.json().catch(() => ({}));
     if (!session.authenticated) {
-      window.location.href = '/signin?next=/admin';
+      window.location.replace('/signin?next=/admin');
       return;
     }
+    // Do not leave non-admins on /admin with sections merely hidden — send them away.
     if (!session.user?.admin && !session.user?.owner) {
-      statusEl.textContent = 'You need Discord Administrator (or PCSO command/admin) permission to use this panel.';
+      window.location.replace('/');
       return;
     }
 
@@ -229,12 +282,15 @@ newsForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const data = new FormData(newsForm);
   try {
+    const hasFile = Boolean(newsForm.querySelector('input[name="image"]')?.files?.[0]);
+    statusEl.textContent = hasFile ? 'Uploading image…' : 'Saving news…';
+    const imageUrl = await resolveContentImageUrl(newsForm, 'news');
     statusEl.textContent = 'Saving news…';
     await mutate('POST', {
       kind: 'news',
       title: data.get('title'),
       summary: data.get('summary'),
-      imageUrl: data.get('imageUrl'),
+      imageUrl,
       linkUrl: data.get('linkUrl'),
     });
     newsForm.reset();
@@ -248,6 +304,9 @@ eventForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const data = new FormData(eventForm);
   try {
+    const hasFile = Boolean(eventForm.querySelector('input[name="image"]')?.files?.[0]);
+    statusEl.textContent = hasFile ? 'Uploading image…' : 'Saving event…';
+    const imageUrl = await resolveContentImageUrl(eventForm, 'events');
     statusEl.textContent = 'Saving event…';
     await mutate('POST', {
       kind: 'event',
@@ -255,6 +314,7 @@ eventForm?.addEventListener('submit', async (event) => {
       whenLabel: data.get('whenLabel'),
       location: data.get('location'),
       description: data.get('description'),
+      imageUrl,
     });
     eventForm.reset();
     statusEl.textContent = 'Event added.';

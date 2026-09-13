@@ -1,6 +1,7 @@
 import activeCalls from '../../lib/pcso-api/active-calls.js';
 import admin from '../../lib/pcso-api/admin.js';
 import content from '../../lib/pcso-api/content.js';
+import contentUpload from '../../lib/pcso-api/content-upload.js';
 import jail from '../../lib/pcso-api/jail.js';
 import radioLogs from '../../lib/pcso-api/radio-logs.js';
 import weeklyReport from '../../lib/pcso-api/weekly-report.js';
@@ -9,6 +10,7 @@ const ROUTES = {
   'active-calls': activeCalls,
   admin,
   content,
+  'content-upload': contentUpload,
   jail,
   'radio-logs': radioLogs,
   'weekly-report': weeklyReport,
