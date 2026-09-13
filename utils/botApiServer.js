@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
 import { formatTalkDuration, getRadioTalkLogs } from './pcsoRadioTalkLogs.js';
 import { getDispatchRadioMonitorStatus } from './dispatchRadioTalkMonitor.js';
+import { writeDispatchWebTalk, stopDispatchWebTalk } from './dispatchWebTalk.js';
 import { fetchPcsoAssignedMelonlyCalls } from './melonly.js';
 import { readDispatchAudio } from './dispatchLiveAudio.js';
 import { DISPATCH_VOICE_CHANNEL_ID } from './dispatchChannelStatus.js';
@@ -26,6 +27,18 @@ function authorized(request, apiKey) {
   const left = Buffer.from(token);
   const right = Buffer.from(apiKey);
   return left.length === right.length && timingSafeEqual(left, right);
+}
+
+async function readBinaryBody(request, maxBytes = 96_000) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buffer.length;
+    if (total > maxBytes) throw new Error('Request body too large');
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks);
 }
 
 /**
@@ -73,6 +86,18 @@ export function startBotApiServer(client, {
         const ready = !status.paused && !status.stopping
           && status.connectionStatus === 'ready' && status.channelId === DISPATCH_VOICE_CHANNEL_ID;
         return sendJson(response, 200, readDispatchAudio(url.searchParams.get('cursor'), url.searchParams.get('epoch'), ready));
+      }
+
+      if (request.method === 'POST' && url.pathname === '/api/pcso/radio-talk') {
+        const action = String(request.headers['x-talk-action'] || 'audio').toLowerCase();
+        if (action === 'stop') {
+          stopDispatchWebTalk();
+          return sendJson(response, 200, { ok: true, talking: false });
+        }
+        const body = await readBinaryBody(request);
+        if (!body.length) return sendJson(response, 400, { error: 'Audio data is required.' });
+        const result = writeDispatchWebTalk(body);
+        return sendJson(response, result.ok ? 200 : 409, result);
       }
 
       if (request.method === 'GET' && url.pathname === '/api/pcso/radio-logs') {

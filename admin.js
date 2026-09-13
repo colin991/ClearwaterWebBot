@@ -309,6 +309,103 @@ listenButton?.addEventListener('click', async () => {
 });
 window.addEventListener('pagehide', () => stopLiveRadio());
 
+const talkButton = document.querySelector('[data-radio-talk]');
+const talkStatus = document.querySelector('[data-radio-talk-status]');
+let talkSession = null;
+
+function stopTalk(message = 'Hold to Talk') {
+  const session = talkSession;
+  talkSession = null;
+  if (!session) return;
+  session.active = false;
+  try { session.processor.disconnect(); } catch { /* ignore */ }
+  try { session.source.disconnect(); } catch { /* ignore */ }
+  session.stream?.getTracks().forEach((track) => track.stop());
+  void session.context.close().catch(() => {});
+  void fetch('/api/pcso/radio-talk', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream', 'X-Talk-Action': 'stop' },
+    body: new Uint8Array(),
+    credentials: 'same-origin',
+  }).catch(() => {});
+  talkButton?.setAttribute('aria-pressed', 'false');
+  if (talkStatus) talkStatus.textContent = message;
+}
+
+async function startTalk() {
+  if (talkSession) return;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    if (talkStatus) talkStatus.textContent = 'This browser does not support microphone access.';
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    });
+    const context = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+    await context.resume();
+    const source = context.createMediaStreamSource(stream);
+    const processor = context.createScriptProcessor(4096, 1, 1);
+    const silent = context.createGain();
+    silent.gain.value = 0;
+    const session = { active: true, context, stream, source, processor, pending: [], samples: 0, sending: Promise.resolve() };
+    talkSession = session;
+    processor.onaudioprocess = (event) => {
+      if (!session.active) return;
+      const input = event.inputBuffer.getChannelData(0);
+      // Discord raw PCM expects 48 kHz, signed 16-bit, interleaved stereo.
+      const pcm = new Int16Array(input.length * 2);
+      for (let i = 0; i < input.length; i += 1) {
+        const sample = Math.max(-1, Math.min(1, input[i])) * 32767;
+        pcm[i * 2] = sample;
+        pcm[i * 2 + 1] = sample;
+      }
+      session.pending.push(pcm);
+      session.samples += pcm.length;
+      if (session.samples < 8192) return;
+      const chunk = new Int16Array(session.samples);
+      let offset = 0;
+      for (const part of session.pending) { chunk.set(part, offset); offset += part.length; }
+      session.pending = [];
+      session.samples = 0;
+      session.sending = session.sending.then(() => fetch('/api/pcso/radio-talk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream', 'X-Talk-Action': 'audio' },
+        body: chunk,
+        credentials: 'same-origin',
+      })).catch(() => {
+        if (talkSession === session) stopTalk('Microphone transmission lost.');
+      });
+    };
+    source.connect(processor);
+    processor.connect(silent);
+    silent.connect(context.destination);
+    talkButton?.setAttribute('aria-pressed', 'true');
+    if (talkStatus) talkStatus.textContent = 'Transmitting to Dispatch RTO…';
+  } catch (error) {
+    if (talkSession) stopTalk('Microphone access was not granted.');
+    else if (talkStatus) talkStatus.textContent = error?.message || 'Microphone access was not granted.';
+  }
+}
+
+talkButton?.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  void startTalk();
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach((eventName) => {
+  talkButton?.addEventListener(eventName, () => stopTalk());
+});
+talkButton?.addEventListener('keydown', (event) => {
+  if ((event.code === 'Space' || event.code === 'Enter') && !event.repeat) {
+    event.preventDefault();
+    void startTalk();
+  }
+});
+talkButton?.addEventListener('keyup', (event) => {
+  if (event.code === 'Space' || event.code === 'Enter') stopTalk();
+});
+window.addEventListener('pagehide', () => stopTalk('Hold to Talk'));
+
 const RADIO_LOG_LIMIT = 10;
 const RADIO_LOG_REFRESH_MS = 3_000;
 let radioRefreshTimer = null;

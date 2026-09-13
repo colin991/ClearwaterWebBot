@@ -68,6 +68,10 @@ export function getDispatchRadioMonitorStatus() {
   };
 }
 
+export function getDispatchRadioVoiceConnection() {
+  return isHealthyRadioConnection() ? connection : null;
+}
+
 /**
  * Temporarily stop radio listening / auto-rejoin so another feature can use the
  * guild voice connection (Frequency Change greetings, etc.).
@@ -416,7 +420,7 @@ export async function joinDispatchRadio(client, { force = false } = {}) {
     guildId: channel.guild.id,
     adapterCreator: channel.guild.voiceAdapterCreator,
     selfDeaf: false,
-    selfMute: true,
+    selfMute: false,
   });
 
   try {
