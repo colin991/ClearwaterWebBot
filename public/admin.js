@@ -209,6 +209,104 @@ async function loadPersonnel() {
   applySearch();
 }
 
+const listenButton = document.querySelector('[data-radio-listen]');
+const listenStatus = document.querySelector('[data-radio-listen-status]');
+let liveRadio = null;
+
+function stopLiveRadio(message = 'Listening stopped.') {
+  const session = liveRadio;
+  liveRadio = null;
+  if (session) {
+    clearTimeout(session.timer);
+    session.controller?.abort();
+    void session.context.close().catch(() => {});
+  }
+  if (listenButton) {
+    listenButton.textContent = 'Listen Live';
+    listenButton.setAttribute('aria-pressed', 'false');
+  }
+  if (listenStatus) listenStatus.textContent = message;
+}
+
+async function pollLiveRadio(session) {
+  if (liveRadio !== session) return;
+  try {
+    session.controller = new AbortController();
+    const timeout = setTimeout(() => session.controller.abort(), 8000);
+    let payload;
+    try {
+      const query = new URLSearchParams();
+      if (session.cursor != null) query.set('cursor', session.cursor);
+      if (session.epoch) query.set('epoch', session.epoch);
+      const response = await fetch(`/api/pcso/radio-audio?${query}`, {
+        cache: 'no-store', signal: session.controller.signal,
+      });
+      payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Live radio could not be loaded.');
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (liveRadio !== session) return;
+    if (!payload.ready) throw new Error('Dispatch audio is offline or temporarily paused. Try Listen Live again shortly.');
+    if (payload.decodeFailed) throw new Error('The bot cannot decode Discord audio right now.');
+    if (session.context.state !== 'running') throw new Error('Audio was paused by your browser. Click Listen Live to resume.');
+    session.cursor = payload.cursor;
+    session.epoch = payload.epoch;
+    const frames = payload.frames || [];
+    const now = session.context.currentTime;
+    // Preserve each speaker’s timing; simultaneous speakers mix in Web Audio.
+    for (const [speaker, end] of session.ends) {
+      if (end < now) session.ends.delete(speaker);
+    }
+    if (frames.length) {
+      session.lastAudio = Date.now();
+      const firstAt = Math.min(...frames.map((frame) => frame.at));
+      for (const frame of frames) {
+        const raw = Uint8Array.from(atob(frame.pcm), (character) => character.charCodeAt(0));
+        const samples = new DataView(raw.buffer);
+        const buffer = session.context.createBuffer(1, raw.length / 2, 48000);
+        const channel = buffer.getChannelData(0);
+        for (let i = 0; i < channel.length; i += 1) channel[i] = samples.getInt16(i * 2, true) / 32768;
+        const previousEnd = session.ends.get(frame.speaker) || 0;
+        const start = Math.max(now + 0.08 + (frame.at - firstAt) / 1000, previousEnd);
+        // Never accumulate a delayed replay if network delivery falls behind.
+        if (start > now + 2) continue;
+        const source = session.context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(session.context.destination);
+        source.onended = () => source.disconnect();
+        source.start(start);
+        session.ends.set(frame.speaker, start + buffer.duration);
+      }
+    }
+    listenStatus.textContent = session.lastAudio && Date.now() - session.lastAudio < 3000
+      ? 'Listening live to Dispatch RTO.'
+      : 'Connected — waiting for incoming radio audio.';
+    session.timer = setTimeout(() => void pollLiveRadio(session), 400);
+  } catch (error) {
+    if (liveRadio === session) stopLiveRadio(error.message || 'Live radio disconnected.');
+  }
+}
+
+listenButton?.addEventListener('click', async () => {
+  if (liveRadio) return stopLiveRadio();
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return stopLiveRadio('This browser does not support live audio playback.');
+  let session;
+  try {
+    session = { context: new AudioContextClass(), ends: new Map() };
+    liveRadio = session;
+    listenButton.textContent = 'Stop Listening';
+    listenButton.setAttribute('aria-pressed', 'true');
+    listenStatus.textContent = 'Connecting to Dispatch RTO…';
+    await session.context.resume();
+    if (liveRadio === session) void pollLiveRadio(session);
+  } catch {
+    if (!session || liveRadio === session) stopLiveRadio('Audio playback could not start. Try again.');
+  }
+});
+window.addEventListener('pagehide', () => stopLiveRadio());
+
 const RADIO_LOG_LIMIT = 10;
 const RADIO_LOG_REFRESH_MS = 3_000;
 let radioRefreshTimer = null;

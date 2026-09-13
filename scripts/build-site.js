@@ -4,13 +4,13 @@ import { basename, join } from 'node:path';
 const root = process.cwd();
 const output = join(root, 'public');
 const staticFiles = new Set([
-  'index.html', 'internet.html', 'owner.html', 'signin.html', 'coming-soon.html',
+  'index.html', 'internet.html', 'signin.html', 'coming-soon.html',
   'privacy.html', 'terms.html', 'wallet.html', 'manifest.webmanifest',
   'jail.html', 'active-calls.html', 'impound.html', 'submit-tip.html',
   'inside-the-star.html', 'public-records.html', 'complaint.html', 'events.html',
   'news.html', 'admin.html',
   'styles.css', 'internet.css', 'legal.css', 'signin.css', 'coming-soon.css',
-  'script.js', 'internet.js', 'owner.js', 'signin.js', 'coming-soon.js', 'site-gate.js',
+  'script.js', 'internet.js', 'signin.js', 'coming-soon.js', 'site-gate.js',
   'active-calls.js', 'jail.js', 'pcso-events.js', 'admin.js',
 ]);
 

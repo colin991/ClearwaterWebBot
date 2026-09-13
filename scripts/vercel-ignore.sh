@@ -23,7 +23,6 @@ fi
 WEBSITE_PATHS=(
   index.html
   internet.html
-  owner.html
   signin.html
   coming-soon.html
   privacy.html
@@ -42,7 +41,6 @@ WEBSITE_PATHS=(
   coming-soon.css
   script.js
   internet.js
-  owner.js
   signin.js
   coming-soon.js
   site-gate.js

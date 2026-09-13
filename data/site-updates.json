@@ -2,6 +2,20 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-13-dispatch-live-listen",
+      "title": "Listen to Dispatch RTO on the website",
+      "summary": "Added a Listen Live / Stop Listening control to admin radio logs, with protected live audio from the existing Discord radio connection.",
+      "createdAt": "2026-09-13T21:49:16.540Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-13-remove-owner-panel",
+      "title": "Remove the old Owner panel",
+      "summary": "Removed the unused Owner panel and its configuration endpoint. Old Owner page links return to the homepage.",
+      "createdAt": "2026-09-13T21:49:16.541Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-13-radio-logs-latest-10",
       "title": "Radio talk logs show latest 10",
       "summary": "Admin dispatch radio talk logs now show the latest 10 transmits and auto-refresh every 3 seconds.",

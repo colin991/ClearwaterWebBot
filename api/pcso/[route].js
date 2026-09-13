@@ -4,6 +4,7 @@ import content from '../../lib/pcso-api/content.js';
 import contentUpload from '../../lib/pcso-api/content-upload.js';
 import jail from '../../lib/pcso-api/jail.js';
 import radioLogs from '../../lib/pcso-api/radio-logs.js';
+import radioAudio from '../../lib/pcso-api/radio-audio.js';
 import weeklyReport from '../../lib/pcso-api/weekly-report.js';
 
 const ROUTES = {
@@ -13,6 +14,7 @@ const ROUTES = {
   'content-upload': contentUpload,
   jail,
   'radio-logs': radioLogs,
+  'radio-audio': radioAudio,
   'weekly-report': weeklyReport,
 };
 

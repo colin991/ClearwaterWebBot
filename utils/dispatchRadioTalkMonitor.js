@@ -12,6 +12,7 @@ import { logger } from './logger.js';
 import { parseDeputyNickname } from './pinellasShiftPanel.js';
 import { appendRadioTalkLog } from './pcsoRadioTalkLogs.js';
 import { getActiveHold } from './holdVoiceChat.js';
+import { relayDispatchStream } from './dispatchLiveAudio.js';
 
 /** Minimum audible press-to-talk burst to keep as a log entry. */
 const MIN_TALK_MS = 150;
@@ -147,7 +148,7 @@ function keepReceiveAlive(voiceConnection, userId) {
       end: { behavior: EndBehaviorType.AfterSilence, duration: 400 },
     });
     if (!stream) return;
-    stream.on('data', () => {});
+    relayDispatchStream(stream, String(userId), () => !paused && !stopping && isHealthyRadioConnection(voiceConnection));
     stream.on('error', () => {});
   } catch {
     // Receive subscribe is best-effort; speaking events can still fire without it.

@@ -4,6 +4,8 @@ import { logger } from './logger.js';
 import { formatTalkDuration, getRadioTalkLogs } from './pcsoRadioTalkLogs.js';
 import { getDispatchRadioMonitorStatus } from './dispatchRadioTalkMonitor.js';
 import { fetchPcsoAssignedMelonlyCalls } from './melonly.js';
+import { readDispatchAudio } from './dispatchLiveAudio.js';
+import { DISPATCH_VOICE_CHANNEL_ID } from './dispatchChannelStatus.js';
 
 /** Pinellas County Sheriff's Office Melonly department id. */
 const PINELLAS_MELONLY_DEPARTMENT_ID = '7470323914464301056';
@@ -64,6 +66,13 @@ export function startBotApiServer(client, {
           radioMonitor: getDispatchRadioMonitorStatus(),
           melonlyConfigured: Boolean(process.env.MELONLY_API_KEY?.trim()),
         });
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/pcso/radio-audio') {
+        const status = getDispatchRadioMonitorStatus();
+        const ready = !status.paused && !status.stopping
+          && status.connectionStatus === 'ready' && status.channelId === DISPATCH_VOICE_CHANNEL_ID;
+        return sendJson(response, 200, readDispatchAudio(url.searchParams.get('cursor'), url.searchParams.get('epoch'), ready));
       }
 
       if (request.method === 'GET' && url.pathname === '/api/pcso/radio-logs') {
