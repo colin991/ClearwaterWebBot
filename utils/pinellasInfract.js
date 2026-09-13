@@ -32,8 +32,8 @@ import {
 import {
   PINELLAS_EMPLOYEE_WELCOME_ROLE_ID,
   PINELLAS_GUILD_ID,
-  memberHasPinellasCommandAccess,
-  requirePinellasCommandAccess,
+  memberHasPinellasInfractionAccess,
+  requirePinellasInfractionAccess,
 } from './pinellasServer.js';
 import { logger } from './logger.js';
 
@@ -483,7 +483,7 @@ function assertCanInfract(issuerMember, targetMember, { demoteRank = null } = {}
   if (targetMember.user?.bot) throw new Error('You cannot infract a bot.');
   if (targetMember.id === issuerMember.id) throw new Error('You cannot infract yourself.');
 
-  requirePinellasCommandAccess(issuerMember);
+  requirePinellasInfractionAccess(issuerMember);
 
   const issuerRank = getHighestPinellasRank(issuerMember);
   const targetRank = getHighestPinellasRank(targetMember);
@@ -709,7 +709,7 @@ export async function editPinellasInfraction({
   if (String(issuerMember.guild?.id) !== PINELLAS_GUILD_ID) {
     throw new Error('This command can only be used in the Pinellas County Sheriff\'s Office server.');
   }
-  requirePinellasCommandAccess(issuerMember);
+  requirePinellasInfractionAccess(issuerMember);
 
   const store = await readStore();
   const entry = (store.infractions || []).find((item) => item.id === String(id));
@@ -850,9 +850,9 @@ export async function handlePinellasInfractInteraction(interaction) {
 
   const issuerMember = interaction.member
     || await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
-  if (!memberHasPinellasCommandAccess(issuerMember)) {
+  if (!memberHasPinellasInfractionAccess(issuerMember)) {
     await interaction.reply({
-      content: 'You need the required PCSO command role to use this.',
+      content: 'You need a PCSO supervisor/command role to use infractions.',
       flags: MessageFlags.Ephemeral,
     }).catch(() => null);
     return true;
