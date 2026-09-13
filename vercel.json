@@ -6,27 +6,103 @@
   "cleanUrls": false,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/api/media", "destination": "/api/internet" },
-    { "source": "/api/internet-version", "destination": "/api/internet?meta=version" },
-    { "source": "/internet", "destination": "/internet.html" },
-    { "source": "/internet/(.*)", "destination": "/internet.html" },
-    { "source": "/owner", "destination": "/owner.html" },
-    { "source": "/terms", "destination": "/terms.html" },
-    { "source": "/privacy", "destination": "/privacy.html" },
-    { "source": "/signin", "destination": "/signin.html" },
-    { "source": "/coming-soon", "destination": "/coming-soon.html" },
-    { "source": "/wallet", "destination": "/wallet.html" }
+    {
+      "source": "/api/media",
+      "destination": "/api/internet"
+    },
+    {
+      "source": "/api/internet-version",
+      "destination": "/api/internet?meta=version"
+    },
+    {
+      "source": "/internet",
+      "destination": "/internet.html"
+    },
+    {
+      "source": "/internet/(.*)",
+      "destination": "/internet.html"
+    },
+    {
+      "source": "/owner",
+      "destination": "/owner.html"
+    },
+    {
+      "source": "/terms",
+      "destination": "/terms.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
+    {
+      "source": "/signin",
+      "destination": "/signin.html"
+    },
+    {
+      "source": "/coming-soon",
+      "destination": "/coming-soon.html"
+    },
+    {
+      "source": "/wallet",
+      "destination": "/wallet.html"
+    },
+    {
+      "source": "/jail",
+      "destination": "/jail.html"
+    },
+    {
+      "source": "/active-calls",
+      "destination": "/active-calls.html"
+    },
+    {
+      "source": "/impound",
+      "destination": "/impound.html"
+    },
+    {
+      "source": "/submit-tip",
+      "destination": "/submit-tip.html"
+    },
+    {
+      "source": "/inside-the-star",
+      "destination": "/inside-the-star.html"
+    },
+    {
+      "source": "/public-records",
+      "destination": "/public-records.html"
+    },
+    {
+      "source": "/complaint",
+      "destination": "/complaint.html"
+    }
   ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), payment=(), unload=*" },
-        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains; preload" },
-        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=(), payment=(), unload=*"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=31536000; includeSubDomains; preload"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
+        },
         {
           "key": "Content-Security-Policy",
           "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'sha256-/x7W7R75k8Roq0WaVRQX9blP4OufE5xbAdzklGxsgpw=' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://cdn.discordapp.com https://media.discordapp.net https://*.giphy.com https://*.blob.vercel-storage.com; media-src 'self' data: blob: https://*.blob.vercel-storage.com; connect-src 'self' https://cloudflareinsights.com https://*.cloudflareinsights.com https://blob.vercel-storage.com https://*.blob.vercel-storage.com https://vercel.com; worker-src 'self' blob:; upgrade-insecure-requests"
