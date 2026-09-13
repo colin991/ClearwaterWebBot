@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-13-apply-v2-text-budget",
+      "title": "PCSO application submit text limit",
+      "summary": "Entry application review posts now keep Components V2 displayable text under Discord's 4000-character limit by showing a capped preview and attaching the full answers as a text file.",
+      "createdAt": "2026-09-13T13:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "pcso-quicklinks-dark-theme",
       "title": "PCSO quick-links dark theme",
       "summary": "Restyled the homepage quick-links bar to the site gray/black theme with matching gray accent lines on top and bottom.",

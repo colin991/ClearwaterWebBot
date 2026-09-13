@@ -4,6 +4,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
+  FileBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   MessageFlags,
@@ -43,6 +44,8 @@ const ARROW_EMOJI = { id: '1517217487165460591', name: 'rightarrow' };
 
 const DENY_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000;
 const ANSWER_TIMEOUT_MS = 20 * 60 * 1000;
+/** Discord Components V2: total Text Display content across a message must stay under 4000. */
+const V2_DISPLAYABLE_TEXT_BUDGET = 3900;
 
 /** @type {Map<string, { applicationId: string, index: number, answers: string[], updatedAt: number }>} */
 const activeSessions = new Map();
@@ -378,42 +381,53 @@ async function submitApplication(client, user, session) {
     throw new Error('Review channel is unavailable. Your answers were saved — contact staff.');
   }
 
-  const answerBlocks = answers.map((entry, index) => (
-    `**${index + 1}.** ${entry.prompt.replace(/^\*\*\d+\.\*\*\s*/, '')}\n${entry.answer}`
-  ));
+  const header = [
+    `# ${SAVE_EMOJI} Application Review`,
+    `<@&${PINELLAS_APPLY_REVIEW_PING_ROLE_ID}> — new entry application ready for review.`,
+    `Applicant: <@${user.id}> (\`${user.id}\` / **${user.username}**)`,
+    `Application ID: \`${application.id}\``,
+  ].join('\n');
 
-  const chunks = [];
-  let current = '';
-  for (const block of answerBlocks) {
-    const next = current ? `${current}\n\n${block}` : block;
-    if (next.length > 3800) {
-      chunks.push(current);
-      current = block;
-    } else {
-      current = next;
-    }
+  const answersText = answers.map((entry, index) => (
+    `**${index + 1}.** ${entry.prompt.replace(/^\*\*\d+\.\*\*\s*/, '')}\n${entry.answer}`
+  )).join('\n\n');
+
+  const transcriptName = `application-${application.id}.txt`;
+  const transcriptBody = [
+    'Pinellas County Sheriff\'s Office — Entry Application',
+    `Application ID: ${application.id}`,
+    `Applicant: ${user.username} (${user.id})`,
+    `Submitted: ${application.createdAt}`,
+    '',
+    answers.map((entry, index) => (
+      `${index + 1}. ${entry.prompt.replace(/^\*\*\d+\.\*\*\s*/, '')}\n${entry.answer}`
+    )).join('\n\n'),
+  ].join('\n');
+
+  const attachNote = `\n\n-# Full answers are in the attached \`${transcriptName}\`.`;
+  const answersBudget = Math.max(0, V2_DISPLAYABLE_TEXT_BUDGET - header.length);
+  let preview = answersText;
+  if (preview.length > answersBudget) {
+    const room = Math.max(0, answersBudget - attachNote.length);
+    preview = `${preview.slice(0, room)}${attachNote}`;
   }
-  if (current) chunks.push(current);
+
+  // Always attach the transcript so long writing answers never blow the V2 text budget.
+  const files = [
+    new AttachmentBuilder(Buffer.from(transcriptBody, 'utf8'), { name: transcriptName }),
+  ];
 
   const payload = v2Payload((container) => {
     container
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent([
-          `# ${SAVE_EMOJI} Application Review`,
-          `<@&${PINELLAS_APPLY_REVIEW_PING_ROLE_ID}> — new entry application ready for review.`,
-          `Applicant: <@${user.id}> (\`${user.id}\` / **${user.username}**)`,
-          `Application ID: \`${application.id}\``,
-        ].join('\n')),
-      )
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(header))
       .addSeparatorComponents(
         new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
-      );
-
-    for (const chunk of chunks) {
-      container.addTextDisplayComponents(new TextDisplayBuilder().setContent(chunk.slice(0, 4000)));
-    }
-
-    container
+      )
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(preview || '\u200b'))
+      .addSeparatorComponents(
+        new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+      )
+      .addFileComponents(new FileBuilder().setURL(`attachment://${transcriptName}`))
       .addSeparatorComponents(
         new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large),
       )
@@ -430,6 +444,7 @@ async function submitApplication(client, user, session) {
         ),
       );
   }, {
+    files,
     allowedMentions: {
       parse: [],
       roles: [PINELLAS_APPLY_REVIEW_PING_ROLE_ID],
