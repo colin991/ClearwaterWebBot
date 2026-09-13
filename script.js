@@ -309,6 +309,12 @@ const loadSiteBanner = async () => {
 };
 
 document.addEventListener('click', (event) => {
+  const clickedElement = event.target instanceof Element ? event.target : null;
+  const alertClose = clickedElement?.closest('.pcso-alert-close');
+  if (alertClose) {
+    alertClose.closest('.pcso-alert')?.remove();
+    return;
+  }
   if (event.target.closest('[data-site-banner-dismiss]')) {
     const root = document.querySelector('[data-site-banner]');
     try {
