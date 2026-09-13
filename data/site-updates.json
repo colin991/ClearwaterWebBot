@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-13-radio-ws-speaking",
+      "title": "Detect radio key-ups over voice websocket",
+      "summary": "Dispatch radio talk logging now listens for Discord voice Speaking packets on the websocket, not only UDP audio events, so transmits are recorded even when the bot host cannot receive voice UDP.",
+      "createdAt": "2026-09-13T18:12:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-13-radio-log-all-transmits",
       "title": "Log all dispatch radio transmits",
       "summary": "Dispatch radio talk logs now record every non-bot key-up in the radio VC. Unit/member columns parse Clearwater nicknames as callsign | roblox username.",

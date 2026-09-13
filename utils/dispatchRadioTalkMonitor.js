@@ -5,6 +5,7 @@ import {
   joinVoiceChannel,
   VoiceConnectionStatus,
 } from '@discordjs/voice';
+import { VoiceOpcodes } from 'discord-api-types/voice/v8';
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
 import { DISPATCH_VOICE_CHANNEL_ID } from './dispatchChannelStatus.js';
 import { logger } from './logger.js';
@@ -27,6 +28,11 @@ let replacingConnection = false;
 let paused = false;
 let pauseReason = null;
 let lastJoinAt = 0;
+let lastTalkStartAt = null;
+let lastTalkEndAt = null;
+let lastTalkUserId = null;
+let talkStartCount = 0;
+let talkSavedCount = 0;
 
 /** userId -> { startedAt: number, memberSnapshot } */
 const activeTalk = new Map();
@@ -38,6 +44,12 @@ export function isDispatchRadioMonitorPaused() {
 
 export function getDispatchRadioMonitorStatus() {
   const joinConfig = connection?.joinConfig;
+  const guildId = joinConfig?.guildId;
+  const guild = guildId ? clientRef?.guilds?.cache?.get(guildId) : null;
+  const channel = guild?.channels?.cache?.get(DISPATCH_VOICE_CHANNEL_ID);
+  const membersInChannel = channel?.isVoiceBased?.()
+    ? [...channel.members.values()].filter((member) => !member.user?.bot).length
+    : 0;
   return {
     paused,
     pauseReason,
@@ -45,7 +57,13 @@ export function getDispatchRadioMonitorStatus() {
     channelId: joinConfig?.channelId || null,
     connectionStatus: connection?.state?.status || null,
     activeTalkCount: activeTalk.size,
+    membersInChannel,
     lastJoinAt: lastJoinAt || null,
+    lastTalkStartAt,
+    lastTalkEndAt,
+    lastTalkUserId,
+    talkStartCount,
+    talkSavedCount,
   };
 }
 
@@ -155,12 +173,43 @@ function isHealthyRadioConnection(voiceConnection = connection) {
   return voiceConnection.joinConfig?.channelId === DISPATCH_VOICE_CHANNEL_ID;
 }
 
+async function beginTalk(voiceConnection, guild, userId, source = 'udp') {
+  if (stopping || paused) return;
+  const id = String(userId);
+  if (activeTalk.has(id)) return;
+
+  const member = guild.members.cache.get(id)
+    || await guild.members.fetch(id).catch(() => null);
+  if (!shouldLogRadioTalk(member)) return;
+  if (member.voice?.channelId !== DISPATCH_VOICE_CHANNEL_ID) return;
+
+  keepReceiveAlive(voiceConnection, id);
+  const identity = radioIdentityFromMember(member);
+  activeTalk.set(id, {
+    startedAt: Date.now(),
+    member,
+    callsign: identity.callsign,
+    memberName: identity.memberName,
+    username: member.user?.username || '',
+    displayName: identity.memberName || member.displayName || '',
+  });
+  talkStartCount += 1;
+  lastTalkStartAt = new Date().toISOString();
+  lastTalkUserId = id;
+  logger.info(
+    `Radio talk start (${source}): ${identity.callsign || identity.memberName || id} `
+    + `(${member.user?.username || id})`,
+  );
+}
+
 async function finalizeTalk(userId, member = null, endedAt = Date.now()) {
   const active = activeTalk.get(String(userId));
   if (!active) return null;
   activeTalk.delete(String(userId));
 
   const durationMs = Math.max(0, endedAt - active.startedAt);
+  lastTalkEndAt = new Date(endedAt).toISOString();
+  lastTalkUserId = String(userId);
   if (durationMs < MIN_TALK_MS) return null;
 
   const snapshot = member || active.member;
@@ -184,6 +233,7 @@ async function finalizeTalk(userId, member = null, endedAt = Date.now()) {
 
   try {
     await appendRadioTalkLog(entry);
+    talkSavedCount += 1;
     logger.info(
       `Radio talk: ${entry.callsign || entry.displayName || entry.userId} `
       + `spoke for ${Math.round(durationMs / 1000)}s on dispatch radio.`,
@@ -195,52 +245,54 @@ async function finalizeTalk(userId, member = null, endedAt = Date.now()) {
 }
 
 function bindSpeakingListeners(voiceConnection, guild) {
-  const speaking = voiceConnection.receiver?.speaking;
+  const receiver = voiceConnection.receiver;
+  const speaking = receiver?.speaking;
   if (!speaking) {
     logger.error('Radio talk monitor: voice receiver speaking map unavailable.');
     return;
   }
 
-  // Avoid stacking duplicate listeners across reconnects.
+  // UDP speaking map (works when voice UDP audio packets arrive).
   speaking.removeAllListeners('start');
   speaking.removeAllListeners('end');
-
   speaking.on('start', (userId) => {
-    void (async () => {
-      try {
-        if (stopping || paused) return;
-        const id = String(userId);
-        if (activeTalk.has(id)) return;
-        const member = guild.members.cache.get(id)
-          || await guild.members.fetch(id).catch(() => null);
-        if (!shouldLogRadioTalk(member)) return;
-        if (member.voice?.channelId !== DISPATCH_VOICE_CHANNEL_ID) return;
-
-        keepReceiveAlive(voiceConnection, id);
-        const identity = radioIdentityFromMember(member);
-        activeTalk.set(id, {
-          startedAt: Date.now(),
-          member,
-          callsign: identity.callsign,
-          memberName: identity.memberName,
-          username: member.user?.username || '',
-          displayName: identity.memberName || member.displayName || '',
-        });
-        logger.info(
-          `Radio talk start: ${identity.callsign || identity.memberName || id} `
-          + `(${member.user?.username || id})`,
-        );
-      } catch (error) {
-        logger.warn(`Radio talk monitor: speak-start failed: ${error?.message || error}`);
-      }
-    })();
+    void beginTalk(voiceConnection, guild, userId, 'udp').catch((error) => {
+      logger.warn(`Radio talk monitor: speak-start failed: ${error?.message || error}`);
+    });
   });
-
   speaking.on('end', (userId) => {
     void finalizeTalk(userId).catch((error) => {
       logger.warn(`Radio talk monitor: speak-end failed: ${error?.message || error}`);
     });
   });
+
+  // Voice websocket Speaking opcode (op 5). This works even when UDP receive is
+  // blocked/broken on the bot host — the common reason logs stay empty while Ready.
+  if (!receiver.__pcsoWsSpeakingHooked) {
+    receiver.__pcsoWsSpeakingHooked = true;
+    const originalOnWsPacket = receiver.onWsPacket.bind(receiver);
+    receiver.onWsPacket = (packet) => {
+      originalOnWsPacket(packet);
+      try {
+        if (packet?.op !== VoiceOpcodes.Speaking) return;
+        const userId = String(packet?.d?.user_id || '');
+        if (!userId) return;
+        const speakingBits = Number(packet?.d?.speaking || 0);
+        if (speakingBits > 0) {
+          void beginTalk(voiceConnection, guild, userId, 'ws').catch((error) => {
+            logger.warn(`Radio talk monitor: WS speak-start failed: ${error?.message || error}`);
+          });
+        } else {
+          void finalizeTalk(userId).catch((error) => {
+            logger.warn(`Radio talk monitor: WS speak-end failed: ${error?.message || error}`);
+          });
+        }
+      } catch (error) {
+        logger.warn(`Radio talk monitor: WS speaking hook failed: ${error?.message || error}`);
+      }
+    };
+    logger.info('Radio talk monitor: voice WS Speaking opcode hook installed.');
+  }
 }
 
 function scheduleRejoin(reason = 'disconnected') {
@@ -341,14 +393,8 @@ export async function joinDispatchRadio(client, { force = false } = {}) {
     return { ok: true, reused: true };
   }
 
-  // Force rejoin while already healthy only wastes reconnects and causes leave/join flicker.
-  if (force && existing && isHealthyRadioConnection(existing)) {
-    connection = existing;
-    clearRejoinTimer();
-    wireConnectionLifecycle(existing, channel.guild);
-    logger.info('Radio talk monitor: force join skipped; already Ready — rebound talk listeners.');
-    return { ok: true, reused: true };
-  }
+  // force=true always tears down and rejoins undeafened so voice WS Speaking
+  // packets are received (a reused connection may have been joined deafened).
 
   const me = channel.guild.members.me
     || await channel.guild.members.fetchMe().catch(() => null);
@@ -407,7 +453,8 @@ export function startDispatchRadioTalkMonitor(client) {
   replacingConnection = false;
 
   setTimeout(() => {
-    void joinDispatchRadio(client, { force: false }).catch((error) => {
+    // Force a fresh join so the WS Speaking hook is installed on this process's connection.
+    void joinDispatchRadio(client, { force: true }).catch((error) => {
       logger.error('Radio talk monitor: initial join failed', error);
       scheduleRejoin('initial_join_failed');
     });
@@ -415,7 +462,7 @@ export function startDispatchRadioTalkMonitor(client) {
 
   logger.info(
     `Radio talk monitor armed → VC ${DISPATCH_VOICE_CHANNEL_ID} `
-    + '(logs every non-bot transmit; nicknames as callsign | roblox user).',
+    + '(logs every non-bot transmit via UDP + voice WS Speaking; nicknames as callsign | roblox user).',
   );
 
   return () => {
