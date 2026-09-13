@@ -73,6 +73,21 @@ const REPORT_SESSION_PATH = path.join(ROOT, 'data', 'pinellas-report-sessions.js
 const REPORT_CASE_NUMBER_PATH = path.join(ROOT, 'data', 'pinellas-report-case-number.json');
 const BANNER_PATH = path.join(ROOT, 'assets', 'pcso-shift-banner.webp');
 const FOOTER_PATH = path.join(ROOT, 'assets', 'pcso-shift-footer.webp');
+const PCSO_STAR_LOGO_PATH = path.join(ROOT, 'assets', 'pcso-sheriff-star.png');
+
+/** Official-records style palette (CIS-like, PCSO branded). */
+const REPORT_DOC = Object.freeze({
+  titleBlue: '#1a4a8c',
+  barDark: '#4a4a4a',
+  barOlive: '#6b7c3d',
+  barSubject: '#3d3d3d',
+  rowAlt: '#f3f4f6',
+  border: '#c5c9d0',
+  label: '#1f2937',
+  value: '#111827',
+  muted: '#6b7280',
+  page: '#ffffff',
+});
 
 const SLOGO_EMOJI = '<:slogo:1546245229420744804>';
 const ATIME_EMOJI = '<:atime:1546336942785044490>';
@@ -1060,59 +1075,281 @@ function escapeSvg(value) {
     .replaceAll('"', '&quot;');
 }
 
+function reportSubjectName(type, values) {
+  const raw = values.suspect || values.person1 || values.officerName || 'UNKNOWN';
+  return String(raw).replace(/\s+/g, ' ').trim().toUpperCase() || 'UNKNOWN';
+}
+
+function reportMetaLine(type, values) {
+  const bits = [
+    `Ref: ${reportText(values.caseNumber, 40)}`,
+    values.suspect ? `Subject: ${reportText(values.suspect, 80)}` : null,
+    values.location ? `Loc: ${reportText(values.location, 80)}` : null,
+    values.date ? `Date: ${reportText(values.date, 40)}` : null,
+  ].filter(Boolean);
+  return bits.join('  •  ');
+}
+
+function splitReportColumns(lines) {
+  const mid = Math.ceil(lines.length / 2);
+  return [lines.slice(0, mid), lines.slice(mid)];
+}
+
+/** Keep short fields in the 2-col grid; long narrative-style fields get a full-width block. */
+function partitionReportFields(lines) {
+  const grid = [];
+  const blocks = [];
+  for (const entry of lines) {
+    const label = String(entry.label || '');
+    const value = String(entry.value || '');
+    const isLong = /narrative|summary|description|remarks|notes/i.test(label) || value.length > 90;
+    if (isLong) blocks.push(entry);
+    else grid.push(entry);
+  }
+  return { grid, blocks };
+}
+
+async function loadPcsoStarLogoPng() {
+  try {
+    return await sharp(PCSO_STAR_LOGO_PATH)
+      .resize(180, 180, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png()
+      .toBuffer();
+  } catch (error) {
+    logger.warn(`PCSO star logo could not be loaded for report PDF: ${error?.message || error}`);
+    return null;
+  }
+}
+
 async function buildReportDocuments(type, values, submitter) {
   const definition = REPORT_DEFINITIONS[type];
   const lines = reportLines(type, values);
+  const { grid, blocks } = partitionReportFields(lines);
+  const [leftLines, rightLines] = splitReportColumns(grid);
+  const subject = reportSubjectName(type, values);
+  const meta = reportMetaLine(type, values);
+  const generatedAt = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+  const logoPng = await loadPcsoStarLogoPng();
+  const logoDataUri = logoPng
+    ? `data:image/png;base64,${logoPng.toString('base64')}`
+    : null;
+
   const width = 1200;
-  const height = Math.max(1500, 250 + lines.reduce((total, entry) => total + 92 + (wrapDocumentText(entry.value).length - 1) * 28, 0));
-  let y = 210;
+  const rowH = 36;
+  const gridTop = 320;
+  const gridRows = Math.max(leftLines.length, rightLines.length, 1);
+  const gridHeight = gridRows * rowH + 8;
   const svgRows = [];
-  for (const entry of lines) {
-    const wrapped = wrapDocumentText(entry.value);
-    const rowHeight = 72 + (wrapped.length - 1) * 28;
-    svgRows.push(`<rect x="70" y="${y - 38}" width="1060" height="${rowHeight}" rx="8" fill="#f5f6f8" stroke="#c6cbd3"/>`);
-    svgRows.push(`<text x="100" y="${y}" class="label">${escapeSvg(entry.label)}</text>`);
-    wrapped.forEach((line, index) => {
-      svgRows.push(`<text x="100" y="${y + 32 + index * 28}" class="value">${escapeSvg(line)}</text>`);
-    });
-    y += rowHeight + 18;
+
+  for (let i = 0; i < gridRows; i += 1) {
+    const y = gridTop + i * rowH;
+    const fill = i % 2 === 0 ? '#ffffff' : REPORT_DOC.rowAlt;
+    svgRows.push(`<rect x="40" y="${y}" width="1120" height="${rowH}" fill="${fill}" stroke="${REPORT_DOC.border}"/>`);
+
+    const left = leftLines[i];
+    if (left) {
+      svgRows.push(`<text x="52" y="${y + 23}" class="grid-label">${escapeSvg(left.label.toUpperCase())}</text>`);
+      svgRows.push(`<text x="250" y="${y + 23}" class="grid-value">${escapeSvg(String(left.value).toUpperCase().slice(0, 42))}</text>`);
+    }
+    const right = rightLines[i];
+    if (right) {
+      svgRows.push(`<text x="620" y="${y + 23}" class="grid-label">${escapeSvg(right.label.toUpperCase())}</text>`);
+      svgRows.push(`<text x="820" y="${y + 23}" class="grid-value">${escapeSvg(String(right.value).toUpperCase().slice(0, 42))}</text>`);
+    }
   }
+
+  let blockY = gridTop + gridHeight + 24;
+  const blockSvg = [];
+  for (const entry of blocks) {
+    const wrapped = wrapDocumentText(String(entry.value).toUpperCase(), 96);
+    const blockH = 40 + wrapped.length * 22;
+    blockSvg.push(`<rect x="40" y="${blockY}" width="1120" height="${blockH}" fill="#ffffff" stroke="${REPORT_DOC.border}"/>`);
+    blockSvg.push(`<text x="56" y="${blockY + 24}" class="grid-label">${escapeSvg(entry.label.toUpperCase())}</text>`);
+    wrapped.forEach((line, index) => {
+      blockSvg.push(`<text x="56" y="${blockY + 48 + index * 22}" class="grid-value">${escapeSvg(line)}</text>`);
+    });
+    blockY += blockH + 12;
+  }
+
+  const height = Math.max(980, blockY + 180 + 130);
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-    <rect width="100%" height="100%" fill="#ffffff"/>
-    <rect x="0" y="0" width="${width}" height="145" fill="#1f2937"/>
-    <rect x="70" y="172" width="1060" height="4" fill="#d4a017"/>
-    <text x="70" y="62" class="title">PINELLAS COUNTY SHERIFF OFFICE</text>
-    <text x="70" y="112" class="subtitle">${escapeSvg(definition.heading)}</text>
-    <text x="1130" y="62" text-anchor="end" class="small">OFFICIAL REPORT</text>
-    <text x="1130" y="105" text-anchor="end" class="small">Submitted by ${escapeSvg(submitter)}</text>
+    <rect width="100%" height="100%" fill="${REPORT_DOC.page}"/>
+    ${logoDataUri ? `<image href="${logoDataUri}" x="40" y="28" width="88" height="88"/>` : ''}
+    <text x="${logoDataUri ? 150 : 40}" y="58" class="agency">PINELLAS COUNTY SHERIFF'S OFFICE</text>
+    <text x="${logoDataUri ? 150 : 40}" y="88" class="report-title">${escapeSvg(definition.title)} — Official Record</text>
+    <text x="1160" y="48" text-anchor="end" class="tagline">CLEARWATER ROLEPLAY</text>
+    <text x="1160" y="74" text-anchor="end" class="tagline-sub">ONE COUNTY • ONE STANDARD</text>
+
+    <rect x="0" y="140" width="${width}" height="36" fill="${REPORT_DOC.barDark}"/>
+    <text x="40" y="164" class="bar-left">Search Results</text>
+    <text x="1160" y="164" text-anchor="end" class="bar-right">${escapeSvg(meta.slice(0, 90))}</text>
+
+    <rect x="0" y="176" width="${width}" height="36" fill="${REPORT_DOC.barOlive}"/>
+    <text x="40" y="200" class="bar-left">Official ${escapeSvg(definition.title)} record generated for PCSO operations.</text>
+    <text x="1160" y="200" text-anchor="end" class="bar-right">${escapeSvg(generatedAt)}</text>
+
+    <rect x="0" y="220" width="${width}" height="72" fill="${REPORT_DOC.barSubject}"/>
+    <text x="40" y="246" class="subj-head">NAME</text>
+    <text x="320" y="246" class="subj-head">CASE #</text>
+    <text x="560" y="246" class="subj-head">DATE</text>
+    <text x="780" y="246" class="subj-head">OFFICER / DEPUTY</text>
+    <text x="40" y="276" class="subj-val">${escapeSvg(subject.slice(0, 28))}</text>
+    <text x="320" y="276" class="subj-val">${escapeSvg(reportText(values.caseNumber, 28).toUpperCase())}</text>
+    <text x="560" y="276" class="subj-val">${escapeSvg(reportText(values.date, 28).toUpperCase())}</text>
+    <text x="780" y="276" class="subj-val">${escapeSvg(reportText(values.officerName, 28).toUpperCase())}</text>
+
     ${svgRows.join('\n')}
-    <text x="70" y="${height - 45}" class="small">Pinellas County Sheriff Office • Official Report</text>
+    ${blockSvg.join('\n')}
+
+    <rect x="40" y="${blockY + 16}" width="1120" height="110" fill="#fafafa" stroke="${REPORT_DOC.border}"/>
+    <text x="56" y="${blockY + 42}" class="disc-title">IMPORTANT NOTE AND DISCLAIMER</text>
+    <text x="56" y="${blockY + 66}" class="disc-body">This document is an official Pinellas County Sheriff's Office operations record for Clearwater Roleplay.</text>
+    <text x="56" y="${blockY + 88}" class="disc-body">Information is as reported by the submitting deputy/officer (${escapeSvg(String(submitter).replace(/<@!?(\d+)>/g, 'Discord:$1'))}). Verify against CAD before enforcement action.</text>
+    <text x="600" y="${height - 28}" text-anchor="middle" class="end-mark">— End Report —</text>
   <style>
-    .title { font: 700 30px Arial; fill: #e7b329; letter-spacing: 1px; }
-    .subtitle { font: 700 25px Arial; fill: #ffffff; }
-    .small { font: 16px Arial; fill: #e5e7eb; }
-    .label { font: 700 18px Arial; fill: #1f2937; }
-    .value { font: 17px Arial; fill: #374151; }
+    .agency { font: 700 28px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.titleBlue}; }
+    .report-title { font: 700 20px Arial, Helvetica, sans-serif; fill: #111827; }
+    .tagline { font: 700 12px Arial, Helvetica, sans-serif; fill: #111827; letter-spacing: 0.5px; }
+    .tagline-sub { font: 11px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.muted}; }
+    .bar-left { font: 700 14px Arial, Helvetica, sans-serif; fill: #ffffff; }
+    .bar-right { font: 12px Arial, Helvetica, sans-serif; fill: #f3f4f6; }
+    .subj-head { font: 700 12px Arial, Helvetica, sans-serif; fill: #d1d5db; }
+    .subj-val { font: 700 16px Arial, Helvetica, sans-serif; fill: #ffffff; }
+    .grid-label { font: 700 12px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.label}; }
+    .grid-value { font: 12px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.value}; }
+    .disc-title { font: 700 12px Arial, Helvetica, sans-serif; fill: #111827; }
+    .disc-body { font: 11px Arial, Helvetica, sans-serif; fill: #374151; }
+    .end-mark { font: 12px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.muted}; }
   </style></svg>`;
 
   const png = await sharp(Buffer.from(svg)).png().toBuffer();
+
   const pdf = await new Promise((resolve, reject) => {
-    const document = new PDFDocument({ size: 'LETTER', margin: 45 });
+    const doc = new PDFDocument({ size: 'LETTER', margin: 36 });
     const chunks = [];
-    document.on('data', (chunk) => chunks.push(chunk));
-    document.on('end', () => resolve(Buffer.concat(chunks)));
-    document.on('error', reject);
-    document.fillColor('#1f2937').fontSize(18).font('Helvetica-Bold').text('PINELLAS COUNTY SHERIFF OFFICE');
-    document.moveDown(0.3).fillColor('#374151').fontSize(15).text(definition.heading);
-    document.moveDown(0.2).font('Helvetica').fontSize(9).fillColor('#6b7280').text(`Submitted by ${submitter}`);
-    document.moveDown(0.8);
-    for (const entry of lines) {
-      document.font('Helvetica-Bold').fontSize(10).fillColor('#1f2937').text(entry.label);
-      document.font('Helvetica').fontSize(10).fillColor('#374151').text(entry.value, { width: 510 });
-      document.moveDown(0.35);
+    doc.on('data', (chunk) => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const pageW = doc.page.width;
+    const left = 36;
+    const contentW = pageW - 72;
+    let y = 36;
+
+    if (logoPng) {
+      try {
+        doc.image(logoPng, left, y, { width: 52, height: 52 });
+      } catch {
+        // continue without logo
+      }
     }
-    document.end();
+
+    const textLeft = logoPng ? left + 64 : left;
+    doc.fillColor(REPORT_DOC.titleBlue).font('Helvetica-Bold').fontSize(16)
+      .text("PINELLAS COUNTY SHERIFF'S OFFICE", textLeft, y + 4, { width: contentW - 70 });
+    doc.fillColor('#111827').fontSize(12)
+      .text(`${definition.title} — Official Record`, textLeft, y + 26, { width: contentW - 70 });
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8)
+      .text('CLEARWATER ROLEPLAY', left, y + 8, { width: contentW, align: 'right' });
+    doc.fillColor(REPORT_DOC.muted).font('Helvetica').fontSize(7)
+      .text('ONE COUNTY • ONE STANDARD', left, y + 22, { width: contentW, align: 'right' });
+
+    y = 100;
+    doc.rect(0, y, pageW, 22).fill(REPORT_DOC.barDark);
+    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(9).text('Search Results', left, y + 6);
+    doc.font('Helvetica').fontSize(7).text(meta.slice(0, 95), left, y + 7, { width: contentW, align: 'right' });
+
+    y += 22;
+    doc.rect(0, y, pageW, 22).fill(REPORT_DOC.barOlive);
+    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(8)
+      .text(`Official ${definition.title} record generated for PCSO operations.`, left, y + 7);
+    doc.font('Helvetica').fontSize(7).text(generatedAt, left, y + 7, { width: contentW, align: 'right' });
+
+    y += 22;
+    doc.rect(0, y, pageW, 44).fill(REPORT_DOC.barSubject);
+    doc.fillColor('#d1d5db').font('Helvetica-Bold').fontSize(7);
+    doc.text('NAME', left, y + 8);
+    doc.text('CASE #', left + 190, y + 8);
+    doc.text('DATE', left + 320, y + 8);
+    doc.text('OFFICER / DEPUTY', left + 430, y + 8);
+    doc.fillColor('#ffffff').fontSize(10);
+    doc.text(subject.slice(0, 28), left, y + 24);
+    doc.text(reportText(values.caseNumber, 24).toUpperCase(), left + 190, y + 24);
+    doc.text(reportText(values.date, 24).toUpperCase(), left + 320, y + 24);
+    doc.text(reportText(values.officerName, 24).toUpperCase(), left + 430, y + 24);
+
+    y += 52;
+    const colGap = 12;
+    const colW = (contentW - colGap) / 2;
+    const labelW = 88;
+    const valueW = colW - labelW - 8;
+    const pdfRowH = 18;
+
+    for (let i = 0; i < gridRows; i += 1) {
+      if (y > doc.page.height - 120) {
+        doc.addPage();
+        y = 36;
+      }
+      const fill = i % 2 === 0 ? '#ffffff' : REPORT_DOC.rowAlt;
+      doc.rect(left, y, contentW, pdfRowH).fill(fill).strokeColor(REPORT_DOC.border).lineWidth(0.4).stroke();
+
+      const drawCell = (entry, x) => {
+        if (!entry) return;
+        doc.fillColor(REPORT_DOC.label).font('Helvetica-Bold').fontSize(7)
+          .text(String(entry.label).toUpperCase(), x + 4, y + 5, { width: labelW, lineBreak: false });
+        doc.fillColor(REPORT_DOC.value).font('Helvetica').fontSize(7)
+          .text(String(entry.value).toUpperCase(), x + labelW + 4, y + 5, {
+            width: valueW,
+            lineBreak: false,
+            ellipsis: true,
+          });
+      };
+
+      drawCell(leftLines[i], left);
+      drawCell(rightLines[i], left + colW + colGap);
+      y += pdfRowH;
+    }
+
+    y += 14;
+    for (const entry of blocks) {
+      const wrapped = wrapDocumentText(String(entry.value).toUpperCase(), 92);
+      const blockH = Math.max(36, 22 + wrapped.length * 12);
+      if (y + blockH > doc.page.height - 110) {
+        doc.addPage();
+        y = 36;
+      }
+      doc.rect(left, y, contentW, blockH).fill('#ffffff').strokeColor(REPORT_DOC.border).lineWidth(0.5).stroke();
+      doc.fillColor(REPORT_DOC.label).font('Helvetica-Bold').fontSize(8)
+        .text(String(entry.label).toUpperCase(), left + 8, y + 8, { width: contentW - 16 });
+      doc.fillColor(REPORT_DOC.value).font('Helvetica').fontSize(8)
+        .text(wrapped.join('\n'), left + 8, y + 20, { width: contentW - 16 });
+      y += blockH + 10;
+    }
+
+    y += 10;
+    if (y > doc.page.height - 100) {
+      doc.addPage();
+      y = 36;
+    }
+    doc.rect(left, y, contentW, 70).fill('#fafafa').strokeColor(REPORT_DOC.border).lineWidth(0.6).stroke();
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8).text('IMPORTANT NOTE AND DISCLAIMER', left + 8, y + 10);
+    doc.fillColor('#374151').font('Helvetica').fontSize(7)
+      .text(
+        "This document is an official Pinellas County Sheriff's Office operations record for Clearwater Roleplay. "
+        + 'Information is as reported by the submitting deputy/officer. Verify against CAD before any enforcement action. '
+        + `Generated ${generatedAt}.`,
+        left + 8,
+        y + 26,
+        { width: contentW - 16 },
+      );
+
+    doc.fillColor(REPORT_DOC.muted).fontSize(8)
+      .text('— End Report —', left, doc.page.height - 42, { width: contentW, align: 'center' });
+
+    doc.end();
   });
+
   return { png, pdf };
 }
 
