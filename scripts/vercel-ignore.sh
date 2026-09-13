@@ -29,6 +29,11 @@ WEBSITE_PATHS=(
   privacy.html
   terms.html
   wallet.html
+  active-calls.js
+  active-calls.html
+  jail.html
+  admin.js
+  admin.html
   manifest.webmanifest
   styles.css
   internet.css
@@ -43,6 +48,7 @@ WEBSITE_PATHS=(
   site-gate.js
   api
   lib
+  utils/pcsoAdminData.js
   assets
   public
   vercel.json

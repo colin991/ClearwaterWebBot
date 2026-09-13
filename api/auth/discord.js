@@ -19,7 +19,7 @@ export default function handler(request, response) {
       redirect_uri: redirectUri,
       // This lets the site read the signed-in person's Clearwater server
       // profile, including its server-specific banner when they have one.
-      scope: 'identify guilds.members.read',
+      scope: 'identify guilds guilds.members.read',
       state,
     }).toString();
 
