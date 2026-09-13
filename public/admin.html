@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="PCSO admin panel — news, events, and department tools." />
+<meta name="theme-color" content="#090a0c" />
+<meta name="robots" content="noindex,nofollow" />
+<title>Admin Panel | Pinellas County Sheriff's Office</title>
+<link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
+<link rel="stylesheet" href="styles.css?v=20260913-news-events" />
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body class="pcso-home">
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="pcso-header"><div class="pcso-wrap pcso-nav">
+<a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a>
+<nav class="pcso-links" aria-label="Admin navigation">
+  <a href="/">Home</a>
+  <a href="/#news">News &amp; Events</a>
+  <a class="pcso-button pcso-button-red" href="/api/auth/logout">Log out</a>
+</nav>
+</div></header>
+<main id="main" class="pcso-page-main"><div class="pcso-wrap">
+<p class="pcso-eyebrow">Administration</p>
+<h1>PCSO admin panel</h1>
+<p class="pcso-page-lead">Add news posts and upcoming events for the homepage News &amp; Events section.</p>
+<p class="admin-status" data-admin-status>Checking admin access…</p>
+
+<div class="admin-content-grid" data-admin-content hidden>
+  <section class="admin-content-card" aria-labelledby="admin-news-heading">
+    <h2 id="admin-news-heading">News</h2>
+    <form class="admin-form" data-news-form>
+      <label>Title<input name="title" required maxlength="160" placeholder="Headline" /></label>
+      <label>Summary<textarea name="summary" maxlength="400" placeholder="Short preview shown on the homepage card"></textarea></label>
+      <label>Image URL<input name="imageUrl" maxlength="500" placeholder="https://…" /></label>
+      <label>Link URL<input name="linkUrl" maxlength="500" placeholder="Optional read-more link" /></label>
+      <button type="submit">Add news</button>
+    </form>
+    <div class="admin-item-list" data-news-list>
+      <p class="admin-status">None</p>
+    </div>
+  </section>
+
+  <section class="admin-content-card" aria-labelledby="admin-events-heading">
+    <h2 id="admin-events-heading">Events</h2>
+    <form class="admin-form" data-event-form>
+      <label>Title<input name="title" required maxlength="160" placeholder="Event name" /></label>
+      <label>When label<input name="whenLabel" maxlength="160" placeholder="Monday, September 14, 2026 10:00 AM - 02:00 PM" /></label>
+      <label>Location<input name="location" maxlength="240" placeholder="Venue / address" /></label>
+      <label>Description<textarea name="description" maxlength="1000" placeholder="Optional details"></textarea></label>
+      <button type="submit">Add event</button>
+    </form>
+    <div class="admin-item-list" data-event-list>
+      <p class="admin-status">None</p>
+    </div>
+  </section>
+</div>
+
+<p style="margin-top:28px"><a class="pcso-text-link" href="/">← Back to home</a></p>
+</div></main>
+<script src="admin.js?v=20260913-news-events"></script>
+</body>
+</html>

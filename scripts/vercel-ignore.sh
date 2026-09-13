@@ -42,11 +42,15 @@ WEBSITE_PATHS=(
   coming-soon.js
   site-gate.js
   events.html
+  news.html
+  admin.html
   pcso-events.js
+  admin.js
   api
   lib
   assets
   public
+  data
   vercel.json
   scripts/build-site.js
   scripts/vercel-ignore.sh

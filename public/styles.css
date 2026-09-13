@@ -921,35 +921,165 @@ body.home-stage {
 .pcso-about { background:#08090b; color:#c5c8ce; border-top:1px solid #27292e; }.pcso-footer { background:#050607; color:#b7bbc2; border-top:1px solid #27292e; }.pcso-footer .pcso-brand { color:#f1f2f4; }.pcso-footer a:last-child { color:#d1d4d9; }
 @media(max-width:760px){.pcso-links{background:#0d0e10;box-shadow:0 12px 20px rgba(0,0,0,.45)}.pcso-menu{background:#17181b;color:#e8e9eb;border-color:#44474e}}
 
-/* Upcoming events sidebar + events directory (PCSO branding) */
+/* PCSO News & Events block — news carousel left, events right (gray/black brand) */
+.pcso-news {
+  padding: 0 0 72px !important;
+  background: #0e0f11;
+}
+.pcso-news-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 54px;
+  margin-bottom: 28px;
+  padding: 14px 20px;
+  background: #1a1b1e;
+  border-top: 1px solid #2c2e34;
+  border-bottom: 1px solid #2c2e34;
+  color: #f1f2f4;
+  font-size: clamp(15px, 1.6vw, 18px);
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  text-align: center;
+}
 .pcso-news-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
-  gap: 28px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1.7fr) minmax(240px, 320px);
+  gap: 0;
+  align-items: stretch;
 }
+.pcso-news-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 8px 28px 8px 0;
+}
+.pcso-news-carousel-mount { min-height: 220px; }
+.pcso-news-empty,
+.pcso-events-empty {
+  margin: 24px 0;
+  color: #92969f;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.pcso-news-carousel {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  gap: 8px;
+  align-items: center;
+}
+.pcso-news-nav {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #8b9099;
+  font-size: 34px;
+  line-height: 1;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.pcso-news-nav:hover { color: #f1f2f4; }
+.pcso-news-track {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  padding: 4px 2px 10px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.pcso-news-card {
+  flex: 0 0 min(240px, 78%);
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  background: #15161a;
+  border: 1px solid #4a4e56;
+  min-height: 280px;
+}
+.pcso-news-card-image {
+  height: 118px;
+  background: #202227 center / cover no-repeat;
+  border-bottom: 1px solid #2c2e34;
+}
+.pcso-news-card-image-fallback {
+  background:
+    linear-gradient(135deg, #2a2c31 0%, #17181b 55%, #101114 100%);
+}
+.pcso-news-card-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 14px 14px 42px;
+}
+.pcso-news-card-body h3 {
+  margin: 0 0 8px;
+  color: #f1f2f4;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+.pcso-news-card-body p {
+  margin: 0;
+  color: #a4a8b0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.pcso-news-card-more {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #34363b;
+  border: 1px solid #555961;
+  color: #fff !important;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none !important;
+}
+.pcso-news-card-more:hover { background: #45484f; }
+.pcso-news-all,
+.pcso-upcoming-all {
+  display: inline-block;
+  align-self: flex-start;
+  margin-top: 18px;
+  color: #cfd2d7 !important;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  text-decoration: underline !important;
+  text-underline-offset: 3px;
+}
+.pcso-news-all:hover,
+.pcso-upcoming-all:hover { color: #fff !important; }
 .pcso-upcoming {
-  background: #121316;
-  border: 1px solid #2c2e34;
-  border-left: 3px solid #8b9099;
-  padding: 22px 20px 18px;
+  padding: 8px 0 8px 28px;
+  border-left: 1px solid #4a4e56;
 }
 .pcso-upcoming-title {
   margin: 0 0 14px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #676b74;
   color: #f1f2f4;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 800;
-  letter-spacing: .12em;
+  letter-spacing: .08em;
   text-transform: uppercase;
 }
-.pcso-upcoming-list {
-  display: grid;
-  gap: 0;
-}
+.pcso-upcoming-list { display: grid; gap: 0; }
 .pcso-upcoming-item {
-  padding: 14px 0;
+  padding: 16px 0;
   border-bottom: 1px solid #3a3d44;
 }
 .pcso-upcoming-item:last-child { border-bottom: 0; }
@@ -964,7 +1094,7 @@ body.home-stage {
 }
 .pcso-upcoming-when {
   margin: 0 0 4px;
-  color: #d4d7dc;
+  color: #e0e2e6;
   font-size: 13px;
   font-weight: 700;
   line-height: 1.4;
@@ -975,54 +1105,36 @@ body.home-stage {
   font-size: 13px;
   line-height: 1.45;
 }
-.pcso-upcoming-all {
-  display: inline-block;
-  margin-top: 16px;
-  color: #cfd2d7 !important;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  text-decoration: underline !important;
-  text-underline-offset: 3px;
-}
-.pcso-upcoming-all:hover { color: #fff !important; }
-.pcso-events-empty {
-  margin: 8px 0 0;
-  color: #92969f;
-  font-size: 14px;
-  line-height: 1.5;
-}
-.pcso-news-layout .pcso-news-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
+.pcso-upcoming-all { align-self: flex-end; margin-left: auto; }
 
-.pcso-events-page {
+.pcso-events-page,
+.pcso-news-page {
   background: #0b0c0e !important;
   color: #e8e9eb;
 }
-.pcso-events-page .pcso-page-lead {
+.pcso-events-page .pcso-page-lead,
+.pcso-news-page .pcso-page-lead {
   color: #a4a8b0 !important;
+  max-width: 760px;
 }
-.pcso-events-title {
+.pcso-events-title,
+.pcso-news-page-title {
   margin: 0 0 14px !important;
   color: #f1f2f4 !important;
-  font-family: Georgia, serif !important;
+  font-family: Georgia, "Times New Roman", serif !important;
   font-size: clamp(36px, 5vw, 52px) !important;
   font-weight: 600 !important;
   letter-spacing: .04em;
   text-transform: uppercase;
 }
-.pcso-events-page .pcso-page-lead {
-  color: #a4a8b0;
-  max-width: 760px;
-}
-.pcso-events-search {
+.pcso-events-search,
+.pcso-news-search {
   position: relative;
   display: block;
   margin: 28px 0 8px;
 }
-.pcso-events-search-icon {
+.pcso-events-search-icon,
+.pcso-news-search-icon {
   position: absolute;
   left: 14px;
   top: 50%;
@@ -1031,7 +1143,8 @@ body.home-stage {
   font-size: 16px;
   pointer-events: none;
 }
-.pcso-events-search input {
+.pcso-events-search input,
+.pcso-news-search input {
   width: 100%;
   min-height: 48px;
   padding: 12px 14px 12px 42px;
@@ -1042,23 +1155,29 @@ body.home-stage {
   font: inherit;
   font-size: 15px;
 }
-.pcso-events-search input::placeholder { color: #7d828b; }
-.pcso-events-search input:focus {
+.pcso-events-search input::placeholder,
+.pcso-news-search input::placeholder { color: #7d828b; }
+.pcso-events-search input:focus,
+.pcso-news-search input:focus {
   outline: none;
   border-color: #676b74;
   box-shadow: 0 0 0 3px rgba(103, 107, 116, .25);
 }
-.pcso-events-directory {
+.pcso-events-directory,
+.pcso-news-directory {
   display: grid;
   gap: 0;
   margin-top: 8px;
 }
-.pcso-events-row {
+.pcso-events-row,
+.pcso-news-row {
   padding: 28px 0;
   border-bottom: 1px solid #2c2e34;
 }
-.pcso-events-row:first-child { border-top: 1px solid #2c2e34; }
-.pcso-events-row h2 {
+.pcso-events-row:first-child,
+.pcso-news-row:first-child { border-top: 1px solid #2c2e34; }
+.pcso-events-row h2,
+.pcso-news-row h2 {
   margin: 0 0 8px;
   color: #f1f2f4;
   font-size: clamp(20px, 2.4vw, 28px);
@@ -1067,7 +1186,8 @@ body.home-stage {
   text-transform: uppercase;
   line-height: 1.25;
 }
-.pcso-events-when {
+.pcso-events-when,
+.pcso-news-row-date {
   margin: 0 0 6px;
   color: #e0e2e6;
   font-size: 15px;
@@ -1079,19 +1199,111 @@ body.home-stage {
   font-size: 15px;
   line-height: 1.45;
 }
-.pcso-events-desc {
+.pcso-events-desc,
+.pcso-news-row-summary {
   margin: 10px 0 0;
   color: #92969f;
   font-size: 14px;
   line-height: 1.55;
   max-width: 760px;
 }
-.pcso-events-page .pcso-text-link { color: #cfd2d7; }
-.pcso-events-page .pcso-text-link:hover { color: #fff; }
+.pcso-events-page .pcso-text-link,
+.pcso-news-page .pcso-text-link { color: #cfd2d7; }
+.pcso-events-page .pcso-text-link:hover,
+.pcso-news-page .pcso-text-link:hover { color: #fff; }
+
+/* Admin content manager */
+.admin-content-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  margin-top: 22px;
+}
+.admin-content-card {
+  background: #121316;
+  border: 1px solid #2c2e34;
+  padding: 20px;
+}
+.admin-content-card h2 {
+  margin: 0 0 14px;
+  color: #f1f2f4;
+  font-size: 18px;
+}
+.admin-form {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.admin-form label {
+  display: grid;
+  gap: 6px;
+  color: #c4c7ce;
+  font-size: 13px;
+  font-weight: 700;
+}
+.admin-form input,
+.admin-form textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #3a3d44;
+  border-radius: 2px;
+  background: #0d0e10;
+  color: #e8e9eb;
+  font: inherit;
+}
+.admin-form textarea { min-height: 88px; resize: vertical; }
+.admin-form button,
+.admin-item-delete {
+  appearance: none;
+  border: 1px solid #555961;
+  background: #34363b;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+.admin-form button:hover,
+.admin-item-delete:hover { background: #45484f; }
+.admin-item-list {
+  display: grid;
+  gap: 10px;
+}
+.admin-item {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-top: 1px solid #2c2e34;
+}
+.admin-item strong {
+  display: block;
+  color: #f1f2f4;
+  margin-bottom: 4px;
+}
+.admin-item span {
+  color: #92969f;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.admin-item-delete { padding: 8px 10px; flex-shrink: 0; }
+.admin-status {
+  margin: 0 0 12px;
+  color: #aeb2ba;
+  font-size: 14px;
+}
 
 @media (max-width: 980px) {
   .pcso-news-layout { grid-template-columns: 1fr; }
-  .pcso-news-layout .pcso-news-grid { grid-template-columns: 1fr; }
+  .pcso-news-panel { padding: 0 0 24px; }
+  .pcso-upcoming {
+    padding: 24px 0 0;
+    border-left: 0;
+    border-top: 1px solid #4a4e56;
+  }
+  .admin-content-grid { grid-template-columns: 1fr; }
 }
 
 

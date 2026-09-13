@@ -77,6 +77,14 @@
     {
       "source": "/events",
       "destination": "/events.html"
+    },
+    {
+      "source": "/news",
+      "destination": "/news.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/admin.html"
     }
   ],
   "headers": [
