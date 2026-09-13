@@ -2,6 +2,14 @@
   "version": 1,
   "updates": [
     {
+      "id": "pcso-quicklinks-brand-colors",
+      "title": "PCSO quick-links brand colors",
+      "summary": "Restyled the homepage quick-links bar to PCSO navy and red branding, and added a matching accent line above the bar.",
+      "createdAt": "2026-09-13T02:03:17Z",
+      "updatedBy": "colin991",
+      "commit": "957fb14"
+    },
+    {
       "id": "pcso-quick-links-active-calls",
       "title": "PCSO quick links + Melonly active calls",
       "summary": "Added the PCSO quick-links bar under the homepage hero (without Obtain Fingerprints), linked each item to its own page, and wired Active Calls to Melonly CAD calls that have a PCSO unit assigned.",
