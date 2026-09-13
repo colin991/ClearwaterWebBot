@@ -41,10 +41,13 @@ WEBSITE_PATHS=(
   signin.js
   coming-soon.js
   site-gate.js
+  admin.html
+  admin.js
   api
   lib
   assets
   public
+  data
   vercel.json
   scripts/build-site.js
   scripts/vercel-ignore.sh

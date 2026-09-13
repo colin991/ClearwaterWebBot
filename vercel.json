@@ -73,6 +73,10 @@
     {
       "source": "/complaint",
       "destination": "/complaint.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/admin.html"
     }
   ],
   "headers": [

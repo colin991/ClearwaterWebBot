@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="PCSO admin panel — radio talk logs and department tools." />
+<meta name="theme-color" content="#090a0c" />
+<meta name="robots" content="noindex,nofollow" />
+<title>Admin Panel | Pinellas County Sheriff's Office</title>
+<link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
+<link rel="stylesheet" href="styles.css?v=20260913-radio-logs" />
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body class="pcso-home">
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="pcso-header"><div class="pcso-wrap pcso-nav">
+<a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a>
+<nav class="pcso-links" aria-label="Admin navigation">
+  <a href="/">Home</a>
+  <a href="/#news">News &amp; Events</a>
+  <a class="pcso-button pcso-button-red" href="/api/auth/logout">Log out</a>
+</nav>
+</div></header>
+<main id="main" class="pcso-page-main"><div class="pcso-wrap">
+<p class="pcso-eyebrow">Administration</p>
+<h1>PCSO admin panel</h1>
+<p class="pcso-page-lead">Dispatch radio talk logs for PCSO units transmitting in the monitored radio channel.</p>
+<p class="admin-status" data-admin-status>Checking admin access…</p>
+
+<div class="admin-content-grid" data-admin-content hidden>
+  <section class="admin-content-card admin-radio-card" aria-labelledby="admin-radio-heading">
+    <div class="admin-radio-toolbar">
+      <h2 id="admin-radio-heading">Dispatch radio talk logs</h2>
+      <button type="button" class="admin-refresh" data-radio-refresh>Refresh</button>
+    </div>
+    <p class="admin-status" data-radio-meta>Loading…</p>
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Unit</th>
+            <th>Member</th>
+            <th>Started</th>
+            <th>Duration</th>
+          </tr>
+        </thead>
+        <tbody data-radio-body>
+          <tr><td colspan="4">None</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<p style="margin-top:28px"><a class="pcso-text-link" href="/">← Back to home</a></p>
+</div></main>
+<script src="admin.js?v=20260913-radio-logs"></script>
+</body>
+</html>
