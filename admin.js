@@ -268,9 +268,11 @@ async function pollLiveRadio(session) {
         const channel = buffer.getChannelData(0);
         for (let i = 0; i < channel.length; i += 1) channel[i] = samples.getInt16(i * 2, true) / 32768;
         const previousEnd = session.ends.get(frame.speaker) || 0;
-        const start = Math.max(now + 0.08 + (frame.at - firstAt) / 1000, previousEnd);
-        // Never accumulate a delayed replay if network delivery falls behind.
-        if (start > now + 2) continue;
+        // Keep the player close to live. If a slow request left a speaker's
+        // queue in the future, reset that queue instead of replaying stale audio.
+        const queuedEnd = previousEnd > now + 0.35 ? now : previousEnd;
+        const start = Math.max(now + 0.02 + (frame.at - firstAt) / 1000, queuedEnd);
+        if (start > now + 0.75) continue;
         const source = session.context.createBufferSource();
         source.buffer = buffer;
         source.connect(session.context.destination);
@@ -282,7 +284,7 @@ async function pollLiveRadio(session) {
     listenStatus.textContent = session.lastAudio && Date.now() - session.lastAudio < 3000
       ? 'Listening live to Dispatch RTO.'
       : 'Connected — waiting for incoming radio audio.';
-    session.timer = setTimeout(() => void pollLiveRadio(session), 400);
+    session.timer = setTimeout(() => void pollLiveRadio(session), 180);
   } catch (error) {
     if (liveRadio === session) stopLiveRadio(error.message || 'Live radio disconnected.');
   }
