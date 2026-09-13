@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-13-radio-allow-fc-leave",
+      "title": "Radio logging yields for Frequency Change greetings",
+      "summary": "While the bot is parked in the dispatch radio VC for transmit logging, it may leave briefly to speak Frequency Change greetings, then return to radio monitoring.",
+      "createdAt": "2026-09-13T14:15:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-13-apply-v2-text-budget",
       "title": "PCSO application submit text limit",
       "summary": "Entry application review posts now keep Components V2 displayable text under Discord's 4000-character limit by showing a capped preview and attaching the full answers as a text file.",

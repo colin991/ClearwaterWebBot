@@ -24,9 +24,45 @@ let clientRef = null;
 let connection = null;
 let rejoinTimer = null;
 let stopping = false;
+/** When set, another feature (e.g. Frequency Change greeting) owns the guild VC. */
+let paused = false;
+let pauseReason = null;
 
 /** userId -> { startedAt: number, memberSnapshot } */
 const activeTalk = new Map();
+
+/** True while radio monitoring is paused so another VC feature can speak. */
+export function isDispatchRadioMonitorPaused() {
+  return paused;
+}
+
+/**
+ * Temporarily stop radio listening / auto-rejoin so another feature can use the
+ * guild voice connection (Frequency Change greetings, etc.).
+ */
+export function pauseDispatchRadioMonitor(reason = 'paused') {
+  paused = true;
+  pauseReason = String(reason || 'paused');
+  if (rejoinTimer) {
+    clearTimeout(rejoinTimer);
+    rejoinTimer = null;
+  }
+  logger.info(`Radio talk monitor paused (${pauseReason}).`);
+}
+
+/**
+ * Resume radio listening after another feature finishes with the guild VC.
+ */
+export function resumeDispatchRadioMonitor(reason = 'resumed') {
+  const wasPaused = paused;
+  paused = false;
+  pauseReason = null;
+  if (!wasPaused) return;
+  logger.info(`Radio talk monitor resumed (${reason}).`);
+  if (!stopping && clientRef) {
+    scheduleRejoin(`resume:${reason}`);
+  }
+}
 
 function callsignForMember(member) {
   const parsed = parseDeputyNickname(
@@ -129,10 +165,11 @@ function bindSpeakingListeners(voiceConnection, guild) {
 }
 
 function scheduleRejoin(reason = 'disconnected') {
-  if (stopping || rejoinTimer) return;
+  if (stopping || paused || rejoinTimer) return;
   logger.info(`Radio talk monitor: scheduling rejoin (${reason}) in ${REJOIN_DELAY_MS}ms.`);
   rejoinTimer = setTimeout(() => {
     rejoinTimer = null;
+    if (stopping || paused) return;
     void joinDispatchRadio(clientRef, { force: true }).catch((error) => {
       logger.error('Radio talk monitor: rejoin failed', error);
       scheduleRejoin('rejoin_failed');
@@ -143,7 +180,7 @@ function scheduleRejoin(reason = 'disconnected') {
 
 function wireConnectionLifecycle(voiceConnection, guild) {
   voiceConnection.on('stateChange', (oldState, newState) => {
-    if (stopping) return;
+    if (stopping || paused) return;
     if (newState.status === VoiceConnectionStatus.Destroyed) {
       connection = null;
       scheduleRejoin('destroyed');
@@ -172,6 +209,10 @@ export async function joinDispatchRadio(client, { force = false } = {}) {
   if (!client) return { ok: false, reason: 'no_client' };
   clientRef = client;
   stopping = false;
+  if (paused) {
+    logger.info(`Radio talk monitor: join skipped while paused (${pauseReason || 'paused'}).`);
+    return { ok: false, reason: 'paused' };
+  }
 
   const channel = await resolveRadioChannel(client);
   if (!channel) return { ok: false, reason: 'channel_unavailable' };
@@ -252,6 +293,8 @@ export function startDispatchRadioTalkMonitor(client) {
 
   return () => {
     stopping = true;
+    paused = false;
+    pauseReason = null;
     if (rejoinTimer) {
       clearTimeout(rejoinTimer);
       rejoinTimer = null;
