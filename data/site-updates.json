@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-13-vercel-hobby-function-limit",
+      "title": "Stay under Vercel Hobby serverless limit",
+      "summary": "PCSO and bot API routes now share dynamic handlers so production deploys stay within the Hobby plan's 12 serverless function limit.",
+      "createdAt": "2026-09-13T14:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-13-radio-allow-fc-leave",
       "title": "Radio logging yields for Frequency Change greetings",
       "summary": "While the bot is parked in the dispatch radio VC for transmit logging, it may leave briefly to speak Frequency Change greetings, then return to radio monitoring.",
