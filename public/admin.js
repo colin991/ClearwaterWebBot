@@ -16,11 +16,47 @@ const refreshBtn = document.querySelector('[data-radio-refresh]');
 
 let people = [];
 
+const MAX_CONTENT_IMAGE_BYTES = 5 * 1024 * 1024;
+
 const escapeHtml = (value) => String(value ?? '')
   .replaceAll('&', '&amp;')
   .replaceAll('<', '&lt;')
   .replaceAll('>', '&gt;')
   .replaceAll('"', '&quot;');
+
+function safeContentImageName(file, fallback = 'image.jpg') {
+  return String(file?.name || fallback)
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '') || fallback;
+}
+
+async function resolveContentImageUrl(form, folder) {
+  const fileInput = form?.querySelector('input[name="image"]');
+  const file = fileInput?.files?.[0];
+  const typedUrl = String(new FormData(form).get('imageUrl') || '').trim();
+  if (!file) return typedUrl;
+
+  if (file.size > MAX_CONTENT_IMAGE_BYTES) {
+    throw new Error('Image must be 5 MB or smaller.');
+  }
+  if (!/^image\/(png|jpeg|jpg|webp|gif)$/i.test(file.type || '')) {
+    throw new Error('Use a PNG, JPEG, WebP, or GIF image.');
+  }
+
+  const upload = globalThis.VercelBlob?.upload;
+  if (typeof upload !== 'function') {
+    throw new Error('Image upload is unavailable. Paste an Image URL instead, or configure Vercel Blob.');
+  }
+
+  const blob = await upload(`pcso-content/${folder}/${safeContentImageName(file)}`, file, {
+    access: 'public',
+    handleUploadUrl: '/api/pcso/content-upload',
+    contentType: file.type || 'image/jpeg',
+  });
+  if (!blob?.url) throw new Error('Image upload failed.');
+  return blob.url;
+}
 
 function formatWhen(iso) {
   const date = iso ? new Date(iso) : null;
@@ -110,15 +146,21 @@ function renderList(mount, items, kind) {
     mount.innerHTML = '<p class="admin-status">None</p>';
     return;
   }
-  mount.innerHTML = items.map((item) => `
+  mount.innerHTML = items.map((item) => {
+    const thumb = item.imageUrl
+      ? `<div class="admin-item-thumb" style="background-image:url('${escapeHtml(item.imageUrl)}')" aria-hidden="true"></div>`
+      : '';
+    return `
     <div class="admin-item">
+      ${thumb}
       <div>
         <strong>${escapeHtml(item.title || 'Untitled')}</strong>
         <span>${escapeHtml(item.summary || item.whenLabel || item.location || item.description || '')}</span>
       </div>
       <button type="button" class="admin-item-delete" data-delete-kind="${kind}" data-delete-id="${escapeHtml(item.id)}">Delete</button>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 async function loadContent() {
@@ -229,12 +271,15 @@ newsForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const data = new FormData(newsForm);
   try {
+    const hasFile = Boolean(newsForm.querySelector('input[name="image"]')?.files?.[0]);
+    statusEl.textContent = hasFile ? 'Uploading image…' : 'Saving news…';
+    const imageUrl = await resolveContentImageUrl(newsForm, 'news');
     statusEl.textContent = 'Saving news…';
     await mutate('POST', {
       kind: 'news',
       title: data.get('title'),
       summary: data.get('summary'),
-      imageUrl: data.get('imageUrl'),
+      imageUrl,
       linkUrl: data.get('linkUrl'),
     });
     newsForm.reset();
@@ -248,6 +293,9 @@ eventForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const data = new FormData(eventForm);
   try {
+    const hasFile = Boolean(eventForm.querySelector('input[name="image"]')?.files?.[0]);
+    statusEl.textContent = hasFile ? 'Uploading image…' : 'Saving event…';
+    const imageUrl = await resolveContentImageUrl(eventForm, 'events');
     statusEl.textContent = 'Saving event…';
     await mutate('POST', {
       kind: 'event',
@@ -255,6 +303,7 @@ eventForm?.addEventListener('submit', async (event) => {
       whenLabel: data.get('whenLabel'),
       location: data.get('location'),
       description: data.get('description'),
+      imageUrl,
     });
     eventForm.reset();
     statusEl.textContent = 'Event added.';

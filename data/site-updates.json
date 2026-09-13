@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-13-news-events-image-upload",
+      "title": "News and events image uploads",
+      "summary": "Admin news and event forms now accept an uploaded image (or an image URL). Event images show on the homepage upcoming list and Events page; news images continue on the homepage carousel and News page.",
+      "createdAt": "2026-09-13T15:25:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-13-radio-vc-rejoin-loop",
       "title": "Stabilize PCSO radio VC logging",
       "summary": "Stopped the dispatch radio monitor from destroying and recreating its voice connection on a loop, and skipped rejoins when already connected so talk logs can stay online for the admin panel.",

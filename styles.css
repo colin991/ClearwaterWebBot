@@ -1079,10 +1079,24 @@ body.home-stage {
 }
 .pcso-upcoming-list { display: grid; gap: 0; }
 .pcso-upcoming-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
   padding: 16px 0;
   border-bottom: 1px solid #3a3d44;
 }
+.pcso-upcoming-item:not(.pcso-upcoming-item-has-image) {
+  grid-template-columns: 1fr;
+}
 .pcso-upcoming-item:last-child { border-bottom: 0; }
+.pcso-upcoming-image {
+  width: 72px;
+  height: 72px;
+  background: #1a1c20 center / cover no-repeat;
+  border: 1px solid #2c2e34;
+}
+.pcso-upcoming-copy { min-width: 0; }
 .pcso-upcoming-item h3 {
   margin: 0 0 6px;
   color: #f1f2f4;
@@ -1171,9 +1185,26 @@ body.home-stage {
 }
 .pcso-events-row,
 .pcso-news-row {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
   padding: 28px 0;
   border-bottom: 1px solid #2c2e34;
 }
+.pcso-events-row:not(.pcso-events-row-has-image),
+.pcso-news-row:not(.pcso-news-row-has-image) {
+  grid-template-columns: 1fr;
+}
+.pcso-events-row-image,
+.pcso-news-row-image {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  background: #1a1c20 center / cover no-repeat;
+  border: 1px solid #2c2e34;
+}
+.pcso-events-row-body,
+.pcso-news-row-body { min-width: 0; }
 .pcso-events-row:first-child,
 .pcso-news-row:first-child { border-top: 1px solid #2c2e34; }
 .pcso-events-row h2,
@@ -1278,6 +1309,23 @@ body.home-stage {
   padding: 12px 0;
   border-top: 1px solid #2c2e34;
 }
+.admin-item-thumb {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  background: #1a1c20 center / cover no-repeat;
+  border: 1px solid #2c2e34;
+}
+.admin-form input[type="file"] {
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: #c4c7ce;
+}
+.admin-item > div {
+  flex: 1;
+  min-width: 0;
+}
 .admin-item strong {
   display: block;
   color: #f1f2f4;
@@ -1304,6 +1352,10 @@ body.home-stage {
     border-top: 1px solid #4a4e56;
   }
   .admin-content-grid { grid-template-columns: 1fr; }
+  .pcso-events-row,
+  .pcso-news-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 

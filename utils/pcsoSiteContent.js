@@ -27,7 +27,7 @@ export function normalizePcsoSiteContent(input = {}) {
       title: cleanText(item?.title, 160) || 'Untitled news',
       summary: cleanText(item?.summary || item?.excerpt, 400),
       body: cleanText(item?.body, 4000),
-      imageUrl: cleanText(item?.imageUrl, 500),
+      imageUrl: cleanText(item?.imageUrl, 800),
       linkUrl: cleanText(item?.linkUrl, 500),
       publishedAt: cleanText(item?.publishedAt, 40) || new Date().toISOString(),
     })).slice(0, 100),
@@ -39,6 +39,7 @@ export function normalizePcsoSiteContent(input = {}) {
       endsAt: cleanText(item?.endsAt, 40),
       location: cleanText(item?.location, 240),
       description: cleanText(item?.description, 1000),
+      imageUrl: cleanText(item?.imageUrl, 800),
     })).slice(0, 100),
     updatedAt: cleanText(input.updatedAt, 40) || null,
   };
