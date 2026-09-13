@@ -1135,38 +1135,72 @@ async function buildReportDocuments(type, values, submitter) {
     : null;
 
   const width = 1200;
-  const rowH = 36;
+  const labelColW = 220;
+  const leftLabelX = 52;
+  const leftValueX = 52 + labelColW;
+  const rightLabelX = 620;
+  const rightValueX = 620 + labelColW;
   const gridTop = 320;
   const gridRows = Math.max(leftLines.length, rightLines.length, 1);
-  const gridHeight = gridRows * rowH + 8;
   const svgRows = [];
 
+  const measureCellLines = (entry) => {
+    if (!entry) return { labelLines: [], valueLines: [], height: 56 };
+    // Char budgets sized for ~220px bold / ~340px regular at 11px.
+    const labelLines = wrapDocumentText(String(entry.label).toUpperCase(), 28);
+    const valueLines = wrapDocumentText(String(entry.value).toUpperCase(), 42);
+    const lines = Math.max(labelLines.length, valueLines.length, 1);
+    // Extra padding so sharp/SVG does not clip glyph descenders on wrapped labels.
+    return { labelLines, valueLines, height: Math.max(56, 28 + lines * 18) };
+  };
+
+  const rowMetrics = [];
   for (let i = 0; i < gridRows; i += 1) {
-    const y = gridTop + i * rowH;
+    const left = measureCellLines(leftLines[i]);
+    const right = measureCellLines(rightLines[i]);
+    rowMetrics.push({
+      left,
+      right,
+      height: Math.max(left.height, right.height),
+    });
+  }
+
+  let yCursor = gridTop;
+  for (let i = 0; i < gridRows; i += 1) {
+    const row = rowMetrics[i];
+    const y = yCursor;
+    const rowH = row.height;
     const fill = i % 2 === 0 ? '#ffffff' : REPORT_DOC.rowAlt;
     svgRows.push(`<rect x="40" y="${y}" width="1120" height="${rowH}" fill="${fill}" stroke="${REPORT_DOC.border}"/>`);
 
-    const left = leftLines[i];
-    if (left) {
-      svgRows.push(`<text x="52" y="${y + 23}" class="grid-label">${escapeSvg(left.label.toUpperCase())}</text>`);
-      svgRows.push(`<text x="250" y="${y + 23}" class="grid-value">${escapeSvg(String(left.value).toUpperCase().slice(0, 42))}</text>`);
-    }
-    const right = rightLines[i];
-    if (right) {
-      svgRows.push(`<text x="620" y="${y + 23}" class="grid-label">${escapeSvg(right.label.toUpperCase())}</text>`);
-      svgRows.push(`<text x="820" y="${y + 23}" class="grid-value">${escapeSvg(String(right.value).toUpperCase().slice(0, 42))}</text>`);
-    }
+    const drawSide = (side, labelX, valueX) => {
+      if (!side.labelLines.length && !side.valueLines.length) return;
+      side.labelLines.forEach((line, index) => {
+        svgRows.push(`<text x="${labelX}" y="${y + 22 + index * 18}" class="grid-label">${escapeSvg(line)}</text>`);
+      });
+      side.valueLines.forEach((line, index) => {
+        svgRows.push(`<text x="${valueX}" y="${y + 22 + index * 18}" class="grid-value">${escapeSvg(line)}</text>`);
+      });
+    };
+
+    drawSide(row.left, leftLabelX, leftValueX);
+    drawSide(row.right, rightLabelX, rightValueX);
+    yCursor += rowH;
   }
 
-  let blockY = gridTop + gridHeight + 24;
+  let blockY = yCursor + 24;
   const blockSvg = [];
   for (const entry of blocks) {
+    const labelLines = wrapDocumentText(String(entry.label).toUpperCase(), 90);
     const wrapped = wrapDocumentText(String(entry.value).toUpperCase(), 96);
-    const blockH = 40 + wrapped.length * 22;
+    const blockH = 28 + labelLines.length * 18 + wrapped.length * 20;
     blockSvg.push(`<rect x="40" y="${blockY}" width="1120" height="${blockH}" fill="#ffffff" stroke="${REPORT_DOC.border}"/>`);
-    blockSvg.push(`<text x="56" y="${blockY + 24}" class="grid-label">${escapeSvg(entry.label.toUpperCase())}</text>`);
+    labelLines.forEach((line, index) => {
+      blockSvg.push(`<text x="56" y="${blockY + 22 + index * 18}" class="grid-label">${escapeSvg(line)}</text>`);
+    });
+    const valueTop = blockY + 22 + labelLines.length * 18 + 6;
     wrapped.forEach((line, index) => {
-      blockSvg.push(`<text x="56" y="${blockY + 48 + index * 22}" class="grid-value">${escapeSvg(line)}</text>`);
+      blockSvg.push(`<text x="56" y="${valueTop + index * 20}" class="grid-value">${escapeSvg(line)}</text>`);
     });
     blockY += blockH + 12;
   }
@@ -1186,8 +1220,8 @@ async function buildReportDocuments(type, values, submitter) {
     <text x="1160" y="164" text-anchor="end" class="bar-right">${escapeSvg(meta.slice(0, 90))}</text>
 
     <rect x="0" y="176" width="${width}" height="36" fill="${REPORT_DOC.barOlive}"/>
-    <text x="40" y="200" class="bar-left">Official ${escapeSvg(definition.title)} record generated for PCSO operations.</text>
-    <text x="1160" y="200" text-anchor="end" class="bar-right">${escapeSvg(generatedAt)}</text>
+    <text x="40" y="200" class="bar-left-light">Official ${escapeSvg(definition.title)} record generated for PCSO operations.</text>
+    <text x="1160" y="200" text-anchor="end" class="bar-right-light">${escapeSvg(generatedAt)}</text>
 
     <rect x="0" y="220" width="${width}" height="72" fill="${REPORT_DOC.barSubject}"/>
     <text x="40" y="246" class="subj-head">NAME</text>
@@ -1214,10 +1248,12 @@ async function buildReportDocuments(type, values, submitter) {
     .tagline-sub { font: 11px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.muted}; }
     .bar-left { font: 700 14px Arial, Helvetica, sans-serif; fill: #ffffff; }
     .bar-right { font: 12px Arial, Helvetica, sans-serif; fill: #f3f4f6; }
+    .bar-left-light { font: 700 14px Arial, Helvetica, sans-serif; fill: #1f2937; }
+    .bar-right-light { font: 12px Arial, Helvetica, sans-serif; fill: #374151; }
     .subj-head { font: 700 12px Arial, Helvetica, sans-serif; fill: #d1d5db; }
     .subj-val { font: 700 16px Arial, Helvetica, sans-serif; fill: #ffffff; }
-    .grid-label { font: 700 12px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.label}; }
-    .grid-value { font: 12px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.value}; }
+    .grid-label { font: 700 11px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.label}; }
+    .grid-value { font: 11px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.value}; }
     .disc-title { font: 700 12px Arial, Helvetica, sans-serif; fill: #111827; }
     .disc-body { font: 11px Arial, Helvetica, sans-serif; fill: #374151; }
     .end-mark { font: 12px Arial, Helvetica, sans-serif; fill: ${REPORT_DOC.muted}; }
@@ -1262,9 +1298,9 @@ async function buildReportDocuments(type, values, submitter) {
 
     y += 22;
     doc.rect(0, y, pageW, 22).fill(REPORT_DOC.barOlive);
-    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(8)
+    doc.fillColor('#1f2937').font('Helvetica-Bold').fontSize(8)
       .text(`Official ${definition.title} record generated for PCSO operations.`, left, y + 7);
-    doc.font('Helvetica').fontSize(7).text(generatedAt, left, y + 7, { width: contentW, align: 'right' });
+    doc.fillColor('#374151').font('Helvetica').fontSize(7).text(generatedAt, left, y + 7, { width: contentW, align: 'right' });
 
     y += 22;
     doc.rect(0, y, pageW, 44).fill(REPORT_DOC.barSubject);
@@ -1282,48 +1318,69 @@ async function buildReportDocuments(type, values, submitter) {
     y += 52;
     const colGap = 12;
     const colW = (contentW - colGap) / 2;
-    const labelW = 88;
-    const valueW = colW - labelW - 8;
-    const pdfRowH = 18;
+    // Wide enough for long MVA labels ("PERSON 1: PLATE AND LICENSE #") to wrap cleanly.
+    const labelW = 148;
+    const valueW = Math.max(72, colW - labelW - 8);
+    const textOpts = { lineGap: 2 };
+
+    const measureSideHeight = (entry) => {
+      if (!entry) return 0;
+      const label = String(entry.label || '').toUpperCase();
+      const value = String(entry.value || '').toUpperCase();
+      doc.font('Helvetica-Bold').fontSize(7);
+      const labelH = doc.heightOfString(label, { width: labelW, ...textOpts });
+      doc.font('Helvetica').fontSize(7);
+      const valueH = doc.heightOfString(value, { width: valueW, ...textOpts });
+      return Math.max(labelH, valueH);
+    };
 
     for (let i = 0; i < gridRows; i += 1) {
-      if (y > doc.page.height - 120) {
+      const leftEntry = leftLines[i];
+      const rightEntry = rightLines[i];
+      const contentH = Math.max(measureSideHeight(leftEntry), measureSideHeight(rightEntry), 9);
+      // Padding above/below so wrapped lines and glyph descenders are not clipped by the row box.
+      const pdfRowH = Math.ceil(contentH + 16);
+
+      if (y + pdfRowH > doc.page.height - 120) {
         doc.addPage();
         y = 36;
       }
       const fill = i % 2 === 0 ? '#ffffff' : REPORT_DOC.rowAlt;
       doc.rect(left, y, contentW, pdfRowH).fill(fill).strokeColor(REPORT_DOC.border).lineWidth(0.4).stroke();
 
-      const drawCell = (entry, x) => {
+      const drawSide = (entry, x) => {
         if (!entry) return;
+        const label = String(entry.label || '').toUpperCase();
+        const value = String(entry.value || '').toUpperCase();
         doc.fillColor(REPORT_DOC.label).font('Helvetica-Bold').fontSize(7)
-          .text(String(entry.label).toUpperCase(), x + 4, y + 5, { width: labelW, lineBreak: false });
+          .text(label, x + 4, y + 8, { width: labelW, ...textOpts });
         doc.fillColor(REPORT_DOC.value).font('Helvetica').fontSize(7)
-          .text(String(entry.value).toUpperCase(), x + labelW + 4, y + 5, {
-            width: valueW,
-            lineBreak: false,
-            ellipsis: true,
-          });
+          .text(value, x + labelW + 4, y + 8, { width: valueW, ...textOpts });
       };
 
-      drawCell(leftLines[i], left);
-      drawCell(rightLines[i], left + colW + colGap);
+      drawSide(leftEntry, left);
+      drawSide(rightEntry, left + colW + colGap);
       y += pdfRowH;
     }
 
     y += 14;
     for (const entry of blocks) {
-      const wrapped = wrapDocumentText(String(entry.value).toUpperCase(), 92);
-      const blockH = Math.max(36, 22 + wrapped.length * 12);
+      const label = String(entry.label || '').toUpperCase();
+      const value = String(entry.value || '').toUpperCase();
+      doc.font('Helvetica-Bold').fontSize(8);
+      const labelH = doc.heightOfString(label, { width: contentW - 16, lineGap: 2 });
+      doc.font('Helvetica').fontSize(8);
+      const valueH = doc.heightOfString(value, { width: contentW - 16, lineGap: 2 });
+      const blockH = Math.ceil(16 + labelH + 6 + valueH);
       if (y + blockH > doc.page.height - 110) {
         doc.addPage();
         y = 36;
       }
       doc.rect(left, y, contentW, blockH).fill('#ffffff').strokeColor(REPORT_DOC.border).lineWidth(0.5).stroke();
       doc.fillColor(REPORT_DOC.label).font('Helvetica-Bold').fontSize(8)
-        .text(String(entry.label).toUpperCase(), left + 8, y + 8, { width: contentW - 16 });
+        .text(label, left + 8, y + 8, { width: contentW - 16, lineGap: 2 });
       doc.fillColor(REPORT_DOC.value).font('Helvetica').fontSize(8)
-        .text(wrapped.join('\n'), left + 8, y + 20, { width: contentW - 16 });
+        .text(value, left + 8, y + 8 + labelH + 4, { width: contentW - 16, lineGap: 2 });
       y += blockH + 10;
     }
 
