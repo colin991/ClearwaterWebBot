@@ -4,22 +4,15 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
-  FileBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   MessageFlags,
-  ModalBuilder,
   PermissionFlagsBits,
   SeparatorBuilder,
   SeparatorSpacingSize,
   StringSelectMenuBuilder,
   TextDisplayBuilder,
-  TextInputBuilder,
-  TextInputStyle,
 } from 'discord.js';
-import { randomBytes } from 'node:crypto';
-import PDFDocument from 'pdfkit';
-import sharp from 'sharp';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -52,7 +45,6 @@ export const PINELLAS_ON_DUTY_ROLE_ID = '1514462780575715418';
 export const PINELLAS_SHIFT_VC_GUILD_ID = '1514026810348671026';
 export const PINELLAS_SHIFT_REFRESH_MS = 30_000;
 
-export const PINELLAS_SHIFT_REPORTS_ID = 'pcs:shift:reports';
 export const PINELLAS_SHIFT_LOOKUP_ID = 'pcs:shift:lookup';
 
 export const PINELLAS_SHIFT_REPORT_CHANNELS = Object.freeze({
@@ -69,11 +61,8 @@ export const PINELLAS_MELONLY_DEPARTMENT_ID = '7470323914464301056';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const STORE_PATH = path.join(ROOT, 'data', 'pinellas-shift-panel.json');
 const MEMBER_MAP_PATH = path.join(ROOT, 'data', 'pinellas-melonly-members-v2.json');
-const REPORT_SESSION_PATH = path.join(ROOT, 'data', 'pinellas-report-sessions.json');
-const REPORT_CASE_NUMBER_PATH = path.join(ROOT, 'data', 'pinellas-report-case-number.json');
 const BANNER_PATH = path.join(ROOT, 'assets', 'pcso-shift-banner.webp');
 const FOOTER_PATH = path.join(ROOT, 'assets', 'pcso-shift-footer.webp');
-
 const SLOGO_EMOJI = '<:slogo:1546245229420744804>';
 const ATIME_EMOJI = '<:atime:1546336942785044490>';
 const SHEET_EMOJI = '<:sheet:1546293540827701329>';
@@ -82,67 +71,8 @@ const SHEET_EMOJI = '<:sheet:1546293540827701329>';
 const memberDiscordCache = new Map();
 /** discordId → Melonly memberId */
 const discordMemberCache = new Map();
-const reportSessions = new Map();
-let reportCaseQueue = Promise.resolve();
 /** Last successful on-duty snapshot (used when Melonly 429s). */
 let lastSnapshot = null;
-
-const REPORT_OPTIONS = Object.freeze([
-  { label: 'OIS Report', value: 'ois' },
-  { label: 'MVA Report', value: 'mva' },
-  { label: 'Arrest Report', value: 'arrest' },
-  { label: 'Citation Report', value: 'citation' },
-  { label: 'Warrant Log', value: 'warrant' },
-]);
-
-const REPORT_DEFINITIONS = Object.freeze({
-  ois: {
-    title: 'OIS Report',
-    heading: 'Pinellas County Sheriff Office OIS Report',
-    steps: [
-      [['date', 'Date', false], ['time', 'Time (in game)', false], ['location', 'Location', true], ['weather', 'Weather conditions', false]],
-      [['badge', 'Badge #', false], ['suspectDescription', 'Suspect Description', true], ['vehicle', 'Vehicle Involved', false], ['weapon', 'Suspect weapon', false]],
-      [['roundsAmount', 'Amount of rounds fired', false], ['roundsFired', 'Rounds Fired', false], ['direction', 'Direction of fire', false], ['weaponUsed', 'Weapon Used', false], ['subjectInjuries', 'Subject Injuries', true]],
-      [['deputyInjuries', 'Deputy Injuries', true], ['propertyDamage', 'Property Damage', true], ['narrative', 'Narrative Scene Summary', true]],
-    ],
-  },
-  mva: {
-    title: 'MVA Report',
-    heading: 'Pinellas County Sheriff Office MVA Report',
-    steps: [
-      [['date', 'Date', false], ['time', 'Time (in game)', false], ['location', 'Location', true], ['weather', 'Weather conditions', false]],
-      [['badge', 'Deputy Reporting Badge #', false], ['citation', 'Any Citation given?', false], ['arrest', 'Any Arrest made?', false], ['person1', 'Person 1: name and DOB', true], ['person1Vehicle', 'Person 1: plate and license #', true]],
-      [['person2', 'Person 2: name and DOB', true], ['person2Vehicle', 'Person 2: plate and license #', true], ['injuriesDamage', 'Injuries and vehicle damage', true], ['narrative', 'Narrative Scene Summary', true]],
-    ],
-  },
-  arrest: {
-    title: 'Arrest Report',
-    heading: 'PCSO Arrest Log',
-    steps: [
-      [['assisting', 'Assisting Officer(s)', true], ['date', 'Date', false], ['time', 'Time of Arrest', false], ['suspect', 'Suspect', true]],
-      [['suspectDescription', 'Suspect Description', true], ['background', 'Background clear', false], ['cad', 'Registered in CAD', false], ['charges', 'Charges', true], ['vehicleColor', 'Vehicle Color', false]],
-      [['vehicleModel', 'Vehicle Exact Model', false], ['vehiclePlate', 'Vehicle Plate', false], ['narrative', 'Detailed Scene Narrative', true]],
-    ],
-  },
-  citation: {
-    title: 'Citation Report',
-    heading: 'PCSO Citation Log',
-    steps: [
-      [['assisting', 'Assisting Officer(s)', true], ['date', 'Date', false], ['time', 'Time of Citation', false], ['location', 'Location', true]],
-      [['citedFor', 'Cited for', true], ['suspect', 'Suspect', true], ['background', 'Background clear', false], ['cad', 'Registered in CAD', false], ['vehicleColor', 'Vehicle Color', false]],
-      [['vehicleModel', 'Vehicle Exact Model', false], ['vehiclePlate', 'Vehicle Plate', false], ['narrative', 'Detailed Scene Narrative', true]],
-    ],
-  },
-  warrant: {
-    title: 'Warrant Arrest Log',
-    heading: 'PCSO Warrant Arrest Log',
-    steps: [
-      [['assisting', 'Assisting Deputy(s)', true], ['date', 'Date', false], ['time', 'Time of Arrest', false], ['warrantType', 'Warrant Type (Search / Arrest)', false]],
-      [['warrantNumber', 'Warrant Number', false], ['charges', 'Charge(s)', true], ['suspect', 'Suspect', true], ['background', 'Background clear (Y / N)', false], ['cad', 'Registered in CAD (Y / N)', false]],
-      [['gang', 'Gang Documented (Y / N)', false], ['vehicleColor', 'Vehicle Color', false], ['vehicleModel', 'Vehicle Exact Model', false], ['vehiclePlate', 'Vehicle Plate', false], ['narrative', 'Detailed Scene Narrative', true]],
-    ],
-  },
-});
 
 const CORPORAL_INDEX = PINELLAS_RANKS.findIndex((rank) => rank.name === 'Corporal');
 
@@ -189,7 +119,9 @@ export async function resolvePinellasMelonlyMemberDiscordId(apiKey, memberId) {
   await loadMemberDiscordMap();
   if (memberDiscordCache.has(id)) return memberDiscordCache.get(id);
 
-  const discordId = await fetchMelonlyMemberDiscordId(apiKey, id);
+  const discordId = await fetchMelonlyMemberDiscordId(apiKey, id, {
+    departmentId: PINELLAS_MELONLY_DEPARTMENT_ID,
+  });
   if (discordId) await rememberMemberDiscord(id, discordId);
   return discordId;
 }
@@ -829,19 +761,6 @@ async function buildShiftPanelPayload(snapshot, { includeFiles = true } = {}) {
     )
     .addSeparatorComponents(
       new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large),
-    )
-    .addActionRowComponents(
-      new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId(PINELLAS_SHIFT_REPORTS_ID)
-          .setPlaceholder('Reports')
-          .setMinValues(1)
-          .setMaxValues(1)
-          .addOptions(REPORT_OPTIONS.map((option) => ({
-            label: option.label,
-            value: option.value,
-          }))),
-      ),
     );
 
   const options = lookupOptions(deputies);
@@ -894,335 +813,6 @@ async function buildShiftPanelPayload(snapshot, { includeFiles = true } = {}) {
   };
   if (includeFiles && files.length) payload.files = files;
   return payload;
-}
-
-function reportModalId(type, step, token) {
-  return `pcs:shift:report:${type}:${step}:${token}`;
-}
-
-async function persistReportSessions() {
-  const now = Date.now();
-  const stored = Object.fromEntries([...reportSessions.entries()]
-    .filter(([, session]) => now - session.updatedAt < 30 * 60 * 1000));
-  await mkdir(path.dirname(REPORT_SESSION_PATH), { recursive: true });
-  await writeFile(REPORT_SESSION_PATH, `${JSON.stringify(stored)}\n`, 'utf8');
-}
-
-async function restoreReportSession(token) {
-  const existing = reportSessions.get(token);
-  if (existing) return existing;
-  try {
-    const stored = JSON.parse(await readFile(REPORT_SESSION_PATH, 'utf8')) || {};
-    const session = stored[token];
-    if (session && Date.now() - Number(session.updatedAt || 0) < 30 * 60 * 1000) {
-      reportSessions.set(token, session);
-      return session;
-    }
-  } catch {
-    // No saved form state yet.
-  }
-  return null;
-}
-
-async function restoreReportSessionForUser(userId) {
-  for (const session of reportSessions.values()) {
-    if (session.mode === 'dm' && session.userId === userId) return session;
-  }
-  try {
-    const stored = JSON.parse(await readFile(REPORT_SESSION_PATH, 'utf8')) || {};
-    const found = Object.entries(stored).find(([, session]) => session.mode === 'dm' && session.userId === userId);
-    if (found) {
-      reportSessions.set(found[0], found[1]);
-      return found[1];
-    }
-  } catch {
-    // No saved form state yet.
-  }
-  return null;
-}
-
-async function nextReportCaseNumber() {
-  const run = reportCaseQueue.then(async () => {
-    let next = 1;
-    try {
-      const stored = JSON.parse(await readFile(REPORT_CASE_NUMBER_PATH, 'utf8')) || {};
-      next = Math.max(1, Number(stored.next) || 1);
-    } catch {
-      // Start the case number sequence at PCSO-0001.
-    }
-    await mkdir(path.dirname(REPORT_CASE_NUMBER_PATH), { recursive: true });
-    await writeFile(REPORT_CASE_NUMBER_PATH, `${JSON.stringify({ next: next + 1 })}\n`, 'utf8');
-    return `PCSO-${String(next).padStart(4, '0')}`;
-  });
-  reportCaseQueue = run.catch(() => {});
-  return run;
-}
-
-function buildReportModal(type, step, token) {
-  const definition = REPORT_DEFINITIONS[type];
-  const modal = new ModalBuilder()
-    .setCustomId(reportModalId(type, step, token))
-    .setTitle(`${definition.title} (${step + 1}/${definition.steps.length})`);
-
-  for (const [fieldId, label, paragraph] of definition.steps[step]) {
-    modal.addComponents(new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId(fieldId)
-        .setLabel(label.slice(0, 45))
-        .setStyle(paragraph ? TextInputStyle.Paragraph : TextInputStyle.Short)
-        .setRequired(true)
-        .setMaxLength(paragraph ? 1000 : 200),
-    ));
-  }
-  return modal;
-}
-
-function reportText(value, maxLength = 1000) {
-  const cleaned = String(value || '').replace(/[`]/g, '').trim();
-  if (!cleaned) return 'N/A';
-  return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength - 1)}…` : cleaned;
-}
-
-const PCSO_REPORT_BANNER_URL = 'https://media.discordapp.net/attachments/1546222659824787596/1548460178737995816/pcso_banner_2.png?format=webp&quality=lossless&width=1536&height=478';
-const PCSO_REPORT_FOOTER_URL = 'https://cdn.discordapp.com/attachments/1514443793607295058/1546271578147524618/pcso-application-footer.png';
-
-function reportBody(type, values, submitter) {
-  const definition = REPORT_DEFINITIONS[type];
-  const lines = reportLines(type, values);
-  const common = `> Case ID: ${reportText(values.caseNumber, 40)}\n> Date: ${reportText(values.date, 120)}\n> Time (In game): ${reportText(values.time, 120)}\n> Location: ${reportText(values.location, 250)}`;
-  const sections = {
-    mva: `# <:info:1517217516706074634> MVA Report\n\n${common}\n\n> Deputy Reporting Badge #: ${reportText(values.badge, 120)}\n> Any Citation given: ${reportText(values.citation, 120)}\n> Any Arrest made: ${reportText(values.arrest, 120)}\n\n**Person 1 Information**\n\n> Name and DOB: ${reportText(values.person1)}\n> Plate and license #: ${reportText(values.person1Vehicle)}\n\n**Person 2 Information**\n\n> Name and DOB: ${reportText(values.person2)}\n> Plate and license #: ${reportText(values.person2Vehicle)}\n\n**Scene Summary**\n\n> Injuries and vehicle damage: ${reportText(values.injuriesDamage)}\n> Narrative Scene Summary: ${reportText(values.narrative)}\n\n*Signed:* ${reportText(values.officerName, 120)}`,
-    arrest: `# <:info:1517217516706074634> Arrest Report\n\n${common}\n\n> Suspect Name: ${reportText(values.suspect)}\n> Charges: ${reportText(values.charges)}\n\n> Suspect Description: ${reportText(values.suspectDescription)}\n> Vehicle: ${reportText(values.vehicleColor)} ${reportText(values.vehicleModel)}\n> Vehicle Plate: ${reportText(values.vehiclePlate)}\n> Background clear: ${reportText(values.background)}\n> Registered in CAD: ${reportText(values.cad)}\n\n**Scene Summary**\n\n> ${reportText(values.narrative)}\n\n*Signed:* ${reportText(values.officerName, 120)}`,
-  };
-  if (sections[type]) return sections[type].slice(0, 3900);
-  const details = lines.map(({ label, value }) => `> **${label}:** ${value}`).join('\n');
-  return `# <:info:1517217516706074634> ${definition.title}\n\n${details}\n\n*Submitted by:* ${submitter}`.slice(0, 3900);
-}
-
-function buildReportPayload(type, values, submitter, documents) {
-  const container = new ContainerBuilder()
-    .clearAccentColor()
-    .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(PCSO_REPORT_BANNER_URL)))
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(reportBody(type, values, submitter)))
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-    .addFileComponents(new FileBuilder().setURL('attachment://pcso-report.pdf'))
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-    .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(PCSO_REPORT_FOOTER_URL)));
-  return {
-    components: [container],
-    flags: MessageFlags.IsComponentsV2,
-    allowedMentions: { parse: [] },
-    files: [
-      new AttachmentBuilder(documents.png, { name: 'pcso-report.png' }),
-      new AttachmentBuilder(documents.pdf, { name: 'pcso-report.pdf' }),
-    ],
-  };
-}
-
-function reportLines(type, values) {
-  const definition = REPORT_DEFINITIONS[type];
-  const automatic = type === 'ois'
-    ? [{ fieldId: 'officerName', label: 'Involved Deputy', value: values.officerName }, { fieldId: 'signed', label: 'Signed (Deputy Name)', value: values.officerName }]
-    : type === 'mva'
-      ? [{ fieldId: 'officerName', label: 'Deputy Reporting', value: values.officerName }, { fieldId: 'signed', label: 'Signed (Deputy Name)', value: values.officerName }]
-      : type === 'warrant'
-        ? [{ fieldId: 'officerName', label: 'Deputy', value: values.officerName }]
-        : [{ fieldId: 'officerName', label: 'Officer', value: values.officerName }];
-  return [{ fieldId: 'caseNumber', label: 'Case #', value: reportText(values.caseNumber, 40) }, ...automatic, ...definition.steps.flatMap((step) => step.map(([fieldId, label]) => ({
-    fieldId,
-    label,
-    value: reportText(values[fieldId]),
-  })) )];
-}
-
-function wrapDocumentText(value, width = 62) {
-  const words = String(value || '').split(/\s+/).filter(Boolean);
-  const lines = [];
-  let line = '';
-  for (const word of words) {
-    if (line && `${line} ${word}`.length > width) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = line ? `${line} ${word}` : word;
-    }
-  }
-  if (line) lines.push(line);
-  return lines.length ? lines : ['N/A'];
-}
-
-function escapeSvg(value) {
-  return String(value || '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
-}
-
-async function buildReportDocuments(type, values, submitter) {
-  const definition = REPORT_DEFINITIONS[type];
-  const lines = reportLines(type, values);
-  const width = 1200;
-  const height = Math.max(1500, 250 + lines.reduce((total, entry) => total + 92 + (wrapDocumentText(entry.value).length - 1) * 28, 0));
-  let y = 210;
-  const svgRows = [];
-  for (const entry of lines) {
-    const wrapped = wrapDocumentText(entry.value);
-    const rowHeight = 72 + (wrapped.length - 1) * 28;
-    svgRows.push(`<rect x="70" y="${y - 38}" width="1060" height="${rowHeight}" rx="8" fill="#f5f6f8" stroke="#c6cbd3"/>`);
-    svgRows.push(`<text x="100" y="${y}" class="label">${escapeSvg(entry.label)}</text>`);
-    wrapped.forEach((line, index) => {
-      svgRows.push(`<text x="100" y="${y + 32 + index * 28}" class="value">${escapeSvg(line)}</text>`);
-    });
-    y += rowHeight + 18;
-  }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-    <rect width="100%" height="100%" fill="#ffffff"/>
-    <rect x="0" y="0" width="${width}" height="145" fill="#1f2937"/>
-    <rect x="70" y="172" width="1060" height="4" fill="#d4a017"/>
-    <text x="70" y="62" class="title">PINELLAS COUNTY SHERIFF OFFICE</text>
-    <text x="70" y="112" class="subtitle">${escapeSvg(definition.heading)}</text>
-    <text x="1130" y="62" text-anchor="end" class="small">OFFICIAL REPORT</text>
-    <text x="1130" y="105" text-anchor="end" class="small">Submitted by ${escapeSvg(submitter)}</text>
-    ${svgRows.join('\n')}
-    <text x="70" y="${height - 45}" class="small">Pinellas County Sheriff Office • Official Report</text>
-  <style>
-    .title { font: 700 30px Arial; fill: #e7b329; letter-spacing: 1px; }
-    .subtitle { font: 700 25px Arial; fill: #ffffff; }
-    .small { font: 16px Arial; fill: #e5e7eb; }
-    .label { font: 700 18px Arial; fill: #1f2937; }
-    .value { font: 17px Arial; fill: #374151; }
-  </style></svg>`;
-
-  const png = await sharp(Buffer.from(svg)).png().toBuffer();
-  const pdf = await new Promise((resolve, reject) => {
-    const document = new PDFDocument({ size: 'LETTER', margin: 45 });
-    const chunks = [];
-    document.on('data', (chunk) => chunks.push(chunk));
-    document.on('end', () => resolve(Buffer.concat(chunks)));
-    document.on('error', reject);
-    document.fillColor('#1f2937').fontSize(18).font('Helvetica-Bold').text('PINELLAS COUNTY SHERIFF OFFICE');
-    document.moveDown(0.3).fillColor('#374151').fontSize(15).text(definition.heading);
-    document.moveDown(0.2).font('Helvetica').fontSize(9).fillColor('#6b7280').text(`Submitted by ${submitter}`);
-    document.moveDown(0.8);
-    for (const entry of lines) {
-      document.font('Helvetica-Bold').fontSize(10).fillColor('#1f2937').text(entry.label);
-      document.font('Helvetica').fontSize(10).fillColor('#374151').text(entry.value, { width: 510 });
-      document.moveDown(0.35);
-    }
-    document.end();
-  });
-  return { png, pdf };
-}
-
-async function submitShiftReport(interaction, type, values) {
-  const channelId = PINELLAS_SHIFT_REPORT_CHANNELS[type];
-  const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
-  if (!channel?.isTextBased?.()) {
-    throw new Error(`The ${REPORT_DEFINITIONS[type].title} log channel (${channelId}) could not be accessed.`);
-  }
-
-  const submitter = `<@${interaction.user.id}>`;
-  let documents;
-  try {
-    documents = await buildReportDocuments(type, values, submitter);
-  } catch (error) {
-    logger.error(`Pinellas ${type} report document generation failed`, error);
-    throw new Error('The report document could not be generated. Please contact command staff.');
-  }
-  const payload = buildReportPayload(type, values, submitter, documents);
-  let message;
-  try {
-    message = await channel.send(payload);
-  } catch (error) {
-    logger.error(`Pinellas ${type} report could not be posted to channel ${channelId}`, error);
-    throw new Error('The report channel rejected the upload. The bot needs View Channel, Send Messages, and Attach Files permissions there.');
-  }
-  return { channel, message };
-}
-
-function reportQuestions(type) {
-  return REPORT_DEFINITIONS[type].steps.flatMap((step) => step.map(([fieldId, label]) => ({ fieldId, label })));
-}
-
-async function sendNextReportQuestion(message, session) {
-  const questions = reportQuestions(session.type);
-  const question = questions[session.step];
-  if (!question) return false;
-  await message.author.send([
-    `**PCSO ${REPORT_DEFINITIONS[session.type].title}**`,
-    `Question **${session.step + 1} of ${questions.length}**`,
-    '',
-    `**${question.label}**`,
-    'Please reply with your answer below.',
-    'Type `cancel` at any time to stop, or type `N/A` if the question does not apply.',
-  ].join('\n'));
-  return true;
-}
-
-export async function startPinellasShiftReportDm(interaction, type) {
-  const existing = await restoreReportSessionForUser(interaction.user.id);
-  if (existing) throw new Error('You already have a report questionnaire open in your DMs. Finish it or type `cancel`.');
-  const token = randomBytes(5).toString('hex');
-  const session = {
-    mode: 'dm',
-    userId: interaction.user.id,
-    type,
-    step: 0,
-    values: {},
-    updatedAt: Date.now(),
-  };
-  try {
-    await interaction.user.send('Your PCSO report questionnaire is starting. I will ask each question one at a time.');
-    await sendNextReportQuestion({ author: interaction.user }, session);
-  } catch {
-    throw new Error('I could not DM you. Please enable direct messages from server members and try again.');
-  }
-  reportSessions.set(token, session);
-  await persistReportSessions();
-}
-
-export async function handlePinellasShiftReportDm(message) {
-  if (!message?.author || message.author.bot || !message.channel?.isDMBased?.()) return false;
-  const session = await restoreReportSessionForUser(message.author.id);
-  if (!session) return false;
-  const token = [...reportSessions.entries()].find(([, value]) => value === session)?.[0];
-  const answer = String(message.content || '').trim();
-  if (answer.toLowerCase() === 'cancel') {
-    if (token) reportSessions.delete(token);
-    await persistReportSessions();
-    await message.reply('Your PCSO report questionnaire was cancelled.');
-    return true;
-  }
-  const questions = reportQuestions(session.type);
-  const question = questions[session.step];
-  if (!question) return false;
-  session.values[question.fieldId] = answer.slice(0, 1000);
-  session.step += 1;
-  session.updatedAt = Date.now();
-  if (session.step < questions.length) {
-    await persistReportSessions();
-    await sendNextReportQuestion(message, session);
-    return true;
-  }
-
-  if (token) reportSessions.delete(token);
-  await persistReportSessions();
-  session.values.caseNumber = await nextReportCaseNumber();
-  session.values.officerName = message.author.globalName || message.author.username;
-  try {
-    const result = await submitShiftReport({ client: message.client, user: message.author }, session.type, session.values);
-    await message.reply(`Your **${REPORT_DEFINITIONS[session.type].title}** was submitted to <#${result.channel.id}>. Case number: **${session.values.caseNumber}**`);
-  } catch (error) {
-    logger.error(`Pinellas ${session.type} DM report submission failed`, error);
-    await message.reply([
-      'Your answers were received, but I could not post the report to its log channel.',
-      `Reason: ${error?.message || 'unknown posting error'}`,
-      'Please contact command staff if the problem continues.',
-    ].join('\n'));
-  }
-  return true;
 }
 
 /**
@@ -1547,76 +1137,8 @@ export function startPinellasShiftPanel(client) {
 
 export async function handlePinellasShiftPanelInteraction(interaction) {
   const id = String(interaction.customId || '');
-  const reportModalMatch = /^pcs:shift:report:(ois|mva|arrest|citation|warrant):(\d+):([a-f0-9]+)$/.exec(id);
-
-  if (reportModalMatch && interaction.isModalSubmit()) {
-    const [, type, stepToken, token] = reportModalMatch;
-    const step = Number(stepToken);
-    const definition = REPORT_DEFINITIONS[type];
-    const session = await restoreReportSession(token);
-    if (!session || session.userId !== interaction.user.id || session.type !== type || session.step !== step) {
-      await interaction.reply({
-        content: 'That report form expired. Please choose the report again from the shift panel.',
-        flags: MessageFlags.Ephemeral,
-      });
-      return true;
-    }
-
-    for (const [fieldId] of definition.steps[step]) {
-      session.values[fieldId] = interaction.fields.getTextInputValue(fieldId);
-    }
-    session.updatedAt = Date.now();
-
-    if (step + 1 < definition.steps.length) {
-      session.step += 1;
-      await persistReportSessions();
-      await interaction.showModal(buildReportModal(type, session.step, token));
-      return true;
-    }
-
-    reportSessions.delete(token);
-    await persistReportSessions();
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    try {
-      session.values.caseNumber = await nextReportCaseNumber();
-      session.values.officerName = interaction.member?.displayName
-        || interaction.user.globalName
-        || interaction.user.username;
-      const result = await submitShiftReport(interaction, type, session.values);
-      await interaction.editReply({
-        content: `Your **${definition.title}** was submitted to <#${result.channel.id}>.`,
-        allowedMentions: { parse: [] },
-      });
-    } catch (error) {
-      logger.error(`Pinellas ${type} report submission failed`, error);
-      await interaction.editReply({
-        content: 'The report could not be submitted. Please try again or contact command staff.',
-      }).catch(() => {});
-    }
-    return true;
-  }
-
-  if (id !== PINELLAS_SHIFT_REPORTS_ID && id !== PINELLAS_SHIFT_LOOKUP_ID) return false;
+  if (id !== PINELLAS_SHIFT_LOOKUP_ID) return false;
   if (!interaction.isStringSelectMenu()) return false;
-
-  if (id === PINELLAS_SHIFT_REPORTS_ID) {
-    const type = interaction.values?.[0];
-    if (!REPORT_DEFINITIONS[type]) {
-      await interaction.reply({ content: 'That report type is unavailable.', flags: MessageFlags.Ephemeral });
-      return true;
-    }
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    try {
-      await startPinellasShiftReportDm(interaction, type);
-      await interaction.editReply({
-        content: 'I sent the report questions to your DMs. Answer each question there; type `cancel` to stop.',
-        allowedMentions: { parse: [] },
-      });
-    } catch (error) {
-      await interaction.editReply({ content: String(error?.message || 'I could not start the report questionnaire.').slice(0, 1800) });
-    }
-    return true;
-  }
 
   const discordId = interaction.values?.[0];
   if (!discordId || discordId === 'none') {

@@ -1,5 +1,6 @@
 import { SESSION_COOKIE, avatarUrl, bannerUrl, getAuthConfig, parseCookies, readSessionToken, sendJson } from '../../lib/discord-auth.js';
 import { getStaffAccess } from '../../lib/owner-access.js';
+import { hasAdminPanelAccess } from '../../lib/admin-access.js';
 import { proxiedMediaUrl, publicUserId } from '../../lib/privacy.js';
 import { withSiteBadges } from '../../utils/staffRanks.js';
 
@@ -30,6 +31,7 @@ export default async function handler(request, response) {
         bannerColor: user.bannerColor || null,
         bio: user.bio || '',
         owner: staffAccess.allowed,
+        admin: hasAdminPanelAccess(user, staffAccess),
         staffPanel: staffAccess.panelAccess,
         staffRank: staffAccess.staffRank,
         badges: withSiteBadges(staffAccess.badges, user),

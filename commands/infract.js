@@ -6,7 +6,7 @@ import {
 import { buildInitialInfractPanel } from '../utils/pinellasInfract.js';
 import {
   PINELLAS_GUILD_ID,
-  requirePinellasCommandAccess,
+  requirePinellasInfractionAccess,
 } from '../utils/pinellasServer.js';
 
 export default {
@@ -23,7 +23,7 @@ export default {
 
     const issuerMember = interaction.member
       || await interaction.guild.members.fetch(interaction.user.id);
-    requirePinellasCommandAccess(issuerMember);
+    requirePinellasInfractionAccess(issuerMember);
 
     await interaction.reply(await buildInitialInfractPanel());
   },

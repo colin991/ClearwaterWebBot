@@ -398,10 +398,144 @@ export function resolveMelonlyDiscordId(memberOrShift) {
 }
 
 /**
- * Melonly CAD is not part of the public API docs.
+ * Melonly CAD helpers. Call listing is not fully documented publicly, so we probe
+ * known /server/cad paths and normalize whatever shape comes back.
  */
 export async function fetchMelonlyCadForDiscord() {
   return null;
+}
+
+const CAD_CALL_PATHS = [
+  '/server/cad/calls',
+  '/server/cad/calls/active',
+  '/server/calls',
+];
+
+function asCadArray(value) {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== 'object') return [];
+  if (Array.isArray(value.data)) return value.data;
+  if (Array.isArray(value.calls)) return value.calls;
+  if (Array.isArray(value.results)) return value.results;
+  if (Array.isArray(value.items)) return value.items;
+  return [];
+}
+
+function cadUnitLabels(call) {
+  const bags = [
+    call?.units,
+    call?.assignedUnits,
+    call?.attachedUnits,
+    call?.respondingUnits,
+    call?.unit,
+    call?.assigned,
+    call?.officers,
+  ];
+  const labels = [];
+  for (const bag of bags) {
+    if (bag == null) continue;
+    const list = Array.isArray(bag) ? bag : [bag];
+    for (const entry of list) {
+      if (entry == null || entry === '') continue;
+      if (typeof entry === 'string' || typeof entry === 'number') {
+        labels.push(String(entry));
+        continue;
+      }
+      const label = entry.callsign || entry.unit || entry.name || entry.label
+        || entry.badge || entry.username || entry.displayName || entry.id;
+      if (label) labels.push(String(label));
+      if (entry.department) labels.push(String(entry.department));
+      if (entry.agency) labels.push(String(entry.agency));
+    }
+  }
+  return labels;
+}
+
+function cadCallText(call) {
+  return [
+    call?.title, call?.name, call?.code, call?.type, call?.postal,
+    call?.description, call?.location, call?.address, call?.agency,
+    call?.department, call?.departmentId, call?.departmentName,
+    ...cadUnitLabels(call),
+  ].map((value) => String(value || '').toLowerCase()).join(' ');
+}
+
+/** True when Melonly call text/units look like Pinellas / PCSO. */
+export function isPcsoAssignedCadCall(call, pinellasDepartmentId = '') {
+  const text = cadCallText(call);
+  const dept = String(pinellasDepartmentId || '').trim();
+  if (dept && (String(call?.departmentId || '') === dept || String(call?.department?.id || '') === dept)) {
+    return cadUnitLabels(call).length > 0 || /pcso|pinellas|sheriff/.test(text);
+  }
+  if (!/pcso|pinellas|sheriff/.test(text)) return false;
+  const units = cadUnitLabels(call);
+  if (!units.length) {
+    return /assigned|attached|responding/.test(text) || Boolean(call?.units || call?.assignedUnits);
+  }
+  return units.some((unit) => /pcso|pinellas|sheriff|\b\d{1,3}[a-z]-\d+/i.test(unit))
+    || /pcso|pinellas|sheriff/.test(text);
+}
+
+export function normalizeMelonlyCadCall(call) {
+  if (!call || typeof call !== 'object') return null;
+  const units = cadUnitLabels(call);
+  return {
+    id: String(call.id || call.callId || call._id || call.number || ''),
+    title: String(call.title || call.name || call.type || call.code || 'Active call'),
+    code: String(call.code || call.callCode || call.postal || ''),
+    status: String(call.status?.name || call.status?.label || call.status || call.state || 'Active'),
+    location: String(call.location || call.address || call.street || call.place || ''),
+    units,
+  };
+}
+
+/**
+ * Fetch Melonly CAD calls and keep those with a PCSO / Pinellas unit assigned.
+ */
+export async function fetchPcsoAssignedMelonlyCalls(apiKey, {
+  pinellasDepartmentId = '',
+  cacheTtlMs = 15_000,
+} = {}) {
+  const paths = [...CAD_CALL_PATHS];
+  const dept = String(pinellasDepartmentId || '').trim();
+  if (dept) {
+    paths.unshift(`/server/departments/${encodeURIComponent(dept)}/cad/calls`);
+    paths.unshift(`/server/departments/${encodeURIComponent(dept)}/calls`);
+  }
+
+  let lastError = null;
+  let rawCalls = [];
+  let sourcePath = null;
+
+  for (const path of paths) {
+    try {
+      const result = await melonlyFetch(apiKey, path, { cacheTtlMs });
+      const batch = asCadArray(result);
+      sourcePath = path;
+      rawCalls = batch;
+      break;
+    } catch (error) {
+      lastError = error;
+      if (error?.status === 429) throw error;
+    }
+  }
+
+  if (!sourcePath) {
+    const error = lastError || new Error('Melonly CAD calls are unavailable.');
+    error.code = 'cad_unavailable';
+    throw error;
+  }
+
+  const calls = rawCalls
+    .filter((call) => isPcsoAssignedCadCall(call, dept))
+    .map(normalizeMelonlyCadCall)
+    .filter(Boolean);
+
+  return {
+    calls,
+    sourcePath,
+    totalRaw: rawCalls.length,
+  };
 }
 
 export function formatCadStatus(cad) {

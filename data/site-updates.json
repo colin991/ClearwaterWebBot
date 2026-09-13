@@ -2,6 +2,143 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-13-radio-logs-latest-10",
+      "title": "Radio talk logs show latest 10",
+      "summary": "Admin dispatch radio talk logs now show the latest 10 transmits and auto-refresh every 3 seconds.",
+      "createdAt": "2026-09-13T20:42:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-13-active-calls-melonly-bridge",
+      "title": "Fix Active Calls Melonly configuration",
+      "summary": "Active Calls now loads PCSO Melonly CAD data through the bot host bridge (BOT_API_URL), so the page works when Melonly is configured on the bot even if Vercel has no MELONLY_API_KEY.",
+      "createdAt": "2026-09-13T18:16:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-13-radio-ws-speaking",
+      "title": "Detect radio key-ups over voice websocket",
+      "summary": "Dispatch radio talk logging now listens for Discord voice Speaking packets on the websocket, not only UDP audio events, so transmits are recorded even when the bot host cannot receive voice UDP.",
+      "createdAt": "2026-09-13T18:12:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-13-radio-log-all-transmits",
+      "title": "Log all dispatch radio transmits",
+      "summary": "Dispatch radio talk logs now record every non-bot key-up in the radio VC. Unit/member columns parse Clearwater nicknames as callsign | roblox username.",
+      "createdAt": "2026-09-13T18:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-13-radio-logs-bridge",
+      "title": "Fix empty dispatch radio talk logs",
+      "summary": "Admin radio logs no longer silently show empty when the website cannot reach the bot. Reused radio VC connections now rebind talk listeners, and the admin panel surfaces bot bridge/monitor status.",
+      "createdAt": "2026-09-13T17:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-13-discord-embed-gray",
+      "title": "Gray Discord link embed color",
+      "summary": "Discord link previews for the PCSO site now use a gray theme-color accent instead of blue.",
+      "createdAt": "2026-09-13T16:59:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-13-admin-deny-redirect",
+      "title": "Block non-admins from the admin panel",
+      "summary": "Signed-in users without admin access are redirected away from /admin instead of staying on the page with the panel merely hidden.",
+      "createdAt": "2026-09-13T16:57:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-13-news-events-image-upload",
+      "title": "News and events image uploads",
+      "summary": "Admin news and event forms now accept an uploaded image (or an image URL). Event images show on the homepage upcoming list and Events page; news images continue on the homepage carousel and News page.",
+      "createdAt": "2026-09-13T15:25:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-13-radio-vc-rejoin-loop",
+      "title": "Stabilize PCSO radio VC logging",
+      "summary": "Stopped the dispatch radio monitor from destroying and recreating its voice connection on a loop, and skipped rejoins when already connected so talk logs can stay online for the admin panel.",
+      "createdAt": "2026-09-13T15:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-13-pcso-signin-gray-black",
+      "title": "PCSO sign-in gray and black theme",
+      "summary": "Restyled the Discord sign-in page to the site gray/black theme, replacing the blue glow, checkbox, and Discord button accents.",
+      "createdAt": "2026-09-13T14:58:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-13-pcso-signin-branding-oauth",
+      "title": "PCSO sign-in branding and OAuth redirect fix",
+      "summary": "The Discord sign-in page now uses PCSO branding, and OAuth redirect_uri is derived from the request host so login matches the Discord app redirect URL for that domain.",
+      "createdAt": "2026-09-13T14:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-13-vercel-hobby-function-limit",
+      "title": "Stay under Vercel Hobby serverless limit",
+      "summary": "PCSO and bot API routes now share dynamic handlers so production deploys stay within the Hobby plan's 12 serverless function limit.",
+      "createdAt": "2026-09-13T14:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-13-radio-allow-fc-leave",
+      "title": "Radio logging yields for Frequency Change greetings",
+      "summary": "While the bot is parked in the dispatch radio VC for transmit logging, it may leave briefly to speak Frequency Change greetings, then return to radio monitoring.",
+      "createdAt": "2026-09-13T14:15:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-13-apply-v2-text-budget",
+      "title": "PCSO application submit text limit",
+      "summary": "Entry application review posts now keep Components V2 displayable text under Discord's 4000-character limit by showing a capped preview and attaching the full answers as a text file.",
+      "createdAt": "2026-09-13T13:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "pcso-afk-alert-timings",
+      "title": "PCSO AFK alert timings",
+      "summary": "AFK stationarity alerts now fire at 10 minutes for the first warning and 15 minutes for the second warning.",
+      "createdAt": "2026-09-13T13:24:32Z",
+      "updatedBy": "colin991",
+      "commit": "5ee9dbd"
+    },
+    {
+      "id": "pcso-radio-talk-logs",
+      "title": "PCSO radio talk logging",
+      "summary": "The bot now stays in the PCSO dispatch radio voice channel, logs when a PCSO unit transmits and for how long, and shows those talk logs on the admin panel.",
+      "createdAt": "2026-09-13T06:17:53Z",
+      "updatedBy": "colin991",
+      "commit": "be310c2"
+    },
+    {
+      "id": "pcso-quicklinks-dark-theme",
+      "title": "PCSO quick-links dark theme",
+      "summary": "Restyled the homepage quick-links bar to the site gray/black theme with matching gray accent lines on top and bottom.",
+      "createdAt": "2026-09-13T02:13:54Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "pcso-quicklinks-brand-colors",
+      "title": "PCSO quick-links brand colors",
+      "summary": "Restyled the homepage quick-links bar to PCSO navy and red branding, and added a matching accent line above the bar.",
+      "createdAt": "2026-09-13T02:03:17Z",
+      "updatedBy": "colin991",
+      "commit": "957fb14"
+    },
+    {
+      "id": "pcso-quick-links-active-calls",
+      "title": "PCSO quick links + Melonly active calls",
+      "summary": "Added the PCSO quick-links bar under the homepage hero (without Obtain Fingerprints), linked each item to its own page, and wired Active Calls to Melonly CAD calls that have a PCSO unit assigned.",
+      "createdAt": "2026-09-13T01:54:56Z",
+      "updatedBy": "colin991",
+      "commit": "4fff427"
+    },
+    {
       "id": "2026-09-07-pinellas-roster-cleanup",
       "title": "PCSO roster cleanup checks",
       "summary": "The PCSO roster now checks member rank roles every minute, removes assignments when a member no longer has the recorded rank, and expires warning or strike history after four days.",
@@ -11,7 +148,7 @@
     {
       "id": "2026-09-07-pinellas-callsign-sheet-fix",
       "title": "PCSO callsigns update the live roster",
-      "summary": "The -callsign roster workflow now reads and writes the PCSO databaseâ€™s actual rank, callsign, roleplay name, Discord ID, activity, and punishment columns, using the shared operations database.",
+      "summary": "The -callsign roster workflow now reads and writes the PCSO database\u00e2\u20ac\u2122s actual rank, callsign, roleplay name, Discord ID, activity, and punishment columns, using the shared operations database.",
       "updatedBy": "colin991",
       "createdAt": "2026-09-07T17:00:00.000Z"
     },

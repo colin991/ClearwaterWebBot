@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="PCSO admin panel — weekly reports, news, events, and radio talk logs." />
+<meta name="theme-color" content="#6b7078" />
+<meta name="robots" content="noindex,nofollow" />
+<title>Admin Panel | Pinellas County Sheriff's Office</title>
+<link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
+<link rel="stylesheet" href="styles.css?v=20260913-content-images" />
+<style>
+  .admin-toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:18px; }
+  .admin-toolbar input { min-width:min(100%,280px); padding:10px 12px; border:1px solid #d0d5db; border-radius:4px; background:#fff; color:#1d2b38; }
+  .admin-table-wrap { overflow:auto; }
+  .admin-table { width:100%; border-collapse:collapse; font-size:14px; }
+  .admin-table th, .admin-table td { text-align:left; padding:12px 10px; border-bottom:1px solid #dce2e7; vertical-align:top; }
+  .admin-table th { color:#092d55; font-size:12px; letter-spacing:.04em; text-transform:uppercase; }
+  .admin-table td { color:#31404d; }
+  .admin-actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .admin-actions a {
+    display:inline-flex; align-items:center; justify-content:center;
+    padding:8px 12px; border-radius:3px; border:1px solid #555961; background:#34363b; color:#fff !important;
+    font-weight:700; font-size:13px;
+  }
+  .admin-actions a:hover { background:#45484f; }
+  .pcso-home .admin-toolbar input { background:#121316; border-color:#2c2e34; color:#e8e9eb; }
+  .pcso-home .admin-table th { color:#f1f2f4; }
+  .pcso-home .admin-table td { color:#c4c7ce; border-bottom-color:#2c2e34; }
+  .pcso-call-meta { margin-top:4px; font-size:12px; opacity:.75; }
+  .admin-section-gap { margin-top:28px; }
+</style>
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body class="pcso-home">
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="pcso-header"><div class="pcso-wrap pcso-nav">
+<a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a>
+<nav class="pcso-links" aria-label="Admin navigation">
+  <a href="/">Home</a>
+  <a href="/#news">News &amp; Events</a>
+  <a class="pcso-button pcso-button-red" href="/api/auth/logout">Log out</a>
+</nav>
+</div></header>
+<main id="main" class="pcso-page-main"><div class="pcso-wrap">
+<p class="pcso-eyebrow">Administration</p>
+<h1>PCSO admin panel</h1>
+<p class="pcso-page-lead">View deputy callsigns, Melonly shift hours, and weekly PDFs. Manage news posts and upcoming events for the homepage. Review dispatch radio talk logs for PCSO units.</p>
+<p class="admin-status" data-admin-status>Checking admin access…</p>
+
+<div class="pcso-page-card" data-admin-personnel hidden>
+  <div class="admin-toolbar">
+    <h2 style="margin:0">Personnel this week</h2>
+    <input type="search" data-admin-search placeholder="Search callsign, name, or Discord id" aria-label="Search personnel" />
+  </div>
+  <p class="pcso-call-status" data-admin-roster-status hidden></p>
+  <div class="admin-table-wrap" data-admin-table-wrap hidden>
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>Callsign</th>
+          <th>Name</th>
+          <th>Rank</th>
+          <th>Shift hours</th>
+          <th>Reports</th>
+          <th>Weekly PDF</th>
+        </tr>
+      </thead>
+      <tbody data-admin-body></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="admin-content-grid admin-section-gap" data-admin-content hidden>
+  <section class="admin-content-card" aria-labelledby="admin-news-heading">
+    <h2 id="admin-news-heading">News</h2>
+    <form class="admin-form" data-news-form>
+      <label>Title<input name="title" required maxlength="160" placeholder="Headline" /></label>
+      <label>Summary<textarea name="summary" maxlength="400" placeholder="Short preview shown on the homepage card"></textarea></label>
+      <label>Image<input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" /></label>
+      <label>Image URL<input name="imageUrl" maxlength="800" placeholder="Optional if uploading a file — https://…" /></label>
+      <label>Link URL<input name="linkUrl" maxlength="500" placeholder="Optional read-more link" /></label>
+      <button type="submit">Add news</button>
+    </form>
+    <div class="admin-item-list" data-news-list>
+      <p class="admin-status">None</p>
+    </div>
+  </section>
+
+  <section class="admin-content-card" aria-labelledby="admin-events-heading">
+    <h2 id="admin-events-heading">Events</h2>
+    <form class="admin-form" data-event-form>
+      <label>Title<input name="title" required maxlength="160" placeholder="Event name" /></label>
+      <label>When label<input name="whenLabel" maxlength="160" placeholder="Monday, September 14, 2026 10:00 AM - 02:00 PM" /></label>
+      <label>Location<input name="location" maxlength="240" placeholder="Venue / address" /></label>
+      <label>Description<textarea name="description" maxlength="1000" placeholder="Optional details"></textarea></label>
+      <label>Image<input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" /></label>
+      <label>Image URL<input name="imageUrl" maxlength="800" placeholder="Optional if uploading a file — https://…" /></label>
+      <button type="submit">Add event</button>
+    </form>
+    <div class="admin-item-list" data-event-list>
+      <p class="admin-status">None</p>
+    </div>
+  </section>
+</div>
+
+<div class="admin-content-grid admin-section-gap" data-admin-radio hidden>
+  <section class="admin-content-card admin-radio-card" aria-labelledby="admin-radio-heading">
+    <div class="admin-radio-toolbar">
+      <h2 id="admin-radio-heading">Dispatch radio talk logs</h2>
+      <button type="button" class="admin-refresh" data-radio-refresh>Refresh</button>
+    </div>
+    <p class="admin-status" data-radio-meta>Loading…</p>
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Unit</th>
+            <th>Member</th>
+            <th>Started</th>
+            <th>Duration</th>
+          </tr>
+        </thead>
+        <tbody data-radio-body>
+          <tr><td colspan="4">None</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<p style="margin-top:28px"><a class="pcso-text-link" href="/">← Back to home</a></p>
+</div></main>
+<script src="assets/vercel-blob-client.js?v=20260913-content-images"></script>
+<script src="admin.js?v=20260913-radio-logs-10"></script>
+</body>
+</html>

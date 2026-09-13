@@ -1,6 +1,11 @@
 import { AuditLogEvent, ChannelType, PermissionFlagsBits } from 'discord.js';
 import { getVoiceConnection } from '@discordjs/voice';
 import { wasMovedByBot } from './botVoiceMoves.js';
+import { DISPATCH_VOICE_CHANNEL_ID } from './dispatchChannelStatus.js';
+import {
+  pauseDispatchRadioMonitor,
+  resumeDispatchRadioMonitor,
+} from './dispatchRadioTalkMonitor.js';
 import { getActiveHold } from './holdVoiceChat.js';
 import { logger } from './logger.js';
 import { playMp3InVoiceChannel, synthesizeSpeechMp3 } from './vcSpeak.js';
@@ -156,7 +161,15 @@ async function announceFrequencyChange(channel) {
   }
 
   const existing = getVoiceConnection(channel.guild.id);
-  if (existing && existing.joinConfig?.channelId !== channel.id) {
+  const existingChannelId = existing?.joinConfig?.channelId;
+  const leavingRadioForFc = Boolean(
+    existing
+    && existingChannelId
+    && existingChannelId !== channel.id
+    && existingChannelId === DISPATCH_VOICE_CHANNEL_ID,
+  );
+
+  if (existing && existingChannelId !== channel.id && !leavingRadioForFc) {
     // Don't yank the bot out of another live session mid-playback.
     logger.info(
       `Frequency change greeting skipped for #${channel.name}: bot already in another VC.`,
@@ -178,17 +191,32 @@ async function announceFrequencyChange(channel) {
     return { ok: false, reason: 'operations_present' };
   }
 
-  const mp3 = await synthesizeSpeechMp3(FREQUENCY_CHANGE_GREETING);
-  await playMp3InVoiceChannel(channel, channel.guild.voiceAdapterCreator, mp3, {
-    leaveAfter: true,
-    speakDelayMs: FREQUENCY_CHANGE_SPEAK_DELAY_MS,
-  });
+  // Radio talk logging sits in dispatch VC — leaving briefly for FC TTS is fine.
+  if (leavingRadioForFc) {
+    pauseDispatchRadioMonitor('frequency_change_greeting');
+    logger.info(
+      `Frequency change greeting: leaving dispatch radio VC ${DISPATCH_VOICE_CHANNEL_ID} `
+      + `to speak in #${channel.name}.`,
+    );
+  }
 
-  logger.info(
-    `Frequency change greeting played in #${channel.name} (${channel.id}) `
-    + `for ${humans[0]?.user?.tag || humans[0]?.id}.`,
-  );
-  return { ok: true };
+  try {
+    const mp3 = await synthesizeSpeechMp3(FREQUENCY_CHANGE_GREETING);
+    await playMp3InVoiceChannel(channel, channel.guild.voiceAdapterCreator, mp3, {
+      leaveAfter: true,
+      speakDelayMs: FREQUENCY_CHANGE_SPEAK_DELAY_MS,
+    });
+
+    logger.info(
+      `Frequency change greeting played in #${channel.name} (${channel.id}) `
+      + `for ${humans[0]?.user?.tag || humans[0]?.id}.`,
+    );
+    return { ok: true };
+  } finally {
+    if (leavingRadioForFc) {
+      resumeDispatchRadioMonitor('frequency_change_done');
+    }
+  }
 }
 
 /**
