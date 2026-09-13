@@ -1080,6 +1080,51 @@ function reportSubjectName(type, values) {
   return String(raw).replace(/\s+/g, ' ').trim().toUpperCase() || 'UNKNOWN';
 }
 
+/** Calendar date for the report header strip (Eastern). */
+function reportHeaderDate() {
+  return new Date().toLocaleDateString('en-US', {
+    timeZone: 'America/New_York',
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+  });
+}
+
+/** Prefer nickname roleplay name over Discord username/global name. */
+function reportOfficerRoleplayName(values) {
+  const explicit = String(values?.roleplayName || '').trim();
+  if (explicit) return explicit;
+  const parsed = parseDeputyNickname(values?.officerName);
+  if (parsed.roleplayName && parsed.roleplayName !== '—') return parsed.roleplayName;
+  const fallback = String(values?.officerName || '').trim();
+  return fallback || 'UNKNOWN';
+}
+
+async function resolveSubmitterRoleplayName(client, userId, fallbackName = '') {
+  const pinellas = client?.guilds?.cache?.get(PINELLAS_GUILD_ID)
+    || await client?.guilds?.fetch(PINELLAS_GUILD_ID).catch(() => null);
+  const clearwater = config.guildId
+    ? (client?.guilds?.cache?.get(config.guildId)
+      || await client?.guilds?.fetch(config.guildId).catch(() => null))
+    : null;
+
+  const uid = String(userId || '');
+  const pinellasMember = pinellas
+    ? (pinellas.members.cache.get(uid) || await pinellas.members.fetch(uid).catch(() => null))
+    : null;
+  const clearwaterMember = clearwater
+    ? (clearwater.members.cache.get(uid) || await clearwater.members.fetch(uid).catch(() => null))
+    : null;
+
+  const { roleplayName } = resolveDeputyIdentity(pinellasMember, clearwaterMember, null);
+  if (roleplayName && roleplayName !== '—' && roleplayName !== 'Unknown') {
+    return roleplayName;
+  }
+  const parsed = parseDeputyNickname(fallbackName);
+  if (parsed.roleplayName && parsed.roleplayName !== '—') return parsed.roleplayName;
+  return String(fallbackName || 'Unknown').trim() || 'Unknown';
+}
+
 function reportMetaLine(type, values) {
   const bits = [
     `Ref: ${reportText(values.caseNumber, 40)}`,
@@ -1126,9 +1171,10 @@ async function buildReportDocuments(type, values, submitter) {
   const lines = reportLines(type, values);
   const { grid, blocks } = partitionReportFields(lines);
   const [leftLines, rightLines] = splitReportColumns(grid);
-  const subject = reportSubjectName(type, values);
   const meta = reportMetaLine(type, values);
   const generatedAt = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+  const headerDate = reportHeaderDate();
+  const officerRoleplayName = reportOfficerRoleplayName(values);
   const logoPng = await loadPcsoStarLogoPng();
   const logoDataUri = logoPng
     ? `data:image/png;base64,${logoPng.toString('base64')}`
@@ -1224,14 +1270,12 @@ async function buildReportDocuments(type, values, submitter) {
     <text x="1160" y="200" text-anchor="end" class="bar-right-light">${escapeSvg(generatedAt)}</text>
 
     <rect x="0" y="220" width="${width}" height="72" fill="${REPORT_DOC.barSubject}"/>
-    <text x="40" y="246" class="subj-head">NAME</text>
-    <text x="320" y="246" class="subj-head">CASE #</text>
-    <text x="560" y="246" class="subj-head">DATE</text>
-    <text x="780" y="246" class="subj-head">OFFICER / DEPUTY</text>
-    <text x="40" y="276" class="subj-val">${escapeSvg(subject.slice(0, 28))}</text>
-    <text x="320" y="276" class="subj-val">${escapeSvg(reportText(values.caseNumber, 28).toUpperCase())}</text>
-    <text x="560" y="276" class="subj-val">${escapeSvg(reportText(values.date, 28).toUpperCase())}</text>
-    <text x="780" y="276" class="subj-val">${escapeSvg(reportText(values.officerName, 28).toUpperCase())}</text>
+    <text x="40" y="246" class="subj-head">CASE #</text>
+    <text x="360" y="246" class="subj-head">DATE</text>
+    <text x="640" y="246" class="subj-head">OFFICER / DEPUTY</text>
+    <text x="40" y="276" class="subj-val">${escapeSvg(reportText(values.caseNumber, 28).toUpperCase())}</text>
+    <text x="360" y="276" class="subj-val">${escapeSvg(String(headerDate).toUpperCase())}</text>
+    <text x="640" y="276" class="subj-val">${escapeSvg(reportText(officerRoleplayName, 36).toUpperCase())}</text>
 
     ${svgRows.join('\n')}
     ${blockSvg.join('\n')}
@@ -1305,15 +1349,13 @@ async function buildReportDocuments(type, values, submitter) {
     y += 22;
     doc.rect(0, y, pageW, 44).fill(REPORT_DOC.barSubject);
     doc.fillColor('#d1d5db').font('Helvetica-Bold').fontSize(7);
-    doc.text('NAME', left, y + 8);
-    doc.text('CASE #', left + 190, y + 8);
-    doc.text('DATE', left + 320, y + 8);
-    doc.text('OFFICER / DEPUTY', left + 430, y + 8);
+    doc.text('CASE #', left, y + 8);
+    doc.text('DATE', left + 180, y + 8);
+    doc.text('OFFICER / DEPUTY', left + 340, y + 8);
     doc.fillColor('#ffffff').fontSize(10);
-    doc.text(subject.slice(0, 28), left, y + 24);
-    doc.text(reportText(values.caseNumber, 24).toUpperCase(), left + 190, y + 24);
-    doc.text(reportText(values.date, 24).toUpperCase(), left + 320, y + 24);
-    doc.text(reportText(values.officerName, 24).toUpperCase(), left + 430, y + 24);
+    doc.text(reportText(values.caseNumber, 24).toUpperCase(), left, y + 24);
+    doc.text(String(headerDate).toUpperCase(), left + 180, y + 24);
+    doc.text(reportText(officerRoleplayName, 28).toUpperCase(), left + 340, y + 24);
 
     y += 52;
     const colGap = 12;
@@ -1418,14 +1460,29 @@ async function submitShiftReport(interaction, type, values) {
   }
 
   const submitter = `<@${interaction.user.id}>`;
+  const fallbackOfficer = values.officerName
+    || interaction.member?.displayName
+    || interaction.user?.globalName
+    || interaction.user?.username
+    || '';
+  const roleplayName = await resolveSubmitterRoleplayName(
+    interaction.client,
+    interaction.user.id,
+    fallbackOfficer,
+  );
+  const documentValues = {
+    ...values,
+    roleplayName,
+    officerName: roleplayName,
+  };
   let documents;
   try {
-    documents = await buildReportDocuments(type, values, submitter);
+    documents = await buildReportDocuments(type, documentValues, submitter);
   } catch (error) {
     logger.error(`Pinellas ${type} report document generation failed`, error);
     throw new Error('The report document could not be generated. Please contact command staff.');
   }
-  const payload = buildReportPayload(type, values, submitter, documents);
+  const payload = buildReportPayload(type, documentValues, submitter, documents);
   let message;
   try {
     message = await channel.send(payload);
