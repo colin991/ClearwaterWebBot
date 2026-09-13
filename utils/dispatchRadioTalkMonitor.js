@@ -16,8 +16,8 @@ import { relayDispatchStream } from './dispatchLiveAudio.js';
 
 /** Minimum audible press-to-talk burst to keep as a log entry. */
 const MIN_TALK_MS = 150;
-/** Rejoin delay after an unexpected disconnect (not an intentional replace). */
-const REJOIN_DELAY_MS = 12_000;
+/** Short recovery delay after an announcement or unexpected disconnect. */
+const REJOIN_DELAY_MS = 2_000;
 
 let clientRef = null;
 let connection = null;
