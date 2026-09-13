@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-13-active-calls-melonly-bridge",
+      "title": "Fix Active Calls Melonly configuration",
+      "summary": "Active Calls now loads PCSO Melonly CAD data through the bot host bridge (BOT_API_URL), so the page works when Melonly is configured on the bot even if Vercel has no MELONLY_API_KEY.",
+      "createdAt": "2026-09-13T18:16:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-13-radio-ws-speaking",
       "title": "Detect radio key-ups over voice websocket",
       "summary": "Dispatch radio talk logging now listens for Discord voice Speaking packets on the websocket, not only UDP audio events, so transmits are recorded even when the bot host cannot receive voice UDP.",
