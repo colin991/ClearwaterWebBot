@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-13-admin-deny-redirect",
+      "title": "Block non-admins from the admin panel",
+      "summary": "Signed-in users without admin access are redirected away from /admin instead of staying on the page with the panel merely hidden.",
+      "createdAt": "2026-09-13T16:57:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-13-news-events-image-upload",
       "title": "News and events image uploads",
       "summary": "Admin news and event forms now accept an uploaded image (or an image URL). Event images show on the homepage upcoming list and Events page; news images continue on the homepage carousel and News page.",

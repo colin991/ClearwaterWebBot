@@ -227,11 +227,12 @@ async function boot() {
     const sessionResponse = await fetch('/api/auth/me', { cache: 'no-store' });
     const session = await sessionResponse.json().catch(() => ({}));
     if (!session.authenticated) {
-      window.location.href = '/signin?next=/admin';
+      window.location.replace('/signin?next=/admin');
       return;
     }
+    // Do not leave non-admins on /admin with sections merely hidden — send them away.
     if (!session.user?.admin && !session.user?.owner) {
-      statusEl.textContent = 'You need Discord Administrator (or PCSO command/admin) permission to use this panel.';
+      window.location.replace('/');
       return;
     }
 
