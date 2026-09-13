@@ -1,4 +1,12 @@
-import { EmbedBuilder } from 'discord.js';
+import {
+  ContainerBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  MessageFlags,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
+  TextDisplayBuilder,
+} from 'discord.js';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -91,16 +99,34 @@ function safe(value, max = 1024) {
   return text.length > max ? `${text.slice(0, max - 1)}â€¦` : text;
 }
 
-function buildReportEmbed(record, type) {
-  const fields = recordFields(record).map(([name, value]) => ({ name: safe(name, 256), value: safe(value), inline: false }));
+const PCSO_REPORT_BANNER_URL = 'https://media.discordapp.net/attachments/1546222659824787596/1548460178737995816/pcso_banner_2.png?format=webp&quality=lossless&width=1536&height=478';
+const PCSO_REPORT_FOOTER_URL = 'https://cdn.discordapp.com/attachments/1514443793607295058/1546271578147524618/pcso-application-footer.png';
+
+function displayFieldName(value) {
+  return String(value || 'Details')
+    .replace(/^\[\d+\]\s*\/\s*/, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\s*\/\s*/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function buildReportPayload(record, type) {
   const creator = record.createdByUserId ? `Melonly user ${record.createdByUserId}` : 'Melonly';
-  return new EmbedBuilder()
-    .setColor(0x1f2937)
-    .setTitle(`PCSO ${type.toUpperCase()} Report - ${safe(record.label || record.id, 180)}`)
-    .setDescription(`Automatically imported from Melonly.\n**Submitted by:** ${creator}`)
-    .addFields(fields.length ? fields : [{ name: 'Details', value: 'No report details were supplied by Melonly.' }])
-    .setFooter({ text: 'Pinellas County Sheriff Office - Melonly CAD' })
-    .setTimestamp();
+  const fields = recordFields(record);
+  const details = fields.length
+    ? fields.map(([name, value]) => `**${displayFieldName(name)}:** ${safe(value, 700)}`).join('\n')
+    : 'No report details were supplied by Melonly.';
+  const text = `# <:info:1517217516706074634> PCSO ${type.toUpperCase()} Report\n\n> **Case ID:** ${safe(record.id, 80)}\n> **Report:** ${safe(record.label || type, 180)}\n> **Submitted by:** ${creator}\n\n${details}\n\n-# Automatically imported from Melonly CAD`;
+  const container = new ContainerBuilder()
+    .clearAccentColor()
+    .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(PCSO_REPORT_BANNER_URL)))
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(text.slice(0, 3900)))
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+    .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(PCSO_REPORT_FOOTER_URL)));
+  return { components: [container], flags: MessageFlags.IsComponentsV2, allowedMentions: { parse: [] } };
 }
 
 export async function fetchMelonlyCadRecords(apiKey) {
@@ -115,8 +141,7 @@ async function importRecord(client, record, type) {
   const channelId = PINELLAS_SHIFT_REPORT_CHANNELS[type];
   const channel = await client.channels.fetch(channelId).catch(() => null);
   if (!channel?.isTextBased?.()) throw new Error(`Report channel ${channelId} is unavailable.`);
-  const embed = buildReportEmbed(record, type);
-  await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+  await channel.send(buildReportPayload(record, type));
 }
 
 export async function syncPinellasMelonlyReports(client) {
