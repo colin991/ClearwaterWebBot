@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-13-radio-log-all-transmits",
+      "title": "Log all dispatch radio transmits",
+      "summary": "Dispatch radio talk logs now record every non-bot key-up in the radio VC. Unit/member columns parse Clearwater nicknames as callsign | roblox username.",
+      "createdAt": "2026-09-13T18:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-13-radio-logs-bridge",
       "title": "Fix empty dispatch radio talk logs",
       "summary": "Admin radio logs no longer silently show empty when the website cannot reach the bot. Reused radio VC connections now rebind talk listeners, and the admin panel surfaces bot bridge/monitor status.",

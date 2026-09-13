@@ -1,4 +1,5 @@
 import {
+  EndBehaviorType,
   entersState,
   getVoiceConnection,
   joinVoiceChannel,
@@ -7,16 +8,12 @@ import {
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
 import { DISPATCH_VOICE_CHANNEL_ID } from './dispatchChannelStatus.js';
 import { logger } from './logger.js';
-import {
-  isOtherDepartmentCallsign,
-  isPinellasDiscordStaff,
-  parseDeputyNickname,
-} from './pinellasShiftPanel.js';
+import { parseDeputyNickname } from './pinellasShiftPanel.js';
 import { appendRadioTalkLog } from './pcsoRadioTalkLogs.js';
 import { getActiveHold } from './holdVoiceChat.js';
 
 /** Minimum audible press-to-talk burst to keep as a log entry. */
-const MIN_TALK_MS = 300;
+const MIN_TALK_MS = 150;
 /** Rejoin delay after an unexpected disconnect (not an intentional replace). */
 const REJOIN_DELAY_MS = 12_000;
 
@@ -83,20 +80,60 @@ function clearRejoinTimer() {
   rejoinTimer = null;
 }
 
-function callsignForMember(member) {
-  const parsed = parseDeputyNickname(
-    member?.nickname || member?.displayName || member?.user?.globalName || member?.user?.username || '',
-  );
-  const callsign = parsed.callsign && parsed.callsign !== '—' ? parsed.callsign : '';
-  return callsign;
+/**
+ * Clearwater radio nicknames look like: `<callsign> | <roblox username>`.
+ * Fall back to the shared deputy nickname parser for older formats.
+ */
+export function radioIdentityFromMember(member) {
+  const nick = String(
+    member?.nickname
+    || member?.displayName
+    || member?.user?.globalName
+    || member?.user?.username
+    || '',
+  ).trim();
+  const pipeParts = nick.split('|').map((part) => part.trim()).filter(Boolean);
+  if (pipeParts.length >= 2) {
+    return {
+      callsign: pipeParts[0].slice(0, 64),
+      memberName: pipeParts.slice(1).join(' | ').slice(0, 120),
+    };
+  }
+
+  const parsed = parseDeputyNickname(nick);
+  return {
+    callsign: parsed.callsign && parsed.callsign !== '—' ? parsed.callsign : '',
+    memberName: parsed.roleplayName && parsed.roleplayName !== '—'
+      ? parsed.roleplayName
+      : (member?.displayName || member?.user?.username || ''),
+  };
 }
 
+function callsignForMember(member) {
+  return radioIdentityFromMember(member).callsign;
+}
+
+/** Log every non-bot talker in the dispatch radio VC. */
+export function shouldLogRadioTalk(member) {
+  return Boolean(member && !member.user?.bot);
+}
+
+/** @deprecated use shouldLogRadioTalk */
 export function isPcsoRadioUnit(member) {
-  if (!member || member.user?.bot) return false;
-  if (!isPinellasDiscordStaff(member)) return false;
-  const callsign = callsignForMember(member);
-  if (callsign && isOtherDepartmentCallsign(callsign)) return false;
-  return true;
+  return shouldLogRadioTalk(member);
+}
+
+function keepReceiveAlive(voiceConnection, userId) {
+  try {
+    const stream = voiceConnection.receiver?.subscribe(String(userId), {
+      end: { behavior: EndBehaviorType.AfterSilence, duration: 400 },
+    });
+    if (!stream) return;
+    stream.on('data', () => {});
+    stream.on('error', () => {});
+  } catch {
+    // Receive subscribe is best-effort; speaking events can still fire without it.
+  }
 }
 
 async function resolveRadioChannel(client) {
@@ -127,11 +164,17 @@ async function finalizeTalk(userId, member = null, endedAt = Date.now()) {
   if (durationMs < MIN_TALK_MS) return null;
 
   const snapshot = member || active.member;
-  const callsign = callsignForMember(snapshot) || active.callsign || '';
+  const identity = radioIdentityFromMember(snapshot);
+  const callsign = identity.callsign || active.callsign || '';
+  const memberName = identity.memberName || active.memberName || active.displayName || '';
   const entry = {
     userId: String(userId),
     username: snapshot?.user?.username || active.username || '',
-    displayName: snapshot?.displayName || snapshot?.user?.globalName || active.displayName || '',
+    displayName: memberName
+      || snapshot?.displayName
+      || snapshot?.user?.globalName
+      || active.displayName
+      || '',
     callsign,
     startedAt: new Date(active.startedAt).toISOString(),
     endedAt: new Date(endedAt).toISOString(),
@@ -170,16 +213,23 @@ function bindSpeakingListeners(voiceConnection, guild) {
         if (activeTalk.has(id)) return;
         const member = guild.members.cache.get(id)
           || await guild.members.fetch(id).catch(() => null);
-        if (!isPcsoRadioUnit(member)) return;
+        if (!shouldLogRadioTalk(member)) return;
         if (member.voice?.channelId !== DISPATCH_VOICE_CHANNEL_ID) return;
 
+        keepReceiveAlive(voiceConnection, id);
+        const identity = radioIdentityFromMember(member);
         activeTalk.set(id, {
           startedAt: Date.now(),
           member,
-          callsign: callsignForMember(member),
+          callsign: identity.callsign,
+          memberName: identity.memberName,
           username: member.user?.username || '',
-          displayName: member.displayName || '',
+          displayName: identity.memberName || member.displayName || '',
         });
+        logger.info(
+          `Radio talk start: ${identity.callsign || identity.memberName || id} `
+          + `(${member.user?.username || id})`,
+        );
       } catch (error) {
         logger.warn(`Radio talk monitor: speak-start failed: ${error?.message || error}`);
       }
@@ -245,6 +295,16 @@ function wireConnectionLifecycle(voiceConnection, guild) {
   });
 
   bindSpeakingListeners(voiceConnection, guild);
+
+  // Prime receive subscriptions for people already in the radio VC so speaking
+  // packets map cleanly once they key up.
+  const channel = guild.channels.cache.get(DISPATCH_VOICE_CHANNEL_ID);
+  if (channel?.isVoiceBased?.()) {
+    for (const [, member] of channel.members) {
+      if (!shouldLogRadioTalk(member)) continue;
+      keepReceiveAlive(voiceConnection, member.id);
+    }
+  }
 }
 
 /**
@@ -355,7 +415,7 @@ export function startDispatchRadioTalkMonitor(client) {
 
   logger.info(
     `Radio talk monitor armed → VC ${DISPATCH_VOICE_CHANNEL_ID} `
-    + '(logs PCSO unit transmit duration only).',
+    + '(logs every non-bot transmit; nicknames as callsign | roblox user).',
   );
 
   return () => {
