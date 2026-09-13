@@ -4,6 +4,7 @@ import {
   buildMelonlyReportPdf,
   buildMelonlyReportPng,
   extractReportSubject,
+  personNameMatches,
   recordFields,
   resolveReportSubjectDiscordId,
   resolveReportSubmitter,
@@ -77,6 +78,80 @@ test('resolveReportSubjectDiscordId uses nested civilian discord id', async () =
     civilian: { discordId: '112233445566778899' },
   }, null);
   assert.equal(discordId, '112233445566778899');
+});
+
+test('resolveReportSubjectDiscordId reads discord from Melonly civilian field object', async () => {
+  const discordId = await resolveReportSubjectDiscordId('key', {
+    id: '2026-001462',
+    label: 'Vehicle Citation',
+    agency: 'Pinellas County Sheriff',
+    createdBy: { discordId: '999999999999999999' },
+    previewData: {
+      civilian: {
+        name: 'Civilian',
+        value: {
+          firstName: 'Andrew',
+          lastName: 'Miller',
+          discordId: '555555555555555555',
+        },
+      },
+    },
+  }, null);
+  assert.equal(discordId, '555555555555555555');
+});
+
+test('resolveReportSubjectDiscordId does not treat submitter discord as subject', async () => {
+  const discordId = await resolveReportSubjectDiscordId('key', {
+    ...sampleArrest,
+    createdBy: { discordId: '999999999999999999' },
+  }, null);
+  assert.equal(discordId, null);
+});
+
+test('personNameMatches supports PCSO nickname styles', () => {
+  const subject = { firstName: 'Andrew', lastName: 'Miller', fullName: 'Andrew Miller' };
+  assert.equal(personNameMatches('482 | Andrew Miller', subject), true);
+  assert.equal(personNameMatches('482 | A. Miller', subject), true);
+  assert.equal(personNameMatches('AndrewMiller', subject), true);
+  assert.equal(personNameMatches('1000 | N. Richards', subject), false);
+  assert.equal(personNameMatches('Miller', subject), false);
+});
+
+test('resolveReportSubjectDiscordId matches guild nickname initial + last', async () => {
+  const members = new Map([
+    ['111111111111111111', {
+      id: '111111111111111111',
+      displayName: '482 | A. Miller',
+      nickname: '482 | A. Miller',
+      user: { bot: false, globalName: 'Andrew', username: 'amiller' },
+    }],
+  ]);
+  const client = {
+    guilds: {
+      cache: {
+        get: () => ({
+          members: {
+            cache: {
+              size: members.size,
+              values: () => members.values(),
+            },
+            fetch: async () => members,
+          },
+        }),
+      },
+      fetch: async () => null,
+    },
+  };
+  const discordId = await resolveReportSubjectDiscordId('key', {
+    id: '2026-001462',
+    label: 'Vehicle Citation',
+    agency: 'Pinellas County Sheriff',
+    previewData: {
+      firstName: { name: 'First Name', value: 'Andrew' },
+      lastName: { name: 'Last Name', value: 'Miller' },
+    },
+  }, client);
+  assert.equal(discordId, '111111111111111111');
 });
 
 test('buildMelonlyReportPng returns a PNG buffer', async () => {
