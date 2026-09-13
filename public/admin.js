@@ -223,9 +223,19 @@ async function loadRadioLogs() {
       ? 'bot'
       : (payload.source === 'local' ? 'local' : payload.source || 'unknown');
     const monitor = payload.radioMonitor;
-    const monitorLabel = monitor?.connectionStatus
-      ? ` · monitor ${monitor.connectionStatus}${monitor.paused ? ' (paused)' : ''}`
-      : '';
+    const monitorParts = [];
+    if (monitor?.connectionStatus) {
+      monitorParts.push(`monitor ${monitor.connectionStatus}${monitor.paused ? ' (paused)' : ''}`);
+    }
+    if (Number.isFinite(monitor?.membersInChannel)) {
+      monitorParts.push(`${monitor.membersInChannel} in VC`);
+    }
+    if (monitor?.lastTalkStartAt) {
+      monitorParts.push(`last key-up ${formatWhen(monitor.lastTalkStartAt)}`);
+    } else if (Number.isFinite(monitor?.talkStartCount)) {
+      monitorParts.push(`${monitor.talkStartCount} key-ups heard`);
+    }
+    const monitorLabel = monitorParts.length ? ` · ${monitorParts.join(' · ')}` : '';
     radioMetaEl.textContent = entries.length
       ? `${entries.length} recent PCSO radio transmit${entries.length === 1 ? '' : 's'}${payload.updatedAt ? ` · updated ${formatWhen(payload.updatedAt)}` : ''} · ${sourceLabel}${monitorLabel}`
       : `No PCSO radio transmits logged yet · ${sourceLabel}${monitorLabel}`;
