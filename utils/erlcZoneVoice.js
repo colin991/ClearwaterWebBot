@@ -1,5 +1,5 @@
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
-import { fetchErlcServer, libertyMapPoint, parseErlcPlayer } from './erlc.js';
+import { fetchErlcServer, libertyMapPoint, parseErlcPlayer, isEmergencyServiceTeam } from './erlc.js';
 import { discordIdsByRobloxId } from './identityStore.js';
 import { markBotVoiceMove } from './botVoiceMoves.js';
 import { logger } from './logger.js';
@@ -31,7 +31,7 @@ export const ERLC_DRAG_ZONE = Object.freeze({
 const POLL_MS = 5_000;
 const HEARTBEAT_EVERY = 8; // ~40s at 5s poll
 
-function pointInDragZone(x, z) {
+export function pointInDragZone(x, z) {
   const pin = libertyMapPoint(x, z);
   if (!pin) return false;
   return pin.left >= ERLC_DRAG_ZONE.leftMin
@@ -215,6 +215,10 @@ export async function syncErlcZoneVoice(client, config = {}) {
     const x = player.location?.x;
     const z = player.location?.z;
     if (!pointInDragZone(x, z)) continue;
+    if (isEmergencyServiceTeam(player.team)) {
+      // DOT / Fire / Police / Sheriff in the lot are not jail inmates — do not drag.
+      continue;
+    }
 
     const pin = libertyMapPoint(x, z);
     const label = `${player.username || 'unknown'} (${player.robloxId || '?'})`;

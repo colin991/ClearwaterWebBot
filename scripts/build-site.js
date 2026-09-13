@@ -11,6 +11,7 @@ const staticFiles = new Set([
   'styles.css', 'internet.css', 'legal.css', 'signin.css', 'coming-soon.css',
   'script.js', 'internet.js', 'owner.js', 'signin.js', 'coming-soon.js', 'site-gate.js',
   'active-calls.js',
+  'jail.js',
 ]);
 
 rmSync(output, { recursive: true, force: true });
