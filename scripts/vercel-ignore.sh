@@ -41,6 +41,8 @@ WEBSITE_PATHS=(
   signin.js
   coming-soon.js
   site-gate.js
+  events.html
+  pcso-events.js
   api
   lib
   assets

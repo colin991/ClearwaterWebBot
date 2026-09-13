@@ -921,4 +921,177 @@ body.home-stage {
 .pcso-about { background:#08090b; color:#c5c8ce; border-top:1px solid #27292e; }.pcso-footer { background:#050607; color:#b7bbc2; border-top:1px solid #27292e; }.pcso-footer .pcso-brand { color:#f1f2f4; }.pcso-footer a:last-child { color:#d1d4d9; }
 @media(max-width:760px){.pcso-links{background:#0d0e10;box-shadow:0 12px 20px rgba(0,0,0,.45)}.pcso-menu{background:#17181b;color:#e8e9eb;border-color:#44474e}}
 
+/* Upcoming events sidebar + events directory (PCSO branding) */
+.pcso-news-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+.pcso-upcoming {
+  background: #121316;
+  border: 1px solid #2c2e34;
+  border-left: 3px solid #8b9099;
+  padding: 22px 20px 18px;
+}
+.pcso-upcoming-title {
+  margin: 0 0 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #676b74;
+  color: #f1f2f4;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.pcso-upcoming-list {
+  display: grid;
+  gap: 0;
+}
+.pcso-upcoming-item {
+  padding: 14px 0;
+  border-bottom: 1px solid #3a3d44;
+}
+.pcso-upcoming-item:last-child { border-bottom: 0; }
+.pcso-upcoming-item h3 {
+  margin: 0 0 6px;
+  color: #f1f2f4;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  line-height: 1.35;
+}
+.pcso-upcoming-when {
+  margin: 0 0 4px;
+  color: #d4d7dc;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.pcso-upcoming-where {
+  margin: 0;
+  color: #aeb2ba;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.pcso-upcoming-all {
+  display: inline-block;
+  margin-top: 16px;
+  color: #cfd2d7 !important;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  text-decoration: underline !important;
+  text-underline-offset: 3px;
+}
+.pcso-upcoming-all:hover { color: #fff !important; }
+.pcso-events-empty {
+  margin: 8px 0 0;
+  color: #92969f;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.pcso-news-layout .pcso-news-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pcso-events-page {
+  background: #0b0c0e !important;
+  color: #e8e9eb;
+}
+.pcso-events-page .pcso-page-lead {
+  color: #a4a8b0 !important;
+}
+.pcso-events-title {
+  margin: 0 0 14px !important;
+  color: #f1f2f4 !important;
+  font-family: Georgia, serif !important;
+  font-size: clamp(36px, 5vw, 52px) !important;
+  font-weight: 600 !important;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.pcso-events-page .pcso-page-lead {
+  color: #a4a8b0;
+  max-width: 760px;
+}
+.pcso-events-search {
+  position: relative;
+  display: block;
+  margin: 28px 0 8px;
+}
+.pcso-events-search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #8b9099;
+  font-size: 16px;
+  pointer-events: none;
+}
+.pcso-events-search input {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px 12px 42px;
+  border: 1px solid #3a3d44;
+  border-radius: 2px;
+  background: #121316;
+  color: #f1f2f4;
+  font: inherit;
+  font-size: 15px;
+}
+.pcso-events-search input::placeholder { color: #7d828b; }
+.pcso-events-search input:focus {
+  outline: none;
+  border-color: #676b74;
+  box-shadow: 0 0 0 3px rgba(103, 107, 116, .25);
+}
+.pcso-events-directory {
+  display: grid;
+  gap: 0;
+  margin-top: 8px;
+}
+.pcso-events-row {
+  padding: 28px 0;
+  border-bottom: 1px solid #2c2e34;
+}
+.pcso-events-row:first-child { border-top: 1px solid #2c2e34; }
+.pcso-events-row h2 {
+  margin: 0 0 8px;
+  color: #f1f2f4;
+  font-size: clamp(20px, 2.4vw, 28px);
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  line-height: 1.25;
+}
+.pcso-events-when {
+  margin: 0 0 6px;
+  color: #e0e2e6;
+  font-size: 15px;
+  font-weight: 700;
+}
+.pcso-events-where {
+  margin: 0;
+  color: #aeb2ba;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.pcso-events-desc {
+  margin: 10px 0 0;
+  color: #92969f;
+  font-size: 14px;
+  line-height: 1.55;
+  max-width: 760px;
+}
+.pcso-events-page .pcso-text-link { color: #cfd2d7; }
+.pcso-events-page .pcso-text-link:hover { color: #fff; }
+
+@media (max-width: 980px) {
+  .pcso-news-layout { grid-template-columns: 1fr; }
+  .pcso-news-layout .pcso-news-grid { grid-template-columns: 1fr; }
+}
+
 

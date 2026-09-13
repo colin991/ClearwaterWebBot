@@ -73,6 +73,10 @@
     {
       "source": "/complaint",
       "destination": "/complaint.html"
+    },
+    {
+      "source": "/events",
+      "destination": "/events.html"
     }
   ],
   "headers": [
