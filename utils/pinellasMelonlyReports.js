@@ -38,12 +38,17 @@ const POLL_MS = 60_000;
 const PAGE_SIZE = 100;
 const MAX_SEEN = 2_000;
 const SUBJECT_DM_TYPES = new Set(['arrest', 'citation']);
+const DISCORD_SNOWFLAKE_RE = /^\d{16,22}$/;
+const SUBJECT_LABEL_RE = /subject|civilian|citizen|suspect|defendant|cited|violator|character|person|offender/;
+const CREATOR_KEY_RE = /^(createdby|author|submitter|submittedby|creator|officer|deputy)$/i;
 const CAD_CHARACTER_PATHS = Object.freeze([
   '/server/cad/characters',
   '/server/cad/civilians',
   '/server/cad/profiles',
   '/server/characters',
   '/server/civilians',
+  '/server/cad/users',
+  '/server/cad/players',
 ]);
 
 const REPORT_DOC = Object.freeze({
@@ -507,6 +512,10 @@ function normalizePersonName(value) {
     .trim();
 }
 
+function compactPersonName(value) {
+  return normalizePersonName(value).replace(/\s+/g, '');
+}
+
 function asObjectList(payload) {
   if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== 'object') return [];
@@ -533,12 +542,56 @@ function characterFullName(entry) {
     entry.roleplayName,
     entry.roleplay_name,
     entry.rpName,
+    entry.rp_name,
     entry.characterName,
+    entry.character_name,
+    entry.cadName,
+    entry.cad_name,
     entry.fullName,
+    entry.full_name,
     entry.displayName,
+    entry.display_name,
     combined,
     entry.name,
   );
+}
+
+/**
+ * Match a candidate display/RP name to a report subject.
+ * Supports full names, compacted names, first+last tokens, and PCSO-style "A. Miller".
+ */
+export function personNameMatches(candidate, subject) {
+  const hay = normalizePersonName(candidate);
+  if (!hay) return false;
+
+  const subjectObj = subject && typeof subject === 'object'
+    ? subject
+    : { fullName: subject };
+  const full = normalizePersonName(subjectObj.fullName);
+  const first = normalizePersonName(subjectObj.firstName);
+  const last = normalizePersonName(subjectObj.lastName);
+  const tokens = hay.split(' ').filter(Boolean);
+
+  if (full) {
+    if (hay === full || hay.includes(full)) return true;
+    if (compactPersonName(hay) === compactPersonName(full)) return true;
+    // Multi-token shortenings only (avoid last-name-only false positives).
+    if (tokens.length >= 2 && hay.length >= 6 && full.includes(hay)) return true;
+  }
+
+  if (first && last && last.length >= 2) {
+    if (tokens.includes(first) && tokens.includes(last)) return true;
+    // Initial + last ("a miller") used in many PCSO nicknames.
+    const initial = first[0];
+    if (
+      tokens.includes(last)
+      && tokens.some((token) => token === initial || token === `${initial}${last}`)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /** Pull the civilian / subject name from a Melonly CAD report. */
@@ -568,8 +621,86 @@ export function extractReportSubject(record) {
   };
 }
 
-function subjectDiscordFromRecord(record) {
-  const pools = [
+function discordFromCharacterRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  return resolveMelonlyDiscordId(row)
+    || resolveMelonlyDiscordId(row.owner)
+    || resolveMelonlyDiscordId(row.user)
+    || resolveMelonlyDiscordId(row.member)
+    || resolveMelonlyDiscordId(row.account)
+    || resolveMelonlyDiscordId(row.player)
+    || null;
+}
+
+function pushDiscordCandidate(out, value, score = 1) {
+  const discordId = String(value || '').trim();
+  if (!DISCORD_SNOWFLAKE_RE.test(discordId)) return;
+  const existing = out.get(discordId) || 0;
+  if (score > existing) out.set(discordId, score);
+}
+
+/**
+ * Deep-scan Melonly payload for subject Discord IDs before flatten loses object shape.
+ * Scores candidates so subject/civilian branches beat incidental IDs; never uses creator keys.
+ */
+function collectSubjectDiscordCandidates(record, subject = null) {
+  const scores = new Map();
+  const visit = (value, pathKeys = []) => {
+    if (value == null) return;
+    if (typeof value === 'string') {
+      const parsed = parseObject(value);
+      if (parsed) visit(parsed, pathKeys);
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((entry, index) => visit(entry, [...pathKeys, String(index)]));
+      return;
+    }
+    if (typeof value !== 'object') return;
+
+    const pathText = pathKeys.join(' ').toLowerCase();
+    if (pathKeys.some((key) => CREATOR_KEY_RE.test(String(key).replace(/[^a-z]/gi, '')))) {
+      return;
+    }
+
+    if (isMelonlyFieldObject(value)) {
+      const label = melonlyFieldLabel(value);
+      const answer = objectValue(value, 'value');
+      visit(answer, [...pathKeys, label]);
+      return;
+    }
+
+    const pathIsSubject = SUBJECT_LABEL_RE.test(pathText);
+    const ownName = characterFullName(value);
+    const nameMatches = subject?.fullName ? personNameMatches(ownName, subject) : false;
+    const direct = discordFromCharacterRow(value);
+    if (direct) {
+      let score = 1;
+      if (pathIsSubject) score = 5;
+      if (nameMatches) score = Math.max(score, 6);
+      if (pathIsSubject && nameMatches) score = 8;
+      pushDiscordCandidate(scores, direct, score);
+    }
+
+    for (const [key, entry] of Object.entries(value)) {
+      const keyNorm = String(key).toLowerCase();
+      if (CREATOR_KEY_RE.test(keyNorm.replace(/[^a-z]/g, ''))) continue;
+      if (
+        /discord/.test(keyNorm)
+        && typeof entry !== 'object'
+        && DISCORD_SNOWFLAKE_RE.test(String(entry || '').trim())
+      ) {
+        let score = 2;
+        if (pathIsSubject || SUBJECT_LABEL_RE.test(keyNorm)) score = 7;
+        if (nameMatches) score = Math.max(score, 6);
+        pushDiscordCandidate(scores, entry, score);
+        continue;
+      }
+      visit(entry, [...pathKeys, key]);
+    }
+  };
+
+  for (const root of [
     record?.subject,
     record?.civilian,
     record?.character,
@@ -578,80 +709,128 @@ function subjectDiscordFromRecord(record) {
     record?.person,
     record?.target,
     record?.cited,
+    record?.citizen,
     ...(Array.isArray(record?.subjects) ? record.subjects : []),
     ...(Array.isArray(record?.civilians) ? record.civilians : []),
-  ].filter((value) => value && typeof value === 'object');
+  ]) {
+    visit(root, ['subject']);
+  }
 
-  for (const entry of pools) {
-    const discordId = resolveMelonlyDiscordId(entry)
-      || resolveMelonlyDiscordId(entry.owner)
-      || resolveMelonlyDiscordId(entry.user)
-      || resolveMelonlyDiscordId(entry.member)
-      || resolveMelonlyDiscordId(entry.account);
-    if (discordId) return discordId;
+  for (const source of [record?.previewData, record?.data, record?.objects, record?.meta]) {
+    visit(parseObject(source) || source, []);
   }
 
   for (const [name, value] of recordFields(record)) {
     const label = displayFieldName(name).toLowerCase();
     const text = String(value ?? '').trim();
-    if (!/^\d{16,22}$/.test(text)) continue;
-    if (/discord/.test(label) && /(subject|civilian|suspect|defendant|cited|person|violator)/.test(label)) {
-      return text;
-    }
+    if (!DISCORD_SNOWFLAKE_RE.test(text)) continue;
+    if (!/discord/.test(label)) continue;
+    pushDiscordCandidate(scores, text, SUBJECT_LABEL_RE.test(label) ? 7 : 3);
   }
-  return null;
+
+  return [...scores.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .map(([discordId]) => discordId);
 }
 
-function discordFromCharacterRow(row) {
-  if (!row || typeof row !== 'object') return null;
-  return resolveMelonlyDiscordId(row)
-    || resolveMelonlyDiscordId(row.owner)
-    || resolveMelonlyDiscordId(row.user)
-    || resolveMelonlyDiscordId(row.member)
-    || resolveMelonlyDiscordId(row.account)
-    || null;
+function subjectDiscordFromRecord(record, subject = null) {
+  const resolvedSubject = subject || extractReportSubject(record);
+  const creatorDiscord = recordCreatorDiscordId(record);
+  const candidates = collectSubjectDiscordCandidates(record, resolvedSubject)
+    .filter((discordId) => !creatorDiscord || discordId !== creatorDiscord);
+  return candidates[0] || null;
 }
 
-async function resolveDiscordFromCadCharacters(apiKey, fullName) {
-  const needle = normalizePersonName(fullName);
-  if (!apiKey || !needle) return null;
+async function resolveDiscordFromCadCharacters(apiKey, subject) {
+  const fullName = subject?.fullName || subject;
+  if (!apiKey || !normalizePersonName(fullName)) return null;
+  const subjectObj = subject && typeof subject === 'object'
+    ? subject
+    : { fullName };
+
+  const queries = [
+    {},
+    { search: fullName, name: fullName, q: fullName },
+  ];
 
   for (const pathName of CAD_CHARACTER_PATHS) {
-    try {
-      const payload = await melonlyFetch(apiKey, pathName, { cacheTtlMs: 60_000 });
-      const rows = asObjectList(payload);
-      if (!rows.length) continue;
-      for (const row of rows) {
-        if (normalizePersonName(characterFullName(row)) !== needle) continue;
-        const direct = discordFromCharacterRow(row);
-        if (direct) return direct;
-        const ownerId = pickText(
-          row.ownerId,
-          row.owner_id,
-          row.userId,
-          row.user_id,
-          row.memberId,
-          row.member_id,
-          row.createdByUserId,
-          row.created_by_user_id,
-        );
-        if (ownerId) {
-          const mapped = await resolvePinellasMelonlyMemberDiscordId(apiKey, ownerId);
-          if (mapped) return mapped;
+    for (const query of queries) {
+      try {
+        const payload = await melonlyFetch(apiKey, pathName, {
+          query,
+          cacheTtlMs: 60_000,
+        });
+        const rows = asObjectList(payload);
+        if (!rows.length) continue;
+        for (const row of rows) {
+          if (!personNameMatches(characterFullName(row), subjectObj)) continue;
+          const direct = discordFromCharacterRow(row);
+          if (direct) return direct;
+          const ownerId = pickText(
+            row.ownerId,
+            row.owner_id,
+            row.userId,
+            row.user_id,
+            row.memberId,
+            row.member_id,
+            row.createdByUserId,
+            row.created_by_user_id,
+            row.playerId,
+            row.player_id,
+          );
+          if (ownerId) {
+            const mapped = await resolvePinellasMelonlyMemberDiscordId(apiKey, ownerId);
+            if (mapped) return mapped;
+          }
         }
+        // Path returned rows; no need to hammer query variants forever.
+        if (!Object.keys(query).length) break;
+      } catch (error) {
+        if (error?.status === 429) throw error;
       }
-      // Path existed with data; no need to try other aliases.
-      break;
-    } catch (error) {
-      if (error?.status === 429) throw error;
     }
   }
   return null;
 }
 
-async function resolveDiscordFromIdentityName(fullName) {
-  const needle = normalizePersonName(fullName);
-  if (!needle) return null;
+async function resolveDiscordFromMelonlyMembers(apiKey, subject) {
+  if (!apiKey || !subject?.fullName) return null;
+  const members = await fetchMelonlyMembers(apiKey, { maxPages: 10, cacheTtlMs: 5 * 60_000 });
+  for (const member of members || []) {
+    const names = [
+      characterFullName(member),
+      characterFullName(member?.character),
+      characterFullName(member?.civilian),
+      characterFullName(member?.profile),
+      characterFullName(member?.cad),
+      member?.roleplayName,
+      member?.roleplay_name,
+      member?.rpName,
+      member?.displayName,
+      member?.display_name,
+      member?.username,
+      member?.name,
+    ];
+    if (!names.some((name) => personNameMatches(name, subject))) continue;
+
+    const direct = discordFromCharacterRow(member);
+    if (direct) return direct;
+
+    const memberId = pickText(member?.id, member?.memberId, member?.member_id, member?.userId);
+    if (memberId) {
+      const mapped = await resolvePinellasMelonlyMemberDiscordId(apiKey, memberId);
+      if (mapped) return mapped;
+    }
+  }
+  return null;
+}
+
+async function resolveDiscordFromIdentityName(subject) {
+  const fullName = subject?.fullName || subject;
+  if (!normalizePersonName(fullName)) return null;
+  const subjectObj = subject && typeof subject === 'object'
+    ? subject
+    : { fullName };
   try {
     const cache = await getIdentityCache();
     for (const entry of Object.values(cache?.byDiscord || {})) {
@@ -660,11 +839,10 @@ async function resolveDiscordFromIdentityName(fullName) {
         entry?.robloxUsername,
         entry?.nickname,
         entry?.displayName,
-      ].map(normalizePersonName).filter(Boolean);
-      if (names.some((name) => name === needle || name.includes(needle) || needle.includes(name))) {
-        const discordId = String(entry?.discordId || '').trim();
-        if (/^\d{16,22}$/.test(discordId)) return discordId;
-      }
+      ];
+      if (!names.some((name) => personNameMatches(name, subjectObj))) continue;
+      const discordId = String(entry?.discordId || '').trim();
+      if (DISCORD_SNOWFLAKE_RE.test(discordId)) return discordId;
     }
   } catch {
     // optional
@@ -672,9 +850,13 @@ async function resolveDiscordFromIdentityName(fullName) {
   return null;
 }
 
-async function resolveDiscordFromGuildNicknames(client, fullName) {
-  const needle = normalizePersonName(fullName);
-  if (!client || !needle) return null;
+async function resolveDiscordFromGuildNicknames(client, subject) {
+  const fullName = subject?.fullName || subject;
+  if (!client || !normalizePersonName(fullName)) return null;
+  const subjectObj = subject && typeof subject === 'object'
+    ? subject
+    : { fullName };
+
   for (const guildId of [PINELLAS_GUILD_ID, CLEARWATER_GUILD_ID]) {
     if (!guildId) continue;
     const guild = client.guilds.cache.get(guildId)
@@ -690,8 +872,8 @@ async function resolveDiscordFromGuildNicknames(client, fullName) {
         member.nickname,
         member.user?.globalName,
         member.user?.username,
-      ].map(normalizePersonName).filter(Boolean);
-      if (names.some((name) => name === needle || name.includes(needle))) {
+      ];
+      if (names.some((name) => personNameMatches(name, subjectObj))) {
         return member.id;
       }
     }
@@ -701,22 +883,28 @@ async function resolveDiscordFromGuildNicknames(client, fullName) {
 
 /** Resolve arrest/citation subject → Discord snowflake when possible. */
 export async function resolveReportSubjectDiscordId(apiKey, record, client = null) {
-  const direct = subjectDiscordFromRecord(record);
+  const subject = extractReportSubject(record);
+  const direct = subjectDiscordFromRecord(record, subject);
   if (direct) return direct;
 
-  const subject = extractReportSubject(record);
   if (!subject.fullName) return null;
 
-  const fromCad = await resolveDiscordFromCadCharacters(apiKey, subject.fullName).catch((error) => {
+  const fromCad = await resolveDiscordFromCadCharacters(apiKey, subject).catch((error) => {
     logger.warn(`CAD character subject lookup failed: ${error?.message || error}`);
     return null;
   });
   if (fromCad) return fromCad;
 
-  const fromIdentity = await resolveDiscordFromIdentityName(subject.fullName);
+  const fromMembers = await resolveDiscordFromMelonlyMembers(apiKey, subject).catch((error) => {
+    logger.warn(`Melonly member subject lookup failed: ${error?.message || error}`);
+    return null;
+  });
+  if (fromMembers) return fromMembers;
+
+  const fromIdentity = await resolveDiscordFromIdentityName(subject);
   if (fromIdentity) return fromIdentity;
 
-  const fromGuild = await resolveDiscordFromGuildNicknames(client, subject.fullName).catch((error) => {
+  const fromGuild = await resolveDiscordFromGuildNicknames(client, subject).catch((error) => {
     logger.warn(`Guild nickname subject lookup failed: ${error?.message || error}`);
     return null;
   });
@@ -839,22 +1027,38 @@ export async function buildMelonlyReportPng(record, type, submitterLabel = 'Melo
 
 async function dmSubjectReportPng(client, record, type, submitterLabel) {
   if (!SUBJECT_DM_TYPES.has(type)) return { sent: false, reason: 'type' };
+  const subject = extractReportSubject(record);
   const discordId = await resolveReportSubjectDiscordId(config.melonlyApiKey, record, client);
   if (!discordId) {
-    const subject = extractReportSubject(record);
     logger.info(
       `Melonly ${type} report ${record?.id || 'unknown'}: no Discord match for subject `
-      + `"${subject.fullName || 'unknown'}" — skipping subject DM`,
+      + `"${subject.fullName || 'unknown'}" — skipping subject DM `
+      + '(needs linked Melonly/CAD character, identity, or matching guild nickname)',
     );
     return { sent: false, reason: 'unresolved', discordId: null };
   }
 
   const png = await buildMelonlyReportPng(record, type, submitterLabel);
-  const user = await client.users.fetch(discordId);
-  await user.send({
-    files: [new AttachmentBuilder(png, { name: 'pcso-report.png' })],
-  });
-  logger.info(`DMed Melonly ${type} report PNG to subject Discord ${discordId} for case ${record?.id || 'unknown'}`);
+  try {
+    const user = await client.users.fetch(discordId);
+    await user.send({
+      files: [new AttachmentBuilder(png, { name: 'pcso-report.png' })],
+    });
+  } catch (error) {
+    const code = error?.code || error?.rawError?.code;
+    if (code === 50007) {
+      logger.warn(
+        `Melonly ${type} report ${record?.id || 'unknown'}: subject Discord ${discordId} `
+        + `(${subject.fullName || 'unknown'}) has DMs closed — could not deliver PNG`,
+      );
+      return { sent: false, reason: 'dms_closed', discordId };
+    }
+    throw error;
+  }
+  logger.info(
+    `DMed Melonly ${type} report PNG to subject Discord ${discordId} `
+    + `(${subject.fullName || 'unknown'}) for case ${record?.id || 'unknown'}`,
+  );
   return { sent: true, discordId };
 }
 
