@@ -71,32 +71,141 @@ function isPinellasRecord(record) {
   return /pinellas|pcso|sheriff/.test(text);
 }
 
+function objectKey(value, ...names) {
+  if (!value || typeof value !== 'object') return null;
+  const entries = Object.entries(value);
+  for (const name of names) {
+    const match = entries.find(([key]) => key.toLowerCase() === name.toLowerCase());
+    if (match) return match[0];
+  }
+  return null;
+}
+
+function objectValue(value, ...names) {
+  const key = objectKey(value, ...names);
+  return key == null ? undefined : value[key];
+}
+
+function humanizeLabel(value) {
+  return String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isMelonlyFieldObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const keys = new Set(Object.keys(value).map((key) => key.toLowerCase()));
+  const hasAnswer = keys.has('value');
+  const hasLabel = keys.has('name') || keys.has('mappingid') || keys.has('mapping_id');
+  return hasAnswer && hasLabel;
+}
+
+function melonlyFieldLabel(value) {
+  return humanizeLabel(
+    objectValue(value, 'name')
+    ?? objectValue(value, 'mappingId', 'mapping_id')
+    ?? 'Details',
+  );
+}
+
+function isChargeObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const keys = new Set(Object.keys(value).map((key) => key.toLowerCase()));
+  return keys.has('code')
+    || keys.has('charge')
+    || ((keys.has('class') || keys.has('act')) && (keys.has('counts') || keys.has('count') || keys.has('fine') || keys.has('jail')));
+}
+
+function formatCharge(charge, index) {
+  const code = objectValue(charge, 'code', 'charge');
+  const cls = objectValue(charge, 'class', 'act');
+  const counts = objectValue(charge, 'counts', 'count');
+  const fine = objectValue(charge, 'fine');
+  const jail = objectValue(charge, 'jail');
+  const parts = [
+    code != null && code !== '' ? String(code) : null,
+    cls != null && cls !== '' ? String(cls) : null,
+    counts != null && counts !== '' ? `${counts} count${Number(counts) === 1 ? '' : 's'}` : null,
+    fine != null && fine !== '' && Number(fine) !== 0 ? `Fine $${fine}` : null,
+    jail != null && jail !== '' && Number(jail) !== 0 ? `Jail ${jail}` : null,
+  ].filter(Boolean);
+  return `${index}. ${parts.join(' · ') || 'Charge'}`;
+}
+
+function looksLikeTimestamp(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return false;
+  // Melonly often stores DOB / dates as unix ms.
+  return numeric > 1e11 && numeric < 4e12;
+}
+
+function formatTimestamp(value) {
+  const numeric = Number(value);
+  const date = new Date(numeric);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function formatScalar(value) {
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (looksLikeTimestamp(value)) return formatTimestamp(value);
+  return String(value);
+}
+
 function flatten(value, prefix = '', output = []) {
   if (value == null || value === '') return output;
   if (Array.isArray(value)) {
+    if (value.length && value.every(isChargeObject)) {
+      output.push([prefix || 'Charges', value.map((entry, index) => formatCharge(entry, index + 1)).join('\n')]);
+      return output;
+    }
     value.forEach((entry, index) => flatten(entry, `${prefix}[${index + 1}]`, output));
     return output;
   }
   if (typeof value === 'object') {
+    // Melonly form answers are objects with presentation metadata plus the
+    // actual answer. Keep the readable field name and answer only.
+    if (isMelonlyFieldObject(value)) {
+      const label = melonlyFieldLabel(value);
+      const answer = objectValue(value, 'value');
+      if (label) flatten(answer, label, output);
+      return output;
+    }
+    if (isChargeObject(value)) {
+      output.push([prefix || 'Charge', formatCharge(value, 1).replace(/^1\.\s*/, '')]);
+      return output;
+    }
     for (const [key, entry] of Object.entries(value)) flatten(entry, prefix ? `${prefix} / ${key}` : key, output);
     return output;
   }
-  output.push([prefix || 'Details', String(value)]);
+  output.push([prefix || 'Details', formatScalar(value)]);
   return output;
 }
 
-function recordFields(record) {
+/** @param {object} record Melonly CAD record */
+export function recordFields(record) {
   const sources = [record?.previewData, record?.data, record?.objects, record?.meta]
     .map(parseObject)
     .filter(Boolean);
-  const fields = sources.flatMap((source) => flatten(source));
-  if (!fields.length && record?.data) fields.push(['Details', String(record.data)]);
-  return fields.slice(0, 25);
+  // Prefer the first source that yields fields so previewData + data don't duplicate.
+  for (const source of sources) {
+    const fields = flatten(source);
+    if (fields.length) return fields.slice(0, 40);
+  }
+  if (record?.data) return [['Details', String(record.data)]];
+  return [];
 }
 
 function safe(value, max = 1024) {
   const text = String(value ?? 'N/A').replace(/[<>`]/g, '').trim() || 'N/A';
-  return text.length > max ? `${text.slice(0, max - 1)}â€¦` : text;
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
 const PCSO_REPORT_BANNER_URL = 'https://media.discordapp.net/attachments/1546222659824787596/1548460178737995816/pcso_banner_2.png?format=webp&quality=lossless&width=1536&height=478';
