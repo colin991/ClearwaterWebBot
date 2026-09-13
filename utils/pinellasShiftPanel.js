@@ -1306,7 +1306,11 @@ async function buildReportDocuments(type, values, submitter) {
   const png = await sharp(Buffer.from(svg)).png().toBuffer();
 
   const pdf = await new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'LETTER', margin: 36 });
+    // Keep reports on a single letter page — no auto/manual page breaks.
+    const doc = new PDFDocument({
+      size: 'LETTER',
+      margins: { top: 36, left: 36, right: 36, bottom: 0 },
+    });
     const chunks = [];
     doc.on('data', (chunk) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -1383,10 +1387,6 @@ async function buildReportDocuments(type, values, submitter) {
       // Padding above/below so wrapped lines and glyph descenders are not clipped by the row box.
       const pdfRowH = Math.ceil(contentH + 16);
 
-      if (y + pdfRowH > doc.page.height - 120) {
-        doc.addPage();
-        y = 36;
-      }
       const fill = i % 2 === 0 ? '#ffffff' : REPORT_DOC.rowAlt;
       doc.rect(left, y, contentW, pdfRowH).fill(fill).strokeColor(REPORT_DOC.border).lineWidth(0.4).stroke();
 
@@ -1395,9 +1395,9 @@ async function buildReportDocuments(type, values, submitter) {
         const label = String(entry.label || '').toUpperCase();
         const value = String(entry.value || '').toUpperCase();
         doc.fillColor(REPORT_DOC.label).font('Helvetica-Bold').fontSize(7)
-          .text(label, x + 4, y + 8, { width: labelW, ...textOpts });
+          .text(label, x + 4, y + 8, { width: labelW, height: pdfRowH - 10, ellipsis: true, ...textOpts });
         doc.fillColor(REPORT_DOC.value).font('Helvetica').fontSize(7)
-          .text(value, x + labelW + 4, y + 8, { width: valueW, ...textOpts });
+          .text(value, x + labelW + 4, y + 8, { width: valueW, height: pdfRowH - 10, ellipsis: true, ...textOpts });
       };
 
       drawSide(leftEntry, left);
@@ -1414,37 +1414,41 @@ async function buildReportDocuments(type, values, submitter) {
       doc.font('Helvetica').fontSize(8);
       const valueH = doc.heightOfString(value, { width: contentW - 16, lineGap: 2 });
       const blockH = Math.ceil(16 + labelH + 6 + valueH);
-      if (y + blockH > doc.page.height - 110) {
-        doc.addPage();
-        y = 36;
-      }
-      doc.rect(left, y, contentW, blockH).fill('#ffffff').strokeColor(REPORT_DOC.border).lineWidth(0.5).stroke();
+      const maxBlockBottom = doc.page.height - 100;
+      const cappedBlockH = Math.min(blockH, Math.max(36, maxBlockBottom - y));
+      doc.rect(left, y, contentW, cappedBlockH).fill('#ffffff').strokeColor(REPORT_DOC.border).lineWidth(0.5).stroke();
       doc.fillColor(REPORT_DOC.label).font('Helvetica-Bold').fontSize(8)
-        .text(label, left + 8, y + 8, { width: contentW - 16, lineGap: 2 });
+        .text(label, left + 8, y + 8, { width: contentW - 16, height: 14, ellipsis: true, lineGap: 2 });
       doc.fillColor(REPORT_DOC.value).font('Helvetica').fontSize(8)
-        .text(value, left + 8, y + 8 + labelH + 4, { width: contentW - 16, lineGap: 2 });
-      y += blockH + 10;
+        .text(value, left + 8, y + 8 + Math.min(labelH, 14) + 4, {
+          width: contentW - 16,
+          height: Math.max(12, cappedBlockH - 28),
+          ellipsis: true,
+          lineGap: 2,
+        });
+      y += cappedBlockH + 10;
     }
 
-    y += 10;
-    if (y > doc.page.height - 100) {
-      doc.addPage();
-      y = 36;
-    }
-    doc.rect(left, y, contentW, 70).fill('#fafafa').strokeColor(REPORT_DOC.border).lineWidth(0.6).stroke();
-    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8).text('IMPORTANT NOTE AND DISCLAIMER', left + 8, y + 10);
+    // Pin disclaimer + end mark to the remaining space on page 1 (never spill to page 2).
+    const footerH = 64;
+    const endMarkH = 18;
+    const maxFooterY = doc.page.height - footerH - endMarkH - 12;
+    y = Math.min(y + 10, maxFooterY);
+    doc.rect(left, y, contentW, footerH).fill('#fafafa').strokeColor(REPORT_DOC.border).lineWidth(0.6).stroke();
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8)
+      .text('IMPORTANT NOTE AND DISCLAIMER', left + 8, y + 8, { width: contentW - 16, lineBreak: false });
     doc.fillColor('#374151').font('Helvetica').fontSize(7)
       .text(
         "This document is an official Pinellas County Sheriff's Office operations record for Clearwater Roleplay. "
         + 'Information is as reported by the submitting deputy/officer. Verify against CAD before any enforcement action. '
         + `Generated ${generatedAt}.`,
         left + 8,
-        y + 26,
-        { width: contentW - 16 },
+        y + 22,
+        { width: contentW - 16, height: footerH - 28, ellipsis: true },
       );
 
     doc.fillColor(REPORT_DOC.muted).fontSize(8)
-      .text('— End Report —', left, doc.page.height - 42, { width: contentW, align: 'center' });
+      .text('— End Report —', left, y + footerH + 8, { width: contentW, align: 'center', lineBreak: false });
 
     doc.end();
   });
