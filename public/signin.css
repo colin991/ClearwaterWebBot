@@ -4,11 +4,11 @@ html, body { min-height: 100%; margin: 0; }
 body.signin-body {
   min-height: 100vh;
   overflow: hidden;
-  color: #f4f7ff;
+  color: #f0f1f3;
   background:
-    radial-gradient(circle at 18% 12%, rgba(42, 92, 176, .28), transparent 34%),
-    radial-gradient(circle at 86% 88%, rgba(8, 42, 92, .4), transparent 32%),
-    #02050a;
+    radial-gradient(circle at 18% 12%, rgba(120, 124, 132, .16), transparent 34%),
+    radial-gradient(circle at 86% 88%, rgba(40, 42, 46, .45), transparent 32%),
+    #090a0c;
   font: 16px/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -17,19 +17,19 @@ body.signin-body {
   position: absolute;
   border-radius: 50%;
   filter: blur(80px);
-  opacity: .7;
+  opacity: .55;
   animation: signinDrift 18s ease-in-out infinite alternate;
 }
-.signin-orb-a { width: 46vw; height: 46vw; top: -20%; left: -14%; background: #15427f; }
-.signin-orb-b { width: 36vw; height: 36vw; right: -12%; bottom: -18%; background: #08203f; animation-delay: -7s; }
-.signin-orb-c { width: 20vw; height: 20vw; top: 42%; left: 58%; background: #2a62b8; opacity: .38; animation-delay: -3s; }
+.signin-orb-a { width: 46vw; height: 46vw; top: -20%; left: -14%; background: #3a3d44; }
+.signin-orb-b { width: 36vw; height: 36vw; right: -12%; bottom: -18%; background: #1a1c20; animation-delay: -7s; }
+.signin-orb-c { width: 20vw; height: 20vw; top: 42%; left: 58%; background: #5a5e66; opacity: .28; animation-delay: -3s; }
 .signin-grid {
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(rgba(180, 210, 255, .12) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(200, 204, 212, .1) 1px, transparent 1px);
   background-size: 24px 24px;
   mask-image: radial-gradient(circle at 50% 42%, #000 18%, transparent 74%);
-  opacity: .5;
+  opacity: .45;
 }
 @keyframes signinDrift {
   from { transform: translate3d(0, 0, 0) scale(1); }
@@ -55,7 +55,7 @@ body.signin-body {
   justify-items: center;
   gap: 12px;
   margin-bottom: 26px;
-  color: #fff;
+  color: #f0f1f3;
   letter-spacing: .32em;
   font-size: 12px;
   font-weight: 800;
@@ -65,11 +65,11 @@ body.signin-body {
   width: 78px;
   height: 78px;
   object-fit: contain;
-  filter: drop-shadow(0 16px 36px rgba(78, 145, 249, .32));
+  filter: drop-shadow(0 16px 36px rgba(0, 0, 0, .55));
 }
 .signin-mark span {
   padding-bottom: 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, .28);
+  border-bottom: 1px solid rgba(255, 255, 255, .22);
 }
 .signin-stage h1 {
   margin: 0;
@@ -77,11 +77,12 @@ body.signin-body {
   letter-spacing: -.055em;
   line-height: .98;
   font-weight: 800;
+  color: #f5f6f7;
 }
 .signin-lead {
   max-width: 34ch;
   margin: 16px 0 28px;
-  color: #9db0c9;
+  color: #a8adb6;
   font-size: 15px;
   line-height: 1.55;
 }
@@ -90,17 +91,17 @@ body.signin-body {
   gap: 18px;
   width: min(100%, 420px);
   padding: 22px 22px 20px;
-  border: 1px solid rgba(148, 184, 255, .16);
+  border: 1px solid rgba(180, 184, 192, .14);
   border-radius: 22px;
-  background: rgba(8, 16, 28, .62);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, .35);
+  background: rgba(17, 18, 20, .72);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .45);
   backdrop-filter: blur(18px);
 }
 .signin-agree {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  color: #c5d3e6;
+  color: #c8ccd3;
   font-size: 13px;
   line-height: 1.5;
   text-align: left;
@@ -116,7 +117,7 @@ body.signin-body {
   width: 20px;
   height: 20px;
   margin-top: 1px;
-  border: 1.5px solid rgba(180, 204, 232, .4);
+  border: 1.5px solid rgba(180, 184, 192, .4);
   border-radius: 6px;
   background: rgba(255, 255, 255, .04);
   transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
@@ -126,23 +127,23 @@ body.signin-body {
   width: 5px;
   height: 9px;
   margin: 2px 0 0 6px;
-  border: solid #fff;
+  border: solid #f0f1f3;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg) scale(0);
   content: '';
   transition: transform .16s ease;
 }
-.signin-agree:hover i { border-color: #7eb0ff; }
+.signin-agree:hover i { border-color: #9aa0a8; }
 .signin-agree input:focus-visible + i {
-  box-shadow: 0 0 0 3px rgba(78, 145, 249, .28);
+  box-shadow: 0 0 0 3px rgba(180, 184, 192, .22);
 }
 .signin-agree input:checked + i {
-  border-color: #4e91f9;
-  background: #357dec;
+  border-color: #8b9098;
+  background: #2a2c31;
 }
 .signin-agree input:checked + i::after { transform: rotate(45deg) scale(1); }
 .signin-agree a {
-  color: #fff;
+  color: #f0f1f3;
   font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -153,33 +154,36 @@ body.signin-body {
   justify-content: center;
   gap: 10px;
   min-height: 52px;
-  border: 0;
+  border: 1px solid rgba(200, 204, 212, .18);
   border-radius: 14px;
-  color: #fff;
-  background: linear-gradient(180deg, #6875f5, #5865f2);
-  box-shadow: 0 12px 28px rgba(88, 101, 242, .32);
+  color: #f5f6f7;
+  background: linear-gradient(180deg, #3a3d44, #1c1e22);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .4);
   font: inherit;
   font-size: 15px;
   font-weight: 800;
   cursor: pointer;
-  transition: transform .18s ease, filter .18s ease, box-shadow .18s ease, background .18s ease, color .18s ease;
+  transition: transform .18s ease, filter .18s ease, box-shadow .18s ease, background .18s ease, color .18s ease, border-color .18s ease;
 }
 .signin-form button svg { width: 22px; height: 22px; }
 .signin-form button:hover:not(:disabled) {
   transform: translateY(-1px);
-  filter: brightness(1.06);
-  box-shadow: 0 16px 34px rgba(88, 101, 242, .42);
+  filter: brightness(1.08);
+  border-color: rgba(220, 224, 230, .28);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, .5);
 }
 .signin-form button:disabled {
-  color: rgba(244, 247, 255, .38);
-  background: rgba(255, 255, 255, .08);
+  color: rgba(240, 241, 243, .38);
+  background: rgba(255, 255, 255, .06);
+  border-color: rgba(255, 255, 255, .06);
   box-shadow: none;
   cursor: not-allowed;
+  filter: none;
 }
 .signin-note {
   max-width: 42ch;
   margin: 20px 0 0;
-  color: #7e90a8;
+  color: #7e848e;
   font-size: 12px;
   line-height: 1.5;
 }

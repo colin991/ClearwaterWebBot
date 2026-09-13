@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-13-pcso-signin-gray-black",
+      "title": "PCSO sign-in gray and black theme",
+      "summary": "Restyled the Discord sign-in page to the site gray/black theme, replacing the blue glow, checkbox, and Discord button accents.",
+      "createdAt": "2026-09-13T14:58:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-13-pcso-signin-branding-oauth",
       "title": "PCSO sign-in branding and OAuth redirect fix",
       "summary": "The Discord sign-in page now uses PCSO branding, and OAuth redirect_uri is derived from the request host so login matches the Discord app redirect URL for that domain.",
