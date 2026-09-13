@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-13-pcso-signin-branding-oauth",
+      "title": "PCSO sign-in branding and OAuth redirect fix",
+      "summary": "The Discord sign-in page now uses PCSO branding, and OAuth redirect_uri is derived from the request host so login matches the Discord app redirect URL for that domain.",
+      "createdAt": "2026-09-13T14:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-13-vercel-hobby-function-limit",
       "title": "Stay under Vercel Hobby serverless limit",
       "summary": "PCSO and bot API routes now share dynamic handlers so production deploys stay within the Hobby plan's 12 serverless function limit.",

@@ -10,7 +10,7 @@ export default function handler(request, response) {
       return redirect(response, `/signin?next=${encodeURIComponent(next)}`);
     }
 
-    const { clientId, redirectUri } = getAuthConfig();
+    const { clientId, redirectUri } = getAuthConfig(request);
     const state = createState();
     const authorizationUrl = new URL('https://discord.com/oauth2/authorize');
     authorizationUrl.search = new URLSearchParams({

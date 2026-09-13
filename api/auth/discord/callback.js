@@ -20,7 +20,7 @@ export default async function handler(request, response) {
   const siteRedirect = '/coming-soon?denied=1';
 
   try {
-    const { clientId, clientSecret, redirectUri, sessionSecret } = getAuthConfig();
+    const { clientId, clientSecret, redirectUri, sessionSecret } = getAuthConfig(request);
     const requestUrl = new URL(request.url, `https://${request.headers.host || 'cwrpvc.lol'}`);
     const code = requestUrl.searchParams.get('code');
     const state = requestUrl.searchParams.get('state');
