@@ -48,6 +48,11 @@ export function parseErlcPlayer(player) {
 // Live /v2/server player payloads use northwest-origin studs (0..3120):
 // +X east/right, +Z south/down. Docs also describe a centre-origin variant
 // (negative values allowed); support both so pins never fall off the map.
+
+/** True for DOT / Fire / Police / Sheriff teams — excluded from jail roster + zone drag. */
+export function isEmergencyServiceTeam(team) {
+  return /\b(dot|fire|police|sheriff)\b/i.test(String(team || '').replace(/[_-]+/g, ' '));
+}
 export const LIBERTY_WORLD = 3120;
 
 function clamp01(value) {
