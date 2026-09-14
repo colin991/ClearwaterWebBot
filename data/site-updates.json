@@ -1285,6 +1285,13 @@
       "summary": "Weekly PDF downloads now show a readable retry message instead of opening a raw API error. Valid Melonly cached responses remain usable during cooldown and are isolated by API key.",
       "createdAt": "2026-09-14T04:00:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "priority-queue-panel-20260914",
+      "title": "In-game priority queue panel",
+      "summary": "Added administrator-only -prtyq to post the priority queue panel. Eligible voters and boosters with linked Roblox IDs receive temporary moderator access only when a game queue exists, with removal on entry or after ten seconds and recovery retries.",
+      "createdAt": "2026-09-14T21:46:42.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

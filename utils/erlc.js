@@ -1,9 +1,10 @@
 import { attachPlayerAvatars, robloxAvatarProxyPath } from '../lib/roblox-avatars.js';
 
-export async function fetchErlcServer(serverKey) {
+export async function fetchErlcServer(serverKey, { staff = false } = {}) {
   if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
   const url = new URL('https://api.erlc.gg/v2/server');
   for (const field of ['Players', 'Queue']) url.searchParams.set(field, 'true');
+  if (staff) url.searchParams.set('Staff', 'true');
   const response = await fetch(url, {
     headers: { 'server-key': serverKey },
     signal: AbortSignal.timeout(8000),
@@ -190,7 +191,17 @@ let erlcCommandAvailableAt = 0;
 
 /** Run one in-game command through the ER:LC private server API. */
 export async function executeErlcCommand(serverKey, command, { shouldExecute } = {}) {
-  const run = erlcCommandQueue.then(async () => {
+  return withErlcCommandSession(serverKey, send => send(command, { shouldExecute }));
+}
+
+/** Reserve the shared command queue for a short grant/revoke transaction. */
+export function withErlcCommandSession(serverKey, action) {
+  const run = erlcCommandQueue.then(() => action((command, options) => sendErlcCommand(serverKey, command, options)));
+  erlcCommandQueue = run.catch(() => {});
+  return run;
+}
+
+async function sendErlcCommand(serverKey, command, { shouldExecute } = {}) {
     if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
     const text = String(command || '').trim();
     if (!text.startsWith(':')) throw new Error('Invalid ER:LC command');
@@ -224,9 +235,6 @@ export async function executeErlcCommand(serverKey, command, { shouldExecute } =
       throw error;
     }
     return result;
-  });
-  erlcCommandQueue = run.catch(() => {});
-  return run;
 }
 
 function buildErlcModCommand(action, player, reason) {

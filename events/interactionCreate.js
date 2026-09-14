@@ -1,4 +1,5 @@
 import { Events, MessageFlags } from 'discord.js';
+import { handlePriorityQueue } from '../utils/priorityQueue.js';
 import { logger } from '../utils/logger.js';
 import { handleDiscordInternetInteraction } from '../utils/discordInternetPanel.js';
 import { handleDiscordInternetModerationInteraction } from '../utils/discordInternetModeration.js';
@@ -15,6 +16,7 @@ import { handleMarketInteraction } from '../utils/market.js';
 export default {
   name: Events.InteractionCreate,
   async execute(interaction, client) {
+    if (await handlePriorityQueue(interaction)) return;
     if (await handleDiscordInternetModerationInteraction(interaction)) return;
     if (await handleDiscordInternetInteraction(interaction, client)) return;
 

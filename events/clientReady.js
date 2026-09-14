@@ -1,4 +1,5 @@
 import { Events } from 'discord.js';
+import { startPriorityQueue } from '../utils/priorityQueue.js';
 import { startVcChecks } from '../utils/vcChecks.js';
 import { logger } from '../utils/logger.js';
 import { ensureNoticeChannel } from '../utils/noticeChannel.js';
@@ -31,6 +32,7 @@ export default {
       });
     }, 1200);
 
+    if (!client.stopPriorityQueue) client.stopPriorityQueue = startPriorityQueue(client);
     if (!client.stopVcChecks) client.stopVcChecks = startVcChecks(client, client.config);
 
     // Start the secondary-server role gate as soon as the gateway is ready.
