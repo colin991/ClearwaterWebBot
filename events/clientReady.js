@@ -1,4 +1,5 @@
 import { Events } from 'discord.js';
+import { startVcChecks } from '../utils/vcChecks.js';
 import { logger } from '../utils/logger.js';
 import { ensureNoticeChannel } from '../utils/noticeChannel.js';
 import { ensureInternetPanel } from '../utils/discordInternetPanel.js';
@@ -29,6 +30,8 @@ export default {
         logger.error('Pinellas server profile setup failed', error);
       });
     }, 1200);
+
+    if (!client.stopVcChecks) client.stopVcChecks = startVcChecks(client, client.config);
 
     // Start the secondary-server role gate as soon as the gateway is ready.
     if (!client.stopSecondaryGate) {

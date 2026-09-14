@@ -189,7 +189,7 @@ let erlcCommandQueue = Promise.resolve();
 let erlcCommandAvailableAt = 0;
 
 /** Run one in-game command through the ER:LC private server API. */
-export async function executeErlcCommand(serverKey, command) {
+export async function executeErlcCommand(serverKey, command, { shouldExecute } = {}) {
   const run = erlcCommandQueue.then(async () => {
     if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
     const text = String(command || '').trim();
@@ -197,6 +197,7 @@ export async function executeErlcCommand(serverKey, command) {
 
     const waitMs = Math.max(0, erlcCommandAvailableAt - Date.now());
     if (waitMs) await sleep(waitMs);
+    if (shouldExecute && !shouldExecute()) return false;
     const response = await fetch('https://api.erlc.gg/v2/server/command', {
       method: 'POST',
       headers: {

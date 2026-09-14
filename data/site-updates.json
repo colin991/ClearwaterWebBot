@@ -1271,6 +1271,13 @@
       "summary": "Updated assistance cards with rounded corners, clear icons, colored accents, and keyboard focus styling.",
       "createdAt": "2026-09-14T00:25:59.784Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "vc-checks-20260914",
+      "title": "Automatic in-game voice channel checks",
+      "summary": "Added administrator-only /vc checks on/off, enabled at startup, alternating private reminders, a five-minute voice grace period, immediate jail for missing Discord members, and automatic release when they join voice.",
+      "createdAt": "2026-09-14T03:37:55.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
