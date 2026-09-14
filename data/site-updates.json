@@ -1292,6 +1292,13 @@
       "summary": "Added administrator-only -prtyq to post the priority queue panel. Eligible voters and boosters with linked Roblox IDs receive temporary moderator access only when a game queue exists, with removal on entry or after ten seconds and recovery retries.",
       "createdAt": "2026-09-14T21:46:42.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "sheriff-team-balance-20260914",
+      "title": "Sheriff team capacity checks",
+      "summary": "The bot now allows up to 23 Sheriff players and marks additional team arrivals wanted with a private team-full notice. Vacancies allow new arrivals, and queued enforcement rechecks the live player list.",
+      "createdAt": "2026-09-14T21:49:02.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

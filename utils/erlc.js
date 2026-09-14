@@ -208,7 +208,7 @@ async function sendErlcCommand(serverKey, command, { shouldExecute } = {}) {
 
     const waitMs = Math.max(0, erlcCommandAvailableAt - Date.now());
     if (waitMs) await sleep(waitMs);
-    if (shouldExecute && !shouldExecute()) return false;
+    if (shouldExecute && !await shouldExecute()) return false;
     const response = await fetch('https://api.erlc.gg/v2/server/command', {
       method: 'POST',
       headers: {
