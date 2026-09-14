@@ -1306,6 +1306,13 @@
       "summary": "Role 1514033074948800683 now bypasses Sheriff capacity enforcement, VC checks, and the secondary server gate. Coleddev13 and notj3dah are exempt from VC checks only. Existing VC-check jails are released when an exemption applies.",
       "createdAt": "2026-09-14T21:51:07.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "sheriff-balance-logs-20260914",
+      "title": "Sheriff team balance logs",
+      "summary": "Sheriff capacity enforcement, private notices, exemptions, cancelled checks, and command failures now log to channel 1549178818814812211 with Roblox identity and observed team count.",
+      "createdAt": "2026-09-14T22:04:44.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSheriffBalance } from '../utils/sheriffBalance.js';
+import { createSheriffBalance, postSheriffBalanceLog, SHERIFF_LOG_CHANNEL } from '../utils/sheriffBalance.js';
 
 const player = (id, team = 'Sheriff') => ({ username: 'Player' + id, robloxId: String(id), team });
 function fixture(count) {
@@ -46,4 +46,21 @@ test('a delayed command cancels when team occupancy drops', async () => {
 });
 test('failed lookup issues no commands', async () => {
   const f = fixture(23); await f.service.tick(); f.fail(); await f.service.tick(); assert.deepEqual(f.commands, []); assert.equal(f.errors.length, 1);
+});
+
+test('logs enforcement once and sends embeds to the specified channel without mentions', async () => {
+  let players = Array.from({ length: 23 }, (_, i) => player(i + 1));
+  const events = [];
+  const service = createSheriffBalance({ snapshot: async () => players, send: async () => {}, onLog: e => events.push(e) });
+  await service.tick(); players.push(player(24)); await service.tick(); await service.tick();
+  assert.equal(events.length, 2);
+  assert.match(events[0].action, /Wanted command applied/);
+  assert.match(events[1].action, /notice sent/);
+  let payload;
+  await postSheriffBalanceLog({ channels: { fetch: async id => {
+    assert.equal(id, SHERIFF_LOG_CHANNEL);
+    return { isTextBased: () => true, send: async value => { payload = value; } };
+  } } }, events[0]);
+  assert.deepEqual(payload.allowedMentions.parse, []);
+  assert.equal(payload.embeds[0].fields[1].value, '24');
 });

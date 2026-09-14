@@ -4,11 +4,16 @@ import { hasEnforcementExemption } from './enforcementExemptions.js';
 import { getIdentityCache } from './identityStore.js';
 
 export const SHERIFF_LIMIT = 23;
+export const SHERIFF_LOG_CHANNEL = '1549178818814812211';
 export const SHERIFF_FULL_MESSAGE = 'The Sheriff team is full (23 players maximum). Please choose another team and try again when a spot opens.';
 const isSheriff = p => String(p.team).trim().toLowerCase() === 'sheriff';
 const key = p => p.robloxId || p.username;
 
-export function createSheriffBalance({ snapshot, send, onError = e => logger.error('Sheriff team balance failed', e) }) {
+export function createSheriffBalance({ snapshot, send, onLog = () => {}, onError = e => logger.error('Sheriff team balance failed', e) }) {
+  const log = event => {
+    // Discord delivery must not delay enforcement or cause a game command to repeat.
+    void Promise.resolve().then(() => onLog(event)).catch(e => logger.error('Sheriff log delivery failed', e));
+  };
   let previous = null;
   let running;
   const pending = new Map();
@@ -23,7 +28,10 @@ export function createSheriffBalance({ snapshot, send, onError = e => logger.err
     let occupied = [...current.keys()].filter(id => previous.has(id) && !pending.has(id)).length;
     for (const [id, player] of current) {
       if (previous.has(id) || pending.has(id)) continue;
-      if (player.enforcementExempt) { occupied += 1; continue; }
+      if (player.enforcementExempt) {
+        if (current.size > SHERIFF_LIMIT) log({ action: 'Exemption applied', player, count: current.size });
+        occupied += 1; continue;
+      }
       if (occupied < SHERIFF_LIMIT) occupied += 1;
       else pending.set(id, { player, wanted: false });
     }
@@ -38,14 +46,22 @@ export function createSheriffBalance({ snapshot, send, onError = e => logger.err
               return fresh.filter(isSheriff).length > SHERIFF_LIMIT && fresh.some(p => key(p) === id && isSheriff(p) && !p.enforcementExempt);
             },
           });
-          if (applied === false) { pending.delete(id); continue; }
+          if (applied === false) {
+            log({ action: 'Enforcement cancelled after live recheck', player: entry.player, count: current.size });
+            pending.delete(id); continue;
+          }
           entry.wanted = true;
+          log({ action: 'Wanted command applied: Sheriff team full', player: entry.player, count: current.size });
         }
-        await send(':pm ' + entry.player.username + ' ' + SHERIFF_FULL_MESSAGE, {
+        const notified = await send(':pm ' + entry.player.username + ' ' + SHERIFF_FULL_MESSAGE, {
           shouldExecute: async () => (await snapshot()).some(p => key(p) === id && !p.enforcementExempt),
         });
+        log({ action: notified === false ? 'Private notice skipped after live recheck' : 'Team-full private notice sent', player: entry.player, count: current.size });
         pending.delete(id);
-      } catch (error) { onError(error); }
+      } catch (error) {
+        log({ action: entry.wanted ? 'Private notice failed; retry pending' : 'Wanted command failed; retry pending', player: entry.player, count: current.size });
+        onError(error);
+      }
     }
   }
   return {
@@ -56,9 +72,29 @@ export function createSheriffBalance({ snapshot, send, onError = e => logger.err
   };
 }
 
+export async function postSheriffBalanceLog(client, event) {
+  const channel = await client.channels.fetch(SHERIFF_LOG_CHANNEL);
+  if (!channel?.isTextBased() || typeof channel.send !== 'function') throw new Error('Sheriff balance log channel unavailable.');
+  await channel.send({
+    allowedMentions: { parse: [] },
+    embeds: [{
+      title: 'Sheriff Team Balance',
+      description: event.action,
+      color: event.action.includes('failed') ? 0xe05555 : 0x84b9a4,
+      fields: [
+        { name: 'Roblox player', value: String(event.player.username || 'Unknown'), inline: true },
+        { name: 'Roblox ID', value: String(event.player.robloxId || 'Unknown'), inline: true },
+        { name: 'Observed Sheriff count / limit', value: `${event.count} / ${SHERIFF_LIMIT}`, inline: true },
+      ],
+      timestamp: new Date().toISOString(),
+    }],
+  });
+}
+
 export function startSheriffBalance(client) {
   const key = client.config.erlcServerKey;
   const service = createSheriffBalance({
+    onLog: event => postSheriffBalanceLog(client, event),
     snapshot: async () => {
       if (!client.isReady()) throw new Error('Discord unavailable; skipping Sheriff balance.');
       const guild = await client.guilds.fetch(client.config.guildId);
