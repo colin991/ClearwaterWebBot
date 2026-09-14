@@ -1264,6 +1264,13 @@
       "summary": "Fixed the Discord bot startup import so the Clearwater Internet Panel and weekly department salary service can load together after deployment.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-22T16:20:00.000Z"
+    },
+    {
+      "id": "resource-cards-refresh-20260913",
+      "title": "Refreshed homepage resource cards",
+      "summary": "Updated assistance cards with rounded corners, clear icons, colored accents, and keyboard focus styling.",
+      "createdAt": "2026-09-14T00:25:59.784Z",
+      "updatedBy": "colin991"
     }
   ]
 }
