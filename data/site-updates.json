@@ -1299,6 +1299,13 @@
       "summary": "The bot now allows up to 23 Sheriff players and marks additional team arrivals wanted with a private team-full notice. Vacancies allow new arrivals, and queued enforcement rechecks the live player list.",
       "createdAt": "2026-09-14T21:49:02.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "enforcement-exemptions-20260914",
+      "title": "Role and Roblox enforcement exemptions",
+      "summary": "Role 1514033074948800683 now bypasses Sheriff capacity enforcement, VC checks, and the secondary server gate. Coleddev13 and notj3dah are exempt from VC checks only. Existing VC-check jails are released when an exemption applies.",
+      "createdAt": "2026-09-14T21:51:07.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

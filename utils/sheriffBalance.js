@@ -1,5 +1,7 @@
 import { fetchErlcServer, parseErlcPlayer, executeErlcCommand } from './erlc.js';
 import { logger } from './logger.js';
+import { hasEnforcementExemption } from './enforcementExemptions.js';
+import { getIdentityCache } from './identityStore.js';
 
 export const SHERIFF_LIMIT = 23;
 export const SHERIFF_FULL_MESSAGE = 'The Sheriff team is full (23 players maximum). Please choose another team and try again when a spot opens.';
@@ -21,6 +23,7 @@ export function createSheriffBalance({ snapshot, send, onError = e => logger.err
     let occupied = [...current.keys()].filter(id => previous.has(id) && !pending.has(id)).length;
     for (const [id, player] of current) {
       if (previous.has(id) || pending.has(id)) continue;
+      if (player.enforcementExempt) { occupied += 1; continue; }
       if (occupied < SHERIFF_LIMIT) occupied += 1;
       else pending.set(id, { player, wanted: false });
     }
@@ -32,14 +35,14 @@ export function createSheriffBalance({ snapshot, send, onError = e => logger.err
           const applied = await send(':wanted ' + entry.player.username, {
             shouldExecute: async () => {
               const fresh = await snapshot();
-              return fresh.filter(isSheriff).length > SHERIFF_LIMIT && fresh.some(p => key(p) === id && isSheriff(p));
+              return fresh.filter(isSheriff).length > SHERIFF_LIMIT && fresh.some(p => key(p) === id && isSheriff(p) && !p.enforcementExempt);
             },
           });
           if (applied === false) { pending.delete(id); continue; }
           entry.wanted = true;
         }
         await send(':pm ' + entry.player.username + ' ' + SHERIFF_FULL_MESSAGE, {
-          shouldExecute: async () => (await snapshot()).some(p => key(p) === id),
+          shouldExecute: async () => (await snapshot()).some(p => key(p) === id && !p.enforcementExempt),
         });
         pending.delete(id);
       } catch (error) { onError(error); }
@@ -57,9 +60,15 @@ export function startSheriffBalance(client) {
   const key = client.config.erlcServerKey;
   const service = createSheriffBalance({
     snapshot: async () => {
+      if (!client.isReady()) throw new Error('Discord unavailable; skipping Sheriff balance.');
+      const guild = await client.guilds.fetch(client.config.guildId);
+      await guild.members.fetch();
+      const identities = (await getIdentityCache()).byDiscord;
       const data = await fetchErlcServer(key);
       if (!Array.isArray(data.Players)) throw new Error('Player list unavailable; skipping Sheriff balance.');
-      return data.Players.map(parseErlcPlayer);
+      return data.Players.map(parseErlcPlayer).map(player => ({ ...player,
+        enforcementExempt: hasEnforcementExemption(player, guild.members.cache, identities),
+      }));
     },
     send: (command, options) => executeErlcCommand(key, command, options),
   });

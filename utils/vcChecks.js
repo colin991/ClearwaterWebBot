@@ -2,6 +2,8 @@ import { fetchErlcServer, parseErlcPlayer, executeErlcCommand } from './erlc.js'
 import { logger } from './logger.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { resolve } from 'node:path';
+import { isVcExempt } from './enforcementExemptions.js';
+import { getIdentityCache } from './identityStore.js';
 
 export const VC_MESSAGES = ['Please join a Voice Channel inside of Clewarwater Roleplay', 'Please join a Voice Channel'];
 export const COMMS_MESSAGES = ['⚠️ Please join out comms code: cwrpvc', '🚨 Join our server code: cwrpvc', '⚠️ Join our comms server now to not get jailed code: cwrpvc'];
@@ -24,7 +26,7 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
       for (const [id, state] of await load()) states.set(id, state);
       loaded = true;
     }
-    const { players, members, inVoice } = await snapshot();
+    const { players, members, inVoice, identities = {} } = await snapshot();
     const online = new Set(players.map(p => p.robloxId || p.username));
     for (const id of states.keys()) if (!online.has(id)) states.delete(id);
     for (const player of players) {
@@ -35,7 +37,7 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
       try {
         const matches = matchingMembers(members, player.username);
         const compliant = matches.some(m => inVoice(m.id));
-        if (!enabled || compliant) {
+        if (!enabled || compliant || isVcExempt(player, members, identities)) {
           if (state.jailed) {
             await send(':unjail ' + player.username);
             state.jailed = false;
@@ -53,7 +55,7 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
         }
         const stillNeeded = () => {
           const current = matchingMembers(members, player.username);
-          return enabled && (current.length ? 'voice' : 'comms') === mode && !current.some(m => inVoice(m.id));
+          return enabled && !isVcExempt(player, members, identities) && (current.length ? 'voice' : 'comms') === mode && !current.some(m => inVoice(m.id));
         };
         if (!state.jailed && (mode === 'comms' || now() - state.since >= 300000)) {
           const result = await send(':jail ' + player.username, stillNeeded);
@@ -100,6 +102,7 @@ export function startVcChecks(client, config) {
       const raw = server.Players ?? server.players;
       if (!Array.isArray(raw)) throw new Error('ER:LC player list unavailable; skipping VC enforcement.');
       return { players: raw.map(parseErlcPlayer), members: guild.members.cache,
+        identities: (await getIdentityCache()).byDiscord,
         inVoice: id => Boolean(guild.voiceStates.cache.get(id)?.channelId) };
     },
     send: (command, shouldExecute) => executeErlcCommand(config.erlcServerKey, command, {

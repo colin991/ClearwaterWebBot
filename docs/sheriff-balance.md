@@ -1,5 +1,7 @@
 # Sheriff team balance
 
+Main-server role `1514033074948800683` bypasses enforcement, matched through a linked Roblox ID or Roblox username in the Discord member's name. Exempt players still count toward team occupancy. Role lookups must succeed before enforcement.
+
 Enabled on bot startup. The limit is 23 Sheriff players: a join filling the 23rd slot is allowed, and additional arrivals receive `:wanted USERNAME` followed by a private message that the Sheriff team is full. Other teams are unaffected.
 
 The first successful player snapshot establishes incumbents without mass enforcement. Subsequent snapshots identify arrivals to Sheriff (including players newly seen in-game). When multiple arrivals appear together, available slots are assigned in API snapshot order because exact team-switch timestamps are unavailable.

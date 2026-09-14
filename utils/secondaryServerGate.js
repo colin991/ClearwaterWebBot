@@ -1,5 +1,6 @@
 import { PermissionFlagsBits } from 'discord.js';
 import { logger } from './logger.js';
+import { ENFORCEMENT_EXEMPT_ROLE } from './enforcementExemptions.js';
 
 /** Server that requires a qualifying role from the main Clearwater server. */
 export const SECONDARY_GATE_GUILD_ID = '1514189396184793169';
@@ -9,6 +10,7 @@ export const SECONDARY_GATE_MAIN_GUILD_ID = '1514026810348671026';
 
 /** Roles on the main Clearwater server that allow access to the gated server. */
 export const SECONDARY_GATE_REQUIRED_ROLE_IDS = Object.freeze([
+  ENFORCEMENT_EXEMPT_ROLE,
   '1053768758772109394',
   '1514421440890409060',
   '1514744040778760252',
