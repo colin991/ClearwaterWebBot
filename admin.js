@@ -99,11 +99,49 @@ function renderRows(list) {
       <td>${hours}</td>
       <td>${reportCount}${reportPreview ? `<div class="pcso-call-meta">${reportPreview}${reportExtra}</div>` : ''}</td>
       <td class="admin-actions">
-        <a href="/api/pcso/weekly-report?discordId=${id}">Download PDF</a>
+        <a href="/api/pcso/weekly-report?discordId=${id}" data-weekly-pdf>Download PDF</a>
       </td>
     </tr>`;
   }).join('');
 }
+
+document.addEventListener('click', async (event) => {
+  const link = event.target.closest('[data-weekly-pdf]');
+  if (!link) return;
+  event.preventDefault();
+  if (link.getAttribute('aria-busy') === 'true') return;
+  link.setAttribute('aria-busy', 'true');
+  link.textContent = 'Preparing PDF…';
+  statusEl.textContent = 'Preparing weekly report…';
+  try {
+    const response = await fetch(link.href, { headers: { Accept: 'application/pdf' } });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      const seconds = Math.max(1, Math.ceil(Number(response.headers.get('retry-after')) || 60));
+      throw new Error(response.status === 429
+        ? `Reports are temporarily busy. Please try again in ${seconds} seconds.`
+        : payload.error || 'The report could not be downloaded. Please try again.');
+    }
+    if (!response.headers.get('content-type')?.includes('application/pdf')) {
+      throw new Error('The report could not be downloaded. Please sign in and try again.');
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const download = document.createElement('a');
+    download.href = url;
+    const filename = response.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1];
+    download.download = filename || 'weekly-report.pdf';
+    document.body.append(download);
+    download.click();
+    download.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    statusEl.textContent = 'Weekly report downloaded.';
+  } catch (error) {
+    statusEl.textContent = error.message || 'The report could not be downloaded. Please try again.';
+  } finally {
+    link.removeAttribute('aria-busy');
+    link.textContent = 'Download PDF';
+  }
+});
 
 function renderRadioLogs(entries) {
   if (!radioBodyEl) return;

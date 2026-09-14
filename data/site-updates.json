@@ -1278,6 +1278,13 @@
       "summary": "Added administrator-only /vc checks on/off, enabled at startup, alternating private reminders, a five-minute voice grace period, immediate jail for missing Discord members, and automatic release when they join voice.",
       "createdAt": "2026-09-14T03:37:55.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "weekly-report-rate-limit-20260914",
+      "title": "Keep report download errors inside the admin panel",
+      "summary": "Weekly PDF downloads now show a readable retry message instead of opening a raw API error. Valid Melonly cached responses remain usable during cooldown and are isolated by API key.",
+      "createdAt": "2026-09-14T04:00:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

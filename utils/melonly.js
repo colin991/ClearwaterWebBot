@@ -1,4 +1,5 @@
 import { logger } from './logger.js';
+import { createHash } from 'node:crypto';
 
 /** Melonly API — token is server/department-scoped (create it on the Pinellas Melonly). */
 export const MELONLY_API_BASE = 'https://api.melonly.xyz/api/v1';
@@ -46,14 +47,6 @@ export async function melonlyFetch(apiKey, path, {
   const key = String(apiKey || '').trim();
   if (!key) throw new Error('MELONLY_API_KEY is not configured.');
 
-  if (isMelonlyRateLimited()) {
-    const waitSec = Math.ceil((rateLimitedUntil - Date.now()) / 1000);
-    const error = new Error(`Melonly rate limited — try again in ~${waitSec}s.`);
-    error.status = 429;
-    error.rateLimited = true;
-    throw error;
-  }
-
   const url = new URL(path.replace(/^\//, ''), `${MELONLY_API_BASE}/`);
   if (query && typeof query === 'object') {
     for (const [name, value] of Object.entries(query)) {
@@ -62,10 +55,19 @@ export async function melonlyFetch(apiKey, path, {
     }
   }
 
-  const cacheKey = `${method}:${url.toString()}`;
+  const cacheKey = `${createHash('sha256').update(key).digest('hex')}:${method}:${url.toString()}`;
   if (method === 'GET' && cacheTtlMs > 0) {
     const hit = responseCache.get(cacheKey);
     if (hit && hit.expiresAt > Date.now()) return hit.value;
+  }
+
+  if (isMelonlyRateLimited()) {
+    const waitSec = Math.ceil((rateLimitedUntil - Date.now()) / 1000);
+    const error = new Error(`Melonly rate limited — try again in ~${waitSec}s.`);
+    error.status = 429;
+    error.rateLimited = true;
+    error.retryAfter = waitSec;
+    throw error;
   }
 
   const headers = {
@@ -106,6 +108,7 @@ export async function melonlyFetch(apiKey, path, {
     const error = new Error(`Melonly rate limited (${detail}). Wait ~${retrySec}s.`);
     error.status = 429;
     error.rateLimited = true;
+    error.retryAfter = retrySec;
     error.body = json;
     throw error;
   }
