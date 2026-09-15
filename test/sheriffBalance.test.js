@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSheriffBalance, postSheriffBalanceLog, SHERIFF_LOG_CHANNEL } from '../utils/sheriffBalance.js';
+import { createSheriffBalance, postSheriffBalanceLog, SHERIFF_LOG_CHANNEL, safeBalanceError } from '../utils/sheriffBalance.js';
 
 const player = (id, team = 'Sheriff') => ({ username: 'Player' + id, robloxId: String(id), team });
 function fixture(count) {
@@ -63,4 +63,26 @@ test('logs enforcement once and sends embeds to the specified channel without me
   } } }, events[0]);
   assert.deepEqual(payload.allowedMentions.parse, []);
   assert.equal(payload.embeds[0].fields[1].value, '24');
+});
+
+test('preflight failure is identified accurately and backs off retries', async () => {
+  let players = Array.from({ length: 23 }, (_, i) => player(i + 1));
+  let time = 0, fail = false, attempts = 0;
+  const logs = [];
+  const service = createSheriffBalance({ now: () => time,
+    snapshot: async () => { if (fail) { fail = false; throw Error('Member lookup timed out'); } return players; },
+    send: async (c, options) => { attempts++; fail = true; await options.shouldExecute(); },
+    onError: () => {}, onLog: e => logs.push(e) });
+  await service.tick(); players.push(player(24)); await service.tick();
+  assert.match(logs[0].action, /Live roster\/role recheck/);
+  assert.equal(logs[0].detail, 'Member lookup timed out');
+  time = 59000; await service.tick(); assert.equal(attempts, 1);
+  time = 60000; await service.tick(); assert.equal(attempts, 2);
+  assert.match(logs[1].action, /120s/);
+});
+
+test('diagnostics redact configured credentials and bearer tokens', () => {
+  process.env.TEST_BALANCE_SECRET = 'private-test-value';
+  try { assert.equal(safeBalanceError(Error('private-test-value Bearer abcdef')), '[redacted] Bearer [redacted]'); }
+  finally { delete process.env.TEST_BALANCE_SECRET; }
 });

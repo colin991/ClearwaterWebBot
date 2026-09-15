@@ -1313,6 +1313,13 @@
       "summary": "Sheriff capacity enforcement, private notices, exemptions, cancelled checks, and command failures now log to channel 1549178818814812211 with Roblox identity and observed team count.",
       "createdAt": "2026-09-14T22:04:44.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "sheriff-failure-diagnostics-20260914",
+      "title": "Explain Sheriff enforcement failures",
+      "summary": "Team balance logs now distinguish failed live checks from rejected game commands, include redacted error reasons and HTTP status, and back off retries after failures.",
+      "createdAt": "2026-09-14T22:10:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
