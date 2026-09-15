@@ -19,6 +19,42 @@ export function sheriffRetryDelaySeconds(error, failures = 1) {
   return Math.min(300, 60 * 2 ** Math.min(Math.max(failures, 1) - 1, 3));
 }
 
+function isTransientLookupError(error) {
+  const message = String(error?.message || error || '');
+  return Number(error?.status) === 429
+    || /rate limited|opcode\s*8|limiting member lookups|cooling down|Discord unavailable/i.test(message);
+}
+
+/**
+ * Choose who to :wanted when Sheriff occupancy is over the cap.
+ * Keep incumbents first, then the earliest new arrivals, up to the limit.
+ * Everyone else who is not exempt is queued for :wanted.
+ */
+export function sheriffPlayersToEnforce(sheriffs, {
+  limit = SHERIFF_LIMIT,
+  pendingIds = new Set(),
+  previous = null,
+} = {}) {
+  const list = (Array.isArray(sheriffs) ? sheriffs : []).filter(isSheriff);
+  if (list.length <= limit) return [];
+  const previousSet = previous || new Set();
+  const incumbents = list.filter((player) => previousSet.has(key(player)));
+  const newcomers = list.filter((player) => !previousSet.has(key(player)));
+  const keep = [];
+  for (const player of [...incumbents, ...newcomers]) {
+    if (keep.length < limit) keep.push(player);
+  }
+  const keepIds = new Set(keep.map(key));
+  return list.filter((player) => {
+    const id = key(player);
+    return id
+      && !keepIds.has(id)
+      && !player.enforcementExempt
+      && !pendingIds.has(id)
+      && /^[a-zA-Z0-9_]{3,20}$/.test(String(player.username || ''));
+  });
+}
+
 export function safeBalanceError(error) {
   let message = String(error?.message || 'Unknown error');
   for (const [name, value] of Object.entries(process.env)) {
@@ -35,23 +71,21 @@ export function createSheriffBalance({ snapshot, send, now = Date.now, onLog = (
   let previous = null;
   let running;
   const pending = new Map();
+  const enforced = new Set();
   async function cycle() {
     const players = await snapshot();
     const current = new Map(players.filter(isSheriff).map(p => [key(p), p]));
-    if (previous === null) { previous = new Set(current.keys()); return; }
+    for (const id of enforced) {
+      if (!current.has(id)) enforced.delete(id);
+    }
     for (const [id, entry] of pending) {
       if (!current.has(id) && !entry.wanted) pending.delete(id);
     }
-    // Retain incumbents; give remaining slots to newly observed arrivals in snapshot order.
-    let occupied = [...current.keys()].filter(id => previous.has(id) && !pending.has(id)).length;
-    for (const [id, player] of current) {
-      if (previous.has(id) || pending.has(id)) continue;
-      if (player.enforcementExempt) {
-        if (current.size > SHERIFF_LIMIT) log({ action: 'Exemption applied', player, count: current.size });
-        occupied += 1; continue;
-      }
-      if (occupied < SHERIFF_LIMIT) occupied += 1;
-      else pending.set(id, { player, wanted: false });
+    for (const player of sheriffPlayersToEnforce([...current.values()], {
+      pendingIds: new Set([...pending.keys(), ...enforced]),
+      previous,
+    })) {
+      pending.set(key(player), { player, wanted: false });
     }
     previous = new Set(current.keys());
     for (const [id, entry] of pending) {
@@ -63,9 +97,16 @@ export function createSheriffBalance({ snapshot, send, now = Date.now, onLog = (
           const applied = await send(':wanted ' + entry.player.username, {
             shouldExecute: async () => {
               stage = 'Live roster/role recheck before wanted command';
-              const fresh = await snapshot();
-              stage = 'Wanted command';
-              return fresh.filter(isSheriff).length > SHERIFF_LIMIT && fresh.some(p => key(p) === id && isSheriff(p) && !p.enforcementExempt);
+              try {
+                const fresh = await snapshot();
+                stage = 'Wanted command';
+                return fresh.filter(isSheriff).length > SHERIFF_LIMIT
+                  && fresh.some(p => key(p) === id && isSheriff(p) && !p.enforcementExempt);
+              } catch (error) {
+                if (!isTransientLookupError(error)) throw error;
+                stage = 'Wanted command';
+                return current.size > SHERIFF_LIMIT && current.has(id) && !entry.player.enforcementExempt;
+              }
             },
           });
           if (applied === false) {
@@ -74,15 +115,22 @@ export function createSheriffBalance({ snapshot, send, now = Date.now, onLog = (
           }
           entry.wanted = true;
           entry.failures = 0;
+          enforced.add(id);
           log({ action: 'Wanted command applied: Sheriff team full', player: entry.player, count: current.size });
         }
         stage = 'Private notice';
         const notified = await send(':pm ' + entry.player.username + ' ' + SHERIFF_FULL_MESSAGE, {
           shouldExecute: async () => {
             stage = 'Live roster/role recheck before private notice';
-            const fresh = await snapshot();
-            stage = 'Private notice';
-            return fresh.some(p => key(p) === id && !p.enforcementExempt);
+            try {
+              const fresh = await snapshot();
+              stage = 'Private notice';
+              return fresh.some(p => key(p) === id && !p.enforcementExempt);
+            } catch (error) {
+              if (!isTransientLookupError(error)) throw error;
+              stage = 'Private notice';
+              return !entry.player.enforcementExempt;
+            }
           },
         });
         log({ action: notified === false ? 'Private notice skipped after live recheck' : 'Team-full private notice sent', player: entry.player, count: current.size });
@@ -94,6 +142,7 @@ export function createSheriffBalance({ snapshot, send, now = Date.now, onLog = (
         log({ action: `${stage} failed; retry in ${retrySeconds}s`, player: entry.player, count: current.size,
           detail: safeBalanceError(error), status: error?.status });
         onError(error);
+        break;
       }
     }
   }

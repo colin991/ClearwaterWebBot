@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSheriffBalance, postSheriffBalanceLog, SHERIFF_LOG_CHANNEL, safeBalanceError, sheriffRetryDelaySeconds } from '../utils/sheriffBalance.js';
+import { createSheriffBalance, postSheriffBalanceLog, SHERIFF_LOG_CHANNEL, safeBalanceError, sheriffRetryDelaySeconds, sheriffPlayersToEnforce } from '../utils/sheriffBalance.js';
 
 const player = (id, team = 'Sheriff') => ({ username: 'Player' + id, robloxId: String(id), team });
 function fixture(count) {
@@ -21,9 +21,11 @@ test('23rd Sheriff allowed; 24th wanted and privately notified once', async () =
   assert.equal(f.commands[0], ':wanted Player24'); assert.match(f.commands[1], /^:pm Player24 .*full/);
   await f.service.tick(); assert.equal(f.commands.length, 2);
 });
-test('startup never ejects incumbents; a later arrival to an overfull team is rejected', async () => {
-  const f = fixture(25); await f.service.tick(); assert.deepEqual(f.commands, []);
-  f.set([...f.get(), player(26)]); await f.service.tick(); assert.equal(f.commands[0], ':wanted Player26');
+test('startup wants current extras over 23, not only later arrivals', async () => {
+  const f = fixture(25); await f.service.tick();
+  assert.deepEqual(f.commands.filter(c => c.startsWith(':wanted')), [':wanted Player24', ':wanted Player25']);
+  f.set([...f.get(), player(26)]); await f.service.tick();
+  assert.equal(f.commands.filter(c => c.startsWith(':wanted')).at(-1), ':wanted Player26');
 });
 test('vacancy allows new player; non-Sheriff joins ignored', async () => {
   const f = fixture(23); await f.service.tick();
@@ -46,6 +48,30 @@ test('a delayed command cancels when team occupancy drops', async () => {
 });
 test('failed lookup issues no commands', async () => {
   const f = fixture(23); await f.service.tick(); f.fail(); await f.service.tick(); assert.deepEqual(f.commands, []); assert.equal(f.errors.length, 1);
+});
+
+test('Discord lookup rate limits still enforce from the last Sheriff roster', async () => {
+  let time = 0;
+  let players = Array.from({ length: 25 }, (_, i) => player(i + 1));
+  let lookups = 0;
+  const commands = [];
+  const service = createSheriffBalance({
+    now: () => time,
+    snapshot: async () => {
+      lookups += 1;
+      if (lookups > 1) throw new Error('Discord is temporarily limiting member lookups. Please try -dc again in 30 seconds.');
+      return players;
+    },
+    send: async (c, options) => { if (!await options.shouldExecute()) return false; commands.push(c); },
+  });
+  await service.tick();
+  assert.equal(commands[0], ':wanted Player24');
+});
+
+test('sheriffPlayersToEnforce keeps the first 23 and wants the rest', () => {
+  const sheriffs = Array.from({ length: 28 }, (_, i) => player(i + 1));
+  const wanted = sheriffPlayersToEnforce(sheriffs, { previous: null }).map(p => p.username);
+  assert.deepEqual(wanted, ['Player24', 'Player25', 'Player26', 'Player27', 'Player28']);
 });
 
 test('logs enforcement once and sends embeds to the specified channel without mentions', async () => {
