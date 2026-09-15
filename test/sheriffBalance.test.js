@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSheriffBalance, postSheriffBalanceLog, SHERIFF_LOG_CHANNEL, safeBalanceError } from '../utils/sheriffBalance.js';
+import { createSheriffBalance, postSheriffBalanceLog, SHERIFF_LOG_CHANNEL, safeBalanceError, sheriffRetryDelaySeconds } from '../utils/sheriffBalance.js';
 
 const player = (id, team = 'Sheriff') => ({ username: 'Player' + id, robloxId: String(id), team });
 function fixture(count) {
@@ -79,6 +79,36 @@ test('preflight failure is identified accurately and backs off retries', async (
   time = 59000; await service.tick(); assert.equal(attempts, 1);
   time = 60000; await service.tick(); assert.equal(attempts, 2);
   assert.match(logs[1].action, /120s/);
+});
+
+test('HTTP 429 retries after the API retry-after instead of 60s', async () => {
+  let players = Array.from({ length: 23 }, (_, i) => player(i + 1));
+  let time = 0, attempts = 0;
+  const logs = [];
+  const service = createSheriffBalance({
+    now: () => time,
+    snapshot: async () => players,
+    send: async () => {
+      attempts += 1;
+      const error = new Error('You are being rate limited! Retry after 5 seconds.');
+      error.status = 429;
+      error.retryAfter = 5;
+      throw error;
+    },
+    onError: () => {},
+    onLog: e => logs.push(e),
+  });
+  await service.tick();
+  players.push(player(24));
+  await service.tick();
+  assert.match(logs[0].action, /retry in 5s/);
+  assert.equal(sheriffRetryDelaySeconds({ status: 429, retryAfter: 5 }, 1), 5);
+  time = 4000;
+  await service.tick();
+  assert.equal(attempts, 1);
+  time = 5000;
+  await service.tick();
+  assert.equal(attempts, 2);
 });
 
 test('diagnostics redact configured credentials and bearer tokens', () => {

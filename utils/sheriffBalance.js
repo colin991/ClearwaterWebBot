@@ -10,6 +10,15 @@ export const SHERIFF_FULL_MESSAGE = 'The Sheriff team is full (23 players maximu
 const isSheriff = p => String(p.team).trim().toLowerCase() === 'sheriff';
 const key = p => p.robloxId || p.username;
 
+/** Wait for ER:LC 429 retry-after; use 60s exponential backoff for other failures. */
+export function sheriffRetryDelaySeconds(error, failures = 1) {
+  const apiRetry = Number(error?.retryAfter);
+  if (Number(error?.status) === 429 && Number.isFinite(apiRetry) && apiRetry > 0) {
+    return Math.min(60, Math.max(5, Math.ceil(apiRetry)));
+  }
+  return Math.min(300, 60 * 2 ** Math.min(Math.max(failures, 1) - 1, 3));
+}
+
 export function safeBalanceError(error) {
   let message = String(error?.message || 'Unknown error');
   for (const [name, value] of Object.entries(process.env)) {
@@ -80,7 +89,7 @@ export function createSheriffBalance({ snapshot, send, now = Date.now, onLog = (
         pending.delete(id);
       } catch (error) {
         entry.failures = (entry.failures || 0) + 1;
-        const retrySeconds = Math.max(Number(error?.retryAfter) || 0, Math.min(300, 60 * 2 ** Math.min(entry.failures - 1, 3)));
+        const retrySeconds = sheriffRetryDelaySeconds(error, entry.failures);
         entry.retryAt = now() + retrySeconds * 1000;
         log({ action: `${stage} failed; retry in ${retrySeconds}s`, player: entry.player, count: current.size,
           detail: safeBalanceError(error), status: error?.status });
@@ -124,7 +133,7 @@ export function startSheriffBalance(client) {
     snapshot: async () => {
       if (!client.isReady()) throw new Error('Discord unavailable; skipping Sheriff balance.');
       const guild = await client.guilds.fetch(client.config.guildId);
-      await ensureGuildMembers(guild);
+      await ensureGuildMembers(guild, { allowStale: true });
       const identities = (await getIdentityCache()).byDiscord;
       const data = await fetchErlcServer(key);
       if (!Array.isArray(data.Players)) throw new Error('Player list unavailable; skipping Sheriff balance.');

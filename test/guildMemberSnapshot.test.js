@@ -11,6 +11,20 @@ test('parallel services share one fetch and reuse live cache until refresh', asy
   assert.equal((await load(guild)).has('new-member'), true); assert.equal(calls, 1);
   time = 300000; await load(guild); assert.equal(calls, 2);
 });
+test('rate limits reuse a previously loaded roster instead of blocking enforcement', async () => {
+  let time = 0, calls = 0;
+  const guild = { members: { cache: new Map([['1', {}]]), fetch: async () => {
+    calls += 1;
+    if (calls === 1) return;
+    throw Error('Request with opcode 8 was rate limited. Retry after 23.817 seconds.');
+  } } };
+  const load = createMemberSnapshotLoader({ now: () => time });
+  await load(guild);
+  time = 300000;
+  assert.equal((await load(guild, { allowStale: true })).has('1'), true);
+  assert.equal(calls, 2);
+});
+
 test('rate limits back off without accepting incomplete cache, then retry', async () => {
   let time = 0, calls = 0;
   const guild = { members: { cache: new Map(), fetch: async () => { calls++; if (calls === 1) throw Error('Request with opcode 8 was rate limited. Retry after 23.817 seconds.'); } } };
