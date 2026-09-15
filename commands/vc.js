@@ -1,4 +1,5 @@
 import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { postProximityLog } from '../utils/vcActionLog.js';
 
 export default {
   data: new SlashCommandBuilder().setName('vc').setDescription('Manage in-game voice channel checks.')
@@ -20,6 +21,10 @@ export default {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const enabled = interaction.options.getString('state', true) === 'on';
     const result = await service.setEnabled(enabled);
+    void postProximityLog(interaction.client, {
+      tag: 'VcCheck',
+      body: `${interaction.user.username} (${interaction.user.id}): Received \`/vc checks ${enabled ? 'on' : 'off'}\``,
+    });
     await interaction.editReply('VC checks are now **' + (enabled ? 'on' : 'off') + '**. Checks default to on after a bot restart.' +
       (!enabled && result.pendingReleases ? ' Some releases are pending; the bot will retry automatically.' : ''));
   },

@@ -26,6 +26,14 @@ function channelLabel(voiceChannel) {
   return `#${name}`;
 }
 
+export function enforcementLogBody({ action, player, reason = '', message = '' } = {}) {
+  const name = String(player?.username || 'unknown').replace(/\s+/g, ' ').trim() || 'unknown';
+  const id = String(player?.robloxId || 'unknown').replace(/\s+/g, ' ').trim() || 'unknown';
+  const extra = [reason, message].map((part) => String(part || '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const suffix = extra.length ? ` · ${extra.join(' · ')}` : '';
+  return `${String(action || 'ACTION').toUpperCase()} — ${name} (${id})${suffix}`;
+}
+
 async function fetchLogChannel(client, channelId) {
   const id = String(channelId || '').trim();
   if (!id || !client?.isReady?.()) return null;

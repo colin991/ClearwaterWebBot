@@ -5,6 +5,7 @@ import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { resolve } from 'node:path';
 import { isVcExempt } from './enforcementExemptions.js';
 import { getIdentityCache } from './identityStore.js';
+import { enforcementLogBody, postProximityLog } from './vcActionLog.js';
 
 export const VC_MESSAGES = ['Please join a Voice Channel inside of Clewarwater Roleplay', 'Please join a Voice Channel'];
 export const COMMS_MESSAGES = ['⚠️ Please join out comms code: cwrpvc', '🚨 Join our server code: cwrpvc', '⚠️ Join our comms server now to not get jailed code: cwrpvc'];
@@ -17,11 +18,22 @@ export function matchingMembers(members, username) {
 }
 
 // Inject I/O so tests cannot issue commands to the live game.
-export function createVcChecks({ snapshot, send, load = async () => [], save = async () => {}, now = Date.now, onError = error => logger.error('VC checks failed', error) }) {
+export function createVcChecks({ snapshot, send, load = async () => [], save = async () => {}, now = Date.now, onError = error => logger.error('VC checks failed', error), onLog = () => {} }) {
+  const log = event => {
+    void Promise.resolve().then(() => onLog(event)).catch(error => logger.error('VC check log failed', error));
+  };
   const states = new Map();
   let loaded = false;
   let enabled = true;
   let running;
+  async function apply(command, player, reason, shouldExecute) {
+    const result = await send(command, shouldExecute);
+    if (result === false) return false;
+    const kind = command.startsWith(':unjail') ? 'UNJAIL' : command.startsWith(':jail') ? 'JAIL' : 'PM';
+    const message = kind === 'PM' ? command.replace(/^:pm\s+\S+\s+/i, '').slice(0, 120) : '';
+    log({ action: kind, player, reason, message, command });
+    return result;
+  }
   async function cycle() {
     if (!loaded) {
       for (const [id, state] of await load()) states.set(id, state);
@@ -40,7 +52,8 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
         const compliant = matches.some(m => inVoice(m.id));
         if (!enabled || compliant || isVcExempt(player, members, identities)) {
           if (state.jailed) {
-            await send(':unjail ' + player.username);
+            const reason = !enabled ? 'checks disabled' : isVcExempt(player, members, identities) ? 'exempt' : 'joined voice';
+            await apply(':unjail ' + player.username, player, reason);
             state.jailed = false;
             await save([...states]);
           }
@@ -59,14 +72,14 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
           return enabled && !isVcExempt(player, members, identities) && (current.length ? 'voice' : 'comms') === mode && !current.some(m => inVoice(m.id));
         };
         if (!state.jailed && (mode === 'comms' || now() - state.since >= 300000)) {
-          const result = await send(':jail ' + player.username, stillNeeded);
+          const result = await apply(':jail ' + player.username, player, mode === 'comms' ? 'no Discord match' : 'not in voice for 5 minutes', stillNeeded);
           if (result !== false) state.jailed = true;
           await save([...states]);
         }
         if (!stillNeeded()) continue;
         if (now() - state.lastPm >= 60000) {
           const messages = mode === 'voice' ? VC_MESSAGES : COMMS_MESSAGES;
-          const result = await send(':pm ' + player.username + ' ' + messages[state.index % messages.length], stillNeeded);
+          const result = await apply(':pm ' + player.username + ' ' + messages[state.index % messages.length], player, mode === 'voice' ? 'voice reminder' : 'comms reminder', stillNeeded);
           if (result !== false) { state.lastPm = now(); state.index += 1; }
         }
       } catch (error) { onError(error); }
@@ -111,6 +124,10 @@ export function startVcChecks(client, config) {
         if (!client.isReady()) throw new Error('Discord disconnected before VC command; retrying later.');
         return !shouldExecute || shouldExecute();
       },
+    }),
+    onLog: event => postProximityLog(client, {
+      tag: 'VcCheck',
+      body: enforcementLogBody(event),
     }),
   });
   client.vcChecks = service;

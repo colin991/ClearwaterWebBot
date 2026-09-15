@@ -106,3 +106,21 @@ test('any matching non-bot in VC qualifies and overlapping ticks do not duplicat
   f.voices.add('second'); await Promise.all([f.service.tick(), f.service.tick()]); assert.deepEqual(f.calls, []);
   f.voices.clear(); await Promise.all([f.service.tick(), f.service.tick()]); assert.equal(f.calls.length, 1);
 });
+
+test('successful jail, PM, and unjail emit ops-log events', async () => {
+  const f = fixture();
+  const events = [];
+  const service = createVcChecks({
+    now: () => 0,
+    snapshot: async () => ({ players: f.players, members: f.members, inVoice: id => f.voices.has(id) }),
+    send: async (text, guard) => { if (guard && !guard()) return false; f.calls.push(text); },
+    onLog: event => events.push(event),
+  });
+  await service.tick();
+  assert.equal(events[0].action, 'JAIL');
+  assert.equal(events[0].reason, 'no Discord match');
+  assert.equal(events[1].action, 'PM');
+  f.join(); f.voices.add('discord'); await service.tick();
+  assert.equal(events.at(-1).action, 'UNJAIL');
+  assert.equal(events.at(-1).reason, 'joined voice');
+});
