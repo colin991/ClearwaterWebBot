@@ -1320,6 +1320,13 @@
       "summary": "Team balance logs now distinguish failed live checks from rejected game commands, include redacted error reasons and HTTP status, and back off retries after failures.",
       "createdAt": "2026-09-14T22:10:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "mod-call-voice-20260914",
+      "title": "Accepted mod call rooms and staff waiting greeting",
+      "summary": "Accepted in-game mod calls move the caller and accepting moderator to an empty support voice room. Human arrivals in the staff waiting VC hear the requested spoken message before the bot leaves.",
+      "createdAt": "2026-09-14T22:20:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

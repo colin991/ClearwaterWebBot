@@ -1,10 +1,11 @@
 import { attachPlayerAvatars, robloxAvatarProxyPath } from '../lib/roblox-avatars.js';
 
-export async function fetchErlcServer(serverKey, { staff = false } = {}) {
+export async function fetchErlcServer(serverKey, { staff = false, modCalls = false } = {}) {
   if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
   const url = new URL('https://api.erlc.gg/v2/server');
   for (const field of ['Players', 'Queue']) url.searchParams.set(field, 'true');
   if (staff) url.searchParams.set('Staff', 'true');
+  if (modCalls) url.searchParams.set('ModCalls', 'true');
   const response = await fetch(url, {
     headers: { 'server-key': serverKey },
     signal: AbortSignal.timeout(8000),

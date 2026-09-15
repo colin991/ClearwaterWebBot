@@ -1,4 +1,5 @@
 import { Events } from 'discord.js';
+import { startModCallVoice } from '../utils/modCallVoice.js';
 import { startSheriffBalance } from '../utils/sheriffBalance.js';
 import { startPriorityQueue } from '../utils/priorityQueue.js';
 import { startVcChecks } from '../utils/vcChecks.js';
@@ -36,6 +37,7 @@ export default {
     if (!client.stopPriorityQueue) client.stopPriorityQueue = startPriorityQueue(client);
     if (!client.stopVcChecks) client.stopVcChecks = startVcChecks(client, client.config);
     if (!client.stopSheriffBalance) client.stopSheriffBalance = startSheriffBalance(client);
+    if (!client.stopModCallVoice) client.stopModCallVoice = startModCallVoice(client);
 
     // Start the secondary-server role gate as soon as the gateway is ready.
     if (!client.stopSecondaryGate) {
