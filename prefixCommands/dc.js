@@ -1,4 +1,5 @@
 import { fetchErlcServer, parseErlcPlayer } from '../utils/erlc.js';
+import { ensureGuildMembers } from '../utils/guildMemberSnapshot.js';
 import { getIdentityCache } from '../utils/identityStore.js';
 import { classifyDiscordPlayers, buildDiscordCheckPanels } from '../utils/discordCheck.js';
 
@@ -8,7 +9,7 @@ export default {
   async execute(message) {
     if (!message.guild || message.guild.id !== message.client.config.guildId) throw new Error('Use -dc in the Clearwater Discord server.');
     // Do not label users missing based on an incomplete member cache.
-    await message.guild.members.fetch();
+    await ensureGuildMembers(message.guild);
     const [server, identities] = await Promise.all([
       fetchErlcServer(message.client.config.erlcServerKey), getIdentityCache(),
     ]);

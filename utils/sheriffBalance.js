@@ -1,5 +1,6 @@
 import { fetchErlcServer, parseErlcPlayer, executeErlcCommand } from './erlc.js';
 import { logger } from './logger.js';
+import { ensureGuildMembers } from './guildMemberSnapshot.js';
 import { hasEnforcementExemption } from './enforcementExemptions.js';
 import { getIdentityCache } from './identityStore.js';
 
@@ -123,7 +124,7 @@ export function startSheriffBalance(client) {
     snapshot: async () => {
       if (!client.isReady()) throw new Error('Discord unavailable; skipping Sheriff balance.');
       const guild = await client.guilds.fetch(client.config.guildId);
-      await guild.members.fetch();
+      await ensureGuildMembers(guild);
       const identities = (await getIdentityCache()).byDiscord;
       const data = await fetchErlcServer(key);
       if (!Array.isArray(data.Players)) throw new Error('Player list unavailable; skipping Sheriff balance.');

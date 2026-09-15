@@ -1334,6 +1334,13 @@
       "summary": "Added -dc with the supplied panel style, live online counts, missing Discord, Discord without voice, and voice-connected sections, including callsigns and whitelist labels. Large rosters split across panels.",
       "createdAt": "2026-09-15T22:17:47.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "discord-member-fetch-sharing-20260915",
+      "title": "Prevent repeated Discord member lookups",
+      "summary": "The -dc command, Sheriff balancing, VC checks, mod-call routing, and role sync now share member-list refreshes, reuse the live cache, and respect retry cooldowns instead of issuing duplicate opcode 8 requests.",
+      "createdAt": "2026-09-15T22:19:52.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

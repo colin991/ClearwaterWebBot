@@ -4,6 +4,7 @@ import { discordIdsByRobloxId } from './identityStore.js';
 import { resolveZoneDiscordMember } from './erlcZoneVoice.js';
 import { markBotVoiceMove } from './botVoiceMoves.js';
 import { logger } from './logger.js';
+import { ensureGuildMembers } from './guildMemberSnapshot.js';
 
 export const MOD_CALL_ROOMS = ['1514131750559813733', '1514131852393320519', '1514131887914745906'];
 const reservedRooms = new Set();
@@ -82,7 +83,7 @@ export function startModCallVoice(client) {
     move: async call => {
       if (!client.isReady()) return false;
       const guild = await client.guilds.fetch(client.config.guildId);
-      await guild.members.fetch();
+      await ensureGuildMembers(guild);
       const identities = await discordIdsByRobloxId();
       const caller = await resolveZoneDiscordMember(guild, parseErlcPlayer({ Player: call.Caller }), identities);
       const moderator = await resolveZoneDiscordMember(guild, parseErlcPlayer({ Player: call.Moderator }), identities);

@@ -1,5 +1,6 @@
 import { fetchErlcServer, parseErlcPlayer, executeErlcCommand } from './erlc.js';
 import { logger } from './logger.js';
+import { ensureGuildMembers } from './guildMemberSnapshot.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { resolve } from 'node:path';
 import { isVcExempt } from './enforcementExemptions.js';
@@ -97,7 +98,7 @@ export function startVcChecks(client, config) {
       if (!client.isReady()) throw new Error('Discord is disconnected; skipping VC enforcement.');
       const guild = await client.guilds.fetch(config.guildId);
       // An incomplete member cache must never be treated as confirmed absence.
-      await guild.members.fetch();
+      await ensureGuildMembers(guild);
       const server = await fetchErlcServer(config.erlcServerKey);
       const raw = server.Players ?? server.players;
       if (!Array.isArray(raw)) throw new Error('ER:LC player list unavailable; skipping VC enforcement.');

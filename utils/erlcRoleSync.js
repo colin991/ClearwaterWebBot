@@ -2,6 +2,7 @@ import { fetchErlcServer, parseErlcPlayer } from './erlc.js';
 import { discordIdsByRobloxId } from './identityStore.js';
 import { getOwnerConfig } from './ownerConfig.js';
 import { logger } from './logger.js';
+import { ensureGuildMembers } from './guildMemberSnapshot.js';
 import { v2Card } from './v2Message.js';
 
 async function sendGameLog(client, settings, description) {
@@ -45,7 +46,7 @@ async function syncOnce(client, config, previousState) {
   const identityMap = await discordIdsByRobloxId();
   const activeDiscordIds = new Set(players.map((player) => identityMap.get(player.robloxId)).filter(Boolean));
   const guild = await client.guilds.fetch(settings.inGameGuildId);
-  await guild.members.fetch();
+  await ensureGuildMembers(guild);
   const role = await guild.roles.fetch(settings.inGameRoleId);
   if (!role) throw new Error('Configured in-game role no longer exists');
 
