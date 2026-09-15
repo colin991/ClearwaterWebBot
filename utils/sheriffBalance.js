@@ -125,15 +125,21 @@ export function createSheriffBalance({ snapshot, send, now = Date.now, onLog = (
             try {
               const fresh = await snapshot();
               stage = 'Private notice';
-              return fresh.some(p => key(p) === id && !p.enforcementExempt);
+              // :wanted may already have removed them from Sheriff — still PM if they are in the server.
+              return fresh.some(p => key(p) === id);
             } catch (error) {
               if (!isTransientLookupError(error)) throw error;
               stage = 'Private notice';
-              return !entry.player.enforcementExempt;
+              return true;
             }
           },
         });
-        log({ action: notified === false ? 'Private notice skipped after live recheck' : 'Team-full private notice sent', player: entry.player, count: current.size });
+        if (notified === false) {
+          log({ action: 'Private notice skipped; player left the server', player: entry.player, count: current.size });
+          pending.delete(id);
+          continue;
+        }
+        log({ action: 'Team-full private notice sent', player: entry.player, count: current.size });
         pending.delete(id);
       } catch (error) {
         entry.failures = (entry.failures || 0) + 1;

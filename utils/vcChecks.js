@@ -9,6 +9,10 @@ import { enforcementLogBody, postProximityLog } from './vcActionLog.js';
 
 export const VC_MESSAGES = ['Please join a Voice Channel inside of Clewarwater Roleplay', 'Please join a Voice Channel'];
 export const COMMS_MESSAGES = ['⚠️ Please join out comms code: cwrpvc', '🚨 Join our server code: cwrpvc', '⚠️ Join our comms server now to not get jailed code: cwrpvc'];
+export const JAIL_MESSAGES = Object.freeze({
+  comms: 'You were jailed because you are not in the Clearwater Discord. Join with code cwrpvc to be released.',
+  voice: 'You were jailed for not being in a Clearwater Roleplay voice channel. Join a VC to be released.',
+});
 
 export function matchingMembers(members, username) {
   const name = username.toLowerCase();
@@ -46,7 +50,7 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
       if (!/^[a-zA-Z0-9_]{3,20}$/.test(player.username)) continue;
       const id = player.robloxId || player.username;
       let state = states.get(id);
-      if (!state) { state = { jailed: false, mode: null, since: now(), lastPm: -Infinity, index: 0 }; states.set(id, state); }
+      if (!state) { state = { jailed: false, mode: null, since: now(), lastPm: -Infinity, index: 0, needJailNotice: false }; states.set(id, state); }
       try {
         const matches = matchingMembers(members, player.username);
         const compliant = matches.some(m => inVoice(m.id));
@@ -61,6 +65,7 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
           state.since = now();
           state.lastPm = -Infinity;
           state.index = 0;
+          state.needJailNotice = false;
           continue;
         }
         const mode = matches.length ? 'voice' : 'comms';
@@ -73,10 +78,18 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
         };
         if (!state.jailed && (mode === 'comms' || now() - state.since >= 300000)) {
           const result = await apply(':jail ' + player.username, player, mode === 'comms' ? 'no Discord match' : 'not in voice for 5 minutes', stillNeeded);
-          if (result !== false) state.jailed = true;
-          await save([...states]);
+          if (result !== false) {
+            state.jailed = true;
+            state.needJailNotice = true;
+            await save([...states]);
+          }
         }
         if (!stillNeeded()) continue;
+        if (state.needJailNotice) {
+          const pmResult = await apply(':pm ' + player.username + ' ' + JAIL_MESSAGES[mode], player, 'jail notice', stillNeeded);
+          if (pmResult !== false) { state.needJailNotice = false; state.lastPm = now(); }
+          continue;
+        }
         if (now() - state.lastPm >= 60000) {
           const messages = mode === 'voice' ? VC_MESSAGES : COMMS_MESSAGES;
           const result = await apply(':pm ' + player.username + ' ' + messages[state.index % messages.length], player, mode === 'voice' ? 'voice reminder' : 'comms reminder', stillNeeded);

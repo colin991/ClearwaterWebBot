@@ -137,7 +137,25 @@ test('HTTP 429 retries after the API retry-after instead of 60s', async () => {
   assert.equal(attempts, 2);
 });
 
-test('diagnostics redact configured credentials and bearer tokens', () => {
+test('in-game PM still sends after wanted removes the player from Sheriff', async () => {
+  let players = Array.from({ length: 23 }, (_, i) => player(i + 1));
+  const commands = [];
+  const service = createSheriffBalance({
+    snapshot: async () => players,
+    send: async (c, options) => {
+      if (!await options.shouldExecute()) return false;
+      commands.push(c);
+      if (c.startsWith(':wanted')) players = players.map(p => p.username === 'Player24' ? { ...p, team: 'Police' } : p);
+    },
+  });
+  await service.tick();
+  players.push(player(24, 'Sheriff'));
+  await service.tick();
+  assert.equal(commands[0], ':wanted Player24');
+  assert.match(commands[1], /^:pm Player24 /);
+});
+
+test('safeBalanceError redacts secrets', () => {
   process.env.TEST_BALANCE_SECRET = 'private-test-value';
   try { assert.equal(safeBalanceError(Error('private-test-value Bearer abcdef')), '[redacted] Bearer [redacted]'); }
   finally { delete process.env.TEST_BALANCE_SECRET; }
