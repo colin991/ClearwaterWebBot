@@ -1327,6 +1327,13 @@
       "summary": "Accepted in-game mod calls move the caller and accepting moderator to an empty support voice room. Human arrivals in the staff waiting VC hear the requested spoken message before the bot leaves.",
       "createdAt": "2026-09-14T22:20:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "discord-check-command-20260915",
+      "title": "Live Discord and voice roster check",
+      "summary": "Added -dc with the supplied panel style, live online counts, missing Discord, Discord without voice, and voice-connected sections, including callsigns and whitelist labels. Large rosters split across panels.",
+      "createdAt": "2026-09-15T22:17:47.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
