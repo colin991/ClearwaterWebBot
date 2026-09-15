@@ -3,10 +3,24 @@ import { logger } from './logger.js';
 import { ensureGuildMembers } from './guildMemberSnapshot.js';
 import { hasEnforcementExemption } from './enforcementExemptions.js';
 import { getIdentityCache } from './identityStore.js';
+import { matchingMembers } from './vcChecks.js';
 
 export const SHERIFF_LIMIT = 23;
 export const SHERIFF_LOG_CHANNEL = '1549178818814812211';
 export const SHERIFF_FULL_MESSAGE = 'The Sheriff team is full (23 players maximum). Please choose another team and try again when a spot opens.';
+export const SHERIFF_FULL_DISCORD_MESSAGE = 'You were wanted because the Sheriff team is full (23 players maximum). Please choose another team and try again when a spot opens.';
+
+/** Linked Roblox ID first; otherwise a single unambiguous Discord name match. */
+export function resolveSheriffDiscordId(player, members, identities = {}) {
+  const robloxId = String(player?.robloxId || '');
+  if (robloxId) {
+    for (const [discordId, identity] of Object.entries(identities)) {
+      if (String(identity?.robloxId || '') === robloxId && /^\d{16,22}$/.test(String(discordId))) return String(discordId);
+    }
+  }
+  const matches = matchingMembers(members || new Map(), player?.username);
+  return matches.length === 1 ? String(matches[0].id) : null;
+}
 const isSheriff = p => String(p.team).trim().toLowerCase() === 'sheriff';
 const key = p => p.robloxId || p.username;
 
@@ -63,7 +77,7 @@ export function safeBalanceError(error) {
   return message.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 700);
 }
 
-export function createSheriffBalance({ snapshot, send, now = Date.now, onLog = () => {}, onError = e => logger.error('Sheriff team balance failed', e) }) {
+export function createSheriffBalance({ snapshot, send, notifyDiscord, now = Date.now, onLog = () => {}, onError = e => logger.error('Sheriff team balance failed', e) }) {
   const log = event => {
     // Discord delivery must not delay enforcement or cause a game command to repeat.
     void Promise.resolve().then(() => onLog(event)).catch(e => logger.error('Sheriff log delivery failed', e));
@@ -117,6 +131,29 @@ export function createSheriffBalance({ snapshot, send, now = Date.now, onLog = (
           entry.failures = 0;
           enforced.add(id);
           log({ action: 'Wanted command applied: Sheriff team full', player: entry.player, count: current.size });
+        }
+        if (typeof notifyDiscord === 'function' && !entry.discordNotified) {
+          stage = 'Discord notice';
+          try {
+            const sent = await notifyDiscord(entry.player);
+            entry.discordNotified = true;
+            log({
+              action: sent === false
+                ? 'Discord notice skipped; no linked Discord user'
+                : 'Discord notice sent',
+              player: entry.player,
+              count: current.size,
+            });
+          } catch (error) {
+            entry.discordNotified = true;
+            log({
+              action: 'Discord notice failed',
+              player: entry.player,
+              count: current.size,
+              detail: safeBalanceError(error),
+              status: error?.status,
+            });
+          }
         }
         stage = 'Private notice';
         const notified = await send(':pm ' + entry.player.username + ' ' + SHERIFF_FULL_MESSAGE, {
@@ -197,6 +234,16 @@ export function startSheriffBalance(client) {
       }));
     },
     send: (command, options) => executeErlcCommand(key, command, options),
+    async notifyDiscord(player) {
+      if (!client.isReady()) return false;
+      const guild = await client.guilds.fetch(client.config.guildId);
+      const identities = (await getIdentityCache()).byDiscord;
+      const discordId = resolveSheriffDiscordId(player, guild.members.cache, identities);
+      if (!discordId) return false;
+      const user = await client.users.fetch(discordId);
+      await user.send({ content: SHERIFF_FULL_DISCORD_MESSAGE, allowedMentions: { parse: [] } });
+      return true;
+    },
   });
   let stopped = false;
   let timer;

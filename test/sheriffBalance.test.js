@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSheriffBalance, postSheriffBalanceLog, SHERIFF_LOG_CHANNEL, safeBalanceError, sheriffRetryDelaySeconds, sheriffPlayersToEnforce } from '../utils/sheriffBalance.js';
+import { createSheriffBalance, postSheriffBalanceLog, SHERIFF_LOG_CHANNEL, safeBalanceError, sheriffRetryDelaySeconds, sheriffPlayersToEnforce, resolveSheriffDiscordId } from '../utils/sheriffBalance.js';
 
 const player = (id, team = 'Sheriff') => ({ username: 'Player' + id, robloxId: String(id), team });
 function fixture(count) {
@@ -159,4 +159,61 @@ test('safeBalanceError redacts secrets', () => {
   process.env.TEST_BALANCE_SECRET = 'private-test-value';
   try { assert.equal(safeBalanceError(Error('private-test-value Bearer abcdef')), '[redacted] Bearer [redacted]'); }
   finally { delete process.env.TEST_BALANCE_SECRET; }
+});
+
+test('resolveSheriffDiscordId prefers linked Roblox ID and skips ambiguous names', () => {
+  const members = new Map([
+    ['111111111111111111', { id: '111111111111111111', nickname: 'Deputy | Player24', user: {} }],
+    ['222222222222222222', { id: '222222222222222222', nickname: 'Also Player24', user: {} }],
+    ['333333333333333333', { id: '333333333333333333', nickname: 'Deputy | UniqueName', user: {} }],
+  ]);
+  assert.equal(resolveSheriffDiscordId({ username: 'Player24', robloxId: '24' }, members, {
+    '111111111111111111': { robloxId: '24' },
+  }), '111111111111111111');
+  assert.equal(resolveSheriffDiscordId({ username: 'Player24', robloxId: '24' }, members), null);
+  assert.equal(resolveSheriffDiscordId({ username: 'UniqueName', robloxId: '9' }, members), '333333333333333333');
+});
+
+test('wanted extras receive a Discord DM once without repeating wanted', async () => {
+  let players = Array.from({ length: 23 }, (_, i) => player(i + 1));
+  const commands = [];
+  const dms = [];
+  const logs = [];
+  const service = createSheriffBalance({
+    snapshot: async () => players,
+    send: async (c, options) => { if (!await options.shouldExecute()) return false; commands.push(c); },
+    notifyDiscord: async target => { dms.push(target.username); return true; },
+    onLog: e => logs.push(e),
+  });
+  await service.tick();
+  players = [...players, player(24)];
+  await service.tick();
+  assert.deepEqual(dms, ['Player24']);
+  assert.equal(commands[0], ':wanted Player24');
+  assert.match(commands[1], /^:pm Player24 /);
+  assert.match(logs.find(e => e.action.includes('Discord notice')).action, /Discord notice sent/);
+  await service.tick();
+  assert.deepEqual(dms, ['Player24']);
+  assert.equal(commands.filter(c => c === ':wanted Player24').length, 1);
+});
+
+test('Discord DM failure does not retry wanted and still sends the in-game PM', async () => {
+  let players = Array.from({ length: 23 }, (_, i) => player(i + 1));
+  const commands = [];
+  let dmAttempts = 0;
+  const logs = [];
+  const service = createSheriffBalance({
+    snapshot: async () => players,
+    send: async (c, options) => { if (!await options.shouldExecute()) return false; commands.push(c); },
+    notifyDiscord: async () => { dmAttempts += 1; throw new Error('Cannot send messages to this user'); },
+    onLog: e => logs.push(e),
+  });
+  await service.tick();
+  players = [...players, player(24)];
+  await service.tick();
+  await service.tick();
+  assert.equal(dmAttempts, 1);
+  assert.equal(commands.filter(c => c === ':wanted Player24').length, 1);
+  assert.match(commands[1], /^:pm Player24 /);
+  assert.match(logs.find(e => e.action.includes('Discord notice')).action, /Discord notice failed/);
 });
