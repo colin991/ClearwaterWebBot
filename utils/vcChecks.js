@@ -7,7 +7,7 @@ import { isVcExempt } from './enforcementExemptions.js';
 import { getIdentityCache } from './identityStore.js';
 import { enforcementLogBody, postProximityLog } from './vcActionLog.js';
 
-export const VC_MESSAGES = ['Please join a Voice Channel inside of Clewarwater Roleplay', 'Please join a Voice Channel'];
+export const VC_MESSAGES = ['Please join a Voice Channel inside of Clearwater Roleplay', 'Please join a Voice Channel'];
 export const COMMS_MESSAGES = ['⚠️ Please join out comms code: cwrpvc', '🚨 Join our server code: cwrpvc', '⚠️ Join our comms server now to not get jailed code: cwrpvc'];
 export const JAIL_MESSAGES = Object.freeze({
   comms: 'You were jailed because you are not in the Clearwater Discord. Join with code cwrpvc to be released.',
