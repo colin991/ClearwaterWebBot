@@ -1,17 +1,74 @@
 import { attachPlayerAvatars, robloxAvatarProxyPath } from '../lib/roblox-avatars.js';
+import { logger } from './logger.js';
+
+const ERLC_MIN_INTERVAL_MS = 5_000;
+const ERLC_SERVER_CACHE_TTL_MS = 5_000;
+let erlcAvailableAt = 0;
+let erlcNetworkQueue = Promise.resolve();
+const serverCache = new Map();
+const serverInflight = new Map();
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function rememberErlcCooldown(retryAfterSeconds = 0) {
+  const extra = Number.isFinite(Number(retryAfterSeconds)) ? Number(retryAfterSeconds) * 1000 : 0;
+  erlcAvailableAt = Date.now() + Math.max(ERLC_MIN_INTERVAL_MS, extra);
+}
+
+function withErlcNetworkSlot(task) {
+  const run = erlcNetworkQueue.then(async () => {
+    const waitMs = Math.max(0, erlcAvailableAt - Date.now());
+    if (waitMs) await sleep(waitMs);
+    return task();
+  });
+  erlcNetworkQueue = run.catch(() => {});
+  return run;
+}
 
 export async function fetchErlcServer(serverKey, { staff = false, modCalls = false } = {}) {
   if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
-  const url = new URL('https://api.erlc.gg/v2/server');
-  for (const field of ['Players', 'Queue']) url.searchParams.set(field, 'true');
-  if (staff) url.searchParams.set('Staff', 'true');
-  if (modCalls) url.searchParams.set('ModCalls', 'true');
-  const response = await fetch(url, {
-    headers: { 'server-key': serverKey },
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!response.ok) throw new Error(`ER:LC request failed (${response.status})`);
-  return response.json();
+  const cacheKey = `${serverKey}|${staff ? 1 : 0}|${modCalls ? 1 : 0}`;
+  const cached = serverCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  if (serverInflight.has(cacheKey)) return serverInflight.get(cacheKey);
+
+  const pending = (async () => {
+    const still = serverCache.get(cacheKey);
+    if (still && still.expiresAt > Date.now()) return still.value;
+
+    const url = new URL('https://api.erlc.gg/v2/server');
+    for (const field of ['Players', 'Queue']) url.searchParams.set(field, 'true');
+    if (staff) url.searchParams.set('Staff', 'true');
+    if (modCalls) url.searchParams.set('ModCalls', 'true');
+
+    let lastError = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const waitMs = Math.max(0, erlcAvailableAt - Date.now());
+      if (waitMs) await sleep(waitMs);
+      const response = await fetch(url, {
+        headers: { 'server-key': serverKey },
+        signal: AbortSignal.timeout(8000),
+      });
+      const retryAfter = Number(response.headers.get('retry-after') || 0);
+      if (response.status === 429 && attempt < 2) {
+        rememberErlcCooldown(retryAfter || 5);
+        logger.warn(`ER:LC server snapshot 429; retry after ${Math.ceil(retryAfter || 5)}s`);
+        lastError = new Error('ER:LC request failed (429)');
+        continue;
+      }
+      if (!response.ok) throw new Error(`ER:LC request failed (${response.status})`);
+      rememberErlcCooldown(retryAfter);
+      const json = await response.json();
+      serverCache.set(cacheKey, { value: json, expiresAt: Date.now() + ERLC_SERVER_CACHE_TTL_MS });
+      return json;
+    }
+    throw lastError || new Error('ER:LC request failed (429)');
+  })().finally(() => { serverInflight.delete(cacheKey); });
+
+  serverInflight.set(cacheKey, pending);
+  return pending;
 }
 
 function firstFinite(...values) {
@@ -182,14 +239,6 @@ function sanitizeErlcReason(value) {
     .slice(0, 120);
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-const ERLC_COMMAND_MIN_INTERVAL_MS = 5_000;
-let erlcCommandQueue = Promise.resolve();
-let erlcCommandAvailableAt = 0;
-
 /** Run one in-game command through the ER:LC private server API. */
 export async function executeErlcCommand(serverKey, command, { shouldExecute } = {}) {
   return withErlcCommandSession(serverKey, send => send(command, { shouldExecute }));
@@ -197,9 +246,7 @@ export async function executeErlcCommand(serverKey, command, { shouldExecute } =
 
 /** Reserve the shared command queue for a short grant/revoke transaction. */
 export function withErlcCommandSession(serverKey, action) {
-  const run = erlcCommandQueue.then(() => action((command, options) => sendErlcCommand(serverKey, command, options)));
-  erlcCommandQueue = run.catch(() => {});
-  return run;
+  return withErlcNetworkSlot(() => action((command, options) => sendErlcCommand(serverKey, command, options)));
 }
 
 async function sendErlcCommand(serverKey, command, { shouldExecute } = {}) {
@@ -207,35 +254,39 @@ async function sendErlcCommand(serverKey, command, { shouldExecute } = {}) {
     const text = String(command || '').trim();
     if (!text.startsWith(':')) throw new Error('Invalid ER:LC command');
 
-    const waitMs = Math.max(0, erlcCommandAvailableAt - Date.now());
-    if (waitMs) await sleep(waitMs);
-    if (shouldExecute && !await shouldExecute()) return false;
-    const response = await fetch('https://api.erlc.gg/v2/server/command', {
-      method: 'POST',
-      headers: {
-        'server-key': serverKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ command: text }),
-      signal: AbortSignal.timeout(12000),
-    });
-    const result = await response.json().catch(() => ({}));
-    const retryAfterSeconds = Number(result.retry_after || response.headers.get('retry-after') || 0);
-    erlcCommandAvailableAt = Date.now() + Math.max(
-      ERLC_COMMAND_MIN_INTERVAL_MS,
-      Number.isFinite(retryAfterSeconds) ? retryAfterSeconds * 1000 : 0,
-    );
-    if (!response.ok) {
+    let lastError = null;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const waitMs = Math.max(0, erlcAvailableAt - Date.now());
+      if (waitMs) await sleep(waitMs);
+      if (shouldExecute && !await shouldExecute()) return false;
+      const response = await fetch('https://api.erlc.gg/v2/server/command', {
+        method: 'POST',
+        headers: {
+          'server-key': serverKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ command: text }),
+        signal: AbortSignal.timeout(12000),
+      });
+      const result = await response.json().catch(() => ({}));
+      const retryAfterSeconds = Number(result.retry_after || response.headers.get('retry-after') || 0);
+      rememberErlcCooldown(Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : 0);
+      if (response.ok) return result;
       const message = result.message || result.error || `ER:LC command failed (${response.status})`;
       const error = new Error(response.status === 429
         ? `${message} Retry after ${Math.ceil(Math.max(retryAfterSeconds, 5))} seconds.`
         : message);
       error.status = response.status;
       error.commandId = result.commandId;
-      error.retryAfter = retryAfterSeconds || null;
+      error.retryAfter = retryAfterSeconds || (response.status === 429 ? 5 : null);
+      lastError = error;
+      if (response.status === 429 && attempt < 3) {
+        logger.warn(`ER:LC command 429 on ${text.slice(0, 80)}; retry ${attempt + 1}/3 after ${error.retryAfter}s`);
+        continue;
+      }
       throw error;
     }
-    return result;
+    throw lastError || new Error('ER:LC command failed');
 }
 
 function buildErlcModCommand(action, player, reason) {
