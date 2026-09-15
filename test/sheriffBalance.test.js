@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSheriffBalance, postSheriffBalanceLog, SHERIFF_LOG_CHANNEL, safeBalanceError, sheriffRetryDelaySeconds, sheriffPlayersToEnforce, resolveSheriffDiscordId } from '../utils/sheriffBalance.js';
+import { createSheriffBalance, postSheriffBalanceLog, SHERIFF_LOG_CHANNEL, safeBalanceError, sheriffRetryDelaySeconds, sheriffPlayersToEnforce, planSheriffEnforcement, resolveSheriffDiscordId, SHERIFF_TENURE_MS, SHERIFF_ROTATE_MESSAGE, SHERIFF_ROTATE_DISCORD_MESSAGE } from '../utils/sheriffBalance.js';
 
 const player = (id, team = 'Sheriff') => ({ username: 'Player' + id, robloxId: String(id), team });
 function fixture(count) {
@@ -72,6 +72,25 @@ test('sheriffPlayersToEnforce keeps the first 23 and wants the rest', () => {
   const sheriffs = Array.from({ length: 28 }, (_, i) => player(i + 1));
   const wanted = sheriffPlayersToEnforce(sheriffs, { previous: null }).map(p => p.username);
   assert.deepEqual(wanted, ['Player24', 'Player25', 'Player26', 'Player27', 'Player28']);
+});
+
+test('planSheriffEnforcement rotates the longest 1.5h incumbent instead of wanting the joiner', () => {
+  const sheriffs = Array.from({ length: 24 }, (_, i) => player(i + 1));
+  const previous = new Set(sheriffs.slice(0, 23).map(p => p.robloxId));
+  const now = SHERIFF_TENURE_MS + 5_000;
+  const joinedAt = Object.fromEntries(sheriffs.slice(0, 23).map(p => [p.robloxId, 4_000]));
+  joinedAt['5'] = 1;
+  const actions = planSheriffEnforcement(sheriffs, { previous, joinedAt, now });
+  assert.deepEqual(actions.map(a => [a.player.username, a.reason]), [['Player5', 'rotate']]);
+});
+
+test('planSheriffEnforcement wants the joiner when nobody has 1.5 hours', () => {
+  const sheriffs = Array.from({ length: 24 }, (_, i) => player(i + 1));
+  const previous = new Set(sheriffs.slice(0, 23).map(p => p.robloxId));
+  const now = 60_000;
+  const joinedAt = Object.fromEntries(sheriffs.slice(0, 23).map(p => [p.robloxId, 1]));
+  const actions = planSheriffEnforcement(sheriffs, { previous, joinedAt, now });
+  assert.deepEqual(actions.map(a => [a.player.username, a.reason]), [['Player24', 'full']]);
 });
 
 test('logs enforcement once and sends embeds to the specified channel without mentions', async () => {
@@ -216,4 +235,69 @@ test('Discord DM failure does not retry wanted and still sends the in-game PM', 
   assert.equal(commands.filter(c => c === ':wanted Player24').length, 1);
   assert.match(commands[1], /^:pm Player24 /);
   assert.match(logs.find(e => e.action.includes('Discord notice')).action, /Discord notice failed/);
+});
+
+test('rotates the longest 1.5h Sheriff, PMs in game, and DMs Discord', async () => {
+  let time = SHERIFF_TENURE_MS + 10_000;
+  let players = Array.from({ length: 23 }, (_, i) => player(i + 1));
+  const commands = [];
+  const dms = [];
+  const logs = [];
+  const tenure = Object.fromEntries(players.map(p => [p.robloxId, time - 1_000]));
+  tenure['1'] = 1;
+  const service = createSheriffBalance({
+    now: () => time,
+    loadTenure: async () => tenure,
+    snapshot: async () => players,
+    send: async (c, options) => { if (!await options.shouldExecute()) return false; commands.push(c); },
+    notifyDiscord: async (target, message) => { dms.push({ user: target.username, message }); return true; },
+    onLog: e => logs.push(e),
+  });
+  await service.tick();
+  players = [...players, player(24)];
+  await service.tick();
+  assert.equal(commands[0], ':wanted Player1');
+  assert.equal(commands[1], ':pm Player1 ' + SHERIFF_ROTATE_MESSAGE);
+  assert.deepEqual(dms, [{ user: 'Player1', message: SHERIFF_ROTATE_DISCORD_MESSAGE }]);
+  assert.ok(!commands.some(c => c.includes('Player24')));
+  assert.match(logs[0].action, /rotated after 1.5 hours/);
+});
+
+test('one long-timer and two joiners rotates one and wants the extra', async () => {
+  let time = SHERIFF_TENURE_MS + 10_000;
+  let players = Array.from({ length: 23 }, (_, i) => player(i + 1));
+  const commands = [];
+  const tenure = Object.fromEntries(players.map(p => [p.robloxId, time - 1_000]));
+  tenure['1'] = 1;
+  const service = createSheriffBalance({
+    now: () => time,
+    loadTenure: async () => tenure,
+    snapshot: async () => players,
+    send: async (c, options) => { if (!await options.shouldExecute()) return false; commands.push(c); },
+  });
+  await service.tick();
+  players = [...players, player(24), player(25)];
+  await service.tick();
+  assert.deepEqual(commands.filter(c => c.startsWith(':wanted')), [':wanted Player1', ':wanted Player25']);
+  assert.ok(!commands.some(c => c.includes('Player24') && c.startsWith(':wanted')));
+});
+
+test('exempt long-timer is not rotated; the new joiner is wanted', async () => {
+  let time = SHERIFF_TENURE_MS + 10_000;
+  let players = Array.from({ length: 23 }, (_, i) => player(i + 1));
+  players[0] = { ...players[0], enforcementExempt: true };
+  const commands = [];
+  const tenure = Object.fromEntries(players.map(p => [p.robloxId, time - 1_000]));
+  tenure['1'] = 1;
+  const service = createSheriffBalance({
+    now: () => time,
+    loadTenure: async () => tenure,
+    snapshot: async () => players,
+    send: async (c, options) => { if (!await options.shouldExecute()) return false; commands.push(c); },
+  });
+  await service.tick();
+  players = [...players, player(24)];
+  await service.tick();
+  assert.equal(commands[0], ':wanted Player24');
+  assert.ok(!commands.some(c => c === ':wanted Player1'));
 });
