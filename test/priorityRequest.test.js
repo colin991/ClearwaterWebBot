@@ -10,6 +10,7 @@ import {
   PRIORITY_PEACE_SECONDS,
   PRIORITY_REQUEST_SECONDS,
   requesterDiedAfterGrace,
+  resolvePriorityPlayers,
 } from '../utils/priorityRequest.js';
 
 test('civilian vehicles keep civilian-owned cars and format the staff label', () => {
@@ -24,6 +25,37 @@ test('civilian vehicles keep civilian-owned cars and format the staff label', ()
   const civ = civilianVehicles(vehicles, players);
   assert.equal(civ.length, 1);
   assert.equal(formatPriorityVehicle(civ[0]), 'Really black Navara Horizon 2013 [GOV-884]');
+});
+
+test('typed search and dropdown values resolve in-game players', () => {
+  const players = [
+    { username: 'Alpha', robloxId: '1' },
+    { username: 'Bravo', robloxId: '2' },
+    { username: 'Charlie', robloxId: '3' },
+  ];
+  const picked = resolvePriorityPlayers(players, ['0'], 'char');
+  assert.deepEqual(picked.map((player) => player.username), ['Alpha', 'Charlie']);
+});
+
+test('priority form modal placeholders tell people they can search', async () => {
+  const stored = { request: null };
+  const svc = createPriorityRequestService({
+    now: () => 1,
+    load: async () => stored,
+    save: async () => {},
+    send: async () => {},
+    snapshot: async () => ({}),
+    postStaff: async () => ({ id: 'm' }),
+    editStaff: async () => {},
+    dmUser: async () => {},
+  });
+  const modal = await svc.openForm({ user: { id: 'u1' } }, {
+    players: [{ username: 'Alpha', robloxId: '1', team: 'Civilian' }],
+    vehicles: [{ name: 'Navara', ownerUsername: 'Alpha', texture: 'Black', plate: '1' }],
+  });
+  const json = JSON.stringify(modal.toJSON());
+  assert.match(json, /Search in-game users/);
+  assert.match(json, /Search civilian vehicles/);
 });
 
 test('pending and active requests block a new submission', () => {
