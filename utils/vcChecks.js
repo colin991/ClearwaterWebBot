@@ -6,6 +6,9 @@ import { resolve } from 'node:path';
 import { isVcExempt } from './enforcementExemptions.js';
 import { getIdentityCache } from './identityStore.js';
 import { enforcementLogBody, postProximityLog } from './vcActionLog.js';
+import { membersForPlayer } from './robloxDiscordMatch.js';
+
+export { matchingMembers, membersForPlayer, robloxNameMatchesText } from './robloxDiscordMatch.js';
 
 export const VC_MESSAGES = ['Please join a Voice Channel inside of Clearwater Roleplay', 'Please join a Voice Channel'];
 export const COMMS_MESSAGES = ['⚠️ Please join out comms code: cwrpvc', '🚨 Join our server code: cwrpvc', '⚠️ Join our comms server now to not get jailed code: cwrpvc'];
@@ -13,13 +16,6 @@ export const JAIL_MESSAGES = Object.freeze({
   comms: 'You were jailed because you are not in the Clearwater Discord. Join with code cwrpvc to be released.',
   voice: 'You were jailed for not being in a Clearwater Roleplay voice channel. Join a VC to be released.',
 });
-
-export function matchingMembers(members, username) {
-  const name = username.toLowerCase();
-  return [...members.values()].filter(m => !m.user?.bot &&
-    [m.nickname, m.displayName, m.user?.globalName, m.user?.username].some(text =>
-      String(text || '').toLowerCase().includes(name)));
-}
 
 // Inject I/O so tests cannot issue commands to the live game.
 export function createVcChecks({ snapshot, send, load = async () => [], save = async () => {}, now = Date.now, onError = error => logger.error('VC checks failed', error), onLog = () => {} }) {
@@ -52,7 +48,7 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
       let state = states.get(id);
       if (!state) { state = { jailed: false, mode: null, since: now(), lastPm: -Infinity, index: 0, needJailNotice: false }; states.set(id, state); }
       try {
-        const matches = matchingMembers(members, player.username);
+        const matches = membersForPlayer(player, members, identities);
         const compliant = matches.some(m => inVoice(m.id));
         if (!enabled || compliant || isVcExempt(player, members, identities)) {
           if (state.jailed) {
@@ -73,7 +69,7 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
           state.mode = mode; state.since = now(); state.lastPm = -Infinity; state.index = 0;
         }
         const stillNeeded = () => {
-          const current = matchingMembers(members, player.username);
+          const current = membersForPlayer(player, members, identities);
           return enabled && !isVcExempt(player, members, identities) && (current.length ? 'voice' : 'comms') === mode && !current.some(m => inVoice(m.id));
         };
         if (!state.jailed && (mode === 'comms' || now() - state.since >= 300000)) {

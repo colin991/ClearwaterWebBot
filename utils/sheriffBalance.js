@@ -4,7 +4,7 @@ import { logger } from './logger.js';
 import { ensureGuildMembers } from './guildMemberSnapshot.js';
 import { hasEnforcementExemption } from './enforcementExemptions.js';
 import { getIdentityCache } from './identityStore.js';
-import { matchingMembers } from './vcChecks.js';
+import { matchingMembers } from './robloxDiscordMatch.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
 export const SHERIFF_LIMIT = 23;

@@ -1,5 +1,5 @@
 import { MessageFlags, escapeMarkdown } from 'discord.js';
-import { matchingMembers } from './vcChecks.js';
+import { membersForPlayer } from './robloxDiscordMatch.js';
 import { isVcExempt } from './enforcementExemptions.js';
 
 const CHECK = '<:check:1514421732356653139>';
@@ -8,10 +8,7 @@ const BANNER = 'https://cdn.discordapp.com/attachments/1514422317587890327/15492
 
 export function classifyDiscordPlayers(players, members, identities = {}, inVoice = () => false) {
   return players.map(player => {
-    const linked = Object.entries(identities).filter(([, identity]) => player.robloxId && String(identity.robloxId) === String(player.robloxId));
-    const matches = linked.length
-      ? linked.map(([id]) => members.get(id)).filter(m => m && !m.user?.bot)
-      : matchingMembers(members, player.username);
+    const matches = membersForPlayer(player, members, identities);
     return { ...player, inDiscord: matches.length > 0, inVoice: matches.some(m => inVoice(m.id)),
       exempt: isVcExempt(player, members, identities) };
   }).sort((a, b) => a.username.localeCompare(b.username));

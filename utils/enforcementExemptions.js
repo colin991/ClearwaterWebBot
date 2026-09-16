@@ -1,3 +1,5 @@
+import { robloxNameMatchesText } from './robloxDiscordMatch.js';
+
 export const ENFORCEMENT_EXEMPT_ROLE = '1514033074948800683';
 const VC_EXEMPT_NAMES = new Set(['coleddev13', 'notj3dah']);
 
@@ -7,7 +9,7 @@ export function hasEnforcementExemption(player, members, identities = {}) {
     if (player.robloxId && String(identities[member.id]?.robloxId || '') === String(player.robloxId)) return true;
     const username = String(player.username || '').trim().toLowerCase();
     return username.length >= 3 && [member.nickname, member.displayName, member.user?.globalName, member.user?.username]
-      .some(name => String(name || '').toLowerCase().includes(username));
+      .some(name => robloxNameMatchesText(name, username));
   });
 }
 
