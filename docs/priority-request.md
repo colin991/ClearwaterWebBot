@@ -1,10 +1,10 @@
 # Priority requests
 
-`/request-priority` in the Clearwater Discord server opens an ephemeral form:
+`/request-priority` in the Clearwater Discord server opens a searchable form:
 
-1. Select up to **4 in-game players**.
-2. Select up to **2 vehicles** whose owners are currently on the **Civilian** team.
-3. Continue into **Background** and **Priority Details**.
+1. **Search and select** up to **4 in-game players** (type in the dropdown to filter). If more than 25 people are in-game, extra names can be typed.
+2. **Search and select** up to **2 vehicles** whose owners are currently on the **Civilian** team.
+3. Fill in **Background** and **Priority Details** on the same form.
 
 If a request is already **pending** or **active**, a new one cannot be submitted.
 

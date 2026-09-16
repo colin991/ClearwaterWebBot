@@ -1,7 +1,4 @@
 import {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
   LabelBuilder,
   MessageFlags,
   ModalBuilder,
@@ -216,6 +213,109 @@ function vehicleOptions(vehicles) {
   }));
 }
 
+function byUsername(left, right) {
+  return String(left?.username || '').localeCompare(String(right?.username || ''), undefined, { sensitivity: 'base' });
+}
+
+export function resolvePriorityPlayers(players, selectedValues, typedNames = '') {
+  const picked = [];
+  const seen = new Set();
+  const add = (player) => {
+    if (!player) return;
+    const key = String(player.robloxId || player.username).toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    picked.push(player);
+  };
+  for (const value of selectedValues || []) {
+    const index = Number(value);
+    if (Number.isInteger(index)) add(players[index]);
+  }
+  for (const token of String(typedNames || '').split(/[,;\n]+/).map((part) => part.trim()).filter(Boolean)) {
+    const lower = token.toLowerCase();
+    add(players.find((player) => player.username.toLowerCase() === lower)
+      || players.find((player) => player.username.toLowerCase().includes(lower)));
+  }
+  return picked.slice(0, 4);
+}
+
+function optionalSelectValues(fields, customId) {
+  try {
+    return fields.getStringSelectValues(customId);
+  } catch {
+    return [];
+  }
+}
+
+function optionalText(fields, customId) {
+  try {
+    return fields.getTextInputValue(customId);
+  } catch {
+    return '';
+  }
+}
+
+function buildPriorityFormModal({ id, players, vehicles }) {
+  const playerOpts = playerOptions(players);
+  const vehicleOpts = vehicleOptions(vehicles);
+  const modal = new ModalBuilder().setCustomId(`${PREFIX}form:${id}`).setTitle('Priority request');
+  const labels = [
+    new LabelBuilder()
+      .setLabel('Users involved (max 4)')
+      .setDescription('Type to search in-game names, then select up to 4 people.')
+      .setStringSelectMenuComponent(
+        new StringSelectMenuBuilder()
+          .setCustomId('users')
+          .setPlaceholder('Search in-game users')
+          .setMinValues(1)
+          .setMaxValues(Math.min(4, playerOpts.length))
+          .setRequired(true)
+          .addOptions(playerOpts),
+      ),
+  ];
+  if (vehicleOpts.length) {
+    labels.push(
+      new LabelBuilder()
+        .setLabel('Civilian vehicles (max 2)')
+        .setDescription('Type to search vehicle or owner name.')
+        .setStringSelectMenuComponent(
+          new StringSelectMenuBuilder()
+            .setCustomId('vehs')
+            .setPlaceholder('Search civilian vehicles')
+            .setMinValues(0)
+            .setMaxValues(Math.min(2, vehicleOpts.length))
+            .setRequired(false)
+            .addOptions(vehicleOpts),
+        ),
+    );
+  }
+  if (players.length > 25) {
+    labels.push(
+      new LabelBuilder()
+        .setLabel('More users')
+        .setDescription('Type names that did not appear in the searchable list.')
+        .setTextInputComponent(
+          new TextInputBuilder()
+            .setCustomId('more_users')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false)
+            .setMaxLength(100)
+            .setPlaceholder('Name1, Name2'),
+        ),
+    );
+  }
+  labels.push(
+    new LabelBuilder().setLabel('Background').setTextInputComponent(
+      new TextInputBuilder().setCustomId('background').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(800),
+    ),
+    new LabelBuilder().setLabel('Priority Details').setTextInputComponent(
+      new TextInputBuilder().setCustomId('details').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(800),
+    ),
+  );
+  modal.addLabelComponents(...labels.slice(0, 5));
+  return modal;
+}
+
 export function createPriorityRequestService({
   snapshot,
   send,
@@ -323,49 +423,18 @@ export function createPriorityRequestService({
         throw new Error(`A priority request is ${status}. Wait until staff finish it before submitting another.`);
       }
       const id = newId();
+      const sorted = [...players].sort(byUsername);
       drafts.set(interaction.user.id, {
         id,
         userId: interaction.user.id,
-        players,
+        players: sorted,
         vehicles,
         selectedPlayers: [],
         selectedVehicles: [],
         createdAt: now(),
       });
-      const playerOpts = playerOptions(players);
-      if (!playerOpts.length) throw new Error('No in-game players are available to add to a priority.');
-      const rows = [
-        new ActionRowBuilder().addComponents(
-          new StringSelectMenuBuilder()
-            .setCustomId(`${PREFIX}users:${id}`)
-            .setPlaceholder('Users involved (max 4)')
-            .setMinValues(1)
-            .setMaxValues(Math.min(4, playerOpts.length))
-            .addOptions(playerOpts),
-        ),
-      ];
-      const vehicleOpts = vehicleOptions(vehicles);
-      if (vehicleOpts.length) {
-        const options = [{ label: 'No vehicle', value: 'none' }, ...vehicleOpts].slice(0, 25);
-        rows.push(new ActionRowBuilder().addComponents(
-          new StringSelectMenuBuilder()
-            .setCustomId(`${PREFIX}vehs:${id}`)
-            .setPlaceholder('Civilian vehicles (max 2)')
-            .setMinValues(1)
-            .setMaxValues(Math.min(2, vehicleOpts.length))
-            .addOptions(options),
-        ));
-      }
-      rows.push(new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`${PREFIX}continue:${id}`).setLabel('Continue').setStyle(ButtonStyle.Primary),
-      ));
-      return {
-        flags: MessageFlags.Ephemeral,
-        content: vehicleOpts.length
-          ? 'Select **up to 4 in-game users** and **up to 2 civilian vehicles**, then continue to add background and priority details.'
-          : 'Select **up to 4 in-game users**, then continue. No civilian-team vehicles are spawned right now.',
-        components: rows,
-      };
+      if (!sorted.length) throw new Error('No in-game players are available to add to a priority.');
+      return buildPriorityFormModal({ id, players: sorted, vehicles });
     },
 
     async submitRequest({ user, selectedPlayers, selectedVehicles, background, details }) {
@@ -500,62 +569,34 @@ export async function handlePriorityRequest(interaction) {
         await interaction.reply({ content: 'Use `/request-priority` in the Clearwater Discord server.', flags: MessageFlags.Ephemeral });
         return true;
       }
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const server = await fetchErlcServer(interaction.client.config.erlcServerKey, { vehicles: true });
       const players = (server.Players || []).map(parseErlcPlayer).filter(p => p.username);
       const vehicles = civilianVehicles((server.Vehicles || []).map(parseErlcVehicle), players);
-      const payload = await service.openForm(interaction, { players, vehicles });
-      await interaction.editReply(payload);
+      await interaction.showModal(await service.openForm(interaction, { players, vehicles }));
       return true;
     }
 
-    if (interaction.isStringSelectMenu()) {
+    if (interaction.isModalSubmit() && id.startsWith(`${PREFIX}form:`)) {
       const draft = service.getDraft(interaction.user.id);
       if (!draft || !id.endsWith(`:${draft.id}`)) {
         await interaction.reply({ content: 'That form expired. Run `/request-priority` again.', flags: MessageFlags.Ephemeral });
         return true;
       }
-      const indexes = interaction.values.map(Number).filter(Number.isInteger);
-      if (id.startsWith(`${PREFIX}users:`)) {
-        service.setDraft(interaction.user.id, { selectedPlayers: indexes.map(i => draft.players[i]).filter(Boolean).slice(0, 4) });
-      } else {
-        const picked = interaction.values.filter(value => value !== 'none').map(Number).filter(Number.isInteger);
-        service.setDraft(interaction.user.id, { selectedVehicles: picked.map(i => draft.vehicles[i]).filter(Boolean).slice(0, 2) });
-      }
-      await interaction.deferUpdate();
-      return true;
-    }
-
-    if (interaction.isButton() && id.startsWith(`${PREFIX}continue:`)) {
-      const draft = service.getDraft(interaction.user.id);
-      if (!draft || !draft.selectedPlayers.length) {
-        await interaction.reply({ content: 'Select at least one in-game user first.', flags: MessageFlags.Ephemeral });
-        return true;
-      }
-      const modal = new ModalBuilder().setCustomId(`${PREFIX}details:${draft.id}`).setTitle('Priority Information');
-      modal.addLabelComponents(
-        new LabelBuilder().setLabel('Background').setTextInputComponent(
-          new TextInputBuilder().setCustomId('background').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(800),
-        ),
-        new LabelBuilder().setLabel('Priority Details').setTextInputComponent(
-          new TextInputBuilder().setCustomId('details').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(800),
-        ),
+      const selectedPlayers = resolvePriorityPlayers(
+        draft.players,
+        interaction.fields.getStringSelectValues('users'),
+        optionalText(interaction.fields, 'more_users'),
       );
-      await interaction.showModal(modal);
-      return true;
-    }
-
-    if (interaction.isModalSubmit() && id.startsWith(`${PREFIX}details:`)) {
-      const draft = service.getDraft(interaction.user.id);
-      if (!draft) {
-        await interaction.reply({ content: 'That form expired. Run `/request-priority` again.', flags: MessageFlags.Ephemeral });
+      if (!selectedPlayers.length) {
+        await interaction.reply({ content: 'Select at least one in-game user.', flags: MessageFlags.Ephemeral });
         return true;
       }
+      const vehicleIndexes = optionalSelectValues(interaction.fields, 'vehs').map(Number).filter(Number.isInteger);
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await service.submitRequest({
         user: interaction.user,
-        selectedPlayers: draft.selectedPlayers,
-        selectedVehicles: draft.selectedVehicles || [],
+        selectedPlayers,
+        selectedVehicles: vehicleIndexes.map((index) => draft.vehicles[index]).filter(Boolean).slice(0, 2),
         background: interaction.fields.getTextInputValue('background'),
         details: interaction.fields.getTextInputValue('details'),
       });
