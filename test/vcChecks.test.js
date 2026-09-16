@@ -13,6 +13,7 @@ function fixture() {
   let fail = false;
   const service = createVcChecks({
     now: () => time,
+    enabled: true,
     snapshot: async () => { if (fail) throw Error('unavailable'); return { players, members, inVoice: id => voices.has(id) }; },
     send: async (text, guard) => { if (guard && !guard()) return false; calls.push(text); },
     onError: error => errors.push(error),
@@ -23,7 +24,22 @@ function fixture() {
   };
 }
 
-test('default on; minute reminders and never jails or loads', async () => {
+test('default off; no reminders until turned on', async () => {
+  const f = fixture();
+  const service = createVcChecks({
+    now: () => 0,
+    snapshot: async () => ({ players: f.players, members: f.members, inVoice: id => f.voices.has(id) }),
+    send: async (text, guard) => { if (guard && !guard()) return false; f.calls.push(text); },
+  });
+  assert.equal(service.enabled, false);
+  await service.tick();
+  assert.deepEqual(f.calls, []);
+  f.join();
+  await service.setEnabled(true);
+  assert.equal(f.calls[0], ':pm Roblox_User ' + VC_MESSAGES[0]);
+});
+
+test('default on when enabled; minute reminders and never jails or loads', async () => {
   const f = fixture(); f.join();
   assert.equal(f.service.enabled, true);
   await f.service.tick();
@@ -68,6 +84,7 @@ test('lookup failure cannot PM or clear tracked jail state', async () => {
 test('incomplete Discord roster does not treat players as missing', async () => {
   const calls = [];
   const service = createVcChecks({
+    enabled: true,
     snapshot: async () => ({
       players: [{ username: 'Player', robloxId: '1' }],
       members: new Map(),
@@ -105,6 +122,7 @@ test('queued enforcement is cancelled if the player joins voice while waiting', 
   let voice = false;
   const calls = [];
   const service = createVcChecks({
+    enabled: true,
     snapshot: async () => ({ players: [{ username: 'Player', robloxId: '1' }], members: new Map([['d', { id: 'd', nickname: 'Player' }]]), inVoice: () => voice }),
     send: async (c, guard) => { voice = true; if (guard && !guard()) return false; calls.push(c); },
   });
@@ -123,6 +141,7 @@ test('successful PM emits ops-log events and never jails', async () => {
   const events = [];
   const service = createVcChecks({
     now: () => 0,
+    enabled: true,
     snapshot: async () => ({ players: f.players, members: f.members, inVoice: id => f.voices.has(id) }),
     send: async (text, guard) => { if (guard && !guard()) return false; f.calls.push(text); },
     onLog: event => events.push(event),

@@ -2,7 +2,7 @@
 
 Main-server role `1514033074948800683` bypasses VC checks (linked Roblox ID or name match). Roblox usernames `Coleddev13` and `notj3dah` also bypass these checks, with exact case-insensitive matching. Exempt players receive no reminders; previously tracked VC-check jails are released. The role also permits entry through the secondary-server gate; the username exemptions apply only to VC checks.
 
-Use `/vc checks state:on` or `/vc checks state:off` in the configured Clearwater Discord server. Administrator permission is required both in the command registration and at execution. Checks start **on** at every bot startup, even if previously disabled.
+Use `/vc checks state:on` or `/vc checks state:off` in the configured Clearwater Discord server. Administrator permission is required both in the command registration and at execution. Checks start **off** at every bot startup, even if previously enabled.
 
 `/vc whitelist` is Administrator-only (Discord Administrator permission, not just a role named admin). Discord hides it from members without that permission. Use `action:remove` to take them off, or `action:list` to see the list. Stored in `data/vc-whitelist.json` (Git-ignored). A whitelist match unjails any VC-check jail on the next pass. The hardcoded usernames and staff exemption role still apply.
 
