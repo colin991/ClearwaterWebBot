@@ -1,6 +1,6 @@
 import { fetchErlcServer, parseErlcPlayer, executeErlcCommand } from './erlc.js';
 import { logger } from './logger.js';
-import { ensureGuildMembers } from './guildMemberSnapshot.js';
+import { ensureGuildMembers, isDiscordRosterReady } from './guildMemberSnapshot.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { resolve } from 'node:path';
 import { isVcExempt } from './enforcementExemptions.js';
@@ -15,7 +15,7 @@ export const VC_MESSAGES = ['Please hop in a Clearwater Roleplay voice chat.', '
 export const COMMS_MESSAGES = [
   'Please get in Clearwater comms. Code: CWRP VC',
   'Please join Clearwater comms now. Code: CWRP VC',
-  'Get in Clearwater comms to be released. Code: CWRP VC',
+  'Get in Clearwater comms. Code: CWRP VC',
 ];
 export const JAIL_MESSAGES = Object.freeze({
   comms: 'You are held until you are in Clearwater comms. Code: CWRP VC',
@@ -33,10 +33,10 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
   let running;
   async function apply(command, player, reason, shouldExecute) {
     const verb = String(command || '').trim().split(/\s+/)[0].toLowerCase();
-    if (![':pm', ':jail', ':unjail'].includes(verb)) return false;
+    if (![':pm', ':unjail'].includes(verb)) return false;
     const result = await send(command, shouldExecute);
     if (result === false) return false;
-    const kind = verb === ':unjail' ? 'UNJAIL' : verb === ':jail' ? 'JAIL' : 'PM';
+    const kind = verb === ':unjail' ? 'UNJAIL' : 'PM';
     const message = kind === 'PM' ? command.replace(/^:pm\s+\S+\s+/i, '').slice(0, 120) : '';
     log({ action: kind, player, reason, message, command });
     return result;
@@ -46,7 +46,7 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
       for (const [id, state] of await load()) states.set(id, state);
       loaded = true;
     }
-    const { players, members, inVoice, identities = {} } = await snapshot();
+    const { players, members, inVoice, identities = {}, membersReady = true } = await snapshot();
     const online = new Set(players.map(p => p.robloxId || p.username));
     for (const id of states.keys()) if (!online.has(id)) states.delete(id);
     for (const player of players) {
@@ -55,15 +55,14 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
       let state = states.get(id);
       if (!state) { state = { jailed: false, mode: null, since: now(), lastPm: -Infinity, index: 0, needJailNotice: false }; states.set(id, state); }
       try {
+        if (state.jailed) {
+          await apply(':unjail ' + player.username, player, 'vc checks no longer jail');
+          state.jailed = false;
+          await save([...states]);
+        }
         const matches = membersForPlayer(player, members, identities);
         const compliant = matches.some(m => inVoice(m.id));
         if (!enabled || compliant || isVcExempt(player, members, identities)) {
-          if (state.jailed) {
-            const reason = !enabled ? 'checks disabled' : isVcExempt(player, members, identities) ? 'exempt' : 'joined voice';
-            await apply(':unjail ' + player.username, player, reason);
-            state.jailed = false;
-            await save([...states]);
-          }
           state.mode = null;
           state.since = now();
           state.lastPm = -Infinity;
@@ -71,6 +70,7 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
           state.needJailNotice = false;
           continue;
         }
+        if (!membersReady && !matches.length) continue;
         const mode = matches.length ? 'voice' : 'comms';
         if (state.mode !== mode) {
           state.mode = mode; state.since = now(); state.lastPm = -Infinity; state.index = 0; state.needJailNotice = false;
@@ -79,35 +79,6 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
           const current = membersForPlayer(player, members, identities);
           return enabled && !isVcExempt(player, members, identities) && (current.length ? 'voice' : 'comms') === mode && !current.some(m => inVoice(m.id));
         };
-        if (!state.jailed && (mode === 'comms' || now() - state.since >= 300000)) {
-          const jailReason = mode === 'comms' ? 'no Discord match' : 'not in voice for 5 minutes';
-          if (stillNeeded()) {
-            try {
-              const pmResult = await apply(':pm ' + player.username + ' ' + JAIL_MESSAGES[mode], player, 'jail notice', stillNeeded);
-              if (pmResult !== false) {
-                state.needJailNotice = false;
-                state.lastPm = now();
-              } else {
-                state.needJailNotice = true;
-              }
-            } catch (error) {
-              onError(error);
-              state.needJailNotice = true;
-            }
-          }
-          if (!stillNeeded()) continue;
-          const result = await apply(':jail ' + player.username, player, jailReason, stillNeeded);
-          if (result !== false) {
-            state.jailed = true;
-            await save([...states]);
-          }
-          continue;
-        }
-        if (state.needJailNotice) {
-          const pmResult = await apply(':pm ' + player.username + ' ' + JAIL_MESSAGES[mode], player, 'jail notice', stillNeeded);
-          if (pmResult !== false) { state.needJailNotice = false; state.lastPm = now(); }
-          continue;
-        }
         if (now() - state.lastPm >= 60000) {
           const messages = mode === 'voice' ? VC_MESSAGES : COMMS_MESSAGES;
           const result = await apply(':pm ' + player.username + ' ' + messages[state.index % messages.length], player, mode === 'voice' ? 'voice reminder' : 'comms reminder', stillNeeded);
@@ -148,6 +119,7 @@ export function startVcChecks(client, config) {
       if (!Array.isArray(raw)) throw new Error('ER:LC player list unavailable; skipping VC enforcement.');
       return { players: raw.map(parseErlcPlayer), members: guild.members.cache,
         identities: (await getIdentityCache()).byDiscord,
+        membersReady: isDiscordRosterReady(guild),
         inVoice: id => Boolean(guild.voiceStates.cache.get(id)?.channelId) };
     },
     send: (command, shouldExecute) => executeErlcCommand(config.erlcServerKey, command, {

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-16-stop-auto-jail-load",
+      "title": "Stop automatic jail and load",
+      "summary": "VC checks only send in-game PMs now and unjail anyone they previously jailed. Automatic :load is blocked. An incomplete Discord member list is no longer treated as players missing from Discord.",
+      "createdAt": "2026-09-16T01:46:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-16-vc-whitelist-admin-lock",
       "title": "Lock /vc whitelist to Discord Administrator",
       "summary": "/vc whitelist is hidden from members without Discord Administrator permission and is rejected at runtime unless they have that permission in the Clearwater server.",

@@ -369,8 +369,8 @@ function sanitizeErlcReason(value) {
 }
 
 /** Run one in-game command through the ER:LC private server API. */
-export async function executeErlcCommand(serverKey, command, { shouldExecute } = {}) {
-  return withErlcCommandSession(serverKey, send => send(command, { shouldExecute }));
+export async function executeErlcCommand(serverKey, command, options = {}) {
+  return withErlcCommandSession(serverKey, send => send(command, options));
 }
 
 /** Reserve the shared command queue for a short grant/revoke transaction. */
@@ -381,10 +381,14 @@ export function withErlcCommandSession(serverKey, action) {
   );
 }
 
-async function sendErlcCommand(serverKey, command, { shouldExecute } = {}) {
+async function sendErlcCommand(serverKey, command, { shouldExecute, allowLoad = false } = {}) {
     if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
     const text = String(command || '').trim();
     if (!text.startsWith(':')) throw new Error('Invalid ER:LC command');
+    if (!allowLoad && /^:load\b/i.test(text)) {
+      logger.warn(`Blocked automatic ER:LC :load (${text.slice(0, 80)})`);
+      return false;
+    }
 
     let lastError = null;
     for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -451,7 +455,7 @@ export async function runErlcRawCommand({ serverKey, command } = {}) {
   if (text.length > 200) throw new Error('Command is too long');
   if (!/^:[A-Za-z]/.test(text)) throw new Error('Command must look like :h Hello or :kick Player');
 
-  const response = await executeErlcCommand(serverKey, text);
+  const response = await executeErlcCommand(serverKey, text, { allowLoad: /^:load\b/i.test(text) });
   return {
     action: 'command',
     ok: true,
@@ -486,7 +490,7 @@ export async function runErlcModeration({ serverKey, action, players = [], reaso
       continue;
     }
     try {
-      const response = await executeErlcCommand(serverKey, command);
+      const response = await executeErlcCommand(serverKey, command, { allowLoad: action === 'load' });
       results.push({
         ...player,
         ok: true,

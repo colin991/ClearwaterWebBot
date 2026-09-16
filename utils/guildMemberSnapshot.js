@@ -51,3 +51,13 @@ export function createMemberSnapshotLoader({ now = Date.now, ttlMs = MEMBER_FETC
 }
 
 export const ensureGuildMembers = createMemberSnapshotLoader();
+
+export function isDiscordRosterReady(guild) {
+  const cache = guild?.members?.cache;
+  if (!cache?.size) return false;
+  const humans = [...cache.values()].filter((member) => !member.user?.bot).length;
+  const expected = Number(guild.memberCount) || 0;
+  if (humans <= 0) return false;
+  if (!expected || expected <= humans) return true;
+  return humans >= Math.max(25, Math.floor(expected * 0.3));
+}

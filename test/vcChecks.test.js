@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createVcChecks, VC_MESSAGES, COMMS_MESSAGES, JAIL_MESSAGES } from '../utils/vcChecks.js';
+import { createVcChecks, VC_MESSAGES, COMMS_MESSAGES } from '../utils/vcChecks.js';
 import command from '../commands/vc.js';
 
 function fixture() {
@@ -23,32 +23,27 @@ function fixture() {
   };
 }
 
-test('default on; five minute grace, alternating minute reminders, one jail and one release', async () => {
+test('default on; minute reminders and never jails or loads', async () => {
   const f = fixture(); f.join();
   assert.equal(f.service.enabled, true);
   await f.service.tick();
   assert.deepEqual(f.calls, [':pm Roblox_User ' + VC_MESSAGES[0]]);
   f.advance(59000); await f.service.tick(); assert.equal(f.calls.length, 1);
   f.advance(1000); await f.service.tick(); assert.equal(f.calls[1], ':pm Roblox_User ' + VC_MESSAGES[1]);
-  f.advance(239999); await f.service.tick(); assert.ok(!f.calls.includes(':jail Roblox_User'));
-  f.advance(1); await f.service.tick();
-  assert.equal(f.calls.filter(c => c === ':jail Roblox_User').length, 1);
-  assert.equal(f.calls.at(-2), ':pm Roblox_User ' + JAIL_MESSAGES.voice);
-  assert.equal(f.calls.at(-1), ':jail Roblox_User');
-  assert.ok(!f.calls.some(c => c.startsWith(':kick') || c.startsWith(':load') || c.startsWith(':wanted')));
-  await f.service.tick(); assert.equal(f.calls.filter(c => c === ':jail Roblox_User').length, 1);
-  f.voices.add('discord'); await f.service.tick(); await f.service.tick();
-  assert.equal(f.calls.filter(c => c === ':unjail Roblox_User').length, 1);
+  f.advance(300000); await f.service.tick();
+  assert.ok(!f.calls.some(c => c.startsWith(':jail') || c.startsWith(':load') || c.startsWith(':kick')));
+  f.voices.add('discord'); await f.service.tick();
+  assert.ok(!f.calls.some(c => c.startsWith(':unjail')));
 });
 
-test('missing member is jailed immediately; rotates comms then voice messages and releases on VC', async () => {
+test('missing member is PMed, never jailed, then voice reminders after they join Discord', async () => {
   const f = fixture(); await f.service.tick();
-  assert.deepEqual(f.calls, [':pm Roblox_User ' + JAIL_MESSAGES.comms, ':jail Roblox_User']);
-  assert.ok(!f.calls.some(c => c.startsWith(':kick')));
-  f.advance(60000); await f.service.tick(); assert.equal(f.calls.at(-1), ':pm Roblox_User ' + COMMS_MESSAGES[0]);
-  for (let i = 1; i <= 3; i++) { f.advance(60000); await f.service.tick(); assert.equal(f.calls.at(-1), ':pm Roblox_User ' + COMMS_MESSAGES[i % 3]); }
+  assert.deepEqual(f.calls, [':pm Roblox_User ' + COMMS_MESSAGES[0]]);
+  assert.ok(!f.calls.some(c => c.startsWith(':jail') || c.startsWith(':load')));
+  f.advance(60000); await f.service.tick(); assert.equal(f.calls.at(-1), ':pm Roblox_User ' + COMMS_MESSAGES[1]);
   f.join(); await f.service.tick(); assert.equal(f.calls.at(-1), ':pm Roblox_User ' + VC_MESSAGES[0]);
-  f.voices.add('discord'); await f.service.tick(); assert.equal(f.calls.at(-1), ':unjail Roblox_User');
+  f.voices.add('discord'); await f.service.tick();
+  assert.ok(!f.calls.some(c => c.startsWith(':unjail')));
 });
 
 test('already compliant is untouched; leaving VC gets a fresh grace period', async () => {
@@ -57,45 +52,41 @@ test('already compliant is untouched; leaving VC gets a fresh grace period', asy
   assert.ok(f.calls[0].startsWith(':pm'));
 });
 
-test('off releases feature jails and suppresses reminders; on starts fresh grace', async () => {
-  const f = fixture(); await f.service.tick(); await f.service.setEnabled(false);
-  assert.equal(f.calls.at(-1), ':unjail Roblox_User');
-  const count = f.calls.length; f.advance(600000); await f.service.tick(); assert.equal(f.calls.length, count);
+test('off suppresses reminders; on starts fresh grace', async () => {
+  const f = fixture(); await f.service.tick();
+  assert.ok(f.calls[0].startsWith(':pm'));
+  const count = f.calls.length;
+  await f.service.setEnabled(false);
+  f.advance(600000); await f.service.tick(); assert.equal(f.calls.length, count);
   f.join(); await f.service.setEnabled(true); assert.equal(f.calls.at(-1), ':pm Roblox_User ' + VC_MESSAGES[0]);
 });
 
-test('lookup failure cannot jail or clear tracked jail state', async () => {
+test('lookup failure cannot PM or clear tracked jail state', async () => {
   const f = fixture(); f.fail(); await f.service.tick(); assert.deepEqual(f.calls, []); assert.equal(f.errors.length, 1);
 });
 
-test('failed jail is retried, and never falsely tracked as successfully jailed', async () => {
-  const calls = []; let fail = true;
-  const service = createVcChecks({ snapshot: async () => ({ players: [{ username: 'Player', robloxId: '1' }], members: new Map(), inVoice: () => false }),
-    send: async c => { calls.push(c); if (fail && c.startsWith(':jail')) throw Error('rate limited'); }, onError: () => {} });
-  await service.tick(); fail = false; await service.tick();
-  assert.equal(calls.filter(c => c === ':jail Player').length, 2);
-  assert.equal(calls.filter(c => c.startsWith(':pm Player ' + JAIL_MESSAGES.comms)).length, 2);
-});
-
-test('jail-notice PM is retried if it fails after a successful jail', async () => {
+test('incomplete Discord roster does not treat players as missing', async () => {
   const calls = [];
   const service = createVcChecks({
-    snapshot: async () => ({ players: [{ username: 'Player', robloxId: '1' }], members: new Map(), inVoice: () => false }),
-    send: async c => { calls.push(c); if (c.startsWith(':pm')) throw Error('pm failed'); },
-    onError: () => {},
+    snapshot: async () => ({
+      players: [{ username: 'Player', robloxId: '1' }],
+      members: new Map(),
+      membersReady: false,
+      inVoice: () => false,
+    }),
+    send: async (c) => calls.push(c),
   });
   await service.tick();
-  await service.tick();
-  assert.equal(calls.filter(c => c === ':jail Player').length, 1);
-  assert.equal(calls.filter(c => c.startsWith(':pm Player ' + JAIL_MESSAGES.comms)).length, 2);
+  assert.deepEqual(calls, []);
 });
 
-test('tracked jails survive restart and release once compliant', async () => {
+test('tracked jails are released even if the player is still not in voice', async () => {
   const calls = [];
   const service = createVcChecks({ load: async () => [['1', { jailed: true }]],
-    snapshot: async () => ({ players: [{ username: 'Player', robloxId: '1' }], members: new Map([['d', { id: 'd', nickname: 'Player' }]]), inVoice: () => true }),
+    snapshot: async () => ({ players: [{ username: 'Player', robloxId: '1' }], members: new Map(), inVoice: () => false }),
     send: async c => calls.push(c) });
-  await service.tick(); assert.deepEqual(calls, [':unjail Player']);
+  await service.tick(); assert.equal(calls[0], ':unjail Player');
+  assert.ok(!calls.some(c => c.startsWith(':jail')));
 });
 
 test('command rejects non-admins and administrators in another guild', async () => {
@@ -127,7 +118,7 @@ test('any matching non-bot in VC qualifies and overlapping ticks do not duplicat
   f.voices.clear(); await Promise.all([f.service.tick(), f.service.tick()]); assert.equal(f.calls.length, 1);
 });
 
-test('successful jail, PM, and unjail emit ops-log events', async () => {
+test('successful PM emits ops-log events and never jails', async () => {
   const f = fixture();
   const events = [];
   const service = createVcChecks({
@@ -138,10 +129,8 @@ test('successful jail, PM, and unjail emit ops-log events', async () => {
   });
   await service.tick();
   assert.equal(events[0].action, 'PM');
-  assert.equal(events[0].reason, 'jail notice');
-  assert.equal(events[1].action, 'JAIL');
-  assert.equal(events[1].reason, 'no Discord match');
+  assert.equal(events[0].reason, 'comms reminder');
+  assert.ok(!events.some(event => event.action === 'JAIL'));
   f.join(); f.voices.add('discord'); await service.tick();
-  assert.equal(events.at(-1).action, 'UNJAIL');
-  assert.equal(events.at(-1).reason, 'joined voice');
+  assert.ok(!events.some(event => event.action === 'UNJAIL'));
 });
