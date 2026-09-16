@@ -12,6 +12,23 @@ function subcommandName(interaction) {
   return interaction.options?.getSubcommand?.(false) || 'checks';
 }
 
+async function hasDiscordAdministrator(interaction) {
+  if (interaction.memberPermissions?.has?.(PermissionFlagsBits.Administrator)) return true;
+  if (interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator)) return true;
+  const member = await interaction.guild?.members.fetch(interaction.user.id).catch(() => null);
+  return Boolean(member?.permissions?.has?.(PermissionFlagsBits.Administrator));
+}
+
+async function denyUnlessDiscordAdmin(interaction) {
+  if (interaction.inGuild() && interaction.guildId === interaction.client.config.guildId
+    && await hasDiscordAdministrator(interaction)) return true;
+  await interaction.reply({
+    content: 'You must have the Discord Administrator permission in the Clearwater server to use this command.',
+    flags: MessageFlags.Ephemeral,
+  });
+  return false;
+}
+
 async function handleChecks(interaction) {
   const service = interaction.client.vcChecks;
   if (!service) {
@@ -86,7 +103,7 @@ async function handleWhitelist(interaction) {
 
 export default {
   data: new SlashCommandBuilder().setName('vc').setDescription('Manage in-game voice channel checks.')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator).setDMPermission(false)
+    .setDMPermission(false)
     .addSubcommand(sub => sub.setName('checks').setDescription('Turn automatic voice checks on or off.')
       .addStringOption(option => option.setName('state').setDescription('Enable or disable checks').setRequired(true)
         .addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' })))
@@ -97,13 +114,10 @@ export default {
         { name: 'add', value: 'add' },
         { name: 'remove', value: 'remove' },
         { name: 'list', value: 'list' },
-      ))),
+      )))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   async execute(interaction) {
-    if (!interaction.inGuild() || interaction.guildId !== interaction.client.config.guildId ||
-        !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-      await interaction.reply({ content: 'You must have Administrator permission in the Clearwater server to use this command.', flags: MessageFlags.Ephemeral });
-      return;
-    }
+    if (!await denyUnlessDiscordAdmin(interaction)) return;
     if (subcommandName(interaction) === 'whitelist') {
       await handleWhitelist(interaction);
       return;

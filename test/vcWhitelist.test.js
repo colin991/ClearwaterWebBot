@@ -82,6 +82,21 @@ test('/vc whitelist add persists a Roblox username', async () => {
   assert.equal(isVcExempt({ username: 'iTsAronJ' }, new Map()), true);
 });
 
+test('/vc whitelist rejects members without Discord Administrator', async () => {
+  let reply;
+  await command.execute({
+    inGuild: () => true,
+    guildId: 'home',
+    client: { config: { guildId: 'home' } },
+    memberPermissions: { has: () => false },
+    member: { permissions: { has: () => false } },
+    user: { id: '333333333333333333', username: 'Staffless' },
+    options: { getSubcommand: () => 'whitelist' },
+    reply: async (payload) => { reply = payload.content; },
+  });
+  assert.match(reply, /Administrator/);
+});
+
 test('/vc whitelist list is empty until someone is added', async () => {
   resetVcWhitelistForTests({ entries: [] });
   let reply;
