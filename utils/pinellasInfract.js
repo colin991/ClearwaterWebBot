@@ -178,7 +178,7 @@ function formatExpires(expiresAt) {
   return `<t:${ts}:R> (<t:${ts}:f>)`;
 }
 
-function strikeLines(text) {
+export function strikeLines(text) {
   return String(text || '')
     .split('\n')
     .map((line) => {
@@ -188,6 +188,32 @@ function strikeLines(text) {
       return `~~${line}~~`;
     })
     .join('\n');
+}
+
+export function infractionShouldBeStruck(entry) {
+  return entry?.status === 'voided' || entry?.status === 'expired';
+}
+
+export function applyInfractionVoidChange(entry, voidInfraction, { voidedBy = null } = {}) {
+  if (voidInfraction === true) {
+    entry.status = 'voided';
+    entry.voidedAt = new Date().toISOString();
+    entry.voidedBy = voidedBy || entry.voidedBy || null;
+    return entry;
+  }
+  if (voidInfraction === false) {
+    entry.voidedAt = null;
+    entry.voidedBy = null;
+    const expiredMs = entry.expiresAt ? new Date(entry.expiresAt).getTime() : NaN;
+    if (Number.isFinite(expiredMs) && expiredMs <= Date.now()) {
+      entry.status = 'expired';
+      entry.expiredAt = entry.expiredAt || new Date().toISOString();
+    } else {
+      entry.status = 'active';
+      entry.expiredAt = null;
+    }
+  }
+  return entry;
 }
 
 async function loadOptionalAttachment(filePath, name) {
@@ -387,12 +413,12 @@ function detailsModal(type) {
     );
 }
 
-function buildInfractionBody(entry, { struck = false } = {}) {
+export function buildInfractionBody(entry, { struck = false } = {}) {
   const createdTs = Math.floor(new Date(entry.createdAt).getTime() / 1000);
   const statusPrefix = entry.status === 'voided'
-    ? '**VOIDED** â€” '
+    ? '**VOIDED** — '
     : entry.status === 'expired'
-      ? '**EXPIRED** â€” '
+      ? '**EXPIRED** — '
       : '';
 
   let body = [
@@ -416,7 +442,7 @@ function buildInfractionBody(entry, { struck = false } = {}) {
   );
 
   const text = body.join('\n');
-  if (struck || entry.status === 'voided' || entry.status === 'expired') {
+  if (struck || infractionShouldBeStruck(entry)) {
     return strikeLines(text);
   }
   return text;
@@ -700,7 +726,7 @@ export async function editPinellasInfraction({
   client,
   issuerMember,
   id,
-  voidInfraction = false,
+  voidInfraction = null,
   type = null,
   policy = null,
   description = null,
@@ -715,11 +741,7 @@ export async function editPinellasInfraction({
   const entry = (store.infractions || []).find((item) => item.id === String(id));
   if (!entry) throw new Error(`No infraction found with ID \`${id}\`.`);
 
-  if (voidInfraction) {
-    entry.status = 'voided';
-    entry.voidedAt = new Date().toISOString();
-    entry.voidedBy = issuerMember.id;
-  }
+  applyInfractionVoidChange(entry, voidInfraction, { voidedBy: issuerMember.id });
 
   if (type) {
     if (!INFRACTION_TYPES.includes(type)) throw new Error('Unknown infraction type.');
@@ -745,7 +767,7 @@ export async function editPinellasInfraction({
 
   await writeStore(store);
   await editInfractionMessage(client, entry, {
-    struck: entry.status === 'voided' || entry.status === 'expired',
+    struck: infractionShouldBeStruck(entry),
   });
   return entry;
 }

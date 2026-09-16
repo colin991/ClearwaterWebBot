@@ -20,7 +20,7 @@ const typeChoices = INFRACTION_TYPES.map((type) => ({
 export default {
   data: new SlashCommandBuilder()
     .setName('edit-infraction')
-    .setDescription('Void or edit an existing PCSO infraction by ID.')
+    .setDescription('Void, restore, or edit an existing PCSO infraction by ID.')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .setDMPermission(false)
     .addStringOption((option) => option
@@ -31,7 +31,7 @@ export default {
       .setMaxLength(32))
     .addBooleanOption((option) => option
       .setName('void')
-      .setDescription('Void this infraction (strikes out the posted message)')
+      .setDescription('True voids and strikes it out; false restores and unstrikes')
       .setRequired(false))
     .addStringOption((option) => option
       .setName('type')
@@ -66,13 +66,13 @@ export default {
     requirePinellasInfractionAccess(issuerMember);
 
     const id = interaction.options.getString('id', true).trim();
-    const voidInfraction = interaction.options.getBoolean('void') || false;
+    const voidInfraction = interaction.options.getBoolean('void');
     const type = interaction.options.getString('type');
     const policy = interaction.options.getString('policy');
     const description = interaction.options.getString('description');
     const expires = interaction.options.getString('expires');
 
-    if (!voidInfraction && !type && !policy && !description && !expires) {
+    if (voidInfraction == null && !type && !policy && !description && !expires) {
       throw new Error('Provide at least one change: void, type, policy, description, or expires.');
     }
 
