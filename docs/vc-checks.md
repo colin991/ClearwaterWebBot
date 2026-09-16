@@ -4,6 +4,8 @@ Main-server role `1514033074948800683` bypasses VC checks (linked Roblox ID or n
 
 Use `/vc checks state:on` or `/vc checks state:off` in the configured Clearwater Discord server. Administrator permission is required both in the command registration and at execution. Checks start **on** at every bot startup, even if previously disabled.
 
+`/vc whitelist` (Administrator) exempts a Discord member and/or in-game Roblox username from VC jail and in-game PMs. Use `action:remove` to take them off, or `action:list` to see the list. Stored in `data/vc-whitelist.json` (Git-ignored). A whitelist match unjails any VC-check jail on the next pass. The hardcoded usernames and staff exemption role still apply.
+
 The service checks the ER:LC player list and Discord members every 15 seconds after the previous pass finishes. It matches a linked Roblox identity, or the Roblox username (ignoring case, underscores vs spaces) within Discord nicknames, display names, global names, or usernames. Any matching non-bot member in any voice channel in that Discord server satisfies the check.
 
 - A matching member outside voice receives alternating VC reminders, starting immediately and then at least one minute apart. After five minutes outside voice, they are PMed the jail reason in-game and then jailed. They are never `:kick`ed, `:load`ed, or `:wanted` off the private server for this.
@@ -15,6 +17,6 @@ The service checks the ER:LC player list and Discord members every 15 seconds af
 
 The service uses `DISCORD_GUILD_ID` and `ERLC_SERVER_KEY`. Full Discord member fetches are shared and limited to **one request every 20 seconds**; VC checks, `-dc`, Sheriff balance, and other features reuse that cache. If Discord is rate-limiting, the last roster is used instead of failing `-dc`. The existing Guild Members and Guild Voice States intents are required. Player-list checks use the last ER:LC roster without waiting behind other features. Only in-game commands share the five-second PRC queue, so a busy command line can delay jail and release, not the 15-second compliance scan itself.
 
-Jail, unjail, in-game PMs, `/vc checks` toggles, and `-dc` summaries are posted to channel `1514547037537046688` in the same `[VcCheck]` / `[DcCheck]` proximity-log style as hold/say logs. Discord log failures do not delay or repeat enforcement.
+Jail, unjail, in-game PMs, `/vc checks` toggles, `/vc whitelist` changes, and `-dc` summaries are posted to channel `1514547037537046688` in the same `[VcCheck]` / `[DcCheck]` proximity-log style as hold/say logs. Discord log failures do not delay or repeat enforcement.
 
 Runtime ownership and timers are saved in `data/vc-checks.json`, which is ignored by Git. Checks do not intentionally release jails they did not apply. The API does not provide jail ownership, so simultaneous manual moderation can overlap with automation. Keep this runtime file when updating the bot.

@@ -107,7 +107,7 @@ test('command rejects non-admins and administrators in another guild', async () 
   }
   const json = command.data.toJSON();
   assert.equal(json.default_member_permissions, '8');
-  assert.equal(json.options[0].name, 'checks');
+  assert.deepEqual(json.options.map(option => option.name), ['checks', 'whitelist']);
 });
 
 test('queued enforcement is cancelled if the player joins voice while waiting', async () => {

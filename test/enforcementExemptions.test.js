@@ -4,8 +4,10 @@ import { ENFORCEMENT_EXEMPT_ROLE, hasEnforcementExemption, isVcExempt } from '..
 import { createVcChecks } from '../utils/vcChecks.js';
 import { createSheriffBalance } from '../utils/sheriffBalance.js';
 import { enforceSecondaryGateMember, SECONDARY_GATE_GUILD_ID, SECONDARY_GATE_MAIN_GUILD_ID } from '../utils/secondaryServerGate.js';
+import { resetVcWhitelistForTests } from '../utils/vcWhitelist.js';
 
 test('VC usernames match exactly ignoring case and do not grant Sheriff exemptions', () => {
+  resetVcWhitelistForTests({ entries: [] });
   for (const username of ['Coleddev13', 'NOTJ3DAH']) {
     assert.equal(isVcExempt({ username }, new Map()), true);
     assert.equal(hasEnforcementExemption({ username }, new Map()), false);

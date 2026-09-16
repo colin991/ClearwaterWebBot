@@ -1,4 +1,5 @@
 import { robloxNameMatchesText } from './robloxDiscordMatch.js';
+import { isOnVcWhitelist } from './vcWhitelist.js';
 
 export const ENFORCEMENT_EXEMPT_ROLE = '1514033074948800683';
 const VC_EXEMPT_NAMES = new Set(['coleddev13', 'notj3dah']);
@@ -15,5 +16,6 @@ export function hasEnforcementExemption(player, members, identities = {}) {
 
 export function isVcExempt(player, members, identities = {}) {
   return VC_EXEMPT_NAMES.has(String(player.username || '').trim().toLowerCase())
+    || isOnVcWhitelist(player, members, identities)
     || hasEnforcementExemption(player, members, identities);
 }
