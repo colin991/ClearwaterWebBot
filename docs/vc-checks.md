@@ -4,7 +4,7 @@ Main-server role `1514033074948800683` bypasses VC checks (linked Roblox ID or n
 
 Use `/vc checks state:on` or `/vc checks state:off` in the configured Clearwater Discord server. Administrator permission is required both in the command registration and at execution. Checks start **on** at every bot startup, even if previously disabled.
 
-`/vc whitelist` (Administrator) exempts a Discord member and/or in-game Roblox username from VC jail and in-game PMs. Use `action:remove` to take them off, or `action:list` to see the list. Stored in `data/vc-whitelist.json` (Git-ignored). A whitelist match unjails any VC-check jail on the next pass. The hardcoded usernames and staff exemption role still apply.
+`/vc whitelist` is Administrator-only (Discord Administrator permission, not just a role named admin). Discord hides it from members without that permission. Use `action:remove` to take them off, or `action:list` to see the list. Stored in `data/vc-whitelist.json` (Git-ignored). A whitelist match unjails any VC-check jail on the next pass. The hardcoded usernames and staff exemption role still apply.
 
 The service checks the ER:LC player list and Discord members every 15 seconds after the previous pass finishes. It matches a linked Roblox identity, or the Roblox username (ignoring case, underscores vs spaces) within Discord nicknames, display names, global names, or usernames. Any matching non-bot member in any voice channel in that Discord server satisfies the check.
 

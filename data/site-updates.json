@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-16-vc-whitelist-admin-lock",
+      "title": "Lock /vc whitelist to Discord Administrator",
+      "summary": "/vc whitelist is hidden from members without Discord Administrator permission and is rejected at runtime unless they have that permission in the Clearwater server.",
+      "createdAt": "2026-09-16T01:41:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-16-gta-no-load",
       "title": "GTA speeding no longer loads players",
       "summary": "Going over 130 still gets an in-game PM, including a second PM if it happens again within 3 minutes. The bot no longer sends :load.",

@@ -14,7 +14,7 @@ export default {
         '`/server` - show Clearwater server information',
         '`/request-priority` - request a 30 minute in-game priority for staff review',
         '`/help` - show this command list',
-        '`/vc whitelist` - Administrator: stop VC checks from jailing or PMing a player',
+        '`/vc whitelist` - Discord Administrator only: stop VC checks from jailing or PMing a player',
         '`/say` - Ownership only: speak text in a voice channel',
         '',
         'Ownership VC hold uses prefix commands: `-holdvc` / `-unholdvc` (auto-mutes joiners while held)',
