@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-16-vc-checks-default-off",
+      "title": "VC checks default off",
+      "summary": "Automatic VC checks now start off after every bot restart. Use /vc checks on to turn them back on.",
+      "createdAt": "2026-09-16T22:34:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-16-remove-priority-queue",
       "title": "Remove priority Join Queue and queue DMs",
       "summary": "The Join Queue panel, -prtyq, in-game :mod grants, and Melonly/boost DMs for people sitting in the ER:LC queue are removed. /request-priority is unchanged.",
