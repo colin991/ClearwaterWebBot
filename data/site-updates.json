@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-16-remove-priority-queue",
+      "title": "Remove priority Join Queue and queue DMs",
+      "summary": "The Join Queue panel, -prtyq, in-game :mod grants, and Melonly/boost DMs for people sitting in the ER:LC queue are removed. /request-priority is unchanged.",
+      "createdAt": "2026-09-16T20:52:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-16-remove-gta-driving",
       "title": "Remove GTA driving checks",
       "summary": "The bot no longer watches in-game speed or sends GTA speeding PMs. That system is fully removed.",
