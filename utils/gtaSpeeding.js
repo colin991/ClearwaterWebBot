@@ -9,8 +9,9 @@ import { enforcementLogBody, postProximityLog } from './vcActionLog.js';
 
 export const GTA_SPEED_LIMIT = 130;
 export const GTA_SPEED_REPEAT_MS = 3 * 60 * 1000;
-export const GTA_SPEED_WARN_PM = 'GTA Speeding is not allowed. Stay at or under 130.';
-export const GTA_SPEED_LOAD_PM = 'You were loaded for GTA Speeding again within 3 minutes. Stay at or under 130.';
+export const GTA_SPEED_WARN_PM = 'Do not go over 130. Slow down now.';
+export const GTA_SPEED_LOAD_PM = 'You went over 130 twice. Slow down.';
+export const GTA_OVER_TICKS_REQUIRED = 2;
 /** Roblox studs are treated as feet so estimated speed matches the in-game MPH gauge. */
 export const STUDS_PER_SECOND_TO_MPH = 3600 / 5280;
 const MAX_PLAUSIBLE_MPH = 250;
@@ -38,8 +39,9 @@ export function playerSpeedMph(player, previous, now) {
       dtMs: now - previous.at,
     })
     : null;
-  if (fromApi != null && fromMove != null) return Math.max(fromApi, fromMove);
-  return fromApi ?? fromMove;
+  // Never let a one-tick map rubberband override a real speedometer reading.
+  if (fromApi != null) return fromApi;
+  return fromMove;
 }
 
 function persistable(states) {
@@ -107,8 +109,11 @@ export function createGtaSpeeding({
       const over = Number.isFinite(mph) && mph > GTA_SPEED_LIMIT;
       if (!over) {
         state.speeding = false;
+        state.overTicks = 0;
         continue;
       }
+      state.overTicks = (state.overTicks || 0) + 1;
+      if (state.overTicks < GTA_OVER_TICKS_REQUIRED) continue;
       if (state.speeding) continue;
       state.speeding = true;
       const repeat = state.lastAction === 'warn'

@@ -10,11 +10,15 @@ import { membersForPlayer } from './robloxDiscordMatch.js';
 
 export { matchingMembers, membersForPlayer, robloxNameMatchesText } from './robloxDiscordMatch.js';
 
-export const VC_MESSAGES = ['Please join a Voice Channel inside of Clearwater Roleplay', 'Please join a Voice Channel'];
-export const COMMS_MESSAGES = ['⚠️ Please join out comms code: cwrpvc', '🚨 Join our server code: cwrpvc', '⚠️ Join our comms server now to not get jailed code: cwrpvc'];
+export const VC_MESSAGES = ['Please hop in a Clearwater Roleplay voice chat.', 'Please stay in a Clearwater Roleplay voice chat.'];
+export const COMMS_MESSAGES = [
+  'Please get in Clearwater comms. Code: CWRP VC',
+  'Please join Clearwater comms now. Code: CWRP VC',
+  'Get in Clearwater comms to be released. Code: CWRP VC',
+];
 export const JAIL_MESSAGES = Object.freeze({
-  comms: 'You were jailed because you are not in the Clearwater Discord. Join with code cwrpvc to be released.',
-  voice: 'You were jailed for not being in a Clearwater Roleplay voice channel. Join a VC to be released.',
+  comms: 'You are held until you are in Clearwater comms. Code: CWRP VC',
+  voice: 'You are held until you are in a Clearwater Roleplay voice chat.',
 });
 
 // Inject I/O so tests cannot issue commands to the live game.
