@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-16-vc-whitelist-command",
+      "title": "VC whitelist slash command",
+      "summary": "Administrators can run /vc whitelist to stop VC checks from jailing or PMing a Discord member or in-game Roblox username. action:remove takes them off; action:list shows the list.",
+      "createdAt": "2026-09-16T01:34:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-16-gta-false-load-pm-filter",
       "title": "Stop false GTA loads and hashed PMs",
       "summary": "A single map rubberband no longer counts as GTA speeding, so players in Discord/VC are not :load'ed by a lag jump. In-game PMs were rewritten so Roblox does not replace them with #.",

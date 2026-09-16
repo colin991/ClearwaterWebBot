@@ -7,6 +7,7 @@ import { isVcExempt } from './enforcementExemptions.js';
 import { getIdentityCache } from './identityStore.js';
 import { enforcementLogBody, postProximityLog } from './vcActionLog.js';
 import { membersForPlayer } from './robloxDiscordMatch.js';
+import { loadVcWhitelist } from './vcWhitelist.js';
 
 export { matchingMembers, membersForPlayer, robloxNameMatchesText } from './robloxDiscordMatch.js';
 
@@ -167,7 +168,7 @@ export function startVcChecks(client, config) {
     await service.tick();
     if (!stopped) { timer = setTimeout(run, 15000); timer.unref(); }
   };
-  void run();
+  void loadVcWhitelist().catch((error) => logger.error('VC whitelist failed to load', error)).finally(() => { void run(); });
   logger.info('VC checks enabled on startup.');
   return () => { stopped = true; clearTimeout(timer); };
 }
