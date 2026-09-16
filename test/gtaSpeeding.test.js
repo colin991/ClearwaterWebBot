@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   createGtaSpeeding,
   GTA_SPEED_LIMIT,
-  GTA_SPEED_LOAD_PM,
+  GTA_SPEED_REPEAT_PM,
   GTA_SPEED_REPEAT_MS,
   GTA_SPEED_WARN_PM,
   playerSpeedMph,
@@ -98,7 +98,7 @@ test('first GTA Speeding offense PMs a warning and does not load', async () => {
   assert.equal(f.commands.length, 1);
 });
 
-test('speeding again within 3 minutes loads and PMs', async () => {
+test('speeding again within 3 minutes PMs again and never loads', async () => {
   const f = fixture();
   f.set([racer({ x: 0 })], 0);
   const afterWarn = await twoOverLimitTicks(f, 0);
@@ -107,9 +107,11 @@ test('speeding again within 3 minutes loads and PMs', async () => {
   await f.tick();
   const afterRepeat = await twoOverLimitTicks(f, afterWarn);
   assert.ok(afterRepeat);
-  assert.equal(f.commands[0], `:pm RacerOne ${GTA_SPEED_WARN_PM}`);
-  assert.equal(f.commands[1], ':load RacerOne');
-  assert.equal(f.commands[2], `:pm RacerOne ${GTA_SPEED_LOAD_PM}`);
+  assert.deepEqual(f.commands, [
+    `:pm RacerOne ${GTA_SPEED_WARN_PM}`,
+    `:pm RacerOne ${GTA_SPEED_REPEAT_PM}`,
+  ]);
+  assert.ok(!f.commands.some((command) => command.startsWith(':load')));
 });
 
 test('a later offense after 3 minutes warns again instead of loading', async () => {
