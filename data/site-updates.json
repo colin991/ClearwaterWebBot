@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-16-remove-gta-driving",
+      "title": "Remove GTA driving checks",
+      "summary": "The bot no longer watches in-game speed or sends GTA speeding PMs. That system is fully removed.",
+      "createdAt": "2026-09-16T03:32:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-16-pcso-unvoid-infraction",
       "title": "Restore PCSO infractions when void is false",
       "summary": "/edit-infraction void:false now un-voids the record and removes strikethrough from the posted PCSO infraction message. void:true still voids and strikes it out. Leaving void unset does not change void status.",
