@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   executeErlcCommand,
+  expireErlcBundleCacheForTests,
   fetchErlcServer,
   resetErlcNetworkForTests,
 } from '../utils/erlc.js';
@@ -63,6 +64,50 @@ test('a live command uses the cached roster instead of a second snapshot', async
         return Array.isArray(server.Players);
       },
     });
+    assert.equal(gets, 1);
+  } finally {
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+  }
+});
+
+test('expired roster reads stay instant and do not jump ahead of a queued command', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 0 });
+  let gets = 0;
+  let posts = 0;
+  let release;
+  const hold = new Promise((resolve) => { release = resolve; });
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (String(options?.method || 'GET').toUpperCase() === 'POST') {
+      posts += 1;
+      return jsonResponse(200, { message: 'ok' });
+    }
+    gets += 1;
+    return jsonResponse(200, { Players: [{ Player: 'Test:1', Team: 'Sheriff' }] });
+  };
+  try {
+    await fetchErlcServer('key');
+    expireErlcBundleCacheForTests();
+    const command = executeErlcCommand('key', ':wanted Test', {
+      shouldExecute: async () => {
+        await hold;
+        return true;
+      },
+    });
+    const t0 = Date.now();
+    const roster = await Promise.all([
+      fetchErlcServer('key'),
+      fetchErlcServer('key', { vehicles: true }),
+      fetchErlcServer('key', { killLogs: true }),
+    ]);
+    assert.ok(Date.now() - t0 < 50);
+    assert.equal(gets, 1);
+    assert.equal(posts, 0);
+    assert.equal(roster[0].Players[0].Player, 'Test:1');
+    release();
+    await command;
+    assert.equal(posts, 1);
     assert.equal(gets, 1);
   } finally {
     globalThis.fetch = original;
