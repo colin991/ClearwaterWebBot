@@ -33,7 +33,9 @@ test('default on; five minute grace, alternating minute reminders, one jail and 
   f.advance(239999); await f.service.tick(); assert.ok(!f.calls.includes(':jail Roblox_User'));
   f.advance(1); await f.service.tick();
   assert.equal(f.calls.filter(c => c === ':jail Roblox_User').length, 1);
-  assert.equal(f.calls.at(-1), ':pm Roblox_User ' + JAIL_MESSAGES.voice);
+  assert.equal(f.calls.at(-2), ':pm Roblox_User ' + JAIL_MESSAGES.voice);
+  assert.equal(f.calls.at(-1), ':jail Roblox_User');
+  assert.ok(!f.calls.some(c => c.startsWith(':kick') || c.startsWith(':load') || c.startsWith(':wanted')));
   await f.service.tick(); assert.equal(f.calls.filter(c => c === ':jail Roblox_User').length, 1);
   f.voices.add('discord'); await f.service.tick(); await f.service.tick();
   assert.equal(f.calls.filter(c => c === ':unjail Roblox_User').length, 1);
@@ -41,7 +43,8 @@ test('default on; five minute grace, alternating minute reminders, one jail and 
 
 test('missing member is jailed immediately; rotates comms then voice messages and releases on VC', async () => {
   const f = fixture(); await f.service.tick();
-  assert.deepEqual(f.calls, [':jail Roblox_User', ':pm Roblox_User ' + JAIL_MESSAGES.comms]);
+  assert.deepEqual(f.calls, [':pm Roblox_User ' + JAIL_MESSAGES.comms, ':jail Roblox_User']);
+  assert.ok(!f.calls.some(c => c.startsWith(':kick')));
   f.advance(60000); await f.service.tick(); assert.equal(f.calls.at(-1), ':pm Roblox_User ' + COMMS_MESSAGES[0]);
   for (let i = 1; i <= 3; i++) { f.advance(60000); await f.service.tick(); assert.equal(f.calls.at(-1), ':pm Roblox_User ' + COMMS_MESSAGES[i % 3]); }
   f.join(); await f.service.tick(); assert.equal(f.calls.at(-1), ':pm Roblox_User ' + VC_MESSAGES[0]);
@@ -68,10 +71,10 @@ test('lookup failure cannot jail or clear tracked jail state', async () => {
 test('failed jail is retried, and never falsely tracked as successfully jailed', async () => {
   const calls = []; let fail = true;
   const service = createVcChecks({ snapshot: async () => ({ players: [{ username: 'Player', robloxId: '1' }], members: new Map(), inVoice: () => false }),
-    send: async c => { calls.push(c); if (fail) throw Error('rate limited'); }, onError: () => {} });
+    send: async c => { calls.push(c); if (fail && c.startsWith(':jail')) throw Error('rate limited'); }, onError: () => {} });
   await service.tick(); fail = false; await service.tick();
   assert.equal(calls.filter(c => c === ':jail Player').length, 2);
-  assert.equal(calls.filter(c => c.startsWith(':pm Player ' + JAIL_MESSAGES.comms)).length, 1);
+  assert.equal(calls.filter(c => c.startsWith(':pm Player ' + JAIL_MESSAGES.comms)).length, 2);
 });
 
 test('jail-notice PM is retried if it fails after a successful jail', async () => {
@@ -134,10 +137,10 @@ test('successful jail, PM, and unjail emit ops-log events', async () => {
     onLog: event => events.push(event),
   });
   await service.tick();
-  assert.equal(events[0].action, 'JAIL');
-  assert.equal(events[0].reason, 'no Discord match');
-  assert.equal(events[1].action, 'PM');
-  assert.equal(events[1].reason, 'jail notice');
+  assert.equal(events[0].action, 'PM');
+  assert.equal(events[0].reason, 'jail notice');
+  assert.equal(events[1].action, 'JAIL');
+  assert.equal(events[1].reason, 'no Discord match');
   f.join(); f.voices.add('discord'); await service.tick();
   assert.equal(events.at(-1).action, 'UNJAIL');
   assert.equal(events.at(-1).reason, 'joined voice');

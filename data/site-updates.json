@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-16-vc-pm-jail-no-kick",
+      "title": "VC checks jail instead of kicking",
+      "summary": "Players missing Discord or voice are PMed in-game and jailed. VC checks never :kick, :load, or :wanted them off the private server.",
+      "createdAt": "2026-09-16T01:26:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-16-erlc-stale-roster-queue",
       "title": "ER:LC checks stay instant on the 5s line",
       "summary": "Sheriff, VC, GTA, and other player-list checks reuse the last ER:LC roster instead of waiting behind each other. Only in-game commands wait the PRC 5 second gap, and roster refreshes run when that line is idle.",
