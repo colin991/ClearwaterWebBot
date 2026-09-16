@@ -264,6 +264,34 @@ export function resolvePriorityPlayers(players, selectedValues, typedNames = '')
   return picked.slice(0, 4);
 }
 
+export function resolvePriorityVehicles(vehicles, selectedValues, typedNames = '') {
+  const picked = [];
+  const seen = new Set();
+  const add = (vehicle) => {
+    if (!vehicle) return;
+    const key = [
+      vehicle.ownerRobloxId || vehicle.ownerUsername || '',
+      vehicle.plate || '',
+      vehicle.name || '',
+    ].join(':').toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    picked.push(vehicle);
+  };
+  for (const value of selectedValues || []) {
+    const index = Number(value);
+    if (Number.isInteger(index)) add(vehicles[index]);
+  }
+  for (const token of String(typedNames || '').split(/[,;\n]+/).map((part) => part.trim()).filter(Boolean)) {
+    const lower = token.toLowerCase();
+    add(vehicles.find((vehicle) => formatPriorityVehicle(vehicle).toLowerCase() === lower)
+      || vehicles.find((vehicle) => String(vehicle.name || '').toLowerCase().includes(lower))
+      || vehicles.find((vehicle) => String(vehicle.ownerUsername || '').toLowerCase() === lower)
+      || vehicles.find((vehicle) => String(vehicle.ownerUsername || '').toLowerCase().includes(lower)));
+  }
+  return picked.slice(0, 2);
+}
+
 function optionalSelectValues(fields, customId) {
   try {
     return fields.getStringSelectValues(customId);
@@ -284,16 +312,17 @@ function buildPriorityFormModal({ id, players, vehicles }) {
   const playerOpts = playerOptions(players);
   const vehicleOpts = vehicleOptions(vehicles);
   const modal = new ModalBuilder().setCustomId(`${PREFIX}form:${id}`).setTitle('Priority request');
+  // Discord only shows type-to-search on single-select menus. Extra people/cars are typed.
   const labels = [
     new LabelBuilder()
-      .setLabel('Users involved (max 4)')
-      .setDescription('Type to search in-game names, then select up to 4 people.')
+      .setLabel('Search users')
+      .setDescription('Type to search, then pick one in-game user. Add more names below.')
       .setStringSelectMenuComponent(
         new StringSelectMenuBuilder()
           .setCustomId('users')
-          .setPlaceholder('Search in-game users')
+          .setPlaceholder('Type to search in-game users')
           .setMinValues(1)
-          .setMaxValues(Math.min(4, playerOpts.length))
+          .setMaxValues(1)
           .setRequired(true)
           .addOptions(playerOpts),
       ),
@@ -301,35 +330,31 @@ function buildPriorityFormModal({ id, players, vehicles }) {
   if (vehicleOpts.length) {
     labels.push(
       new LabelBuilder()
-        .setLabel('Civilian vehicles (max 2)')
-        .setDescription('Type to search vehicle or owner name.')
+        .setLabel('Search vehicles')
+        .setDescription('Type to search, then pick one civilian vehicle. Add another below if needed.')
         .setStringSelectMenuComponent(
           new StringSelectMenuBuilder()
             .setCustomId('vehs')
-            .setPlaceholder('Search civilian vehicles')
+            .setPlaceholder('Type to search civilian vehicles')
             .setMinValues(0)
-            .setMaxValues(Math.min(2, vehicleOpts.length))
+            .setMaxValues(1)
             .setRequired(false)
             .addOptions(vehicleOpts),
         ),
     );
   }
-  if (players.length > 25) {
-    labels.push(
-      new LabelBuilder()
-        .setLabel('More users')
-        .setDescription('Type names that did not appear in the searchable list.')
-        .setTextInputComponent(
-          new TextInputBuilder()
-            .setCustomId('more_users')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(false)
-            .setMaxLength(100)
-            .setPlaceholder('Name1, Name2'),
-        ),
-    );
-  }
   labels.push(
+    new LabelBuilder()
+      .setLabel('Additional users or vehicles')
+      .setDescription('Comma-separated extra in-game names or vehicle/owner names.')
+      .setTextInputComponent(
+        new TextInputBuilder()
+          .setCustomId('more_users')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(150)
+          .setPlaceholder('Name2, Name3, vehicle or owner'),
+      ),
     new LabelBuilder().setLabel('Background').setTextInputComponent(
       new TextInputBuilder().setCustomId('background').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(800),
     ),
@@ -608,21 +633,26 @@ export async function handlePriorityRequest(interaction) {
         await interaction.reply({ content: 'That form expired. Run `/request-priority` again.', flags: MessageFlags.Ephemeral });
         return true;
       }
+      const extra = optionalText(interaction.fields, 'more_users');
       const selectedPlayers = resolvePriorityPlayers(
         draft.players,
         interaction.fields.getStringSelectValues('users'),
-        optionalText(interaction.fields, 'more_users'),
+        extra,
       );
       if (!selectedPlayers.length) {
-        await interaction.reply({ content: 'Select at least one in-game user.', flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: 'Select or type at least one in-game user.', flags: MessageFlags.Ephemeral });
         return true;
       }
-      const vehicleIndexes = optionalSelectValues(interaction.fields, 'vehs').map(Number).filter(Number.isInteger);
+      const selectedVehicles = resolvePriorityVehicles(
+        draft.vehicles,
+        optionalSelectValues(interaction.fields, 'vehs'),
+        extra,
+      );
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await service.submitRequest({
         user: interaction.user,
         selectedPlayers,
-        selectedVehicles: vehicleIndexes.map((index) => draft.vehicles[index]).filter(Boolean).slice(0, 2),
+        selectedVehicles,
         background: interaction.fields.getTextInputValue('background'),
         details: interaction.fields.getTextInputValue('details'),
       });
