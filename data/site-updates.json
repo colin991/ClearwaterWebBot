@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-16-erlc-stale-roster-queue",
+      "title": "ER:LC checks stay instant on the 5s line",
+      "summary": "Sheriff, VC, GTA, and other player-list checks reuse the last ER:LC roster instead of waiting behind each other. Only in-game commands wait the PRC 5 second gap, and roster refreshes run when that line is idle.",
+      "createdAt": "2026-09-16T01:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-13-dispatch-live-listen",
       "title": "Listen to Dispatch RTO on the website",
       "summary": "Added a Listen Live / Stop Listening control to admin radio logs, with protected live audio from the existing Discord radio connection.",

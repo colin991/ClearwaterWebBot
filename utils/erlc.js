@@ -8,6 +8,10 @@ let erlcMinIntervalMs = ERLC_MIN_INTERVAL_MS;
 let erlcAvailableAt = 0;
 let erlcNetworkQueue = Promise.resolve();
 let erlcSlotDepth = 0;
+let queuedCommands = 0;
+let idleRefreshEnabled = true;
+let idleRefreshTimer = null;
+let idleRefreshServerKey = null;
 let bundleCache = { value: null, expiresAt: 0, inflight: null };
 
 function sleep(ms) {
@@ -19,16 +23,28 @@ function rememberErlcCooldown(retryAfterSeconds = 0) {
   erlcAvailableAt = Date.now() + Math.max(erlcMinIntervalMs, extra);
 }
 
+function shouldSkipSnapshotHttp() {
+  if (bundleCache.value && Date.now() < bundleCache.expiresAt) return true;
+  return queuedCommands > 0 && Boolean(bundleCache.value);
+}
+
 /** One-at-a-time ER:LC HTTP: snapshots and commands share this line. */
-export function withErlcNetworkSlot(task) {
+export function withErlcNetworkSlot(task, { kind = 'snapshot' } = {}) {
+  if (kind === 'command') queuedCommands += 1;
   const run = erlcNetworkQueue.then(async () => {
-    const waitMs = Math.max(0, erlcAvailableAt - Date.now());
-    if (waitMs) await sleep(waitMs);
-    erlcSlotDepth += 1;
     try {
-      return await task();
+      if (kind === 'snapshot' && shouldSkipSnapshotHttp()) return bundleCache.value;
+      const waitMs = Math.max(0, erlcAvailableAt - Date.now());
+      if (waitMs) await sleep(waitMs);
+      if (kind === 'snapshot' && shouldSkipSnapshotHttp()) return bundleCache.value;
+      erlcSlotDepth += 1;
+      try {
+        return await task();
+      } finally {
+        erlcSlotDepth -= 1;
+      }
     } finally {
-      erlcSlotDepth -= 1;
+      if (kind === 'command') queuedCommands -= 1;
     }
   });
   erlcNetworkQueue = run.then(() => undefined, () => undefined);
@@ -73,34 +89,63 @@ async function fetchErlcBundle(serverKey) {
   throw lastError || new Error('ER:LC request failed (429)');
 }
 
-export async function fetchErlcServer(serverKey, _options = {}) {
-  if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
-  if (bundleCache.value && Date.now() < bundleCache.expiresAt) return bundleCache.value;
-  if (bundleCache.inflight) return bundleCache.inflight;
-  // A command/session already holds the queue: never fire a second HTTP in that slot.
-  if (erlcSlotDepth > 0) {
-    if (bundleCache.value) return bundleCache.value;
-    return fetchErlcBundle(serverKey);
-  }
-
-  const pending = withErlcNetworkSlot(async () => {
-    if (bundleCache.value && Date.now() < bundleCache.expiresAt) return bundleCache.value;
-    return fetchErlcBundle(serverKey);
-  });
-  bundleCache.inflight = pending;
-  try {
-    return await pending;
-  } finally {
-    if (bundleCache.inflight === pending) bundleCache.inflight = null;
-  }
+function stopIdleRefreshTimer() {
+  if (!idleRefreshTimer) return;
+  clearInterval(idleRefreshTimer);
+  idleRefreshTimer = null;
 }
 
-export function resetErlcNetworkForTests({ minIntervalMs = 0 } = {}) {
+function ensureIdleRefresh(serverKey) {
+  idleRefreshServerKey = serverKey;
+  if (!idleRefreshEnabled || idleRefreshTimer) return;
+  idleRefreshTimer = setInterval(() => {
+    if (!idleRefreshServerKey || queuedCommands > 0 || erlcSlotDepth > 0) return;
+    if (bundleCache.inflight) return;
+    if (bundleCache.value && Date.now() < bundleCache.expiresAt) return;
+    scheduleBundleRefresh(idleRefreshServerKey);
+  }, 250);
+  idleRefreshTimer.unref?.();
+}
+
+function scheduleBundleRefresh(serverKey) {
+  if (bundleCache.inflight) return bundleCache.inflight;
+  if (shouldSkipSnapshotHttp() && bundleCache.value) {
+    return Promise.resolve(bundleCache.value);
+  }
+  const pending = withErlcNetworkSlot(async () => {
+    if (shouldSkipSnapshotHttp()) return bundleCache.value;
+    return fetchErlcBundle(serverKey);
+  }, { kind: 'snapshot' });
+  bundleCache.inflight = pending;
+  pending.finally(() => {
+    if (bundleCache.inflight === pending) bundleCache.inflight = null;
+  });
+  return pending;
+}
+
+export async function fetchErlcServer(serverKey, _options = {}) {
+  if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
+  ensureIdleRefresh(serverKey);
+  if (bundleCache.value) return bundleCache.value;
+  if (bundleCache.inflight) return bundleCache.inflight;
+  if (erlcSlotDepth > 0) return fetchErlcBundle(serverKey);
+  return scheduleBundleRefresh(serverKey);
+}
+
+export function resetErlcNetworkForTests({ minIntervalMs = 0, idleRefresh = false } = {}) {
+  stopIdleRefreshTimer();
+  idleRefreshEnabled = Boolean(idleRefresh);
+  idleRefreshServerKey = null;
   erlcMinIntervalMs = Number.isFinite(minIntervalMs) ? minIntervalMs : 0;
   erlcAvailableAt = 0;
   erlcNetworkQueue = Promise.resolve();
   erlcSlotDepth = 0;
+  queuedCommands = 0;
   bundleCache = { value: null, expiresAt: 0, inflight: null };
+}
+
+export function expireErlcBundleCacheForTests() {
+  if (bundleCache.value) bundleCache.expiresAt = 0;
 }
 
 function firstFinite(...values) {
@@ -330,7 +375,10 @@ export async function executeErlcCommand(serverKey, command, { shouldExecute } =
 
 /** Reserve the shared command queue for a short grant/revoke transaction. */
 export function withErlcCommandSession(serverKey, action) {
-  return withErlcNetworkSlot(() => action((command, options) => sendErlcCommand(serverKey, command, options)));
+  return withErlcNetworkSlot(
+    () => action((command, options) => sendErlcCommand(serverKey, command, options)),
+    { kind: 'command' },
+  );
 }
 
 async function sendErlcCommand(serverKey, command, { shouldExecute } = {}) {
