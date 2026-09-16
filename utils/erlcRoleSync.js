@@ -46,7 +46,7 @@ async function syncOnce(client, config, previousState) {
   const identityMap = await discordIdsByRobloxId();
   const activeDiscordIds = new Set(players.map((player) => identityMap.get(player.robloxId)).filter(Boolean));
   const guild = await client.guilds.fetch(settings.inGameGuildId);
-  await ensureGuildMembers(guild);
+  await ensureGuildMembers(guild, { allowStale: true });
   const role = await guild.roles.fetch(settings.inGameRoleId);
   if (!role) throw new Error('Configured in-game role no longer exists');
 

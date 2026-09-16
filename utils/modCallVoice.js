@@ -83,7 +83,7 @@ export function startModCallVoice(client) {
     move: async call => {
       if (!client.isReady()) return false;
       const guild = await client.guilds.fetch(client.config.guildId);
-      await ensureGuildMembers(guild);
+      await ensureGuildMembers(guild, { allowStale: true });
       const identities = await discordIdsByRobloxId();
       const caller = await resolveZoneDiscordMember(guild, parseErlcPlayer({ Player: call.Caller }), identities);
       const moderator = await resolveZoneDiscordMember(guild, parseErlcPlayer({ Player: call.Moderator }), identities);

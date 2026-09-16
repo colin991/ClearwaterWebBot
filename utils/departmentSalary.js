@@ -20,6 +20,7 @@ import {
   upsertInternetUser,
 } from './internetStore.js';
 import { sendSalaryPaidDm } from './salaryPaidDm.js';
+import { ensureGuildMembers } from './guildMemberSnapshot.js';
 
 function creditBalance(user) {
   return Math.trunc(Number(user?.credits) || 0);
@@ -211,7 +212,7 @@ export async function runDepartmentSalaryPayout(client, { force = false } = {}) 
       continue;
     }
     try {
-      await guild.members.fetch();
+      await ensureGuildMembers(guild, { allowStale: true });
     } catch (error) {
       skippedGuilds += 1;
       errors.push(`${department.name}: could not load members (${error.message || 'error'})`);

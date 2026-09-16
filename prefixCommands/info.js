@@ -17,6 +17,7 @@ import {
   withModerationStore,
 } from '../utils/moderationStore.js';
 import { v2Card } from '../utils/v2Message.js';
+import { ensureGuildMembers } from '../utils/guildMemberSnapshot.js';
 
 export const roles = {
   name: 'roles',
@@ -76,7 +77,7 @@ export const members = {
     const hasRoles = hasTokens.map(resolveRole).filter(Boolean);
     const missingRoles = missingTokens.map(resolveRole).filter(Boolean);
     if (!hasRoles.length) return message.reply('Could not resolve the required role.');
-    await message.guild.members.fetch().catch(() => {});
+    await ensureGuildMembers(message.guild, { allowStale: true }).catch(() => {});
     const matches = [...message.guild.members.cache.values()].filter((member) => (
       hasRoles.every((role) => member.roles.cache.has(role.id))
       && missingRoles.every((role) => !member.roles.cache.has(role.id))
@@ -96,7 +97,7 @@ export const mutes = {
   minRank: RANK_FLOOR.anyStaff,
   async execute(message) {
     requireMinRank(message, RANK_FLOOR.anyStaff);
-    await message.guild.members.fetch().catch(() => {});
+    await ensureGuildMembers(message.guild, { allowStale: true }).catch(() => {});
     const timed = [...message.guild.members.cache.values()]
       .filter((member) => member.communicationDisabledUntilTimestamp && member.communicationDisabledUntilTimestamp > Date.now())
       .sort((a, b) => a.communicationDisabledUntilTimestamp - b.communicationDisabledUntilTimestamp)

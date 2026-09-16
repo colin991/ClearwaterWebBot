@@ -9,8 +9,7 @@ export default {
   description: 'Show every in-game player and their Discord and voice status.',
   async execute(message) {
     if (!message.guild || message.guild.id !== message.client.config.guildId) throw new Error('Use -dc in the Clearwater Discord server.');
-    // Do not label users missing based on an incomplete member cache.
-    await ensureGuildMembers(message.guild);
+    await ensureGuildMembers(message.guild, { allowStale: true }).catch(() => {});
     const [server, identities] = await Promise.all([
       fetchErlcServer(message.client.config.erlcServerKey), getIdentityCache(),
     ]);

@@ -13,7 +13,7 @@ The service checks the ER:LC player list and Discord members every 15 seconds af
 - Joining voice releases jails applied by this feature. Already compliant players receive no commands. Leaving voice starts a fresh five-minute grace period.
 - Turning checks off releases tracked jails and stops enforcement. Failed releases retry automatically.
 
-The service uses `DISCORD_GUILD_ID` and `ERLC_SERVER_KEY`. Full member fetches must succeed before enforcement; lookup errors skip that pass. The existing Guild Members and Guild Voice States intents are required. The shared ER:LC command queue enforces a five-second minimum gap, so busy servers or API throttling can delay reminders, jail, and release beyond their target times.
+The service uses `DISCORD_GUILD_ID` and `ERLC_SERVER_KEY`. Full Discord member fetches are shared and limited to **one request every 20 seconds**; VC checks, `-dc`, Sheriff balance, and other features reuse that cache. If Discord is rate-limiting, the last roster is used instead of failing `-dc`. The existing Guild Members and Guild Voice States intents are required. The shared ER:LC command queue enforces a five-second minimum gap, so busy servers or API throttling can delay reminders, jail, and release beyond their target times.
 
 Jail, unjail, in-game PMs, `/vc checks` toggles, and `-dc` summaries are posted to channel `1514547037537046688` in the same `[VcCheck]` / `[DcCheck]` proximity-log style as hold/say logs. Discord log failures do not delay or repeat enforcement.
 

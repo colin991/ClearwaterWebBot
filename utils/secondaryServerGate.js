@@ -1,6 +1,7 @@
 import { PermissionFlagsBits } from 'discord.js';
 import { logger } from './logger.js';
 import { ENFORCEMENT_EXEMPT_ROLE } from './enforcementExemptions.js';
+import { ensureGuildMembers } from './guildMemberSnapshot.js';
 
 /** Server that requires a qualifying role from the main Clearwater server. */
 export const SECONDARY_GATE_GUILD_ID = '1514189396184793169';
@@ -172,7 +173,7 @@ export async function sweepSecondaryGateServer(client) {
     return { checked: 0, kicked: 0, allowed: 0, skipped: 0, failed: 0 };
   }
 
-  await gated.members.fetch().catch(() => null);
+  await ensureGuildMembers(gated, { allowStale: true }).catch(() => null);
 
   let kicked = 0;
   let allowed = 0;
