@@ -9,3 +9,5 @@ The bot sends `:mod ROBLOX_ID`, checks for entry approximately once per second, 
 Before granting, the bot writes `data/priority-queue-pending.json`. It clears that record only after a successful removal. Pending removals block new grants and retry on startup and every fifteen seconds. Preserve this ignored runtime file during host updates. No live role grants are performed by automated tests.
 
 The panel uses the supplied Discord attachment URLs; Discord may expire those signed image links. If images become unavailable, replace them with refreshed attachment URLs.
+
+Uses of Join Queue are logged to channel `1549178818814812211` (success and failure) with the Discord user and linked Roblox ID. Log delivery does not delay or block the in-game grant.

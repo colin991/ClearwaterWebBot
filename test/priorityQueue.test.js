@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPriorityService, validatePriorityServer, priorityPanel } from '../utils/priorityQueue.js';
+import { createPriorityService, validatePriorityServer, priorityPanel, postPriorityQueueLog, PRIORITY_QUEUE_LOG_CHANNEL } from '../utils/priorityQueue.js';
 import command from '../prefixCommands/prtyq.js';
 
 const server = () => ({ Queue: [123], Players: [], Staff: { Admins: {}, Mods: {}, Helpers: {} }, OwnerId: 9, CoOwnerIds: [] });
@@ -72,4 +72,16 @@ test('panel has supplied button and admin permission enforced before posting', a
   assert.equal(panel.components[0].components[4].components[0].custom_id, 'priority_queue_boost');
   await assert.rejects(command.execute({ guild: { id: 'home', members: { fetch: async () => ({ permissions: { has: () => false } }) } },
     author: { id: 'user' }, client: { config: { guildId: 'home' } } }), /Administrator/);
+});
+
+test('Join Queue usage logs to the specified channel without mentions', async () => {
+  let payload;
+  await postPriorityQueueLog({ channels: { fetch: async id => {
+    assert.equal(id, PRIORITY_QUEUE_LOG_CHANNEL);
+    return { isTextBased: () => true, send: async value => { payload = value; } };
+  } } }, { action: 'Join Queue used', ok: true, userId: '1', username: 'Tester', robloxId: '123' });
+  assert.deepEqual(payload.allowedMentions.parse, []);
+  assert.equal(payload.embeds[0].title, 'Priority Queue');
+  assert.match(payload.embeds[0].fields[0].value, /Tester/);
+  assert.equal(payload.embeds[0].fields[1].value, '123');
 });

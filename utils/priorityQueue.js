@@ -6,6 +6,7 @@ import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
 
 export const PRIORITY_CHANNEL = '1532549648042954922';
+export const PRIORITY_QUEUE_LOG_CHANNEL = '1549178818814812211';
 export const PRIORITY_BUTTON = 'priority_queue_boost';
 export const PRIORITY_ROLES = ['1514109306700693616', '1532549498696634408'];
 const HEADER = 'https://media.discordapp.net/attachments/1529616984755540088/1546535995736858644/clearwater_ban.png?format=webp&quality=lossless&ex=6aa95de2&is=6aa80c62&hm=15715be370c6833a859c9eab336aa9f2b25f9a75eea6ec4d3408e9c893cbeff7';
@@ -84,6 +85,25 @@ export function createPriorityService({ snapshot, session, load, save, now = Dat
   return { grant, recover };
 }
 
+export async function postPriorityQueueLog(client, event) {
+  const channel = await client.channels.fetch(PRIORITY_QUEUE_LOG_CHANNEL);
+  if (!channel?.isTextBased() || typeof channel.send !== 'function') throw new Error('Priority queue log channel unavailable.');
+  await channel.send({
+    allowedMentions: { parse: [] },
+    embeds: [{
+      title: 'Priority Queue',
+      description: event.action,
+      color: event.ok === false ? 0xe05555 : 0x5b8def,
+      fields: [
+        { name: 'Discord user', value: event.userId ? `<@${event.userId}>\n${event.username || 'Unknown'} (${event.userId})` : 'Unknown', inline: true },
+        { name: 'Roblox ID', value: String(event.robloxId || 'Unknown'), inline: true },
+        ...(event.detail ? [{ name: 'Result', value: String(event.detail).slice(0, 700) }] : []),
+      ],
+      timestamp: new Date().toISOString(),
+    }],
+  });
+}
+
 export function startPriorityQueue(client) {
   const path = resolve('data', 'priority-queue-pending.json');
   const key = client.config.erlcServerKey;
@@ -103,6 +123,17 @@ export function startPriorityQueue(client) {
 export async function handlePriorityQueue(interaction) {
   if (!interaction.isButton() || interaction.customId !== PRIORITY_BUTTON) return false;
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  let robloxId = '';
+  const logUse = (ok, detail) => {
+    void postPriorityQueueLog(interaction.client, {
+      action: ok ? 'Join Queue used' : 'Join Queue failed',
+      ok,
+      userId: interaction.user.id,
+      username: interaction.user.username,
+      robloxId,
+      detail,
+    }).catch(error => logger.error('Priority queue log failed', error));
+  };
   try {
     if (interaction.channelId !== PRIORITY_CHANNEL || interaction.guildId !== interaction.client.config.guildId) throw new Error('Use the priority queue panel in the Clearwater server.');
     const checkRole = async () => {
@@ -112,12 +143,15 @@ export async function handlePriorityQueue(interaction) {
     await checkRole();
     const identity = (await getIdentityCache()).byDiscord[interaction.user.id];
     if (!interaction.client.priorityQueue) throw new Error('Priority queue is still starting. Try again shortly.');
+    robloxId = String(identity?.robloxId || '');
     await interaction.editReply('Checking your queue access. Join the game as soon as priority access is available.');
-    await interaction.client.priorityQueue.grant(String(identity?.robloxId || ''), checkRole,
+    await interaction.client.priorityQueue.grant(robloxId, checkRole,
       () => interaction.editReply('Priority access is active! Join the game now. Temporary moderator access will be removed on entry or after 10 seconds.'));
     await interaction.editReply('Your priority window has ended and temporary moderator access has been removed.');
+    logUse(true, 'Temporary moderator access granted and removed.');
   } catch (error) {
     logger.error('Priority queue request failed', error);
+    logUse(false, error.message || 'Priority queue could not be activated.');
     await interaction.editReply(error.message || 'Priority queue could not be activated.');
   }
   return true;
