@@ -1,12 +1,14 @@
 import { attachPlayerAvatars, robloxAvatarProxyPath } from '../lib/roblox-avatars.js';
 import { logger } from './logger.js';
 
-const ERLC_MIN_INTERVAL_MS = 5_000;
+/** PRC shares one HTTP bucket for server snapshots and in-game commands. */
+export const ERLC_MIN_INTERVAL_MS = 5_000;
 const ERLC_SERVER_CACHE_TTL_MS = 5_000;
+let erlcMinIntervalMs = ERLC_MIN_INTERVAL_MS;
 let erlcAvailableAt = 0;
 let erlcNetworkQueue = Promise.resolve();
-const serverCache = new Map();
-const serverInflight = new Map();
+let erlcSlotDepth = 0;
+let bundleCache = { value: null, expiresAt: 0, inflight: null };
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -14,68 +16,91 @@ function sleep(ms) {
 
 function rememberErlcCooldown(retryAfterSeconds = 0) {
   const extra = Number.isFinite(Number(retryAfterSeconds)) ? Number(retryAfterSeconds) * 1000 : 0;
-  erlcAvailableAt = Date.now() + Math.max(ERLC_MIN_INTERVAL_MS, extra);
+  erlcAvailableAt = Date.now() + Math.max(erlcMinIntervalMs, extra);
 }
 
-function withErlcNetworkSlot(task) {
+/** One-at-a-time ER:LC HTTP: snapshots and commands share this line. */
+export function withErlcNetworkSlot(task) {
   const run = erlcNetworkQueue.then(async () => {
     const waitMs = Math.max(0, erlcAvailableAt - Date.now());
     if (waitMs) await sleep(waitMs);
-    return task();
+    erlcSlotDepth += 1;
+    try {
+      return await task();
+    } finally {
+      erlcSlotDepth -= 1;
+    }
   });
-  erlcNetworkQueue = run.catch(() => {});
+  erlcNetworkQueue = run.then(() => undefined, () => undefined);
   return run;
 }
 
-export async function fetchErlcServer(serverKey, {
-  staff = false,
-  modCalls = false,
-  vehicles = false,
-  killLogs = false,
-} = {}) {
-  if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
-  const cacheKey = `${serverKey}|s${staff ? 1 : 0}|m${modCalls ? 1 : 0}|v${vehicles ? 1 : 0}|k${killLogs ? 1 : 0}`;
-  const cached = serverCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.value;
-  if (serverInflight.has(cacheKey)) return serverInflight.get(cacheKey);
+async function fetchErlcBundle(serverKey) {
+  const url = new URL('https://api.erlc.gg/v2/server');
+  url.searchParams.set('Players', 'true');
+  url.searchParams.set('Queue', 'true');
+  url.searchParams.set('Vehicles', 'true');
+  url.searchParams.set('KillLogs', 'true');
+  url.searchParams.set('ModCalls', 'true');
+  url.searchParams.set('Staff', 'true');
 
-  const pending = (async () => {
-    const still = serverCache.get(cacheKey);
-    if (still && still.expiresAt > Date.now()) return still.value;
-
-    const url = new URL('https://api.erlc.gg/v2/server');
-    for (const field of ['Players', 'Queue']) url.searchParams.set(field, 'true');
-    if (staff) url.searchParams.set('Staff', 'true');
-    if (modCalls) url.searchParams.set('ModCalls', 'true');
-    if (vehicles) url.searchParams.set('Vehicles', 'true');
-    if (killLogs) url.searchParams.set('KillLogs', 'true');
-
-    let lastError = null;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const waitMs = Math.max(0, erlcAvailableAt - Date.now());
-      if (waitMs) await sleep(waitMs);
-      const response = await fetch(url, {
-        headers: { 'server-key': serverKey },
-        signal: AbortSignal.timeout(8000),
-      });
-      const retryAfter = Number(response.headers.get('retry-after') || 0);
-      if (response.status === 429 && attempt < 2) {
-        rememberErlcCooldown(retryAfter || 5);
-        logger.warn(`ER:LC server snapshot 429; retry after ${Math.ceil(retryAfter || 5)}s`);
-        lastError = new Error('ER:LC request failed (429)');
-        continue;
-      }
-      if (!response.ok) throw new Error(`ER:LC request failed (${response.status})`);
-      rememberErlcCooldown(retryAfter);
-      const json = await response.json();
-      serverCache.set(cacheKey, { value: json, expiresAt: Date.now() + ERLC_SERVER_CACHE_TTL_MS });
-      return json;
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const waitMs = Math.max(0, erlcAvailableAt - Date.now());
+    if (waitMs) await sleep(waitMs);
+    const response = await fetch(url, {
+      headers: { 'server-key': serverKey },
+      signal: AbortSignal.timeout(8000),
+    });
+    const retryAfter = Number(response.headers.get('retry-after') || 0);
+    if (response.status === 429 && attempt < 2) {
+      rememberErlcCooldown(retryAfter || 5);
+      logger.warn(`ER:LC server snapshot 429; queued retry after ${Math.ceil(retryAfter || 5)}s`);
+      lastError = new Error('ER:LC request failed (429)');
+      lastError.status = 429;
+      continue;
     }
-    throw lastError || new Error('ER:LC request failed (429)');
-  })().finally(() => { serverInflight.delete(cacheKey); });
+    if (!response.ok) {
+      const error = new Error(`ER:LC request failed (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
+    rememberErlcCooldown(retryAfter);
+    const json = await response.json();
+    bundleCache = { value: json, expiresAt: Date.now() + ERLC_SERVER_CACHE_TTL_MS, inflight: null };
+    return json;
+  }
+  throw lastError || new Error('ER:LC request failed (429)');
+}
 
-  serverInflight.set(cacheKey, pending);
-  return pending;
+export async function fetchErlcServer(serverKey, _options = {}) {
+  if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
+  if (bundleCache.value && Date.now() < bundleCache.expiresAt) return bundleCache.value;
+  if (bundleCache.inflight) return bundleCache.inflight;
+  // A command/session already holds the queue: never fire a second HTTP in that slot.
+  if (erlcSlotDepth > 0) {
+    if (bundleCache.value) return bundleCache.value;
+    return fetchErlcBundle(serverKey);
+  }
+
+  const pending = withErlcNetworkSlot(async () => {
+    if (bundleCache.value && Date.now() < bundleCache.expiresAt) return bundleCache.value;
+    return fetchErlcBundle(serverKey);
+  });
+  bundleCache.inflight = pending;
+  try {
+    return await pending;
+  } finally {
+    if (bundleCache.inflight === pending) bundleCache.inflight = null;
+  }
+}
+
+export function resetErlcNetworkForTests({ minIntervalMs = 0 } = {}) {
+  erlcMinIntervalMs = Number.isFinite(minIntervalMs) ? minIntervalMs : 0;
+  erlcAvailableAt = 0;
+  erlcNetworkQueue = Promise.resolve();
+  erlcSlotDepth = 0;
+  bundleCache = { value: null, expiresAt: 0, inflight: null };
 }
 
 function firstFinite(...values) {

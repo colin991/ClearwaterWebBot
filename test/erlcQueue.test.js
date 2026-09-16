@@ -1,0 +1,71 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  executeErlcCommand,
+  fetchErlcServer,
+  resetErlcNetworkForTests,
+} from '../utils/erlc.js';
+
+function jsonResponse(status, body, headers = {}) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: (name) => headers[String(name).toLowerCase()] || null },
+    json: async () => body,
+  };
+}
+
+test('parallel snapshots and a command share one ER:LC HTTP queue', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 0 });
+  const urls = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    urls.push({ url: String(url), method: options?.method || 'GET' });
+    if (String(options?.method || 'GET').toUpperCase() === 'POST') {
+      return jsonResponse(200, { message: 'ok' });
+    }
+    return jsonResponse(200, { Players: [], Queue: [] });
+  };
+  try {
+    await Promise.all([
+      fetchErlcServer('key'),
+      fetchErlcServer('key', { vehicles: true }),
+      fetchErlcServer('key', { killLogs: true }),
+    ]);
+    await executeErlcCommand('key', ':wanted TestUser');
+    assert.equal(urls.filter((entry) => entry.method === 'GET').length, 1);
+    assert.equal(urls.filter((entry) => entry.method === 'POST').length, 1);
+    assert.ok(urls[0].method === 'GET');
+    assert.ok(urls[1].method === 'POST');
+  } finally {
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+  }
+});
+
+test('a live command uses the cached roster instead of a second snapshot', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 0 });
+  let gets = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (String(options?.method || 'GET').toUpperCase() === 'POST') {
+      await fetchErlcServer('key');
+      return jsonResponse(200, { message: 'ok' });
+    }
+    gets += 1;
+    return jsonResponse(200, { Players: [{ Player: 'Test:1', Team: 'Sheriff' }] });
+  };
+  try {
+    await fetchErlcServer('key');
+    await executeErlcCommand('key', ':pm Test hello', {
+      shouldExecute: async () => {
+        const server = await fetchErlcServer('key');
+        return Array.isArray(server.Players);
+      },
+    });
+    assert.equal(gets, 1);
+  } finally {
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+  }
+});
