@@ -12,6 +12,7 @@ export default {
       description: [
         '`/ping` - check the bot response time and latency',
         '`/server` - show Clearwater server information',
+        '`/request-priority` - request a 30 minute in-game priority for staff review',
         '`/help` - show this command list',
         '`/say` - Ownership only: speak text in a voice channel',
         '',

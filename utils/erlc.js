@@ -27,9 +27,14 @@ function withErlcNetworkSlot(task) {
   return run;
 }
 
-export async function fetchErlcServer(serverKey, { staff = false, modCalls = false } = {}) {
+export async function fetchErlcServer(serverKey, {
+  staff = false,
+  modCalls = false,
+  vehicles = false,
+  killLogs = false,
+} = {}) {
   if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
-  const cacheKey = `${serverKey}|${staff ? 1 : 0}|${modCalls ? 1 : 0}`;
+  const cacheKey = `${serverKey}|s${staff ? 1 : 0}|m${modCalls ? 1 : 0}|v${vehicles ? 1 : 0}|k${killLogs ? 1 : 0}`;
   const cached = serverCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
   if (serverInflight.has(cacheKey)) return serverInflight.get(cacheKey);
@@ -42,6 +47,8 @@ export async function fetchErlcServer(serverKey, { staff = false, modCalls = fal
     for (const field of ['Players', 'Queue']) url.searchParams.set(field, 'true');
     if (staff) url.searchParams.set('Staff', 'true');
     if (modCalls) url.searchParams.set('ModCalls', 'true');
+    if (vehicles) url.searchParams.set('Vehicles', 'true');
+    if (killLogs) url.searchParams.set('KillLogs', 'true');
 
     let lastError = null;
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -101,6 +108,57 @@ export function parseErlcPlayer(player) {
       building: String(loc.BuildingNumber || player?.building || loc.building || ''),
     },
   };
+}
+
+function splitOwner(owner) {
+  const raw = String(owner || '');
+  const separator = raw.lastIndexOf(':');
+  return {
+    username: separator >= 0 ? raw.slice(0, separator) : raw,
+    robloxId: separator >= 0 ? raw.slice(separator + 1) : '',
+  };
+}
+
+export function parseErlcVehicle(vehicle) {
+  const owner = splitOwner(vehicle?.Owner || vehicle?.owner);
+  return {
+    name: String(vehicle?.Name || vehicle?.name || '').trim(),
+    ownerUsername: owner.username,
+    ownerRobloxId: owner.robloxId,
+    texture: String(vehicle?.Texture || vehicle?.texture || '').trim(),
+    colorName: String(vehicle?.ColorName || vehicle?.colorName || '').trim(),
+    plate: String(vehicle?.Plate || vehicle?.LicensePlate || vehicle?.plate || '').trim(),
+  };
+}
+
+export function formatPriorityVehicle(vehicle) {
+  const color = vehicle?.texture && !/^standard$/i.test(vehicle.texture)
+    ? vehicle.texture
+    : (vehicle?.colorName || '');
+  const label = [color, vehicle?.name].filter(Boolean).join(' ').trim();
+  const plate = vehicle?.plate ? ` [${vehicle.plate}]` : '';
+  return `${label || 'Unknown vehicle'}${plate}`;
+}
+
+export function civilianVehicles(vehicles, players) {
+  const civ = new Set();
+  for (const player of Array.isArray(players) ? players : []) {
+    if (!/civilian/i.test(String(player?.team || ''))) continue;
+    if (player.robloxId) civ.add(`id:${player.robloxId}`);
+    if (player.username) civ.add(`name:${String(player.username).toLowerCase()}`);
+  }
+  return (Array.isArray(vehicles) ? vehicles : []).filter((vehicle) => {
+    const parsed = vehicle?.name ? vehicle : parseErlcVehicle(vehicle);
+    return (parsed.ownerRobloxId && civ.has(`id:${parsed.ownerRobloxId}`))
+      || (parsed.ownerUsername && civ.has(`name:${parsed.ownerUsername.toLowerCase()}`));
+  }).map((vehicle) => (vehicle?.name ? vehicle : parseErlcVehicle(vehicle)));
+}
+
+export function parseErlcKill(entry) {
+  const killed = splitOwner(entry?.Killed || entry?.killed);
+  const raw = Number(entry?.Timestamp || entry?.timestamp || 0);
+  const at = raw > 0 && raw < 1e12 ? raw * 1000 : raw;
+  return { username: killed.username, robloxId: killed.robloxId, at };
 }
 
 // Official map images are 3121Â² and cover the in-game 3120Â² stud plane.
