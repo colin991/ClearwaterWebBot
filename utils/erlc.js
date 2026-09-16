@@ -100,6 +100,7 @@ export function parseErlcPlayer(player) {
     robloxId: separator >= 0 ? raw.slice(separator + 1) : String(player?.PlayerId || player?.id || ''),
     team: player?.Team || player?.team || 'Civilian',
     callsign: player?.Callsign || player?.callsign || '',
+    speed: firstFinite(player?.Speed, player?.speed, player?.VehicleSpeed, player?.vehicleSpeed, loc.Speed, loc.speed),
     location: {
       x,
       z,
