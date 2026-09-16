@@ -94,6 +94,10 @@ export function hasBlockingPriority(request) {
   return status === 'pending' || status === 'active';
 }
 
+export function uniqueMentionUsers(...lists) {
+  return [...new Set(lists.flat(Infinity).map((id) => String(id || '').trim()).filter(Boolean))];
+}
+
 function gallery(url) {
   return { type: 12, items: [{ media: { url } }] };
 }
@@ -154,7 +158,7 @@ function pendingPayload(request) {
       { type: 2, style: 3, label: 'Approve', custom_id: `${PREFIX}approve:${request.id}` },
       { type: 2, style: 4, label: 'Deny', custom_id: `${PREFIX}deny:${request.id}` },
     ]],
-    allowedMentions: { parse: [], users: [request.requesterId, ...(request.participantDiscordIds || [])].filter(Boolean) },
+    allowedMentions: { parse: [], users: uniqueMentionUsers(request.requesterId, request.participantDiscordIds) },
   });
 }
 
@@ -166,7 +170,7 @@ function activePayload(request) {
       [{ type: 2, style: 2, label: 'Void', custom_id: `${PREFIX}void:${request.id}` }],
       [{ type: 2, style: 3, label: 'Started', custom_id: `${PREFIX}started:${request.id}`, disabled: true }],
     ],
-    allowedMentions: { parse: [], users: [request.requesterId, request.approvedBy, ...(request.participantDiscordIds || [])].filter(Boolean) },
+    allowedMentions: { parse: [], users: uniqueMentionUsers(request.requesterId, request.approvedBy, request.participantDiscordIds) },
   });
 }
 
@@ -174,7 +178,7 @@ function closedPayload(request, title, intro) {
   return v2Message({
     title,
     body: `${intro}\n\n${detailsBody(request)}`,
-    allowedMentions: { parse: [], users: [request.requesterId, request.approvedBy, request.voidedBy, request.deniedBy].filter(Boolean) },
+    allowedMentions: { parse: [], users: uniqueMentionUsers(request.requesterId, request.approvedBy, request.voidedBy, request.deniedBy) },
   });
 }
 
@@ -190,7 +194,7 @@ function voidedDmPayload(staffId) {
   return v2Message({
     title: '📶 Priority Request — Voided',
     body: `Your priority was **voided** by <@${staffId}>. It cannot be started.`,
-    allowedMentions: { parse: [], users: [staffId].filter(Boolean) },
+    allowedMentions: { parse: [], users: uniqueMentionUsers(staffId) },
   });
 }
 
@@ -202,7 +206,7 @@ function extraTimePayload(request, minutes) {
       { type: 2, style: 3, label: 'Approve time', custom_id: `${PREFIX}timeok:${request.id}:${minutes}` },
       { type: 2, style: 4, label: 'Deny time', custom_id: `${PREFIX}timeno:${request.id}` },
     ]],
-    allowedMentions: { parse: [], users: [request.requesterId], roles: [PRIORITY_REQUEST_STAFF_ROLE] },
+    allowedMentions: { parse: [], users: uniqueMentionUsers(request.requesterId), roles: [PRIORITY_REQUEST_STAFF_ROLE] },
   });
 }
 
@@ -405,7 +409,7 @@ export function createPriorityRequestService({
           username: player.username,
           robloxId: String(player.robloxId || ''),
         })),
-        participantDiscordIds: [...new Set([user.id, ...discordIds])],
+        participantDiscordIds: uniqueMentionUsers(user.id, discordIds),
         vehicles: selectedVehicles.map(formatPriorityVehicle),
         background: clip(background, 800),
         details: clip(details, 800),

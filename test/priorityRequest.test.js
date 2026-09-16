@@ -9,6 +9,7 @@ import {
   PRIORITY_PENDING_MS,
   PRIORITY_PEACE_SECONDS,
   PRIORITY_REQUEST_SECONDS,
+  uniqueMentionUsers,
 } from '../utils/priorityRequest.js';
 
 test('civilian vehicles keep civilian-owned cars and format the staff label', () => {
@@ -23,6 +24,10 @@ test('civilian vehicles keep civilian-owned cars and format the staff label', ()
   const civ = civilianVehicles(vehicles, players);
   assert.equal(civ.length, 1);
   assert.equal(formatPriorityVehicle(civ[0]), 'Really black Navara Horizon 2013 [GOV-884]');
+});
+
+test('priority Discord mentions drop duplicate user ids', () => {
+  assert.deepEqual(uniqueMentionUsers('111', ['111', '222'], '222', ''), ['111', '222']);
 });
 
 test('pending and active requests block a new submission', () => {
