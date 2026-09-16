@@ -107,10 +107,22 @@ function resolveMedia(post) {
   return { files, mediaUrl };
 }
 
-export function buildInternetPostPayload(post, store = null) {
-  const { files, mediaUrl } = resolveMedia(post);
+export function buildInternetPostPayload(post, store = null, { emojis = true, media = true } = {}) {
+  const { files, mediaUrl } = media ? resolveMedia(post) : { files: [], mediaUrl: '' };
   const likes = Array.isArray(post?.likes) ? post.likes.length : 0;
   const comments = commentCount(store, post?.id);
+  const likeButton = new ButtonBuilder()
+    .setCustomId(`${INTERNET_POST_LIKE_PREFIX}${post.id}`)
+    .setLabel(`Like${likes ? ` (${likes})` : ''}`)
+    .setStyle(ButtonStyle.Secondary);
+  const commentButton = new ButtonBuilder()
+    .setCustomId(`${INTERNET_POST_COMMENT_PREFIX}${post.id}`)
+    .setLabel(`Comment${comments ? ` (${comments})` : ''}`)
+    .setStyle(ButtonStyle.Secondary);
+  if (emojis) {
+    likeButton.setEmoji('❤️');
+    commentButton.setEmoji('💬');
+  }
   const container = new ContainerBuilder()
     .clearAccentColor()
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(buildFeedText(post, store)));
@@ -123,16 +135,8 @@ export function buildInternetPostPayload(post, store = null) {
 
   container.addActionRowComponents(
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`${INTERNET_POST_LIKE_PREFIX}${post.id}`)
-        .setLabel(`Like${likes ? ` (${likes})` : ''}`)
-        .setEmoji({ id: '1517253647069614241', name: 'Heart' })
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`${INTERNET_POST_COMMENT_PREFIX}${post.id}`)
-        .setLabel(`Comment${comments ? ` (${comments})` : ''}`)
-        .setEmoji({ id: '1540761931797758013', name: 'chat' })
-        .setStyle(ButtonStyle.Secondary),
+      likeButton,
+      commentButton,
       new ButtonBuilder()
         .setCustomId(`${INTERNET_POST_PROFILE_PREFIX}${post.authorId}`)
         .setLabel('Profile')
@@ -144,12 +148,13 @@ export function buildInternetPostPayload(post, store = null) {
     ),
   );
 
-  return {
+  const payload = {
     components: [container],
-    files,
     flags: MessageFlags.IsComponentsV2,
-    allowedMentions: { parse: [], users: [] },
+    allowedMentions: { parse: [] },
   };
+  if (files.length) payload.files = files;
+  return payload;
 }
 
 function buildCommentPayload(comment) {
@@ -166,7 +171,7 @@ function buildCommentPayload(comment) {
       .clearAccentColor()
       .addTextDisplayComponents(new TextDisplayBuilder().setContent(text))],
     flags: MessageFlags.IsComponentsV2,
-    allowedMentions: { parse: [], users: [] },
+    allowedMentions: { parse: [] },
   };
 }
 
@@ -176,8 +181,52 @@ export function isInternetForumChannel(channel) {
 
 export function requiredInternetForumTags(channel) {
   if (!channel?.flags?.has?.(ChannelFlagsBitField.Flags.RequireTag)) return [];
-  const firstTag = channel.availableTags?.[0]?.id;
-  return firstTag ? [firstTag] : [];
+  return [...new Set((channel.availableTags || []).map((tag) => String(tag?.id || '').trim()).filter(Boolean))].slice(0, 1);
+}
+
+async function findThreadByName(channel, name) {
+  const match = (bundle) => bundle?.threads?.find((thread) => thread.name === name) || null;
+  return match(await channel.threads.fetchActive().catch(() => null))
+    || match(await channel.threads.fetchArchived({ type: 'public', limit: 100 }).catch(() => null));
+}
+
+function payloadAttempts(post, store) {
+  return [
+    () => buildInternetPostPayload(post, store),
+    () => buildInternetPostPayload(post, store, { emojis: false }),
+    () => buildInternetPostPayload(post, store, { emojis: false, media: false }),
+    () => ({ content: buildFeedText(post, store).slice(0, 1900), allowedMentions: { parse: [] } }),
+  ];
+}
+
+async function createForumThread(channel, post, payload) {
+  const name = forumThreadName(post);
+  const tags = requiredInternetForumTags(channel);
+  const body = { name, message: payload };
+  if (tags.length) body.appliedTags = tags;
+  try {
+    return await channel.threads.create(body);
+  } catch (error) {
+    if (!tags.length) throw error;
+    return channel.threads.create({ name, message: payload });
+  }
+}
+
+async function sendFeedPayload(channel, post, payload) {
+  if (isInternetForumChannel(channel)) {
+    try {
+      const thread = await createForumThread(channel, post, payload);
+      return thread?.id || null;
+    } catch (error) {
+      const panel = await findThreadByName(channel, 'Internet Panel');
+      if (!panel) throw error;
+      if (panel.archived) await panel.setArchived(false, 'Publish Internet post').catch(() => {});
+      const message = await panel.send(payload);
+      return message?.id || null;
+    }
+  }
+  const message = await channel.send(payload);
+  return message?.id || null;
 }
 
 export async function fetchInternetChannel(client, channelId) {
@@ -222,25 +271,20 @@ export function createInternetFeedController(client, config = {}) {
     if (!shouldAnnounceInternetPost(post)) return null;
     const channel = await fetchInternetChannel(client, channelId);
     if (!channel) return null;
+    if (typeof channel.fetch === 'function') await channel.fetch().catch(() => {});
     const store = knownStore || await readInternetStore().catch(() => null);
-    const payload = buildInternetPostPayload(post, store);
-
-    try {
-      if (isInternetForumChannel(channel)) {
-        const appliedTags = requiredInternetForumTags(channel);
-        const thread = await channel.threads.create({
-          name: forumThreadName(post),
-          message: payload,
-          ...(appliedTags.length ? { appliedTags } : {}),
-        });
-        return thread?.id || null;
+    let lastError = null;
+    for (const build of payloadAttempts(post, store)) {
+      try {
+        const id = await sendFeedPayload(channel, post, build());
+        if (id) return id;
+      } catch (error) {
+        lastError = error;
+        logger.warn('Could not publish Clearwater Internet post to Discord', error);
       }
-      const message = await channel.send(payload);
-      return message?.id || null;
-    } catch (error) {
-      logger.error('Could not publish Clearwater Internet post to Discord', error);
-      return null;
     }
+    if (lastError) throw lastError;
+    return null;
   }
 
   async function update(post, knownStore = null) {

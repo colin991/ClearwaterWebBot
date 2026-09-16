@@ -359,12 +359,23 @@ async function publishPost(interaction, client) {
   }
   const post = result.post;
   const controller = createInternetFeedController(client, client.config);
-  const messageId = await controller.announce(post);
+  let messageId = null;
+  let publishError = '';
+  try {
+    messageId = await controller.announce(post);
+  } catch (error) {
+    publishError = String(error?.rawError?.message || error?.message || error).replace(/\s+/g, ' ').trim().slice(0, 180);
+    logger.error('Could not publish Clearwater Internet post to Discord', error);
+  }
   if (messageId) {
     await mutateDiscordInternetStore((store) => setInternetPostDiscordFeedMessage(store, post.id, messageId));
     await interaction.editReply({ content: 'Your post was published to Clearwater Internet.' });
   } else {
-    await interaction.editReply({ content: 'Your post was saved, but Discord could not publish it in the Internet channel. Please contact staff.' });
+    await interaction.editReply({
+      content: publishError
+        ? `Your post was saved, but Discord could not publish it in the Internet channel (${publishError}).`
+        : 'Your post was saved, but Discord could not publish it in the Internet channel. Check the bot can post there, then try again.',
+    });
   }
 }
 
