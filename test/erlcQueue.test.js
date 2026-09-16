@@ -114,3 +114,21 @@ test('expired roster reads stay instant and do not jump ahead of a queued comman
     resetErlcNetworkForTests({ minIntervalMs: 5000 });
   }
 });
+
+test('automatic :load commands never hit the ER:LC API', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 0 });
+  let posts = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => {
+    posts += 1;
+    return jsonResponse(200, { message: 'ok' });
+  };
+  try {
+    const result = await executeErlcCommand('key', ':load Test');
+    assert.equal(result, false);
+    assert.equal(posts, 0);
+  } finally {
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+  }
+});

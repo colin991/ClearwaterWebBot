@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMemberSnapshotLoader, MEMBER_FETCH_INTERVAL_MS } from '../utils/guildMemberSnapshot.js';
+import { createMemberSnapshotLoader, isDiscordRosterReady, MEMBER_FETCH_INTERVAL_MS } from '../utils/guildMemberSnapshot.js';
 
 test('parallel services share one fetch and reuse live cache until the 20s interval', async () => {
   let time = 0, calls = 0;
@@ -55,4 +55,12 @@ test('rate limits back off without accepting empty cache when stale is forbidden
   await assert.rejects(load(guild, { allowStale: false }), /24 seconds/);
   time = 20_000; await assert.rejects(load(guild, { allowStale: false }), /cooling down/); assert.equal(calls, 1);
   time = 24_000; await load(guild, { allowStale: false }); assert.equal(calls, 2);
+});
+
+test('incomplete Discord member caches are not treated as a full roster', () => {
+  assert.equal(isDiscordRosterReady({ members: { cache: new Map() }, memberCount: 400 }), false);
+  const small = new Map([['1', { user: { bot: false } }]]);
+  assert.equal(isDiscordRosterReady({ members: { cache: small }, memberCount: 400 }), false);
+  const ready = new Map(Array.from({ length: 120 }, (_, i) => [String(i), { user: { bot: false } }]));
+  assert.equal(isDiscordRosterReady({ members: { cache: ready }, memberCount: 400 }), true);
 });
