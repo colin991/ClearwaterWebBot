@@ -16,7 +16,7 @@ On approve:
 - The bot runs `:prty 1800` (30 minutes).
 - The staff message switches to **Active**, with **Void** available.
 
-**Void** (or a natural timer end, or the requester dying in-game **after 3 minutes**) runs `:prty 0` then `:pt 600` (10 minute peace timer). Void also DMs the requester that staff voided it.
+**Void** (or a natural timer end, or **everyone listed on the request dying in-game**) runs `:prty 0` then `:pt 600` (10 minute peace timer). All listed deaths end it immediately — there is no 3 minute wait. Void also DMs the requester that staff voided it.
 
 **Request Added Time** asks for 1–30 extra minutes, posts to the same staff channel, and pings role `1515107822432419971`. If staff approve, the bot runs `:prty` with remaining time plus the extra minutes.
 

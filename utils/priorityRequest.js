@@ -27,7 +27,6 @@ export const PRIORITY_REQUEST_STAFF_ROLE = '1515107822432419971';
 export const PRIORITY_REQUEST_SECONDS = 1800;
 export const PRIORITY_PEACE_SECONDS = 600;
 export const PRIORITY_PENDING_MS = 25 * 60 * 1000;
-export const PRIORITY_DEATH_GRACE_MS = 3 * 60 * 1000;
 export const PRIORITY_INFO_EMOJI = '<:info:1514347280105209928>';
 const HEADER = 'https://media.discordapp.net/attachments/1529616984755540088/1546535995736858644/clearwater_ban.png?format=webp&quality=lossless';
 const FOOTER = 'https://media.discordapp.net/attachments/1529616984755540088/1545833442040619018/clearwater_footer.png?format=webp&quality=lossless';
@@ -54,20 +53,46 @@ export function extraTimeCommandSeconds(endsAt, extraMinutes, now = Date.now()) 
   return remaining + extra;
 }
 
-export function requesterDiedAfterGrace({ kills = [], robloxId, username, startedAt, now = Date.now(), graceMs = PRIORITY_DEATH_GRACE_MS } = {}) {
-  if (!startedAt || now < startedAt + graceMs) return false;
+export function playerDiedDuringPriority({ kills = [], robloxId, username, startedAt } = {}) {
+  const started = Number(startedAt) || 0;
+  if (!started) return false;
   const id = String(robloxId || '');
   const name = String(username || '').toLowerCase();
+  if (!id && !name) return false;
   return kills.some((kill) => {
     const at = Number(kill.at || 0);
-    if (!at || at < startedAt + graceMs) return false;
+    if (!at || at < started) return false;
     return (id && String(kill.robloxId) === id) || (name && String(kill.username || '').toLowerCase() === name);
   });
+}
+
+export function listedPriorityParticipants(request) {
+  const listed = Array.isArray(request?.participants) ? request.participants.filter((player) => player?.username || player?.robloxId) : [];
+  if (listed.length) return listed;
+  if (request?.requesterRobloxId || request?.requesterUsername) {
+    return [{ robloxId: request.requesterRobloxId, username: request.requesterUsername }];
+  }
+  return [];
+}
+
+export function allPriorityParticipantsDied({ kills = [], participants = [], startedAt } = {}) {
+  const people = (Array.isArray(participants) ? participants : []).filter((player) => player?.username || player?.robloxId);
+  if (!people.length) return false;
+  return people.every((player) => playerDiedDuringPriority({
+    kills,
+    robloxId: player.robloxId,
+    username: player.username,
+    startedAt,
+  }));
 }
 
 export function hasBlockingPriority(request) {
   const status = String(request?.status || '');
   return status === 'pending' || status === 'active';
+}
+
+export function uniqueMentionUsers(...lists) {
+  return [...new Set(lists.flat(Infinity).map((id) => String(id || '').trim()).filter(Boolean))];
 }
 
 function gallery(url) {
@@ -130,7 +155,7 @@ function pendingPayload(request) {
       { type: 2, style: 3, label: 'Approve', custom_id: `${PREFIX}approve:${request.id}` },
       { type: 2, style: 4, label: 'Deny', custom_id: `${PREFIX}deny:${request.id}` },
     ]],
-    allowedMentions: { parse: [], users: [request.requesterId, ...(request.participantDiscordIds || [])].filter(Boolean) },
+    allowedMentions: { parse: [], users: uniqueMentionUsers(request.requesterId, request.participantDiscordIds) },
   });
 }
 
@@ -142,7 +167,7 @@ function activePayload(request) {
       [{ type: 2, style: 2, label: 'Void', custom_id: `${PREFIX}void:${request.id}` }],
       [{ type: 2, style: 3, label: 'Started', custom_id: `${PREFIX}started:${request.id}`, disabled: true }],
     ],
-    allowedMentions: { parse: [], users: [request.requesterId, request.approvedBy, ...(request.participantDiscordIds || [])].filter(Boolean) },
+    allowedMentions: { parse: [], users: uniqueMentionUsers(request.requesterId, request.approvedBy, request.participantDiscordIds) },
   });
 }
 
@@ -150,7 +175,7 @@ function closedPayload(request, title, intro) {
   return v2Message({
     title,
     body: `${intro}\n\n${detailsBody(request)}`,
-    allowedMentions: { parse: [], users: [request.requesterId, request.approvedBy, request.voidedBy, request.deniedBy].filter(Boolean) },
+    allowedMentions: { parse: [], users: uniqueMentionUsers(request.requesterId, request.approvedBy, request.voidedBy, request.deniedBy) },
   });
 }
 
@@ -166,7 +191,7 @@ function voidedDmPayload(staffId) {
   return v2Message({
     title: '📶 Priority Request — Voided',
     body: `Your priority was **voided** by <@${staffId}>. It cannot be started.`,
-    allowedMentions: { parse: [], users: [staffId].filter(Boolean) },
+    allowedMentions: { parse: [], users: uniqueMentionUsers(staffId) },
   });
 }
 
@@ -178,7 +203,7 @@ function extraTimePayload(request, minutes) {
       { type: 2, style: 3, label: 'Approve time', custom_id: `${PREFIX}timeok:${request.id}:${minutes}` },
       { type: 2, style: 4, label: 'Deny time', custom_id: `${PREFIX}timeno:${request.id}` },
     ]],
-    allowedMentions: { parse: [], users: [request.requesterId], roles: [PRIORITY_REQUEST_STAFF_ROLE] },
+    allowedMentions: { parse: [], users: uniqueMentionUsers(request.requesterId), roles: [PRIORITY_REQUEST_STAFF_ROLE] },
   });
 }
 
@@ -394,20 +419,17 @@ export function createPriorityRequestService({
       });
       return;
     }
-    if (time < Number(request.startedAt) + PRIORITY_DEATH_GRACE_MS) return;
     try {
       const server = await snapshot({ killLogs: true });
       const kills = (server.KillLogs || server.killLogs || []).map(parseErlcKill);
-      if (requesterDiedAfterGrace({
+      if (allPriorityParticipantsDied({
         kills,
-        robloxId: request.requesterRobloxId,
-        username: request.requesterUsername,
+        participants: listedPriorityParticipants(request),
         startedAt: request.startedAt,
-        now: time,
       })) {
         await closeActive(request, 'ended', {
           title: 'Priority Request — Ended',
-          intro: 'The requester died in-game after 3 minutes. The priority ended and a **10 minute** peace timer is running.',
+          intro: 'Everyone listed on this priority died in-game. The priority ended and a **10 minute** peace timer is running.',
         });
       }
     } catch (error) {
@@ -452,7 +474,11 @@ export function createPriorityRequestService({
         requesterRobloxId: String(identity?.robloxId || selectedPlayers.find(p => identities.get(String(p.robloxId)) === user.id)?.robloxId || ''),
         requesterUsername: selectedPlayers[0]?.username || identity?.robloxUsername || user.username,
         participantsText: text,
-        participantDiscordIds: [...new Set([user.id, ...discordIds])],
+        participants: selectedPlayers.map((player) => ({
+          username: player.username,
+          robloxId: String(player.robloxId || ''),
+        })),
+        participantDiscordIds: uniqueMentionUsers(user.id, discordIds),
         vehicles: selectedVehicles.map(formatPriorityVehicle),
         background: clip(background, 800),
         details: clip(details, 800),
