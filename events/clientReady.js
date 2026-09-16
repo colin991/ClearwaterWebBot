@@ -39,6 +39,7 @@ export default {
     if (!client.stopPriorityQueue) client.stopPriorityQueue = startPriorityQueue(client);
     if (!client.stopPriorityRequest) client.stopPriorityRequest = startPriorityRequest(client);
     if (!client.stopVcChecks) client.stopVcChecks = startVcChecks(client, client.config);
+    if (!client.stopSheriffBalance) client.stopSheriffBalance = startSheriffBalance(client);
     if (!client.stopGtaSpeeding) client.stopGtaSpeeding = startGtaSpeeding(client);
     if (!client.stopModCallVoice) client.stopModCallVoice = startModCallVoice(client);
 
