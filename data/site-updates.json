@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-16-gta-false-load-pm-filter",
+      "title": "Stop false GTA loads and hashed PMs",
+      "summary": "A single map rubberband no longer counts as GTA speeding, so players in Discord/VC are not :load'ed by a lag jump. In-game PMs were rewritten so Roblox does not replace them with #.",
+      "createdAt": "2026-09-16T01:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-16-vc-pm-jail-no-kick",
       "title": "VC checks jail instead of kicking",
       "summary": "Players missing Discord or voice are PMed in-game and jailed. VC checks never :kick, :load, or :wanted them off the private server.",
