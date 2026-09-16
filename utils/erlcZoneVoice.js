@@ -5,6 +5,7 @@ import { markBotVoiceMove } from './botVoiceMoves.js';
 import { logger } from './logger.js';
 import { postProximityLog } from './vcActionLog.js';
 import { v2Card } from './v2Message.js';
+import { ensureGuildMembers } from './guildMemberSnapshot.js';
 
 /** Discord voice channel players are dragged into when they enter the zone. */
 export const ERLC_ZONE_VOICE_CHANNEL_ID = '1545525189339774997';
@@ -90,7 +91,7 @@ export async function resolveZoneDiscordMember(guild, player, identityMap) {
   }
 
   if (guild.members.cache.size < 2) {
-    await guild.members.fetch().catch(() => null);
+    await ensureGuildMembers(guild, { allowStale: true }).catch(() => null);
   }
 
   const matches = [];

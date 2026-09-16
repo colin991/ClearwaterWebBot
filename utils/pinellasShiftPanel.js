@@ -21,6 +21,7 @@ import { fetchErlcServer, libertyMapPoint, parseErlcPlayer } from './erlc.js';
 import { getIdentityCache } from './identityStore.js';
 import { renderLibertyLocationMap } from './libertyMapImage.js';
 import { logger } from './logger.js';
+import { ensureGuildMembers } from './guildMemberSnapshot.js';
 import { syncPinellasAfkWarnings } from './pinellasAfk.js';
 import {
   fetchMelonlyMemberDiscordId,
@@ -546,10 +547,10 @@ export async function collectOnDutyDeputies(client, {
       || await client.guilds.fetch(config.guildId).catch(() => null))
     : null;
 
-  if (pinellas) await pinellas.members.fetch().catch(() => null);
-  if (clearwater) await clearwater.members.fetch().catch(() => null);
+  if (pinellas) await ensureGuildMembers(pinellas, { allowStale: true }).catch(() => null);
+  if (clearwater) await ensureGuildMembers(clearwater, { allowStale: true }).catch(() => null);
   if (vcGuild && vcGuild.id !== clearwater?.id && vcGuild.id !== pinellas?.id) {
-    await vcGuild.members.fetch().catch(() => null);
+    await ensureGuildMembers(vcGuild, { allowStale: true }).catch(() => null);
   }
 
   const neededIds = activeShifts.map((shift) => String(shift?.memberId || '')).filter(Boolean);
@@ -968,7 +969,7 @@ export async function syncPinellasOnDutyRoles(client, snapshot) {
     return { added: 0, removed: 0 };
   }
 
-  await guild.members.fetch().catch(() => null);
+  await ensureGuildMembers(guild, { allowStale: true }).catch(() => null);
 
   // On-duty role tracks Melonly department shift only (not Discord role as a source).
   const shouldHave = new Set(

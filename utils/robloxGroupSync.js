@@ -1,18 +1,15 @@
 import { getIdentityCache } from './identityStore.js';
 import { logger } from './logger.js';
 import { v2Card } from './v2Message.js';
+import { ensureGuildMembers } from './guildMemberSnapshot.js';
 
 const ROBLOX_CLOUD = 'https://apis.roblox.com/cloud/v2';
 const TRANSIENT_HTTP = new Set([408, 425, 429, 500, 502, 503, 504]);
 /** How long to pause sync after Roblox says the API-key account is moderated. */
 const MODERATED_PAUSE_MS = 6 * 60 * 60 * 1000;
-/** Avoid Discord gateway opcode 8 (Request Guild Members) every minute. */
-const MEMBER_FETCH_TTL_MS = 5 * 60 * 1000;
 let lastEmptyRequestDiagnostic = 0;
 let lastTransientDiscordAlertAt = 0;
 let moderatedUntil = 0;
-let lastMemberFetchAt = 0;
-let memberFetchCooldownUntil = 0;
 const robloxUsernameCache = new Map();
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -54,51 +51,6 @@ function isTransientFetchError(error) {
   if (/Request Context Failure/i.test(message)) return true;
   if (/rate limited/i.test(message)) return true;
   return error?.name === 'TimeoutError' || error?.name === 'AbortError';
-}
-
-/**
- * Fetch guild members, but reuse Discord's cache most of the time.
- * Opcode 8 is heavily rate-limited; falling back to cache keeps sync running.
- */
-async function ensureGuildMembers(guild) {
-  const cacheSize = guild.members.cache.size;
-  const now = Date.now();
-  const fresh = now - lastMemberFetchAt < MEMBER_FETCH_TTL_MS;
-  const coolingDown = now < memberFetchCooldownUntil;
-
-  if (cacheSize > 1 && (fresh || coolingDown)) {
-    return guild.members.cache;
-  }
-
-  try {
-    await guild.members.fetch();
-    lastMemberFetchAt = Date.now();
-    memberFetchCooldownUntil = 0;
-  } catch (error) {
-    if (!isDiscordMemberFetchRateLimit(error)) throw error;
-
-    const waitMs = discordRetryAfterMs(error);
-    memberFetchCooldownUntil = Date.now() + waitMs;
-
-    if (cacheSize > 1) {
-      logger.warn(
-        `Discord member fetch rate-limited (opcode 8); using cached roster `
-        + `(${cacheSize} members). Next full fetch in ~${Math.ceil(waitMs / 1000)}s.`,
-      );
-      return guild.members.cache;
-    }
-
-    logger.warn(
-      `Discord member fetch rate-limited (opcode 8) with empty cache; `
-      + `waiting ${Math.ceil(waitMs / 1000)}s then retrying once.`,
-    );
-    await sleep(waitMs);
-    await guild.members.fetch();
-    lastMemberFetchAt = Date.now();
-    memberFetchCooldownUntil = 0;
-  }
-
-  return guild.members.cache;
 }
 
 function isRobloxModeratedError(error) {
@@ -223,7 +175,7 @@ async function robloxUsername(robloxId) {
 }
 
 async function eligibleRobloxIds(guild, allowedRoleIds) {
-  await ensureGuildMembers(guild);
+  await ensureGuildMembers(guild, { allowStale: true });
   const cache = await getIdentityCache();
   const allowed = new Map();
   const nicknameFallbacks = [];
@@ -384,7 +336,6 @@ export function startRobloxGroupSync(client, config) {
 
       if (memberRateLimit) {
         nextDelayMs = Math.max(60_000, discordRetryAfterMs(error));
-        memberFetchCooldownUntil = now + nextDelayMs;
       }
 
       if (moderated) {

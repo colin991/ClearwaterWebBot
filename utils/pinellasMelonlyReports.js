@@ -26,6 +26,7 @@ import { getIdentityCache } from './identityStore.js';
 import { PINELLAS_GUILD_ID } from './pinellasServer.js';
 import { CLEARWATER_GUILD_ID } from './staffRanks.js';
 import { logger } from './logger.js';
+import { ensureGuildMembers } from './guildMemberSnapshot.js';
 import {
   PINELLAS_SHIFT_REPORT_CHANNELS,
   resolvePinellasMelonlyMemberDiscordId,
@@ -871,7 +872,7 @@ async function resolveDiscordFromGuildNicknames(client, subject) {
       || await client.guilds.fetch(guildId).catch(() => null);
     if (!guild) continue;
     if (guild.members.cache.size < 25) {
-      await guild.members.fetch().catch(() => null);
+      await ensureGuildMembers(guild, { allowStale: true }).catch(() => null);
     }
     for (const member of guild.members.cache.values()) {
       if (member.user?.bot) continue;

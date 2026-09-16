@@ -1,33 +1,52 @@
-// Discord opcode 8 requests share a gateway limit. Coalesce callers and only
-// refresh after five minutes; member join/update/remove events keep cache live.
-export function createMemberSnapshotLoader({ now = Date.now, ttlMs = 300000 } = {}) {
+// Discord opcode 8 (full member list) is shared across the bot.
+// One gateway request per guild at most every 20 seconds; everyone else uses cache.
+export const MEMBER_FETCH_INTERVAL_MS = 20_000;
+
+export function createMemberSnapshotLoader({ now = Date.now, ttlMs = MEMBER_FETCH_INTERVAL_MS } = {}) {
   const states = new WeakMap();
-  return async function ensureGuildMembers(guild, { allowStale = false } = {}) {
+  return async function ensureGuildMembers(guild, { allowStale = true } = {}) {
     let state = states.get(guild);
-    if (!state) { state = { fetchedAt: null, retryAt: 0, pending: null }; states.set(guild, state); }
-    const hasRoster = state.fetchedAt !== null || guild.members.cache.size > 1;
-    if (state.fetchedAt !== null && now() - state.fetchedAt < ttlMs) return guild.members.cache;
-    if (state.pending) return state.pending;
+    if (!state) {
+      state = { fetchedAt: null, retryAt: 0, pending: null };
+      states.set(guild, state);
+    }
+    const cache = guild.members.cache;
+    if (state.fetchedAt !== null && now() - state.fetchedAt < ttlMs) return cache;
     if (now() < state.retryAt) {
-      if (allowStale && hasRoster) return guild.members.cache;
+      if (allowStale) return cache;
       throw new Error(`Discord member list is cooling down. Please try again in ${Math.ceil((state.retryAt - now()) / 1000)} seconds.`);
     }
+    if (state.pending) {
+      try {
+        return await state.pending;
+      } catch (error) {
+        if (allowStale) return cache;
+        throw error;
+      }
+    }
+
     state.pending = Promise.resolve().then(() => guild.members.fetch()).then(() => {
-      state.fetchedAt = now(); state.retryAt = 0;
+      state.fetchedAt = now();
+      state.retryAt = 0;
       return guild.members.cache;
-    }).catch(error => {
+    }).catch((error) => {
       const reportedSeconds = Number(String(error?.message || '').match(/Retry after\s+([\d.]+)/i)?.[1]);
-      const seconds = Math.max(30, Number.isFinite(reportedSeconds) ? reportedSeconds : 60);
+      const seconds = Math.max(ttlMs / 1000, Number.isFinite(reportedSeconds) ? reportedSeconds : 20);
       state.retryAt = now() + seconds * 1000;
-      if (/rate.limit|opcode 8/i.test(String(error?.message || ''))) {
-        if (allowStale && (state.fetchedAt !== null || guild.members.cache.size > 1)) {
-          return guild.members.cache;
-        }
-        throw new Error(`Discord is temporarily limiting member lookups. Please try -dc again in ${Math.ceil(seconds)} seconds.`);
+      if (/rate.limit|opcode 8|cooling down/i.test(String(error?.message || ''))) {
+        throw new Error(`Discord is temporarily limiting member lookups. Please try again in ${Math.ceil(seconds)} seconds.`);
       }
       throw error;
-    }).finally(() => { state.pending = null; });
-    return state.pending;
+    }).finally(() => {
+      state.pending = null;
+    });
+
+    try {
+      return await state.pending;
+    } catch (error) {
+      if (allowStale) return cache;
+      throw error;
+    }
   };
 }
 
