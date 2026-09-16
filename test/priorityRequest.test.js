@@ -2,14 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { civilianVehicles, formatPriorityVehicle, parseErlcKill, parseErlcVehicle } from '../utils/erlc.js';
 import {
+  allPriorityParticipantsDied,
   createPriorityRequestService,
   extraTimeCommandSeconds,
   hasBlockingPriority,
-  PRIORITY_DEATH_GRACE_MS,
   PRIORITY_PENDING_MS,
   PRIORITY_PEACE_SECONDS,
   PRIORITY_REQUEST_SECONDS,
-  requesterDiedAfterGrace,
 } from '../utils/priorityRequest.js';
 
 test('civilian vehicles keep civilian-owned cars and format the staff label', () => {
@@ -38,16 +37,27 @@ test('extra time adds minutes onto remaining seconds', () => {
   assert.equal(extraTimeCommandSeconds(0, 5, 10_000), 300);
 });
 
-test('requester death after 3 minutes ends the priority', () => {
+test('priority ends only after every listed participant has died', () => {
   const startedAt = 1_000_000;
-  const kills = [parseErlcKill({ Killed: 'Host:99', Timestamp: (startedAt + PRIORITY_DEATH_GRACE_MS + 1000) / 1000 })];
-  assert.equal(requesterDiedAfterGrace({
-    kills, robloxId: '99', username: 'Host', startedAt, now: startedAt + PRIORITY_DEATH_GRACE_MS + 2000,
-  }), true);
-  assert.equal(requesterDiedAfterGrace({
-    kills: [parseErlcKill({ Killed: 'Host:99', Timestamp: (startedAt + 1000) / 1000 })],
-    robloxId: '99', username: 'Host', startedAt, now: startedAt + PRIORITY_DEATH_GRACE_MS + 2000,
+  const people = [
+    { username: 'Host', robloxId: '99' },
+    { username: 'Partner', robloxId: '88' },
+  ];
+  const hostKill = [parseErlcKill({ Killed: 'Host:99', Timestamp: (startedAt + 1000) / 1000 })];
+  assert.equal(allPriorityParticipantsDied({
+    kills: hostKill, participants: people, startedAt,
   }), false);
+  assert.equal(allPriorityParticipantsDied({
+    kills: [
+      ...hostKill,
+      parseErlcKill({ Killed: 'Partner:88', Timestamp: (startedAt + 2000) / 1000 }),
+    ],
+    participants: people,
+    startedAt,
+  }), true);
+  assert.equal(allPriorityParticipantsDied({
+    kills: hostKill, participants: [{ username: 'Host', robloxId: '99' }], startedAt,
+  }), true);
 });
 
 function serviceFixture(request, extras = {}) {
@@ -100,7 +110,7 @@ test('unanswered pending requests auto-deny after 25 minutes', async () => {
   assert.deepEqual(f.commands, []);
 });
 
-test('requester death after grace ends the running priority', async () => {
+test('all listed deaths end the running priority immediately and start peace timer', async () => {
   const startedAt = 1_000_000;
   const f = serviceFixture({
     id: 'p1',
@@ -108,14 +118,45 @@ test('requester death after grace ends the running priority', async () => {
     requesterId: 'u1',
     requesterRobloxId: '99',
     requesterUsername: 'Host',
+    participants: [
+      { username: 'Host', robloxId: '99' },
+      { username: 'Partner', robloxId: '88' },
+    ],
     startedAt,
     endsAt: startedAt + PRIORITY_REQUEST_SECONDS * 1000,
     staffMessageId: 'm',
   }, {
-    time: startedAt + PRIORITY_DEATH_GRACE_MS + 2000,
-    server: { KillLogs: [{ Killed: 'Host:99', Timestamp: Math.floor((startedAt + PRIORITY_DEATH_GRACE_MS + 1000) / 1000) }] },
+    time: startedAt + 5000,
+    server: {
+      KillLogs: [
+        { Killed: 'Host:99', Timestamp: Math.floor((startedAt + 1000) / 1000) },
+        { Killed: 'Partner:88', Timestamp: Math.floor((startedAt + 2000) / 1000) },
+      ],
+    },
   });
   await f.svc.tick();
   assert.equal(f.stored.request.status, 'ended');
   assert.deepEqual(f.commands, [':prty 0', `:pt ${PRIORITY_PEACE_SECONDS}`]);
+});
+
+test('one listed player dying does not end the priority', async () => {
+  const startedAt = 1_000_000;
+  const f = serviceFixture({
+    id: 'p1',
+    status: 'active',
+    requesterId: 'u1',
+    participants: [
+      { username: 'Host', robloxId: '99' },
+      { username: 'Partner', robloxId: '88' },
+    ],
+    startedAt,
+    endsAt: startedAt + PRIORITY_REQUEST_SECONDS * 1000,
+    staffMessageId: 'm',
+  }, {
+    time: startedAt + 5000,
+    server: { KillLogs: [{ Killed: 'Host:99', Timestamp: Math.floor((startedAt + 1000) / 1000) }] },
+  });
+  await f.svc.tick();
+  assert.equal(f.stored.request.status, 'active');
+  assert.deepEqual(f.commands, []);
 });
