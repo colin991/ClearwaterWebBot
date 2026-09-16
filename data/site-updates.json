@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-16-gta-no-load",
+      "title": "GTA speeding no longer loads players",
+      "summary": "Going over 130 still gets an in-game PM, including a second PM if it happens again within 3 minutes. The bot no longer sends :load.",
+      "createdAt": "2026-09-16T01:39:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-16-vc-whitelist-command",
       "title": "VC whitelist slash command",
       "summary": "Administrators can run /vc whitelist to stop VC checks from jailing or PMing a Discord member or in-game Roblox username. action:remove takes them off; action:list shows the list.",

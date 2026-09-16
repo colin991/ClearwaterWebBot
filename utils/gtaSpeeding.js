@@ -10,7 +10,7 @@ import { enforcementLogBody, postProximityLog } from './vcActionLog.js';
 export const GTA_SPEED_LIMIT = 130;
 export const GTA_SPEED_REPEAT_MS = 3 * 60 * 1000;
 export const GTA_SPEED_WARN_PM = 'Do not go over 130. Slow down now.';
-export const GTA_SPEED_LOAD_PM = 'You went over 130 twice. Slow down.';
+export const GTA_SPEED_REPEAT_PM = 'You went over 130 twice. Slow down.';
 export const GTA_OVER_TICKS_REQUIRED = 2;
 /** Roblox studs are treated as feet so estimated speed matches the in-game MPH gauge. */
 export const STUDS_PER_SECOND_TO_MPH = 3600 / 5280;
@@ -69,11 +69,12 @@ export function createGtaSpeeding({
   };
 
   async function apply(command, player, reason, shouldExecute) {
+    const verb = String(command || '').trim().split(/\s+/)[0].toLowerCase();
+    if (verb !== ':pm') return false;
     const result = await send(command, shouldExecute);
     if (result === false) return false;
-    const kind = command.startsWith(':load') ? 'LOAD' : 'PM';
-    const message = kind === 'PM' ? command.replace(/^:pm\s+\S+\s+/i, '').slice(0, 160) : '';
-    log({ action: kind, player, reason, message, command });
+    const message = command.replace(/^:pm\s+\S+\s+/i, '').slice(0, 160);
+    log({ action: 'PM', player, reason, message, command });
     return result;
   }
 
@@ -125,15 +126,13 @@ export function createGtaSpeeding({
       };
       try {
         if (repeat) {
-          const loadedPlayer = await apply(`:load ${player.username}`, player, `GTA Speeding ${Math.round(mph)} mph`, stillHere);
-          if (loadedPlayer === false) {
+          const noticed = await apply(`:pm ${player.username} ${GTA_SPEED_REPEAT_PM}`, player, `GTA Speeding ${Math.round(mph)} mph`, stillHere);
+          if (noticed === false) {
             state.speeding = false;
             continue;
           }
-          await apply(`:pm ${player.username} ${GTA_SPEED_LOAD_PM}`, player, 'GTA Speeding load notice', stillHere);
-          state.lastAction = 'load';
+          state.lastAction = 'repeat';
           state.lastOffenseAt = time;
-          state.sample = null;
         } else {
           const warned = await apply(`:pm ${player.username} ${GTA_SPEED_WARN_PM}`, player, `GTA Speeding ${Math.round(mph)} mph`, stillHere);
           if (warned === false) {
