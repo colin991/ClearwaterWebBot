@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPriorityService, validatePriorityServer, priorityPanel, postPriorityQueueLog, PRIORITY_QUEUE_LOG_CHANNEL } from '../utils/priorityQueue.js';
+import { createPriorityService, validatePriorityServer, priorityPanel, postPriorityQueueLog, PRIORITY_QUEUE_LOG_CHANNEL, createQueueHintService, parseErlcQueueEntry, queueArrivalIds, QUEUE_HINT_MESSAGE } from '../utils/priorityQueue.js';
 import command from '../prefixCommands/prtyq.js';
 
 const server = () => ({ Queue: [123], Players: [], Staff: { Admins: {}, Mods: {}, Helpers: {} }, OwnerId: 9, CoOwnerIds: [] });
@@ -84,4 +84,39 @@ test('Join Queue usage logs to the specified channel without mentions', async ()
   assert.equal(payload.embeds[0].title, 'Priority Queue');
   assert.match(payload.embeds[0].fields[0].value, /Tester/);
   assert.equal(payload.embeds[0].fields[1].value, '123');
+});
+
+test('parseErlcQueueEntry accepts ids and Player:id strings', () => {
+  assert.deepEqual(parseErlcQueueEntry(123), { robloxId: '123', username: '' });
+  assert.equal(parseErlcQueueEntry('User:456').robloxId, '456');
+  assert.deepEqual(queueArrivalIds(['1', '2'], null), []);
+  assert.deepEqual(queueArrivalIds(['1', '2'], new Set(['1'])), ['2']);
+});
+
+test('new queue arrivals are DMed once unless they just used Join Queue', async () => {
+  let queue = [111];
+  const dms = [];
+  const service = createQueueHintService({
+    snapshot: async () => ({ Queue: queue }),
+    identities: async () => new Map([['111', 'd1'], ['222', 'd2'], ['333', 'd3']]),
+    dm: async (id, content) => { dms.push({ id, content }); },
+  });
+  await service.tick();
+  assert.deepEqual(dms, []);
+  queue = [111, 222];
+  await service.tick();
+  assert.equal(dms.length, 1);
+  assert.equal(dms[0].id, 'd2');
+  assert.equal(dms[0].content, QUEUE_HINT_MESSAGE);
+  await service.tick();
+  assert.equal(dms.length, 1);
+  service.markPriorityUse('333');
+  queue = [111, 222, 333];
+  await service.tick();
+  assert.equal(dms.length, 1);
+  queue = [222];
+  await service.tick();
+  queue = [222, 111];
+  await service.tick();
+  assert.equal(dms.at(-1).id, 'd1');
 });

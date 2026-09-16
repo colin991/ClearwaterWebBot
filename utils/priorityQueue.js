@@ -1,7 +1,7 @@
 import { MessageFlags } from 'discord.js';
 import { resolve } from 'node:path';
 import { fetchErlcServer, parseErlcPlayer, withErlcCommandSession } from './erlc.js';
-import { getIdentityCache } from './identityStore.js';
+import { discordIdsByRobloxId, getIdentityCache } from './identityStore.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
 
@@ -9,6 +9,8 @@ export const PRIORITY_CHANNEL = '1532549648042954922';
 export const PRIORITY_QUEUE_LOG_CHANNEL = '1549178818814812211';
 export const PRIORITY_BUTTON = 'priority_queue_boost';
 export const PRIORITY_ROLES = ['1514109306700693616', '1532549498696634408'];
+export const QUEUE_HINT_SKIP_MS = 15 * 60 * 1000;
+export const QUEUE_HINT_MESSAGE = 'Tired of sitting in queue for ever? Boost the discord server or you can vote for the server on [melonly](https://melonly.xyz/servers/clearwater-roleplay-4/vote) which is free to get a major boost in the queue. https://discord.com/channels/1514026810348671026/1532549648042954922';
 const HEADER = 'https://media.discordapp.net/attachments/1529616984755540088/1546535995736858644/clearwater_ban.png?format=webp&quality=lossless&ex=6aa95de2&is=6aa80c62&hm=15715be370c6833a859c9eab336aa9f2b25f9a75eea6ec4d3408e9c893cbeff7';
 const FOOTER = 'https://media.discordapp.net/attachments/1529616984755540088/1545833442040619018/clearwater_footer.png?format=webp&quality=lossless&ex=6aa97294&is=6aa82114&hm=2b49a1e6d3a74cfa9b6f32d5e427d56bf13aafba1cfe1668572df43db598a92c';
 
@@ -22,6 +24,75 @@ export function priorityPanel() {
     { type: 10, content: '> <:bellring:1518378682912211195> Please note: this is **only necessary whenever the in-game has a queue**. Do not abuse the priority queue or you will be stripped of using it any further.' },
     gallery(FOOTER),
   ] }] };
+}
+
+export function parseErlcQueueEntry(entry) {
+  if (entry == null || entry === '') return null;
+  if (typeof entry === 'number' || (typeof entry === 'string' && /^\d{1,20}$/.test(entry.trim()))) {
+    return { robloxId: String(entry).trim(), username: '' };
+  }
+  if (typeof entry === 'string') return parseErlcPlayer({ Player: entry });
+  const player = parseErlcPlayer(entry);
+  if (player.robloxId || player.username) return player;
+  const id = String(entry.PlayerId || entry.playerId || entry.id || '').replace(/[^\d]/g, '');
+  return id ? { robloxId: id, username: String(entry.Player || entry.username || '') } : null;
+}
+
+export function queueArrivalIds(currentIds, previous) {
+  if (!previous) return [];
+  return currentIds.filter(id => id && !previous.has(id));
+}
+
+export function createQueueHintService({
+  snapshot,
+  identities,
+  dm,
+  now = Date.now,
+  skipMs = QUEUE_HINT_SKIP_MS,
+  onError = error => logger.error('Queue hint DM failed', error),
+} = {}) {
+  let previous = null;
+  let running;
+  const notified = new Set();
+  const skipUntil = new Map();
+  function keyOf(player) {
+    return String(player?.robloxId || player?.username || '');
+  }
+  return {
+    markPriorityUse(robloxId) {
+      const id = String(robloxId || '');
+      if (id) skipUntil.set(id, now() + skipMs);
+    },
+    async tick() {
+      const server = await snapshot();
+      const queue = (Array.isArray(server?.Queue) ? server.Queue : []).map(parseErlcQueueEntry).filter(player => player?.robloxId || player?.username);
+      const currentIds = queue.map(keyOf);
+      const arrivals = queueArrivalIds(currentIds, previous);
+      const online = new Set(currentIds);
+      previous = online;
+      for (const id of notified) if (!online.has(id)) notified.delete(id);
+      for (const [id, until] of skipUntil) if (until <= now()) skipUntil.delete(id);
+      if (!arrivals.length) return;
+      const identityMap = await identities();
+      for (const player of queue) {
+        const id = keyOf(player);
+        if (!arrivals.includes(id) || notified.has(id)) continue;
+        if ((skipUntil.get(player.robloxId) || 0) > now()) { notified.add(id); continue; }
+        const discordId = player.robloxId ? identityMap.get(String(player.robloxId)) : null;
+        if (!discordId) continue;
+        try {
+          await dm(discordId, QUEUE_HINT_MESSAGE);
+          notified.add(id);
+        } catch (error) {
+          onError(error);
+        }
+      }
+    },
+    run() {
+      if (!running) running = this.tick().catch(onError).finally(() => { running = null; });
+      return running;
+    },
+  };
 }
 
 export function validatePriorityServer(server, id) {
@@ -113,9 +184,19 @@ export function startPriorityQueue(client) {
     load: () => readJsonFile(path, null, { corruptFallback: false }),
     save: value => writeJsonFile(path, value),
   });
+  client.priorityQueueHints = createQueueHintService({
+    snapshot: () => fetchErlcServer(key),
+    identities: discordIdsByRobloxId,
+    dm: async (discordId, content) => {
+      const user = await client.users.fetch(discordId);
+      await user.send({ content, allowedMentions: { parse: [] } });
+    },
+  });
   const recover = () => client.priorityQueue.recover().catch(e => logger.error('Priority queue removal pending; will retry', e));
+  const hints = () => client.priorityQueueHints.run();
   void recover();
-  const timer = setInterval(recover, 15000);
+  void hints();
+  const timer = setInterval(() => { void recover(); void hints(); }, 15000);
   timer.unref();
   return () => clearInterval(timer);
 }
@@ -149,6 +230,7 @@ export async function handlePriorityQueue(interaction) {
       () => interaction.editReply('Priority access is active! Join the game now. Temporary moderator access will be removed on entry or after 10 seconds.'));
     await interaction.editReply('Your priority window has ended and temporary moderator access has been removed.');
     logUse(true, 'Temporary moderator access granted and removed.');
+    interaction.client.priorityQueueHints?.markPriorityUse(robloxId);
   } catch (error) {
     logger.error('Priority queue request failed', error);
     logUse(false, error.message || 'Priority queue could not be activated.');

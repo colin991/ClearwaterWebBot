@@ -11,3 +11,5 @@ Before granting, the bot writes `data/priority-queue-pending.json`. It clears th
 The panel uses the supplied Discord attachment URLs; Discord may expire those signed image links. If images become unavailable, replace them with refreshed attachment URLs.
 
 Uses of Join Queue are logged to channel `1549178818814812211` (success and failure) with the Discord user and linked Roblox ID. Log delivery does not delay or block the in-game grant.
+
+When someone **newly appears** in the in-game ER:LC queue and they did not just use Join Queue, the bot DMs a linked Discord account with a Melonly vote / boost reminder and a link to the priority-queue panel. People already in queue when the bot starts are not messaged. Successful Join Queue uses skip that DM for 15 minutes. Closed DMs are ignored.
