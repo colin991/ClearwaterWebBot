@@ -27,9 +27,11 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
   let enabled = true;
   let running;
   async function apply(command, player, reason, shouldExecute) {
+    const verb = String(command || '').trim().split(/\s+/)[0].toLowerCase();
+    if (![':pm', ':jail', ':unjail'].includes(verb)) return false;
     const result = await send(command, shouldExecute);
     if (result === false) return false;
-    const kind = command.startsWith(':unjail') ? 'UNJAIL' : command.startsWith(':jail') ? 'JAIL' : 'PM';
+    const kind = verb === ':unjail' ? 'UNJAIL' : verb === ':jail' ? 'JAIL' : 'PM';
     const message = kind === 'PM' ? command.replace(/^:pm\s+\S+\s+/i, '').slice(0, 120) : '';
     log({ action: kind, player, reason, message, command });
     return result;
@@ -66,21 +68,36 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
         }
         const mode = matches.length ? 'voice' : 'comms';
         if (state.mode !== mode) {
-          state.mode = mode; state.since = now(); state.lastPm = -Infinity; state.index = 0;
+          state.mode = mode; state.since = now(); state.lastPm = -Infinity; state.index = 0; state.needJailNotice = false;
         }
         const stillNeeded = () => {
           const current = membersForPlayer(player, members, identities);
           return enabled && !isVcExempt(player, members, identities) && (current.length ? 'voice' : 'comms') === mode && !current.some(m => inVoice(m.id));
         };
         if (!state.jailed && (mode === 'comms' || now() - state.since >= 300000)) {
-          const result = await apply(':jail ' + player.username, player, mode === 'comms' ? 'no Discord match' : 'not in voice for 5 minutes', stillNeeded);
+          const jailReason = mode === 'comms' ? 'no Discord match' : 'not in voice for 5 minutes';
+          if (stillNeeded()) {
+            try {
+              const pmResult = await apply(':pm ' + player.username + ' ' + JAIL_MESSAGES[mode], player, 'jail notice', stillNeeded);
+              if (pmResult !== false) {
+                state.needJailNotice = false;
+                state.lastPm = now();
+              } else {
+                state.needJailNotice = true;
+              }
+            } catch (error) {
+              onError(error);
+              state.needJailNotice = true;
+            }
+          }
+          if (!stillNeeded()) continue;
+          const result = await apply(':jail ' + player.username, player, jailReason, stillNeeded);
           if (result !== false) {
             state.jailed = true;
-            state.needJailNotice = true;
             await save([...states]);
           }
+          continue;
         }
-        if (!stillNeeded()) continue;
         if (state.needJailNotice) {
           const pmResult = await apply(':pm ' + player.username + ' ' + JAIL_MESSAGES[mode], player, 'jail notice', stillNeeded);
           if (pmResult !== false) { state.needJailNotice = false; state.lastPm = now(); }
