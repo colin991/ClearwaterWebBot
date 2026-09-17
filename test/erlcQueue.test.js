@@ -209,6 +209,22 @@ test('a 429 command leaves the queue instead of retrying in place', async () => 
   }
 });
 
+test('a cooldown timeout names the remaining ER:LC wait', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 5_000 });
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse(429, {}, { 'retry-after': '5' });
+  try {
+    await assert.rejects(() => fetchErlcServer('key'), /rate-limited/);
+    await assert.rejects(
+      () => fetchErlcServer('key', { timeoutMs: 80 }),
+      (error) => error.code === 'ERLC_TIMEOUT' && /rate-limited|seconds/i.test(error.message),
+    );
+  } finally {
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+  }
+});
+
 test('Discord roster reads time out when the snapshot itself hangs', async () => {
   resetErlcNetworkForTests({ minIntervalMs: 0 });
   let release = () => {};

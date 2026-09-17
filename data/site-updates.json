@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-dc-rate-limit-wait",
+      "title": "Tell -dc when ER:LC is rate-limited instead of saying busy",
+      "summary": "-dc waits for the ER:LC cooldown instead of giving up at 12 seconds with a busy message. If the API is rate-limited or unreachable, it says so. Sheriff and zone loops stay off until a snapshot succeeds.",
+      "createdAt": "2026-09-17T23:40:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-erlc-stop-queue-stampede",
       "title": "Stop ER:LC retries from freezing Discord commands",
       "summary": "Sheriff and VC no longer stampede a new or rate-limited ER:LC key. A bad key fails once and stays failed, 429s leave the queue instead of retrying for half a minute, and -dc replies Fetching Discord Check instead of typing forever.",

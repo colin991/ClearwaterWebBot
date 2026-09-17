@@ -35,12 +35,18 @@ export default {
     }, 1200);
 
     const startGameServices = async () => {
+      let warmed = false;
       if (client.config.erlcServerKey) {
         try {
-          await fetchErlcServer(client.config.erlcServerKey, { timeoutMs: 12_000 });
+          await fetchErlcServer(client.config.erlcServerKey, { timeoutMs: 20_000 });
+          warmed = true;
         } catch (error) {
           logger.warn(`Could not warm the ER:LC player list: ${error?.message || error}`);
         }
+      }
+      if (!warmed && client.config.erlcServerKey) {
+        logger.warn('Skipping ER:LC background loops until a snapshot succeeds. Prefix commands can still retry.');
+        return;
       }
       if (!client.stopPriorityRequest) client.stopPriorityRequest = startPriorityRequest(client);
       if (!client.stopVcChecks) client.stopVcChecks = startVcChecks(client, client.config);
