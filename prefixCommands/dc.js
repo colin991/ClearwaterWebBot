@@ -17,23 +17,28 @@ export default {
     if (!message.client.config.erlcServerKey) {
       throw new Error('The ER:LC server key is not set on the bot host. Add ERLC_SERVER_KEY to `.env` and restart.');
     }
-    await message.channel.sendTyping().catch(() => {});
-    const typing = setInterval(() => {
-      void message.channel.sendTyping().catch(() => {});
-    }, 8_000);
-    typing.unref?.();
-    await ensureGuildMembers(guild, { allowStale: true }).catch(() => {});
+    const loading = await message.reply({
+      content: 'Fetching Discord Check…',
+      allowedMentions: { parse: [], repliedUser: false },
+    });
     let server;
     let identities;
     try {
       [server, identities] = await Promise.all([
-        fetchErlcServer(message.client.config.erlcServerKey, { timeoutMs: 25_000 }),
+        fetchErlcServer(message.client.config.erlcServerKey, { timeoutMs: 12_000 }),
         getIdentityCache(),
       ]);
-    } finally {
-      clearInterval(typing);
+      await ensureGuildMembers(guild, { allowStale: true }).catch(() => {});
+    } catch (error) {
+      await loading.edit({
+        content: String(error?.message || 'The in-game player list is unavailable.').slice(0, 1800),
+      }).catch(() => {});
+      return;
     }
-    if (!Array.isArray(server.Players)) throw new Error('The in-game player list is unavailable. Please try again shortly.');
+    if (!Array.isArray(server.Players)) {
+      await loading.edit({ content: 'The in-game player list is unavailable. Please try again shortly.' }).catch(() => {});
+      return;
+    }
     const rows = classifyDiscordPlayers(
       server.Players.map(parseErlcPlayer),
       guild.members.cache,
@@ -54,7 +59,17 @@ export default {
     });
     const panels = buildDiscordCheckPanels(rows);
     for (let index = 0; index < panels.length; index += 1) {
-      const send = (payload) => (index === 0 ? message.reply(payload) : message.channel.send(payload));
+      const send = async (payload) => {
+        if (index === 0) {
+          try {
+            await loading.edit(payload);
+            return;
+          } catch {
+            await loading.delete().catch(() => {});
+          }
+        }
+        await message.channel.send(payload);
+      };
       try {
         await send(panels[index]);
         continue;

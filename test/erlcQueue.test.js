@@ -169,27 +169,41 @@ test('an invalid ER:LC server key fails immediately instead of retrying', async 
   }
 });
 
-test('an empty roster snapshot does not wait behind a live command', async () => {
-  resetErlcNetworkForTests({ minIntervalMs: 5_000 });
-  let release = () => {};
-  const hold = new Promise((resolve) => { release = resolve; });
+test('a rejected server key is not retried on later reads', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 0 });
+  let gets = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => {
+    gets += 1;
+    return jsonResponse(401, {});
+  };
+  try {
+    await assert.rejects(() => fetchErlcServer('bad-key'), /invalid or expired/);
+    await assert.rejects(() => fetchErlcServer('bad-key'), /invalid or expired/);
+    assert.equal(gets, 1);
+  } finally {
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+});
+
+test('a 429 command leaves the queue instead of retrying in place', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 0 });
+  let posts = 0;
   const original = globalThis.fetch;
   globalThis.fetch = async (url, options) => {
     if (String(options?.method || 'GET').toUpperCase() === 'POST') {
-      await hold;
-      return jsonResponse(200, { message: 'ok' });
+      posts += 1;
+      return jsonResponse(429, { message: 'slow down' }, { 'retry-after': '5' });
     }
-    return jsonResponse(200, { Players: [{ Player: 'Test:1' }] });
+    return jsonResponse(200, { Players: [] });
   };
-  const command = executeErlcCommand('key', ':wanted Test');
   try {
-    const t0 = Date.now();
-    const server = await fetchErlcServer('key', { timeoutMs: 200 });
-    assert.ok(Date.now() - t0 < 400);
-    assert.equal(server.Players[0].Player, 'Test:1');
+    await fetchErlcServer('key');
+    await assert.rejects(() => executeErlcCommand('key', ':wanted Test'), /Retry after/);
+    assert.equal(posts, 1);
   } finally {
-    release();
-    await command.catch(() => {});
     globalThis.fetch = original;
     resetErlcNetworkForTests({ minIntervalMs: 5000 });
   }

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-erlc-stop-queue-stampede",
+      "title": "Stop ER:LC retries from freezing Discord commands",
+      "summary": "Sheriff and VC no longer stampede a new or rate-limited ER:LC key. A bad key fails once and stays failed, 429s leave the queue instead of retrying for half a minute, and -dc replies Fetching Discord Check instead of typing forever.",
+      "createdAt": "2026-09-17T23:35:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-dc-roster-not-busy",
       "title": "Make -dc load the player list instead of saying busy",
       "summary": "-dc no longer gives up after 8 seconds while Sheriff commands hold the ER:LC line. With an empty cache it fetches the roster instead of waiting, so Discord Check can send after a new API key.",

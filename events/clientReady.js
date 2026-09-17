@@ -27,11 +27,6 @@ export default {
       logger.warn('Could not clear bot presence; continuing startup.', error);
     }
     logger.info(`Logged in as ${client.user.tag}.`);
-    if (client.config.erlcServerKey) {
-      void fetchErlcServer(client.config.erlcServerKey).catch((error) => {
-        logger.warn(`Could not warm the ER:LC player list: ${error?.message || error}`);
-      });
-    }
 
     setTimeout(() => {
       void ensurePinellasServerProfile(client).catch((error) => {
@@ -39,18 +34,27 @@ export default {
       });
     }, 1200);
 
-    if (!client.stopPriorityRequest) client.stopPriorityRequest = startPriorityRequest(client);
-    if (!client.stopVcChecks) client.stopVcChecks = startVcChecks(client, client.config);
-    if (!client.stopSheriffBalance) client.stopSheriffBalance = startSheriffBalance(client);
-    if (!client.stopModCallVoice) client.stopModCallVoice = startModCallVoice(client);
+    const startGameServices = async () => {
+      if (client.config.erlcServerKey) {
+        try {
+          await fetchErlcServer(client.config.erlcServerKey, { timeoutMs: 12_000 });
+        } catch (error) {
+          logger.warn(`Could not warm the ER:LC player list: ${error?.message || error}`);
+        }
+      }
+      if (!client.stopPriorityRequest) client.stopPriorityRequest = startPriorityRequest(client);
+      if (!client.stopVcChecks) client.stopVcChecks = startVcChecks(client, client.config);
+      if (!client.stopSheriffBalance) client.stopSheriffBalance = startSheriffBalance(client);
+      if (!client.stopModCallVoice) client.stopModCallVoice = startModCallVoice(client);
+      if (!client.stopErlcZoneVoice) {
+        client.stopErlcZoneVoice = startErlcZoneVoice(client, client.config);
+      }
+    };
+    void startGameServices();
 
     // Start the secondary-server role gate as soon as the gateway is ready.
     if (!client.stopSecondaryGate) {
       client.stopSecondaryGate = startSecondaryServerGate(client);
-    }
-
-    if (!client.stopErlcZoneVoice) {
-      client.stopErlcZoneVoice = startErlcZoneVoice(client, client.config);
     }
 
     if (!client.stopDispatchChannelStatus) {
