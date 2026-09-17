@@ -133,7 +133,7 @@ test('automatic :load commands never hit the ER:LC API', async () => {
   }
 });
 
-test('automatic :jail commands never hit the ER:LC API', async () => {
+test('automatic :kick commands never hit the ER:LC API', async () => {
   resetErlcNetworkForTests({ minIntervalMs: 0 });
   let posts = 0;
   const original = globalThis.fetch;
@@ -142,7 +142,7 @@ test('automatic :jail commands never hit the ER:LC API', async () => {
     return jsonResponse(200, { message: 'ok' });
   };
   try {
-    const result = await executeErlcCommand('key', ':jail Test');
+    const result = await executeErlcCommand('key', ':kick Test');
     assert.equal(result, false);
     assert.equal(posts, 0);
   } finally {
