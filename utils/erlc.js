@@ -382,7 +382,7 @@ export function withErlcCommandSession(serverKey, action) {
   );
 }
 
-async function sendErlcCommand(serverKey, command, { shouldExecute, allowLoad = false, allowJail = false } = {}) {
+async function sendErlcCommand(serverKey, command, { shouldExecute, allowLoad = false, allowJail = false, allowKick = false } = {}) {
     if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
     const text = String(command || '').trim();
     if (!text.startsWith(':')) throw new Error('Invalid ER:LC command');
@@ -392,6 +392,10 @@ async function sendErlcCommand(serverKey, command, { shouldExecute, allowLoad = 
     }
     if (!allowJail && /^:jail\b/i.test(text)) {
       logger.warn(`Blocked automatic ER:LC :jail (${text.slice(0, 80)})`);
+      return false;
+    }
+    if (!allowKick && /^:kick\b/i.test(text)) {
+      logger.warn(`Blocked automatic ER:LC :kick (${text.slice(0, 80)})`);
       return false;
     }
 
@@ -463,6 +467,7 @@ export async function runErlcRawCommand({ serverKey, command } = {}) {
   const response = await executeErlcCommand(serverKey, text, {
     allowLoad: /^:load\b/i.test(text),
     allowJail: /^:jail\b/i.test(text),
+    allowKick: /^:kick\b/i.test(text),
   });
   return {
     action: 'command',
@@ -501,6 +506,7 @@ export async function runErlcModeration({ serverKey, action, players = [], reaso
       const response = await executeErlcCommand(serverKey, command, {
         allowLoad: action === 'load',
         allowJail: action === 'jail',
+        allowKick: action === 'kick',
       });
       results.push({
         ...player,

@@ -33,10 +33,10 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
   let running;
   async function apply(command, player, reason, shouldExecute) {
     const verb = String(command || '').trim().split(/\s+/)[0].toLowerCase();
-    if (![':pm', ':unjail'].includes(verb)) return false;
+    if (![':pm', ':jail', ':unjail'].includes(verb)) return false;
     const result = await send(command, shouldExecute);
     if (result === false) return false;
-    const kind = verb === ':unjail' ? 'UNJAIL' : 'PM';
+    const kind = verb === ':unjail' ? 'UNJAIL' : verb === ':jail' ? 'JAIL' : 'PM';
     const message = kind === 'PM' ? command.replace(/^:pm\s+\S+\s+/i, '').slice(0, 120) : '';
     log({ action: kind, player, reason, message, command });
     return result;
@@ -55,14 +55,15 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
       let state = states.get(id);
       if (!state) { state = { jailed: false, mode: null, since: now(), lastPm: -Infinity, index: 0, needJailNotice: false }; states.set(id, state); }
       try {
-        if (state.jailed) {
-          await apply(':unjail ' + player.username, player, 'vc checks no longer jail');
-          state.jailed = false;
-          await save([...states]);
-        }
         const matches = membersForPlayer(player, members, identities);
         const compliant = matches.some(m => inVoice(m.id));
         if (!enabled || compliant || isVcExempt(player, members, identities)) {
+          if (state.jailed) {
+            const reason = !enabled ? 'checks disabled' : isVcExempt(player, members, identities) ? 'exempt' : 'joined voice';
+            await apply(':unjail ' + player.username, player, reason);
+            state.jailed = false;
+            await save([...states]);
+          }
           state.mode = null;
           state.since = now();
           state.lastPm = -Infinity;
@@ -79,6 +80,35 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
           const current = membersForPlayer(player, members, identities);
           return enabled && !isVcExempt(player, members, identities) && (current.length ? 'voice' : 'comms') === mode && !current.some(m => inVoice(m.id));
         };
+        if (!state.jailed && (mode === 'comms' || now() - state.since >= 300000)) {
+          const jailReason = mode === 'comms' ? 'no Discord match' : 'not in voice for 5 minutes';
+          if (stillNeeded()) {
+            try {
+              const pmResult = await apply(':pm ' + player.username + ' ' + JAIL_MESSAGES[mode], player, 'jail notice', stillNeeded);
+              if (pmResult !== false) {
+                state.needJailNotice = false;
+                state.lastPm = now();
+              } else {
+                state.needJailNotice = true;
+              }
+            } catch (error) {
+              onError(error);
+              state.needJailNotice = true;
+            }
+          }
+          if (!stillNeeded()) continue;
+          const result = await apply(':jail ' + player.username, player, jailReason, stillNeeded);
+          if (result !== false) {
+            state.jailed = true;
+            await save([...states]);
+          }
+          continue;
+        }
+        if (state.needJailNotice) {
+          const pmResult = await apply(':pm ' + player.username + ' ' + JAIL_MESSAGES[mode], player, 'jail notice', stillNeeded);
+          if (pmResult !== false) { state.needJailNotice = false; state.lastPm = now(); }
+          continue;
+        }
         if (now() - state.lastPm >= 60000) {
           const messages = mode === 'voice' ? VC_MESSAGES : COMMS_MESSAGES;
           const result = await apply(':pm ' + player.username + ' ' + messages[state.index % messages.length], player, mode === 'voice' ? 'voice reminder' : 'comms reminder', stillNeeded);
@@ -127,6 +157,7 @@ export function startVcChecks(client, config) {
         if (!client.isReady()) throw new Error('Discord disconnected before VC command; retrying later.');
         return !shouldExecute || shouldExecute();
       },
+      allowJail: /^:jail\b/i.test(String(command || '')),
     }),
     onLog: event => postProximityLog(client, {
       tag: 'VcCheck',

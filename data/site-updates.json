@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-vc-jail-pm-no-kick",
+      "title": "VC checks jail and PM, never kick",
+      "summary": "Missing Discord or voice is handled with in-game PMs and jail only. The bot never :kick or :load for VC checks. GTA driving checks stay removed.",
+      "createdAt": "2026-09-17T00:40:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-mod-call-no-stale-drag",
       "title": "Stop stale mod-call voice drags",
       "summary": "The bot no longer moves people into a mod-scene VC after a staff pickup if the caller already left the game or the call is more than 2 minutes old. Live pickups still move both people if they are in Discord voice.",
