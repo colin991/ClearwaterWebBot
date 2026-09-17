@@ -86,6 +86,31 @@ function supportTypeLabel(type) {
   return PINELLAS_SUPPORT_OPTIONS.find((option) => option.type === type)?.title || 'Support';
 }
 
+export function pinellasSupportCategoryIds() {
+  return [...new Set(Object.values(PINELLAS_SUPPORT_CATEGORY_IDS))];
+}
+
+export function ticketTypeFromTopic(channel) {
+  return channel?.topic?.match(/ticket-type:([a-z]+)/)?.[1] || 'general';
+}
+
+export function formatTicketInquiryNote(inquiry, source) {
+  const text = String(inquiry || '').trim();
+  if (source === 'website') {
+    return text ? `${text}\n\nOpened from the PCSO website.` : 'Opened from the PCSO website.';
+  }
+  return text;
+}
+
+export function findOpenSupportChannelsForOwner(guild, ownerId) {
+  const categories = new Set(pinellasSupportCategoryIds());
+  const owner = String(ownerId);
+  return [...(guild?.channels?.cache?.values?.() || [])].filter((channel) => (
+    categories.has(String(channel.parentId || ''))
+    && String(channel.topic || '').includes(`ticket-owner:${owner}`)
+  ));
+}
+
 export function websiteTicketFields(type) {
   if (type === 'compliance') {
     return OPC_INQUIRY_FIELDS.map((field) => ({
@@ -392,16 +417,21 @@ export async function requestPinellasTicketClose(message) {
   await channel.send(buildTicketCloseRequestPayload(ownerId));
 }
 
-export async function createPinellasSupportTicketForMember(guild, member, type, inquiry = '') {
+export async function createPinellasSupportTicketForMember(guild, member, type, inquiry = '', options = {}) {
   if (String(guild.id) !== PINELLAS_SUPPORT_GUILD_ID) {
     throw new Error('Tickets can only be opened in the Pinellas County Sheriff\'s Office server.');
   }
   const categoryId = PINELLAS_SUPPORT_CATEGORY_IDS[type];
   if (!categoryId) throw new Error('That support category is unavailable.');
 
-  const existing = guild.channels.cache.find((channel) => (
+  const matchExisting = () => guild.channels.cache.find((channel) => (
     channel.parentId === categoryId && channel.topic?.includes(`ticket-owner:${member.id}`)
   ));
+  let existing = matchExisting();
+  if (!existing) {
+    await guild.channels.fetch().catch(() => {});
+    existing = matchExisting();
+  }
   if (existing) return { channel: existing, existing: true };
 
   const botMember = guild.members.me || await guild.members.fetchMe();
@@ -420,10 +450,7 @@ export async function createPinellasSupportTicketForMember(guild, member, type, 
     content: `<@${member.id}>`,
     allowedMentions: { users: [member.id] },
   });
-  const openedNote = inquiry
-    ? `${inquiry}\n\nOpened from the PCSO website.`
-    : 'Opened from the PCSO website.';
-  await channel.send(await buildTicketPayload(member, type, openedNote));
+  await channel.send(await buildTicketPayload(member, type, formatTicketInquiryNote(inquiry, options.source)));
   return { channel, existing: false };
 }
 
@@ -447,6 +474,12 @@ export async function handlePinellasSupportInteraction(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
       const result = await createPinellasSupportTicket(interaction, inquiryType, inquiry);
+      const { registerWebTicketForChannel } = await import('./pcsoWebTickets.js');
+      await registerWebTicketForChannel(result.channel, {
+        ownerId: interaction.user.id,
+        type: inquiryType,
+        username: interaction.member?.displayName || interaction.user.username,
+      }).catch(() => {});
       await interaction.editReply({
         content: result.existing
           ? `You already have an open ticket: <#${result.channel.id}>`

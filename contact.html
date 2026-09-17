@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#6b7078" />
 <title>Contact | Pinellas County Sheriff's Office</title>
 <link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
-<link rel="stylesheet" href="styles.css?v=20260917-login" />
+<link rel="stylesheet" href="styles.css?v=20260917-tickets" />
 <script>document.documentElement.classList.add('js');</script>
 </head>
 <body class="pcso-home">
@@ -21,7 +21,7 @@
 <main id="main" class="pcso-page-main"><div class="pcso-wrap">
 <p class="pcso-eyebrow">Contact</p>
 <h1>Tickets and public records</h1>
-<p class="pcso-page-lead">Sign in with Discord to open the same ticket questions used in Discord, reply in the ticket as yourself, and request or track public records.</p>
+<p class="pcso-page-lead">Sign in with Discord to open or follow the same tickets used in the PCSO Discord support panel. Replies you send here post in that channel as you.</p>
 
 <div class="pcso-page-card" data-portal-signin>
   <p>Sign in with Discord to use tickets and public records.</p>
@@ -31,7 +31,7 @@
 <div data-portal-app hidden>
   <div class="pcso-page-card">
     <h2>Open a ticket</h2>
-    <p>This creates a Discord ticket. Replies you send here are posted in that channel with your Discord name through a webhook.</p>
+    <p>This opens the same Discord ticket used in the support panel. Tickets opened in Discord also show here.</p>
     <form class="pcso-form" data-ticket-form>
       <label>Ticket type
         <select name="type" data-ticket-type></select>
@@ -43,8 +43,9 @@
   </div>
 
   <div class="pcso-page-card">
-    <h2>Your ticket</h2>
-    <p class="pcso-form-status" data-thread-empty>No open website ticket yet.</p>
+    <h2>Your tickets</h2>
+    <p class="pcso-form-status" data-thread-empty>No open tickets. Discord tickets appear here automatically.</p>
+    <div class="pcso-ticket-tabs" data-ticket-tabs hidden></div>
     <div class="pcso-ticket-log" data-ticket-log hidden></div>
     <form class="pcso-form" data-ticket-reply hidden>
       <label>Reply<textarea name="content" maxlength="1800" required></textarea></label>
@@ -75,6 +76,6 @@
 <footer class="pcso-footer"><div class="pcso-wrap pcso-footer-grid"><a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a><p>Professionalism · Integrity · Service<br /><small>© 2026 Pinellas County Sheriff's Office Roleplay</small></p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord →</a></div></footer>
 <script src="pcso-nav.js?v=20260917-login"></script>
 <script src="pcso-forms.js?v=20260917-login"></script>
-<script src="pcso-portal.js?v=20260917-login"></script>
+<script src="pcso-portal.js?v=20260917-tickets"></script>
 </body>
 </html>

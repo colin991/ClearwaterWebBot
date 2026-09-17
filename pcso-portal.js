@@ -24,10 +24,29 @@ function renderFields(container, fields) {
   )).join('');
 }
 
+function renderTicketTabs(tabs, payload, selectedId) {
+  const tickets = payload.tickets || [];
+  if (!tabs) return;
+  if (!tickets.length) {
+    tabs.hidden = true;
+    tabs.innerHTML = '';
+    return;
+  }
+  tabs.hidden = false;
+  tabs.innerHTML = tickets.map((ticket) => {
+    const current = String(ticket.channelId) === String(selectedId);
+    const label = `${ticket.title}${ticket.open ? '' : ' (closed)'}`;
+    return `<button type="button" class="${ticket.open ? '' : 'is-closed'}" data-ticket-id="${ticket.channelId}" aria-current="${current ? 'true' : 'false'}">${label}</button>`;
+  }).join('');
+}
+
 function renderMessages(log, payload) {
   const empty = document.querySelector('[data-thread-empty]');
   const reply = document.querySelector('[data-ticket-reply]');
-  if (!payload.open) {
+  const tabs = document.querySelector('[data-ticket-tabs]');
+  const selectedId = payload.channelId;
+  renderTicketTabs(tabs, payload, selectedId);
+  if (!payload.tickets?.length && !payload.open) {
     log.hidden = true;
     if (empty) empty.hidden = false;
     if (reply) reply.hidden = true;
@@ -35,7 +54,7 @@ function renderMessages(log, payload) {
   }
   if (empty) empty.hidden = true;
   log.hidden = false;
-  if (reply) reply.hidden = false;
+  if (reply) reply.hidden = !payload.open;
   log.innerHTML = (payload.messages || []).map((message) => (
     `<article class="${message.fromWeb ? 'from-web' : 'from-staff'}">
       <strong>${message.author}</strong>
@@ -83,17 +102,37 @@ async function boot() {
   });
 
   const log = document.querySelector('[data-ticket-log]');
-  try {
-    renderMessages(log, await portal('ticket', 'list'));
-  } catch {
-    // none yet
+  let selectedChannelId = '';
+  let refreshBusy = false;
+
+  async function refreshTickets() {
+    if (refreshBusy) return;
+    refreshBusy = true;
+    try {
+      const payload = await portal('ticket', 'list', selectedChannelId ? { channelId: selectedChannelId } : {});
+      if (payload.channelId) selectedChannelId = payload.channelId;
+      renderMessages(log, payload);
+    } catch {
+      // keep the last rendered thread if Discord is briefly unavailable
+    } finally {
+      refreshBusy = false;
+    }
   }
+
+  await refreshTickets();
   try {
     const records = await portal('records', 'list');
     renderRecords(document.querySelector('[data-records-list]'), records.records || []);
   } catch (error) {
     document.querySelector('[data-records-list]').textContent = error.message;
   }
+
+  document.querySelector('[data-ticket-tabs]')?.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-ticket-id]');
+    if (!button) return;
+    selectedChannelId = button.getAttribute('data-ticket-id') || '';
+    await refreshTickets();
+  });
 
   document.querySelector('[data-ticket-form]')?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -107,7 +146,12 @@ async function boot() {
     if (status) status.textContent = 'Opening ticket…';
     try {
       const result = await portal('ticket', 'open', { type: data.get('type'), fields });
-      if (status) status.textContent = result.existing ? 'You already have an open ticket. Replies go there.' : 'Ticket opened in Discord.';
+      selectedChannelId = result.channelId || selectedChannelId;
+      if (status) {
+        status.textContent = result.existing
+          ? 'You already have that ticket open in Discord. Replies go there.'
+          : 'Ticket opened in Discord and synced here.';
+      }
       renderMessages(log, result);
     } catch (error) {
       if (status) status.textContent = error.message;
@@ -121,14 +165,20 @@ async function boot() {
     const content = String(new FormData(form).get('content') || '');
     if (status) status.textContent = 'Sending…';
     try {
-      const result = await portal('ticket', 'reply', { content });
+      const result = await portal('ticket', 'reply', { content, channelId: selectedChannelId });
       form.reset();
       if (status) status.textContent = 'Reply posted in Discord as you.';
+      if (result.channelId) selectedChannelId = result.channelId;
       renderMessages(log, result);
     } catch (error) {
       if (status) status.textContent = error.message;
     }
   });
+
+  window.setInterval(() => {
+    if (document.hidden) return;
+    void refreshTickets();
+  }, 8000);
 }
 
 boot();
