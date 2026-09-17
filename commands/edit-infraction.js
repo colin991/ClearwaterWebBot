@@ -1,6 +1,5 @@
 import {
   MessageFlags,
-  PermissionFlagsBits,
   SlashCommandBuilder,
 } from 'discord.js';
 import {
@@ -21,7 +20,7 @@ export default {
   data: new SlashCommandBuilder()
     .setName('edit-infraction')
     .setDescription('Void, restore, or edit an existing PCSO infraction by ID.')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+    .setDefaultMemberPermissions(null)
     .setDMPermission(false)
     .addStringOption((option) => option
       .setName('id')

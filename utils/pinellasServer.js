@@ -40,17 +40,31 @@ export const PINELLAS_COMMAND_ACCESS_ROLE_ID = '1514361105244356639';
  * Roles allowed to run /infract and /edit-infraction.
  * Includes the general PCSO command-access role plus additional supervisor ranks.
  */
+export const PINELLAS_INFRACTION_SUPERVISOR_ROLE_ID = '1514851283817725962';
 export const PINELLAS_INFRACTION_ACCESS_ROLE_IDS = Object.freeze([
   PINELLAS_COMMAND_ACCESS_ROLE_ID,
-  '1514851283817725962',
+  PINELLAS_INFRACTION_SUPERVISOR_ROLE_ID,
   '1514851216679632906',
   '1514850974127100007',
 ]);
 
+function memberRoleIds(member) {
+  const roles = member?.roles;
+  if (!roles) return [];
+  if (Array.isArray(roles)) return roles.map((role) => String(role?.id || role));
+  if (roles.cache?.keys) return [...roles.cache.keys()].map(String);
+  if (typeof roles.keys === 'function') return [...roles.keys()].map(String);
+  return [];
+}
+
 function memberHasAnyRole(member, roleIds) {
-  const cache = member?.roles?.cache;
-  if (!cache) return false;
-  return roleIds.some((roleId) => cache.has(String(roleId)));
+  const have = new Set(memberRoleIds(member));
+  if (have.size) return roleIds.some((roleId) => have.has(String(roleId)));
+  const cache = member?.roles?.cache || member?.roles;
+  if (typeof cache?.has === 'function') {
+    return roleIds.some((roleId) => cache.has(String(roleId)) || cache.has(roleId));
+  }
+  return false;
 }
 
 /** True when the member has the PCSO command-access role. */
