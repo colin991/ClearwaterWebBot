@@ -34,6 +34,19 @@ function throwIfErlcHalted() {
   if (erlcHaltError && Date.now() < erlcHaltUntil) throw erlcHaltError;
 }
 
+export function erlcCooldownRemainingMs(now = Date.now()) {
+  return Math.max(0, erlcAvailableAt - now);
+}
+
+function erlcTimeoutError() {
+  const wait = erlcCooldownRemainingMs();
+  const error = new Error(wait > 400
+    ? `ER:LC is rate-limited. Try again in ${Math.ceil(wait / 1000)} seconds.`
+    : 'Could not reach the ER:LC API in time. Check ERLC_SERVER_KEY and that the bot host can reach api.erlc.gg.');
+  error.code = 'ERLC_TIMEOUT';
+  return error;
+}
+
 function shouldSkipSnapshotHttp() {
   if (bundleCache.value && Date.now() < bundleCache.expiresAt) return true;
   return queuedCommands > 0 && Boolean(bundleCache.value);
@@ -73,39 +86,38 @@ async function fetchErlcBundle(serverKey) {
   url.searchParams.set('ModCalls', 'true');
   url.searchParams.set('Staff', 'true');
 
-  let lastError = null;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    throwIfErlcHalted();
-    const waitMs = Math.max(0, erlcAvailableAt - Date.now());
-    if (waitMs) await sleep(waitMs);
-    const response = await fetch(url, {
-      headers: { 'server-key': serverKey },
-      signal: AbortSignal.timeout(6000),
-    });
-    const retryAfter = Number(response.headers.get('retry-after') || 0);
-    if (response.status === 401 || response.status === 403) {
-      const error = erlcKeyError(response.status);
-      haltErlc(error, 10 * 60 * 1000);
-      throw error;
-    }
-    if (response.status === 429 && attempt < 1) {
-      rememberErlcCooldown(retryAfter || 5);
-      logger.warn(`ER:LC server snapshot 429; queued retry after ${Math.ceil(retryAfter || 5)}s`);
-      lastError = new Error('ER:LC request failed (429)');
-      lastError.status = 429;
-      continue;
-    }
-    if (!response.ok) {
-      const error = new Error(`ER:LC request failed (${response.status})`);
-      error.status = response.status;
-      throw error;
-    }
-    rememberErlcCooldown(retryAfter);
-    const json = await response.json();
-    bundleCache = { value: json, expiresAt: Date.now() + ERLC_SERVER_CACHE_TTL_MS, inflight: null };
-    return json;
+  throwIfErlcHalted();
+  const waitMs = Math.max(0, erlcAvailableAt - Date.now());
+  if (waitMs) await sleep(waitMs);
+  const response = await fetch(url, {
+    headers: { 'server-key': serverKey },
+    signal: AbortSignal.timeout(8000),
+  }).catch((error) => {
+    const wrapped = new Error('Could not reach the ER:LC API in time. Check ERLC_SERVER_KEY and that the bot host can reach api.erlc.gg.');
+    wrapped.cause = error;
+    wrapped.code = 'ERLC_TIMEOUT';
+    throw wrapped;
+  });
+  const retryAfter = Number(response.headers.get('retry-after') || 0);
+  if (response.status === 401 || response.status === 403) {
+    const error = erlcKeyError(response.status);
+    haltErlc(error, 10 * 60 * 1000);
+    throw error;
   }
-  throw lastError || new Error('ER:LC request failed (429)');
+  if (!response.ok) {
+    rememberErlcCooldown(retryAfter || (response.status === 429 ? 5 : 0));
+    const retrySec = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 5;
+    const error = new Error(response.status === 429
+      ? `ER:LC is rate-limited. Try again in ${Math.ceil(retrySec)} seconds.`
+      : `ER:LC request failed (${response.status})`);
+    error.status = response.status;
+    error.retryAfter = retryAfter || (response.status === 429 ? 5 : null);
+    throw error;
+  }
+  rememberErlcCooldown(retryAfter);
+  const json = await response.json();
+  bundleCache = { value: json, expiresAt: Date.now() + ERLC_SERVER_CACHE_TTL_MS, inflight: null };
+  return json;
 }
 
 function stopIdleRefreshTimer() {
@@ -160,14 +172,12 @@ function loadErlcServer(serverKey) {
   return scheduleBundleRefresh(serverKey);
 }
 
-function withTimeout(promise, timeoutMs, message) {
+function withTimeout(promise, timeoutMs) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise;
   let timer;
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => {
-      const error = new Error(message);
-      error.code = 'ERLC_TIMEOUT';
-      reject(error);
+      reject(erlcTimeoutError());
     }, timeoutMs);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
@@ -176,15 +186,12 @@ function withTimeout(promise, timeoutMs, message) {
 /** Snapshot the private server. `timeoutMs` fails fast for Discord commands. */
 export async function fetchErlcServer(serverKey, options = {}) {
   if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
+  throwIfErlcHalted();
   const pending = loadErlcServer(serverKey);
   const timeoutMs = Number(options.timeoutMs);
   if (Number.isFinite(timeoutMs) && timeoutMs > 0) pending.catch(() => {});
   try {
-    return await withTimeout(
-      pending,
-      timeoutMs,
-      'The in-game player list is busy. Try again in a few seconds.',
-    );
+    return await withTimeout(pending, timeoutMs);
   } catch (error) {
     if (error?.code === 'ERLC_TIMEOUT' && bundleCache.value) return bundleCache.value;
     throw error;
