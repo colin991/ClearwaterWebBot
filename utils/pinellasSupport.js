@@ -28,8 +28,10 @@ export const PINELLAS_SUPPORT_CATEGORY_IDS = Object.freeze({
 });
 export const PINELLAS_SUPPORT_BUTTON_PREFIX = 'pcs:support:';
 export const PINELLAS_SUPPORT_TRANSCRIPT_CHANNEL_ID = '1542631874684526663';
-const PINELLAS_SUPPORT_CLOSE_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}close`;
-const PINELLAS_SUPPORT_CLAIM_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}claim`;
+export const PINELLAS_SUPPORT_CLOSE_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}close`;
+export const PINELLAS_SUPPORT_CLAIM_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}claim`;
+export const PINELLAS_SUPPORT_CR_YES_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}cr:yes`;
+export const PINELLAS_SUPPORT_CR_NO_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}cr:no`;
 const PINELLAS_SUPPORT_STAFF_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}staff`;
 const PINELLAS_SUPPORT_INQUIRY_FIELD_ID = 'ticket-inquiry';
 
@@ -166,7 +168,6 @@ async function buildTicketPayload(member, type, inquiry = '') {
     .addActionRowComponents(new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(PINELLAS_SUPPORT_CLAIM_ID).setStyle(ButtonStyle.Secondary).setLabel('Claim'),
       new ButtonBuilder().setCustomId(PINELLAS_SUPPORT_CLOSE_ID).setStyle(ButtonStyle.Danger).setLabel('Close'),
-      new ButtonBuilder().setCustomId(PINELLAS_SUPPORT_STAFF_ID).setStyle(ButtonStyle.Secondary).setLabel('Staff Panel'),
     ))
     .addSeparatorComponents(new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small))
     .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(
@@ -248,23 +249,69 @@ function buildTranscriptPayload(transcript, channelName) {
   };
 }
 
-async function archiveAndDmTicketTranscript(interaction, channel, ownerId) {
+async function archiveAndDmTicketTranscript(client, channel, { ownerId, closedById, closureReason }) {
   const claimedById = channel.topic?.match(/claimed-by:(\d{16,22})/)?.[1] || null;
-  const transcript = await createTicketTranscript(interaction.client, channel, {
+  const transcript = await createTicketTranscript(client, channel, {
     ownerId,
-    closedById: interaction.user.id,
-    closureReason: 'Ticket closed by the ticket owner or staff.',
+    closedById,
+    closureReason,
   });
   transcript.claimedById = claimedById;
   const payload = buildTranscriptPayload(transcript, channel.name);
-  const archiveChannel = await interaction.client.channels.fetch(PINELLAS_SUPPORT_TRANSCRIPT_CHANNEL_ID).catch(() => null);
+  const archiveChannel = await client.channels.fetch(PINELLAS_SUPPORT_TRANSCRIPT_CHANNEL_ID).catch(() => null);
   if (!archiveChannel?.isTextBased?.()) throw new Error('The ticket transcript channel is unavailable.');
   await archiveChannel.send(payload);
   if (ownerId) {
-    const owner = await interaction.client.users.fetch(ownerId).catch(() => null);
+    const owner = await client.users.fetch(ownerId).catch(() => null);
     if (owner) await owner.send(payload).catch(() => {});
   }
   return transcript;
+}
+
+export function ticketOwnerId(channel) {
+  return channel?.topic?.match(/ticket-owner:(\d{16,22})/)?.[1] || null;
+}
+
+export function isPinellasSupportTicketChannel(channel) {
+  return Boolean(ticketOwnerId(channel));
+}
+
+export function buildTicketCloseRequestPayload(ownerId) {
+  return {
+    content: ownerId
+      ? `<@${ownerId}> A close request was made. Click **Yes** to close this ticket.`
+      : 'A close request was made. Click **Yes** to close this ticket.',
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(PINELLAS_SUPPORT_CR_YES_ID).setStyle(ButtonStyle.Success).setLabel('Yes'),
+        new ButtonBuilder().setCustomId(PINELLAS_SUPPORT_CR_NO_ID).setStyle(ButtonStyle.Secondary).setLabel('No'),
+      ),
+    ],
+    allowedMentions: { users: ownerId ? [ownerId] : [] },
+  };
+}
+
+async function closePinellasSupportTicket(channel, { client, user, ownerId, reason }) {
+  try {
+    await archiveAndDmTicketTranscript(client, channel, {
+      ownerId,
+      closedById: user.id,
+      closureReason: reason,
+    });
+  } catch (error) {
+    await channel.send(`The ticket will still be deleted, but the transcript could not be created: ${error?.message || 'unknown error'}`).catch(() => {});
+  }
+  await channel.send('This ticket is being closed. The channel will be deleted in 5 seconds.').catch(() => {});
+  setTimeout(() => { void channel.delete('PCSO support ticket closed'); }, 5_000).unref?.();
+}
+
+export async function requestPinellasTicketClose(message) {
+  const channel = message.channel;
+  if (!isPinellasSupportTicketChannel(channel)) {
+    throw new Error('Use `-cr` in an open PCSO support ticket.');
+  }
+  const ownerId = ticketOwnerId(channel);
+  await channel.send(buildTicketCloseRequestPayload(ownerId));
 }
 
 export async function createPinellasSupportTicket(interaction, type, inquiry = '') {
@@ -325,7 +372,7 @@ export async function handlePinellasSupportInteraction(interaction) {
   }
   if (!interaction.isButton() || !id.startsWith(PINELLAS_SUPPORT_BUTTON_PREFIX)) return false;
   const channel = interaction.channel;
-  const ownerId = channel?.topic?.match(/ticket-owner:(\d{16,22})/)?.[1] || null;
+  const ownerId = ticketOwnerId(channel);
   const isStaff = Boolean(interaction.member?.permissions?.has(PermissionFlagsBits.Administrator)
     || interaction.member?.permissions?.has(PermissionFlagsBits.ManageMessages));
 
@@ -335,15 +382,47 @@ export async function handlePinellasSupportInteraction(interaction) {
       return true;
     }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    let transcript = null;
-    try {
-      transcript = await archiveAndDmTicketTranscript(interaction, channel, ownerId);
-      await interaction.editReply({ content: 'The transcript was created and sent to the ticket archive and opener. This ticket will be deleted in 5 seconds.' });
-    } catch (error) {
-      await interaction.editReply({ content: `The ticket will be deleted in 5 seconds, but the transcript could not be created: ${error?.message || 'unknown error'}` });
+    await closePinellasSupportTicket(channel, {
+      client: interaction.client,
+      user: interaction.user,
+      ownerId,
+      reason: 'Ticket closed by the ticket owner or staff.',
+    });
+    await interaction.editReply({ content: 'This ticket is closing. The transcript will be sent to the archive and opener when it is available.' });
+    return true;
+  }
+
+  if (id === PINELLAS_SUPPORT_CR_YES_ID) {
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({ content: 'Only the ticket opener can confirm this close request.', flags: MessageFlags.Ephemeral });
+      return true;
     }
-    await channel.send('This ticket is being closed. The channel will be deleted in 5 seconds.').catch(() => {});
-    setTimeout(() => { void channel.delete('PCSO support ticket closed'); }, 5_000).unref?.();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    if (interaction.message?.editable) {
+      await interaction.message.edit({ content: 'Close request accepted.', components: [] }).catch(() => {});
+    }
+    await closePinellasSupportTicket(channel, {
+      client: interaction.client,
+      user: interaction.user,
+      ownerId,
+      reason: 'Ticket closed after the opener confirmed a close request.',
+    });
+    await interaction.editReply({ content: 'You confirmed the close request. This ticket is closing.' });
+    return true;
+  }
+
+  if (id === PINELLAS_SUPPORT_CR_NO_ID) {
+    if (interaction.user.id !== ownerId && !isStaff) {
+      await interaction.reply({ content: 'Only the ticket opener or staff can dismiss this close request.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    if (interaction.message?.editable) {
+      await interaction.update({ content: 'Close request cancelled.', components: [] }).catch(async () => {
+        await interaction.reply({ content: 'Close request cancelled.', flags: MessageFlags.Ephemeral });
+      });
+    } else {
+      await interaction.reply({ content: 'Close request cancelled.', flags: MessageFlags.Ephemeral });
+    }
     return true;
   }
 
@@ -359,14 +438,9 @@ export async function handlePinellasSupportInteraction(interaction) {
   }
 
   if (id === PINELLAS_SUPPORT_STAFF_ID) {
-    if (!isStaff) {
-      await interaction.reply({ content: 'Only staff can open the staff panel.', flags: MessageFlags.Ephemeral });
-      return true;
-    }
     await interaction.reply({
-      content: `Ticket owner: ${ownerId ? `<@${ownerId}>` : 'Unknown'}\nCategory: ${channel?.parent?.name || 'Unknown'}\nClaimed by: ${channel?.topic?.match(/claimed-by:(\d{16,22})/)?.[1] ? `<@${channel.topic.match(/claimed-by:(\d{16,22})/)[1]}>` : 'Nobody'}`,
+      content: 'The staff panel has been removed from tickets.',
       flags: MessageFlags.Ephemeral,
-      allowedMentions: { parse: [] },
     });
     return true;
   }
