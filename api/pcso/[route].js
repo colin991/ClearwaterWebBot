@@ -1,4 +1,3 @@
-import activeCalls from '../../lib/pcso-api/active-calls.js';
 import admin from '../../lib/pcso-api/admin.js';
 import content from '../../lib/pcso-api/content.js';
 import contentUpload from '../../lib/pcso-api/content-upload.js';
@@ -9,7 +8,6 @@ import radioTalk from '../../lib/pcso-api/radio-talk.js';
 import weeklyReport from '../../lib/pcso-api/weekly-report.js';
 
 const ROUTES = {
-  'active-calls': activeCalls,
   admin,
   content,
   'content-upload': contentUpload,

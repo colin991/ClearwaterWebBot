@@ -31,16 +31,16 @@
       "destination": "/jail.html"
     },
     {
-      "source": "/active-calls",
-      "destination": "/active-calls.html"
-    },
-    {
       "source": "/impound",
       "destination": "/impound.html"
     },
     {
-      "source": "/submit-tip",
-      "destination": "/submit-tip.html"
+      "source": "/police-report",
+      "destination": "/police-report.html"
+    },
+    {
+      "source": "/crime-stoppers",
+      "destination": "/crime-stoppers.html"
     },
     {
       "source": "/inside-the-star",
@@ -99,6 +99,26 @@
     }
   ],
   "redirects": [
+    {
+      "source": "/active-calls",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/active-calls.html",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/submit-tip",
+      "destination": "/crime-stoppers",
+      "permanent": false
+    },
+    {
+      "source": "/submit-tip.html",
+      "destination": "/crime-stoppers",
+      "permanent": false
+    },
     {
       "source": "/owner",
       "destination": "/",
