@@ -395,14 +395,31 @@ export function buildTicketCloseRequestPayload(ownerId) {
 }
 
 async function closePinellasSupportTicket(channel, { client, user, ownerId, reason }) {
+  let transcript = null;
   try {
-    await archiveAndDmTicketTranscript(client, channel, {
+    transcript = await archiveAndDmTicketTranscript(client, channel, {
       ownerId,
       closedById: user.id,
       closureReason: reason,
     });
   } catch (error) {
     await channel.send(`The ticket will still be deleted, but the transcript could not be created: ${error?.message || 'unknown error'}`).catch(() => {});
+  }
+  try {
+    const { saveClosedTicketTranscript, snapshotTicketChannelMessages } = await import('./pcsoWebTickets.js');
+    const messages = await snapshotTicketChannelMessages(channel, { discordId: ownerId });
+    await saveClosedTicketTranscript(channel, {
+      ownerId,
+      type: transcript?.type,
+      transcript: transcript || {
+        closedById: user.id,
+        closureReason: reason,
+        closedAt: Date.now(),
+      },
+      messages,
+    });
+  } catch {
+    // Contact still marks the ticket closed when the channel is deleted.
   }
   await channel.send('This ticket is being closed. The channel will be deleted in 5 seconds.').catch(() => {});
   setTimeout(() => { void channel.delete('PCSO support ticket closed'); }, 5_000).unref?.();
@@ -509,7 +526,7 @@ export async function handlePinellasSupportInteraction(interaction) {
       ownerId,
       reason: 'Ticket closed by the ticket owner or staff.',
     });
-    await interaction.editReply({ content: 'This ticket is closing. The transcript will be sent to the archive and opener when it is available.' });
+    await interaction.editReply({ content: 'This ticket is closing. The transcript will be sent to the archive, opener, and PCSO website when it is available.' });
     return true;
   }
 
