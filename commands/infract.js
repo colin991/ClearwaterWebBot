@@ -1,8 +1,4 @@
-import {
-  MessageFlags,
-  PermissionFlagsBits,
-  SlashCommandBuilder,
-} from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { buildInitialInfractPanel } from '../utils/pinellasInfract.js';
 import {
   PINELLAS_GUILD_ID,
@@ -13,7 +9,7 @@ export default {
   data: new SlashCommandBuilder()
     .setName('infract')
     .setDescription('Open the Pinellas County Sheriff\'s Office infraction panel.')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+    .setDefaultMemberPermissions(null)
     .setDMPermission(false),
 
   async execute(interaction) {

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-pcso-infract-supervisor-role",
+      "title": "Let the PCSO supervisor role infract and edit infractions",
+      "summary": "Role 1514851283817725962 can use /infract and /edit-infraction. Those commands are no longer hidden behind Manage Roles; the bot still checks the PCSO infraction roles before anyone can issue or edit a record.",
+      "createdAt": "2026-09-17T11:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-vc-in-voice-no-false-jail",
       "title": "Stop jailing people -dc already shows in voice",
       "summary": "If someone is in a Clearwater Discord voice channel, VC checks treat them as in VC the same way -dc does, including matches from live voice states. A failed unjail is retried instead of leaving them in jail.",
