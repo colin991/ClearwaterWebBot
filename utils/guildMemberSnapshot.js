@@ -59,5 +59,7 @@ export function isDiscordRosterReady(guild) {
   const expected = Number(guild.memberCount) || 0;
   if (humans <= 0) return false;
   if (!expected || expected <= humans) return true;
-  return humans >= Math.max(25, Math.floor(expected * 0.3));
+  // Never treat a 30% cache as complete — missing nicknames would look like
+  // "not in Discord" and get jailed/PMed even when their nick is their Roblox user.
+  return humans >= Math.min(expected, Math.max(Math.ceil(expected * 0.9), expected - 25));
 }
