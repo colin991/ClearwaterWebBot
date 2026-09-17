@@ -7,7 +7,35 @@ import { logger } from './logger.js';
 import { ensureGuildMembers } from './guildMemberSnapshot.js';
 
 export const MOD_CALL_ROOMS = ['1514131750559813733', '1514131852393320519', '1514131887914745906'];
+/** Do not drag if the in-game call is older than this when staff pick it up. */
+export const MOD_CALL_MAX_AGE_MS = 2 * 60 * 1000;
+/** Retry a failed live move only briefly — never keep pulling people minutes later. */
+export const MOD_CALL_RETRY_MS = 30 * 1000;
 const reservedRooms = new Set();
+
+export function modCallTimestampMs(call) {
+  const raw = Number(call?.Timestamp ?? call?.timestamp ?? 0);
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return raw < 1e12 ? raw * 1000 : raw;
+}
+
+export function isModCallStale(call, now = Date.now(), maxAgeMs = MOD_CALL_MAX_AGE_MS) {
+  const at = modCallTimestampMs(call);
+  if (!at) return true;
+  return now - at > maxAgeMs;
+}
+
+export function modCallCallerInGame(call, players = []) {
+  const caller = parseErlcPlayer({ Player: call?.Caller });
+  const id = String(caller.robloxId || '');
+  const name = String(caller.username || '').toLowerCase();
+  if (!id && !name) return false;
+  return (Array.isArray(players) ? players : []).some((player) => {
+    const parsed = player?.username ? player : parseErlcPlayer(player);
+    if (id && String(parsed.robloxId || '') === id) return true;
+    return Boolean(name && String(parsed.username || '').toLowerCase() === name);
+  });
+}
 
 export async function moveModCallPair(guild, caller, moderator) {
   if (!caller || !moderator || caller.id === moderator.id || !caller.voice.channelId || !moderator.voice.channelId) return false;
@@ -42,14 +70,33 @@ export async function moveModCallPair(guild, caller, moderator) {
   return false;
 }
 
-export function createModCallMonitor({ snapshot, move, now = Date.now, onError = e => logger.error('Mod-call voice move failed', e) }) {
+export function createModCallMonitor({
+  snapshot,
+  move,
+  now = Date.now,
+  onError = e => logger.error('Mod-call voice move failed', e),
+  maxAgeMs = MOD_CALL_MAX_AGE_MS,
+  retryMs = MOD_CALL_RETRY_MS,
+}) {
   const done = new Set();
   const pending = new Map();
   let initialized = false;
   let running;
   const callKey = call => `${call.Timestamp}:${call.Caller}`;
+  const readSnapshot = async () => {
+    const data = await snapshot();
+    if (Array.isArray(data)) return { calls: data, players: [] };
+    return {
+      calls: Array.isArray(data?.calls) ? data.calls : [],
+      players: Array.isArray(data?.players) ? data.players : [],
+    };
+  };
+  const abandon = (id) => {
+    done.add(id);
+    pending.delete(id);
+  };
   async function cycle() {
-    const calls = await snapshot();
+    const { calls, players } = await readSnapshot();
     if (!Array.isArray(calls)) throw new Error('Mod-call data unavailable');
     // Ignore historical accepted calls at startup, but observe later acceptances.
     if (!initialized) {
@@ -57,15 +104,25 @@ export function createModCallMonitor({ snapshot, move, now = Date.now, onError =
       initialized = true;
       return;
     }
+    const havePlayers = players.length > 0;
     for (const call of calls) {
       const id = callKey(call);
       if (!call.Caller || !call.Timestamp || !call.Moderator || done.has(id) || pending.has(id)) continue;
-      pending.set(id, { call, expires: now() + 5 * 60000 });
+      if (isModCallStale(call, now(), maxAgeMs) || (havePlayers && !modCallCallerInGame(call, players))) {
+        done.add(id);
+        continue;
+      }
+      pending.set(id, { call, expires: now() + retryMs });
     }
     for (const [id, entry] of pending) {
-      if (now() >= entry.expires) { done.add(id); pending.delete(id); continue; }
+      if (now() >= entry.expires
+        || isModCallStale(entry.call, now(), maxAgeMs)
+        || (havePlayers && !modCallCallerInGame(entry.call, players))) {
+        abandon(id);
+        continue;
+      }
       try {
-        if (await move(entry.call)) { done.add(id); pending.delete(id); }
+        if (await move(entry.call)) abandon(id);
       } catch (error) { onError(error); }
     }
     const visible = new Set(calls.map(callKey));
@@ -79,7 +136,13 @@ export function createModCallMonitor({ snapshot, move, now = Date.now, onError =
 
 export function startModCallVoice(client) {
   const monitor = createModCallMonitor({
-    snapshot: async () => (await fetchErlcServer(client.config.erlcServerKey, { modCalls: true })).ModCalls,
+    snapshot: async () => {
+      const server = await fetchErlcServer(client.config.erlcServerKey, { modCalls: true });
+      return {
+        calls: server.ModCalls,
+        players: (server.Players || []).map(parseErlcPlayer),
+      };
+    },
     move: async call => {
       if (!client.isReady()) return false;
       const guild = await client.guilds.fetch(client.config.guildId);
