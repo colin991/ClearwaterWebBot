@@ -150,3 +150,49 @@ test('automatic :kick commands never hit the ER:LC API', async () => {
     resetErlcNetworkForTests({ minIntervalMs: 5000 });
   }
 });
+
+test('an invalid ER:LC server key fails immediately instead of retrying', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 0 });
+  let gets = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => {
+    gets += 1;
+    return jsonResponse(401, {});
+  };
+  try {
+    await assert.rejects(() => fetchErlcServer('bad-key'), /invalid or expired/);
+    assert.equal(gets, 1);
+  } finally {
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+});
+
+test('Discord roster reads time out instead of waiting behind a live command', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 5_000 });
+  let release = () => {};
+  const hold = new Promise((resolve) => { release = resolve; });
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (String(options?.method || 'GET').toUpperCase() === 'POST') {
+      await hold;
+      return jsonResponse(200, { message: 'ok' });
+    }
+    return jsonResponse(200, { Players: [] });
+  };
+  const command = executeErlcCommand('key', ':wanted Test');
+  try {
+    const t0 = Date.now();
+    await assert.rejects(
+      () => fetchErlcServer('key', { timeoutMs: 80 }),
+      (error) => error.code === 'ERLC_TIMEOUT',
+    );
+    assert.ok(Date.now() - t0 < 400);
+  } finally {
+    release();
+    await command.catch(() => {});
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+  }
+});

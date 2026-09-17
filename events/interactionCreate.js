@@ -17,7 +17,18 @@ import { handlePcsoSiteFormInteraction } from '../utils/pcsoSiteFormDiscord.js';
 export default {
   name: Events.InteractionCreate,
   async execute(interaction, client) {
-    if (await handlePriorityRequest(interaction)) return;
+    try {
+      if (await handlePriorityRequest(interaction)) return;
+    } catch (error) {
+      logger.error('Priority request interaction failed', error);
+      const reply = {
+        content: String(error?.message || 'That priority action failed.').slice(0, 1800),
+        flags: MessageFlags.Ephemeral,
+      };
+      if (interaction.deferred || interaction.replied) await interaction.followUp(reply).catch(() => {});
+      else await interaction.reply(reply).catch(() => {});
+      return;
+    }
     if (await handleDiscordInternetModerationInteraction(interaction)) return;
     if (await handleDiscordInternetInteraction(interaction, client)) return;
 

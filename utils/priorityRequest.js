@@ -632,7 +632,17 @@ export async function handlePriorityRequest(interaction) {
         await interaction.reply({ content: 'Use `/request-priority` in the Clearwater Discord server.', flags: MessageFlags.Ephemeral });
         return true;
       }
-      const server = await fetchErlcServer(interaction.client.config.erlcServerKey, { vehicles: true });
+      if (!interaction.client.config.erlcServerKey) {
+        await interaction.reply({
+          content: 'The ER:LC server key is not set on the bot host. Add ERLC_SERVER_KEY to `.env` and restart.',
+          flags: MessageFlags.Ephemeral,
+        });
+        return true;
+      }
+      const server = await fetchErlcServer(interaction.client.config.erlcServerKey, {
+        timeoutMs: 1_200,
+        vehicles: true,
+      });
       const players = (server.Players || []).map(parseErlcPlayer).filter(p => p.username);
       const vehicles = civilianVehicles((server.Vehicles || []).map(parseErlcVehicle), players);
       await interaction.showModal(await service.openForm(interaction, { players, vehicles }));
