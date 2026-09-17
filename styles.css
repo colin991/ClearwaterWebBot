@@ -1542,6 +1542,9 @@ body.home-stage {
 .pcso-links { position: relative; gap: 18px; flex-wrap: wrap; }
 .pcso-drop { position: relative; }
 .pcso-drop-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -1549,6 +1552,20 @@ body.home-stage {
   font-weight: 700;
   cursor: pointer;
   padding: 0;
+}
+.pcso-drop-toggle::after {
+  content: "";
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  transform-origin: 50% 40%;
+  transition: transform .15s ease;
+}
+.pcso-drop:hover .pcso-drop-toggle::after,
+.pcso-drop.open .pcso-drop-toggle::after {
+  transform: rotate(180deg);
 }
 .pcso-drop-menu {
   display: none;
