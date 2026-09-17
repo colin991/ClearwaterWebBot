@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#6b7078" />
 <title>Events | Pinellas County Sheriff's Office</title>
 <link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
-<link rel="stylesheet" href="styles.css?v=20260913-content-images" />
+<link rel="stylesheet" href="styles.css?v=20260917-nav" />
 <script>document.documentElement.classList.add('js');</script>
 </head>
 <body class="pcso-home">
@@ -16,7 +16,7 @@
 <header class="pcso-header"><div class="pcso-wrap pcso-nav">
 <a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a>
 <button class="pcso-menu" type="button" aria-expanded="false" aria-controls="pcso-navigation">Menu</button>
-<nav id="pcso-navigation" class="pcso-links" aria-label="Primary navigation"><a href="/#services">Services</a><a href="/#news">News &amp; Events</a><a href="/#about">About PCSO</a><a class="pcso-button pcso-button-red" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Join Discord</a></nav>
+<nav id="pcso-navigation" class="pcso-links" aria-label="Primary navigation"></nav>
 </div></header>
 <main id="main" class="pcso-page-main pcso-events-page"><div class="pcso-wrap">
   <h1 class="pcso-events-title">EVENTS</h1>
@@ -46,6 +46,6 @@
   events = payload.events;
   paint();
 </script>
-<script>const menu=document.querySelector('.pcso-menu'),links=document.querySelector('.pcso-links');menu?.addEventListener('click',()=>{const open=menu.getAttribute('aria-expanded')==='true';menu.setAttribute('aria-expanded',String(!open));links?.classList.toggle('open',!open);});document.querySelector('.pcso-alert-close')?.addEventListener('click',()=>document.querySelector('.pcso-alert')?.remove());</script>
+<script src="pcso-nav.js?v=20260917-nav"></script>
 </body>
 </html>

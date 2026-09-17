@@ -7,9 +7,11 @@ import {
   PINELLAS_SUPPORT_CR_YES_ID,
   buildInquiryModal,
   buildTicketCloseRequestPayload,
+  formatWebsiteInquiry,
   handlePinellasSupportInteraction,
   isPinellasSupportTicketChannel,
   ticketOwnerId,
+  websiteTicketFields,
 } from '../utils/pinellasSupport.js';
 
 test('ticket owner is read from the channel topic', () => {
@@ -64,4 +66,20 @@ test('only the ticket opener can confirm -cr', async () => {
   });
   assert.equal(handled, true);
   assert.match(String(reply.content), /ticket opener/);
+});
+
+test('website OPC ticket fields match Discord questions', () => {
+  const labels = websiteTicketFields('compliance').map((field) => field.label);
+  assert.deepEqual(labels, [
+    'Who are you reporting?',
+    'Why are you reporting this deputy?',
+    'Do you have any proof of this?',
+  ]);
+  const inquiry = formatWebsiteInquiry('compliance', {
+    'opc-who': 'Deputy Example',
+    'opc-why': 'Policy issue on shift.',
+    'opc-proof': 'Clip in Discord.',
+  });
+  assert.match(inquiry, /Who are you reporting/);
+  assert.match(inquiry, /Deputy Example/);
 });

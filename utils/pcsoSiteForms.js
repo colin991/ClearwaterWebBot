@@ -142,6 +142,21 @@ export async function savePcsoSiteForm(entry) {
   return record;
 }
 
+export async function listPcsoSiteFormsForUser(discordId) {
+  const store = await readJsonFile(STORE_PATH, { entries: [] });
+  const id = String(discordId || '');
+  return (store.entries || []).filter((entry) => (
+    entry.kind === 'public-records' && String(entry.requester?.discordId || '') === id
+  )).slice(0, 40).map((entry) => ({
+    id: entry.id,
+    kind: entry.kind,
+    status: entry.status || 'pending',
+    subjectType: entry.fields?.subjectType,
+    subject: entry.fields?.subject,
+    createdAt: entry.createdAt,
+  }));
+}
+
 export async function getPcsoSiteForm(id) {
   const store = await readJsonFile(STORE_PATH, { entries: [] });
   return (store.entries || []).find((entry) => entry.id === String(id)) || null;

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="Contact PCSO — tickets and public records." />
+<meta name="theme-color" content="#6b7078" />
+<title>Contact | Pinellas County Sheriff's Office</title>
+<link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
+<link rel="stylesheet" href="styles.css?v=20260917-nav" />
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body class="pcso-home">
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="pcso-alert"><div class="pcso-wrap pcso-alert-inner"><span><strong>Alert:</strong> This is a roleplay community. Please call 911 for real emergencies.</span><button class="pcso-alert-close" type="button" aria-label="Close warning">×</button></div></div>
+<header class="pcso-header"><div class="pcso-wrap pcso-nav">
+<a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a>
+<button class="pcso-menu" type="button" aria-expanded="false" aria-controls="pcso-navigation">Menu</button>
+<nav id="pcso-navigation" class="pcso-links" aria-label="Primary navigation"></nav>
+</div></header>
+<main id="main" class="pcso-page-main"><div class="pcso-wrap">
+<p class="pcso-eyebrow">Contact</p>
+<h1>Tickets and public records</h1>
+<p class="pcso-page-lead">Sign in with Discord to open the same ticket questions used in Discord, reply in the ticket as yourself, and request or track public records.</p>
+
+<div class="pcso-page-card" data-portal-signin>
+  <p>Sign in with Discord to use tickets and public records.</p>
+  <p><a class="pcso-button pcso-button-red" href="/signin?next=/contact">Sign in with Discord</a></p>
+</div>
+
+<div data-portal-app hidden>
+  <div class="pcso-page-card">
+    <h2>Open a ticket</h2>
+    <p>This creates a Discord ticket. Replies you send here are posted in that channel with your Discord name through a webhook.</p>
+    <form class="pcso-form" data-ticket-form>
+      <label>Ticket type
+        <select name="type" data-ticket-type></select>
+      </label>
+      <div data-ticket-fields></div>
+      <p class="pcso-form-status" data-ticket-status role="status"></p>
+      <button class="pcso-button pcso-button-red" type="submit">Open ticket</button>
+    </form>
+  </div>
+
+  <div class="pcso-page-card">
+    <h2>Your ticket</h2>
+    <p class="pcso-form-status" data-thread-empty>No open website ticket yet.</p>
+    <div class="pcso-ticket-log" data-ticket-log hidden></div>
+    <form class="pcso-form" data-ticket-reply hidden>
+      <label>Reply<textarea name="content" maxlength="1800" required></textarea></label>
+      <p class="pcso-form-status" data-reply-status role="status"></p>
+      <button class="pcso-button pcso-button-red" type="submit">Send reply</button>
+    </form>
+  </div>
+
+  <div class="pcso-page-card" id="records">
+    <h2>Public records</h2>
+    <form class="pcso-form" data-public-records>
+      <label>Request type
+        <select name="subjectType">
+          <option value="deputy">Deputy</option>
+          <option value="case">Case number</option>
+        </select>
+      </label>
+      <label>Deputy name or case number<input name="subject" required minlength="2" maxlength="120" /></label>
+      <label>Details (optional)<textarea name="details" maxlength="1500"></textarea></label>
+      <p class="pcso-form-status" data-form-status role="status"></p>
+      <button class="pcso-button pcso-button-red" type="submit">Submit request</button>
+    </form>
+    <h3 class="pcso-subhead">Your requests</h3>
+    <div data-records-list><p class="pcso-form-status">Loading…</p></div>
+  </div>
+</div>
+</div></main>
+<footer class="pcso-footer"><div class="pcso-wrap pcso-footer-grid"><a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a><p>Professionalism · Integrity · Service<br /><small>© 2026 Pinellas County Sheriff's Office Roleplay</small></p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord →</a></div></footer>
+<script src="pcso-nav.js?v=20260917-nav"></script>
+<script src="pcso-forms.js?v=20260917-nav"></script>
+<script src="pcso-portal.js?v=20260917-nav"></script>
+</body>
+</html>

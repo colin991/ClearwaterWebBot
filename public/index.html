@@ -9,7 +9,7 @@
 <meta property="og:description" content="Serving Pinellas County with professionalism, integrity, and pride." />
 <title>Pinellas County Sheriff's Office</title>
 <link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
-<link rel="stylesheet" href="styles.css?v=20260917-pcso-forms" />
+<link rel="stylesheet" href="styles.css?v=20260917-nav" />
 <script>document.documentElement.classList.add('js');</script>
 </head>
 <body class="pcso-home">
@@ -18,7 +18,7 @@
 <header class="pcso-header"><div class="pcso-wrap pcso-nav">
 <a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a>
 <button class="pcso-menu" type="button" aria-expanded="false" aria-controls="pcso-navigation">Menu</button>
-<nav id="pcso-navigation" class="pcso-links" aria-label="Primary navigation"><a href="#services">Services</a><a href="#news">News &amp; Events</a><a href="#about">About PCSO</a><a class="pcso-button pcso-button-red" href="/signin?next=/admin" data-pcso-login>Log In</a></nav>
+<nav id="pcso-navigation" class="pcso-links" aria-label="Primary navigation"></nav>
 </div></header>
 <main id="main">
 <section class="pcso-hero"><div class="pcso-hero-shade"></div><div class="pcso-wrap pcso-hero-content"><p class="pcso-eyebrow">Professionalism · Integrity · Service</p><h1>Serving Pinellas County<br /><em>with pride.</em></h1><p class="pcso-hero-copy">The Pinellas County Sheriff's Office is dedicated to protecting our community, supporting our members, and making every shift count.</p><div class="pcso-hero-actions"><a class="pcso-button pcso-button-red" href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Connect with PCSO</a><a class="pcso-button pcso-button-light" href="#services">Explore services</a></div></div></section>
@@ -83,6 +83,6 @@
   import { hydrateNewsAndEventsSection } from './pcso-events.js?v=20260913-content-images';
   hydrateNewsAndEventsSection();
 </script>
-<script>const menu=document.querySelector('.pcso-menu'),links=document.querySelector('.pcso-links');menu?.addEventListener('click',()=>{const open=menu.getAttribute('aria-expanded')==='true';menu.setAttribute('aria-expanded',String(!open));links?.classList.toggle('open',!open);});</script>
+<script src="pcso-nav.js?v=20260917-nav"></script>
 </body></html>
 

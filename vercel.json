@@ -57,6 +57,66 @@
     {
       "source": "/news",
       "destination": "/news.html"
+    },
+    {
+      "source": "/contact",
+      "destination": "/contact.html"
+    },
+    {
+      "source": "/careers",
+      "destination": "/careers.html"
+    },
+    {
+      "source": "/active-calls",
+      "destination": "/active-calls.html"
+    },
+    {
+      "source": "/sheriff",
+      "destination": "/sheriff.html"
+    },
+    {
+      "source": "/missions-values",
+      "destination": "/missions-values.html"
+    },
+    {
+      "source": "/public-notices",
+      "destination": "/public-notices.html"
+    },
+    {
+      "source": "/patrol-operations",
+      "destination": "/patrol-operations.html"
+    },
+    {
+      "source": "/ride-along",
+      "destination": "/ride-along.html"
+    },
+    {
+      "source": "/patrol-staff",
+      "destination": "/patrol-staff.html"
+    },
+    {
+      "source": "/public-information",
+      "destination": "/public-information.html"
+    },
+    {
+      "source": "/special-response",
+      "destination": "/special-response.html"
+    },
+    {
+      "source": "/traffic-enforcement",
+      "destination": "/traffic-enforcement.html"
+    },
+    {
+      "source": "/criminal-investigations",
+      "destination": "/criminal-investigations.html"
+    },
+    {
+      "source": "/detention",
+      "destination": "/detention.html"
+    },
+    {
+      "source": "/field-training",
+      "destination": "/field-training.html"
     }
   ],
   "headers": [
@@ -95,16 +155,6 @@
     }
   ],
   "redirects": [
-    {
-      "source": "/active-calls",
-      "destination": "/",
-      "permanent": false
-    },
-    {
-      "source": "/active-calls.html",
-      "destination": "/",
-      "permanent": false
-    },
     {
       "source": "/submit-tip",
       "destination": "/crime-stoppers",
