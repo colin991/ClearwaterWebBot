@@ -73,9 +73,9 @@ if [[ ! -f utils/secondaryServerGate.js ]]; then
   exit 1
 fi
 
-if [[ -f utils/statusServer.js ]] || [[ -f vercel.json ]]; then
-  echo "[start] ERROR: old website files are still present. Update failed."
-  exit 1
+# This repo also hosts the PCSO website (vercel.json). That is not a failed update.
+if [[ -f utils/statusServer.js ]]; then
+  echo "[start] WARNING: leftover utils/statusServer.js from an old website split; starting anyway."
 fi
 
 echo "[start] Launching Discord bot..."
