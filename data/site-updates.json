@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-pcso-nav-arrows",
+      "title": "Dropdown arrows on PCSO top nav",
+      "summary": "About, Law Enforcement, Divisions, and Contact now show a down arrow. The arrow flips up when that menu is open.",
+      "createdAt": "2026-09-17T21:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-pcso-nav-portal",
       "title": "New PCSO site navigation, tickets, and careers",
       "summary": "The top bar is now Home, About, Law Enforcement, Divisions, Contact, and a boxed Careers button. About, Law Enforcement, Divisions, and Contact use hover menus. Contact opens Discord tickets from the same questions and posts website replies through a webhook as the signed-in user, plus public records status. Careers includes Apply Now with the official application questions and pending/approved/denied status.",
