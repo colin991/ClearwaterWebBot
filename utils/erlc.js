@@ -3,6 +3,7 @@ import { logger } from './logger.js';
 
 /** PRC shares one HTTP bucket for server snapshots and in-game commands. */
 export const ERLC_MIN_INTERVAL_MS = 5_000;
+export const ERLC_MAX_RETRY_AFTER_SEC = 15;
 const ERLC_SERVER_CACHE_TTL_MS = 5_000;
 let erlcMinIntervalMs = ERLC_MIN_INTERVAL_MS;
 let erlcAvailableAt = 0;
@@ -20,8 +21,20 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export function normalizeErlcRetryAfterSeconds(retryAfterSeconds = 0) {
+  let seconds = Number(retryAfterSeconds);
+  if (!Number.isFinite(seconds) || seconds < 0) return 0;
+  // Unix timestamps are sometimes sent instead of delta-seconds.
+  if (seconds > 1e9) seconds = Math.max(0, seconds - Date.now() / 1000);
+  if (seconds > ERLC_MAX_RETRY_AFTER_SEC) {
+    logger.warn(`ER:LC Retry-After ${Math.round(seconds)}s capped at ${ERLC_MAX_RETRY_AFTER_SEC}s`);
+    return ERLC_MAX_RETRY_AFTER_SEC;
+  }
+  return seconds;
+}
+
 function rememberErlcCooldown(retryAfterSeconds = 0) {
-  const extra = Number.isFinite(Number(retryAfterSeconds)) ? Number(retryAfterSeconds) * 1000 : 0;
+  const extra = normalizeErlcRetryAfterSeconds(retryAfterSeconds) * 1000;
   erlcAvailableAt = Date.now() + Math.max(erlcMinIntervalMs, extra);
 }
 
@@ -105,13 +118,13 @@ async function fetchErlcBundle(serverKey) {
     throw error;
   }
   if (!response.ok) {
-    rememberErlcCooldown(retryAfter || (response.status === 429 ? 5 : 0));
-    const retrySec = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 5;
+    const retrySec = normalizeErlcRetryAfterSeconds(retryAfter || (response.status === 429 ? 5 : 0));
+    rememberErlcCooldown(retrySec);
     const error = new Error(response.status === 429
-      ? `ER:LC is rate-limited. Try again in ${Math.ceil(retrySec)} seconds.`
+      ? `ER:LC is rate-limited. Try again in ${Math.ceil(Math.max(retrySec, 5))} seconds.`
       : `ER:LC request failed (${response.status})`);
     error.status = response.status;
-    error.retryAfter = retryAfter || (response.status === 429 ? 5 : null);
+    error.retryAfter = retrySec || (response.status === 429 ? 5 : null);
     throw error;
   }
   rememberErlcCooldown(retryAfter);
@@ -491,8 +504,8 @@ async function sendErlcCommand(serverKey, command, { shouldExecute, allowLoad = 
       signal: AbortSignal.timeout(8000),
     });
     const result = await response.json().catch(() => ({}));
-    const retryAfterSeconds = Number(result.retry_after || response.headers.get('retry-after') || 0);
-    rememberErlcCooldown(Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : 0);
+    const retryAfterSeconds = normalizeErlcRetryAfterSeconds(result.retry_after || response.headers.get('retry-after') || 0);
+    rememberErlcCooldown(retryAfterSeconds);
     if (response.ok) return result;
     if (response.status === 401 || response.status === 403) {
       const error = erlcKeyError(response.status);

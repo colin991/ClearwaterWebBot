@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   executeErlcCommand,
+  erlcCooldownRemainingMs,
   expireErlcBundleCacheForTests,
   fetchErlcServer,
   resetErlcNetworkForTests,
@@ -219,6 +220,20 @@ test('a cooldown timeout names the remaining ER:LC wait', async () => {
       () => fetchErlcServer('key', { timeoutMs: 80 }),
       (error) => error.code === 'ERLC_TIMEOUT' && /rate-limited|seconds/i.test(error.message),
     );
+  } finally {
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+  }
+});
+
+test('absurd Retry-After values are capped to 15 seconds', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 0 });
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse(429, {}, { 'retry-after': '4857' });
+  try {
+    await assert.rejects(() => fetchErlcServer('key'), /rate-limited.*15 seconds/);
+    assert.ok(erlcCooldownRemainingMs() <= 15_050);
+    assert.ok(erlcCooldownRemainingMs() >= 10_000);
   } finally {
     globalThis.fetch = original;
     resetErlcNetworkForTests({ minIntervalMs: 5000 });

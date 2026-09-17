@@ -25,17 +25,11 @@ export default {
     let identities;
     try {
       const waitMs = erlcCooldownRemainingMs();
-      if (waitMs > 20_000) {
-        await loading.edit({
-          content: `ER:LC is rate-limited. Try \`-dc\` again in ${Math.ceil(waitMs / 1000)} seconds.`,
-        });
-        return;
-      }
       if (waitMs > 500) {
         await loading.edit({ content: `Waiting ${Math.ceil(waitMs / 1000)}s for ER:LC…` }).catch(() => {});
       }
       [server, identities] = await Promise.all([
-        fetchErlcServer(message.client.config.erlcServerKey, { timeoutMs: waitMs + 12_000 }),
+        fetchErlcServer(message.client.config.erlcServerKey, { timeoutMs: Math.min(waitMs, 15_000) + 12_000 }),
         getIdentityCache(),
       ]);
       await ensureGuildMembers(guild, { allowStale: true }).catch(() => {});
