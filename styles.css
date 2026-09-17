@@ -1360,7 +1360,7 @@ body.home-stage {
 
 
 
-/* Admin panel — radio talk logs */
+/* Admin panel */
 .admin-status { margin: 0 0 14px; color: #aeb2ba; font-size: 14px; }
 .admin-content-grid { display: grid; gap: 22px; margin-top: 18px; }
 .admin-content-card {
@@ -1373,26 +1373,6 @@ body.home-stage {
   color: #f1f2f4;
   font-size: 18px;
 }
-.admin-radio-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-.admin-refresh {
-  appearance: none;
-  border: 1px solid #555961;
-  background: #34363b;
-  color: #fff;
-  font: inherit;
-  font-weight: 700;
-  font-size: 13px;
-  padding: 8px 12px;
-  cursor: pointer;
-}
-.admin-refresh:hover { background: #45484f; }
 .admin-table-wrap { overflow: auto; }
 .admin-table {
   width: 100%;

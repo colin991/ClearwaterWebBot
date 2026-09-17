@@ -13,7 +13,6 @@ import { startDispatchChannelStatus } from '../utils/dispatchChannelStatus.js';
 import { startCorrectionsChannelStatus } from '../utils/correctionsChannelStatus.js';
 import { startFrequencyChangeGreeting } from '../utils/frequencyChangeGreeting.js';
 import { ensurePinellasServerProfile } from '../utils/pinellasServer.js';
-import { startDispatchRadioTalkMonitor } from '../utils/dispatchRadioTalkMonitor.js';
 import { startBotApiServer } from '../utils/botApiServer.js';
 
 export default {
@@ -58,10 +57,6 @@ export default {
 
     if (!client.stopFrequencyChangeGreeting) {
       client.stopFrequencyChangeGreeting = startFrequencyChangeGreeting(client);
-    }
-
-    if (!client.stopDispatchRadioTalkMonitor) {
-      client.stopDispatchRadioTalkMonitor = startDispatchRadioTalkMonitor(client);
     }
 
     if (!client.stopBotApiServer) {

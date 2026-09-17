@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-remove-radio-talk",
+      "title": "Remove dispatch radio listen, talk, and talk logs",
+      "summary": "The bot no longer joins Dispatch to log who is talking on radio. The admin panel Listen Live and Hold to Talk controls are removed.",
+      "createdAt": "2026-09-17T23:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-fix-bot-host-start",
       "title": "Stop the bot host from refusing to start",
       "summary": "start.sh no longer exits because vercel.json is in this repo. Slash command registration failures no longer block login, so -dc and other prefix commands still come up after a restart.",

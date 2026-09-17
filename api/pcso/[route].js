@@ -3,9 +3,6 @@ import content from '../../lib/pcso-api/content.js';
 import contentUpload from '../../lib/pcso-api/content-upload.js';
 import forms from '../../lib/pcso-api/forms.js';
 import jail from '../../lib/pcso-api/jail.js';
-import radioLogs from '../../lib/pcso-api/radio-logs.js';
-import radioAudio from '../../lib/pcso-api/radio-audio.js';
-import radioTalk from '../../lib/pcso-api/radio-talk.js';
 import weeklyReport from '../../lib/pcso-api/weekly-report.js';
 import portal from '../../lib/pcso-api/portal.js';
 import calls from '../../lib/pcso-api/calls.js';
@@ -16,9 +13,6 @@ const ROUTES = {
   'content-upload': contentUpload,
   forms,
   jail,
-  'radio-logs': radioLogs,
-  'radio-audio': radioAudio,
-  'radio-talk': radioTalk,
   'weekly-report': weeklyReport,
   portal,
   calls,
