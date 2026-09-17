@@ -7,6 +7,7 @@ import { writeDispatchWebTalk, stopDispatchWebTalk } from './dispatchWebTalk.js'
 import { readDispatchAudio } from './dispatchLiveAudio.js';
 import { DISPATCH_VOICE_CHANNEL_ID } from './dispatchChannelStatus.js';
 import { noteWebListener, noteWebTalk } from './dispatchActivityLog.js';
+import { postPcsoSiteForm } from './pcsoSiteFormDiscord.js';
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -107,6 +108,18 @@ export function startBotApiServer(client, {
         noteWebTalk(client, actor, 'audio');
         const result = writeDispatchWebTalk(body);
         return sendJson(response, result.ok ? 200 : 409, result);
+      }
+
+      if (request.method === 'POST' && url.pathname === '/api/pcso/site-form') {
+        const raw = await readBinaryBody(request, 80_000);
+        let record;
+        try {
+          record = JSON.parse(raw.toString('utf8') || '{}');
+        } catch {
+          return sendJson(response, 400, { error: 'Invalid JSON.' });
+        }
+        const result = await postPcsoSiteForm(client, record);
+        return sendJson(response, 200, { ok: true, ...result });
       }
 
       if (request.method === 'GET' && url.pathname === '/api/pcso/radio-logs') {

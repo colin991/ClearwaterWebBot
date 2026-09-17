@@ -5,11 +5,14 @@ const wrapEl = document.querySelector('[data-admin-table-wrap]');
 const bodyEl = document.querySelector('[data-admin-body]');
 const searchEl = document.querySelector('[data-admin-search]');
 const contentEl = document.querySelector('[data-admin-content]');
+const starEl = document.querySelector('[data-admin-star]');
 const radioEl = document.querySelector('[data-admin-radio]');
 const newsListEl = document.querySelector('[data-news-list]');
 const eventListEl = document.querySelector('[data-event-list]');
+const starListEl = document.querySelector('[data-star-list]');
 const newsForm = document.querySelector('[data-news-form]');
 const eventForm = document.querySelector('[data-event-form]');
+const starForm = document.querySelector('[data-star-form]');
 const radioBodyEl = document.querySelector('[data-radio-body]');
 const radioMetaEl = document.querySelector('[data-radio-meta]');
 const refreshBtn = document.querySelector('[data-radio-refresh]');
@@ -17,6 +20,7 @@ const refreshBtn = document.querySelector('[data-radio-refresh]');
 let people = [];
 
 const MAX_CONTENT_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_CONTENT_MEDIA_BYTES = 20 * 1024 * 1024;
 
 const escapeHtml = (value) => String(value ?? '')
   .replaceAll('&', '&amp;')
@@ -55,6 +59,38 @@ async function resolveContentImageUrl(form, folder) {
     contentType: file.type || 'image/jpeg',
   });
   if (!blob?.url) throw new Error('Image upload failed.');
+  return blob.url;
+}
+
+async function resolveContentMediaUrl(form, folder) {
+  const fileInput = form?.querySelector('input[name="media"]');
+  const file = fileInput?.files?.[0];
+  const typedUrl = String(new FormData(form).get('mediaUrl') || '').trim();
+  if (!file) return typedUrl;
+
+  const isVideo = /^video\/(mp4|webm|quicktime)$/i.test(file.type || '');
+  const isImage = /^image\/(png|jpeg|jpg|webp|gif)$/i.test(file.type || '');
+  if (!isVideo && !isImage) {
+    throw new Error('Use a PNG, JPEG, WebP, GIF, MP4, or WebM file.');
+  }
+  if (isImage && file.size > MAX_CONTENT_IMAGE_BYTES) {
+    throw new Error('Image must be 5 MB or smaller.');
+  }
+  if (isVideo && file.size > MAX_CONTENT_MEDIA_BYTES) {
+    throw new Error('Video must be 20 MB or smaller.');
+  }
+
+  const upload = globalThis.VercelBlob?.upload;
+  if (typeof upload !== 'function') {
+    throw new Error('Upload is unavailable. Paste a Media URL instead, or configure Vercel Blob.');
+  }
+
+  const blob = await upload(`pcso-content/${folder}/${safeContentImageName(file, isVideo ? 'clip.mp4' : 'image.jpg')}`, file, {
+    access: 'public',
+    handleUploadUrl: '/api/pcso/content-upload',
+    contentType: file.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+  });
+  if (!blob?.url) throw new Error('Upload failed.');
   return blob.url;
 }
 
@@ -185,15 +221,15 @@ function renderList(mount, items, kind) {
     return;
   }
   mount.innerHTML = items.map((item) => {
-    const thumb = item.imageUrl
-      ? `<div class="admin-item-thumb" style="background-image:url('${escapeHtml(item.imageUrl)}')" aria-hidden="true"></div>`
+    const thumb = (item.imageUrl || (item.mediaType === 'image' && item.mediaUrl))
+      ? `<div class="admin-item-thumb" style="background-image:url('${escapeHtml(item.imageUrl || item.mediaUrl)}')" aria-hidden="true"></div>`
       : '';
     return `
     <div class="admin-item">
       ${thumb}
       <div>
         <strong>${escapeHtml(item.title || 'Untitled')}</strong>
-        <span>${escapeHtml(item.summary || item.whenLabel || item.location || item.description || '')}</span>
+        <span>${escapeHtml(item.summary || item.whenLabel || item.location || item.description || item.body || '')}</span>
       </div>
       <button type="button" class="admin-item-delete" data-delete-kind="${kind}" data-delete-id="${escapeHtml(item.id)}">Delete</button>
     </div>
@@ -207,6 +243,7 @@ async function loadContent() {
   if (!response.ok) throw new Error(payload.error || 'Content could not be loaded.');
   renderList(newsListEl, Array.isArray(payload.news) ? payload.news : [], 'news');
   renderList(eventListEl, Array.isArray(payload.events) ? payload.events : [], 'event');
+  renderList(starListEl, Array.isArray(payload.star) ? payload.star : [], 'star');
 }
 
 async function mutate(method, body) {
@@ -220,6 +257,7 @@ async function mutate(method, body) {
   if (!response.ok) throw new Error(payload.error || 'Update failed.');
   renderList(newsListEl, Array.isArray(payload.news) ? payload.news : [], 'news');
   renderList(eventListEl, Array.isArray(payload.events) ? payload.events : [], 'event');
+  renderList(starListEl, Array.isArray(payload.star) ? payload.star : [], 'star');
   return payload;
 }
 
@@ -509,6 +547,7 @@ async function boot() {
 
     if (personnelEl) personnelEl.hidden = false;
     if (contentEl) contentEl.hidden = false;
+    if (starEl) starEl.hidden = false;
     if (radioEl) radioEl.hidden = false;
     statusEl.textContent = 'Loading admin tools…';
 
@@ -530,7 +569,7 @@ async function boot() {
     ]);
 
     if (statusEl.textContent === 'Loading admin tools…') {
-      statusEl.textContent = 'Signed in. Manage weekly PDFs, news/events, and dispatch radio talk logs below.';
+      statusEl.textContent = 'Signed in. Manage weekly PDFs, news/events, Inside the Star, and dispatch radio talk logs below.';
     }
     startRadioLogAutoRefresh();
   } catch {
@@ -585,13 +624,35 @@ eventForm?.addEventListener('submit', async (event) => {
   }
 });
 
+starForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const data = new FormData(starForm);
+  try {
+    const hasFile = Boolean(starForm.querySelector('input[name="media"]')?.files?.[0]);
+    statusEl.textContent = hasFile ? 'Uploading media…' : 'Saving Inside the Star…';
+    const mediaUrl = await resolveContentMediaUrl(starForm, 'star');
+    statusEl.textContent = 'Saving Inside the Star…';
+    await mutate('POST', {
+      kind: 'star',
+      title: data.get('title'),
+      body: data.get('body'),
+      mediaUrl,
+    });
+    starForm.reset();
+    statusEl.textContent = 'Inside the Star item added.';
+  } catch (error) {
+    statusEl.textContent = error.message || 'Could not add Inside the Star item.';
+  }
+});
+
 document.addEventListener('click', async (event) => {
   const button = event.target.closest('[data-delete-id]');
   if (!button) return;
   try {
     statusEl.textContent = 'Deleting…';
+    const kind = button.getAttribute('data-delete-kind');
     await mutate('DELETE', {
-      kind: button.getAttribute('data-delete-kind') === 'event' ? 'event' : 'news',
+      kind: kind === 'event' ? 'event' : (kind === 'star' ? 'star' : 'news'),
       id: button.getAttribute('data-delete-id'),
     });
     statusEl.textContent = 'Item removed.';

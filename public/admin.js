@@ -5,11 +5,14 @@ const wrapEl = document.querySelector('[data-admin-table-wrap]');
 const bodyEl = document.querySelector('[data-admin-body]');
 const searchEl = document.querySelector('[data-admin-search]');
 const contentEl = document.querySelector('[data-admin-content]');
+const starEl = document.querySelector('[data-admin-star]');
 const radioEl = document.querySelector('[data-admin-radio]');
 const newsListEl = document.querySelector('[data-news-list]');
 const eventListEl = document.querySelector('[data-event-list]');
+const starListEl = document.querySelector('[data-star-list]');
 const newsForm = document.querySelector('[data-news-form]');
 const eventForm = document.querySelector('[data-event-form]');
+const starForm = document.querySelector('[data-star-form]');
 const radioBodyEl = document.querySelector('[data-radio-body]');
 const radioMetaEl = document.querySelector('[data-radio-meta]');
 const refreshBtn = document.querySelector('[data-radio-refresh]');
@@ -17,6 +20,7 @@ const refreshBtn = document.querySelector('[data-radio-refresh]');
 let people = [];
 
 const MAX_CONTENT_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_CONTENT_MEDIA_BYTES = 20 * 1024 * 1024;
 
 const escapeHtml = (value) => String(value ?? '')
   .replaceAll('&', '&amp;')
@@ -55,6 +59,38 @@ async function resolveContentImageUrl(form, folder) {
     contentType: file.type || 'image/jpeg',
   });
   if (!blob?.url) throw new Error('Image upload failed.');
+  return blob.url;
+}
+
+async function resolveContentMediaUrl(form, folder) {
+  const fileInput = form?.querySelector('input[name="media"]');
+  const file = fileInput?.files?.[0];
+  const typedUrl = String(new FormData(form).get('mediaUrl') || '').trim();
+  if (!file) return typedUrl;
+
+  const isVideo = /^video\/(mp4|webm|quicktime)$/i.test(file.type || '');
+  const isImage = /^image\/(png|jpeg|jpg|webp|gif)$/i.test(file.type || '');
+  if (!isVideo && !isImage) {
+    throw new Error('Use a PNG, JPEG, WebP, GIF, MP4, or WebM file.');
+  }
+  if (isImage && file.size > MAX_CONTENT_IMAGE_BYTES) {
+    throw new Error('Image must be 5 MB or smaller.');
+  }
+  if (isVideo && file.size > MAX_CONTENT_MEDIA_BYTES) {
+    throw new Error('Video must be 20 MB or smaller.');
+  }
+
+  const upload = globalThis.VercelBlob?.upload;
+  if (typeof upload !== 'function') {
+    throw new Error('Upload is unavailable. Paste a Media URL instead, or configure Vercel Blob.');
+  }
+
+  const blob = await upload(`pcso-content/${folder}/${safeContentImageName(file, isVideo ? 'clip.mp4' : 'image.jpg')}`, file, {
+    access: 'public',
+    handleUploadUrl: '/api/pcso/content-upload',
+    contentType: file.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+  });
+  if (!blob?.url) throw new Error('Upload failed.');
   return blob.url;
 }
 
@@ -99,11 +135,49 @@ function renderRows(list) {
       <td>${hours}</td>
       <td>${reportCount}${reportPreview ? `<div class="pcso-call-meta">${reportPreview}${reportExtra}</div>` : ''}</td>
       <td class="admin-actions">
-        <a href="/api/pcso/weekly-report?discordId=${id}">Download PDF</a>
+        <a href="/api/pcso/weekly-report?discordId=${id}" data-weekly-pdf>Download PDF</a>
       </td>
     </tr>`;
   }).join('');
 }
+
+document.addEventListener('click', async (event) => {
+  const link = event.target.closest('[data-weekly-pdf]');
+  if (!link) return;
+  event.preventDefault();
+  if (link.getAttribute('aria-busy') === 'true') return;
+  link.setAttribute('aria-busy', 'true');
+  link.textContent = 'Preparing PDF…';
+  statusEl.textContent = 'Preparing weekly report…';
+  try {
+    const response = await fetch(link.href, { headers: { Accept: 'application/pdf' } });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      const seconds = Math.max(1, Math.ceil(Number(response.headers.get('retry-after')) || 60));
+      throw new Error(response.status === 429
+        ? `Reports are temporarily busy. Please try again in ${seconds} seconds.`
+        : payload.error || 'The report could not be downloaded. Please try again.');
+    }
+    if (!response.headers.get('content-type')?.includes('application/pdf')) {
+      throw new Error('The report could not be downloaded. Please sign in and try again.');
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const download = document.createElement('a');
+    download.href = url;
+    const filename = response.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1];
+    download.download = filename || 'weekly-report.pdf';
+    document.body.append(download);
+    download.click();
+    download.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    statusEl.textContent = 'Weekly report downloaded.';
+  } catch (error) {
+    statusEl.textContent = error.message || 'The report could not be downloaded. Please try again.';
+  } finally {
+    link.removeAttribute('aria-busy');
+    link.textContent = 'Download PDF';
+  }
+});
 
 function renderRadioLogs(entries) {
   if (!radioBodyEl) return;
@@ -147,15 +221,15 @@ function renderList(mount, items, kind) {
     return;
   }
   mount.innerHTML = items.map((item) => {
-    const thumb = item.imageUrl
-      ? `<div class="admin-item-thumb" style="background-image:url('${escapeHtml(item.imageUrl)}')" aria-hidden="true"></div>`
+    const thumb = (item.imageUrl || (item.mediaType === 'image' && item.mediaUrl))
+      ? `<div class="admin-item-thumb" style="background-image:url('${escapeHtml(item.imageUrl || item.mediaUrl)}')" aria-hidden="true"></div>`
       : '';
     return `
     <div class="admin-item">
       ${thumb}
       <div>
         <strong>${escapeHtml(item.title || 'Untitled')}</strong>
-        <span>${escapeHtml(item.summary || item.whenLabel || item.location || item.description || '')}</span>
+        <span>${escapeHtml(item.summary || item.whenLabel || item.location || item.description || item.body || '')}</span>
       </div>
       <button type="button" class="admin-item-delete" data-delete-kind="${kind}" data-delete-id="${escapeHtml(item.id)}">Delete</button>
     </div>
@@ -169,6 +243,7 @@ async function loadContent() {
   if (!response.ok) throw new Error(payload.error || 'Content could not be loaded.');
   renderList(newsListEl, Array.isArray(payload.news) ? payload.news : [], 'news');
   renderList(eventListEl, Array.isArray(payload.events) ? payload.events : [], 'event');
+  renderList(starListEl, Array.isArray(payload.star) ? payload.star : [], 'star');
 }
 
 async function mutate(method, body) {
@@ -182,6 +257,7 @@ async function mutate(method, body) {
   if (!response.ok) throw new Error(payload.error || 'Update failed.');
   renderList(newsListEl, Array.isArray(payload.news) ? payload.news : [], 'news');
   renderList(eventListEl, Array.isArray(payload.events) ? payload.events : [], 'event');
+  renderList(starListEl, Array.isArray(payload.star) ? payload.star : [], 'star');
   return payload;
 }
 
@@ -268,9 +344,11 @@ async function pollLiveRadio(session) {
         const channel = buffer.getChannelData(0);
         for (let i = 0; i < channel.length; i += 1) channel[i] = samples.getInt16(i * 2, true) / 32768;
         const previousEnd = session.ends.get(frame.speaker) || 0;
-        const start = Math.max(now + 0.08 + (frame.at - firstAt) / 1000, previousEnd);
-        // Never accumulate a delayed replay if network delivery falls behind.
-        if (start > now + 2) continue;
+        // Keep the player close to live. If a slow request left a speaker's
+        // queue in the future, reset that queue instead of replaying stale audio.
+        const queuedEnd = previousEnd > now + 0.35 ? now : previousEnd;
+        const start = Math.max(now + 0.02 + (frame.at - firstAt) / 1000, queuedEnd);
+        if (start > now + 0.75) continue;
         const source = session.context.createBufferSource();
         source.buffer = buffer;
         source.connect(session.context.destination);
@@ -282,7 +360,7 @@ async function pollLiveRadio(session) {
     listenStatus.textContent = session.lastAudio && Date.now() - session.lastAudio < 3000
       ? 'Listening live to Dispatch RTO.'
       : 'Connected — waiting for incoming radio audio.';
-    session.timer = setTimeout(() => void pollLiveRadio(session), 400);
+    session.timer = setTimeout(() => void pollLiveRadio(session), 180);
   } catch (error) {
     if (liveRadio === session) stopLiveRadio(error.message || 'Live radio disconnected.');
   }
@@ -306,6 +384,103 @@ listenButton?.addEventListener('click', async () => {
   }
 });
 window.addEventListener('pagehide', () => stopLiveRadio());
+
+const talkButton = document.querySelector('[data-radio-talk]');
+const talkStatus = document.querySelector('[data-radio-talk-status]');
+let talkSession = null;
+
+function stopTalk(message = 'Hold to Talk') {
+  const session = talkSession;
+  talkSession = null;
+  if (!session) return;
+  session.active = false;
+  try { session.processor.disconnect(); } catch { /* ignore */ }
+  try { session.source.disconnect(); } catch { /* ignore */ }
+  session.stream?.getTracks().forEach((track) => track.stop());
+  void session.context.close().catch(() => {});
+  void fetch('/api/pcso/radio-talk', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream', 'X-Talk-Action': 'stop' },
+    body: new Uint8Array(),
+    credentials: 'same-origin',
+  }).catch(() => {});
+  talkButton?.setAttribute('aria-pressed', 'false');
+  if (talkStatus) talkStatus.textContent = message;
+}
+
+async function startTalk() {
+  if (talkSession) return;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    if (talkStatus) talkStatus.textContent = 'This browser does not support microphone access.';
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    });
+    const context = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+    await context.resume();
+    const source = context.createMediaStreamSource(stream);
+    const processor = context.createScriptProcessor(4096, 1, 1);
+    const silent = context.createGain();
+    silent.gain.value = 0;
+    const session = { active: true, context, stream, source, processor, pending: [], samples: 0, sending: Promise.resolve() };
+    talkSession = session;
+    processor.onaudioprocess = (event) => {
+      if (!session.active) return;
+      const input = event.inputBuffer.getChannelData(0);
+      // Discord raw PCM expects 48 kHz, signed 16-bit, interleaved stereo.
+      const pcm = new Int16Array(input.length * 2);
+      for (let i = 0; i < input.length; i += 1) {
+        const sample = Math.max(-1, Math.min(1, input[i])) * 32767;
+        pcm[i * 2] = sample;
+        pcm[i * 2 + 1] = sample;
+      }
+      session.pending.push(pcm);
+      session.samples += pcm.length;
+      if (session.samples < 8192) return;
+      const chunk = new Int16Array(session.samples);
+      let offset = 0;
+      for (const part of session.pending) { chunk.set(part, offset); offset += part.length; }
+      session.pending = [];
+      session.samples = 0;
+      session.sending = session.sending.then(() => fetch('/api/pcso/radio-talk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream', 'X-Talk-Action': 'audio' },
+        body: chunk,
+        credentials: 'same-origin',
+      })).catch(() => {
+        if (talkSession === session) stopTalk('Microphone transmission lost.');
+      });
+    };
+    source.connect(processor);
+    processor.connect(silent);
+    silent.connect(context.destination);
+    talkButton?.setAttribute('aria-pressed', 'true');
+    if (talkStatus) talkStatus.textContent = 'Transmitting to Dispatch RTO…';
+  } catch (error) {
+    if (talkSession) stopTalk('Microphone access was not granted.');
+    else if (talkStatus) talkStatus.textContent = error?.message || 'Microphone access was not granted.';
+  }
+}
+
+talkButton?.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  void startTalk();
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach((eventName) => {
+  talkButton?.addEventListener(eventName, () => stopTalk());
+});
+talkButton?.addEventListener('keydown', (event) => {
+  if ((event.code === 'Space' || event.code === 'Enter') && !event.repeat) {
+    event.preventDefault();
+    void startTalk();
+  }
+});
+talkButton?.addEventListener('keyup', (event) => {
+  if (event.code === 'Space' || event.code === 'Enter') stopTalk();
+});
+window.addEventListener('pagehide', () => stopTalk('Hold to Talk'));
 
 const RADIO_LOG_LIMIT = 10;
 const RADIO_LOG_REFRESH_MS = 3_000;
@@ -372,6 +547,7 @@ async function boot() {
 
     if (personnelEl) personnelEl.hidden = false;
     if (contentEl) contentEl.hidden = false;
+    if (starEl) starEl.hidden = false;
     if (radioEl) radioEl.hidden = false;
     statusEl.textContent = 'Loading admin tools…';
 
@@ -393,7 +569,7 @@ async function boot() {
     ]);
 
     if (statusEl.textContent === 'Loading admin tools…') {
-      statusEl.textContent = 'Signed in. Manage weekly PDFs, news/events, and dispatch radio talk logs below.';
+      statusEl.textContent = 'Signed in. Manage weekly PDFs, news/events, Inside the Star, and dispatch radio talk logs below.';
     }
     startRadioLogAutoRefresh();
   } catch {
@@ -448,13 +624,35 @@ eventForm?.addEventListener('submit', async (event) => {
   }
 });
 
+starForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const data = new FormData(starForm);
+  try {
+    const hasFile = Boolean(starForm.querySelector('input[name="media"]')?.files?.[0]);
+    statusEl.textContent = hasFile ? 'Uploading media…' : 'Saving Inside the Star…';
+    const mediaUrl = await resolveContentMediaUrl(starForm, 'star');
+    statusEl.textContent = 'Saving Inside the Star…';
+    await mutate('POST', {
+      kind: 'star',
+      title: data.get('title'),
+      body: data.get('body'),
+      mediaUrl,
+    });
+    starForm.reset();
+    statusEl.textContent = 'Inside the Star item added.';
+  } catch (error) {
+    statusEl.textContent = error.message || 'Could not add Inside the Star item.';
+  }
+});
+
 document.addEventListener('click', async (event) => {
   const button = event.target.closest('[data-delete-id]');
   if (!button) return;
   try {
     statusEl.textContent = 'Deleting…';
+    const kind = button.getAttribute('data-delete-kind');
     await mutate('DELETE', {
-      kind: button.getAttribute('data-delete-kind') === 'event' ? 'event' : 'news',
+      kind: kind === 'event' ? 'event' : (kind === 'star' ? 'star' : 'news'),
       id: button.getAttribute('data-delete-id'),
     });
     statusEl.textContent = 'Item removed.';

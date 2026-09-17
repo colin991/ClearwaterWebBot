@@ -19,11 +19,16 @@ const renderInmates = (payload) => {
 
   statusEl.hidden = true;
   listEl.hidden = false;
-  listEl.innerHTML = inmates.map((inmate) => {
-    const roleplayName = escapeHtml(inmate.roleplayName || 'Roleplay name unavailable');
-    const robloxUsername = escapeHtml(inmate.robloxUsername || 'Unknown');
-    return `<article class="pcso-call-item"><strong>${roleplayName}</strong><div class="pcso-call-meta">Roblox: ${robloxUsername}</div></article>`;
-  }).join('');
+  listEl.innerHTML = `<table class="pcso-jail-table">
+    <thead><tr><th>Roblox username</th><th>Time in jail</th></tr></thead>
+    <tbody>
+      ${inmates.map((inmate) => {
+        const username = escapeHtml(inmate.robloxUsername || 'Unknown');
+        const heldFor = escapeHtml(inmate.heldFor || '—');
+        return `<tr><td>${username}</td><td>${heldFor}</td></tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
 };
 
 const loadInmates = async () => {

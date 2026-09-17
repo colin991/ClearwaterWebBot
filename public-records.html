@@ -7,8 +7,7 @@
 <meta name="theme-color" content="#6b7078" />
 <title>Public Records | Pinellas County Sheriff's Office</title>
 <link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
-<link rel="stylesheet" href="styles.css?v=20260913-quicklinks" />
-
+<link rel="stylesheet" href="styles.css?v=20260917-pcso-forms" />
 <script>document.documentElement.classList.add('js');</script>
 </head>
 <body class="pcso-home">
@@ -22,14 +21,30 @@
 <main id="main" class="pcso-page-main"><div class="pcso-wrap">
 <p class="pcso-eyebrow">Pinellas County Sheriff's Office</p>
 <h1>Public Records</h1>
-<p class="pcso-page-lead">Request roleplay records, reports, and department documents.</p>
-<div class="pcso-page-card"><h2>Records requests</h2>
-<p>Public records requests for PCSO roleplay (crash reports, arrest logs, citations, and warrants) can be routed through department records staff in Discord. Include the case number when available.</p></div>
+<p class="pcso-page-lead">Request records on a deputy or a case number. If it is accepted, the report or key is sent to your Discord DMs. If it is denied, you will get a DM with a link to file a complaint.</p>
+<div class="pcso-page-card" data-records-signin>
+  <p>Sign in with Discord so we can DM you the result.</p>
+  <p><a class="pcso-button pcso-button-red" href="/signin?next=/public-records">Sign in with Discord</a></p>
+</div>
+<div class="pcso-page-card" data-records-form-wrap hidden>
+<form class="pcso-form" data-public-records>
+  <label>Request type
+    <select name="subjectType">
+      <option value="deputy">Deputy</option>
+      <option value="case">Case number</option>
+    </select>
+  </label>
+  <label>Deputy name or case number<input name="subject" required minlength="2" maxlength="120" /></label>
+  <label>Details (optional)<textarea name="details" maxlength="1500"></textarea></label>
+  <p class="pcso-form-status" data-form-status role="status"></p>
+  <button class="pcso-button pcso-button-red" type="submit">Submit request</button>
+</form>
+</div>
 <p style="margin-top:28px"><a class="pcso-text-link" href="/">← Back to home</a></p>
 </div></main>
 <footer class="pcso-footer"><div class="pcso-wrap pcso-footer-grid"><a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a><p>Professionalism · Integrity · Service<br /><small>© 2026 Pinellas County Sheriff's Office Roleplay</small></p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord →</a></div></footer>
-<script src="script.js?v=20260913-quicklinks"></script>
+<script src="script.js?v=20260917-pcso-forms"></script>
+<script src="pcso-forms.js?v=20260917-pcso-forms"></script>
 <script>const menu=document.querySelector('.pcso-menu'),links=document.querySelector('.pcso-links');menu?.addEventListener('click',()=>{const open=menu.getAttribute('aria-expanded')==='true';menu.setAttribute('aria-expanded',String(!open));links?.classList.toggle('open',!open);});document.querySelector('.pcso-alert-close')?.addEventListener('click',()=>document.querySelector('.pcso-alert')?.remove());</script>
-
 </body>
 </html>

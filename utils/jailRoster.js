@@ -1,7 +1,10 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { fetchErlcServer, parseErlcPlayer, isEmergencyServiceTeam, libertyMapPoint } from './erlc.js';
-import { melonlyFetch, fetchMelonlyMembers } from './melonly.js';
-import { getIdentityCache } from './identityStore.js';
+import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const TENURE_PATH = join(ROOT, 'data', 'jail-tenure.json');
 
 const JAIL_DRAG_ZONE = Object.freeze({
   leftMin: 0.55937,
@@ -19,164 +22,37 @@ function pointInDragZone(x, z) {
     && pin.top <= JAIL_DRAG_ZONE.topMax;
 }
 
-const CAD_CHARACTER_PATHS = [
-  '/server/cad/characters',
-  '/server/cad/civilians',
-  '/server/cad/profiles',
-  '/server/characters',
-  '/server/civilians',
-];
-
-function pickString(...values) {
-  for (const value of values) {
-    const text = String(value ?? '').trim();
-    if (text) return text;
-  }
-  return '';
+export function formatJailHold(ms) {
+  const total = Math.max(0, Math.floor(Number(ms) / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (hours >= 1) return `${hours}h ${minutes}m`;
+  if (minutes >= 1) return `${minutes} min`;
+  return `${Math.max(1, total)} sec`;
 }
 
-function asList(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (!payload || typeof payload !== 'object') return [];
-  for (const key of ['data', 'characters', 'civilians', 'profiles', 'results', 'items', 'members']) {
-    if (Array.isArray(payload[key])) return payload[key];
-  }
-  return [];
-}
-
-function characterRoleplayName(entry) {
-  if (!entry || typeof entry !== 'object') return '';
-  const first = pickString(entry.firstName, entry.first_name, entry.givenName);
-  const last = pickString(entry.lastName, entry.last_name, entry.surname, entry.familyName);
-  const combined = [first, last].filter(Boolean).join(' ').trim();
-  return pickString(
-    entry.roleplayName,
-    entry.roleplay_name,
-    entry.rpName,
-    entry.rp_name,
-    entry.characterName,
-    entry.character_name,
-    entry.cadName,
-    entry.cad_name,
-    entry.fullName,
-    entry.full_name,
-    entry.displayName,
-    entry.display_name,
-    combined,
-    entry.name,
-  );
-}
-
-function characterRobloxKeys(entry) {
-  const keys = new Set();
-  const id = pickString(
-    entry.robloxId,
-    entry.roblox_id,
-    entry.robloxUserId,
-    entry.roblox_user_id,
-    entry.userId,
-    entry.user_id,
-    entry.playerId,
-  );
-  const username = pickString(
-    entry.robloxUsername,
-    entry.roblox_username,
-    entry.robloxName,
-    entry.username,
-    entry.playerName,
-  ).toLowerCase();
-  if (id) keys.add(`id:${id}`);
-  if (username) keys.add(`name:${username}`);
-  return keys;
-}
-
-function memberRoleplayName(member) {
-  if (!member || typeof member !== 'object') return '';
-  const nested = member.character || member.cad || member.profile || member.civilian || null;
-  return pickString(
-    characterRoleplayName(nested),
-    member.roleplayName,
-    member.roleplay_name,
-    member.rpName,
-    member.characterName,
-    member.cadName,
-    member.displayName,
-    member.display_name,
-  );
-}
-
-function memberRobloxId(member) {
-  return pickString(
-    member?.robloxId,
-    member?.roblox_id,
-    member?.robloxUserId,
-    member?.roblox_user_id,
-    member?.user?.robloxId,
-    member?.account?.robloxId,
-  );
-}
-
-function memberRobloxUsername(member) {
-  return pickString(
-    member?.robloxUsername,
-    member?.roblox_username,
-    member?.robloxName,
-    member?.username,
-    member?.user?.robloxUsername,
-    member?.account?.robloxUsername,
-  );
-}
-
-async function loadCadCharacterIndex(apiKey) {
-  const byKey = new Map();
-  if (!apiKey) return byKey;
-
-  for (const path of CAD_CHARACTER_PATHS) {
-    try {
-      const payload = await melonlyFetch(apiKey, path, { cacheTtlMs: 60_000 });
-      const rows = asList(payload);
-      if (!rows.length) continue;
-      for (const row of rows) {
-        const name = characterRoleplayName(row);
-        if (!name) continue;
-        for (const key of characterRobloxKeys(row)) {
-          if (!byKey.has(key)) byKey.set(key, name);
-        }
-      }
-      if (byKey.size) return byKey;
-    } catch (error) {
-      if (error?.status === 429) throw error;
-    }
-  }
-  return byKey;
-}
-
-async function loadMelonlyMemberIndex(apiKey) {
-  const byId = new Map();
-  const byName = new Map();
-  if (!apiKey) return { byId, byName };
-
-  try {
-    const members = await fetchMelonlyMembers(apiKey, { maxPages: 8, cacheTtlMs: 5 * 60_000 });
-    for (const member of members || []) {
-      const id = memberRobloxId(member);
-      const username = memberRobloxUsername(member).toLowerCase();
-      if (id) byId.set(id, member);
-      if (username) byName.set(username, member);
-    }
-  } catch (error) {
-    if (error?.status === 429) throw error;
-  }
-  return { byId, byName };
+export function applyJailTenure(inmates, previous = {}, now = Date.now()) {
+  const occupants = {};
+  const next = (Array.isArray(inmates) ? inmates : []).map((inmate) => {
+    const key = String(inmate.robloxId || inmate.robloxUsername || '').trim().toLowerCase();
+    const enteredAt = Number(previous?.[key]) || now;
+    if (key) occupants[key] = enteredAt;
+    const heldMs = Math.max(0, now - enteredAt);
+    return {
+      robloxUsername: inmate.robloxUsername || 'Unknown',
+      robloxId: inmate.robloxId || null,
+      heldMs,
+      heldFor: formatJailHold(heldMs),
+    };
+  });
+  return { inmates: next, occupants };
 }
 
 /**
- * People currently in the jail drag zone who are not on emergency-service teams.
- * Includes Melonly CAD roleplay name (when resolvable) and Roblox username.
+ * People currently in the jail booking zone, with Roblox username and hold time.
  */
 export async function fetchJailInmates({
   erlcServerKey,
-  melonlyApiKey = '',
 } = {}) {
   if (!erlcServerKey) {
     const error = new Error('ERLC_SERVER_KEY is not configured');
@@ -194,46 +70,16 @@ export async function fetchJailInmates({
     return Boolean(player.username || player.robloxId);
   });
 
-  const [cadIndex, memberIndex, identityCache] = await Promise.all([
-    loadCadCharacterIndex(melonlyApiKey).catch(() => new Map()),
-    loadMelonlyMemberIndex(melonlyApiKey).catch(() => ({ byId: new Map(), byName: new Map() })),
-    getIdentityCache().catch(() => ({ byDiscord: {} })),
-  ]);
+  const rows = inZone.map((player) => ({
+    robloxUsername: String(player.username || '').trim() || 'Unknown',
+    robloxId: String(player.robloxId || '').trim() || null,
+  })).sort((left, right) => left.robloxUsername.localeCompare(right.robloxUsername));
 
-  const identityByRobloxId = new Map();
-  for (const entry of Object.values(identityCache?.byDiscord || {})) {
-    const robloxId = String(entry?.robloxId || '').trim();
-    if (robloxId) identityByRobloxId.set(robloxId, entry);
-  }
-
-  const inmates = inZone.map((player) => {
-    const robloxId = String(player.robloxId || '').trim();
-    const robloxUsername = String(player.username || '').trim();
-    const usernameKey = robloxUsername.toLowerCase();
-
-    const member = (robloxId && memberIndex.byId.get(robloxId))
-      || (usernameKey && memberIndex.byName.get(usernameKey))
-      || null;
-
-    const identity = robloxId ? identityByRobloxId.get(robloxId) : null;
-
-    const roleplayName = pickString(
-      cadIndex.get(robloxId ? `id:${robloxId}` : ''),
-      cadIndex.get(usernameKey ? `name:${usernameKey}` : ''),
-      memberRoleplayName(member),
-      identity?.robloxDisplayName,
-    ) || null;
-
-    return {
-      roleplayName,
-      robloxUsername: robloxUsername || null,
-      robloxId: robloxId || null,
-      team: player.team || 'Civilian',
-    };
-  }).sort((left, right) => {
-    const a = `${left.roleplayName || ''} ${left.robloxUsername || ''}`.toLowerCase();
-    const b = `${right.roleplayName || ''} ${right.robloxUsername || ''}`.toLowerCase();
-    return a.localeCompare(b);
+  const stored = await readJsonFile(TENURE_PATH, { occupants: {} });
+  const { inmates, occupants } = applyJailTenure(rows, stored.occupants);
+  await writeJsonFile(TENURE_PATH, {
+    occupants,
+    updatedAt: new Date().toISOString(),
   });
 
   return {

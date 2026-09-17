@@ -6,12 +6,12 @@ const output = join(root, 'public');
 const staticFiles = new Set([
   'index.html', 'signin.html', 'coming-soon.html',
   'privacy.html', 'terms.html',
-  'jail.html', 'impound.html', 'police-report.html', 'crime-stoppers.html',
+  'jail.html', 'police-report.html', 'crime-stoppers.html',
   'inside-the-star.html', 'public-records.html', 'complaint.html', 'events.html',
   'news.html', 'admin.html',
   'styles.css', 'legal.css', 'signin.css', 'coming-soon.css',
   'script.js', 'signin.js', 'coming-soon.js', 'site-gate.js',
-  'jail.js', 'pcso-events.js', 'admin.js',
+  'jail.js', 'pcso-forms.js', 'inside-the-star.js', 'pcso-events.js', 'admin.js',
 ]);
 
 rmSync(output, { recursive: true, force: true });

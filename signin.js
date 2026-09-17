@@ -9,7 +9,8 @@ function safeNextPath(value = '') {
   const path = (raw.split('?')[0].split('#')[0] || '/').replace(/\/+$/, '') || '/';
   if (path === '/internet.html') return '/internet';
   if (path === '/admin.html') return '/admin';
-  if (path === '/' || path === '/internet' || path === '/admin') return path;
+  if (path === '/public-records.html') return '/public-records';
+  if (path === '/' || path === '/internet' || path === '/admin' || path === '/public-records' || path === '/complaint' || path === '/police-report') return path;
   if (/^\/internet\/(post|member|sponsored)\/[A-Za-z0-9._-]{1,120}$/.test(path)) return path;
   if (/^\/internet\/(messages|notifications|settings|profile|wallet|staff|sponsored)$/.test(path)) return path;
   return '';
