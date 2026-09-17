@@ -14,6 +14,7 @@ import { startCorrectionsChannelStatus } from '../utils/correctionsChannelStatus
 import { startFrequencyChangeGreeting } from '../utils/frequencyChangeGreeting.js';
 import { ensurePinellasServerProfile } from '../utils/pinellasServer.js';
 import { startBotApiServer } from '../utils/botApiServer.js';
+import { fetchErlcServer } from '../utils/erlc.js';
 
 export default {
   name: Events.ClientReady,
@@ -26,6 +27,11 @@ export default {
       logger.warn('Could not clear bot presence; continuing startup.', error);
     }
     logger.info(`Logged in as ${client.user.tag}.`);
+    if (client.config.erlcServerKey) {
+      void fetchErlcServer(client.config.erlcServerKey).catch((error) => {
+        logger.warn(`Could not warm the ER:LC player list: ${error?.message || error}`);
+      });
+    }
 
     setTimeout(() => {
       void ensurePinellasServerProfile(client).catch((error) => {

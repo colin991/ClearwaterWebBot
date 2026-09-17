@@ -169,7 +169,7 @@ test('an invalid ER:LC server key fails immediately instead of retrying', async 
   }
 });
 
-test('Discord roster reads time out instead of waiting behind a live command', async () => {
+test('an empty roster snapshot does not wait behind a live command', async () => {
   resetErlcNetworkForTests({ minIntervalMs: 5_000 });
   let release = () => {};
   const hold = new Promise((resolve) => { release = resolve; });
@@ -179,9 +179,31 @@ test('Discord roster reads time out instead of waiting behind a live command', a
       await hold;
       return jsonResponse(200, { message: 'ok' });
     }
-    return jsonResponse(200, { Players: [] });
+    return jsonResponse(200, { Players: [{ Player: 'Test:1' }] });
   };
   const command = executeErlcCommand('key', ':wanted Test');
+  try {
+    const t0 = Date.now();
+    const server = await fetchErlcServer('key', { timeoutMs: 200 });
+    assert.ok(Date.now() - t0 < 400);
+    assert.equal(server.Players[0].Player, 'Test:1');
+  } finally {
+    release();
+    await command.catch(() => {});
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+  }
+});
+
+test('Discord roster reads time out when the snapshot itself hangs', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 0 });
+  let release = () => {};
+  const hang = new Promise((resolve) => { release = resolve; });
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => {
+    await hang;
+    return jsonResponse(200, { Players: [] });
+  };
   try {
     const t0 = Date.now();
     await assert.rejects(
@@ -191,8 +213,8 @@ test('Discord roster reads time out instead of waiting behind a live command', a
     assert.ok(Date.now() - t0 < 400);
   } finally {
     release();
-    await command.catch(() => {});
     globalThis.fetch = original;
     resetErlcNetworkForTests({ minIntervalMs: 5000 });
+    await new Promise((resolve) => setImmediate(resolve));
   }
 });

@@ -18,11 +18,21 @@ export default {
       throw new Error('The ER:LC server key is not set on the bot host. Add ERLC_SERVER_KEY to `.env` and restart.');
     }
     await message.channel.sendTyping().catch(() => {});
+    const typing = setInterval(() => {
+      void message.channel.sendTyping().catch(() => {});
+    }, 8_000);
+    typing.unref?.();
     await ensureGuildMembers(guild, { allowStale: true }).catch(() => {});
-    const [server, identities] = await Promise.all([
-      fetchErlcServer(message.client.config.erlcServerKey, { timeoutMs: 8_000 }),
-      getIdentityCache(),
-    ]);
+    let server;
+    let identities;
+    try {
+      [server, identities] = await Promise.all([
+        fetchErlcServer(message.client.config.erlcServerKey, { timeoutMs: 25_000 }),
+        getIdentityCache(),
+      ]);
+    } finally {
+      clearInterval(typing);
+    }
     if (!Array.isArray(server.Players)) throw new Error('The in-game player list is unavailable. Please try again shortly.');
     const rows = classifyDiscordPlayers(
       server.Players.map(parseErlcPlayer),

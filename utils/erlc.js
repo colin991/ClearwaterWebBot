@@ -102,23 +102,16 @@ function ensureIdleRefresh(serverKey) {
   idleRefreshServerKey = serverKey;
   if (!idleRefreshEnabled || idleRefreshTimer) return;
   idleRefreshTimer = setInterval(() => {
-    if (!idleRefreshServerKey || queuedCommands > 0 || erlcSlotDepth > 0) return;
+    if (!idleRefreshServerKey || erlcSlotDepth > 0) return;
+    if (queuedCommands > 0 && bundleCache.value) return;
     if (bundleCache.inflight) return;
     if (bundleCache.value && Date.now() < bundleCache.expiresAt) return;
-    scheduleBundleRefresh(idleRefreshServerKey);
+    loadErlcServer(idleRefreshServerKey);
   }, 250);
   idleRefreshTimer.unref?.();
 }
 
-function scheduleBundleRefresh(serverKey) {
-  if (bundleCache.inflight) return bundleCache.inflight;
-  if (shouldSkipSnapshotHttp() && bundleCache.value) {
-    return Promise.resolve(bundleCache.value);
-  }
-  const pending = withErlcNetworkSlot(async () => {
-    if (shouldSkipSnapshotHttp()) return bundleCache.value;
-    return fetchErlcBundle(serverKey);
-  }, { kind: 'snapshot' });
+function trackInflight(pending) {
   bundleCache.inflight = pending;
   void pending.then(
     () => {
@@ -129,6 +122,28 @@ function scheduleBundleRefresh(serverKey) {
     },
   );
   return pending;
+}
+
+function scheduleBundleRefresh(serverKey) {
+  if (bundleCache.inflight) return bundleCache.inflight;
+  if (shouldSkipSnapshotHttp() && bundleCache.value) {
+    return Promise.resolve(bundleCache.value);
+  }
+  return trackInflight(withErlcNetworkSlot(async () => {
+    if (shouldSkipSnapshotHttp()) return bundleCache.value;
+    return fetchErlcBundle(serverKey);
+  }, { kind: 'snapshot' }));
+}
+
+/** Empty-cache reads must not sit behind :wanted/:pm or Discord Check never sends. */
+function loadErlcServer(serverKey) {
+  ensureIdleRefresh(serverKey);
+  if (bundleCache.value) return Promise.resolve(bundleCache.value);
+  if (bundleCache.inflight) return bundleCache.inflight;
+  if (queuedCommands > 0 || erlcSlotDepth > 0) {
+    return trackInflight(fetchErlcBundle(serverKey));
+  }
+  return scheduleBundleRefresh(serverKey);
 }
 
 function withTimeout(promise, timeoutMs, message) {
@@ -144,24 +159,22 @@ function withTimeout(promise, timeoutMs, message) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-function loadErlcServer(serverKey) {
-  ensureIdleRefresh(serverKey);
-  if (bundleCache.value) return Promise.resolve(bundleCache.value);
-  if (bundleCache.inflight) return bundleCache.inflight;
-  return scheduleBundleRefresh(serverKey);
-}
-
 /** Snapshot the private server. `timeoutMs` fails fast for Discord commands. */
 export async function fetchErlcServer(serverKey, options = {}) {
   if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
   const pending = loadErlcServer(serverKey);
   const timeoutMs = Number(options.timeoutMs);
   if (Number.isFinite(timeoutMs) && timeoutMs > 0) pending.catch(() => {});
-  return withTimeout(
-    pending,
-    timeoutMs,
-    'The in-game player list is busy. Try again in a few seconds.',
-  );
+  try {
+    return await withTimeout(
+      pending,
+      timeoutMs,
+      'The in-game player list is busy. Try again in a few seconds.',
+    );
+  } catch (error) {
+    if (error?.code === 'ERLC_TIMEOUT' && bundleCache.value) return bundleCache.value;
+    throw error;
+  }
 }
 
 export function erlcKeyError(status = 401) {

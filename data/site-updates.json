@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-dc-roster-not-busy",
+      "title": "Make -dc load the player list instead of saying busy",
+      "summary": "-dc no longer gives up after 8 seconds while Sheriff commands hold the ER:LC line. With an empty cache it fetches the roster instead of waiting, so Discord Check can send after a new API key.",
+      "createdAt": "2026-09-17T23:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-fix-erlc-command-timeout",
       "title": "Stop slash and -dc commands from hanging on ER:LC",
       "summary": "/request-priority now opens or replies within Discord's 3 second limit instead of waiting on the ER:LC queue. -dc times out with an error instead of typing forever, and a bad or expired ERLC_SERVER_KEY is reported immediately.",
