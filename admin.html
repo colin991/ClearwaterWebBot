@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex,nofollow" />
 <title>Admin Panel | Pinellas County Sheriff's Office</title>
 <link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
-<link rel="stylesheet" href="styles.css?v=20260913-content-images" />
+<link rel="stylesheet" href="styles.css?v=20260917-pcso-forms" />
 <style>
   .admin-toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:18px; }
   .admin-toolbar input { min-width:min(100%,280px); padding:10px 12px; border:1px solid #d0d5db; border-radius:4px; background:#fff; color:#1d2b38; }
@@ -45,7 +45,7 @@
 <main id="main" class="pcso-page-main"><div class="pcso-wrap">
 <p class="pcso-eyebrow">Administration</p>
 <h1>PCSO admin panel</h1>
-<p class="pcso-page-lead">View deputy callsigns, Melonly shift hours, and weekly PDFs. Manage news posts and upcoming events for the homepage. Review dispatch radio talk logs for PCSO units.</p>
+<p class="pcso-page-lead">View deputy callsigns, Melonly shift hours, and weekly PDFs. Manage news, events, and Inside the Star. Review dispatch radio talk logs for PCSO units.</p>
 <p class="admin-status" data-admin-status role="status">Checking admin access…</p>
 
 <div class="pcso-page-card" data-admin-personnel hidden>
@@ -104,6 +104,22 @@
   </section>
 </div>
 
+<div class="admin-content-grid admin-section-gap" data-admin-star hidden>
+  <section class="admin-content-card" aria-labelledby="admin-star-heading">
+    <h2 id="admin-star-heading">Inside the Star</h2>
+    <form class="admin-form" data-star-form>
+      <label>Title<input name="title" maxlength="160" placeholder="Headline" /></label>
+      <label>Text<textarea name="body" maxlength="4000" placeholder="Text shown when someone opens the item"></textarea></label>
+      <label>Image or video<input type="file" name="media" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm" /></label>
+      <label>Media URL<input name="mediaUrl" maxlength="800" placeholder="Optional if uploading a file — https://…" /></label>
+      <button type="submit">Add to Inside the Star</button>
+    </form>
+    <div class="admin-item-list" data-star-list>
+      <p class="admin-status">None</p>
+    </div>
+  </section>
+</div>
+
 <div class="admin-content-grid admin-section-gap" data-admin-radio hidden>
   <section class="admin-content-card admin-radio-card" aria-labelledby="admin-radio-heading">
     <div class="admin-radio-toolbar">
@@ -136,6 +152,6 @@
 <p style="margin-top:28px"><a class="pcso-text-link" href="/">← Back to home</a></p>
 </div></main>
 <script src="assets/vercel-blob-client.js?v=20260913-content-images"></script>
-<script src="admin.js?v=20260914-report-download"></script>
+<script src="admin.js?v=20260917-pcso-forms"></script>
 </body>
 </html>

@@ -44,7 +44,11 @@ createServer(async (req, res) => {
     if (path === '/police-report') path = '/police-report.html';
     if (path === '/crime-stoppers') path = '/crime-stoppers.html';
     if (path === '/submit-tip') path = '/crime-stoppers.html';
-    if (path === '/active-calls') path = '/index.html';
+    if (path === '/jail') path = '/jail.html';
+    if (path === '/public-records') path = '/public-records.html';
+    if (path === '/complaint') path = '/complaint.html';
+    if (path === '/inside-the-star') path = '/inside-the-star.html';
+    if (path === '/impound' || path === '/active-calls') path = '/index.html';
 
     const file = join(root, path);
     const data = await readFile(file);

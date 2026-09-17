@@ -12,6 +12,7 @@ import { handlePinellasCallsignInteraction } from '../utils/pinellasRoster.js';
 import { handlePinellasShiftPanelInteraction } from '../utils/pinellasShiftPanel.js';
 import { handlePinellasSupportInteraction } from '../utils/pinellasSupport.js';
 import { handleMarketInteraction } from '../utils/market.js';
+import { handlePcsoSiteFormInteraction } from '../utils/pcsoSiteFormDiscord.js';
 
 export default {
   name: Events.InteractionCreate,
@@ -72,6 +73,24 @@ export default {
       if (await handlePinellasShiftPanelInteraction(interaction)) return;
     } catch (error) {
       logger.error('Pinellas shift panel interaction failed', error);
+    }
+
+    try {
+      if (await handlePcsoSiteFormInteraction(interaction)) return;
+    } catch (error) {
+      logger.error('PCSO site form interaction failed', error);
+      const reply = {
+        content: String(error?.message || 'That request could not be updated.').slice(0, 1800),
+        flags: MessageFlags.Ephemeral,
+      };
+      if (interaction.deferred) {
+        await interaction.editReply({ content: reply.content }).catch(() => {});
+      } else if (interaction.replied) {
+        await interaction.followUp(reply).catch(() => {});
+      } else {
+        await interaction.reply(reply).catch(() => {});
+      }
+      return;
     }
 
     if (interaction.isButton()) {

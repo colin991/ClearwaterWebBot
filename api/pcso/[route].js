@@ -1,6 +1,7 @@
 import admin from '../../lib/pcso-api/admin.js';
 import content from '../../lib/pcso-api/content.js';
 import contentUpload from '../../lib/pcso-api/content-upload.js';
+import forms from '../../lib/pcso-api/forms.js';
 import jail from '../../lib/pcso-api/jail.js';
 import radioLogs from '../../lib/pcso-api/radio-logs.js';
 import radioAudio from '../../lib/pcso-api/radio-audio.js';
@@ -11,6 +12,7 @@ const ROUTES = {
   admin,
   content,
   'content-upload': contentUpload,
+  forms,
   jail,
   'radio-logs': radioLogs,
   'radio-audio': radioAudio,

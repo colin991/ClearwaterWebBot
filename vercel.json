@@ -31,10 +31,6 @@
       "destination": "/jail.html"
     },
     {
-      "source": "/impound",
-      "destination": "/impound.html"
-    },
-    {
       "source": "/police-report",
       "destination": "/police-report.html"
     },
@@ -117,6 +113,16 @@
     {
       "source": "/submit-tip.html",
       "destination": "/crime-stoppers",
+      "permanent": false
+    },
+    {
+      "source": "/impound",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/impound.html",
+      "destination": "/",
       "permanent": false
     },
     {
