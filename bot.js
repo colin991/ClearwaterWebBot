@@ -66,21 +66,27 @@ async function loadPrefixCommands(client) {
 async function loadEvents(client) {
   const directory = join(process.cwd(), 'events');
   const files = (await readdir(directory)).filter((file) => file.endsWith('.js')).sort();
+  let loaded = 0;
 
   for (const file of files) {
-    const module = await import(pathToFileURL(join(directory, file)).href);
-    const event = module.default;
+    try {
+      const module = await import(pathToFileURL(join(directory, file)).href);
+      const event = module.default;
 
-    if (!event?.name || typeof event.execute !== 'function') {
-      throw new Error(`Invalid event module: ${file}`);
+      if (!event?.name || typeof event.execute !== 'function') {
+        throw new Error(`Invalid event module: ${file}`);
+      }
+
+      const listener = (...args) => event.execute(...args, client);
+      if (event.once) client.once(event.name, listener);
+      else client.on(event.name, listener);
+      loaded += 1;
+    } catch (error) {
+      logger.error(`Could not load event ${file}; continuing startup.`, error);
     }
-
-    const listener = (...args) => event.execute(...args, client);
-    if (event.once) client.once(event.name, listener);
-    else client.on(event.name, listener);
   }
 
-  logger.info(`Loaded ${files.length} event handlers.`);
+  logger.info(`Loaded ${loaded} event handlers.`);
 }
 
 async function registerCommands(commands, settings) {
@@ -119,7 +125,11 @@ client.config = config;
 const commands = await loadCommands(client);
 await loadPrefixCommands(client);
 await loadEvents(client);
-await registerCommands(commands, config);
+try {
+  await registerCommands(commands, config);
+} catch (error) {
+  logger.error('Could not register slash commands; logging in anyway so prefix commands still work.', error);
+}
 
 const stopBotServices = startBotServices(client, config);
 let stopErlcSync = () => {};

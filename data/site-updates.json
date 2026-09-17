@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-fix-bot-host-start",
+      "title": "Stop the bot host from refusing to start",
+      "summary": "start.sh no longer exits because vercel.json is in this repo. Slash command registration failures no longer block login, so -dc and other prefix commands still come up after a restart.",
+      "createdAt": "2026-09-17T23:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-pcso-help-cards",
       "title": "Point How can we help cards to website pages",
       "summary": "The homepage Contact, Submit a report, and Member resources cards now open Contact, File a Police Report, and Careers on this website. Their icons are sized to the card and use the police-report and sheriff-star artwork.",
@@ -74,7 +81,7 @@
     {
       "id": "2026-09-17-pcso-forms-vercel-readonly",
       "title": "Stop PCSO site forms from writing JSON on Vercel",
-      "summary": "Police reports, Crime Stoppers tips, complaints, and public records no longer try to save JSON on Vercel’s read-only filesystem. The site forwards the form to the bot host, which stores it and posts it to Discord.",
+      "summary": "Police reports, Crime Stoppers tips, complaints, and public records no longer try to save JSON on Vercel\u2019s read-only filesystem. The site forwards the form to the bot host, which stores it and posts it to Discord.",
       "createdAt": "2026-09-17T20:35:00.000Z",
       "updatedBy": "colin991"
     },
