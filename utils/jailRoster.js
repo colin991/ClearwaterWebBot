@@ -77,10 +77,14 @@ export async function fetchJailInmates({
 
   const stored = await readJsonFile(TENURE_PATH, { occupants: {} });
   const { inmates, occupants } = applyJailTenure(rows, stored.occupants);
-  await writeJsonFile(TENURE_PATH, {
-    occupants,
-    updatedAt: new Date().toISOString(),
-  });
+  try {
+    await writeJsonFile(TENURE_PATH, {
+      occupants,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    if (!['EROFS', 'EACCES'].includes(String(error?.code || '')) && !process.env.VERCEL) throw error;
+  }
 
   return {
     inmates,

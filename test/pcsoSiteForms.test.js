@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyJailTenure, formatJailHold } from '../utils/jailRoster.js';
-import { validatePcsoSiteForm } from '../utils/pcsoSiteForms.js';
+import { savePcsoSiteForm, validatePcsoSiteForm } from '../utils/pcsoSiteForms.js';
 
 test('formatJailHold uses minutes then hours', () => {
   assert.equal(formatJailHold(45_000), '45 sec');
@@ -73,4 +73,21 @@ test('public records require Discord and complaints require trooper fields', () 
     witnesses: 'Jordan',
   });
   assert.equal(complaint.fields.witnesses, 'Jordan');
+});
+
+test('savePcsoSiteForm still returns a record on a read-only Vercel filesystem', async () => {
+  const previous = process.env.VERCEL;
+  process.env.VERCEL = '1';
+  try {
+    const record = await savePcsoSiteForm({
+      kind: 'crime-stoppers',
+      fields: { tip: 'Someone is selling drugs at the pier' },
+    });
+    assert.match(record.id, /^form_/);
+    assert.equal(record.kind, 'crime-stoppers');
+    assert.equal(record.status, 'submitted');
+  } finally {
+    if (previous == null) delete process.env.VERCEL;
+    else process.env.VERCEL = previous;
+  }
 });
