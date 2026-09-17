@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-pcso-weekly-pdf-official",
+      "title": "Match weekly personnel PDFs to the official CAD report layout",
+      "summary": "Admin weekly personnel downloads now use the same Pinellas official-record PDF as Melonly CAD reports: sheriff star, header bars, labeled field rows, and the operations disclaimer.",
+      "createdAt": "2026-09-17T20:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-pcso-site-forms-star",
       "title": "PCSO jail roster, reports, Crime Stoppers, and Inside the Star",
       "summary": "Jail Information lists Roblox username and time in jail only. Police reports use a form plus the in-game Liberty County map and post to Discord. Crime Stoppers is an anonymous text tip. Impound Release is removed. Inside the Star is admin-managed photos, videos, and text. Public records requests can be accepted or denied in Discord with a DM of the report/key or a complaint link. Complaints collect trooper name, badge, in-game location, reason, description, and witnesses. How can we help cards use the original layout.",

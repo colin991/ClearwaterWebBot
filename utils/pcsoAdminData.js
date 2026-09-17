@@ -1,4 +1,8 @@
 import PDFDocument from 'pdfkit';
+import sharp from 'sharp';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { isGoogleSheetsConfigured, readGoogleSheetValues } from './googleSheets.js';
 import { PINELLAS_ROSTER_RANGE, parsePinellasRosterRows } from './pinellasRoster.js';
 import {
@@ -12,6 +16,52 @@ import {
   melonlyFetch,
   shiftCreatedMs,
 } from './melonly.js';
+
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const PCSO_STAR_LOGO_PATH = path.join(ROOT, 'assets', 'pcso-sheriff-star.png');
+
+const REPORT_DOC = Object.freeze({
+  titleBlue: '#5b6470',
+  barDark: '#4a4a4a',
+  barOlive: '#b0b5bc',
+  barSubject: '#3d3d3d',
+  rowAlt: '#f3f4f6',
+  border: '#c5c9d0',
+  label: '#1f2937',
+  value: '#111827',
+  muted: '#6b7280',
+});
+
+async function loadStarLogo() {
+  try {
+    const raw = await readFile(PCSO_STAR_LOGO_PATH);
+    return await sharp(raw)
+      .resize(96, 96, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png()
+      .toBuffer();
+  } catch {
+    return null;
+  }
+}
+
+function formatNyDate(value, withTime = false) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    month: 'numeric',
+    day: 'numeric',
+    year: 'numeric',
+    ...(withTime ? { hour: 'numeric', minute: '2-digit' } : {}),
+  });
+}
+
+function formatReportWhen(value) {
+  const raw = Number(value || 0);
+  if (!raw) return 'Unknown time';
+  const ms = raw < 1e12 ? raw * 1000 : raw;
+  return formatNyDate(ms, true);
+}
 
 function googleSettings() {
   return {
@@ -200,6 +250,155 @@ export async function buildPcsoAdminRoster({ melonlyApiKey = '' } = {}) {
   };
 }
 
+/** Render the official weekly personnel PDF (same layout as Melonly CAD reports). */
+export async function renderPcsoWeeklyReportPdf(person, weekStart, weekEnd) {
+  const logoPng = await loadStarLogo();
+  const generatedAt = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+  const weekLabel = `${formatNyDate(weekStart)} – ${formatNyDate(weekEnd)}`;
+  const reports = Array.isArray(person.reports) ? person.reports.slice(0, 40) : [];
+  const reportCount = Number(person.reportCount || reports.length || 0);
+  const rows = [
+    { label: 'Roleplay name', value: person.roleplayName || 'Unknown' },
+    { label: 'Callsign', value: person.callsign || '—' },
+    { label: 'Rank', value: person.rank || '—' },
+    { label: 'Discord ID', value: person.discordId || '—' },
+    { label: 'Reporting week', value: weekLabel },
+    { label: 'Shift hours', value: person.shiftHoursLabel || '0m' },
+    { label: 'Reports completed', value: String(reportCount) },
+  ];
+  if (!reports.length) {
+    rows.push({
+      label: 'CAD reports',
+      value: 'No Melonly CAD reports were attributed to this member in the last 7 days.',
+    });
+  } else {
+    reports.forEach((report, index) => {
+      rows.push({
+        label: `Report ${index + 1}`,
+        value: `${report.type || 'Report'} — ${formatReportWhen(report.createdAt)}`,
+      });
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: 'LETTER',
+      margins: { top: 36, left: 36, right: 36, bottom: 36 },
+    });
+    const chunks = [];
+    doc.on('data', (chunk) => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const pageW = doc.page.width;
+    const left = 36;
+    const contentW = pageW - 72;
+    let y = 36;
+
+    if (logoPng) {
+      try {
+        doc.image(logoPng, left, y, { width: 52, height: 52 });
+      } catch {
+        // continue without logo
+      }
+    }
+
+    const textLeft = logoPng ? left + 64 : left;
+    doc.fillColor(REPORT_DOC.titleBlue).font('Helvetica-Bold').fontSize(16)
+      .text("PINELLAS COUNTY SHERIFF'S OFFICE", textLeft, y + 4, { width: contentW - 70 });
+    doc.fillColor('#111827').fontSize(12)
+      .text('Weekly Personnel Report — Official Record', textLeft, y + 26, { width: contentW - 70 });
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8)
+      .text('CLEARWATER ROLEPLAY', left, y + 8, { width: contentW, align: 'right' });
+    doc.fillColor(REPORT_DOC.muted).font('Helvetica').fontSize(7)
+      .text('ONE COUNTY • ONE STANDARD', left, y + 22, { width: contentW, align: 'right' });
+
+    y = 100;
+    doc.rect(0, y, pageW, 22).fill(REPORT_DOC.barDark);
+    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(9).text('Personnel Summary', left, y + 6);
+    doc.font('Helvetica').fontSize(7).text(`Unit ${person.callsign || 'N/A'}`.slice(0, 95), left, y + 7, {
+      width: contentW,
+      align: 'right',
+    });
+
+    y += 22;
+    doc.rect(0, y, pageW, 22).fill(REPORT_DOC.barOlive);
+    doc.fillColor('#1f2937').font('Helvetica-Bold').fontSize(8)
+      .text('Official weekly personnel summary from Melonly CAD and the PCSO roster.', left, y + 7);
+    doc.fillColor('#374151').font('Helvetica').fontSize(7).text(generatedAt, left, y + 7, {
+      width: contentW,
+      align: 'right',
+    });
+
+    y += 22;
+    doc.rect(0, y, pageW, 44).fill(REPORT_DOC.barSubject);
+    doc.fillColor('#d1d5db').font('Helvetica-Bold').fontSize(7);
+    doc.text('CALLSIGN', left, y + 8);
+    doc.text('MEMBER', left + 180, y + 8);
+    doc.text('RANK', left + 340, y + 8);
+    doc.fillColor('#ffffff').fontSize(10);
+    doc.text(String(person.callsign || '—').slice(0, 24).toUpperCase(), left, y + 24);
+    doc.text(String(person.roleplayName || 'Unknown').slice(0, 28).toUpperCase(), left + 180, y + 24);
+    doc.text(String(person.rank || '—').slice(0, 28).toUpperCase(), left + 340, y + 24);
+
+    y += 52;
+    const labelW = 150;
+    const valueW = contentW - labelW - 12;
+    const textOpts = { lineGap: 2 };
+
+    for (let i = 0; i < rows.length; i += 1) {
+      const entry = rows[i];
+      const label = String(entry.label || '').toUpperCase();
+      const value = String(entry.value || '').toUpperCase();
+      doc.font('Helvetica-Bold').fontSize(7);
+      const labelH = doc.heightOfString(label, { width: labelW, ...textOpts });
+      doc.font('Helvetica').fontSize(7);
+      const valueH = doc.heightOfString(value, { width: valueW, ...textOpts });
+      const rowH = Math.ceil(Math.max(labelH, valueH, 9) + 16);
+
+      if (y + rowH > doc.page.height - 90) {
+        doc.addPage();
+        y = 36;
+      }
+
+      const fill = i % 2 === 0 ? '#ffffff' : REPORT_DOC.rowAlt;
+      doc.rect(left, y, contentW, rowH).fill(fill).strokeColor(REPORT_DOC.border).lineWidth(0.4).stroke();
+      doc.fillColor(REPORT_DOC.label).font('Helvetica-Bold').fontSize(7)
+        .text(label, left + 4, y + 8, { width: labelW, height: rowH - 10, ellipsis: true, ...textOpts });
+      doc.fillColor(REPORT_DOC.value).font('Helvetica').fontSize(7)
+        .text(value, left + labelW + 4, y + 8, { width: valueW, height: rowH - 10, ellipsis: true, ...textOpts });
+      y += rowH;
+    }
+
+    if (y + 80 > doc.page.height - 36) {
+      doc.addPage();
+      y = 36;
+    } else {
+      y += 14;
+    }
+
+    const footerH = 64;
+    doc.rect(left, y, contentW, footerH).fill('#fafafa').strokeColor(REPORT_DOC.border).lineWidth(0.6).stroke();
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8)
+      .text('IMPORTANT NOTE AND DISCLAIMER', left + 8, y + 8, { width: contentW - 16, lineBreak: false });
+    doc.fillColor('#374151').font('Helvetica').fontSize(7)
+      .text(
+        "This document is an official Pinellas County Sheriff's Office operations record for Clearwater Roleplay. "
+        + 'Shift hours and CAD reports are compiled from Melonly CAD and the PCSO roster for the reporting week. '
+        + 'Verify against CAD before any personnel action. '
+        + `Generated ${generatedAt}.`,
+        left + 8,
+        y + 22,
+        { width: contentW - 16, height: footerH - 28, ellipsis: true },
+      );
+
+    doc.fillColor(REPORT_DOC.muted).fontSize(8)
+      .text('— End Report —', left, y + footerH + 8, { width: contentW, align: 'center', lineBreak: false });
+
+    doc.end();
+  });
+}
+
 /** Generate a weekly PDF summary for one Discord member. */
 export async function buildPcsoWeeklyReportPdf({ melonlyApiKey = '', discordId } = {}) {
   const id = String(discordId || '').trim();
@@ -217,46 +416,7 @@ export async function buildPcsoWeeklyReportPdf({ melonlyApiKey = '', discordId }
     throw error;
   }
 
-  const pdf = await new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'LETTER', margin: 48 });
-    const chunks = [];
-    doc.on('data', (chunk) => chunks.push(chunk));
-    doc.on('end', () => resolve(Buffer.concat(chunks)));
-    doc.on('error', reject);
-
-    doc.fillColor('#092d55').fontSize(20).text("Pinellas County Sheriff's Office");
-    doc.moveDown(0.3);
-    doc.fillColor('#34363b').fontSize(12).text('Weekly personnel report');
-    doc.moveDown(0.8);
-    doc.fillColor('#111').fontSize(11);
-    doc.text(`Roleplay name: ${person.roleplayName}`);
-    doc.text(`Callsign: ${person.callsign}`);
-    doc.text(`Rank: ${person.rank}`);
-    doc.text(`Discord ID: ${person.discordId}`);
-    doc.text(`Week: ${new Date(roster.weekStart).toLocaleString('en-US')} – ${new Date(roster.weekEnd).toLocaleString('en-US')}`);
-    doc.moveDown();
-    doc.fontSize(13).fillColor('#092d55').text('Shift hours');
-    doc.fontSize(11).fillColor('#111').text(person.shiftHoursLabel);
-    doc.moveDown();
-    doc.fontSize(13).fillColor('#092d55').text(`Reports completed (${person.reportCount})`);
-    doc.fontSize(11).fillColor('#111');
-    if (!person.reports.length) {
-      doc.text('No Melonly CAD reports were attributed to this member in the last 7 days.');
-    } else {
-      for (const report of person.reports.slice(0, 40)) {
-        const raw = Number(report.createdAt || 0);
-        const when = raw
-          ? new Date(raw < 1e12 ? raw * 1000 : raw).toLocaleString('en-US')
-          : 'Unknown time';
-        doc.text(`• ${report.type} — ${when}`);
-      }
-    }
-    doc.moveDown(1.5);
-    doc.fontSize(9).fillColor('#666').text(
-      'Generated from Melonly CAD / PCSO roster data for roleplay administration.',
-    );
-    doc.end();
-  });
+  const pdf = await renderPcsoWeeklyReportPdf(person, roster.weekStart, roster.weekEnd);
 
   const safeName = String(person.callsign || person.roleplayName || id)
     .replace(/[^a-zA-Z0-9._-]+/g, '-')
