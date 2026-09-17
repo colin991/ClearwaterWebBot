@@ -5,6 +5,7 @@ import {
   PINELLAS_SUPPORT_CLOSE_ID,
   PINELLAS_SUPPORT_CR_NO_ID,
   PINELLAS_SUPPORT_CR_YES_ID,
+  buildInquiryModal,
   buildTicketCloseRequestPayload,
   handlePinellasSupportInteraction,
   isPinellasSupportTicketChannel,
@@ -25,6 +26,30 @@ test('close request asks the opener to click Yes', () => {
   assert.deepEqual(ids, [PINELLAS_SUPPORT_CR_YES_ID, PINELLAS_SUPPORT_CR_NO_ID]);
   assert.equal(ids.includes(PINELLAS_SUPPORT_CLAIM_ID), false);
   assert.equal(ids.includes(PINELLAS_SUPPORT_CLOSE_ID), false);
+});
+
+test('OPC ticket modal asks who, why, and proof', () => {
+  const modal = buildInquiryModal('compliance');
+  const labels = modal.components.flatMap((row) => (
+    row.components.map((input) => input.data.label)
+  ));
+  const ids = modal.components.flatMap((row) => (
+    row.components.map((input) => input.data.custom_id)
+  ));
+  assert.deepEqual(labels, [
+    'Who are you reporting?',
+    'Why are you reporting this deputy?',
+    'Do you have any proof of this?',
+  ]);
+  assert.deepEqual(ids, ['opc-who', 'opc-why', 'opc-proof']);
+});
+
+test('general support still asks what the user needs help with', () => {
+  const modal = buildInquiryModal('general');
+  const labels = modal.components.flatMap((row) => (
+    row.components.map((input) => input.data.label)
+  ));
+  assert.deepEqual(labels, ['What do you need help with?']);
 });
 
 test('only the ticket opener can confirm -cr', async () => {
