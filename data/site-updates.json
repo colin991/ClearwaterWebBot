@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-cap-erlc-retry-after",
+      "title": "Cap bogus ER:LC retry-after so -dc is not blocked for hours",
+      "summary": "PRC Retry-After values like 4857 seconds are capped at 15 seconds. -dc waits that short cooldown and retries instead of telling you to come back in hours.",
+      "createdAt": "2026-09-17T23:45:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-dc-rate-limit-wait",
       "title": "Tell -dc when ER:LC is rate-limited instead of saying busy",
       "summary": "-dc waits for the ER:LC cooldown instead of giving up at 12 seconds with a busy message. If the API is rate-limited or unreachable, it says so. Sheriff and zone loops stay off until a snapshot succeeds.",
