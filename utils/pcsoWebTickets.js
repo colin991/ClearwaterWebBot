@@ -98,7 +98,27 @@ function supportTitle(type) {
   return PINELLAS_SUPPORT_OPTIONS.find((option) => option.type === type)?.title || 'Support';
 }
 
+export function publicTranscriptUrl(url) {
+  const value = String(url || '').trim();
+  if (!/^https:\/\/[^\s]+$/i.test(value)) return null;
+  return value.slice(0, 500);
+}
+
+export function publicTicketTranscript(ticket) {
+  const url = publicTranscriptUrl(ticket?.transcriptUrl || ticket?.transcript?.url);
+  if (!url && !ticket?.closedAt) return null;
+  return {
+    url,
+    claimedById: ticket.claimedById || ticket.transcript?.claimedById || null,
+    closedById: ticket.closedById || ticket.transcript?.closedById || null,
+    closureReason: ticket.closedReason || ticket.transcript?.closureReason || null,
+    openedAt: ticket.createdAt || ticket.transcript?.openedAt || null,
+    closedAt: ticket.closedAt || ticket.transcript?.closedAt || null,
+  };
+}
+
 function ticketSummary(ticket, { open }) {
+  const transcript = publicTicketTranscript(ticket);
   return {
     channelId: ticket.channelId,
     type: ticket.type || 'general',
@@ -106,6 +126,7 @@ function ticketSummary(ticket, { open }) {
     open,
     closedAt: ticket.closedAt || null,
     createdAt: ticket.createdAt || null,
+    transcriptUrl: transcript?.url || null,
   };
 }
 
@@ -138,6 +159,7 @@ export async function registerWebTicketForChannel(channel, {
     }
   }
   const record = {
+    ...previous,
     channelId: channel.id,
     ownerId: String(ownerId || ticketOwnerId(channel) || previous.ownerId || ''),
     webhookId,
@@ -166,34 +188,120 @@ export async function markTicketChannelClosed(channel, { reason = 'deleted' } = 
     ownerId: String(ownerId || previous.ownerId || ''),
     type: ticketTypeFromTopic(channel) || previous.type || 'general',
     closedAt: previous.closedAt || new Date().toISOString(),
-    closedReason: reason,
+    closedReason: previous.closedReason || reason,
     updatedAt: new Date().toISOString(),
   };
   await writeStore(store);
   return { closed: true, channelId, ownerId: store.channels[channelId].ownerId };
 }
 
+function mappedMessage(message, ticket, discordId) {
+  const attachments = [...(message.attachments?.values?.() || [])]
+    .map((file) => String(file.url || file.proxyURL || '').trim())
+    .filter((url) => /^https:\/\//i.test(url));
+  const content = [extractDiscordMessageText(message), ...attachments].filter(Boolean).join('\n').slice(0, 1800);
+  const webhookMatch = ticket.webhookId && String(message.webhookId || '') === String(ticket.webhookId);
+  const fromUser = Boolean(
+    webhookMatch
+    || (!message.webhookId && String(message.author?.id) === String(discordId)),
+  );
+  return {
+    id: message.id,
+    fromWeb: fromUser,
+    author: fromUser
+      ? (message.author?.username || ticket.username || 'You')
+      : (message.member?.displayName || message.author?.username || 'Staff'),
+    content,
+    createdAt: new Date(message.createdTimestamp).toISOString(),
+  };
+}
+
+export async function snapshotTicketChannelMessages(channel, { discordId, ticket = {} } = {}) {
+  if (!channel?.messages?.fetch) return [];
+  const ownerId = String(discordId || ticket.ownerId || ticketOwnerId(channel) || '');
+  const collected = [];
+  let before;
+  for (let page = 0; page < 5; page += 1) {
+    const fetched = await channel.messages.fetch({ limit: 100, ...(before ? { before } : {}) }).catch(() => null);
+    const batch = [...(fetched?.values?.() || [])];
+    if (!batch.length) break;
+    collected.push(...batch);
+    const oldest = batch.reduce((min, message) => (
+      !min || message.createdTimestamp < min.createdTimestamp ? message : min
+    ), null);
+    before = oldest?.id;
+    if (batch.length < 100) break;
+  }
+  return collected
+    .sort((left, right) => left.createdTimestamp - right.createdTimestamp)
+    .map((message) => mappedMessage(message, ticket, ownerId))
+    .filter((entry) => entry.content);
+}
+
+export async function saveTicketMessageSnapshot(channelId, messages) {
+  const id = String(channelId || '');
+  if (!/^\d{16,22}$/.test(id) || !Array.isArray(messages) || !messages.length) return null;
+  const store = await readStore();
+  const previous = store.channels[id];
+  if (!previous) return null;
+  const lastId = String(messages.at(-1)?.id || '');
+  if (lastId && lastId === previous.snapshotLastId) return previous;
+  store.channels[id] = {
+    ...previous,
+    transcriptMessages: messages.slice(-80),
+    snapshotLastId: lastId,
+    updatedAt: new Date().toISOString(),
+  };
+  await writeStore(store);
+  return store.channels[id];
+}
+
+export async function saveClosedTicketTranscript(channel, {
+  ownerId,
+  type,
+  username,
+  transcript,
+  messages = [],
+} = {}) {
+  const channelId = String(channel?.id || '');
+  if (!/^\d{16,22}$/.test(channelId)) return null;
+  const store = await readStore();
+  const previous = store.channels[channelId] || {};
+  const url = publicTranscriptUrl(transcript?.url);
+  store.channels[channelId] = {
+    ...previous,
+    channelId,
+    ownerId: String(ownerId || ticketOwnerId(channel) || previous.ownerId || ''),
+    type: type || ticketTypeFromTopic(channel) || previous.type || 'general',
+    username: username || previous.username || '',
+    createdAt: previous.createdAt || new Date(channel.createdTimestamp || transcript?.openedAt || Date.now()).toISOString(),
+    closedAt: new Date(transcript?.closedAt || Date.now()).toISOString(),
+    closedReason: transcript?.closureReason || previous.closedReason || 'closed',
+    closedById: transcript?.closedById || previous.closedById || '',
+    claimedById: transcript?.claimedById || previous.claimedById || '',
+    transcriptUrl: url || previous.transcriptUrl || null,
+    transcript: url ? {
+      url,
+      claimedById: transcript?.claimedById || null,
+      closedById: transcript?.closedById || null,
+      closureReason: transcript?.closureReason || null,
+      openedAt: transcript?.openedAt || null,
+      closedAt: transcript?.closedAt || null,
+    } : (previous.transcript || null),
+    transcriptMessages: (Array.isArray(messages) && messages.length ? messages.slice(-80) : previous.transcriptMessages) || [],
+    snapshotLastId: messages.at(-1)?.id || previous.snapshotLastId || '',
+    updatedAt: new Date().toISOString(),
+  };
+  await writeStore(store);
+  return store.channels[channelId];
+}
+
 async function mapChannelMessages(channel, ticket, discordId) {
+  if (!channel?.messages?.fetch) return [];
   const fetched = await channel.messages.fetch({ limit: 50 }).catch(() => null);
   return [...(fetched?.values?.() || [])]
     .sort((left, right) => left.createdTimestamp - right.createdTimestamp)
-    .map((message) => {
-      const content = extractDiscordMessageText(message);
-      const webhookMatch = ticket.webhookId && String(message.webhookId || '') === String(ticket.webhookId);
-      const fromUser = Boolean(
-        webhookMatch
-        || (!message.webhookId && String(message.author?.id) === String(discordId)),
-      );
-      return {
-        id: message.id,
-        fromWeb: fromUser,
-        author: fromUser
-          ? (message.author?.username || ticket.username || 'You')
-          : (message.member?.displayName || message.author?.username || 'Staff'),
-        content,
-        createdAt: new Date(message.createdTimestamp).toISOString(),
-      };
-    })
+    .map((message) => mappedMessage(message, ticket, discordId))
     .filter((entry) => entry.content);
 }
 
@@ -279,16 +387,22 @@ export async function listWebTicketMessages(client, discordId, channelId = '') {
   }
 
   let messages = [];
+  const transcript = publicTicketTranscript(selected.record || {});
   if (selected.open && selected.channel?.isTextBased?.()) {
     messages = await mapChannelMessages(selected.channel, selected.record || {}, discordId);
+    await saveTicketMessageSnapshot(selected.channelId, messages);
   } else if (!selected.open) {
-    messages = [{
-      id: `closed-${selected.channelId}`,
-      fromWeb: false,
-      author: 'PCSO',
-      content: 'This ticket is closed. The Discord channel was deleted.',
-      createdAt: selected.closedAt || new Date().toISOString(),
-    }];
+    messages = Array.isArray(selected.record?.transcriptMessages) && selected.record.transcriptMessages.length
+      ? selected.record.transcriptMessages
+      : [{
+        id: `closed-${selected.channelId}`,
+        fromWeb: false,
+        author: 'PCSO',
+        content: transcript?.url
+          ? 'This ticket is closed. Open the transcript below for the full record.'
+          : 'This ticket is closed. The Discord channel was deleted.',
+        createdAt: selected.closedAt || new Date().toISOString(),
+      }];
   }
 
   return {
@@ -297,6 +411,8 @@ export async function listWebTicketMessages(client, discordId, channelId = '') {
     title: selected.title,
     channelId: selected.channelId,
     closedAt: selected.closedAt || null,
+    transcriptUrl: transcript?.url || null,
+    transcript,
     messages,
     tickets: summaries,
   };

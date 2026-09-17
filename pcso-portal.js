@@ -44,8 +44,23 @@ function renderMessages(log, payload) {
   const empty = document.querySelector('[data-thread-empty]');
   const reply = document.querySelector('[data-ticket-reply]');
   const tabs = document.querySelector('[data-ticket-tabs]');
+  const transcript = document.querySelector('[data-ticket-transcript]');
   const selectedId = payload.channelId;
   renderTicketTabs(tabs, payload, selectedId);
+  if (transcript) {
+    const url = payload.transcriptUrl || payload.transcript?.url;
+    if (url && /^https:\/\//i.test(url) && !payload.open) {
+      const safeUrl = String(url).replace(/"/g, '');
+      transcript.hidden = false;
+      transcript.innerHTML = `<a class="pcso-button pcso-button-red" href="${safeUrl}" target="_blank" rel="noopener">Open official transcript</a>`;
+    } else if (!payload.open && payload.channelId) {
+      transcript.hidden = false;
+      transcript.textContent = 'Official transcript is not available. The saved conversation is below.';
+    } else {
+      transcript.hidden = true;
+      transcript.textContent = '';
+    }
+  }
   if (!payload.tickets?.length && !payload.open) {
     log.hidden = true;
     if (empty) empty.hidden = false;
@@ -57,7 +72,7 @@ function renderMessages(log, payload) {
   if (reply) reply.hidden = !payload.open;
   log.innerHTML = (payload.messages || []).map((message) => (
     `<article class="${message.fromWeb ? 'from-web' : 'from-staff'}">
-      <strong>${message.author}</strong>
+      <strong>${String(message.author || '').replace(/</g, '&lt;')}</strong>
       <time>${new Date(message.createdAt).toLocaleString()}</time>
       <p>${String(message.content || '').replace(/</g, '&lt;')}</p>
     </article>`
