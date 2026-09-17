@@ -1616,6 +1616,22 @@ body.home-stage {
 .pcso-prose p { line-height: 1.7; color: #c5c8ce; }
 .pcso-prose-list { margin: 0; padding-left: 18px; line-height: 1.8; color: #c5c8ce; }
 .pcso-subhead { margin: 28px 0 12px; font-size: 18px; }
+.pcso-ticket-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.pcso-ticket-tabs button {
+  appearance: none;
+  border: 1px solid #3a3d45;
+  background: #17181c;
+  color: #d5d8de;
+  padding: 8px 12px;
+  cursor: pointer;
+  font: inherit;
+}
+.pcso-ticket-tabs button[aria-current="true"] {
+  border-color: #9aa0aa;
+  background: #2a2d34;
+  color: #fff;
+}
+.pcso-ticket-tabs .is-closed { color: #8b8f97; }
 .pcso-ticket-log { display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow: auto; }
 .pcso-ticket-log article { padding: 12px 14px; border: 1px solid #2c2e34; background: #121316; }
 .pcso-ticket-log .from-web { border-color: #555961; }

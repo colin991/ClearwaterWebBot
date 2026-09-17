@@ -61,18 +61,18 @@ export async function handlePcsoPortal(client, body = {}) {
 
   if (kind === 'ticket') {
     if (action === 'list') {
-      return { ok: true, ...(await listWebTicketMessages(client, user.id)) };
+      return { ok: true, ...(await listWebTicketMessages(client, user.id, body.channelId)) };
     }
     if (action === 'open') {
       const type = ['general', 'compliance', 'sheriff'].includes(body.type) ? body.type : 'general';
       const inquiry = formatWebsiteInquiry(type, body.fields || {});
       const opened = await openWebTicket(client, { user, type, inquiry });
-      const thread = await listWebTicketMessages(client, user.id);
+      const thread = await listWebTicketMessages(client, user.id, opened.channelId);
       return { ok: true, ...opened, ...thread };
     }
     if (action === 'reply') {
-      await postWebTicketReply(client, { user, content: body.content });
-      return { ok: true, ...(await listWebTicketMessages(client, user.id)) };
+      await postWebTicketReply(client, { user, content: body.content, channelId: body.channelId });
+      return { ok: true, ...(await listWebTicketMessages(client, user.id, body.channelId)) };
     }
   }
 

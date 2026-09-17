@@ -2,7 +2,12 @@
   "version": 1,
   "updates": [
     {
-      "id": "2026-09-17-pcso-website-login",
+      "id": "2026-09-17-pcso-ticket-sync",
+      "title": "Sync PCSO Discord tickets with the website",
+      "summary": "Contact tickets now follow the live Discord support channels for each signed-in member, including tickets opened in Discord. Website replies still post as you. If a ticket channel is deleted, the website marks that ticket closed.",
+      "createdAt": "2026-09-17T22:40:00.000Z",
+      "updatedBy": "colin991"
+    },
       "title": "Fix Discord login on the PCSO website",
       "summary": "The header Log In button now updates after Discord OAuth because the nav is built first. Members of the PCSO Discord server can stay signed in on the website even without the Clearwater tester role.",
       "createdAt": "2026-09-17T21:50:00.000Z",

@@ -83,3 +83,20 @@ test('website OPC ticket fields match Discord questions', () => {
   assert.match(inquiry, /Who are you reporting/);
   assert.match(inquiry, /Deputy Example/);
 });
+
+test('only website-opened tickets get the website note', async () => {
+  const { formatTicketInquiryNote, findOpenSupportChannelsForOwner } = await import('../utils/pinellasSupport.js');
+  assert.equal(formatTicketInquiryNote('Need help', 'website'), 'Need help\n\nOpened from the PCSO website.');
+  assert.equal(formatTicketInquiryNote('Need help', 'discord'), 'Need help');
+  const channels = findOpenSupportChannelsForOwner({
+    channels: {
+      cache: new Map([
+        ['1', { id: '1', parentId: '1514848054724005938', topic: 'ticket-owner:99 ticket-type:general' }],
+        ['2', { id: '2', parentId: '1514851966629711952', topic: 'ticket-owner:99 ticket-type:compliance' }],
+        ['3', { id: '3', parentId: '1514848054724005938', topic: 'ticket-owner:88 ticket-type:general' }],
+        ['4', { id: '4', parentId: '0', topic: 'ticket-owner:99 ticket-type:general' }],
+      ]),
+    },
+  }, '99');
+  assert.deepEqual(channels.map((channel) => channel.id).sort(), ['1', '2']);
+});
