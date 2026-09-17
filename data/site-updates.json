@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-pcso-website-login",
+      "title": "Fix Discord login on the PCSO website",
+      "summary": "The header Log In button now updates after Discord OAuth because the nav is built first. Members of the PCSO Discord server can stay signed in on the website even without the Clearwater tester role.",
+      "createdAt": "2026-09-17T21:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-pcso-dropdown-click",
       "title": "Make PCSO nav dropdown links clickable",
       "summary": "Dropdown menus no longer sit in a hover gap under the header, so About, Law Enforcement, Divisions, and Contact links can be clicked through to their pages.",

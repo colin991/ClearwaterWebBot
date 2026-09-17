@@ -99,4 +99,30 @@
       toggle.parentElement?.classList.remove('open');
     });
   });
+
+  refreshPcsoLoginButton();
+  document.dispatchEvent(new Event('pcso-nav-ready'));
 })();
+
+async function refreshPcsoLoginButton() {
+  const loginLinks = document.querySelectorAll('[data-pcso-login]');
+  if (!loginLinks.length) return;
+  try {
+    const response = await fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' });
+    const payload = await response.json().catch(() => ({}));
+    if (!payload?.authenticated) return;
+    for (const link of loginLinks) {
+      if (payload.user?.admin) {
+        link.textContent = 'Admin';
+        link.setAttribute('href', '/admin');
+      } else {
+        link.textContent = 'Signed in';
+        link.setAttribute('href', '/');
+      }
+      link.removeAttribute('target');
+      link.removeAttribute('rel');
+    }
+  } catch {
+    // Keep Log In if the session check fails.
+  }
+}
