@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-pcso-nav-portal",
+      "title": "New PCSO site navigation, tickets, and careers",
+      "summary": "The top bar is now Home, About, Law Enforcement, Divisions, Contact, and a boxed Careers button. About, Law Enforcement, Divisions, and Contact use hover menus. Contact opens Discord tickets from the same questions and posts website replies through a webhook as the signed-in user, plus public records status. Careers includes Apply Now with the official application questions and pending/approved/denied status.",
+      "createdAt": "2026-09-17T21:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-opc-ticket-questions",
       "title": "Office of Professional Compliance ticket questions",
       "summary": "Opening an Office of Professional Compliance ticket now asks only: who you are reporting, why you are reporting that deputy, and whether you have proof.",

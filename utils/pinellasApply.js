@@ -175,7 +175,7 @@ function sentenceCount(text) {
     .filter(Boolean).length;
 }
 
-function validateAnswer(question, raw) {
+export function validatePinellasApplyAnswer(question, raw) {
   const text = String(raw || '').trim();
   if (!text) return { ok: false, error: 'Please send a non-empty answer.' };
   if (text.length > 1800) return { ok: false, error: 'Keep each answer under 1800 characters.' };
@@ -462,6 +462,67 @@ async function submitApplication(client, user, session) {
   ));
 }
 
+export async function getPinellasApplicationStatus(userId) {
+  const id = String(userId || '').trim();
+  const store = await readStore();
+  const applications = (store.applications || []).filter((entry) => entry.userId === id);
+  const latest = applications[0] || null;
+  const deniedUntil = Number(store.denials?.[id] || 0);
+  return {
+    latest: latest
+      ? {
+        id: latest.id,
+        status: latest.status,
+        createdAt: latest.createdAt,
+        reviewedAt: latest.reviewedAt || null,
+      }
+      : null,
+    pending: applications.some((entry) => entry.status === 'pending'),
+    canApply: !(deniedUntil > Date.now()) && !applications.some((entry) => entry.status === 'pending'),
+    deniedUntil: deniedUntil > Date.now() ? new Date(deniedUntil).toISOString() : null,
+    questions: PINELLAS_APPLY_QUESTIONS.map((question, index) => ({
+      key: question.key,
+      index,
+      prompt: question.prompt.replace(/^\*\*\d+\.\*\*\s*/, '').replace(/\*/g, ''),
+      writing: Boolean(question.writing),
+      scale: Boolean(question.scale),
+      yesNo: Boolean(question.yesNo),
+    })),
+  };
+}
+
+export async function submitWebsiteApplication(client, user, rawAnswers = {}) {
+  const store = await readStore();
+  const deniedUntil = Number(store.denials?.[user.id] || 0);
+  if (deniedUntil > Date.now()) {
+    throw new Error('You cannot re-apply until the denial cooldown ends.');
+  }
+  const existingPending = (store.applications || []).find(
+    (entry) => entry.userId === user.id && entry.status === 'pending',
+  );
+  if (existingPending) {
+    throw new Error('You already have a pending application under review.');
+  }
+
+  const answers = [];
+  for (const question of PINELLAS_APPLY_QUESTIONS) {
+    const validated = validatePinellasApplyAnswer(question, rawAnswers[question.key]);
+    if (!validated.ok) {
+      throw new Error(validated.error.replace(/\*\*/g, ''));
+    }
+    answers.push(validated.value);
+  }
+
+  const session = {
+    applicationId: newId(),
+    index: PINELLAS_APPLY_QUESTIONS.length,
+    answers,
+    updatedAt: Date.now(),
+  };
+  await submitApplication(client, user, session);
+  return getPinellasApplicationStatus(user.id);
+}
+
 export async function handlePinellasApplyInteraction(interaction) {
   if (!interaction.isButton()) return false;
   const id = interaction.customId || '';
@@ -628,7 +689,7 @@ export async function handlePinellasApplyDm(message) {
     return true;
   }
 
-  const validated = validateAnswer(question, text);
+  const validated = validatePinellasApplyAnswer(question, text);
   if (!validated.ok) {
     await message.reply(dmCard('Invalid Answer', validated.error)).catch(() => null);
     return true;

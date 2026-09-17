@@ -34,7 +34,7 @@ export const PINELLAS_SUPPORT_CR_YES_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}cr:y
 export const PINELLAS_SUPPORT_CR_NO_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}cr:no`;
 const PINELLAS_SUPPORT_STAFF_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}staff`;
 const PINELLAS_SUPPORT_INQUIRY_FIELD_ID = 'ticket-inquiry';
-const OPC_INQUIRY_FIELDS = Object.freeze([
+export const OPC_INQUIRY_FIELDS = Object.freeze([
   {
     id: 'opc-who',
     label: 'Who are you reporting?',
@@ -58,7 +58,7 @@ const OPC_INQUIRY_FIELDS = Object.freeze([
   },
 ]);
 
-const SUPPORT_OPTIONS = Object.freeze([
+export const PINELLAS_SUPPORT_OPTIONS = Object.freeze([
   {
     type: 'general',
     title: 'General Support',
@@ -83,7 +83,36 @@ const SUPPORT_OPTIONS = Object.freeze([
 ]);
 
 function supportTypeLabel(type) {
-  return SUPPORT_OPTIONS.find((option) => option.type === type)?.title || 'Support';
+  return PINELLAS_SUPPORT_OPTIONS.find((option) => option.type === type)?.title || 'Support';
+}
+
+export function websiteTicketFields(type) {
+  if (type === 'compliance') {
+    return OPC_INQUIRY_FIELDS.map((field) => ({
+      id: field.id,
+      label: field.label,
+      placeholder: field.placeholder,
+      maxLength: field.maxLength,
+      multiline: field.style === TextInputStyle.Paragraph,
+    }));
+  }
+  return [{
+    id: PINELLAS_SUPPORT_INQUIRY_FIELD_ID,
+    label: 'What do you need help with?',
+    placeholder: 'Explain your request with as much detail as possible.',
+    maxLength: 1000,
+    multiline: true,
+  }];
+}
+
+export function formatWebsiteInquiry(type, fields = {}) {
+  const schema = websiteTicketFields(type);
+  const lines = schema.map((field) => {
+    const value = String(fields[field.id] || '').trim();
+    if (!value) throw new Error(`Answer: ${field.label}`);
+    return `${field.label}\n${value.slice(0, field.maxLength)}`;
+  });
+  return lines.join('\n\n');
 }
 
 function supportButton(option) {
@@ -95,7 +124,7 @@ function supportButton(option) {
 }
 
 export function buildInquiryModal(type) {
-  const option = SUPPORT_OPTIONS.find((entry) => entry.type === type);
+  const option = PINELLAS_SUPPORT_OPTIONS.find((entry) => entry.type === type);
   const modal = new ModalBuilder()
     .setCustomId(`${PINELLAS_SUPPORT_BUTTON_PREFIX}inquiry:${type}`)
     .setTitle(`${option?.title || 'Support'} Inquiry`.slice(0, 45));
@@ -148,7 +177,7 @@ export function buildPinellasSupportPanel() {
     ].join('\n')))
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large));
 
-  for (const option of SUPPORT_OPTIONS) {
+  for (const option of PINELLAS_SUPPORT_OPTIONS) {
     container.addSectionComponents(new SectionBuilder()
       .addTextDisplayComponents(new TextDisplayBuilder().setContent([
         `## ${option.emoji.name === 'Tickets' ? '<:Tickets:1517217535802605628>' : option.emoji.name === 'shield' ? '<:shield:1517217280658768013>' : '<:PCSO_Sheriff:1523109128317173800>'} ${option.title}`,
@@ -188,7 +217,7 @@ async function buildTicketPayload(member, type, inquiry = '') {
   const robloxUsername = melonlyValue(melonly, 'robloxUsername', 'roblox_username', 'username', 'robloxName');
   const robloxId = melonlyValue(melonly, 'robloxId', 'roblox_id', 'robloxUserId', 'roblox_user_id');
   const robloxProfile = /^\d+$/.test(robloxId) ? `https://www.roblox.com/users/${robloxId}/profile` : 'Not linked';
-  const option = SUPPORT_OPTIONS.find((entry) => entry.type === type);
+  const option = PINELLAS_SUPPORT_OPTIONS.find((entry) => entry.type === type);
   const container = new ContainerBuilder().clearAccentColor()
     .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(
       new MediaGalleryItemBuilder().setURL('https://media.discordapp.net/attachments/1546222659824787596/1546222760991129671/pcso_support.png?ex=6aa59729&is=6aa445a9&hm=f343493334e16de182b31c98e8ef35b5d7ce90bee5a54130711067d733ae7455&=&format=webp&quality=lossless'),
@@ -363,15 +392,13 @@ export async function requestPinellasTicketClose(message) {
   await channel.send(buildTicketCloseRequestPayload(ownerId));
 }
 
-export async function createPinellasSupportTicket(interaction, type, inquiry = '') {
-  if (String(interaction.guildId) !== PINELLAS_SUPPORT_GUILD_ID) {
+export async function createPinellasSupportTicketForMember(guild, member, type, inquiry = '') {
+  if (String(guild.id) !== PINELLAS_SUPPORT_GUILD_ID) {
     throw new Error('Tickets can only be opened in the Pinellas County Sheriff\'s Office server.');
   }
   const categoryId = PINELLAS_SUPPORT_CATEGORY_IDS[type];
   if (!categoryId) throw new Error('That support category is unavailable.');
 
-  const guild = interaction.guild;
-  const member = interaction.member || await guild.members.fetch(interaction.user.id);
   const existing = guild.channels.cache.find((channel) => (
     channel.parentId === categoryId && channel.topic?.includes(`ticket-owner:${member.id}`)
   ));
@@ -386,15 +413,27 @@ export async function createPinellasSupportTicket(interaction, type, inquiry = '
     permissionOverwrites: [
       { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
       { id: member.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] },
-      { id: botMember.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages] },
+      { id: botMember.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ManageWebhooks] },
     ],
   });
   await channel.send({
     content: `<@${member.id}>`,
     allowedMentions: { users: [member.id] },
   });
-  await channel.send(await buildTicketPayload(member, type, inquiry));
+  const openedNote = inquiry
+    ? `${inquiry}\n\nOpened from the PCSO website.`
+    : 'Opened from the PCSO website.';
+  await channel.send(await buildTicketPayload(member, type, openedNote));
   return { channel, existing: false };
+}
+
+export async function createPinellasSupportTicket(interaction, type, inquiry = '') {
+  if (String(interaction.guildId) !== PINELLAS_SUPPORT_GUILD_ID) {
+    throw new Error('Tickets can only be opened in the Pinellas County Sheriff\'s Office server.');
+  }
+  const guild = interaction.guild;
+  const member = interaction.member || await guild.members.fetch(interaction.user.id);
+  return createPinellasSupportTicketForMember(guild, member, type, inquiry);
 }
 
 export async function handlePinellasSupportInteraction(interaction) {
@@ -403,7 +442,7 @@ export async function handlePinellasSupportInteraction(interaction) {
     ? id.slice(`${PINELLAS_SUPPORT_BUTTON_PREFIX}inquiry:`.length)
     : null;
   if (inquiryType && interaction.isModalSubmit()) {
-    if (!SUPPORT_OPTIONS.some((option) => option.type === inquiryType)) return false;
+    if (!PINELLAS_SUPPORT_OPTIONS.some((option) => option.type === inquiryType)) return false;
     const inquiry = readInquiryFromModal(interaction, inquiryType);
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
@@ -495,7 +534,7 @@ export async function handlePinellasSupportInteraction(interaction) {
   }
 
   const type = id.slice(PINELLAS_SUPPORT_BUTTON_PREFIX.length);
-  if (!SUPPORT_OPTIONS.some((option) => option.type === type)) return false;
+  if (!PINELLAS_SUPPORT_OPTIONS.some((option) => option.type === type)) return false;
   await interaction.showModal(buildInquiryModal(type));
   return true;
 }

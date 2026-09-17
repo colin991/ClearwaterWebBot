@@ -7,6 +7,8 @@ import radioLogs from '../../lib/pcso-api/radio-logs.js';
 import radioAudio from '../../lib/pcso-api/radio-audio.js';
 import radioTalk from '../../lib/pcso-api/radio-talk.js';
 import weeklyReport from '../../lib/pcso-api/weekly-report.js';
+import portal from '../../lib/pcso-api/portal.js';
+import calls from '../../lib/pcso-api/calls.js';
 
 const ROUTES = {
   admin,
@@ -18,6 +20,8 @@ const ROUTES = {
   'radio-audio': radioAudio,
   'radio-talk': radioTalk,
   'weekly-report': weeklyReport,
+  portal,
+  calls,
 };
 
 function routeName(request) {
