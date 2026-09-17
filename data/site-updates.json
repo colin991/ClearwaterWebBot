@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-pcso-weekly-cad-reports",
+      "title": "Count Melonly CAD reports on weekly deputy PDFs",
+      "summary": "Weekly personnel reports now page through Melonly CAD records for the last 7 days and match the deputy the same way live CAD imports do, including nested createdBy Discord ids. Deputies who filed several reports should no longer show 0.",
+      "createdAt": "2026-09-17T20:55:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-pcso-ticket-cr",
       "title": "Remove ticket Staff Panel and add -cr close request",
       "summary": "PCSO support tickets no longer have a Staff Panel button. Staff can use -cr in a ticket to send a Yes/No close request; if the ticket opener clicks Yes, the ticket closes.",
