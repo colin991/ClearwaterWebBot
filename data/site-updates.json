@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-nickname-match-no-jail",
+      "title": "Stop jailing people whose nick is their Roblox name",
+      "summary": "A partial Discord member list is no longer treated as proof someone is missing. Automatic :jail and :load are blocked. Nickname matching still counts a Discord nick that is the Roblox username, including display names.",
+      "createdAt": "2026-09-17T00:33:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-priority-vehicle-search",
       "title": "Fix priority vehicle search",
       "summary": "/request-priority vehicle dropdown is now a required single pick with a None option so Discord shows type-to-search. Owner names are in the option label so typing a username filters the list.",

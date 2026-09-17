@@ -167,6 +167,7 @@ export function parseErlcPlayer(player) {
   const z = firstFinite(loc.LocationZ, loc.z, player?.z, player?.Z, position?.[1]);
   return {
     username: separator >= 0 ? raw.slice(0, separator) : raw,
+    displayName: String(player?.PlayerDisplayName || player?.DisplayName || player?.displayName || '').trim(),
     robloxId: separator >= 0 ? raw.slice(separator + 1) : String(player?.PlayerId || player?.id || ''),
     team: player?.Team || player?.team || 'Civilian',
     callsign: player?.Callsign || player?.callsign || '',
@@ -381,12 +382,16 @@ export function withErlcCommandSession(serverKey, action) {
   );
 }
 
-async function sendErlcCommand(serverKey, command, { shouldExecute, allowLoad = false } = {}) {
+async function sendErlcCommand(serverKey, command, { shouldExecute, allowLoad = false, allowJail = false } = {}) {
     if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
     const text = String(command || '').trim();
     if (!text.startsWith(':')) throw new Error('Invalid ER:LC command');
     if (!allowLoad && /^:load\b/i.test(text)) {
       logger.warn(`Blocked automatic ER:LC :load (${text.slice(0, 80)})`);
+      return false;
+    }
+    if (!allowJail && /^:jail\b/i.test(text)) {
+      logger.warn(`Blocked automatic ER:LC :jail (${text.slice(0, 80)})`);
       return false;
     }
 
@@ -455,7 +460,10 @@ export async function runErlcRawCommand({ serverKey, command } = {}) {
   if (text.length > 200) throw new Error('Command is too long');
   if (!/^:[A-Za-z]/.test(text)) throw new Error('Command must look like :h Hello or :kick Player');
 
-  const response = await executeErlcCommand(serverKey, text, { allowLoad: /^:load\b/i.test(text) });
+  const response = await executeErlcCommand(serverKey, text, {
+    allowLoad: /^:load\b/i.test(text),
+    allowJail: /^:jail\b/i.test(text),
+  });
   return {
     action: 'command',
     ok: true,
@@ -490,7 +498,10 @@ export async function runErlcModeration({ serverKey, action, players = [], reaso
       continue;
     }
     try {
-      const response = await executeErlcCommand(serverKey, command, { allowLoad: action === 'load' });
+      const response = await executeErlcCommand(serverKey, command, {
+        allowLoad: action === 'load',
+        allowJail: action === 'jail',
+      });
       results.push({
         ...player,
         ok: true,

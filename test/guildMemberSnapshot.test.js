@@ -61,6 +61,8 @@ test('incomplete Discord member caches are not treated as a full roster', () => 
   assert.equal(isDiscordRosterReady({ members: { cache: new Map() }, memberCount: 400 }), false);
   const small = new Map([['1', { user: { bot: false } }]]);
   assert.equal(isDiscordRosterReady({ members: { cache: small }, memberCount: 400 }), false);
-  const ready = new Map(Array.from({ length: 120 }, (_, i) => [String(i), { user: { bot: false } }]));
+  const ready = new Map(Array.from({ length: 380 }, (_, i) => [String(i), { user: { bot: false } }]));
   assert.equal(isDiscordRosterReady({ members: { cache: ready }, memberCount: 400 }), true);
+  const partial = new Map(Array.from({ length: 120 }, (_, i) => [String(i), { user: { bot: false } }]));
+  assert.equal(isDiscordRosterReady({ members: { cache: partial }, memberCount: 400 }), false);
 });

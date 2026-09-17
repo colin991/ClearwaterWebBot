@@ -1,11 +1,15 @@
 export function robloxNameMatchesText(text, username) {
   const user = String(username || '').trim();
   if (user.length < 3) return false;
-  const hay = String(text || '').normalize('NFKC').replace(/[\u200b-\u200d\ufeff]/g, '');
+  const hay = String(text || '')
+    .normalize('NFKC')
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200d\u2060\ufeff]/g, '');
   if (hay.toLowerCase().includes(user.toLowerCase())) return true;
-  const needle = user.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const compact = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const needle = compact(user);
   if (needle.length < 3) return false;
   const tokens = hay.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  if (tokens.some((token) => compact(token) === needle)) return true;
   for (let i = 0; i < tokens.length; i += 1) {
     let acc = '';
     for (let j = i; j < tokens.length; j += 1) {
@@ -18,7 +22,14 @@ export function robloxNameMatchesText(text, username) {
 }
 
 export function memberNameTexts(member) {
-  return [member?.nickname, member?.displayName, member?.user?.globalName, member?.user?.username];
+  return [
+    member?.nickname,
+    member?.nick,
+    member?.displayName,
+    member?.user?.globalName,
+    member?.user?.displayName,
+    member?.user?.username,
+  ];
 }
 
 export function matchingMembers(members, username) {
@@ -45,5 +56,8 @@ export function membersForPlayer(player, members, identities = {}) {
     }
   }
   for (const member of matchingMembers(members, player?.username)) add(member);
+  if (player?.displayName && String(player.displayName).toLowerCase() !== String(player.username || '').toLowerCase()) {
+    for (const member of matchingMembers(members, player.displayName)) add(member);
+  }
   return found;
 }
