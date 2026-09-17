@@ -29,3 +29,9 @@ test('empty server displays zero counts and None sections', () => {
   const text = JSON.stringify(buildDiscordCheckPanels([], 123));
   assert.match(text, /Online:\*\* 0/); assert.equal((text.match(/None/g) || []).length, 3);
 });
+test('banner can be omitted for a text-only Discord Check fallback', () => {
+  const withBanner = buildDiscordCheckPanels([], 123);
+  const withoutBanner = buildDiscordCheckPanels([], 123, { banner: false });
+  assert.equal(withBanner[0].components[0].components.some((part) => part.type === 12), true);
+  assert.equal(withoutBanner[0].components[0].components.some((part) => part.type === 12), false);
+});

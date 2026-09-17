@@ -9,7 +9,7 @@ export default {
     if (!serverKey) throw new Error('ER:LC is not configured on the bot host yet.');
     if (args?.length) throw new Error('Use only `;refresh` to refresh yourself.');
 
-    const server = await fetchErlcServer(serverKey);
+    const server = await fetchErlcServer(serverKey, { timeoutMs: 8_000 });
     const players = (server.Players || server.players || []).map(parseErlcPlayer);
     const identities = await getIdentityCache();
     const identity = identities.byDiscord?.[message.author.id];

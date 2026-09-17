@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-fix-erlc-command-timeout",
+      "title": "Stop slash and -dc commands from hanging on ER:LC",
+      "summary": "/request-priority now opens or replies within Discord's 3 second limit instead of waiting on the ER:LC queue. -dc times out with an error instead of typing forever, and a bad or expired ERLC_SERVER_KEY is reported immediately.",
+      "createdAt": "2026-09-17T23:25:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-remove-radio-talk",
       "title": "Remove dispatch radio listen, talk, and talk logs",
       "summary": "The bot no longer joins Dispatch to log who is talking on radio. The admin panel Listen Live and Hold to Talk controls are removed.",

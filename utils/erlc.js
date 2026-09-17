@@ -69,6 +69,9 @@ async function fetchErlcBundle(serverKey) {
       signal: AbortSignal.timeout(8000),
     });
     const retryAfter = Number(response.headers.get('retry-after') || 0);
+    if (response.status === 401 || response.status === 403) {
+      throw erlcKeyError(response.status);
+    }
     if (response.status === 429 && attempt < 2) {
       rememberErlcCooldown(retryAfter || 5);
       logger.warn(`ER:LC server snapshot 429; queued retry after ${Math.ceil(retryAfter || 5)}s`);
@@ -117,19 +120,57 @@ function scheduleBundleRefresh(serverKey) {
     return fetchErlcBundle(serverKey);
   }, { kind: 'snapshot' });
   bundleCache.inflight = pending;
-  pending.finally(() => {
-    if (bundleCache.inflight === pending) bundleCache.inflight = null;
-  });
+  void pending.then(
+    () => {
+      if (bundleCache.inflight === pending) bundleCache.inflight = null;
+    },
+    () => {
+      if (bundleCache.inflight === pending) bundleCache.inflight = null;
+    },
+  );
   return pending;
 }
 
-export async function fetchErlcServer(serverKey, _options = {}) {
-  if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
+function withTimeout(promise, timeoutMs, message) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise;
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(message);
+      error.code = 'ERLC_TIMEOUT';
+      reject(error);
+    }, timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function loadErlcServer(serverKey) {
   ensureIdleRefresh(serverKey);
-  if (bundleCache.value) return bundleCache.value;
+  if (bundleCache.value) return Promise.resolve(bundleCache.value);
   if (bundleCache.inflight) return bundleCache.inflight;
-  if (erlcSlotDepth > 0) return fetchErlcBundle(serverKey);
   return scheduleBundleRefresh(serverKey);
+}
+
+/** Snapshot the private server. `timeoutMs` fails fast for Discord commands. */
+export async function fetchErlcServer(serverKey, options = {}) {
+  if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
+  const pending = loadErlcServer(serverKey);
+  const timeoutMs = Number(options.timeoutMs);
+  if (Number.isFinite(timeoutMs) && timeoutMs > 0) pending.catch(() => {});
+  return withTimeout(
+    pending,
+    timeoutMs,
+    'The in-game player list is busy. Try again in a few seconds.',
+  );
+}
+
+export function erlcKeyError(status = 401) {
+  const error = new Error(
+    'The ER:LC server key on the bot host is invalid or expired. Update ERLC_SERVER_KEY in the host .env and restart the bot.',
+  );
+  error.status = status;
+  error.code = 'ERLC_KEY';
+  return error;
 }
 
 export function resetErlcNetworkForTests({ minIntervalMs = 0, idleRefresh = false } = {}) {
@@ -417,6 +458,7 @@ async function sendErlcCommand(serverKey, command, { shouldExecute, allowLoad = 
       const retryAfterSeconds = Number(result.retry_after || response.headers.get('retry-after') || 0);
       rememberErlcCooldown(Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : 0);
       if (response.ok) return result;
+      if (response.status === 401 || response.status === 403) throw erlcKeyError(response.status);
       const message = result.message || result.error || `ER:LC command failed (${response.status})`;
       const error = new Error(response.status === 429
         ? `${message} Retry after ${Math.ceil(Math.max(retryAfterSeconds, 5))} seconds.`

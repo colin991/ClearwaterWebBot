@@ -4,7 +4,7 @@ import { isVcExempt } from './enforcementExemptions.js';
 
 const CHECK = '<:check:1514421732356653139>';
 const CROSS = '<:x_:1514353388542890015>';
-const BANNER = 'https://cdn.discordapp.com/attachments/1514422317587890327/1549211219246714940/clearwater_ban_1.png?ex=6aaa87a1&is=6aa93621&hm=c82e1fd62aa00932f99168f5a90a60c4d2903e62d4141bfb04659dcc0f8e7d02';
+const BANNER = 'https://media.discordapp.net/attachments/1529616984755540088/1546535995736858644/clearwater_ban.png?format=webp&quality=lossless';
 
 export function classifyDiscordPlayers(players, members, identities = {}, inVoice = () => false, voiceStates) {
   return players.map(player => {
@@ -15,7 +15,7 @@ export function classifyDiscordPlayers(players, members, identities = {}, inVoic
   }).sort((a, b) => a.username.localeCompare(b.username));
 }
 
-export function buildDiscordCheckPanels(rows, timestamp = Math.floor(Date.now() / 1000)) {
+export function buildDiscordCheckPanels(rows, timestamp = Math.floor(Date.now() / 1000), { banner = true } = {}) {
   const missing = rows.filter(p => !p.inDiscord);
   const noVoice = rows.filter(p => p.inDiscord && !p.inVoice);
   const voice = rows.filter(p => p.inVoice);
@@ -48,7 +48,7 @@ export function buildDiscordCheckPanels(rows, timestamp = Math.floor(Date.now() 
     flags: MessageFlags.IsComponentsV2,
     allowedMentions: { parse: [], repliedUser: false },
     components: [{ type: 17, accent_color: 2829617, components: [
-      ...(index === 0 ? [{ type: 12, items: [{ media: { url: BANNER } }] }, { type: 14, divider: false, spacing: 1 }] : []),
+      ...(index === 0 && banner ? [{ type: 12, items: [{ media: { url: BANNER } }] }, { type: 14, divider: false, spacing: 1 }] : []),
       { type: 10, content: header + (pages.length > 1 ? `\n-# Page ${index + 1}/${pages.length}` : '') },
       ...sections,
     ] }],
