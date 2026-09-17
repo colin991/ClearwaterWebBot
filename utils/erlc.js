@@ -13,6 +13,8 @@ let idleRefreshEnabled = true;
 let idleRefreshTimer = null;
 let idleRefreshServerKey = null;
 let bundleCache = { value: null, expiresAt: 0, inflight: null };
+let erlcHaltUntil = 0;
+let erlcHaltError = null;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -21,6 +23,15 @@ function sleep(ms) {
 function rememberErlcCooldown(retryAfterSeconds = 0) {
   const extra = Number.isFinite(Number(retryAfterSeconds)) ? Number(retryAfterSeconds) * 1000 : 0;
   erlcAvailableAt = Date.now() + Math.max(erlcMinIntervalMs, extra);
+}
+
+function haltErlc(error, ms) {
+  erlcHaltError = error;
+  erlcHaltUntil = Date.now() + Math.max(0, Number(ms) || 0);
+}
+
+function throwIfErlcHalted() {
+  if (erlcHaltError && Date.now() < erlcHaltUntil) throw erlcHaltError;
 }
 
 function shouldSkipSnapshotHttp() {
@@ -33,9 +44,11 @@ export function withErlcNetworkSlot(task, { kind = 'snapshot' } = {}) {
   if (kind === 'command') queuedCommands += 1;
   const run = erlcNetworkQueue.then(async () => {
     try {
+      throwIfErlcHalted();
       if (kind === 'snapshot' && shouldSkipSnapshotHttp()) return bundleCache.value;
       const waitMs = Math.max(0, erlcAvailableAt - Date.now());
       if (waitMs) await sleep(waitMs);
+      throwIfErlcHalted();
       if (kind === 'snapshot' && shouldSkipSnapshotHttp()) return bundleCache.value;
       erlcSlotDepth += 1;
       try {
@@ -61,18 +74,21 @@ async function fetchErlcBundle(serverKey) {
   url.searchParams.set('Staff', 'true');
 
   let lastError = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    throwIfErlcHalted();
     const waitMs = Math.max(0, erlcAvailableAt - Date.now());
     if (waitMs) await sleep(waitMs);
     const response = await fetch(url, {
       headers: { 'server-key': serverKey },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(6000),
     });
     const retryAfter = Number(response.headers.get('retry-after') || 0);
     if (response.status === 401 || response.status === 403) {
-      throw erlcKeyError(response.status);
+      const error = erlcKeyError(response.status);
+      haltErlc(error, 10 * 60 * 1000);
+      throw error;
     }
-    if (response.status === 429 && attempt < 2) {
+    if (response.status === 429 && attempt < 1) {
       rememberErlcCooldown(retryAfter || 5);
       logger.warn(`ER:LC server snapshot 429; queued retry after ${Math.ceil(retryAfter || 5)}s`);
       lastError = new Error('ER:LC request failed (429)');
@@ -102,6 +118,7 @@ function ensureIdleRefresh(serverKey) {
   idleRefreshServerKey = serverKey;
   if (!idleRefreshEnabled || idleRefreshTimer) return;
   idleRefreshTimer = setInterval(() => {
+    if (erlcHaltError && Date.now() < erlcHaltUntil) return;
     if (!idleRefreshServerKey || erlcSlotDepth > 0) return;
     if (queuedCommands > 0 && bundleCache.value) return;
     if (bundleCache.inflight) return;
@@ -135,14 +152,11 @@ function scheduleBundleRefresh(serverKey) {
   }, { kind: 'snapshot' }));
 }
 
-/** Empty-cache reads must not sit behind :wanted/:pm or Discord Check never sends. */
 function loadErlcServer(serverKey) {
+  throwIfErlcHalted();
   ensureIdleRefresh(serverKey);
   if (bundleCache.value) return Promise.resolve(bundleCache.value);
   if (bundleCache.inflight) return bundleCache.inflight;
-  if (queuedCommands > 0 || erlcSlotDepth > 0) {
-    return trackInflight(fetchErlcBundle(serverKey));
-  }
   return scheduleBundleRefresh(serverKey);
 }
 
@@ -196,6 +210,8 @@ export function resetErlcNetworkForTests({ minIntervalMs = 0, idleRefresh = fals
   erlcSlotDepth = 0;
   queuedCommands = 0;
   bundleCache = { value: null, expiresAt: 0, inflight: null };
+  erlcHaltUntil = 0;
+  erlcHaltError = null;
 }
 
 export function expireErlcBundleCacheForTests() {
@@ -453,40 +469,40 @@ async function sendErlcCommand(serverKey, command, { shouldExecute, allowLoad = 
       return false;
     }
 
-    let lastError = null;
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const waitMs = Math.max(0, erlcAvailableAt - Date.now());
-      if (waitMs) await sleep(waitMs);
-      if (shouldExecute && !await shouldExecute()) return false;
-      const response = await fetch('https://api.erlc.gg/v2/server/command', {
-        method: 'POST',
-        headers: {
-          'server-key': serverKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ command: text }),
-        signal: AbortSignal.timeout(12000),
-      });
-      const result = await response.json().catch(() => ({}));
-      const retryAfterSeconds = Number(result.retry_after || response.headers.get('retry-after') || 0);
-      rememberErlcCooldown(Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : 0);
-      if (response.ok) return result;
-      if (response.status === 401 || response.status === 403) throw erlcKeyError(response.status);
-      const message = result.message || result.error || `ER:LC command failed (${response.status})`;
-      const error = new Error(response.status === 429
-        ? `${message} Retry after ${Math.ceil(Math.max(retryAfterSeconds, 5))} seconds.`
-        : message);
-      error.status = response.status;
-      error.commandId = result.commandId;
-      error.retryAfter = retryAfterSeconds || (response.status === 429 ? 5 : null);
-      lastError = error;
-      if (response.status === 429 && attempt < 3) {
-        logger.warn(`ER:LC command 429 on ${text.slice(0, 80)}; retry ${attempt + 1}/3 after ${error.retryAfter}s`);
-        continue;
-      }
+    throwIfErlcHalted();
+    const waitMs = Math.max(0, erlcAvailableAt - Date.now());
+    if (waitMs) await sleep(waitMs);
+    throwIfErlcHalted();
+    if (shouldExecute && !await shouldExecute()) return false;
+    const response = await fetch('https://api.erlc.gg/v2/server/command', {
+      method: 'POST',
+      headers: {
+        'server-key': serverKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ command: text }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const result = await response.json().catch(() => ({}));
+    const retryAfterSeconds = Number(result.retry_after || response.headers.get('retry-after') || 0);
+    rememberErlcCooldown(Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : 0);
+    if (response.ok) return result;
+    if (response.status === 401 || response.status === 403) {
+      const error = erlcKeyError(response.status);
+      haltErlc(error, 10 * 60 * 1000);
       throw error;
     }
-    throw lastError || new Error('ER:LC command failed');
+    const message = result.message || result.error || `ER:LC command failed (${response.status})`;
+    const error = new Error(response.status === 429
+      ? `${message} Retry after ${Math.ceil(Math.max(retryAfterSeconds, 5))} seconds.`
+      : message);
+    error.status = response.status;
+    error.commandId = result.commandId;
+    error.retryAfter = retryAfterSeconds || (response.status === 429 ? 5 : null);
+    if (response.status === 429) {
+      logger.warn(`ER:LC command 429 on ${text.slice(0, 80)}; leaving the queue for ${error.retryAfter}s`);
+    }
+    throw error;
 }
 
 function buildErlcModCommand(action, player, reason) {
