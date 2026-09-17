@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-priority-vehicle-search",
+      "title": "Fix priority vehicle search",
+      "summary": "/request-priority vehicle dropdown is now a required single pick with a None option so Discord shows type-to-search. Owner names are in the option label so typing a username filters the list.",
+      "createdAt": "2026-09-17T00:25:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-16-vc-checks-default-off",
       "title": "VC checks default off",
       "summary": "Automatic VC checks now start off after every bot restart. Use /vc checks on to turn them back on.",
