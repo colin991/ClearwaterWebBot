@@ -348,7 +348,7 @@ async function refreshPcsoLoginButton() {
   const loginLinks = document.querySelectorAll('[data-pcso-login]');
   if (!loginLinks.length) return;
   try {
-    const response = await fetch('/api/auth/me', { cache: 'no-store' });
+    const response = await fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' });
     const payload = await response.json().catch(() => ({}));
     if (!payload?.authenticated) return;
     for (const link of loginLinks) {
@@ -368,3 +368,4 @@ async function refreshPcsoLoginButton() {
 }
 
 refreshPcsoLoginButton();
+window.addEventListener('pcso-nav-ready', refreshPcsoLoginButton);

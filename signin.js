@@ -10,7 +10,17 @@ function safeNextPath(value = '') {
   if (path === '/internet.html') return '/internet';
   if (path === '/admin.html') return '/admin';
   if (path === '/public-records.html') return '/public-records';
-  if (path === '/' || path === '/internet' || path === '/admin' || path === '/public-records' || path === '/complaint' || path === '/police-report') return path;
+  if (path === '/complaint.html') return '/complaint';
+  if (path === '/police-report.html') return '/police-report';
+  if (path === '/contact.html') return '/contact';
+  if (path === '/careers.html') return '/careers';
+  if (path === '/jail.html') return '/jail';
+  if (path === '/active-calls.html') return '/active-calls';
+  const allowed = new Set([
+    '/', '/internet', '/admin', '/news', '/events', '/public-records', '/complaint',
+    '/police-report', '/contact', '/careers', '/jail', '/active-calls',
+  ]);
+  if (allowed.has(path)) return path;
   if (/^\/internet\/(post|member|sponsored)\/[A-Za-z0-9._-]{1,120}$/.test(path)) return path;
   if (/^\/internet\/(messages|notifications|settings|profile|wallet|staff|sponsored)$/.test(path)) return path;
   return '';

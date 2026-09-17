@@ -52,26 +52,36 @@ export default async function handler(request, response) {
     if (!userResponse.ok) return redirect(response, siteRedirect, [clearCookie(STATE_COOKIE)]);
     const user = await userResponse.json();
 
-    // A Discord server profile can use a different banner from the person's
-    // global account. Read Clearwater's member profile when Discord grants it;
-    // a missing profile or permission simply falls back to the global banner.
+    const CLEARWATER_GUILD_ID = '1514026810348671026';
+    const PINELLAS_GUILD_ID = '1514100977920245760';
+    const ADMINISTRATOR = 0x8n;
+
     let guildMember = null;
+    let pinellasMember = null;
     try {
       const memberResponse = await fetch(
-        'https://discord.com/api/v10/users/@me/guilds/1514026810348671026/member',
+        `https://discord.com/api/v10/users/@me/guilds/${CLEARWATER_GUILD_ID}/member`,
         { headers: { Authorization: `Bearer ${token.access_token}` } },
       );
       if (memberResponse.ok) guildMember = await memberResponse.json();
     } catch {
-      // The normal Discord account profile remains available below.
+      // Global Discord profile remains available below.
+    }
+    try {
+      const pinellasMemberResponse = await fetch(
+        `https://discord.com/api/v10/users/@me/guilds/${PINELLAS_GUILD_ID}/member`,
+        { headers: { Authorization: `Bearer ${token.access_token}` } },
+      );
+      if (pinellasMemberResponse.ok) pinellasMember = await pinellasMemberResponse.json();
+    } catch {
+      // Pinellas membership is enough for the PCSO website even without Clearwater.
     }
 
-    if (!guildMember) {
-      return redirect(response, '/coming-soon?denied=1', [clearCookie(STATE_COOKIE), clearCookie(NEXT_COOKIE)]);
-    }
-
-    const guildRoles = Array.isArray(guildMember.roles) ? guildMember.roles.map(String) : [];
-    if (!rolesGrantSiteAccess(guildRoles)) {
+    const guildRoles = Array.isArray(guildMember?.roles) ? guildMember.roles.map(String) : [];
+    const pinellasRoles = Array.isArray(pinellasMember?.roles) ? pinellasMember.roles.map(String) : [];
+    const hasClearwaterAccess = Boolean(guildMember) && rolesGrantSiteAccess(guildRoles);
+    const hasPcsoAccess = Boolean(pinellasMember);
+    if (!hasClearwaterAccess && !hasPcsoAccess) {
       return redirect(response, '/coming-soon?denied=1', [
         clearCookie(STATE_COOKIE),
         clearCookie(NEXT_COOKIE),
@@ -79,23 +89,7 @@ export default async function handler(request, response) {
       ]);
     }
 
-    // Pinellas member roles + Discord Administrator bit for the PCSO admin panel.
-    const PINELLAS_GUILD_ID = '1514100977920245760';
-    const ADMINISTRATOR = 0x8n;
-    let pinellasRoles = [];
     let discordAdmin = false;
-    try {
-      const pinellasMemberResponse = await fetch(
-        `https://discord.com/api/v10/users/@me/guilds/${PINELLAS_GUILD_ID}/member`,
-        { headers: { Authorization: `Bearer ${token.access_token}` } },
-      );
-      if (pinellasMemberResponse.ok) {
-        const pinellasMember = await pinellasMemberResponse.json();
-        pinellasRoles = Array.isArray(pinellasMember.roles) ? pinellasMember.roles.map(String) : [];
-      }
-    } catch {
-      // Pinellas membership is optional for site access; admin panel checks it later.
-    }
     try {
       const guildsResponse = await fetch('https://discord.com/api/v10/users/@me/guilds', {
         headers: { Authorization: `Bearer ${token.access_token}` },
@@ -125,6 +119,7 @@ export default async function handler(request, response) {
       guildBanner: guildMember?.banner || null,
       guildRoles,
       pinellasRoles,
+      pinellasMember: hasPcsoAccess,
       discordAdmin,
     }, sessionSecret);
     const next = safeNextPath(cookies[NEXT_COOKIE] || '');

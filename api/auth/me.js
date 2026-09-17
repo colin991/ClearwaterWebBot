@@ -1,4 +1,4 @@
-import { SESSION_COOKIE, avatarUrl, bannerUrl, getAuthConfig, parseCookies, readSessionToken, sendJson } from '../../lib/discord-auth.js';
+import { SESSION_COOKIE, avatarUrl, bannerUrl, getAuthConfig, parseCookies, readSessionToken, sendJson, sessionIsWebsiteSignedIn } from '../../lib/discord-auth.js';
 import { getStaffAccess } from '../../lib/owner-access.js';
 import { hasAdminPanelAccess } from '../../lib/admin-access.js';
 import { proxiedMediaUrl, publicUserId } from '../../lib/privacy.js';
@@ -15,13 +15,15 @@ export default async function handler(request, response) {
 
     // Live Discord role check via the bot — session guildRoles alone are not enough.
     const staffAccess = await getStaffAccess(user);
-    if (!staffAccess.siteAccess) {
+    const signedIn = sessionIsWebsiteSignedIn(user, staffAccess);
+    if (!signedIn) {
       return sendJson(response, 200, { authenticated: false, siteAccess: false, denied: true });
     }
 
     return sendJson(response, 200, {
       authenticated: true,
-      siteAccess: true,
+      siteAccess: Boolean(staffAccess.siteAccess),
+      pcso: user.pinellasMember === true,
       user: {
         id: publicUserId(user.id),
         username: user.username,
