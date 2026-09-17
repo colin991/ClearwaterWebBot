@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-pcso-forms-vercel-readonly",
+      "title": "Stop PCSO site forms from writing JSON on Vercel",
+      "summary": "Police reports, Crime Stoppers tips, complaints, and public records no longer try to save JSON on Vercel’s read-only filesystem. The site forwards the form to the bot host, which stores it and posts it to Discord.",
+      "createdAt": "2026-09-17T20:35:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-pcso-weekly-pdf-official",
       "title": "Match weekly personnel PDFs to the official CAD report layout",
       "summary": "Admin weekly personnel downloads now use the same Pinellas official-record PDF as Melonly CAD reports: sheriff star, header bars, labeled field rows, and the operations disclaimer.",

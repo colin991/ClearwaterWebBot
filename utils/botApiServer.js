@@ -8,6 +8,7 @@ import { readDispatchAudio } from './dispatchLiveAudio.js';
 import { DISPATCH_VOICE_CHANNEL_ID } from './dispatchChannelStatus.js';
 import { noteWebListener, noteWebTalk } from './dispatchActivityLog.js';
 import { postPcsoSiteForm } from './pcsoSiteFormDiscord.js';
+import { savePcsoSiteForm } from './pcsoSiteForms.js';
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -118,8 +119,10 @@ export function startBotApiServer(client, {
         } catch {
           return sendJson(response, 400, { error: 'Invalid JSON.' });
         }
-        const result = await postPcsoSiteForm(client, record);
-        return sendJson(response, 200, { ok: true, ...result });
+        if (!record?.kind) return sendJson(response, 400, { error: 'Unknown form.' });
+        const saved = await savePcsoSiteForm(record);
+        const result = await postPcsoSiteForm(client, saved);
+        return sendJson(response, 200, { ok: true, id: saved.id, ...result });
       }
 
       if (request.method === 'GET' && url.pathname === '/api/pcso/radio-logs') {

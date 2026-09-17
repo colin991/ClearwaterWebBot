@@ -112,16 +112,33 @@ export function validatePcsoSiteForm(kind, fields = {}, sessionUser = null) {
   };
 }
 
-export async function savePcsoSiteForm(entry) {
-  const store = await readJsonFile(STORE_PATH, { entries: [] });
-  const record = {
-    id: newId('form'),
-    status: entry.kind === 'public-records' ? 'pending' : 'submitted',
-    createdAt: new Date().toISOString(),
+export function createPcsoSiteFormRecord(entry = {}) {
+  return {
     ...entry,
+    id: String(entry.id || newId('form')),
+    status: entry.status || (entry.kind === 'public-records' ? 'pending' : 'submitted'),
+    createdAt: entry.createdAt || new Date().toISOString(),
   };
-  store.entries = [record, ...(Array.isArray(store.entries) ? store.entries : [])].slice(0, 500);
-  await writeJsonFile(STORE_PATH, store);
+}
+
+function canPersistSiteForms() {
+  return !process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME;
+}
+
+export async function savePcsoSiteForm(entry) {
+  const record = createPcsoSiteFormRecord(entry);
+  if (!canPersistSiteForms()) return record;
+  try {
+    const store = await readJsonFile(STORE_PATH, { entries: [] });
+    const entries = Array.isArray(store.entries) ? store.entries : [];
+    const index = entries.findIndex((item) => item.id === record.id);
+    if (index >= 0) entries[index] = { ...entries[index], ...record };
+    else entries.unshift(record);
+    store.entries = entries.slice(0, 500);
+    await writeJsonFile(STORE_PATH, store);
+  } catch (error) {
+    if (!['EROFS', 'EACCES'].includes(String(error?.code || ''))) throw error;
+  }
   return record;
 }
 
