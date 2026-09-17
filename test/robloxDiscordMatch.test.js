@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { matchingMembers, membersForPlayer, robloxNameMatchesText } from '../utils/robloxDiscordMatch.js';
+import { matchingMembers, membersForPlayer, playerIsInVoice, robloxNameMatchesText } from '../utils/robloxDiscordMatch.js';
 import { createVcChecks } from '../utils/vcChecks.js';
 import { classifyDiscordPlayers } from '../utils/discordCheck.js';
 
@@ -38,6 +38,31 @@ test('stale identity still falls back to a nickname match', () => {
     { missing: { robloxId: '5' } },
   );
   assert.equal(rows[0].inDiscord, true);
+});
+
+test('player in a voice-state member is in VC even if members cache missed them', () => {
+  const player = { username: 'buttercup75075', robloxId: '55' };
+  const members = new Map();
+  const voiceStates = new Map([
+    ['d', {
+      id: 'd',
+      channelId: 'vc1',
+      member: { id: 'd', user: { username: 'buttercup75075' } },
+    }],
+  ]);
+  assert.equal(playerIsInVoice(player, members, {}, () => false, voiceStates), true);
+});
+
+test('linked identity in voice counts even when the member object is missing', () => {
+  const player = { username: 'SecretAlt', robloxId: '99' };
+  const voiceStates = new Map([['d', { id: 'd', channelId: 'vc1' }]]);
+  assert.equal(playerIsInVoice(player, new Map(), { d: { robloxId: '99' } }, () => false, voiceStates), true);
+});
+
+test('generic display names like Jail do not count as a Discord match', () => {
+  const members = new Map([['x', { id: 'x', nickname: 'Jail Officer', user: {} }]]);
+  const matches = membersForPlayer({ username: 'buttercup75075', displayName: 'Jail', robloxId: '1' }, members);
+  assert.equal(matches.length, 0);
 });
 
 test('VC checks do not jail a player whose nickname contains their Roblox user', async () => {
