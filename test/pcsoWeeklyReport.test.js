@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { inflateSync } from 'node:zlib';
-import { renderPcsoWeeklyReportPdf } from '../utils/pcsoAdminData.js';
+import {
+  cadRecordCreatedMs,
+  renderPcsoWeeklyReportPdf,
+  resolveCadRecordDiscordId,
+} from '../utils/pcsoAdminData.js';
 
 function pdfVisibleText(pdf) {
   const raw = pdf.toString('latin1');
@@ -37,4 +41,27 @@ test('weekly personnel PDF uses the official PCSO record layout', async () => {
   assert.match(text, /JUDAH BRIGGS/);
   assert.match(text, /CLEARWATER ROLEPLAY/);
   assert.match(text, /IMPORTANT NOTE AND DISCLAIMER/);
+});
+
+test('weekly reports match nested createdBy Discord ids', async () => {
+  const discordId = await resolveCadRecordDiscordId('', {
+    id: '2026-001500',
+    createdByUserId: '7184693640411746304',
+    createdBy: { id: '7184693640411746304', discordId: '1128547120304095272' },
+    createdAt: Date.now(),
+  }, new Map(), new Set(['1128547120304095272']));
+  assert.equal(discordId, '1128547120304095272');
+});
+
+test('weekly reports match a Discord id already on the roster', async () => {
+  const discordId = await resolveCadRecordDiscordId('', {
+    createdByUserId: '1128547120304095272',
+    createdAt: Date.now(),
+  }, new Map(), new Set(['1128547120304095272']));
+  assert.equal(discordId, '1128547120304095272');
+});
+
+test('cadRecordCreatedMs accepts unix seconds and milliseconds', () => {
+  assert.equal(cadRecordCreatedMs({ createdAt: 1_700_000_000 }), 1_700_000_000_000);
+  assert.equal(cadRecordCreatedMs({ createdAt: 1_700_000_000_000 }), 1_700_000_000_000);
 });

@@ -292,7 +292,7 @@ function creatorObjects(record) {
   ].filter((value) => value && typeof value === 'object');
 }
 
-function recordCreatorDiscordId(record) {
+export function recordCreatorDiscordId(record) {
   for (const source of creatorObjects(record)) {
     const discordId = resolveMelonlyDiscordId(source);
     if (discordId) return discordId;
@@ -300,7 +300,7 @@ function recordCreatorDiscordId(record) {
   return null;
 }
 
-function recordCreatorId(record) {
+export function recordCreatorId(record) {
   for (const source of creatorObjects(record)) {
     for (const key of ['memberId', 'userId', 'id', 'createdByUserId', 'authorId']) {
       const value = String(source?.[key] || '').trim();

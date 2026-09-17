@@ -16,6 +16,11 @@ import {
   melonlyFetch,
   shiftCreatedMs,
 } from './melonly.js';
+import {
+  recordCreatorDiscordId,
+  recordCreatorId,
+  resolveReportSubmitter,
+} from './pinellasMelonlyReports.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PCSO_STAR_LOGO_PATH = path.join(ROOT, 'assets', 'pcso-sheriff-star.png');
@@ -89,19 +94,28 @@ function shiftDurationMs(shift, now = Date.now()) {
   return Math.max(0, end - start);
 }
 
-function recordCreatorId(record) {
-  return String(
-    record?.createdByUserId
-    || record?.createdBy
-    || record?.authorId
-    || record?.userId
-    || record?.memberId
-    || '',
-  ).trim();
-}
-
 function recordType(record) {
   return String(record?.label || record?.type || record?.templateId || record?.agency || 'Report').trim();
+}
+
+export function cadRecordCreatedMs(record) {
+  const raw = Number(record?.createdAt || record?.created_at || record?.timestamp || 0);
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return raw < 1e12 ? raw * 1000 : raw;
+}
+
+export async function resolveCadRecordDiscordId(apiKey, record, cache, rosterDiscordIds = new Set()) {
+  const direct = recordCreatorDiscordId(record);
+  if (direct) return direct;
+
+  const creator = recordCreatorId(record);
+  if (creator && rosterDiscordIds.has(creator)) return creator;
+
+  const submitter = await resolveReportSubmitter(apiKey, record);
+  if (submitter?.discordId) return String(submitter.discordId);
+
+  if (!creator) return null;
+  return resolveDiscordId(apiKey, creator, cache);
 }
 
 function emptyPerson(seed = {}) {
@@ -161,16 +175,27 @@ async function loadWeeklyShifts(apiKey, { start, end }) {
 async function loadWeeklyReports(apiKey, { start, end }) {
   if (!apiKey) return [];
   try {
-    const result = await melonlyFetch(apiKey, '/server/cad/records', {
-      query: { limit: 100 },
-      cacheTtlMs: 30_000,
-    });
-    const records = Array.isArray(result?.data) ? result.data
-      : (Array.isArray(result?.records) ? result.records
-        : (Array.isArray(result) ? result : []));
+    const records = [];
+    let page = 1;
+    let totalPages = 1;
+    const maxPages = 15;
+    while (page <= totalPages && page <= maxPages) {
+      const result = await melonlyFetch(apiKey, '/server/cad/records', {
+        query: { page, pageSize: 100, limit: 100, orderBy: 'createdAt', sort: 'desc' },
+        cacheTtlMs: 15_000,
+      });
+      const batch = Array.isArray(result?.data) ? result.data
+        : (Array.isArray(result?.records) ? result.records
+          : (Array.isArray(result) ? result : []));
+      totalPages = Math.max(1, Number(result?.totalPages) || 1);
+      records.push(...batch);
+      if (!batch.length) break;
+      const timestamps = batch.map(cadRecordCreatedMs).filter(Boolean);
+      if (timestamps.length && Math.min(...timestamps) < start) break;
+      page += 1;
+    }
     return records.filter((record) => {
-      const created = Number(record?.createdAt || record?.created_at || 0);
-      const ms = created > 0 && created < 1e12 ? created * 1000 : created;
+      const ms = cadRecordCreatedMs(record);
       return ms >= start && ms <= end;
     });
   } catch {
@@ -200,9 +225,12 @@ export async function buildPcsoAdminRoster({ melonlyApiKey = '' } = {}) {
   }
 
   const discordCache = new Map();
+  const rosterDiscordIds = new Set(byDiscord.keys());
   for (const shift of shifts) {
     const memberId = String(shift?.memberId || shift?.userId || '').trim();
-    const discordId = await resolveDiscordId(melonlyApiKey, memberId, discordCache);
+    const discordId = rosterDiscordIds.has(memberId)
+      ? memberId
+      : await resolveDiscordId(melonlyApiKey, memberId, discordCache);
     if (!discordId) continue;
     const person = byDiscord.get(discordId) || emptyPerson({
       discordId,
@@ -213,9 +241,14 @@ export async function buildPcsoAdminRoster({ melonlyApiKey = '' } = {}) {
   }
 
   for (const record of records) {
-    const creator = recordCreatorId(record);
-    const discordId = await resolveDiscordId(melonlyApiKey, creator, discordCache);
-    if (!discordId) continue;
+    const discordId = await resolveCadRecordDiscordId(
+      melonlyApiKey,
+      record,
+      discordCache,
+      rosterDiscordIds,
+    );
+    if (!discordId || !/^\d{16,22}$/.test(discordId)) continue;
+    rosterDiscordIds.add(discordId);
     const person = byDiscord.get(discordId) || emptyPerson({
       discordId,
       roleplayName: `Member ${discordId.slice(-4)}`,
@@ -233,7 +266,7 @@ export async function buildPcsoAdminRoster({ melonlyApiKey = '' } = {}) {
     .map((person) => ({
       ...person,
       shiftHoursLabel: formatShiftDuration(person.shiftMs) || '0m',
-      reports: person.reports.slice(0, 25),
+      reports: person.reports.slice(0, 80),
     }))
     .sort((left, right) => {
       const a = `${left.callsign} ${left.roleplayName}`.toLowerCase();
@@ -255,7 +288,7 @@ export async function renderPcsoWeeklyReportPdf(person, weekStart, weekEnd) {
   const logoPng = await loadStarLogo();
   const generatedAt = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
   const weekLabel = `${formatNyDate(weekStart)} – ${formatNyDate(weekEnd)}`;
-  const reports = Array.isArray(person.reports) ? person.reports.slice(0, 40) : [];
+  const reports = Array.isArray(person.reports) ? person.reports.slice(0, 80) : [];
   const reportCount = Number(person.reportCount || reports.length || 0);
   const rows = [
     { label: 'Roleplay name', value: person.roleplayName || 'Unknown' },
