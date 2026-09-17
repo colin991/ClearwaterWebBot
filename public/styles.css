@@ -1415,4 +1415,30 @@ body.home-stage {
 }
 .admin-table td strong { color: #f1f2f4; }
 .pcso-home .pcso-page-main { background: #0b0c0e; color: #e8e9eb; }
+.pcso-home .pcso-page-main h1 { color: #f2f3f4; }
 .pcso-home .pcso-page-lead { color: #a4a8b0; }
+
+/* Homepage assistance cards */
+.pcso-service-grid .pcso-card {
+  --card-accent: #8fcbbb;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  padding: 28px;
+  border: 1px solid #303638;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #1b2524, #131719 65%);
+  transition: border-color .2s, transform .2s, box-shadow .2s;
+}
+.pcso-service-grid .pcso-card:nth-child(2) { --card-accent: #e4c18a; background: linear-gradient(145deg, #29251f, #171718 65%); }
+.pcso-service-grid .pcso-card:nth-child(3) { --card-accent: #a8bff0; background: linear-gradient(145deg, #202735, #14171c 65%); }
+.pcso-service-grid .pcso-icon { width: 52px; height: 52px; border-radius: 14px; background: #ffffff09; border: 1px solid #ffffff14; color: var(--card-accent); }
+.pcso-service-grid .pcso-icon svg { width: 25px; height: 25px; }
+.pcso-service-grid .pcso-card h3 { margin: 24px 0 10px; font-size: 23px; letter-spacing: -.025em; }
+.pcso-service-grid .pcso-card p { margin: 0 0 28px; color: #b7bec4; line-height: 1.65; }
+.pcso-service-grid .pcso-arrow { display: flex; align-items: center; margin-top: auto; padding-top: 20px; border-top: 1px solid #ffffff14; color: var(--card-accent); }
+.pcso-service-grid .pcso-card:hover { border-color: var(--card-accent); transform: translateY(-4px); box-shadow: 0 16px 32px #0004; }
+.pcso-service-grid .pcso-card:focus-visible { outline: 3px solid var(--card-accent); outline-offset: 5px; }
+@media (prefers-reduced-motion: reduce) { .pcso-service-grid .pcso-card { transition: none; } .pcso-service-grid .pcso-card:hover { transform: none; } }
+@media (max-width: 760px) { .pcso-service-grid .pcso-card { padding: 24px; } }

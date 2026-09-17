@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-pcso-crime-stoppers-police-report",
+      "title": "Replace Active Calls with File a Police Report and Crime Stoppers",
+      "summary": "The homepage no longer has Active Calls. That slot is File a Police Report. Submit Tip is now Crime Stoppers, with anonymous reporting copy and a reward of up to $3,000. Old /active-calls and /submit-tip links redirect.",
+      "createdAt": "2026-09-17T02:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-vc-nick-match-no-false-jail",
       "title": "Stop jailing people whose Discord nick is their Roblox user",
       "summary": "If a Discord nickname is the Roblox username or contains it, VC checks treat them as in Discord. Unmatched players are only PMed, never jailed as missing. Jail is only for people found in Discord who stay out of voice for 5 minutes.",

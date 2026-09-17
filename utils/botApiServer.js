@@ -4,13 +4,9 @@ import { logger } from './logger.js';
 import { formatTalkDuration, getRadioTalkLogs } from './pcsoRadioTalkLogs.js';
 import { getDispatchRadioMonitorStatus } from './dispatchRadioTalkMonitor.js';
 import { writeDispatchWebTalk, stopDispatchWebTalk } from './dispatchWebTalk.js';
-import { fetchPcsoAssignedMelonlyCalls } from './melonly.js';
 import { readDispatchAudio } from './dispatchLiveAudio.js';
 import { DISPATCH_VOICE_CHANNEL_ID } from './dispatchChannelStatus.js';
 import { noteWebListener, noteWebTalk } from './dispatchActivityLog.js';
-
-/** Pinellas County Sheriff's Office Melonly department id. */
-const PINELLAS_MELONLY_DEPARTMENT_ID = '7470323914464301056';
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -126,39 +122,6 @@ export function startBotApiServer(client, {
           radioMonitor: getDispatchRadioMonitorStatus(),
           entries,
         });
-      }
-
-      if (request.method === 'GET' && url.pathname === '/api/pcso/active-calls') {
-        const melonlyApiKey = process.env.MELONLY_API_KEY?.trim() || '';
-        if (!melonlyApiKey) {
-          return sendJson(response, 503, {
-            configured: false,
-            calls: [],
-            error: 'Melonly is not configured.',
-            message: 'Set MELONLY_API_KEY on the bot host to enable active calls.',
-          });
-        }
-        try {
-          const result = await fetchPcsoAssignedMelonlyCalls(melonlyApiKey, {
-            pinellasDepartmentId: PINELLAS_MELONLY_DEPARTMENT_ID,
-          });
-          return sendJson(response, 200, {
-            configured: true,
-            updatedAt: new Date().toISOString(),
-            calls: result.calls,
-            message: result.calls.length
-              ? undefined
-              : 'No active Melonly calls currently have a PCSO unit assigned.',
-          });
-        } catch (error) {
-          const status = error?.status === 429 ? 429 : 502;
-          return sendJson(response, status, {
-            configured: true,
-            calls: [],
-            error: error?.message || 'Melonly CAD calls could not be loaded.',
-            message: 'Active calls could not be loaded from Melonly right now.',
-          });
-        }
       }
 
       return sendJson(response, 404, { error: 'Not found' });
