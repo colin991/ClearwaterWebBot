@@ -45,6 +45,7 @@ test('typed search resolves extra civilian vehicles', () => {
   ];
   const picked = resolvePriorityVehicles(vehicles, ['0'], 'bull');
   assert.deepEqual(picked.map((vehicle) => vehicle.name), ['Navara', 'Bullhorn']);
+  assert.deepEqual(resolvePriorityVehicles(vehicles, ['none'], '').map((vehicle) => vehicle.name), []);
 });
 
 test('priority form modal placeholders tell people they can search', async () => {
@@ -63,10 +64,18 @@ test('priority form modal placeholders tell people they can search', async () =>
     players: [{ username: 'Alpha', robloxId: '1', team: 'Civilian' }],
     vehicles: [{ name: 'Navara', ownerUsername: 'Alpha', texture: 'Black', plate: '1' }],
   });
-  const json = JSON.stringify(modal.toJSON());
+  const payload = modal.toJSON();
+  const json = JSON.stringify(payload);
   assert.match(json, /Type to search in-game users/);
   assert.match(json, /Type to search civilian vehicles/);
-  assert.match(json, /"max_values":1/);
+  assert.match(json, /"value":"none"/);
+  assert.match(json, /Alpha · /);
+  const vehicleSelect = payload.components
+    .map((label) => label.component)
+    .find((component) => component?.custom_id === 'vehs');
+  assert.equal(vehicleSelect.max_values, 1);
+  assert.equal(vehicleSelect.min_values, 1);
+  assert.equal(vehicleSelect.required, true);
 });
 
 test('priority Discord mentions drop duplicate user ids', () => {

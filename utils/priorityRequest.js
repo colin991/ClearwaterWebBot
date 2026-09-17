@@ -231,11 +231,22 @@ function playerOptions(players) {
 }
 
 function vehicleOptions(vehicles) {
-  return vehicles.slice(0, 25).map((vehicle, index) => ({
-    label: clip(formatPriorityVehicle(vehicle), 100),
-    value: String(index),
-    description: clip(vehicle.ownerUsername || 'Civilian', 100),
-  }));
+  if (!vehicles.length) return [];
+  const none = [{
+    label: 'None',
+    value: 'none',
+    description: 'No civilian vehicle on this request',
+  }];
+  const opts = vehicles.slice(0, 24).map((vehicle, index) => {
+    const title = formatPriorityVehicle(vehicle);
+    const owner = String(vehicle.ownerUsername || '').trim();
+    return {
+      label: clip(owner ? `${owner} · ${title}` : title, 100),
+      value: String(index),
+      description: clip(title, 100),
+    };
+  });
+  return none.concat(opts);
 }
 
 function byUsername(left, right) {
@@ -279,6 +290,7 @@ export function resolvePriorityVehicles(vehicles, selectedValues, typedNames = '
     picked.push(vehicle);
   };
   for (const value of selectedValues || []) {
+    if (value === 'none') continue;
     const index = Number(value);
     if (Number.isInteger(index)) add(vehicles[index]);
   }
@@ -331,14 +343,14 @@ function buildPriorityFormModal({ id, players, vehicles }) {
     labels.push(
       new LabelBuilder()
         .setLabel('Search vehicles')
-        .setDescription('Type to search, then pick one civilian vehicle. Add another below if needed.')
+        .setDescription('Type to filter, pick one, or choose None. Add another below if needed.')
         .setStringSelectMenuComponent(
           new StringSelectMenuBuilder()
             .setCustomId('vehs')
             .setPlaceholder('Type to search civilian vehicles')
-            .setMinValues(0)
+            .setMinValues(1)
             .setMaxValues(1)
-            .setRequired(false)
+            .setRequired(true)
             .addOptions(vehicleOpts),
         ),
     );
