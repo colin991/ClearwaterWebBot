@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-mod-call-no-stale-drag",
+      "title": "Stop stale mod-call voice drags",
+      "summary": "The bot no longer moves people into a mod-scene VC after a staff pickup if the caller already left the game or the call is more than 2 minutes old. Live pickups still move both people if they are in Discord voice.",
+      "createdAt": "2026-09-17T00:37:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-nickname-match-no-jail",
       "title": "Stop jailing people whose nick is their Roblox name",
       "summary": "A partial Discord member list is no longer treated as proof someone is missing. Automatic :jail and :load are blocked. Nickname matching still counts a Discord nick that is the Roblox username, including display names.",
