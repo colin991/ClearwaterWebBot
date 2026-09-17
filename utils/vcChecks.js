@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { isVcExempt } from './enforcementExemptions.js';
 import { getIdentityCache } from './identityStore.js';
 import { enforcementLogBody, postProximityLog } from './vcActionLog.js';
-import { membersForPlayer } from './robloxDiscordMatch.js';
+import { membersForPlayer, playerIsInVoice } from './robloxDiscordMatch.js';
 import { loadVcWhitelist } from './vcWhitelist.js';
 
 export { matchingMembers, membersForPlayer, robloxNameMatchesText } from './robloxDiscordMatch.js';
@@ -46,7 +46,7 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
       for (const [id, state] of await load()) states.set(id, state);
       loaded = true;
     }
-    const { players, members, inVoice, identities = {}, membersReady = true } = await snapshot();
+    const { players, members, inVoice, identities = {}, membersReady = true, voiceStates } = await snapshot();
     const online = new Set(players.map(p => p.robloxId || p.username));
     for (const id of states.keys()) if (!online.has(id)) states.delete(id);
     for (const player of players) {
@@ -56,19 +56,24 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
       if (!state) { state = { jailed: false, mode: null, since: now(), lastPm: -Infinity, index: 0, needJailNotice: false }; states.set(id, state); }
       try {
         const matches = membersForPlayer(player, members, identities);
-        const compliant = matches.some(m => inVoice(m.id));
+        const inVc = playerIsInVoice(player, members, identities, inVoice, voiceStates);
+        const compliant = inVc;
         if (!enabled || compliant || isVcExempt(player, members, identities)) {
           if (state.jailed) {
             const reason = !enabled ? 'checks disabled' : isVcExempt(player, members, identities) ? 'exempt' : 'joined voice';
-            await apply(':unjail ' + player.username, player, reason);
-            state.jailed = false;
-            await save([...states]);
+            const released = await apply(':unjail ' + player.username, player, reason);
+            if (released !== false) {
+              state.jailed = false;
+              await save([...states]);
+            }
           }
-          state.mode = null;
-          state.since = now();
-          state.lastPm = -Infinity;
-          state.index = 0;
-          state.needJailNotice = false;
+          if (!state.jailed) {
+            state.mode = null;
+            state.since = now();
+            state.lastPm = -Infinity;
+            state.index = 0;
+            state.needJailNotice = false;
+          }
           continue;
         }
         if (!membersReady && !matches.length) continue;
@@ -77,16 +82,20 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
           state.mode = mode; state.since = now(); state.lastPm = -Infinity; state.index = 0; state.needJailNotice = false;
         }
         const stillNeeded = () => {
+          if (!enabled || isVcExempt(player, members, identities)) return false;
+          if (playerIsInVoice(player, members, identities, inVoice, voiceStates)) return false;
           const current = membersForPlayer(player, members, identities);
-          return enabled && !isVcExempt(player, members, identities) && (current.length ? 'voice' : 'comms') === mode && !current.some(m => inVoice(m.id));
+          return (current.length ? 'voice' : 'comms') === mode;
         };
         // Never jail someone we could not prove is missing from Discord.
         // Nickname matches must count; unmatched players only get comms PMs.
         if (mode === 'comms') {
           if (state.jailed) {
-            await apply(':unjail ' + player.username, player, 'nickname or Discord match uncertain');
-            state.jailed = false;
-            await save([...states]);
+            const released = await apply(':unjail ' + player.username, player, 'nickname or Discord match uncertain');
+            if (released !== false) {
+              state.jailed = false;
+              await save([...states]);
+            }
           }
           if (now() - state.lastPm >= 60000) {
             const result = await apply(':pm ' + player.username + ' ' + COMMS_MESSAGES[state.index % COMMS_MESSAGES.length], player, 'comms reminder', stillNeeded);
@@ -164,7 +173,13 @@ export function startVcChecks(client, config) {
       return { players: raw.map(parseErlcPlayer), members: guild.members.cache,
         identities: (await getIdentityCache()).byDiscord,
         membersReady: isDiscordRosterReady(guild),
-        inVoice: id => Boolean(guild.voiceStates.cache.get(id)?.channelId) };
+        voiceStates: guild.voiceStates.cache,
+        inVoice: id => {
+          const key = String(id || '');
+          const vs = guild.voiceStates.cache.get(key) || guild.voiceStates.cache.get(id);
+          return Boolean(vs?.channelId);
+        },
+      };
     },
     send: (command, shouldExecute) => executeErlcCommand(config.erlcServerKey, command, {
       shouldExecute: () => {

@@ -11,8 +11,9 @@ The service checks the ER:LC player list and Discord members every 15 seconds af
 - A matching member outside voice gets VC reminder PMs, then is **jailed** after 5 minutes. They are **never** `:kick`'ed, `:load`'ed, or `:wanted`.
 - A player whose Discord nickname **is** or **contains** their Roblox username counts as in Discord. They are not jailed as “missing.”
 - A player with no matching Discord member is only PMed comms reminders (never jailed). A partial Discord cache is never treated as “not in Discord.”
-- Joining voice or turning checks off **unjails** anyone this feature jailed. Already compliant players receive no commands. Leaving voice starts a fresh reminder interval.
-- Failed jails and jail-notice PMs retry automatically.
+- Joining voice or turning checks off **unjails** anyone this feature jailed. A failed unjail is retried on the next pass instead of being forgotten. Already compliant players receive no commands. Leaving voice starts a fresh reminder interval.
+- Failed jails, failed unjails, and jail-notice PMs retry automatically.
+- `-dc` and VC checks use the same voice lookup, including people found from live voice-state members, so someone listed as **In Discord — In VC** is not jailed for missing voice.
 
 The service uses `DISCORD_GUILD_ID` and `ERLC_SERVER_KEY`. Full Discord member fetches are shared and limited to **one request every 20 seconds**; VC checks, `-dc`, Sheriff balance, and other features reuse that cache. If Discord is rate-limiting, the last roster is used instead of failing `-dc`. An incomplete roster is never treated as “not in Discord” (needs about 90% of the server cached). The existing Guild Members and Guild Voice States intents are required. Only in-game commands share the five-second PRC queue. Automatic `:load` and `:kick` are blocked unless a staff map/raw command explicitly allows them. VC checks may `:jail` when enabled.
 

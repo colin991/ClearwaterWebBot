@@ -197,6 +197,45 @@ test('successful jail, PM, and unjail emit ops-log events', async () => {
   assert.equal(events.at(-1).reason, 'joined voice');
 });
 
+test('failed unjail is retried and does not forget the jail', async () => {
+  const calls = [];
+  let failUnjail = true;
+  const service = createVcChecks({
+    enabled: true,
+    load: async () => [['1', { jailed: true }]],
+    snapshot: async () => ({
+      players: [{ username: 'buttercup75075', robloxId: '1' }],
+      members: new Map([['d', { id: 'd', nickname: 'buttercup75075', user: {} }]]),
+      inVoice: () => true,
+    }),
+    send: async (c) => {
+      calls.push(c);
+      if (failUnjail && c.startsWith(':unjail')) return false;
+    },
+  });
+  await service.tick();
+  assert.deepEqual(calls, [':unjail buttercup75075']);
+  failUnjail = false;
+  await service.tick();
+  assert.deepEqual(calls, [':unjail buttercup75075', ':unjail buttercup75075']);
+});
+
+test('voice-state match prevents jail when inVoice lookup misses the snowflake', async () => {
+  const calls = [];
+  const service = createVcChecks({
+    enabled: true,
+    snapshot: async () => ({
+      players: [{ username: 'buttercup75075', robloxId: '1' }],
+      members: new Map([['d', { id: 'd', user: { username: 'buttercup75075' } }]]),
+      inVoice: () => false,
+      voiceStates: new Map([['d', { id: 'd', channelId: 'vc1', member: { id: 'd', user: { username: 'buttercup75075' } } }]]),
+    }),
+    send: async (c) => calls.push(c),
+  });
+  await service.tick();
+  assert.deepEqual(calls, []);
+});
+
 test('exact or contained Roblox nickname is in Discord and is not jailed as missing', async () => {
   const calls = [];
   const service = createVcChecks({

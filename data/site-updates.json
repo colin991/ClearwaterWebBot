@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-vc-in-voice-no-false-jail",
+      "title": "Stop jailing people -dc already shows in voice",
+      "summary": "If someone is in a Clearwater Discord voice channel, VC checks treat them as in VC the same way -dc does, including matches from live voice states. A failed unjail is retried instead of leaving them in jail.",
+      "createdAt": "2026-09-17T02:45:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-pcso-crime-stoppers-police-report",
       "title": "Replace Active Calls with File a Police Report and Crime Stoppers",
       "summary": "The homepage no longer has Active Calls. That slot is File a Police Report. Submit Tip is now Crime Stoppers, with anonymous reporting copy and a reward of up to $3,000. Old /active-calls and /submit-tip links redirect.",

@@ -62,13 +62,30 @@ export function matchingMembers(members, username) {
     && memberNameTexts(member).some((text) => robloxNameMatchesText(text, name)));
 }
 
+export function snowflakeId(value) {
+  return String(value ?? '').trim();
+}
+
 export function memberById(members, discordId) {
-  const id = String(discordId || '');
+  const id = snowflakeId(discordId);
   if (!id) return null;
   if (typeof members?.get === 'function') {
-    return members.get(discordId) || members.get(id) || null;
+    return members.get(id) || members.get(discordId) || null;
   }
-  return listGuildMembers(members).find((member) => String(member?.id) === id) || null;
+  return listGuildMembers(members).find((member) => snowflakeId(member?.id) === id) || null;
+}
+
+const GENERIC_DISPLAY_NAMES = new Set([
+  'jail', 'police', 'sheriff', 'civilian', 'fire', 'dot', 'staff', 'mod',
+]);
+
+function displayNameForMatch(player) {
+  const display = String(player?.displayName || '').trim();
+  const username = String(player?.username || '').trim();
+  if (!display || display.toLowerCase() === username.toLowerCase()) return '';
+  if (display.length < 5) return '';
+  if (GENERIC_DISPLAY_NAMES.has(compactAlnum(display))) return '';
+  return display;
 }
 
 /** Linked Roblox identity and Discord nickname/username matches. */
@@ -77,7 +94,7 @@ export function membersForPlayer(player, members, identities = {}) {
   const seen = new Set();
   const add = (member) => {
     if (!member || member.user?.bot === true) return;
-    const id = String(member.id || '');
+    const id = snowflakeId(member.id || member.user?.id);
     if (!id || seen.has(id)) return;
     seen.add(id);
     found.push(member);
@@ -90,8 +107,70 @@ export function membersForPlayer(player, members, identities = {}) {
     }
   }
   for (const member of matchingMembers(members, player?.username)) add(member);
-  if (player?.displayName && String(player.displayName).toLowerCase() !== String(player.username || '').toLowerCase()) {
-    for (const member of matchingMembers(members, player.displayName)) add(member);
+  const display = displayNameForMatch(player);
+  if (display) {
+    for (const member of matchingMembers(members, display)) add(member);
   }
   return found;
+}
+
+function voiceEntries(voiceStates) {
+  if (!voiceStates) return [];
+  if (typeof voiceStates.values === 'function') return [...voiceStates.values()];
+  return listGuildMembers(voiceStates);
+}
+
+export function connectedVoiceUserIds(voiceStates) {
+  const ids = new Set();
+  for (const vs of voiceEntries(voiceStates)) {
+    if (!vs?.channelId && !vs?.channel?.id) continue;
+    const id = snowflakeId(vs.id || vs.userId || vs.member?.id || vs.member?.user?.id);
+    if (id) ids.add(id);
+  }
+  return ids;
+}
+
+export function isDiscordUserInVoice(discordId, inVoice, voiceStates) {
+  const id = snowflakeId(discordId);
+  if (!id) return false;
+  if (typeof inVoice === 'function' && (inVoice(id) || inVoice(discordId))) return true;
+  if (voiceStates && typeof voiceStates.get === 'function') {
+    const vs = voiceStates.get(id) || voiceStates.get(discordId);
+    if (vs?.channelId || vs?.channel?.id) return true;
+  }
+  return connectedVoiceUserIds(voiceStates).has(id);
+}
+
+/** True when a linked or name-matched Discord user is in any guild voice channel. */
+export function playerIsInVoice(player, members, identities = {}, inVoice = () => false, voiceStates) {
+  const connected = connectedVoiceUserIds(voiceStates);
+  const voiceMembers = [];
+  for (const vs of voiceEntries(voiceStates)) {
+    if (!vs?.channelId && !vs?.channel?.id) continue;
+    const member = vs.member;
+    if (member) voiceMembers.push(member);
+    else {
+      const id = snowflakeId(vs.id || vs.userId);
+      if (id) voiceMembers.push({ id, user: vs.user });
+    }
+  }
+  const matches = membersForPlayer(player, members, identities);
+  for (const member of membersForPlayer(player, voiceMembers, identities)) {
+    matches.push(member);
+  }
+  const seen = new Set();
+  for (const member of matches) {
+    const id = snowflakeId(member.id || member.user?.id);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    if (connected.has(id) || isDiscordUserInVoice(id, inVoice, voiceStates)) return true;
+    if (member.voice?.channelId || member.voice?.channel?.id) return true;
+  }
+  const robloxId = String(player?.robloxId || '');
+  if (robloxId) {
+    for (const id of connected) {
+      if (String(identities?.[id]?.robloxId || '') === robloxId) return true;
+    }
+  }
+  return false;
 }

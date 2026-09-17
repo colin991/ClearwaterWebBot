@@ -14,8 +14,17 @@ export default {
       fetchErlcServer(message.client.config.erlcServerKey), getIdentityCache(),
     ]);
     if (!Array.isArray(server.Players)) throw new Error('The in-game player list is unavailable. Please try again shortly.');
-    const rows = classifyDiscordPlayers(server.Players.map(parseErlcPlayer), message.guild.members.cache,
-      identities.byDiscord, id => Boolean(message.guild.voiceStates.cache.get(id)?.channelId));
+    const rows = classifyDiscordPlayers(
+      server.Players.map(parseErlcPlayer),
+      message.guild.members.cache,
+      identities.byDiscord,
+      (id) => {
+        const key = String(id || '');
+        const vs = message.guild.voiceStates.cache.get(key) || message.guild.voiceStates.cache.get(id);
+        return Boolean(vs?.channelId);
+      },
+      message.guild.voiceStates.cache,
+    );
     const missing = rows.filter(row => !row.inDiscord).length;
     const inVoice = rows.filter(row => row.inVoice).length;
     const notInVoice = rows.filter(row => row.inDiscord && !row.inVoice).length;

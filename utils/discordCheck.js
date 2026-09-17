@@ -1,15 +1,16 @@
 import { MessageFlags, escapeMarkdown } from 'discord.js';
-import { membersForPlayer } from './robloxDiscordMatch.js';
+import { membersForPlayer, playerIsInVoice } from './robloxDiscordMatch.js';
 import { isVcExempt } from './enforcementExemptions.js';
 
 const CHECK = '<:check:1514421732356653139>';
 const CROSS = '<:x_:1514353388542890015>';
 const BANNER = 'https://cdn.discordapp.com/attachments/1514422317587890327/1549211219246714940/clearwater_ban_1.png?ex=6aaa87a1&is=6aa93621&hm=c82e1fd62aa00932f99168f5a90a60c4d2903e62d4141bfb04659dcc0f8e7d02';
 
-export function classifyDiscordPlayers(players, members, identities = {}, inVoice = () => false) {
+export function classifyDiscordPlayers(players, members, identities = {}, inVoice = () => false, voiceStates) {
   return players.map(player => {
     const matches = membersForPlayer(player, members, identities);
-    return { ...player, inDiscord: matches.length > 0, inVoice: matches.some(m => inVoice(m.id)),
+    const inVc = playerIsInVoice(player, members, identities, inVoice, voiceStates);
+    return { ...player, inDiscord: matches.length > 0 || inVc, inVoice: inVc,
       exempt: isVcExempt(player, members, identities) };
   }).sort((a, b) => a.username.localeCompare(b.username));
 }
