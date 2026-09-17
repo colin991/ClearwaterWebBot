@@ -138,7 +138,7 @@ export function pcsoSectionHtml(page) {
 <meta name="theme-color" content="#6b7078" />
 <title>${page.title} | Pinellas County Sheriff's Office</title>
 <link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
-<link rel="stylesheet" href="styles.css?v=20260917-nav-arrows" />
+<link rel="stylesheet" href="styles.css?v=20260917-nav-click" />
 <script>document.documentElement.classList.add('js');</script>
 </head>
 <body class="pcso-home">
@@ -156,7 +156,7 @@ export function pcsoSectionHtml(page) {
 <div class="pcso-page-card pcso-prose">${paragraphs}${page.extra || ''}</div>
 </div></main>
 <footer class="pcso-footer"><div class="pcso-wrap pcso-footer-grid"><a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a><p>Professionalism · Integrity · Service<br /><small>© 2026 Pinellas County Sheriff's Office Roleplay</small></p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord →</a></div></footer>
-<script src="pcso-nav.js?v=20260917-nav-arrows"></script>
+<script src="pcso-nav.js?v=20260917-nav-click"></script>
 </body>
 </html>
 `;

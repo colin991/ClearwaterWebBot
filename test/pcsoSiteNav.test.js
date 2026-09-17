@@ -32,7 +32,10 @@ test('shared nav lists Home, About, Law Enforcement, Divisions, Contact, and box
   assert.match(nav, /pcso-careers-btn/);
   assert.match(nav, />Careers</);
   assert.match(nav, /\/active-calls/);
-  assert.match(nav, /\/jail/);
+  assert.match(nav, /mouseenter/);
+  assert.match(nav, /pcso-drop-menu a/);
   const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
   assert.match(css, /\.pcso-drop-toggle::after/);
+  assert.match(css, /\.pcso-drop-menu::before/);
+  assert.match(css, /pointer-events: auto/);
 });

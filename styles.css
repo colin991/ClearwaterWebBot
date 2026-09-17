@@ -1538,9 +1538,11 @@ body.home-stage {
   cursor: pointer;
 }
 
-.pcso-header { z-index: 40; }
-.pcso-links { position: relative; gap: 18px; flex-wrap: wrap; }
-.pcso-drop { position: relative; }
+.pcso-header { z-index: 40; overflow: visible; }
+.pcso-nav { overflow: visible; }
+.pcso-links { position: relative; gap: 18px; flex-wrap: wrap; overflow: visible; }
+.pcso-drop { position: relative; z-index: 1; }
+.pcso-drop.open, .pcso-drop:hover { z-index: 5; }
 .pcso-drop-toggle {
   display: inline-flex;
   align-items: center;
@@ -1570,14 +1572,23 @@ body.home-stage {
 .pcso-drop-menu {
   display: none;
   position: absolute;
-  top: calc(100% + 12px);
+  top: 100%;
   left: 0;
   min-width: 260px;
-  padding: 10px 0;
+  padding: 8px 0 6px;
   background: #0d0e10;
   border: 1px solid #2a2c31;
   box-shadow: 0 16px 32px rgba(0, 0, 0, .35);
-  z-index: 50;
+  z-index: 300;
+  pointer-events: auto;
+}
+.pcso-drop-menu::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 12px;
 }
 .pcso-drop:hover .pcso-drop-menu,
 .pcso-drop.open .pcso-drop-menu { display: flex; flex-direction: column; }
@@ -1587,6 +1598,8 @@ body.home-stage {
   color: #b9bcc3;
   font-weight: 600;
   white-space: nowrap;
+  pointer-events: auto;
+  cursor: pointer;
 }
 .pcso-drop-menu a:hover { color: #fff; background: #17181b; }
 .pcso-careers-btn {
@@ -1640,6 +1653,7 @@ body.home-stage {
 .pcso-mini-event h3 { margin: 0 0 6px; font-size: 18px; }
 @media (max-width: 760px) {
   .pcso-drop-menu { position: static; border: 0; box-shadow: none; padding: 0 0 0 12px; }
+  .pcso-drop-menu::before { display: none; }
   .pcso-drop:hover .pcso-drop-menu { display: none; }
   .pcso-drop.open .pcso-drop-menu { display: flex; }
 }

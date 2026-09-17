@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-pcso-dropdown-click",
+      "title": "Make PCSO nav dropdown links clickable",
+      "summary": "Dropdown menus no longer sit in a hover gap under the header, so About, Law Enforcement, Divisions, and Contact links can be clicked through to their pages.",
+      "createdAt": "2026-09-17T21:45:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-pcso-nav-arrows",
       "title": "Dropdown arrows on PCSO top nav",
       "summary": "About, Law Enforcement, Divisions, and Contact now show a down arrow. The arrow flips up when that menu is open.",

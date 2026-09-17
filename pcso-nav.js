@@ -60,15 +60,35 @@
 
   nav.querySelectorAll('.pcso-drop').forEach((drop) => {
     const toggle = drop.querySelector('.pcso-drop-toggle');
+    let hideTimer = 0;
+    const openMenu = () => {
+      window.clearTimeout(hideTimer);
+      nav.querySelectorAll('.pcso-drop').forEach((other) => {
+        if (other === drop) return;
+        other.classList.remove('open');
+        other.querySelector('.pcso-drop-toggle')?.setAttribute('aria-expanded', 'false');
+      });
+      drop.classList.add('open');
+      toggle?.setAttribute('aria-expanded', 'true');
+    };
+    const closeMenu = () => {
+      drop.classList.remove('open');
+      toggle?.setAttribute('aria-expanded', 'false');
+    };
+    drop.addEventListener('mouseenter', openMenu);
+    drop.addEventListener('mouseleave', () => {
+      hideTimer = window.setTimeout(closeMenu, 200);
+    });
     toggle?.addEventListener('click', (event) => {
       event.preventDefault();
-      const expanded = toggle.getAttribute('aria-expanded') === 'true';
-      nav.querySelectorAll('.pcso-drop-toggle').forEach((other) => {
-        other.setAttribute('aria-expanded', 'false');
-        other.parentElement?.classList.remove('open');
+      event.stopPropagation();
+      if (drop.classList.contains('open')) closeMenu();
+      else openMenu();
+    });
+    drop.querySelectorAll('.pcso-drop-menu a').forEach((link) => {
+      link.addEventListener('click', (event) => {
+        event.stopPropagation();
       });
-      toggle.setAttribute('aria-expanded', String(!expanded));
-      drop.classList.toggle('open', !expanded);
     });
   });
 
