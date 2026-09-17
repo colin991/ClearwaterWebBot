@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-pcso-ticket-cr",
+      "title": "Remove ticket Staff Panel and add -cr close request",
+      "summary": "PCSO support tickets no longer have a Staff Panel button. Staff can use -cr in a ticket to send a Yes/No close request; if the ticket opener clicks Yes, the ticket closes.",
+      "createdAt": "2026-09-17T20:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-pcso-forms-vercel-readonly",
       "title": "Stop PCSO site forms from writing JSON on Vercel",
       "summary": "Police reports, Crime Stoppers tips, complaints, and public records no longer try to save JSON on Vercel’s read-only filesystem. The site forwards the form to the bot host, which stores it and posts it to Discord.",
