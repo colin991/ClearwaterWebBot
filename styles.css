@@ -1415,6 +1415,7 @@ body.home-stage {
 }
 .admin-table td strong { color: #f1f2f4; }
 .pcso-home .pcso-page-main { background: #0b0c0e; color: #e8e9eb; }
+.pcso-home .pcso-page-main h1 { color: #f2f3f4; }
 .pcso-home .pcso-page-lead { color: #a4a8b0; }
 
 /* Homepage assistance cards */
