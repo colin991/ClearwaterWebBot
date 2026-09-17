@@ -9,6 +9,7 @@ test('roblox nicknames match with spaces instead of underscores', () => {
   assert.equal(robloxNameMatchesText('otw_youeboyjay', 'Otw_YoueBoyJay'), true);
   assert.equal(robloxNameMatchesText('482 | Andrew Miller', 'AndrewMiller'), true);
   assert.equal(robloxNameMatchesText('iTsAronJ', 'iTsAronJ'), true);
+  assert.equal(robloxNameMatchesText('482 | iTsAronJ', 'iTsAronJ'), true);
   assert.equal(robloxNameMatchesText('Miller', 'AndrewMiller'), false);
   assert.equal(robloxNameMatchesText('Different Person', 'Otw_YoueBoyJay'), false);
 });
@@ -42,6 +43,7 @@ test('stale identity still falls back to a nickname match', () => {
 test('VC checks do not jail a player whose nickname contains their Roblox user', async () => {
   const calls = [];
   const service = createVcChecks({
+    enabled: true,
     snapshot: async () => ({
       players: [{ username: 'Otw_YoueBoyJay', robloxId: '9' }],
       members: new Map([['d', { id: 'd', nickname: 'Otw YoueBoyJay', user: {} }]]),

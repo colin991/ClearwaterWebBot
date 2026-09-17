@@ -80,8 +80,22 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
           const current = membersForPlayer(player, members, identities);
           return enabled && !isVcExempt(player, members, identities) && (current.length ? 'voice' : 'comms') === mode && !current.some(m => inVoice(m.id));
         };
-        if (!state.jailed && (mode === 'comms' || now() - state.since >= 300000)) {
-          const jailReason = mode === 'comms' ? 'no Discord match' : 'not in voice for 5 minutes';
+        // Never jail someone we could not prove is missing from Discord.
+        // Nickname matches must count; unmatched players only get comms PMs.
+        if (mode === 'comms') {
+          if (state.jailed) {
+            await apply(':unjail ' + player.username, player, 'nickname or Discord match uncertain');
+            state.jailed = false;
+            await save([...states]);
+          }
+          if (now() - state.lastPm >= 60000) {
+            const result = await apply(':pm ' + player.username + ' ' + COMMS_MESSAGES[state.index % COMMS_MESSAGES.length], player, 'comms reminder', stillNeeded);
+            if (result !== false) { state.lastPm = now(); state.index += 1; }
+          }
+          continue;
+        }
+        if (!state.jailed && now() - state.since >= 300000) {
+          const jailReason = 'not in voice for 5 minutes';
           if (stillNeeded()) {
             try {
               const pmResult = await apply(':pm ' + player.username + ' ' + JAIL_MESSAGES[mode], player, 'jail notice', stillNeeded);

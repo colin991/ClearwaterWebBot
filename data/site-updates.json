@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-vc-nick-match-no-false-jail",
+      "title": "Stop jailing people whose Discord nick is their Roblox user",
+      "summary": "If a Discord nickname is the Roblox username or contains it, VC checks treat them as in Discord. Unmatched players are only PMed, never jailed as missing. Jail is only for people found in Discord who stay out of voice for 5 minutes.",
+      "createdAt": "2026-09-17T01:21:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-vc-jail-pm-no-kick",
       "title": "VC checks jail and PM, never kick",
       "summary": "Missing Discord or voice is handled with in-game PMs and jail only. The bot never :kick or :load for VC checks. GTA driving checks stay removed.",
