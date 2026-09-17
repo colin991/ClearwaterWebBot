@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-17-opc-ticket-questions",
+      "title": "Office of Professional Compliance ticket questions",
+      "summary": "Opening an Office of Professional Compliance ticket now asks only: who you are reporting, why you are reporting that deputy, and whether you have proof.",
+      "createdAt": "2026-09-17T21:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-pcso-weekly-cad-reports",
       "title": "Count Melonly CAD reports on weekly deputy PDFs",
       "summary": "Weekly personnel reports now page through Melonly CAD records for the last 7 days and match the deputy the same way live CAD imports do, including nested createdBy Discord ids. Deputies who filed several reports should no longer show 0.",

@@ -34,6 +34,29 @@ export const PINELLAS_SUPPORT_CR_YES_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}cr:y
 export const PINELLAS_SUPPORT_CR_NO_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}cr:no`;
 const PINELLAS_SUPPORT_STAFF_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}staff`;
 const PINELLAS_SUPPORT_INQUIRY_FIELD_ID = 'ticket-inquiry';
+const OPC_INQUIRY_FIELDS = Object.freeze([
+  {
+    id: 'opc-who',
+    label: 'Who are you reporting?',
+    style: TextInputStyle.Short,
+    placeholder: 'Deputy name, callsign, or Discord.',
+    maxLength: 200,
+  },
+  {
+    id: 'opc-why',
+    label: 'Why are you reporting this deputy?',
+    style: TextInputStyle.Paragraph,
+    placeholder: 'Describe what happened.',
+    maxLength: 1000,
+  },
+  {
+    id: 'opc-proof',
+    label: 'Do you have any proof of this?',
+    style: TextInputStyle.Paragraph,
+    placeholder: 'Links, clips, screenshots, or witnesses.',
+    maxLength: 1000,
+  },
+]);
 
 const SUPPORT_OPTIONS = Object.freeze([
   {
@@ -71,20 +94,46 @@ function supportButton(option) {
     .setEmoji(option.emoji);
 }
 
-function buildInquiryModal(type) {
+export function buildInquiryModal(type) {
   const option = SUPPORT_OPTIONS.find((entry) => entry.type === type);
-  return new ModalBuilder()
+  const modal = new ModalBuilder()
     .setCustomId(`${PINELLAS_SUPPORT_BUTTON_PREFIX}inquiry:${type}`)
-    .setTitle(`${option?.title || 'Support'} Inquiry`.slice(0, 45))
-    .addComponents(new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId(PINELLAS_SUPPORT_INQUIRY_FIELD_ID)
-        .setLabel('What do you need help with?')
-        .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('Explain your request with as much detail as possible.')
-        .setRequired(true)
-        .setMaxLength(1000),
-    ));
+    .setTitle(`${option?.title || 'Support'} Inquiry`.slice(0, 45));
+
+  if (type === 'compliance') {
+    for (const field of OPC_INQUIRY_FIELDS) {
+      modal.addComponents(new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId(field.id)
+          .setLabel(field.label)
+          .setStyle(field.style)
+          .setPlaceholder(field.placeholder)
+          .setRequired(true)
+          .setMaxLength(field.maxLength),
+      ));
+    }
+    return modal;
+  }
+
+  return modal.addComponents(new ActionRowBuilder().addComponents(
+    new TextInputBuilder()
+      .setCustomId(PINELLAS_SUPPORT_INQUIRY_FIELD_ID)
+      .setLabel('What do you need help with?')
+      .setStyle(TextInputStyle.Paragraph)
+      .setPlaceholder('Explain your request with as much detail as possible.')
+      .setRequired(true)
+      .setMaxLength(1000),
+  ));
+}
+
+function readInquiryFromModal(interaction, type) {
+  if (type === 'compliance') {
+    return OPC_INQUIRY_FIELDS.map((field) => {
+      const value = String(interaction.fields.getTextInputValue(field.id) || '').trim() || 'Not provided';
+      return `${field.label}\n${value}`;
+    }).join('\n\n');
+  }
+  return interaction.fields.getTextInputValue(PINELLAS_SUPPORT_INQUIRY_FIELD_ID).trim();
 }
 
 export function buildPinellasSupportPanel() {
@@ -355,7 +404,7 @@ export async function handlePinellasSupportInteraction(interaction) {
     : null;
   if (inquiryType && interaction.isModalSubmit()) {
     if (!SUPPORT_OPTIONS.some((option) => option.type === inquiryType)) return false;
-    const inquiry = interaction.fields.getTextInputValue(PINELLAS_SUPPORT_INQUIRY_FIELD_ID).trim();
+    const inquiry = readInquiryFromModal(interaction, inquiryType);
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
       const result = await createPinellasSupportTicket(interaction, inquiryType, inquiry);
