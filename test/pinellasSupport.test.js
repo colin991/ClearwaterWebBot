@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  PINELLAS_SUPPORT_CATEGORY_IDS,
   PINELLAS_SUPPORT_CLAIM_ID,
   PINELLAS_SUPPORT_CLOSE_ID,
   PINELLAS_SUPPORT_CR_NO_ID,
@@ -19,6 +20,12 @@ import {
   ticketOwnerId,
   websiteTicketFields,
 } from '../utils/pinellasSupport.js';
+
+test('Office of the Sheriff tickets use their own category', () => {
+  assert.equal(PINELLAS_SUPPORT_CATEGORY_IDS.sheriff, '1514848142653390898');
+  assert.notEqual(PINELLAS_SUPPORT_CATEGORY_IDS.sheriff, PINELLAS_SUPPORT_CATEGORY_IDS.compliance);
+  assert.notEqual(PINELLAS_SUPPORT_CATEGORY_IDS.sheriff, PINELLAS_SUPPORT_CATEGORY_IDS.general);
+});
 
 test('ticket owner is read from the channel topic', () => {
   assert.equal(ticketOwnerId({ topic: 'ticket-owner:1074411240757137589 ticket-type:compliance' }), '1074411240757137589');

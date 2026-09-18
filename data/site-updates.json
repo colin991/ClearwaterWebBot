@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-sheriff-ticket-category",
+      "title": "Put Office of the Sheriff tickets in their own category",
+      "summary": "Office of the Sheriff tickets now open in Discord category 1514848142653390898 instead of sharing the Office of Professional Compliance category.",
+      "createdAt": "2026-09-18T01:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-vc-comms-jail-pms",
       "title": "Jail players not in Discord after one minute",
       "summary": "VC checks still rotate the old PMs and add the new cwrpvc / join-voice lines. Anyone not in Discord is reminded every minute, jailed after one minute, and jailed again every minute if they get out while still missing Discord.",
