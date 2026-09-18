@@ -35,6 +35,21 @@ test('report type trusts an explicit citation label over nested MVA text', () =>
   }), 'citation');
 });
 
+test('warrant CAD logs are not treated as arrest reports', () => {
+  assert.equal(reportTypeFor({
+    label: 'Warrant Arrest Log',
+    agency: 'Pinellas County Sheriff',
+  }), 'warrant');
+  assert.equal(reportTypeFor({
+    label: 'Warrant',
+    agency: 'PCSO',
+  }), 'warrant');
+  assert.equal(reportTypeFor({
+    label: 'Arrest Report',
+    agency: 'Pinellas County Sheriff',
+  }), 'arrest');
+});
+
 test('recordFields flattens Melonly arrest preview data', () => {
   const fields = recordFields(sampleArrest);
   assert.ok(fields.some(([name]) => /first name/i.test(name)));

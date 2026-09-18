@@ -75,9 +75,9 @@ const REPORT_TYPE_TITLES = Object.freeze({
 const reportTypeAliases = [
   ['ois', ['ois', 'officer involved shooting', 'officer-involved shooting', 'shooting']],
   ['mva', ['mva', 'motor vehicle accident', 'motor vehicle collision', 'traffic collision', 'crash', 'collision']],
-  ['arrest', ['arrest']],
+  ['warrant', ['warrant arrest', 'arrest warrant', 'warrant log', 'warant', 'warrant']],
   ['citation', ['citation', 'ticket']],
-  ['warrant', ['warrant']],
+  ['arrest', ['arrest']],
 ];
 
 let timer = null;
@@ -1154,7 +1154,11 @@ export async function syncPinellasMelonlyReports(client) {
   for (const record of records.reverse()) {
     const id = String(record?.id || '').trim();
     const type = reportTypeFor(record);
-    if (!id || seen.has(id) || !type || !isPinellasRecord(record)) {
+    if (!id || seen.has(id) || !type) {
+      skipped += 1;
+      continue;
+    }
+    if (!isPinellasRecord(record) && type !== 'warrant') {
       skipped += 1;
       continue;
     }

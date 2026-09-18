@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-cad-warrant-channel",
+      "title": "Post CAD warrant logs to the warrant channel",
+      "summary": "When a PCSO unit files a warrant in Melonly CAD, it now posts to the warrant channel with the same report embed and PDF as the other CAD logs, instead of being treated as an arrest.",
+      "createdAt": "2026-09-18T03:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-weekly-pdf-no-melonly-refetch",
       "title": "Fix busy weekly PDF downloads",
       "summary": "Download PDF on the admin panel now builds from the personnel row already on screen instead of asking Melonly again, so it no longer fails with a 60-second busy message after the roster loads.",
