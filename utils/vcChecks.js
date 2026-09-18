@@ -30,6 +30,11 @@ export const JAIL_MESSAGES = Object.freeze({
   voice: 'You are held until you are in a Clearwater Roleplay voice chat.',
 });
 
+export function hasJoinedTeam(player) {
+  const team = String(player?.team || '').trim().toLowerCase();
+  return Boolean(team) && !['none', 'n/a', 'unknown', 'selecting'].includes(team);
+}
+
 // Inject I/O so tests cannot issue commands to the live game.
 export function createVcChecks({ snapshot, send, load = async () => [], save = async () => {}, now = Date.now, onError = error => logger.error('VC checks failed', error), onLog = () => {}, enabled: initialEnabled = true }) {
   const log = event => {
@@ -98,10 +103,10 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
         };
         // Incomplete roster: never treat unknown members as missing from Discord.
         if (mode === 'comms') {
-          if (now() - state.since >= 60_000) {
+          if (hasJoinedTeam(player) && stillNeeded()) {
             const due = !state.lastJail || now() - state.lastJail >= 60_000;
-            if (due && stillNeeded()) {
-              const result = await apply(':jail ' + player.username, player, 'not in Discord for 1 minute', stillNeeded);
+            if (due) {
+              const result = await apply(':jail ' + player.username, player, 'not in Discord after joining a team', stillNeeded);
               if (result !== false) {
                 state.jailed = true;
                 state.lastJail = now();

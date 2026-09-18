@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-vc-jail-on-team",
+      "title": "Jail players not in Discord once they join a team",
+      "summary": "If someone is in-game without a matching Discord account and they pick a team, VC checks jail them right away instead of waiting a minute. They are jailed again every minute if they get out while still missing Discord.",
+      "createdAt": "2026-09-18T03:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-mirror-main-unban",
       "title": "Mirror main-server unbans to every bot server",
       "summary": "When someone is unbanned from the main Clearwater Discord, the bot also unbans them in every other server it is in. Bans are not copied.",

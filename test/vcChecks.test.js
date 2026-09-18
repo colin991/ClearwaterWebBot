@@ -9,7 +9,7 @@ function fixture() {
   const errors = [];
   const members = new Map();
   const voices = new Set();
-  const players = [{ username: 'Roblox_User', robloxId: '123' }];
+  const players = [{ username: 'Roblox_User', robloxId: '123', team: 'Civilian' }];
   let fail = false;
   const service = createVcChecks({
     now: () => time,
@@ -59,18 +59,25 @@ test('five minute grace, then jail and PM, never kick or load', async () => {
   assert.equal(f.calls.filter(c => c === ':unjail Roblox_User').length, 1);
 });
 
-test('missing member is PMed every minute and jailed after one minute', async () => {
+test('missing Discord is jailed once they join a team, then again every minute', async () => {
   const f = fixture(); await f.service.tick();
-  assert.equal(f.calls[0], ':pm Roblox_User ' + COMMS_MESSAGES[0]);
-  assert.ok(!f.calls.some(c => c.startsWith(':jail') || c.startsWith(':kick') || c.startsWith(':load')));
-  f.advance(60000); await f.service.tick();
-  assert.ok(f.calls.includes(':jail Roblox_User'));
-  assert.equal(f.calls.filter(c => c.startsWith(':pm Roblox_User ')).length, 2);
+  assert.equal(f.calls[0], ':jail Roblox_User');
+  assert.ok(f.calls.some(c => c.startsWith(':pm Roblox_User ')));
   f.advance(60000); await f.service.tick();
   assert.equal(f.calls.filter(c => c === ':jail Roblox_User').length, 2);
-  assert.equal(f.calls.filter(c => c.startsWith(':pm Roblox_User ')).length, 3);
   f.join(); await f.service.tick();
   assert.equal(f.calls.at(-1), ':pm Roblox_User ' + VC_MESSAGES[0]);
+});
+
+test('missing Discord is not jailed until they join a team', async () => {
+  const f = fixture();
+  f.players[0] = { username: 'Roblox_User', robloxId: '123', team: '' };
+  await f.service.tick();
+  assert.ok(f.calls.some(c => c.startsWith(':pm')));
+  assert.ok(!f.calls.some(c => c.startsWith(':jail')));
+  f.players[0] = { username: 'Roblox_User', robloxId: '123', team: 'DOT' };
+  await f.service.tick();
+  assert.ok(f.calls.includes(':jail Roblox_User'));
 });
 
 test('already compliant is untouched; leaving VC gets a fresh grace period', async () => {
