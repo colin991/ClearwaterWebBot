@@ -24,19 +24,21 @@ function fixture() {
   };
 }
 
-test('default off; no reminders until turned on', async () => {
+test('default on; reminders start unless turned off', async () => {
   const f = fixture();
   const service = createVcChecks({
     now: () => 0,
     snapshot: async () => ({ players: f.players, members: f.members, inVoice: id => f.voices.has(id) }),
     send: async (text, guard) => { if (guard && !guard()) return false; f.calls.push(text); },
   });
-  assert.equal(service.enabled, false);
-  await service.tick();
-  assert.deepEqual(f.calls, []);
+  assert.equal(service.enabled, true);
   f.join();
-  await service.setEnabled(true);
+  await service.tick();
   assert.equal(f.calls[0], ':pm Roblox_User ' + VC_MESSAGES[0]);
+  await service.setEnabled(false);
+  const count = f.calls.length;
+  await service.tick();
+  assert.equal(f.calls.length, count);
 });
 
 test('five minute grace, then jail and PM, never kick or load', async () => {

@@ -42,7 +42,7 @@ async function handleChecks(interaction) {
     tag: 'VcCheck',
     body: `${interaction.user.username} (${interaction.user.id}): Received \`/vc checks ${enabled ? 'on' : 'off'}\``,
   });
-  await interaction.editReply('VC checks are now **' + (enabled ? 'on' : 'off') + '**. Checks default to off after a bot restart.' +
+  await interaction.editReply('VC checks are now **' + (enabled ? 'on' : 'off') + '**. Checks default to on after a bot restart.' +
     (!enabled && result.pendingReleases ? ' Some releases are pending; the bot will retry automatically.' : ''));
 }
 

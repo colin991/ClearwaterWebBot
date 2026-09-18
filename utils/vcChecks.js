@@ -23,7 +23,7 @@ export const JAIL_MESSAGES = Object.freeze({
 });
 
 // Inject I/O so tests cannot issue commands to the live game.
-export function createVcChecks({ snapshot, send, load = async () => [], save = async () => {}, now = Date.now, onError = error => logger.error('VC checks failed', error), onLog = () => {}, enabled: initialEnabled = false }) {
+export function createVcChecks({ snapshot, send, load = async () => [], save = async () => {}, now = Date.now, onError = error => logger.error('VC checks failed', error), onLog = () => {}, enabled: initialEnabled = true }) {
   const log = event => {
     void Promise.resolve().then(() => onLog(event)).catch(error => logger.error('VC check log failed', error));
   };
@@ -201,6 +201,6 @@ export function startVcChecks(client, config) {
     if (!stopped) { timer = setTimeout(run, 15000); timer.unref(); }
   };
   void loadVcWhitelist().catch((error) => logger.error('VC whitelist failed to load', error)).finally(() => { void run(); });
-  logger.info('VC checks start off until /vc checks on.');
+  logger.info('VC checks start on. Use /vc checks off to disable.');
   return () => { stopped = true; clearTimeout(timer); };
 }

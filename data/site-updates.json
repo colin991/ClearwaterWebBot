@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-vc-checks-default-on",
+      "title": "VC checks default on",
+      "summary": "Automatic VC checks now start on after every bot restart. Use /vc checks off to turn them off.",
+      "createdAt": "2026-09-18T01:40:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-pcso-erlc-key-separate",
       "title": "Keep the PCSO ER:LC key off the main server key",
       "summary": "ERLC_SERVER_KEY stays the main ER:LC server. PCSO training reports use only PCSOERLCAPI_KEY for the PCSO server.",
