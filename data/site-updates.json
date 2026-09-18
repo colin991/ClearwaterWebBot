@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-gta-driving",
+      "title": "Bring back GTA driving checks",
+      "summary": "The bot again watches in-game speed over 130. Two snapshots in a row get an in-game PM to slow down, and a second PM if they speed again within 3 minutes. Players are not loaded, kicked, or jailed for this.",
+      "createdAt": "2026-09-18T02:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-sheriff-rotate-grace",
       "title": "Give Sheriff rotations a 10 minute leave warning",
       "summary": "When someone joins Sheriff over the 23-player cap and a player has been on the team over 1.5 hours, that player is PMed to leave in 10 minutes (with a 5-minute reminder) instead of being wanted immediately. They are wanted only after that window if the team is still over the cap.",
