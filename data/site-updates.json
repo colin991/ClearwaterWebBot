@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-help-card-icons",
+      "title": "Fix How can we help card icons",
+      "summary": "The Contact, report, and member resource icons no longer sit in a clipped gray square. They show at full size with no background.",
+      "createdAt": "2026-09-18T02:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-command-abuse",
       "title": "Alert on mass in-game command abuse",
       "summary": "If someone uses :heal all, :bring all / :bing all, :bring others, :kick all, or :ban all, the bot posts an @here alert in the command-abuse channel. It does not undo the command.",
