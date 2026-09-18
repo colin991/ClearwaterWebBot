@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-pcso-erlc-key-separate",
+      "title": "Keep the PCSO ER:LC key off the main server key",
+      "summary": "ERLC_SERVER_KEY stays the main ER:LC server. PCSO training reports use only PCSOERLCAPI_KEY for the PCSO server.",
+      "createdAt": "2026-09-18T01:32:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-fix-logout-get",
       "title": "Fix Log out from the admin panel",
       "summary": "Clicking Log out no longer shows Method not allowed. GET /api/auth/logout clears the Discord session cookie and returns to the homepage.",

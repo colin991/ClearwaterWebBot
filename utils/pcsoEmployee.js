@@ -482,14 +482,14 @@ export async function handleEmployeeAction(action, payload = {}, user = null, he
 }
 
 export function pcsoErlcApiServerKey() {
-  return String(process.env.PCSOERLCAPI_KEY || process.env.ERLC_SERVER_KEY || '').trim();
+  return String(process.env.PCSOERLCAPI_KEY || '').trim();
 }
 
 export async function postPcsoErlcApi(path, body) {
   const base = String(process.env.PCSOERLCAPI_URL || '').replace(/\/$/, '');
   const serverKey = pcsoErlcApiServerKey();
   if (!base) return { ok: false, reason: 'not_configured', error: 'PCSOERLCAPI_URL is not set on the host.' };
-  if (!serverKey) return { ok: false, reason: 'not_configured', error: 'Set ERLC_SERVER_KEY (or PCSOERLCAPI_KEY) to the ER:LC server key.' };
+  if (!serverKey) return { ok: false, reason: 'not_configured', error: 'Set PCSOERLCAPI_KEY to the PCSO ER:LC server key (not ERLC_SERVER_KEY).' };
   try {
     const headers = {
       'Content-Type': 'application/json',

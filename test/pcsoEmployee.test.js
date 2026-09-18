@@ -99,15 +99,15 @@ test('employee panel paths are allowed after Discord login', () => {
   assert.equal(safeNextPath('/employee/reports'), '/employee/reports');
 });
 
-test('PCSOERLCAPI uses the ER:LC server-key header, not a Bearer token', async () => {
+test('PCSOERLCAPI uses the PCSO ER:LC server-key, not the main ERLC_SERVER_KEY', async () => {
   const originalFetch = globalThis.fetch;
   const originalUrl = process.env.PCSOERLCAPI_URL;
   const originalKey = process.env.PCSOERLCAPI_KEY;
   const originalErlc = process.env.ERLC_SERVER_KEY;
   const calls = [];
   process.env.PCSOERLCAPI_URL = 'https://pcsoerlcapi.example.com';
-  delete process.env.PCSOERLCAPI_KEY;
-  process.env.ERLC_SERVER_KEY = 'erlc-server-key-sample';
+  process.env.PCSOERLCAPI_KEY = 'pcso-erlc-server-key';
+  process.env.ERLC_SERVER_KEY = 'main-erlc-server-key';
   globalThis.fetch = async (url, options) => {
     calls.push({ url: String(url), headers: options.headers });
     return {
@@ -120,8 +120,36 @@ test('PCSOERLCAPI uses the ER:LC server-key header, not a Bearer token', async (
     const result = await postPcsoErlcApi('/training-reports', { action: 'approved' });
     assert.equal(result.ok, true);
     assert.equal(calls[0].url, 'https://pcsoerlcapi.example.com/training-reports');
-    assert.equal(calls[0].headers['server-key'], 'erlc-server-key-sample');
+    assert.equal(calls[0].headers['server-key'], 'pcso-erlc-server-key');
+    assert.notEqual(calls[0].headers['server-key'], 'main-erlc-server-key');
     assert.equal(calls[0].headers.Authorization, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalUrl === undefined) delete process.env.PCSOERLCAPI_URL;
+    else process.env.PCSOERLCAPI_URL = originalUrl;
+    if (originalKey === undefined) delete process.env.PCSOERLCAPI_KEY;
+    else process.env.PCSOERLCAPI_KEY = originalKey;
+    if (originalErlc === undefined) delete process.env.ERLC_SERVER_KEY;
+    else process.env.ERLC_SERVER_KEY = originalErlc;
+  }
+});
+
+test('PCSOERLCAPI does not fall back to the main ERLC_SERVER_KEY', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalUrl = process.env.PCSOERLCAPI_URL;
+  const originalKey = process.env.PCSOERLCAPI_KEY;
+  const originalErlc = process.env.ERLC_SERVER_KEY;
+  process.env.PCSOERLCAPI_URL = 'https://pcsoerlcapi.example.com';
+  delete process.env.PCSOERLCAPI_KEY;
+  process.env.ERLC_SERVER_KEY = 'main-erlc-server-key';
+  globalThis.fetch = async () => {
+    throw new Error('must not call the main-server key');
+  };
+  try {
+    const result = await postPcsoErlcApi('/training-reports', { action: 'approved' });
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, 'not_configured');
+    assert.match(result.error, /PCSOERLCAPI_KEY/);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalUrl === undefined) delete process.env.PCSOERLCAPI_URL;
