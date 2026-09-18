@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-gta-driving",
+      "title": "Bring back GTA driving checks",
+      "summary": "The bot again watches in-game speed over 130. Two snapshots in a row get an in-game PM to slow down, and a second PM if they speed again within 3 minutes. Players are not loaded, kicked, or jailed for this.",
+      "createdAt": "2026-09-18T02:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-sheriff-ticket-category",
       "title": "Put Office of the Sheriff tickets in their own category",
       "summary": "Office of the Sheriff tickets now open in Discord category 1514848142653390898 instead of sharing the Office of Professional Compliance category.",

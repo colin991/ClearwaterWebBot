@@ -1,5 +1,6 @@
 import { Events } from 'discord.js';
 import { startModCallVoice } from '../utils/modCallVoice.js';
+import { startGtaSpeeding } from '../utils/gtaSpeeding.js';
 import { startSheriffBalance } from '../utils/sheriffBalance.js';
 import { startPriorityRequest } from '../utils/priorityRequest.js';
 import { startVcChecks } from '../utils/vcChecks.js';
@@ -51,6 +52,7 @@ export default {
       if (!client.stopPriorityRequest) client.stopPriorityRequest = startPriorityRequest(client);
       if (!client.stopVcChecks) client.stopVcChecks = startVcChecks(client, client.config);
       if (!client.stopSheriffBalance) client.stopSheriffBalance = startSheriffBalance(client);
+      if (!client.stopGtaSpeeding) client.stopGtaSpeeding = startGtaSpeeding(client);
       if (!client.stopModCallVoice) client.stopModCallVoice = startModCallVoice(client);
       if (!client.stopErlcZoneVoice) {
         client.stopErlcZoneVoice = startErlcZoneVoice(client, client.config);
