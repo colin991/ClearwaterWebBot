@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-mod-call-unpicked-remind",
+      "title": "Ping staff when a mod call sits for 3 minutes",
+      "summary": "If an in-game mod call is not picked up within 3 minutes, the bot posts one scare ping in the staff channel telling that role to pick up calls or be auto-infracted in 1 minute. Nobody is actually auto-infracted.",
+      "createdAt": "2026-09-18T02:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-sheriff-ticket-category",
       "title": "Put Office of the Sheriff tickets in their own category",
       "summary": "Office of the Sheriff tickets now open in Discord category 1514848142653390898 instead of sharing the Office of Professional Compliance category.",
