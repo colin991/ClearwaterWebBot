@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-remove-patrol-staff-nav",
+      "title": "Remove Patrol Staff from Divisions",
+      "summary": "The Divisions dropdown no longer lists Patrol Staff. Other division pages stay in the menu.",
+      "createdAt": "2026-09-18T01:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-ticket-reply-timeout",
       "title": "Stop Contact ticket replies from timing out",
       "summary": "Website ticket replies no longer scan the whole Discord server first. Mentions like <@user> post in Discord, and a slow bot host shows a retry message instead of The operation was aborted due to timeout.",

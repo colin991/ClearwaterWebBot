@@ -26,7 +26,6 @@
     <div class="pcso-drop">
       <button class="pcso-drop-toggle" type="button" aria-expanded="false">Divisions</button>
       <div class="pcso-drop-menu" role="menu">
-        <a href="/patrol-staff">Patrol Staff</a>
         <a href="/public-information">Public Information Office</a>
         <a href="/special-response">Special Response Team</a>
         <a href="/traffic-enforcement">Traffic Enforcement Unit</a>

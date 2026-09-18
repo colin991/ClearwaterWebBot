@@ -32,6 +32,7 @@ test('shared nav lists Home, About, Law Enforcement, Divisions, Contact, and box
   assert.match(nav, /pcso-careers-btn/);
   assert.match(nav, />Careers</);
   assert.match(nav, /\/active-calls/);
+  assert.doesNotMatch(nav, /\/patrol-staff/);
   assert.match(nav, /mouseenter/);
   assert.match(nav, /pcso-drop-menu a/);
   const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
