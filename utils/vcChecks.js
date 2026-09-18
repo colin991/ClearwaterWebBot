@@ -103,20 +103,29 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
         };
         // Incomplete roster: never treat unknown members as missing from Discord.
         if (mode === 'comms') {
-          if (hasJoinedTeam(player) && stillNeeded()) {
-            const due = !state.lastJail || now() - state.lastJail >= 60_000;
-            if (due) {
-              const result = await apply(':jail ' + player.username, player, 'not in Discord after joining a team', stillNeeded);
-              if (result !== false) {
+          if (now() - state.lastPm >= 60_000 && stillNeeded()) {
+            const result = await apply(':pm ' + player.username + ' ' + COMMS_MESSAGES[state.index % COMMS_MESSAGES.length], player, 'comms reminder', stillNeeded);
+            if (result !== false) { state.lastPm = now(); state.index += 1; }
+            if (hasJoinedTeam(player) && stillNeeded()) {
+              const jailed = await apply(':jail ' + player.username, player, 'not in Discord after comms reminder', stillNeeded);
+              if (jailed !== false) {
                 state.jailed = true;
                 state.lastJail = now();
                 await save([...states]);
               }
             }
-          }
-          if (now() - state.lastPm >= 60_000) {
-            const result = await apply(':pm ' + player.username + ' ' + COMMS_MESSAGES[state.index % COMMS_MESSAGES.length], player, 'comms reminder', stillNeeded);
-            if (result !== false) { state.lastPm = now(); state.index += 1; }
+          } else if (
+            hasJoinedTeam(player)
+            && stillNeeded()
+            && state.lastPm > -Infinity
+            && (!state.lastJail || now() - state.lastJail >= 60_000)
+          ) {
+            const jailed = await apply(':jail ' + player.username, player, 'not in Discord after comms reminder', stillNeeded);
+            if (jailed !== false) {
+              state.jailed = true;
+              state.lastJail = now();
+              await save([...states]);
+            }
           }
           continue;
         }

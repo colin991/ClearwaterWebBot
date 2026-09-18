@@ -59,12 +59,13 @@ test('five minute grace, then jail and PM, never kick or load', async () => {
   assert.equal(f.calls.filter(c => c === ':unjail Roblox_User').length, 1);
 });
 
-test('missing Discord is jailed once they join a team, then again every minute', async () => {
+test('missing Discord is PMed then jailed, and jailed again after every later PM', async () => {
   const f = fixture(); await f.service.tick();
-  assert.equal(f.calls[0], ':jail Roblox_User');
-  assert.ok(f.calls.some(c => c.startsWith(':pm Roblox_User ')));
+  assert.equal(f.calls[0], ':pm Roblox_User ' + COMMS_MESSAGES[0]);
+  assert.equal(f.calls[1], ':jail Roblox_User');
   f.advance(60000); await f.service.tick();
-  assert.equal(f.calls.filter(c => c === ':jail Roblox_User').length, 2);
+  assert.equal(f.calls[2], ':pm Roblox_User ' + COMMS_MESSAGES[1]);
+  assert.equal(f.calls[3], ':jail Roblox_User');
   f.join(); await f.service.tick();
   assert.equal(f.calls.at(-1), ':pm Roblox_User ' + VC_MESSAGES[0]);
 });

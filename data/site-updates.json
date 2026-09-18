@@ -2,10 +2,10 @@
   "version": 1,
   "updates": [
     {
-      "id": "2026-09-18-vc-jail-on-team",
-      "title": "Jail players not in Discord once they join a team",
-      "summary": "If someone is in-game without a matching Discord account and they pick a team, VC checks jail them right away instead of waiting a minute. They are jailed again every minute if they get out while still missing Discord.",
-      "createdAt": "2026-09-18T03:20:00.000Z",
+      "id": "2026-09-18-vc-jail-after-comms-pm",
+      "title": "Jail after every not-in-Discord PM",
+      "summary": "Players missing Discord get a comms PM every minute, and each of those PMs is followed by a jail once they are on a team.",
+      "createdAt": "2026-09-18T03:25:00.000Z",
       "updatedBy": "colin991"
     },
     {
