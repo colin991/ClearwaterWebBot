@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-remove-pcso-afk-alerts",
+      "title": "Remove PCSO stationary AFK alerts",
+      "summary": "Pinellas Operations no longer posts 10-minute and 15-minute warnings when a deputy stays still in ER:LC while on shift.",
+      "createdAt": "2026-09-18T21:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-dc-fresh-roster",
       "title": "Keep Discord Check on a live in-game roster",
       "summary": "-dc no longer shows a frozen player list while VC checks are sending PMs and jails. The in-game roster keeps refreshing in the background, and Discord Check waits for a snapshot that is at most 8 seconds old.",

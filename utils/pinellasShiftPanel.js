@@ -22,7 +22,6 @@ import { getIdentityCache } from './identityStore.js';
 import { renderLibertyLocationMap } from './libertyMapImage.js';
 import { logger } from './logger.js';
 import { ensureGuildMembers } from './guildMemberSnapshot.js';
-import { syncPinellasAfkWarnings } from './pinellasAfk.js';
 import {
   fetchMelonlyMemberDiscordId,
   fetchPinellasDepartmentShifts,
@@ -1037,10 +1036,6 @@ export async function refreshPinellasShiftPanel(client, { forceResend = false } 
       throw error;
     }
   }
-
-  await syncPinellasAfkWarnings(client, snapshot).catch((error) => {
-    logger.warn(`Pinellas AFK check failed: ${error?.message || error}`);
-  });
 
   await syncPinellasOnDutyRoles(client, snapshot).catch((error) => {
     logger.warn(`Pinellas on-duty role sync failed: ${error?.message || error}`);
