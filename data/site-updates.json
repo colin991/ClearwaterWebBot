@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-ticket-claim-role",
+      "title": "Let the designated role claim any ticket",
+      "summary": "Members with role 1514363218754142218 can claim General, OPC, and Office of the Sheriff tickets even without Manage Messages. New tickets also grant that role access so they can open any of them.",
+      "createdAt": "2026-09-18T03:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-cad-warrant-channel",
       "title": "Post CAD warrant logs to the warrant channel",
       "summary": "When a PCSO unit files a warrant in Melonly CAD, it now posts to the warrant channel with the same report embed and PDF as the other CAD logs, instead of being treated as an arrest.",

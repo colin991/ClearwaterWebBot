@@ -30,6 +30,7 @@ export const PINELLAS_SUPPORT_BUTTON_PREFIX = 'pcs:support:';
 export const PINELLAS_SUPPORT_TRANSCRIPT_CHANNEL_ID = '1542631874684526663';
 export const PINELLAS_SUPPORT_CLOSE_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}close`;
 export const PINELLAS_SUPPORT_CLAIM_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}claim`;
+export const PINELLAS_SUPPORT_CLAIM_ROLE_ID = '1514363218754142218';
 export const PINELLAS_SUPPORT_CR_YES_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}cr:yes`;
 export const PINELLAS_SUPPORT_CR_NO_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}cr:no`;
 const PINELLAS_SUPPORT_STAFF_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}staff`;
@@ -393,6 +394,23 @@ export const TICKET_BOT_OVERWRITES = Object.freeze({
   ManageWebhooks: true,
 });
 
+export function memberHasPinellasClaimRole(member) {
+  const roles = member?.roles;
+  if (!roles) return false;
+  if (typeof roles.cache?.has === 'function') return roles.cache.has(PINELLAS_SUPPORT_CLAIM_ROLE_ID);
+  if (typeof roles.has === 'function') return roles.has(PINELLAS_SUPPORT_CLAIM_ROLE_ID);
+  if (Array.isArray(roles)) return roles.map(String).includes(PINELLAS_SUPPORT_CLAIM_ROLE_ID);
+  return false;
+}
+
+export function canClaimPinellasTicket(member) {
+  return Boolean(
+    member?.permissions?.has?.(PermissionFlagsBits.Administrator)
+    || member?.permissions?.has?.(PermissionFlagsBits.ManageMessages)
+    || memberHasPinellasClaimRole(member),
+  );
+}
+
 /** Copy the category overwrites, then grant the opener and bot on top. */
 export async function syncTicketChannelToCategory(channel, { openerId, botId } = {}) {
   if (channel?.parentId && typeof channel.lockPermissions === 'function') {
@@ -404,6 +422,9 @@ export async function syncTicketChannelToCategory(channel, { openerId, botId } =
   }
   if (botId && channel?.permissionOverwrites?.edit) {
     edits.push(channel.permissionOverwrites.edit(botId, TICKET_BOT_OVERWRITES));
+  }
+  if (channel?.permissionOverwrites?.edit) {
+    edits.push(channel.permissionOverwrites.edit(PINELLAS_SUPPORT_CLAIM_ROLE_ID, TICKET_OPENER_OVERWRITES));
   }
   await Promise.all(edits);
   return channel;
@@ -547,6 +568,7 @@ export async function handlePinellasSupportInteraction(interaction) {
   const ownerId = ticketOwnerId(channel);
   const isStaff = Boolean(interaction.member?.permissions?.has(PermissionFlagsBits.Administrator)
     || interaction.member?.permissions?.has(PermissionFlagsBits.ManageMessages));
+  const canClaim = canClaimPinellasTicket(interaction.member);
 
   if (id === PINELLAS_SUPPORT_CLOSE_ID) {
     if (!isStaff && interaction.user.id !== ownerId) {
@@ -599,7 +621,7 @@ export async function handlePinellasSupportInteraction(interaction) {
   }
 
   if (id === PINELLAS_SUPPORT_CLAIM_ID) {
-    if (!isStaff) {
+    if (!canClaim) {
       await interaction.reply({ content: 'Only staff can claim a ticket.', flags: MessageFlags.Ephemeral });
       return true;
     }

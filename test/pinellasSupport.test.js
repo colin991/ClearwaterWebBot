@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   PINELLAS_SUPPORT_CATEGORY_IDS,
   PINELLAS_SUPPORT_CLAIM_ID,
+  PINELLAS_SUPPORT_CLAIM_ROLE_ID,
   PINELLAS_SUPPORT_CLOSE_ID,
   PINELLAS_SUPPORT_CR_NO_ID,
   PINELLAS_SUPPORT_CR_YES_ID,
@@ -12,6 +13,7 @@ import {
   buildInquiryModal,
   buildTicketCloseRequestPayload,
   buildTicketOpenPingPayload,
+  canClaimPinellasTicket,
   createPinellasSupportTicketForMember,
   formatWebsiteInquiry,
   handlePinellasSupportInteraction,
@@ -125,7 +127,7 @@ test('ticket channels lock permissions to the category then grant opener and bot
   };
   await syncTicketChannelToCategory(channel, { openerId: '99', botId: 'bot' });
   assert.equal(channel.synced, true);
-  assert.deepEqual(edits.map((entry) => entry.id), ['99', 'bot']);
+  assert.deepEqual(edits.map((entry) => entry.id), ['99', 'bot', PINELLAS_SUPPORT_CLAIM_ROLE_ID]);
   assert.equal(edits[0].perms.ViewChannel, true);
   assert.equal(edits[1].perms.ManageChannels, true);
   assert.equal(TICKET_OPENER_OVERWRITES.SendMessages, true);
@@ -165,10 +167,43 @@ test('new tickets are created without custom overwrites so they inherit the cate
   assert.equal('permissionOverwrites' in created, false);
   assert.equal(created.parent, '1514848054724005938');
   assert.equal(channel.synced, true);
-  assert.deepEqual(edits.map((entry) => entry.id), ['99', 'bot']);
+  assert.deepEqual(edits.map((entry) => entry.id), ['99', 'bot', PINELLAS_SUPPORT_CLAIM_ROLE_ID]);
   assert.match(String(sent[0].content), /@here/);
   assert.match(String(sent[0].content), /<@99>/);
   assert.deepEqual(sent[0].allowedMentions.parse, ['everyone']);
+});
+
+test('claim role can claim any ticket without Manage Messages', async () => {
+  assert.equal(canClaimPinellasTicket({
+    permissions: { has: () => false },
+    roles: { cache: { has: (id) => id === PINELLAS_SUPPORT_CLAIM_ROLE_ID } },
+  }), true);
+  assert.equal(canClaimPinellasTicket({
+    permissions: { has: () => false },
+    roles: { cache: { has: () => false } },
+  }), false);
+
+  let reply;
+  let sent;
+  const handled = await handlePinellasSupportInteraction({
+    customId: PINELLAS_SUPPORT_CLAIM_ID,
+    isButton: () => true,
+    isModalSubmit: () => false,
+    user: { id: '55' },
+    member: {
+      permissions: { has: () => false },
+      roles: { cache: { has: (id) => id === PINELLAS_SUPPORT_CLAIM_ROLE_ID } },
+    },
+    channel: {
+      topic: 'ticket-owner:1074411240757137589 ticket-type:compliance',
+      setTopic: async () => {},
+      send: async (content) => { sent = content; },
+    },
+    reply: async (payload) => { reply = payload; },
+  });
+  assert.equal(handled, true);
+  assert.match(String(reply.content), /claimed this ticket/);
+  assert.match(String(sent), /<@55>/);
 });
 
 test('new ticket ping uses @here', () => {
