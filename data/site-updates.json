@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-mirror-main-unban",
+      "title": "Mirror main-server unbans to every bot server",
+      "summary": "When someone is unbanned from the main Clearwater Discord, the bot also unbans them in every other server it is in. Bans are not copied.",
+      "createdAt": "2026-09-18T03:15:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-ticket-claim-role",
       "title": "Let the designated role claim any ticket",
       "summary": "Members with role 1514363218754142218 can claim General, OPC, and Office of the Sheriff tickets even without Manage Messages. New tickets also grant that role access so they can open any of them.",
