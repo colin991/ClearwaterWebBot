@@ -51,6 +51,65 @@ export function erlcCooldownRemainingMs(now = Date.now()) {
   return Math.max(0, erlcAvailableAt - now);
 }
 
+export function getErlcRateLimitStatus(now = Date.now()) {
+  const cooldownMs = erlcCooldownRemainingMs(now);
+  const halted = Boolean(erlcHaltError && now < erlcHaltUntil);
+  const haltMs = halted ? Math.max(0, erlcHaltUntil - now) : 0;
+  const cacheExpiresAt = Number(bundleCache.expiresAt) || 0;
+  const cacheAgeMs = bundleCache.value && cacheExpiresAt
+    ? Math.max(0, now - (cacheExpiresAt - ERLC_SERVER_CACHE_TTL_MS))
+    : null;
+  let state = 'ready';
+  if (halted) state = 'key_rejected';
+  else if (cooldownMs > 400) state = 'cooling_down';
+  else if (erlcSlotDepth > 0 || bundleCache.inflight) state = 'in_flight';
+  return {
+    state,
+    cooldownMs,
+    halted,
+    haltMs,
+    haltMessage: halted ? String(erlcHaltError?.message || 'ER:LC is blocked.') : null,
+    queuedCommands,
+    slotBusy: erlcSlotDepth > 0,
+    snapshotInFlight: Boolean(bundleCache.inflight),
+    hasRosterCache: Boolean(bundleCache.value),
+    cacheAgeMs,
+    minIntervalMs: erlcMinIntervalMs,
+    maxRetryAfterSec: ERLC_MAX_RETRY_AFTER_SEC,
+  };
+}
+
+function secondsLabel(ms) {
+  const seconds = Math.max(0, Math.ceil(Number(ms) / 1000));
+  return seconds === 1 ? '1 second' : `${seconds} seconds`;
+}
+
+export function formatErlcRateLimitReport(status = getErlcRateLimitStatus()) {
+  const lines = [];
+  if (status.state === 'key_rejected') {
+    lines.push(`**Status:** Key rejected — ${status.haltMessage}`);
+    lines.push(`**Blocked for:** ${secondsLabel(status.haltMs)}`);
+  } else if (status.state === 'cooling_down') {
+    lines.push(`**Status:** Cooling down`);
+    lines.push(`**Next request:** in ${secondsLabel(status.cooldownMs)}`);
+  } else if (status.state === 'in_flight') {
+    lines.push('**Status:** A request is in flight');
+    lines.push('**Next request:** as soon as the current call finishes, then the 5s PRC gap');
+  } else {
+    lines.push('**Status:** Ready');
+    lines.push('**Next request:** now');
+  }
+  lines.push(`**PRC gap:** ${secondsLabel(status.minIntervalMs)} (Retry-After capped at ${status.maxRetryAfterSec}s)`);
+  lines.push(`**Queued in-game commands:** ${status.queuedCommands}`);
+  lines.push(`**Snapshot in flight:** ${status.snapshotInFlight || status.slotBusy ? 'yes' : 'no'}`);
+  if (status.hasRosterCache) {
+    lines.push(`**Cached roster:** yes (${secondsLabel(status.cacheAgeMs)} old)`);
+  } else {
+    lines.push('**Cached roster:** none');
+  }
+  return lines.join('\n');
+}
+
 function erlcTimeoutError() {
   const wait = erlcCooldownRemainingMs();
   const error = new Error(wait > 400

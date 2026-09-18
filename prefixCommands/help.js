@@ -35,6 +35,7 @@ const GROUPS = [
     lines: [
       `\`-roles\` / \`-members\` / \`-mutes\` / \`-modstats\` / \`-inviteinfo\` / \`-diagnose\` / \`${PREFIX}help\` — **${RANK_FLOOR.anyStaff}+**`,
       `\`-vc\` — Total members in voice across the server · **Administrator**`,
+      '`-ratelimit` — ER:LC API cooldown and queue · **Administrator**',
       `\`-nick\` — Nickname · **${RANK_FLOOR.administrator}+**`,
       '`-callsign [@member]` — PCSO roster callsign · **Administrator**',
       `\`-bans\` — Timed ban cases · **${RANK_FLOOR.supervisor}+**`,

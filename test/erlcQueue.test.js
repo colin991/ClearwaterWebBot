@@ -5,6 +5,8 @@ import {
   erlcCooldownRemainingMs,
   expireErlcBundleCacheForTests,
   fetchErlcServer,
+  formatErlcRateLimitReport,
+  getErlcRateLimitStatus,
   resetErlcNetworkForTests,
 } from '../utils/erlc.js';
 
@@ -258,6 +260,46 @@ test('Discord roster reads time out when the snapshot itself hangs', async () =>
     assert.ok(Date.now() - t0 < 400);
   } finally {
     release();
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+});
+
+test('-ratelimit report is ready when the ER:LC line is idle', () => {
+  resetErlcNetworkForTests({ minIntervalMs: 5000 });
+  const status = getErlcRateLimitStatus();
+  assert.equal(status.state, 'ready');
+  assert.match(formatErlcRateLimitReport(status), /Status:\*\* Ready/);
+  assert.match(formatErlcRateLimitReport(status), /Cached roster:\*\* none/);
+});
+
+test('-ratelimit report shows cooldown after a 429', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 5_000 });
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse(429, {}, { 'retry-after': '5' });
+  try {
+    await assert.rejects(() => fetchErlcServer('key'), /rate-limited/);
+    const status = getErlcRateLimitStatus();
+    assert.equal(status.state, 'cooling_down');
+    assert.ok(status.cooldownMs > 400);
+    assert.match(formatErlcRateLimitReport(status), /Cooling down/);
+  } finally {
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+  }
+});
+
+test('-ratelimit report shows a rejected server key', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 0 });
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse(401, {});
+  try {
+    await assert.rejects(() => fetchErlcServer('key'), /invalid or expired/);
+    const status = getErlcRateLimitStatus();
+    assert.equal(status.state, 'key_rejected');
+    assert.match(formatErlcRateLimitReport(status), /Key rejected/);
+  } finally {
     globalThis.fetch = original;
     resetErlcNetworkForTests({ minIntervalMs: 5000 });
     await new Promise((resolve) => setImmediate(resolve));
