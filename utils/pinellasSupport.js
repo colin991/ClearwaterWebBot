@@ -409,6 +409,17 @@ export async function syncTicketChannelToCategory(channel, { openerId, botId } =
   return channel;
 }
 
+export function buildTicketOpenPingPayload(memberId) {
+  const id = String(memberId || '');
+  return {
+    content: id ? `@here <@${id}>` : '@here',
+    allowedMentions: {
+      parse: ['everyone'],
+      users: id ? [id] : [],
+    },
+  };
+}
+
 export function buildTicketCloseRequestPayload(ownerId) {
   return {
     content: ownerId
@@ -489,10 +500,7 @@ export async function createPinellasSupportTicketForMember(guild, member, type, 
     topic: `ticket-owner:${member.id} ticket-type:${type}`,
   });
   await syncTicketChannelToCategory(channel, { openerId: member.id, botId: botMember.id });
-  await channel.send({
-    content: `<@${member.id}>`,
-    allowedMentions: { users: [member.id] },
-  });
+  await channel.send(buildTicketOpenPingPayload(member.id));
   await channel.send(await buildTicketPayload(member, type, formatTicketInquiryNote(inquiry, options.source)));
   return { channel, existing: false };
 }

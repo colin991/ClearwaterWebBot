@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-ticket-here-ping",
+      "title": "Ping @here when a support ticket opens",
+      "summary": "Every new PCSO support ticket pings @here in the ticket channel so staff online in that category are notified. Reopening an existing ticket does not ping again.",
+      "createdAt": "2026-09-18T00:52:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-ticket-category-sync",
       "title": "Sync new ticket channels to their category permissions",
       "summary": "New PCSO support tickets copy the category permission overwrites, then add the opener and bot on top, so staff roles on the category can see every new ticket.",

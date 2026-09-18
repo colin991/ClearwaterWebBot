@@ -10,6 +10,7 @@ import {
   TICKET_OPENER_OVERWRITES,
   buildInquiryModal,
   buildTicketCloseRequestPayload,
+  buildTicketOpenPingPayload,
   createPinellasSupportTicketForMember,
   formatWebsiteInquiry,
   handlePinellasSupportInteraction,
@@ -127,13 +128,14 @@ test('ticket channels lock permissions to the category then grant opener and bot
 test('new tickets are created without custom overwrites so they inherit the category', async () => {
   const edits = [];
   let created;
+  const sent = [];
   const channel = {
     parentId: '1514848054724005938',
     lockPermissions: async () => { channel.synced = true; },
     permissionOverwrites: {
       edit: async (id, perms) => { edits.push({ id, perms }); },
     },
-    send: async () => {},
+    send: async (payload) => { sent.push(payload); },
   };
   const guild = {
     id: PINELLAS_SUPPORT_GUILD_ID,
@@ -157,4 +159,14 @@ test('new tickets are created without custom overwrites so they inherit the cate
   assert.equal(created.parent, '1514848054724005938');
   assert.equal(channel.synced, true);
   assert.deepEqual(edits.map((entry) => entry.id), ['99', 'bot']);
+  assert.match(String(sent[0].content), /@here/);
+  assert.match(String(sent[0].content), /<@99>/);
+  assert.deepEqual(sent[0].allowedMentions.parse, ['everyone']);
+});
+
+test('new ticket ping uses @here', () => {
+  const payload = buildTicketOpenPingPayload('1074411240757137589');
+  assert.equal(payload.content, '@here <@1074411240757137589>');
+  assert.deepEqual(payload.allowedMentions.parse, ['everyone']);
+  assert.deepEqual(payload.allowedMentions.users, ['1074411240757137589']);
 });
