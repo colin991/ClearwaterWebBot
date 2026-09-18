@@ -203,6 +203,7 @@ async function fetchErlcBundle(serverKey) {
   url.searchParams.set('Vehicles', 'true');
   url.searchParams.set('KillLogs', 'true');
   url.searchParams.set('ModCalls', 'true');
+  url.searchParams.set('CommandLogs', 'true');
   url.searchParams.set('Staff', 'true');
 
   throwIfErlcHalted();
@@ -428,6 +429,18 @@ export function parseErlcKill(entry) {
   const raw = Number(entry?.Timestamp || entry?.timestamp || 0);
   const at = raw > 0 && raw < 1e12 ? raw * 1000 : raw;
   return { username: killed.username, robloxId: killed.robloxId, at };
+}
+
+export function parseErlcCommandLog(entry) {
+  const player = splitOwner(entry?.Player || entry?.player);
+  const raw = Number(entry?.Timestamp || entry?.timestamp || 0);
+  const at = raw > 0 && raw < 1e12 ? raw * 1000 : raw;
+  return {
+    username: player.username,
+    robloxId: player.robloxId,
+    at,
+    command: String(entry?.Command || entry?.command || '').trim(),
+  };
 }
 
 // Official map images are 3121Â² and cover the in-game 3120Â² stud plane.
