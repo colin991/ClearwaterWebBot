@@ -8,9 +8,9 @@ Use `/vc checks state:on` or `/vc checks state:off` in the configured Clearwater
 
 The service checks the ER:LC player list and Discord members every 15 seconds after the previous pass finishes. It matches a linked Roblox identity, or the Roblox username (ignoring case, underscores vs spaces) within Discord nicknames, display names, global names, or usernames. Any matching non-bot member in any voice channel in that Discord server satisfies the check.
 
-- A matching member outside voice gets VC reminder PMs, then is **jailed** after 5 minutes. They are **never** `:kick`'ed, `:load`'ed, or `:wanted`.
+- A matching member outside voice gets VC reminder PMs every minute, then is **jailed** after 5 minutes. They are **never** `:kick`'ed, `:load`'ed, or `:wanted`.
 - A player whose Discord nickname **is** or **contains** their Roblox username counts as in Discord. They are not jailed as “missing.”
-- A player with no matching Discord member is only PMed comms reminders (never jailed). A partial Discord cache is never treated as “not in Discord.”
+- A player with no matching Discord member is PMed comms reminders every minute and **jailed after 1 minute**. If they leave jail and are still not in Discord, they are jailed again every minute. A partial Discord cache is never treated as “not in Discord.”
 - Joining voice or turning checks off **unjails** anyone this feature jailed. A failed unjail is retried on the next pass instead of being forgotten. Already compliant players receive no commands. Leaving voice starts a fresh reminder interval.
 - Failed jails, failed unjails, and jail-notice PMs retry automatically.
 - `-dc` and VC checks use the same voice lookup, including people found from live voice-state members, so someone listed as **In Discord — In VC** is not jailed for missing voice.

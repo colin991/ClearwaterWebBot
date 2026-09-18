@@ -11,11 +11,19 @@ import { loadVcWhitelist } from './vcWhitelist.js';
 
 export { matchingMembers, membersForPlayer, robloxNameMatchesText } from './robloxDiscordMatch.js';
 
-export const VC_MESSAGES = ['Please hop in a Clearwater Roleplay voice chat.', 'Please stay in a Clearwater Roleplay voice chat.'];
+export const VC_MESSAGES = [
+  'Please hop in a Clearwater Roleplay voice chat.',
+  'Please stay in a Clearwater Roleplay voice chat.',
+  'Please join a voice channel in Clearwater',
+];
 export const COMMS_MESSAGES = [
   'Please get in Clearwater comms. Code: CWRP VC',
   'Please join Clearwater comms now. Code: CWRP VC',
   'Get in Clearwater comms. Code: CWRP VC',
+  'Join server code is cwrpvc to avoid being kicked. Failure to do so will result in you continued to being jailed.',
+  'Join our comms code is cwrpvc to avoid being jailed. Refusal to do so will result in you continued to being jailed.',
+  'Getting jailed? Please join our comms code cwrpvc',
+  'If you are getting jailed join our server code cwrpvc',
 ];
 export const JAIL_MESSAGES = Object.freeze({
   comms: 'You are held until you are in Clearwater comms. Code: CWRP VC',
@@ -53,7 +61,7 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
       if (!/^[a-zA-Z0-9_]{3,20}$/.test(player.username)) continue;
       const id = player.robloxId || player.username;
       let state = states.get(id);
-      if (!state) { state = { jailed: false, mode: null, since: now(), lastPm: -Infinity, index: 0, needJailNotice: false }; states.set(id, state); }
+      if (!state) { state = { jailed: false, mode: null, since: now(), lastPm: -Infinity, lastJail: 0, index: 0, needJailNotice: false }; states.set(id, state); }
       try {
         const matches = membersForPlayer(player, members, identities);
         const inVc = playerIsInVoice(player, members, identities, inVoice, voiceStates);
@@ -71,6 +79,7 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
             state.mode = null;
             state.since = now();
             state.lastPm = -Infinity;
+            state.lastJail = 0;
             state.index = 0;
             state.needJailNotice = false;
           }
@@ -79,7 +88,7 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
         if (!membersReady && !matches.length) continue;
         const mode = matches.length ? 'voice' : 'comms';
         if (state.mode !== mode) {
-          state.mode = mode; state.since = now(); state.lastPm = -Infinity; state.index = 0; state.needJailNotice = false;
+          state.mode = mode; state.since = now(); state.lastPm = -Infinity; state.lastJail = 0; state.index = 0; state.needJailNotice = false;
         }
         const stillNeeded = () => {
           if (!enabled || isVcExempt(player, members, identities)) return false;
@@ -87,17 +96,20 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
           const current = membersForPlayer(player, members, identities);
           return (current.length ? 'voice' : 'comms') === mode;
         };
-        // Never jail someone we could not prove is missing from Discord.
-        // Nickname matches must count; unmatched players only get comms PMs.
+        // Incomplete roster: never treat unknown members as missing from Discord.
         if (mode === 'comms') {
-          if (state.jailed) {
-            const released = await apply(':unjail ' + player.username, player, 'nickname or Discord match uncertain');
-            if (released !== false) {
-              state.jailed = false;
-              await save([...states]);
+          if (now() - state.since >= 60_000) {
+            const due = !state.lastJail || now() - state.lastJail >= 60_000;
+            if (due && stillNeeded()) {
+              const result = await apply(':jail ' + player.username, player, 'not in Discord for 1 minute', stillNeeded);
+              if (result !== false) {
+                state.jailed = true;
+                state.lastJail = now();
+                await save([...states]);
+              }
             }
           }
-          if (now() - state.lastPm >= 60000) {
+          if (now() - state.lastPm >= 60_000) {
             const result = await apply(':pm ' + player.username + ' ' + COMMS_MESSAGES[state.index % COMMS_MESSAGES.length], player, 'comms reminder', stillNeeded);
             if (result !== false) { state.lastPm = now(); state.index += 1; }
           }

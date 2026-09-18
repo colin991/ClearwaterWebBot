@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-vc-comms-jail-pms",
+      "title": "Jail players not in Discord after one minute",
+      "summary": "VC checks still rotate the old PMs and add the new cwrpvc / join-voice lines. Anyone not in Discord is reminded every minute, jailed after one minute, and jailed again every minute if they get out while still missing Discord.",
+      "createdAt": "2026-09-18T01:46:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-vc-checks-default-on",
       "title": "VC checks default on",
       "summary": "Automatic VC checks now start on after every bot restart. Use /vc checks off to turn them off.",

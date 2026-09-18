@@ -59,16 +59,18 @@ test('five minute grace, then jail and PM, never kick or load', async () => {
   assert.equal(f.calls.filter(c => c === ':unjail Roblox_User').length, 1);
 });
 
-test('missing member is PMed, never jailed or kicked', async () => {
+test('missing member is PMed every minute and jailed after one minute', async () => {
   const f = fixture(); await f.service.tick();
-  assert.deepEqual(f.calls, [':pm Roblox_User ' + COMMS_MESSAGES[0]]);
+  assert.equal(f.calls[0], ':pm Roblox_User ' + COMMS_MESSAGES[0]);
   assert.ok(!f.calls.some(c => c.startsWith(':jail') || c.startsWith(':kick') || c.startsWith(':load')));
-  f.advance(60000); await f.service.tick(); assert.equal(f.calls.at(-1), ':pm Roblox_User ' + COMMS_MESSAGES[1]);
-  f.advance(300000); await f.service.tick();
-  assert.ok(!f.calls.some(c => c.startsWith(':jail')));
-  f.join(); await f.service.tick(); assert.equal(f.calls.at(-1), ':pm Roblox_User ' + VC_MESSAGES[0]);
-  f.voices.add('discord'); await f.service.tick();
-  assert.ok(!f.calls.some(c => c.startsWith(':unjail')));
+  f.advance(60000); await f.service.tick();
+  assert.ok(f.calls.includes(':jail Roblox_User'));
+  assert.equal(f.calls.filter(c => c.startsWith(':pm Roblox_User ')).length, 2);
+  f.advance(60000); await f.service.tick();
+  assert.equal(f.calls.filter(c => c === ':jail Roblox_User').length, 2);
+  assert.equal(f.calls.filter(c => c.startsWith(':pm Roblox_User ')).length, 3);
+  f.join(); await f.service.tick();
+  assert.equal(f.calls.at(-1), ':pm Roblox_User ' + VC_MESSAGES[0]);
 });
 
 test('already compliant is untouched; leaving VC gets a fresh grace period', async () => {
@@ -254,4 +256,14 @@ test('exact or contained Roblox nickname is in Discord and is not jailed as miss
   await service.tick();
   assert.ok(calls[0].startsWith(':pm iTsAronJ '));
   assert.ok(!calls.some(c => c.startsWith(':jail')));
+});
+
+test('new comms and voice PMs stay in rotation without the staff notes', () => {
+  assert.equal(VC_MESSAGES.includes('Please join a voice channel in Clearwater'), true);
+  assert.equal(COMMS_MESSAGES.includes('Getting jailed? Please join our comms code cwrpvc'), true);
+  assert.equal(COMMS_MESSAGES.includes('If you are getting jailed join our server code cwrpvc'), true);
+  assert.ok(COMMS_MESSAGES.every((message) => !/\[For people/i.test(message)));
+  assert.ok(VC_MESSAGES.every((message) => !/\[For people/i.test(message)));
+  assert.equal(COMMS_MESSAGES[0], 'Please get in Clearwater comms. Code: CWRP VC');
+  assert.equal(VC_MESSAGES[0], 'Please hop in a Clearwater Roleplay voice chat.');
 });
