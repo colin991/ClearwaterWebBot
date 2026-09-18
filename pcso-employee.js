@@ -36,9 +36,9 @@ function setStatus(text) {
 
 function showSignedIn(on) {
   const signin = document.querySelector('[data-employee-signin]');
-  const app = document.querySelector('[data-employee-app]');
   if (signin) signin.hidden = on;
-  if (app) app.hidden = !on;
+  const app = document.querySelector('[data-employee-app]');
+  if (app && app.hasAttribute('hidden')) app.hidden = !on;
 }
 
 function renderSessionList(sessions) {

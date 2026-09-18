@@ -25,14 +25,13 @@
 <p class="pcso-page-lead">Training, department tools, reports, command staff, and admin. Role ID locks come later — anyone signed in can use every panel right now.</p>
 
 <div class="pcso-page-card" data-employee-signin>
-  <p>Sign in with Discord to open the employee tools.</p>
+  <p>Sign in with Discord to use the employee tools. Role locks are off for now — after login you can use every panel.</p>
   <p><a class="pcso-button pcso-button-red" href="/signin?next=/employee">Sign in with Discord</a></p>
 </div>
 
-<div data-employee-app hidden>
-  <p class="pcso-form-status" data-employee-status></p>
-  <div class="employee-grid">
-    <a href="/employee/training">
+<p class="pcso-form-status" data-employee-status></p>
+<div class="employee-grid" data-employee-app>
+  <a href="/employee/training">
       <h2>Training Division</h2>
       <p>Start or join SRT, TEU, or patrol training, then run the website quiz.</p>
     </a>
@@ -52,7 +51,6 @@
       <h2>Admin Panel</h2>
       <p>News, events, Inside the Star, and weekly personnel PDFs.</p>
     </a>
-  </div>
 </div>
 </div></main>
 <script src="pcso-nav.js?v=20260918-employee"></script>
