@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-fix-logout-get",
+      "title": "Fix Log out from the admin panel",
+      "summary": "Clicking Log out no longer shows Method not allowed. GET /api/auth/logout clears the Discord session cookie and returns to the homepage.",
+      "createdAt": "2026-09-18T01:28:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-pcsoerlcapi-erlc-key",
       "title": "PCSOERLCAPI uses the ER:LC server key",
       "summary": "Training report approve/deny calls PCSOERLCAPI with the same ER:LC private-server key (server-key header). It reuses ERLC_SERVER_KEY unless PCSOERLCAPI_KEY is set to that same kind of key.",
