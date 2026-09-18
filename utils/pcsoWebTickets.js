@@ -85,13 +85,17 @@ function walkComponentText(nodes, parts) {
 export function extractDiscordMessageText(message) {
   const parts = [];
   const content = String(message?.content || '').trim();
-  if (content && !/^<@!?\d{16,22}>$/.test(content)) parts.push(content);
+  if (content && !/^@here\s+<@!?\d{16,22}>$/.test(content)) parts.push(content);
   for (const embed of message?.embeds || []) {
     if (embed?.title) parts.push(String(embed.title).trim());
     if (embed?.description) parts.push(String(embed.description).trim());
   }
   walkComponentText(message?.components, parts);
   return [...new Set(parts.filter(Boolean))].join('\n\n').slice(0, 1800);
+}
+
+export function mentionedDiscordUserIds(text) {
+  return [...new Set([...String(text || '').matchAll(/<@!?(\d{16,22})>/g)].map((match) => match[1]))];
 }
 
 function supportTitle(type) {
@@ -311,8 +315,12 @@ async function collectTicketsForUser(client, discordId) {
   const liveById = new Map();
   try {
     const guild = await ensureGuild(client);
-    await guild.channels.fetch().catch(() => {});
-    for (const channel of findOpenSupportChannelsForOwner(guild, ownerId)) {
+    let live = findOpenSupportChannelsForOwner(guild, ownerId);
+    if (!live.length) {
+      await guild.channels.fetch().catch(() => {});
+      live = findOpenSupportChannelsForOwner(guild, ownerId);
+    }
+    for (const channel of live) {
       const record = await registerWebTicketForChannel(channel, {
         ownerId,
         type: ticketTypeFromTopic(channel),
@@ -447,29 +455,50 @@ export async function openWebTicket(client, { user, type, inquiry }) {
 export async function postWebTicketReply(client, { user, content, stored = null, channelId = '' }) {
   const text = String(content || '').trim().slice(0, 1800);
   if (text.length < 1) throw new Error('Enter a reply.');
-  const listed = await collectTicketsForUser(client, user.id);
   const wanted = String(channelId || stored?.channelId || '');
-  const selected = (wanted && listed.find((ticket) => ticket.channelId === wanted && ticket.open))
-    || listed.find((ticket) => ticket.open);
-  const ticket = stored || selected?.record;
-  if (!selected?.open || !ticket?.channelId) {
-    throw new Error('Open a ticket first.');
+  let channel = null;
+  let ticket = stored || null;
+
+  if (/^\d{16,22}$/.test(wanted)) {
+    channel = await client.channels.fetch(wanted).catch(() => null);
+    const owner = ticketOwnerId(channel) || ticket?.ownerId;
+    if (channel?.isTextBased?.() && String(owner) === String(user.id)) {
+      ticket = await registerWebTicketForChannel(channel, {
+        ownerId: user.id,
+        type: ticket?.type || ticketTypeFromTopic(channel),
+        username: user.displayName || user.username,
+      });
+    } else {
+      channel = null;
+    }
   }
+
+  if (!channel || !ticket?.webhookId || !ticket?.webhookToken) {
+    const listed = await collectTicketsForUser(client, user.id);
+    const selected = (wanted && listed.find((entry) => entry.channelId === wanted && entry.open))
+      || listed.find((entry) => entry.open);
+    if (!selected?.open || !selected.record?.channelId) {
+      throw new Error('Open a ticket first.');
+    }
+    channel = selected.channel || channel;
+    ticket = selected.record || ticket;
+  }
+
   let webhookId = ticket.webhookId;
   let webhookToken = ticket.webhookToken;
-  if (!webhookId || !webhookToken) {
-    const refreshed = await registerWebTicketForChannel(selected.channel, {
+  if ((!webhookId || !webhookToken) && channel) {
+    const refreshed = await registerWebTicketForChannel(channel, {
       ownerId: user.id,
       type: ticket.type,
       username: user.displayName || user.username,
     });
     webhookId = refreshed?.webhookId;
     webhookToken = refreshed?.webhookToken;
+    ticket = refreshed || ticket;
   }
   if (!webhookId || !webhookToken) {
     throw new Error('This Discord ticket is not ready for website replies yet.');
   }
-  const channel = selected.channel || await client.channels.fetch(ticket.channelId).catch(() => null);
   if (!channel?.isTextBased?.()) {
     await markTicketChannelClosed({ id: ticket.channelId, topic: `ticket-owner:${user.id}` }, { reason: 'missing' });
     throw new Error('That ticket is no longer open.');
@@ -480,7 +509,7 @@ export async function postWebTicketReply(client, { user, content, stored = null,
     content: text,
     username: String(user.displayName || user.username || 'Website user').slice(0, 80),
     avatarURL: webhookAvatar(user),
-    allowedMentions: { parse: [] },
+    allowedMentions: { parse: [], users: mentionedDiscordUserIds(text) },
   });
-  return { ok: true, channelId: ticket.channelId };
+  return { ok: true, channelId: ticket.channelId || channel.id };
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   extractDiscordMessageText,
+  mentionedDiscordUserIds,
   migrateTicketStore,
   publicTicketTranscript,
   publicTranscriptUrl,
@@ -23,7 +24,8 @@ test('legacy one-ticket-per-user store migrates to channel records', () => {
 });
 
 test('website ticket text includes Discord components v2 content', () => {
-  assert.equal(extractDiscordMessageText({ content: '<@1074411240757137589>' }), '');
+  assert.equal(extractDiscordMessageText({ content: '<@1074411240757137589>' }), '<@1074411240757137589>');
+  assert.equal(extractDiscordMessageText({ content: '@here <@1074411240757137589>' }), '');
   const text = extractDiscordMessageText({
     content: '',
     components: [
@@ -50,4 +52,9 @@ test('only https transcript links are published to the website', () => {
   });
   assert.equal(transcript.url, 'https://transcripts.cookie-api.com/abc');
   assert.equal(transcript.closureReason, 'Ticket closed by staff.');
+});
+
+test('website replies mention the tagged Discord users', () => {
+  assert.deepEqual(mentionedDiscordUserIds('<@1169457690066558988> hello'), ['1169457690066558988']);
+  assert.deepEqual(mentionedDiscordUserIds('<@!1074411240757137589>'), ['1074411240757137589']);
 });
