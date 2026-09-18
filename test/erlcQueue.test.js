@@ -228,14 +228,14 @@ test('a cooldown timeout names the remaining ER:LC wait', async () => {
   }
 });
 
-test('absurd Retry-After values are capped to 15 seconds', async () => {
+test('hour-long Retry-After values are honored so the host is not IP-blocked again', async () => {
   resetErlcNetworkForTests({ minIntervalMs: 0 });
   const original = globalThis.fetch;
   globalThis.fetch = async () => jsonResponse(429, {}, { 'retry-after': '4857' });
   try {
-    await assert.rejects(() => fetchErlcServer('key'), /rate-limited.*15 seconds/);
-    assert.ok(erlcCooldownRemainingMs() <= 15_050);
-    assert.ok(erlcCooldownRemainingMs() >= 10_000);
+    await assert.rejects(() => fetchErlcServer('key'), /rate-limited.*4857 seconds/);
+    assert.ok(erlcCooldownRemainingMs() > 4_000_000);
+    assert.ok(erlcCooldownRemainingMs() <= 4_857_050);
   } finally {
     globalThis.fetch = original;
     resetErlcNetworkForTests({ minIntervalMs: 5000 });
@@ -284,7 +284,7 @@ test('-ratelimit report shows cooldown after a 429', async () => {
     const status = getErlcRateLimitStatus();
     assert.equal(status.state, 'cooling_down');
     assert.ok(status.cooldownMs > 400);
-    assert.match(formatErlcRateLimitReport(status), /Cooling down/);
+    assert.match(formatErlcRateLimitReport(status), /PRC blocked this host/);
     assert.match(formatErlcRateLimitReport(status), /Limited for:\*\* \d+ seconds/);
     assert.match(formatErlcRateLimitReport(status), /Clears:\*\* <t:\d+:R>/);
   } finally {
@@ -308,5 +308,29 @@ test('-ratelimit report shows a rejected server key', async () => {
     globalThis.fetch = original;
     resetErlcNetworkForTests({ minIntervalMs: 5000 });
     await new Promise((resolve) => setImmediate(resolve));
+  }
+});
+
+test('a successful snapshot does not start the 5s command gap', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 5_000 });
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (String(options?.method || 'GET').toUpperCase() === 'POST') {
+      return jsonResponse(200, { message: 'ok' });
+    }
+    return jsonResponse(200, { Players: [] });
+  };
+  try {
+    const t0 = Date.now();
+    await fetchErlcServer('key');
+    assert.equal(getErlcRateLimitStatus().state, 'ready');
+    await executeErlcCommand('key', ':wanted Test');
+    assert.ok(Date.now() - t0 < 800);
+    const status = getErlcRateLimitStatus();
+    assert.equal(status.state, 'command_gap');
+    assert.match(formatErlcRateLimitReport(status), /POST \/command/);
+  } finally {
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
   }
 });

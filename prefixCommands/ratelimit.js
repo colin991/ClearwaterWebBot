@@ -12,7 +12,7 @@ export default {
     await message.reply(v2Card({
       title: 'ER:LC Rate Limit',
       description: formatErlcRateLimitReport(status),
-      footer: 'This is the private-server PRC bucket, not Discord.',
+      footer: 'PRC limits this host by IP. POST /command is 1 per 5s. Other bots on another IP can still work.',
     }));
   },
 };

@@ -1,12 +1,14 @@
 import { attachPlayerAvatars, robloxAvatarProxyPath } from '../lib/roblox-avatars.js';
 import { logger } from './logger.js';
 
-/** PRC shares one HTTP bucket for server snapshots and in-game commands. */
+/** PRC POST /command is 1 request per 5 seconds per server-key. GETs use the IP/global bucket. */
 export const ERLC_MIN_INTERVAL_MS = 5_000;
-export const ERLC_MAX_RETRY_AFTER_SEC = 15;
+/** Hour-long 429s are PRC invalid-request IP blocks. Retrying early extends the ban. */
+export const ERLC_MAX_RETRY_AFTER_SEC = 6 * 60 * 60;
 const ERLC_SERVER_CACHE_TTL_MS = 5_000;
 let erlcMinIntervalMs = ERLC_MIN_INTERVAL_MS;
 let erlcAvailableAt = 0;
+let erlcCommandAvailableAt = 0;
 let erlcNetworkQueue = Promise.resolve();
 let erlcSlotDepth = 0;
 let queuedCommands = 0;
@@ -30,12 +32,26 @@ export function normalizeErlcRetryAfterSeconds(retryAfterSeconds = 0) {
     logger.warn(`ER:LC Retry-After ${Math.round(seconds)}s capped at ${ERLC_MAX_RETRY_AFTER_SEC}s`);
     return ERLC_MAX_RETRY_AFTER_SEC;
   }
+  if (seconds >= 60) {
+    logger.warn(`ER:LC Retry-After ${Math.round(seconds)}s looks like a PRC IP/invalid-request block; waiting the full window`);
+  }
   return seconds;
 }
 
-function rememberErlcCooldown(retryAfterSeconds = 0) {
+function rememberErlcCooldown(retryAfterSeconds = 0, { command = false } = {}) {
   const extra = normalizeErlcRetryAfterSeconds(retryAfterSeconds) * 1000;
-  erlcAvailableAt = Date.now() + Math.max(erlcMinIntervalMs, extra);
+  const now = Date.now();
+  if (extra > 0) {
+    erlcAvailableAt = Math.max(erlcAvailableAt, now + extra);
+  }
+  if (command) {
+    erlcCommandAvailableAt = Math.max(erlcCommandAvailableAt, now + Math.max(erlcMinIntervalMs, extra));
+  }
+}
+
+function nextAvailableAt(kind, now = Date.now()) {
+  if (kind === 'command') return Math.max(now, erlcAvailableAt, erlcCommandAvailableAt);
+  return Math.max(now, erlcAvailableAt);
 }
 
 function haltErlc(error, ms) {
@@ -51,23 +67,32 @@ export function erlcCooldownRemainingMs(now = Date.now()) {
   return Math.max(0, erlcAvailableAt - now);
 }
 
+export function erlcCommandCooldownRemainingMs(now = Date.now()) {
+  return Math.max(0, nextAvailableAt('command', now) - now);
+}
+
 export function getErlcRateLimitStatus(now = Date.now()) {
   const cooldownMs = erlcCooldownRemainingMs(now);
+  const commandGapMs = Math.max(0, erlcCommandAvailableAt - now);
   const halted = Boolean(erlcHaltError && now < erlcHaltUntil);
   const haltMs = halted ? Math.max(0, erlcHaltUntil - now) : 0;
   const cacheExpiresAt = Number(bundleCache.expiresAt) || 0;
   const cacheAgeMs = bundleCache.value && cacheExpiresAt
     ? Math.max(0, now - (cacheExpiresAt - ERLC_SERVER_CACHE_TTL_MS))
     : null;
-  const limitedForMs = halted ? haltMs : cooldownMs;
-  const clearsAtMs = halted ? erlcHaltUntil : (cooldownMs > 400 ? erlcAvailableAt : 0);
+  const limitedForMs = halted ? haltMs : Math.max(cooldownMs, commandGapMs);
+  const clearsAtMs = halted
+    ? erlcHaltUntil
+    : (limitedForMs > 400 ? Math.max(erlcAvailableAt, erlcCommandAvailableAt) : 0);
   let state = 'ready';
   if (halted) state = 'key_rejected';
   else if (cooldownMs > 400) state = 'cooling_down';
+  else if (commandGapMs > 400) state = 'command_gap';
   else if (erlcSlotDepth > 0 || bundleCache.inflight) state = 'in_flight';
   return {
     state,
     cooldownMs,
+    commandGapMs,
     limitedForMs,
     clearsAtMs,
     halted,
@@ -101,19 +126,27 @@ export function formatErlcRateLimitReport(status = getErlcRateLimitStatus()) {
     lines.push(`**Limited for:** ${secondsLabel(status.limitedForMs ?? status.haltMs)}`);
     lines.push(`**Clears:** ${discordWhen(status.clearsAtMs)}`);
   } else if (status.state === 'cooling_down') {
-    lines.push('**Status:** Cooling down');
+    lines.push('**Status:** PRC blocked this host');
     lines.push(`**Limited for:** ${secondsLabel(status.limitedForMs ?? status.cooldownMs)}`);
     lines.push(`**Clears:** ${discordWhen(status.clearsAtMs)}`);
+    if ((status.cooldownMs || 0) >= 60_000) {
+      lines.push('This is an IP/invalid-request block. Another bot on a different host (or a PRC global API key) can still work.');
+    }
+  } else if (status.state === 'command_gap') {
+    lines.push('**Status:** Waiting on POST /command (1 per 5 seconds)');
+    lines.push(`**Limited for:** ${secondsLabel(status.limitedForMs ?? status.commandGapMs)}`);
+    lines.push(`**Clears:** ${discordWhen(status.clearsAtMs)}`);
+    lines.push('Player-list reads are not on this bucket.');
   } else if (status.state === 'in_flight') {
     lines.push('**Status:** A request is in flight');
-    lines.push(`**Limited for:** until this request finishes, then ${secondsLabel(status.minIntervalMs)}`);
-    lines.push('**Clears:** when the in-flight call ends, plus the PRC gap');
+    lines.push('**Limited for:** until this request finishes');
+    lines.push('**Clears:** when the in-flight call ends');
   } else {
     lines.push('**Status:** Ready');
     lines.push('**Limited for:** not limited');
     lines.push('**Clears:** now');
   }
-  lines.push(`**PRC gap:** ${secondsLabel(status.minIntervalMs)} (Retry-After capped at ${status.maxRetryAfterSec}s)`);
+  lines.push(`**Command gap:** ${secondsLabel(status.minIntervalMs)} · **Retry-After honor:** up to ${secondsLabel((status.maxRetryAfterSec || 0) * 1000)}`);
   lines.push(`**Queued in-game commands:** ${status.queuedCommands}`);
   lines.push(`**Snapshot in flight:** ${status.snapshotInFlight || status.slotBusy ? 'yes' : 'no'}`);
   if (status.hasRosterCache) {
@@ -145,7 +178,7 @@ export function withErlcNetworkSlot(task, { kind = 'snapshot' } = {}) {
     try {
       throwIfErlcHalted();
       if (kind === 'snapshot' && shouldSkipSnapshotHttp()) return bundleCache.value;
-      const waitMs = Math.max(0, erlcAvailableAt - Date.now());
+      const waitMs = Math.max(0, nextAvailableAt(kind) - Date.now());
       if (waitMs) await sleep(waitMs);
       throwIfErlcHalted();
       if (kind === 'snapshot' && shouldSkipSnapshotHttp()) return bundleCache.value;
@@ -173,7 +206,7 @@ async function fetchErlcBundle(serverKey) {
   url.searchParams.set('Staff', 'true');
 
   throwIfErlcHalted();
-  const waitMs = Math.max(0, erlcAvailableAt - Date.now());
+  const waitMs = Math.max(0, nextAvailableAt('snapshot') - Date.now());
   if (waitMs) await sleep(waitMs);
   const response = await fetch(url, {
     headers: { 'server-key': serverKey },
@@ -299,6 +332,7 @@ export function resetErlcNetworkForTests({ minIntervalMs = 0, idleRefresh = fals
   idleRefreshServerKey = null;
   erlcMinIntervalMs = Number.isFinite(minIntervalMs) ? minIntervalMs : 0;
   erlcAvailableAt = 0;
+  erlcCommandAvailableAt = 0;
   erlcNetworkQueue = Promise.resolve();
   erlcSlotDepth = 0;
   queuedCommands = 0;
@@ -563,7 +597,7 @@ async function sendErlcCommand(serverKey, command, { shouldExecute, allowLoad = 
     }
 
     throwIfErlcHalted();
-    const waitMs = Math.max(0, erlcAvailableAt - Date.now());
+    const waitMs = Math.max(0, nextAvailableAt('command') - Date.now());
     if (waitMs) await sleep(waitMs);
     throwIfErlcHalted();
     if (shouldExecute && !await shouldExecute()) return false;
@@ -578,7 +612,7 @@ async function sendErlcCommand(serverKey, command, { shouldExecute, allowLoad = 
     });
     const result = await response.json().catch(() => ({}));
     const retryAfterSeconds = normalizeErlcRetryAfterSeconds(result.retry_after || response.headers.get('retry-after') || 0);
-    rememberErlcCooldown(retryAfterSeconds);
+    rememberErlcCooldown(retryAfterSeconds, { command: true });
     if (response.ok) return result;
     if (response.status === 401 || response.status === 403) {
       const error = erlcKeyError(response.status);

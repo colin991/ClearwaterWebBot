@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-erlc-ip-rate-limit",
+      "title": "Stop treating every ER:LC call as a 5s command limit",
+      "summary": "PRC rate-limits this bot host by IP and POST /command at 1 per 5 seconds. Player-list reads no longer start that 5s gap, and hour-long 429 Retry-After values are waited out so the host is not IP-blocked again. Another bot on a different host can still work while this IP is blocked.",
+      "createdAt": "2026-09-18T01:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-remove-patrol-staff-nav",
       "title": "Remove Patrol Staff from Divisions",
       "summary": "The Divisions dropdown no longer lists Patrol Staff. Other division pages stay in the menu.",
