@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-ratelimit-command",
+      "title": "Add admin-only -ratelimit",
+      "summary": "Administrators can run -ratelimit to see whether the ER:LC API is ready, cooling down, or blocked, plus the queue and cached roster.",
+      "createdAt": "2026-09-18T00:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-17-cap-erlc-retry-after",
       "title": "Cap bogus ER:LC retry-after so -dc is not blocked for hours",
       "summary": "PRC Retry-After values like 4857 seconds are capped at 15 seconds. -dc waits that short cooldown and retries instead of telling you to come back in hours.",
