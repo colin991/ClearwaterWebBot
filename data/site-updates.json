@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-sheriff-limit-27",
+      "title": "Raise the Sheriff team cap to 27",
+      "summary": "Sheriff team balance now allows 27 players. The 27th join is allowed; extras over that are still wanted or rotated with the 10-minute leave warning.",
+      "createdAt": "2026-09-18T23:35:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-remove-pcso-afk-alerts",
       "title": "Remove PCSO stationary AFK alerts",
       "summary": "Pinellas Operations no longer posts 10-minute and 15-minute warnings when a deputy stays still in ER:LC while on shift.",

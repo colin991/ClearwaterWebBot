@@ -30,11 +30,11 @@ test('VC exemption releases tracked jail and sends no reminders', async () => {
   await service.tick(); await service.tick();
   assert.deepEqual(calls, [':unjail Coleddev13']);
 });
-test('exempt Sheriff arrival can exceed 23 without enforcement', async () => {
-  let players = Array.from({ length: 23 }, (_, i) => ({ robloxId: String(i), username: 'Player' + i, team: 'Sheriff' }));
+test('exempt Sheriff arrival can exceed 27 without enforcement', async () => {
+  let players = Array.from({ length: 27 }, (_, i) => ({ robloxId: String(i), username: 'Player' + i, team: 'Sheriff' }));
   const calls = [];
   const service = createSheriffBalance({ snapshot: async () => players, send: async c => calls.push(c) });
-  await service.tick(); players.push({ robloxId: '24', username: 'ExemptUser', team: 'Sheriff', enforcementExempt: true });
+  await service.tick(); players.push({ robloxId: '28', username: 'ExemptUser', team: 'Sheriff', enforcementExempt: true });
   await service.tick(); assert.deepEqual(calls, []);
 });
 test('server gate accepts exemption role alone from main server REST lookup', async () => {

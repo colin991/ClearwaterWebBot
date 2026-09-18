@@ -7,13 +7,13 @@ import { getIdentityCache } from './identityStore.js';
 import { matchingMembers } from './robloxDiscordMatch.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
-export const SHERIFF_LIMIT = 23;
+export const SHERIFF_LIMIT = 27;
 export const SHERIFF_TENURE_MS = 90 * 60 * 1000;
 export const SHERIFF_ROTATE_GRACE_MS = 10 * 60 * 1000;
 export const SHERIFF_ROTATE_REMIND_MS = 5 * 60 * 1000;
 export const SHERIFF_LOG_CHANNEL = '1549178818814812211';
-export const SHERIFF_FULL_MESSAGE = 'The Sheriff team is full (23 players maximum). Please choose another team and try again when a spot opens.';
-export const SHERIFF_FULL_DISCORD_MESSAGE = 'You were wanted because the Sheriff team is full (23 players maximum). Please choose another team and try again when a spot opens.';
+export const SHERIFF_FULL_MESSAGE = 'The Sheriff team is full (27 players maximum). Please choose another team and try again when a spot opens.';
+export const SHERIFF_FULL_DISCORD_MESSAGE = 'You were wanted because the Sheriff team is full (27 players maximum). Please choose another team and try again when a spot opens.';
 export const SHERIFF_ROTATE_WARN_MESSAGE = 'Please leave the Sheriff team for team balance in 10 minutes or you will be wanted off the team.';
 export const SHERIFF_ROTATE_WARN_DISCORD_MESSAGE = 'Please leave the Sheriff team for team balance in 10 minutes or you will be wanted off the team.';
 export const SHERIFF_ROTATE_REMIND_MESSAGE = 'Reminder: please leave the Sheriff team for team balance in 5 minutes or you will be wanted off the team.';
@@ -402,6 +402,6 @@ export function startSheriffBalance(client) {
     if (!stopped) { timer = setTimeout(run, 5000); timer.unref(); }
   };
   void run();
-  logger.info('Sheriff team balance enabled: 23 players maximum, 1.5 hour rotation with a 10 minute leave warning.');
+  logger.info('Sheriff team balance enabled: 27 players maximum, 1.5 hour rotation with a 10 minute leave warning.');
   return () => { stopped = true; clearTimeout(timer); };
 }
