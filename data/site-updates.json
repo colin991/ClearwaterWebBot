@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-mod-call-unpicked-remind",
+      "title": "Ping staff when a mod call sits for 3 minutes",
+      "summary": "If an in-game mod call is not picked up within 3 minutes, the bot posts one scare ping in the staff channel telling that role to pick up calls or be auto-infracted in 1 minute. Nobody is actually auto-infracted.",
+      "createdAt": "2026-09-18T02:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-gta-driving",
       "title": "Bring back GTA driving checks",
       "summary": "The bot again watches in-game speed over 130. Two snapshots in a row get an in-game PM to slow down, and a second PM if they speed again within 3 minutes. Players are not loaded, kicked, or jailed for this.",

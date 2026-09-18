@@ -6,6 +6,10 @@ import {
   moveModCallPair,
   MOD_CALL_ROOMS,
   MOD_CALL_MAX_AGE_MS,
+  MOD_CALL_UNPICKED_MS,
+  MOD_CALL_REMIND_CHANNEL,
+  MOD_CALL_REMIND_MESSAGE,
+  MOD_CALL_REMIND_ROLE,
   isModCallStale,
   modCallCallerInGame,
 } from '../utils/modCallVoice.js';
@@ -123,6 +127,75 @@ test('pair uses first empty room and never moves a disconnected member', async (
   const offline = member('offline');
   offline.voice.channelId = null;
   assert.equal(await moveModCallPair(guild, offline, member('staff')), false);
+});
+
+test('unpicked mod call pings staff after 3 minutes once and does not infract', async () => {
+  let time = NOW;
+  let calls = [];
+  const reminds = [];
+  const monitor = createModCallMonitor({
+    now: () => time,
+    snapshot: async () => ({ calls, players: [] }),
+    move: async () => false,
+    remind: async () => { reminds.push(time); },
+  });
+  await monitor.tick();
+  calls = [{ Caller: 'Civ:9', Moderator: null, Timestamp: time / 1000 }];
+  await monitor.tick();
+  assert.deepEqual(reminds, []);
+  time += MOD_CALL_UNPICKED_MS - 1000;
+  await monitor.tick();
+  assert.deepEqual(reminds, []);
+  time += 2000;
+  await monitor.tick();
+  assert.equal(reminds.length, 1);
+  await monitor.tick();
+  assert.equal(reminds.length, 1);
+  assert.match(MOD_CALL_REMIND_MESSAGE, new RegExp(`<@&${MOD_CALL_REMIND_ROLE}>`));
+  assert.equal(MOD_CALL_REMIND_CHANNEL, '1514422317587890327');
+});
+
+test('startup queue and picked-up calls do not send the unpicked reminder', async () => {
+  let time = NOW;
+  let calls = [{ Caller: 'Old:1', Moderator: null, Timestamp: (NOW - MOD_CALL_UNPICKED_MS) / 1000 }];
+  const reminds = [];
+  const monitor = createModCallMonitor({
+    now: () => time,
+    snapshot: async () => ({ calls, players: [] }),
+    move: async () => false,
+    remind: async () => { reminds.push(1); },
+  });
+  await monitor.tick();
+  time += MOD_CALL_UNPICKED_MS;
+  await monitor.tick();
+  assert.deepEqual(reminds, []);
+  calls = [{ Caller: 'New:2', Moderator: null, Timestamp: time / 1000 }];
+  await monitor.tick();
+  calls[0].Moderator = 'Staff:3';
+  time += MOD_CALL_UNPICKED_MS + 1000;
+  await monitor.tick();
+  assert.deepEqual(reminds, []);
+});
+
+test('two overdue unpicked calls send one scare ping', async () => {
+  let time = NOW;
+  let calls = [];
+  let reminds = 0;
+  const monitor = createModCallMonitor({
+    now: () => time,
+    snapshot: async () => ({ calls, players: [] }),
+    move: async () => false,
+    remind: async () => { reminds += 1; },
+  });
+  await monitor.tick();
+  calls = [
+    { Caller: 'A:1', Moderator: null, Timestamp: time / 1000 },
+    { Caller: 'B:2', Moderator: null, Timestamp: time / 1000 },
+  ];
+  await monitor.tick();
+  time += MOD_CALL_UNPICKED_MS + 1000;
+  await monitor.tick();
+  assert.equal(reminds, 1);
 });
 
 test('waiting greeting triggers only for human entries, not mute changes or bot joins', () => {
