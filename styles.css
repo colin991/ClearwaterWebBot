@@ -1649,6 +1649,53 @@ body.home-stage {
 .pcso-careers-apply:hover { background: #45484f; }
 .pcso-mini-event { padding: 12px 0; border-bottom: 1px solid #2c2e34; }
 .pcso-mini-event h3 { margin: 0 0 6px; font-size: 18px; }
+.employee-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin: 24px 0 8px;
+}
+.employee-grid a {
+  display: block;
+  padding: 22px 20px;
+  border: 1px solid #2c2e34;
+  background: #121316;
+  color: #e8e9eb !important;
+  text-decoration: none;
+  border-radius: 8px;
+}
+.employee-grid a:hover { border-color: #555961; background: #17181c; }
+.employee-grid h2 { margin: 0 0 8px; font-size: 20px; color: #f1f2f4; }
+.employee-grid p { margin: 0; color: #a4a8b0; }
+.employee-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 0 0 18px; }
+.employee-session-list { display: grid; gap: 12px; }
+.employee-session-card {
+  border: 1px solid #2c2e34;
+  background: #121316;
+  padding: 16px;
+}
+.employee-session-card h3 { margin: 0 0 8px; }
+.employee-quiz { display: grid; gap: 18px; }
+.employee-quiz fieldset {
+  border: 1px solid #2c2e34;
+  padding: 14px 16px;
+  margin: 0;
+}
+.employee-quiz legend { padding: 0 6px; font-weight: 700; }
+.employee-missed { margin: 12px 0; padding: 12px; border: 1px solid #3a2c2c; background: #161213; }
+.employee-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.employee-table th, .employee-table td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid #2c2e34;
+  vertical-align: top;
+}
+.employee-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .08em;
+  font-size: 20px;
+}
+.employee-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 @media (max-width: 760px) {
   .pcso-drop-menu { position: static; border: 0; box-shadow: none; padding: 0 0 0 12px; }
   .pcso-drop-menu::before { display: none; }

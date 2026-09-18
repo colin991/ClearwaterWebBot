@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import content from '../lib/pcso-api/content.js';
-import me from '../api/auth/me.js';
+import employee from '../lib/pcso-api/employee.js';
 
 const port = Number(process.env.PORT || 4177);
 const root = join(process.cwd(), 'public');
@@ -35,6 +35,7 @@ createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
     if (url.pathname === '/api/pcso/content') return content(req, wrap(res));
+    if (url.pathname === '/api/pcso/employee') return employee(req, wrap(res));
     if (url.pathname === '/api/auth/me') return me(req, wrap(res));
 
     let path = url.pathname === '/' ? '/index.html' : url.pathname;
@@ -51,6 +52,11 @@ createServer(async (req, res) => {
     if (path === '/contact') path = '/contact.html';
     if (path === '/careers') path = '/careers.html';
     if (path === '/active-calls') path = '/active-calls.html';
+    if (path === '/employee') path = '/employee.html';
+    if (path === '/employee/training') path = '/employee-training.html';
+    if (path === '/employee/department') path = '/employee-department.html';
+    if (path === '/employee/reports') path = '/employee-reports.html';
+    if (path === '/employee/command') path = '/employee-command.html';
     if (path === '/impound') path = '/index.html';
     if (!extname(path) && path !== '/') {
       path = `${path}.html`;

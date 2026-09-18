@@ -29,6 +29,8 @@ test('shared nav lists Home, About, Law Enforcement, Divisions, Contact, and box
   assert.match(nav, />Law Enforcement</);
   assert.match(nav, />Divisions</);
   assert.match(nav, />Contact</);
+  assert.match(nav, /href="\/employee"/);
+  assert.match(nav, />Employee</);
   assert.match(nav, /pcso-careers-btn/);
   assert.match(nav, />Careers</);
   assert.match(nav, /\/active-calls/);

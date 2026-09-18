@@ -42,6 +42,7 @@
         <a href="/public-records">Records request form</a>
       </div>
     </div>
+    <a href="/employee">Employee</a>
     <a class="pcso-careers-btn" href="/careers">Careers</a>
     <a class="pcso-button pcso-button-red" href="/signin?next=${next}" data-pcso-login>Log In</a>
   `;
@@ -116,7 +117,7 @@ async function refreshPcsoLoginButton() {
         link.setAttribute('href', '/admin');
       } else {
         link.textContent = 'Signed in';
-        link.setAttribute('href', '/');
+        link.setAttribute('href', '/employee');
       }
       link.removeAttribute('target');
       link.removeAttribute('rel');

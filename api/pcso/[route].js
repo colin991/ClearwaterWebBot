@@ -6,6 +6,7 @@ import jail from '../../lib/pcso-api/jail.js';
 import weeklyReport from '../../lib/pcso-api/weekly-report.js';
 import portal from '../../lib/pcso-api/portal.js';
 import calls from '../../lib/pcso-api/calls.js';
+import employee from '../../lib/pcso-api/employee.js';
 
 const ROUTES = {
   admin,
@@ -16,6 +17,7 @@ const ROUTES = {
   'weekly-report': weeklyReport,
   portal,
   calls,
+  employee,
 };
 
 function routeName(request) {

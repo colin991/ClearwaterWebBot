@@ -117,6 +117,26 @@
     {
       "source": "/field-training",
       "destination": "/field-training.html"
+    },
+    {
+      "source": "/employee",
+      "destination": "/employee.html"
+    },
+    {
+      "source": "/employee/training",
+      "destination": "/employee-training.html"
+    },
+    {
+      "source": "/employee/department",
+      "destination": "/employee-department.html"
+    },
+    {
+      "source": "/employee/reports",
+      "destination": "/employee-reports.html"
+    },
+    {
+      "source": "/employee/command",
+      "destination": "/employee-command.html"
     }
   ],
   "headers": [

@@ -4,6 +4,7 @@ import { logger } from './logger.js';
 import { postPcsoSiteForm } from './pcsoSiteFormDiscord.js';
 import { savePcsoSiteForm } from './pcsoSiteForms.js';
 import { handlePcsoPortal } from './pcsoSitePortal.js';
+import { handleEmployeeAction, postPcsoErlcApi } from './pcsoEmployee.js';
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -86,6 +87,28 @@ export function startBotApiServer(client, {
         const saved = await savePcsoSiteForm(record);
         const result = await postPcsoSiteForm(client, saved);
         return sendJson(response, 200, { ok: true, id: saved.id, ...result });
+      }
+
+      if (request.method === 'POST' && url.pathname === '/api/pcso/employee') {
+        const raw = await readBinaryBody(request, 80_000);
+        let payload;
+        try {
+          payload = JSON.parse(raw.toString('utf8') || '{}');
+        } catch {
+          return sendJson(response, 400, { error: 'Invalid JSON.' });
+        }
+        try {
+          const result = await handleEmployeeAction(
+            payload.action,
+            payload.payload || {},
+            payload.user,
+            { postPcsoErlcApi },
+          );
+          return sendJson(response, 200, result);
+        } catch (error) {
+          const status = error?.status || 400;
+          return sendJson(response, status, { error: error?.message || 'Employee request failed.' });
+        }
       }
 
       if (request.method === 'POST' && url.pathname === '/api/pcso/portal') {

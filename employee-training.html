@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="PCSO training division panel." />
+<meta name="theme-color" content="#6b7078" />
+<meta name="robots" content="noindex,nofollow" />
+<title>Training Division | Pinellas County Sheriff's Office</title>
+<link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
+<link rel="stylesheet" href="/styles.css?v=20260918-employee" />
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body class="pcso-home">
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="pcso-alert"><div class="pcso-wrap pcso-alert-inner"><span><strong>Alert:</strong> This is a roleplay community. Please call 911 for real emergencies.</span><button class="pcso-alert-close" type="button" aria-label="Close warning">×</button></div></div>
+<header class="pcso-header"><div class="pcso-wrap pcso-nav">
+<a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a>
+<button class="pcso-menu" type="button" aria-expanded="false" aria-controls="pcso-navigation">Menu</button>
+<nav id="pcso-navigation" class="pcso-links" aria-label="Primary navigation"></nav>
+</div></header>
+<main id="main" class="pcso-page-main"><div class="pcso-wrap">
+<p class="pcso-eyebrow">Employees</p>
+<h1>Training Division</h1>
+<p class="pcso-page-lead">Create a session, pick SRT / TEU / Regular Patrol, start training, then run the quiz. Instructors see scores, missed questions, and the top five most missed items. Starter quizzes are in place until each course is written in depth.</p>
+<p><a class="pcso-text-link" href="/employee">← Employee panel</a></p>
+
+<div class="pcso-page-card" data-employee-signin>
+  <p>Sign in with Discord to use training.</p>
+  <p><a class="pcso-button pcso-button-red" href="/signin?next=/employee/training">Sign in with Discord</a></p>
+</div>
+
+<div data-employee-app hidden>
+  <p class="pcso-form-status" data-employee-status></p>
+
+  <div class="pcso-page-card">
+    <h2>Start a training session</h2>
+    <form class="pcso-form" data-create-training>
+      <label>Training type
+        <select name="type" required>
+          <option value="patrol">Regular Patrol Training</option>
+          <option value="srt">SRT Training</option>
+          <option value="teu">TEU Training</option>
+        </select>
+      </label>
+      <button class="pcso-button pcso-button-red" type="submit">Create session</button>
+    </form>
+  </div>
+
+  <div class="pcso-page-card">
+    <h2>Join a training session</h2>
+    <form class="pcso-form" data-join-training>
+      <label>Session code
+        <input name="code" required maxlength="12" placeholder="ABC123" autocomplete="off" />
+      </label>
+      <button class="pcso-button pcso-button-red" type="submit">Join session</button>
+    </form>
+  </div>
+
+  <div class="pcso-page-card" data-active-session hidden>
+    <h2 data-session-title>Session</h2>
+    <p>Join code: <span class="employee-code" data-session-code></span></p>
+    <p data-session-status></p>
+    <p data-training-brief></p>
+    <div class="employee-actions">
+      <button class="pcso-button pcso-button-red" type="button" data-start-training>Start training</button>
+      <button class="pcso-button pcso-button-red" type="button" data-start-quiz>Start quiz</button>
+      <button class="pcso-button pcso-button-red" type="button" data-review-quiz>End quiz and review top 5</button>
+    </div>
+    <div data-instructor-board hidden></div>
+    <form class="pcso-form employee-quiz" data-quiz-form hidden></form>
+    <div data-quiz-result hidden></div>
+  </div>
+
+  <div class="pcso-page-card">
+    <h2>Open sessions</h2>
+    <div class="employee-session-list" data-session-list></div>
+  </div>
+</div>
+</div></main>
+<script src="/pcso-nav.js?v=20260918-employee"></script>
+<script src="/pcso-employee.js?v=20260918-employee"></script>
+</body>
+</html>

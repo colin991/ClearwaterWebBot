@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-employee-panels",
+      "title": "Open the employee panel for everyone signed in",
+      "summary": "The site now has an Employee hub with Training Division, Department, Reports Admin, Command Staff, and Admin. Anyone signed in can start or join SRT/TEU/patrol training, take the website quiz, and see instructor scores. Training reports can be approved or denied and are sent to PCSOERLCAPI. Role ID locks will be added later.",
+      "createdAt": "2026-09-18T01:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-erlc-ip-rate-limit",
       "title": "Stop treating every ER:LC call as a 5s command limit",
       "summary": "PRC rate-limits this bot host by IP and POST /command at 1 per 5 seconds. Player-list reads no longer start that 5s gap, and hour-long 429 Retry-After values are waited out so the host is not IP-blocked again. Another bot on a different host can still work while this IP is blocked.",

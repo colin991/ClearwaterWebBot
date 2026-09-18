@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="PCSO employee panel." />
+<meta name="theme-color" content="#6b7078" />
+<meta name="robots" content="noindex,nofollow" />
+<title>Employee Panel | Pinellas County Sheriff's Office</title>
+<link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
+<link rel="stylesheet" href="styles.css?v=20260918-employee" />
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body class="pcso-home">
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="pcso-alert"><div class="pcso-wrap pcso-alert-inner"><span><strong>Alert:</strong> This is a roleplay community. Please call 911 for real emergencies.</span><button class="pcso-alert-close" type="button" aria-label="Close warning">×</button></div></div>
+<header class="pcso-header"><div class="pcso-wrap pcso-nav">
+<a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a>
+<button class="pcso-menu" type="button" aria-expanded="false" aria-controls="pcso-navigation">Menu</button>
+<nav id="pcso-navigation" class="pcso-links" aria-label="Primary navigation"></nav>
+</div></header>
+<main id="main" class="pcso-page-main"><div class="pcso-wrap">
+<p class="pcso-eyebrow">Employees</p>
+<h1>Employee panel</h1>
+<p class="pcso-page-lead">Training, department tools, reports, command staff, and admin. Role ID locks come later — anyone signed in can use every panel right now.</p>
+
+<div class="pcso-page-card" data-employee-signin>
+  <p>Sign in with Discord to open the employee tools.</p>
+  <p><a class="pcso-button pcso-button-red" href="/signin?next=/employee">Sign in with Discord</a></p>
+</div>
+
+<div data-employee-app hidden>
+  <p class="pcso-form-status" data-employee-status></p>
+  <div class="employee-grid">
+    <a href="/employee/training">
+      <h2>Training Division</h2>
+      <p>Start or join SRT, TEU, or patrol training, then run the website quiz.</p>
+    </a>
+    <a href="/employee/department">
+      <h2>Department</h2>
+      <p>Department login and tools. More detail will be added later.</p>
+    </a>
+    <a href="/employee/reports">
+      <h2>Reports Admin</h2>
+      <p>Approve or deny training reports. Decisions post to PCSOERLCAPI.</p>
+    </a>
+    <a href="/employee/command">
+      <h2>Command Staff</h2>
+      <p>Command staff tools. More detail will be added later.</p>
+    </a>
+    <a href="/admin">
+      <h2>Admin Panel</h2>
+      <p>News, events, Inside the Star, and weekly personnel PDFs.</p>
+    </a>
+  </div>
+</div>
+</div></main>
+<script src="pcso-nav.js?v=20260918-employee"></script>
+<script src="pcso-employee.js?v=20260918-employee"></script>
+</body>
+</html>
