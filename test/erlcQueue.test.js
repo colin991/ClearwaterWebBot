@@ -271,7 +271,8 @@ test('-ratelimit report is ready when the ER:LC line is idle', () => {
   const status = getErlcRateLimitStatus();
   assert.equal(status.state, 'ready');
   assert.match(formatErlcRateLimitReport(status), /Status:\*\* Ready/);
-  assert.match(formatErlcRateLimitReport(status), /Cached roster:\*\* none/);
+    assert.match(formatErlcRateLimitReport(status), /Limited for:\*\* not limited/);
+    assert.match(formatErlcRateLimitReport(status), /Clears:\*\* now/);
 });
 
 test('-ratelimit report shows cooldown after a 429', async () => {
@@ -284,6 +285,8 @@ test('-ratelimit report shows cooldown after a 429', async () => {
     assert.equal(status.state, 'cooling_down');
     assert.ok(status.cooldownMs > 400);
     assert.match(formatErlcRateLimitReport(status), /Cooling down/);
+    assert.match(formatErlcRateLimitReport(status), /Limited for:\*\* \d+ seconds/);
+    assert.match(formatErlcRateLimitReport(status), /Clears:\*\* <t:\d+:R>/);
   } finally {
     globalThis.fetch = original;
     resetErlcNetworkForTests({ minIntervalMs: 5000 });
@@ -299,6 +302,8 @@ test('-ratelimit report shows a rejected server key', async () => {
     const status = getErlcRateLimitStatus();
     assert.equal(status.state, 'key_rejected');
     assert.match(formatErlcRateLimitReport(status), /Key rejected/);
+    assert.match(formatErlcRateLimitReport(status), /Limited for:/);
+    assert.match(formatErlcRateLimitReport(status), /Clears:\*\* <t:\d+:R>/);
   } finally {
     globalThis.fetch = original;
     resetErlcNetworkForTests({ minIntervalMs: 5000 });

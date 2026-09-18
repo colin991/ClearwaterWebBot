@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-ratelimit-duration",
+      "title": "Show how long the ER:LC rate limit lasts",
+      "summary": "-ratelimit now shows Limited for (remaining seconds) and Cleared as a Discord timestamp so you can see exactly when the PRC cooldown ends.",
+      "createdAt": "2026-09-18T00:55:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-ticket-here-ping",
       "title": "Ping @here when a support ticket opens",
       "summary": "Every new PCSO support ticket pings @here in the ticket channel so staff online in that category are notified. Reopening an existing ticket does not ping again.",

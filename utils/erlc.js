@@ -59,6 +59,8 @@ export function getErlcRateLimitStatus(now = Date.now()) {
   const cacheAgeMs = bundleCache.value && cacheExpiresAt
     ? Math.max(0, now - (cacheExpiresAt - ERLC_SERVER_CACHE_TTL_MS))
     : null;
+  const limitedForMs = halted ? haltMs : cooldownMs;
+  const clearsAtMs = halted ? erlcHaltUntil : (cooldownMs > 400 ? erlcAvailableAt : 0);
   let state = 'ready';
   if (halted) state = 'key_rejected';
   else if (cooldownMs > 400) state = 'cooling_down';
@@ -66,6 +68,8 @@ export function getErlcRateLimitStatus(now = Date.now()) {
   return {
     state,
     cooldownMs,
+    limitedForMs,
+    clearsAtMs,
     halted,
     haltMs,
     haltMessage: halted ? String(erlcHaltError?.message || 'ER:LC is blocked.') : null,
@@ -84,20 +88,30 @@ function secondsLabel(ms) {
   return seconds === 1 ? '1 second' : `${seconds} seconds`;
 }
 
+function discordWhen(ms) {
+  const unix = Math.floor(Number(ms) / 1000);
+  if (!Number.isFinite(unix) || unix <= 0) return 'now';
+  return `<t:${unix}:R> (<t:${unix}:T>)`;
+}
+
 export function formatErlcRateLimitReport(status = getErlcRateLimitStatus()) {
   const lines = [];
   if (status.state === 'key_rejected') {
     lines.push(`**Status:** Key rejected — ${status.haltMessage}`);
-    lines.push(`**Blocked for:** ${secondsLabel(status.haltMs)}`);
+    lines.push(`**Limited for:** ${secondsLabel(status.limitedForMs ?? status.haltMs)}`);
+    lines.push(`**Clears:** ${discordWhen(status.clearsAtMs)}`);
   } else if (status.state === 'cooling_down') {
-    lines.push(`**Status:** Cooling down`);
-    lines.push(`**Next request:** in ${secondsLabel(status.cooldownMs)}`);
+    lines.push('**Status:** Cooling down');
+    lines.push(`**Limited for:** ${secondsLabel(status.limitedForMs ?? status.cooldownMs)}`);
+    lines.push(`**Clears:** ${discordWhen(status.clearsAtMs)}`);
   } else if (status.state === 'in_flight') {
     lines.push('**Status:** A request is in flight');
-    lines.push('**Next request:** as soon as the current call finishes, then the 5s PRC gap');
+    lines.push(`**Limited for:** until this request finishes, then ${secondsLabel(status.minIntervalMs)}`);
+    lines.push('**Clears:** when the in-flight call ends, plus the PRC gap');
   } else {
     lines.push('**Status:** Ready');
-    lines.push('**Next request:** now');
+    lines.push('**Limited for:** not limited');
+    lines.push('**Clears:** now');
   }
   lines.push(`**PRC gap:** ${secondsLabel(status.minIntervalMs)} (Retry-After capped at ${status.maxRetryAfterSec}s)`);
   lines.push(`**Queued in-game commands:** ${status.queuedCommands}`);
