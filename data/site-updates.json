@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-ticket-reply-timeout",
+      "title": "Stop Contact ticket replies from timing out",
+      "summary": "Website ticket replies no longer scan the whole Discord server first. Mentions like <@user> post in Discord, and a slow bot host shows a retry message instead of The operation was aborted due to timeout.",
+      "createdAt": "2026-09-18T00:58:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-ratelimit-duration",
       "title": "Show how long the ER:LC rate limit lasts",
       "summary": "-ratelimit now shows Limited for (remaining seconds) and Cleared as a Discord timestamp so you can see exactly when the PRC cooldown ends.",
