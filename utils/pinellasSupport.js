@@ -379,6 +379,36 @@ export function isPinellasSupportTicketChannel(channel) {
   return Boolean(ticketOwnerId(channel));
 }
 
+export const TICKET_OPENER_OVERWRITES = Object.freeze({
+  ViewChannel: true,
+  SendMessages: true,
+  ReadMessageHistory: true,
+  AttachFiles: true,
+});
+
+export const TICKET_BOT_OVERWRITES = Object.freeze({
+  ...TICKET_OPENER_OVERWRITES,
+  ManageChannels: true,
+  ManageMessages: true,
+  ManageWebhooks: true,
+});
+
+/** Copy the category overwrites, then grant the opener and bot on top. */
+export async function syncTicketChannelToCategory(channel, { openerId, botId } = {}) {
+  if (channel?.parentId && typeof channel.lockPermissions === 'function') {
+    await channel.lockPermissions();
+  }
+  const edits = [];
+  if (openerId && channel?.permissionOverwrites?.edit) {
+    edits.push(channel.permissionOverwrites.edit(openerId, TICKET_OPENER_OVERWRITES));
+  }
+  if (botId && channel?.permissionOverwrites?.edit) {
+    edits.push(channel.permissionOverwrites.edit(botId, TICKET_BOT_OVERWRITES));
+  }
+  await Promise.all(edits);
+  return channel;
+}
+
 export function buildTicketCloseRequestPayload(ownerId) {
   return {
     content: ownerId
@@ -457,12 +487,8 @@ export async function createPinellasSupportTicketForMember(guild, member, type, 
     type: ChannelType.GuildText,
     parent: categoryId,
     topic: `ticket-owner:${member.id} ticket-type:${type}`,
-    permissionOverwrites: [
-      { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-      { id: member.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] },
-      { id: botMember.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ManageWebhooks] },
-    ],
   });
+  await syncTicketChannelToCategory(channel, { openerId: member.id, botId: botMember.id });
   await channel.send({
     content: `<@${member.id}>`,
     allowedMentions: { users: [member.id] },

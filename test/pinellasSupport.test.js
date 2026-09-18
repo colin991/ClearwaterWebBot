@@ -5,11 +5,16 @@ import {
   PINELLAS_SUPPORT_CLOSE_ID,
   PINELLAS_SUPPORT_CR_NO_ID,
   PINELLAS_SUPPORT_CR_YES_ID,
+  PINELLAS_SUPPORT_GUILD_ID,
+  TICKET_BOT_OVERWRITES,
+  TICKET_OPENER_OVERWRITES,
   buildInquiryModal,
   buildTicketCloseRequestPayload,
+  createPinellasSupportTicketForMember,
   formatWebsiteInquiry,
   handlePinellasSupportInteraction,
   isPinellasSupportTicketChannel,
+  syncTicketChannelToCategory,
   ticketOwnerId,
   websiteTicketFields,
 } from '../utils/pinellasSupport.js';
@@ -99,4 +104,57 @@ test('only website-opened tickets get the website note', async () => {
     },
   }, '99');
   assert.deepEqual(channels.map((channel) => channel.id).sort(), ['1', '2']);
+});
+
+test('ticket channels lock permissions to the category then grant opener and bot', async () => {
+  const edits = [];
+  const channel = {
+    parentId: '1514848054724005938',
+    lockPermissions: async () => { channel.synced = true; },
+    permissionOverwrites: {
+      edit: async (id, perms) => { edits.push({ id, perms }); },
+    },
+  };
+  await syncTicketChannelToCategory(channel, { openerId: '99', botId: 'bot' });
+  assert.equal(channel.synced, true);
+  assert.deepEqual(edits.map((entry) => entry.id), ['99', 'bot']);
+  assert.equal(edits[0].perms.ViewChannel, true);
+  assert.equal(edits[1].perms.ManageChannels, true);
+  assert.equal(TICKET_OPENER_OVERWRITES.SendMessages, true);
+  assert.equal(TICKET_BOT_OVERWRITES.ManageWebhooks, true);
+});
+
+test('new tickets are created without custom overwrites so they inherit the category', async () => {
+  const edits = [];
+  let created;
+  const channel = {
+    parentId: '1514848054724005938',
+    lockPermissions: async () => { channel.synced = true; },
+    permissionOverwrites: {
+      edit: async (id, perms) => { edits.push({ id, perms }); },
+    },
+    send: async () => {},
+  };
+  const guild = {
+    id: PINELLAS_SUPPORT_GUILD_ID,
+    channels: {
+      cache: { find: () => null },
+      fetch: async () => {},
+      create: async (options) => {
+        created = options;
+        return channel;
+      },
+    },
+    members: { me: { id: 'bot' } },
+  };
+  const member = {
+    id: '99',
+    displayName: 'Tester',
+    user: { tag: 'tester#0001', username: 'tester', createdTimestamp: 1_700_000_000_000 },
+  };
+  await createPinellasSupportTicketForMember(guild, member, 'general', 'Need help');
+  assert.equal('permissionOverwrites' in created, false);
+  assert.equal(created.parent, '1514848054724005938');
+  assert.equal(channel.synced, true);
+  assert.deepEqual(edits.map((entry) => entry.id), ['99', 'bot']);
 });

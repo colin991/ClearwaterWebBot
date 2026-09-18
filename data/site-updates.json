@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-ticket-category-sync",
+      "title": "Sync new ticket channels to their category permissions",
+      "summary": "New PCSO support tickets copy the category permission overwrites, then add the opener and bot on top, so staff roles on the category can see every new ticket.",
+      "createdAt": "2026-09-18T00:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-ratelimit-command",
       "title": "Add admin-only -ratelimit",
       "summary": "Administrators can run -ratelimit to see whether the ER:LC API is ready, cooling down, or blocked, plus the queue and cached roster.",
