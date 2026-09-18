@@ -5,6 +5,7 @@ import {
   cadRecordCreatedMs,
   renderPcsoWeeklyReportPdf,
   resolveCadRecordDiscordId,
+  sanitizeWeeklyReportPerson,
 } from '../utils/pcsoAdminData.js';
 
 function pdfVisibleText(pdf) {
@@ -64,4 +65,24 @@ test('weekly reports match a Discord id already on the roster', async () => {
 test('cadRecordCreatedMs accepts unix seconds and milliseconds', () => {
   assert.equal(cadRecordCreatedMs({ createdAt: 1_700_000_000 }), 1_700_000_000_000);
   assert.equal(cadRecordCreatedMs({ createdAt: 1_700_000_000_000 }), 1_700_000_000_000);
+});
+
+test('sanitizeWeeklyReportPerson keeps the on-screen report list for PDF', async () => {
+  const person = sanitizeWeeklyReportPerson({
+    callsign: '1100',
+    roleplayName: 'Cole Harrison',
+    rank: 'Major',
+    reportCount: 8,
+    reports: [
+      { type: 'Vehicle Registration', createdAt: Date.now() },
+      { type: 'General Citation', createdAt: Date.now() },
+    ],
+  }, '1128547120304095272');
+  assert.equal(person.discordId, '1128547120304095272');
+  assert.equal(person.callsign, '1100');
+  assert.equal(person.reports.length, 2);
+  const pdf = await renderPcsoWeeklyReportPdf(person, '2026-09-11T00:00:00.000Z', '2026-09-18T00:00:00.000Z');
+  const text = pdfVisibleText(pdf);
+  assert.match(text, /COLE HARRISON/);
+  assert.match(text, /VEHICLE REGISTRATION/);
 });

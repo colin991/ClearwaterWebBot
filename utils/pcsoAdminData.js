@@ -163,7 +163,7 @@ async function loadWeeklyShifts(apiKey, { start, end }) {
   if (!apiKey) return [];
   const shifts = await fetchPinellasDepartmentShifts(apiKey, PINELLAS_MELONLY_DEPARTMENT_ID, {
     maxPages: 8,
-    cacheTtlMs: 30_000,
+    cacheTtlMs: 5 * 60 * 1000,
   });
   return (shifts || []).filter((shift) => {
     if (!isPinellasDepartmentShift(shift)) return false;
@@ -182,7 +182,7 @@ async function loadWeeklyReports(apiKey, { start, end }) {
     while (page <= totalPages && page <= maxPages) {
       const result = await melonlyFetch(apiKey, '/server/cad/records', {
         query: { page, pageSize: 100, limit: 100, orderBy: 'createdAt', sort: 'desc' },
-        cacheTtlMs: 15_000,
+        cacheTtlMs: 5 * 60 * 1000,
       });
       const batch = Array.isArray(result?.data) ? result.data
         : (Array.isArray(result?.records) ? result.records
@@ -203,8 +203,49 @@ async function loadWeeklyReports(apiKey, { start, end }) {
   }
 }
 
+let rosterCache = { value: null, expiresAt: 0 };
+const ROSTER_CACHE_MS = 5 * 60 * 1000;
+
+export function clearPcsoAdminRosterCache() {
+  rosterCache = { value: null, expiresAt: 0 };
+}
+
+export function sanitizeWeeklyReportPerson(raw = {}, discordId = '') {
+  const id = String(discordId || raw.discordId || '').trim();
+  const reports = (Array.isArray(raw.reports) ? raw.reports : []).slice(0, 80).map((report) => ({
+    id: String(report?.id || '').slice(0, 80),
+    type: String(report?.type || 'Report').slice(0, 80),
+    createdAt: report?.createdAt ?? null,
+  }));
+  return {
+    discordId: id,
+    callsign: String(raw.callsign || '—').slice(0, 40),
+    roleplayName: String(raw.roleplayName || 'Unknown').slice(0, 80),
+    rank: String(raw.rank || '—').slice(0, 80),
+    shiftHoursLabel: String(raw.shiftHoursLabel || '0m').slice(0, 40),
+    reportCount: Math.max(reports.length, Math.min(500, Number(raw.reportCount) || 0)),
+    reports,
+  };
+}
+
 /** Build the admin panel roster for the last 7 days. */
-export async function buildPcsoAdminRoster({ melonlyApiKey = '' } = {}) {
+export async function buildPcsoAdminRoster({ melonlyApiKey = '', allowStale = true } = {}) {
+  const now = Date.now();
+  if (rosterCache.value && rosterCache.expiresAt > now) return rosterCache.value;
+
+  try {
+    const roster = await buildPcsoAdminRosterFresh({ melonlyApiKey });
+    rosterCache = { value: roster, expiresAt: now + ROSTER_CACHE_MS };
+    return roster;
+  } catch (error) {
+    if (allowStale && rosterCache.value && (error?.status === 429 || error?.rateLimited)) {
+      return rosterCache.value;
+    }
+    throw error;
+  }
+}
+
+async function buildPcsoAdminRosterFresh({ melonlyApiKey = '' } = {}) {
   const window = weekWindow();
   const [rosterRows, shifts, records] = await Promise.all([
     loadRosterRows(),
@@ -441,7 +482,7 @@ export async function buildPcsoWeeklyReportPdf({ melonlyApiKey = '', discordId }
     throw error;
   }
 
-  const roster = await buildPcsoAdminRoster({ melonlyApiKey });
+  const roster = await buildPcsoAdminRoster({ melonlyApiKey, allowStale: true });
   const person = roster.people.find((entry) => entry.discordId === id);
   if (!person) {
     const error = new Error('No roster, shift, or report data was found for that member this week.');

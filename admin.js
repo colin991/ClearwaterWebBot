@@ -14,6 +14,8 @@ const eventForm = document.querySelector('[data-event-form]');
 const starForm = document.querySelector('[data-star-form]');
 
 let people = [];
+let weekStart = null;
+let weekEnd = null;
 
 const MAX_CONTENT_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_CONTENT_MEDIA_BYTES = 20 * 1024 * 1024;
@@ -118,7 +120,7 @@ function renderRows(list) {
       <td>${hours}</td>
       <td>${reportCount}${reportPreview ? `<div class="pcso-call-meta">${reportPreview}${reportExtra}</div>` : ''}</td>
       <td class="admin-actions">
-        <a href="/api/pcso/weekly-report?discordId=${id}" data-weekly-pdf>Download PDF</a>
+        <a href="/api/pcso/weekly-report?discordId=${id}" data-weekly-pdf data-discord-id="${id}">Download PDF</a>
       </td>
     </tr>`;
   }).join('');
@@ -133,7 +135,21 @@ document.addEventListener('click', async (event) => {
   link.textContent = 'Preparing PDF…';
   statusEl.textContent = 'Preparing weekly report…';
   try {
-    const response = await fetch(link.href, { headers: { Accept: 'application/pdf' } });
+    const discordId = link.getAttribute('data-discord-id')
+      || new URL(link.href, window.location.origin).searchParams.get('discordId')
+      || '';
+    const person = people.find((entry) => entry.discordId === discordId) || null;
+    const response = await fetch(person
+      ? '/api/pcso/weekly-report'
+      : `/api/pcso/weekly-report?discordId=${encodeURIComponent(discordId)}`, {
+      method: person ? 'POST' : 'GET',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/pdf',
+        ...(person ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: person ? JSON.stringify({ discordId, person, weekStart, weekEnd }) : undefined,
+    });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
       const seconds = Math.max(1, Math.ceil(Number(response.headers.get('retry-after')) || 60));
@@ -238,6 +254,8 @@ async function loadPersonnel() {
   }
 
   people = Array.isArray(payload.people) ? payload.people : [];
+  weekStart = payload.weekStart || null;
+  weekEnd = payload.weekEnd || null;
   if (!people.length) {
     if (rosterStatusEl) {
       rosterStatusEl.hidden = false;
