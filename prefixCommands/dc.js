@@ -1,4 +1,4 @@
-import { fetchErlcServer, erlcCooldownRemainingMs, parseErlcPlayer } from '../utils/erlc.js';
+import { fetchErlcServer, erlcCooldownRemainingMs, erlcRosterFetchedAt, parseErlcPlayer } from '../utils/erlc.js';
 import { ensureGuildMembers } from '../utils/guildMemberSnapshot.js';
 import { getIdentityCache } from '../utils/identityStore.js';
 import { classifyDiscordPlayers, buildDiscordCheckPanels } from '../utils/discordCheck.js';
@@ -29,7 +29,10 @@ export default {
         await loading.edit({ content: `Waiting ${Math.ceil(waitMs / 1000)}s for ER:LC…` }).catch(() => {});
       }
       [server, identities] = await Promise.all([
-        fetchErlcServer(message.client.config.erlcServerKey, { timeoutMs: Math.min(waitMs, 15_000) + 12_000 }),
+        fetchErlcServer(message.client.config.erlcServerKey, {
+          timeoutMs: Math.min(waitMs, 15_000) + 12_000,
+          maxAgeMs: 8_000,
+        }),
         getIdentityCache(),
       ]);
       await ensureGuildMembers(guild, { allowStale: true }).catch(() => {});
@@ -61,7 +64,8 @@ export default {
       tag: 'DcCheck',
       body: `${message.author.username} (${message.author.id}): Received \`-dc\` · online ${rows.length} · missing Discord ${missing} · not in VC ${notInVoice} · in VC ${inVoice}`,
     });
-    const panels = buildDiscordCheckPanels(rows);
+    const rosterAt = erlcRosterFetchedAt();
+    const panels = buildDiscordCheckPanels(rows, Math.floor((rosterAt || Date.now()) / 1000));
     for (let index = 0; index < panels.length; index += 1) {
       const send = async (payload) => {
         if (index === 0) {
@@ -81,7 +85,7 @@ export default {
         // Expired CDN banners used to fail the whole Components V2 payload.
       }
       try {
-        await send(buildDiscordCheckPanels(rows, undefined, { banner: false })[index]);
+        await send(buildDiscordCheckPanels(rows, Math.floor((rosterAt || Date.now()) / 1000), { banner: false })[index]);
       } catch {
         const text = panels[index].components[0].components
           .filter((part) => part.type === 10)

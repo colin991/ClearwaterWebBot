@@ -9,13 +9,15 @@ const ERLC_SERVER_CACHE_TTL_MS = 5_000;
 let erlcMinIntervalMs = ERLC_MIN_INTERVAL_MS;
 let erlcAvailableAt = 0;
 let erlcCommandAvailableAt = 0;
-let erlcNetworkQueue = Promise.resolve();
+let erlcCommandQueue = Promise.resolve();
+let erlcSnapshotQueue = Promise.resolve();
+let erlcHttpQueue = Promise.resolve();
 let erlcSlotDepth = 0;
 let queuedCommands = 0;
 let idleRefreshEnabled = true;
 let idleRefreshTimer = null;
 let idleRefreshServerKey = null;
-let bundleCache = { value: null, expiresAt: 0, inflight: null };
+let bundleCache = { value: null, expiresAt: 0, fetchedAt: 0, inflight: null };
 let erlcHaltUntil = 0;
 let erlcHaltError = null;
 
@@ -76,10 +78,7 @@ export function getErlcRateLimitStatus(now = Date.now()) {
   const commandGapMs = Math.max(0, erlcCommandAvailableAt - now);
   const halted = Boolean(erlcHaltError && now < erlcHaltUntil);
   const haltMs = halted ? Math.max(0, erlcHaltUntil - now) : 0;
-  const cacheExpiresAt = Number(bundleCache.expiresAt) || 0;
-  const cacheAgeMs = bundleCache.value && cacheExpiresAt
-    ? Math.max(0, now - (cacheExpiresAt - ERLC_SERVER_CACHE_TTL_MS))
-    : null;
+  const cacheAgeMs = bundleCache.value ? rosterCacheAgeMs(now) : null;
   const limitedForMs = halted ? haltMs : Math.max(cooldownMs, commandGapMs);
   const clearsAtMs = halted
     ? erlcHaltUntil
@@ -166,33 +165,58 @@ function erlcTimeoutError() {
   return error;
 }
 
-function shouldSkipSnapshotHttp() {
-  if (bundleCache.value && Date.now() < bundleCache.expiresAt) return true;
-  return queuedCommands > 0 && Boolean(bundleCache.value);
+function rosterCacheAgeMs(now = Date.now()) {
+  if (!bundleCache.value) return Infinity;
+  const fetchedAt = Number(bundleCache.fetchedAt) || (Number(bundleCache.expiresAt) - ERLC_SERVER_CACHE_TTL_MS);
+  return Math.max(0, now - fetchedAt);
 }
 
-/** One-at-a-time ER:LC HTTP: snapshots and commands share this line. */
-export function withErlcNetworkSlot(task, { kind = 'snapshot' } = {}) {
-  if (kind === 'command') queuedCommands += 1;
-  const run = erlcNetworkQueue.then(async () => {
+export function erlcRosterFetchedAt() {
+  return Number(bundleCache.fetchedAt) || 0;
+}
+
+function shouldSkipSnapshotHttp() {
+  return Boolean(bundleCache.value && Date.now() < bundleCache.expiresAt);
+}
+
+function withErlcHttp(task) {
+  const run = erlcHttpQueue.then(async () => {
+    erlcSlotDepth += 1;
     try {
-      throwIfErlcHalted();
-      if (kind === 'snapshot' && shouldSkipSnapshotHttp()) return bundleCache.value;
-      const waitMs = Math.max(0, nextAvailableAt(kind) - Date.now());
-      if (waitMs) await sleep(waitMs);
-      throwIfErlcHalted();
-      if (kind === 'snapshot' && shouldSkipSnapshotHttp()) return bundleCache.value;
-      erlcSlotDepth += 1;
-      try {
-        return await task();
-      } finally {
-        erlcSlotDepth -= 1;
-      }
+      return await task();
     } finally {
-      if (kind === 'command') queuedCommands -= 1;
+      erlcSlotDepth -= 1;
     }
   });
-  erlcNetworkQueue = run.then(() => undefined, () => undefined);
+  erlcHttpQueue = run.then(() => undefined, () => undefined);
+  return run;
+}
+
+/** Commands and snapshots use separate queues so GET refreshes are not stuck behind the 5s POST gap. */
+export function withErlcNetworkSlot(task, { kind = 'snapshot' } = {}) {
+  if (kind === 'command') {
+    queuedCommands += 1;
+    const run = erlcCommandQueue.then(async () => {
+      try {
+        throwIfErlcHalted();
+        return await task();
+      } finally {
+        queuedCommands -= 1;
+      }
+    });
+    erlcCommandQueue = run.then(() => undefined, () => undefined);
+    return run;
+  }
+  const run = erlcSnapshotQueue.then(async () => {
+    throwIfErlcHalted();
+    if (shouldSkipSnapshotHttp()) return bundleCache.value;
+    const waitMs = Math.max(0, nextAvailableAt('snapshot') - Date.now());
+    if (waitMs) await sleep(waitMs);
+    throwIfErlcHalted();
+    if (shouldSkipSnapshotHttp()) return bundleCache.value;
+    return withErlcHttp(() => task());
+  });
+  erlcSnapshotQueue = run.then(() => undefined, () => undefined);
   return run;
 }
 
@@ -207,8 +231,6 @@ async function fetchErlcBundle(serverKey) {
   url.searchParams.set('Staff', 'true');
 
   throwIfErlcHalted();
-  const waitMs = Math.max(0, nextAvailableAt('snapshot') - Date.now());
-  if (waitMs) await sleep(waitMs);
   const response = await fetch(url, {
     headers: { 'server-key': serverKey },
     signal: AbortSignal.timeout(8000),
@@ -236,7 +258,13 @@ async function fetchErlcBundle(serverKey) {
   }
   rememberErlcCooldown(retryAfter);
   const json = await response.json();
-  bundleCache = { value: json, expiresAt: Date.now() + ERLC_SERVER_CACHE_TTL_MS, inflight: null };
+  const fetchedAt = Date.now();
+  bundleCache = {
+    value: json,
+    expiresAt: fetchedAt + ERLC_SERVER_CACHE_TTL_MS,
+    fetchedAt,
+    inflight: bundleCache.inflight,
+  };
   return json;
 }
 
@@ -251,11 +279,10 @@ function ensureIdleRefresh(serverKey) {
   if (!idleRefreshEnabled || idleRefreshTimer) return;
   idleRefreshTimer = setInterval(() => {
     if (erlcHaltError && Date.now() < erlcHaltUntil) return;
-    if (!idleRefreshServerKey || erlcSlotDepth > 0) return;
-    if (queuedCommands > 0 && bundleCache.value) return;
+    if (!idleRefreshServerKey) return;
     if (bundleCache.inflight) return;
     if (bundleCache.value && Date.now() < bundleCache.expiresAt) return;
-    loadErlcServer(idleRefreshServerKey);
+    scheduleBundleRefresh(idleRefreshServerKey);
   }, 250);
   idleRefreshTimer.unref?.();
 }
@@ -284,10 +311,16 @@ function scheduleBundleRefresh(serverKey) {
   }, { kind: 'snapshot' }));
 }
 
-function loadErlcServer(serverKey) {
+function loadErlcServer(serverKey, { maxAgeMs } = {}) {
   throwIfErlcHalted();
   ensureIdleRefresh(serverKey);
-  if (bundleCache.value) return Promise.resolve(bundleCache.value);
+  const hasCache = Boolean(bundleCache.value);
+  const tooOld = Number.isFinite(maxAgeMs) && hasCache && rosterCacheAgeMs() > maxAgeMs;
+  if (!hasCache || tooOld) {
+    const pending = scheduleBundleRefresh(serverKey);
+    if (!hasCache || tooOld) return pending;
+  }
+  if (hasCache) return Promise.resolve(bundleCache.value);
   if (bundleCache.inflight) return bundleCache.inflight;
   return scheduleBundleRefresh(serverKey);
 }
@@ -307,7 +340,10 @@ function withTimeout(promise, timeoutMs) {
 export async function fetchErlcServer(serverKey, options = {}) {
   if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
   throwIfErlcHalted();
-  const pending = loadErlcServer(serverKey);
+  const maxAgeMs = Number(options.maxAgeMs);
+  const pending = loadErlcServer(serverKey, {
+    maxAgeMs: Number.isFinite(maxAgeMs) ? maxAgeMs : undefined,
+  });
   const timeoutMs = Number(options.timeoutMs);
   if (Number.isFinite(timeoutMs) && timeoutMs > 0) pending.catch(() => {});
   try {
@@ -334,16 +370,21 @@ export function resetErlcNetworkForTests({ minIntervalMs = 0, idleRefresh = fals
   erlcMinIntervalMs = Number.isFinite(minIntervalMs) ? minIntervalMs : 0;
   erlcAvailableAt = 0;
   erlcCommandAvailableAt = 0;
-  erlcNetworkQueue = Promise.resolve();
+  erlcCommandQueue = Promise.resolve();
+  erlcSnapshotQueue = Promise.resolve();
+  erlcHttpQueue = Promise.resolve();
   erlcSlotDepth = 0;
   queuedCommands = 0;
-  bundleCache = { value: null, expiresAt: 0, inflight: null };
+  bundleCache = { value: null, expiresAt: 0, fetchedAt: 0, inflight: null };
   erlcHaltUntil = 0;
   erlcHaltError = null;
 }
 
 export function expireErlcBundleCacheForTests() {
-  if (bundleCache.value) bundleCache.expiresAt = 0;
+  if (bundleCache.value) {
+    bundleCache.expiresAt = 0;
+    bundleCache.fetchedAt = 0;
+  }
 }
 
 function firstFinite(...values) {
@@ -614,7 +655,7 @@ async function sendErlcCommand(serverKey, command, { shouldExecute, allowLoad = 
     if (waitMs) await sleep(waitMs);
     throwIfErlcHalted();
     if (shouldExecute && !await shouldExecute()) return false;
-    const response = await fetch('https://api.erlc.gg/v2/server/command', {
+    const response = await withErlcHttp(() => fetch('https://api.erlc.gg/v2/server/command', {
       method: 'POST',
       headers: {
         'server-key': serverKey,
@@ -622,7 +663,7 @@ async function sendErlcCommand(serverKey, command, { shouldExecute, allowLoad = 
       },
       body: JSON.stringify({ command: text }),
       signal: AbortSignal.timeout(8000),
-    });
+    }));
     const result = await response.json().catch(() => ({}));
     const retryAfterSeconds = normalizeErlcRetryAfterSeconds(result.retry_after || response.headers.get('retry-after') || 0);
     rememberErlcCooldown(retryAfterSeconds, { command: true });

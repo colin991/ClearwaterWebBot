@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-dc-fresh-roster",
+      "title": "Keep Discord Check on a live in-game roster",
+      "summary": "-dc no longer shows a frozen player list while VC checks are sending PMs and jails. The in-game roster keeps refreshing in the background, and Discord Check waits for a snapshot that is at most 8 seconds old.",
+      "createdAt": "2026-09-18T03:45:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-pcso-weekly-no-civilian-cad",
       "title": "Keep civilian CAD forms off PCSO weekly reports",
       "summary": "Weekly personnel PDFs no longer list Vehicle Registration or other civilian CAD forms. Only Pinellas arrest, citation, MVA, OIS, and warrant reports count.",

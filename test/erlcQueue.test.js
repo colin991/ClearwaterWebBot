@@ -74,6 +74,61 @@ test('a live command uses the cached roster instead of a second snapshot', async
   }
 });
 
+test('stale -dc reads wait for a new snapshot', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 0 });
+  let gets = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (String(options?.method || 'GET').toUpperCase() === 'POST') {
+      return jsonResponse(200, { message: 'ok' });
+    }
+    gets += 1;
+    return jsonResponse(200, { Players: [{ Player: `User${gets}:1`, Team: 'Sheriff' }] });
+  };
+  try {
+    await fetchErlcServer('key');
+    expireErlcBundleCacheForTests();
+    const server = await fetchErlcServer('key', { maxAgeMs: 0 });
+    assert.equal(gets, 2);
+    assert.equal(server.Players[0].Player, 'User2:1');
+  } finally {
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+  }
+});
+
+test('idle refresh reloads an expired roster while a command is waiting', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 0, idleRefresh: true });
+  let gets = 0;
+  let release;
+  const hold = new Promise((resolve) => { release = resolve; });
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (String(options?.method || 'GET').toUpperCase() === 'POST') {
+      return jsonResponse(200, { message: 'ok' });
+    }
+    gets += 1;
+    return jsonResponse(200, { Players: [{ Player: `User${gets}:1` }] });
+  };
+  try {
+    await fetchErlcServer('key');
+    expireErlcBundleCacheForTests();
+    const command = executeErlcCommand('key', ':wanted Test', {
+      shouldExecute: async () => {
+        await hold;
+        return true;
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    assert.ok(gets >= 2);
+    release();
+    await command;
+  } finally {
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+  }
+});
+
 test('expired roster reads stay instant and do not jump ahead of a queued command', async () => {
   resetErlcNetworkForTests({ minIntervalMs: 0 });
   let gets = 0;
