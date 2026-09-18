@@ -9,9 +9,15 @@ import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
 export const SHERIFF_LIMIT = 23;
 export const SHERIFF_TENURE_MS = 90 * 60 * 1000;
+export const SHERIFF_ROTATE_GRACE_MS = 10 * 60 * 1000;
+export const SHERIFF_ROTATE_REMIND_MS = 5 * 60 * 1000;
 export const SHERIFF_LOG_CHANNEL = '1549178818814812211';
 export const SHERIFF_FULL_MESSAGE = 'The Sheriff team is full (23 players maximum). Please choose another team and try again when a spot opens.';
 export const SHERIFF_FULL_DISCORD_MESSAGE = 'You were wanted because the Sheriff team is full (23 players maximum). Please choose another team and try again when a spot opens.';
+export const SHERIFF_ROTATE_WARN_MESSAGE = 'Please leave the Sheriff team for team balance in 10 minutes or you will be wanted off the team.';
+export const SHERIFF_ROTATE_WARN_DISCORD_MESSAGE = 'Please leave the Sheriff team for team balance in 10 minutes or you will be wanted off the team.';
+export const SHERIFF_ROTATE_REMIND_MESSAGE = 'Reminder: please leave the Sheriff team for team balance in 5 minutes or you will be wanted off the team.';
+export const SHERIFF_ROTATE_REMIND_DISCORD_MESSAGE = 'Reminder: please leave the Sheriff team for team balance in 5 minutes or you will be wanted off the team.';
 export const SHERIFF_ROTATE_MESSAGE = 'You were removed from Sheriff because you were on the team for over 1.5 hours and another player needed the slot. You can rejoin later if there is room.';
 export const SHERIFF_ROTATE_DISCORD_MESSAGE = 'You were removed from Sheriff because you were on the team for over 1.5 hours and another player needed the slot. You can rejoin later if there is room.';
 
@@ -169,6 +175,7 @@ export function createSheriffBalance({
       joinedAt,
       now: time,
     })) {
+      if (pending.has(key(action.player))) continue;
       pending.set(key(action.player), { player: action.player, reason: action.reason, wanted: false });
     }
     previous = new Set(current.keys());
@@ -177,7 +184,85 @@ export function createSheriffBalance({
       if (!validUsername(entry.player)) { pending.delete(id); continue; }
       const notices = noticesFor(entry.reason);
       let stage = entry.wanted ? 'Private notice' : 'Wanted command';
+      const stillNeedsRotate = async stageName => {
+        stage = stageName;
+        try {
+          const fresh = await snapshot();
+          const sheriffs = fresh.filter(isSheriff);
+          return sheriffs.length > SHERIFF_LIMIT
+            && sheriffs.some(p => key(p) === id && !p.enforcementExempt);
+        } catch (error) {
+          if (!isTransientLookupError(error)) throw error;
+          return current.size > SHERIFF_LIMIT && current.has(id) && !entry.player.enforcementExempt;
+        }
+      };
+      const sendDiscordNotice = async (message, flag) => {
+        if (typeof notifyDiscord !== 'function' || entry[flag]) return;
+        stage = 'Discord notice';
+        try {
+          const sent = await notifyDiscord(entry.player, message);
+          entry[flag] = true;
+          log({
+            action: sent === false
+              ? 'Discord notice skipped; no linked Discord user'
+              : 'Discord notice sent',
+            player: entry.player,
+            count: current.size,
+          });
+        } catch (error) {
+          entry[flag] = true;
+          log({
+            action: 'Discord notice failed',
+            player: entry.player,
+            count: current.size,
+            detail: safeBalanceError(error),
+            status: error?.status,
+          });
+        }
+      };
       try {
+        if (entry.reason === 'rotate' && !entry.wanted) {
+          if (current.size <= SHERIFF_LIMIT || !current.has(id)) {
+            log({ action: 'Rotate warning cancelled; Sheriff occupancy is within the limit', player: entry.player, count: current.size });
+            pending.delete(id);
+            continue;
+          }
+          const elapsed = entry.warnedAt ? now() - entry.warnedAt : 0;
+          if (!entry.warnedAt) {
+            stage = 'Rotate warning';
+            const warned = await send(':pm ' + entry.player.username + ' ' + SHERIFF_ROTATE_WARN_MESSAGE, {
+              shouldExecute: async () => stillNeedsRotate('Live roster/role recheck before rotate warning'),
+            });
+            if (warned === false) {
+              log({ action: 'Rotate warning cancelled after live recheck', player: entry.player, count: current.size });
+              pending.delete(id);
+              continue;
+            }
+            entry.warnedAt = now();
+            entry.failures = 0;
+            log({ action: 'Rotate warning sent: leave in 10 minutes', player: entry.player, count: current.size });
+            await sendDiscordNotice(SHERIFF_ROTATE_WARN_DISCORD_MESSAGE, 'warnDiscordNotified');
+            continue;
+          }
+          if (elapsed < SHERIFF_ROTATE_GRACE_MS) {
+            if (elapsed >= SHERIFF_ROTATE_REMIND_MS && !entry.reminded) {
+              stage = 'Rotate reminder';
+              const reminded = await send(':pm ' + entry.player.username + ' ' + SHERIFF_ROTATE_REMIND_MESSAGE, {
+                shouldExecute: async () => stillNeedsRotate('Live roster/role recheck before rotate reminder'),
+              });
+              if (reminded === false) {
+                log({ action: 'Rotate warning cancelled after live recheck', player: entry.player, count: current.size });
+                pending.delete(id);
+                continue;
+              }
+              entry.reminded = true;
+              entry.failures = 0;
+              log({ action: 'Rotate reminder sent: leave in 5 minutes', player: entry.player, count: current.size });
+              await sendDiscordNotice(SHERIFF_ROTATE_REMIND_DISCORD_MESSAGE, 'remindDiscordNotified');
+            }
+            continue;
+          }
+        }
         if (!entry.wanted) {
           const applied = await send(':wanted ' + entry.player.username, {
             shouldExecute: async () => {
@@ -209,29 +294,7 @@ export function createSheriffBalance({
             count: current.size,
           });
         }
-        if (typeof notifyDiscord === 'function' && !entry.discordNotified) {
-          stage = 'Discord notice';
-          try {
-            const sent = await notifyDiscord(entry.player, notices.discord);
-            entry.discordNotified = true;
-            log({
-              action: sent === false
-                ? 'Discord notice skipped; no linked Discord user'
-                : 'Discord notice sent',
-              player: entry.player,
-              count: current.size,
-            });
-          } catch (error) {
-            entry.discordNotified = true;
-            log({
-              action: 'Discord notice failed',
-              player: entry.player,
-              count: current.size,
-              detail: safeBalanceError(error),
-              status: error?.status,
-            });
-          }
-        }
+        await sendDiscordNotice(notices.discord, 'discordNotified');
         stage = 'Private notice';
         const notified = await send(':pm ' + entry.player.username + ' ' + notices.pm, {
           shouldExecute: async () => {
@@ -339,6 +402,6 @@ export function startSheriffBalance(client) {
     if (!stopped) { timer = setTimeout(run, 5000); timer.unref(); }
   };
   void run();
-  logger.info('Sheriff team balance enabled: 23 players maximum, 1.5 hour rotation.');
+  logger.info('Sheriff team balance enabled: 23 players maximum, 1.5 hour rotation with a 10 minute leave warning.');
   return () => { stopped = true; clearTimeout(timer); };
 }

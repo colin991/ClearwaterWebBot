@@ -6,7 +6,7 @@ Main-server role `1514033074948800683` bypasses enforcement, matched through a l
 
 Enabled on bot startup. The limit is 23 Sheriff players. A join that fills the 23rd slot is allowed. If another player joins while the team is already at 23:
 
-- If at least one non-exempt Sheriff has been on the team for **over 1.5 hours**, that longest-tenured player is removed with `:wanted`, then PMed in-game and DMed on Discord that they were rotated off to free a slot. The new player stays.
+- If at least one non-exempt Sheriff has been on the team for **over 1.5 hours**, that longest-tenured player is PMed in-game and DMed on Discord to leave for team balance in **10 minutes** or they will be wanted off. A reminder is sent when **5 minutes** remain. After 10 minutes they are removed with `:wanted` and told they were rotated off to free a slot. The new player stays. The warning is cancelled if occupancy drops back to 23 or they leave Sheriff first, so they are not yanked mid-scene.
 - If nobody has been on Sheriff for over 1.5 hours, the new player is removed with `:wanted`, PMed in-game, and DMed on Discord that the team is full.
 
 If two people join at once and only one long-timer qualifies, the first extra keeps the rotated slot and the second extra is wanted. Other teams are unaffected.
