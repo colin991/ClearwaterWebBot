@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-pcsoerlcapi-erlc-key",
+      "title": "PCSOERLCAPI uses the ER:LC server key",
+      "summary": "Training report approve/deny calls PCSOERLCAPI with the same ER:LC private-server key (server-key header). It reuses ERLC_SERVER_KEY unless PCSOERLCAPI_KEY is set to that same kind of key.",
+      "createdAt": "2026-09-18T01:25:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-employee-panels",
       "title": "Open the employee panel for everyone signed in",
       "summary": "The site now has an Employee hub with Training Division, Department, Reports Admin, Command Staff, and Admin. Anyone signed in can start or join SRT/TEU/patrol training, take the website quiz, and see instructor scores. Training reports can be approved or denied and are sent to PCSOERLCAPI. Role ID locks will be added later.",

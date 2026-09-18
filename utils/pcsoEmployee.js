@@ -481,16 +481,21 @@ export async function handleEmployeeAction(action, payload = {}, user = null, he
   throw Object.assign(new Error(`Unknown employee action: ${action}`), { status: 400 });
 }
 
+export function pcsoErlcApiServerKey() {
+  return String(process.env.PCSOERLCAPI_KEY || process.env.ERLC_SERVER_KEY || '').trim();
+}
+
 export async function postPcsoErlcApi(path, body) {
   const base = String(process.env.PCSOERLCAPI_URL || '').replace(/\/$/, '');
-  const key = String(process.env.PCSOERLCAPI_KEY || '').trim();
+  const serverKey = pcsoErlcApiServerKey();
   if (!base) return { ok: false, reason: 'not_configured', error: 'PCSOERLCAPI_URL is not set on the host.' };
+  if (!serverKey) return { ok: false, reason: 'not_configured', error: 'Set ERLC_SERVER_KEY (or PCSOERLCAPI_KEY) to the ER:LC server key.' };
   try {
     const headers = {
       'Content-Type': 'application/json',
       'X-API-Name': 'PCSOERLCAPI',
+      'server-key': serverKey,
     };
-    if (key) headers.Authorization = `Bearer ${key}`;
     const upstream = await fetch(`${base}${path.startsWith('/') ? path : `/${path}`}`, {
       method: 'POST',
       headers,

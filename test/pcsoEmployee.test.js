@@ -4,6 +4,7 @@ import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   handleEmployeeAction,
+  postPcsoErlcApi,
   quizForType,
   scoreAnswers,
   sessionStats,
@@ -96,4 +97,38 @@ test('employee panel paths are allowed after Discord login', () => {
   assert.equal(safeNextPath('/employee'), '/employee');
   assert.equal(safeNextPath('/employee-training.html'), '/employee/training');
   assert.equal(safeNextPath('/employee/reports'), '/employee/reports');
+});
+
+test('PCSOERLCAPI uses the ER:LC server-key header, not a Bearer token', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalUrl = process.env.PCSOERLCAPI_URL;
+  const originalKey = process.env.PCSOERLCAPI_KEY;
+  const originalErlc = process.env.ERLC_SERVER_KEY;
+  const calls = [];
+  process.env.PCSOERLCAPI_URL = 'https://pcsoerlcapi.example.com';
+  delete process.env.PCSOERLCAPI_KEY;
+  process.env.ERLC_SERVER_KEY = 'erlc-server-key-sample';
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), headers: options.headers });
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    };
+  };
+  try {
+    const result = await postPcsoErlcApi('/training-reports', { action: 'approved' });
+    assert.equal(result.ok, true);
+    assert.equal(calls[0].url, 'https://pcsoerlcapi.example.com/training-reports');
+    assert.equal(calls[0].headers['server-key'], 'erlc-server-key-sample');
+    assert.equal(calls[0].headers.Authorization, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalUrl === undefined) delete process.env.PCSOERLCAPI_URL;
+    else process.env.PCSOERLCAPI_URL = originalUrl;
+    if (originalKey === undefined) delete process.env.PCSOERLCAPI_KEY;
+    else process.env.PCSOERLCAPI_KEY = originalKey;
+    if (originalErlc === undefined) delete process.env.ERLC_SERVER_KEY;
+    else process.env.ERLC_SERVER_KEY = originalErlc;
+  }
 });
