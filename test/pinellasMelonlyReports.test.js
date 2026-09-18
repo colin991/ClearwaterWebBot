@@ -6,6 +6,7 @@ import {
   extractReportSubject,
   personNameMatches,
   recordFields,
+  isPcsoStaffCadRecord,
   reportTypeFor,
   resolveReportSubjectDiscordId,
   resolveReportSubmitter,
@@ -33,6 +34,21 @@ test('report type trusts an explicit citation label over nested MVA text', () =>
     agency: 'Pinellas County Sheriff',
     previewData: { vehicle: 'motor vehicle collision evidence' },
   }), 'citation');
+});
+
+test('vehicle registration is civilian CAD, not a PCSO staff report', () => {
+  assert.equal(reportTypeFor({
+    label: 'Vehicle Registration',
+    agency: 'Pinellas County Sheriff',
+  }), null);
+  assert.equal(isPcsoStaffCadRecord({
+    label: 'Vehicle Registration',
+    agency: 'Pinellas County Sheriff',
+  }), false);
+  assert.equal(isPcsoStaffCadRecord({
+    label: 'General Citation',
+    agency: 'Pinellas County Sheriff',
+  }), true);
 });
 
 test('warrant CAD logs are not treated as arrest reports', () => {

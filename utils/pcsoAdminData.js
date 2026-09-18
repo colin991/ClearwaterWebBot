@@ -17,8 +17,11 @@ import {
   shiftCreatedMs,
 } from './melonly.js';
 import {
+  isPcsoStaffCadRecord,
   recordCreatorDiscordId,
   recordCreatorId,
+  reportTitle,
+  reportTypeFor,
   resolveReportSubmitter,
 } from './pinellasMelonlyReports.js';
 
@@ -92,10 +95,6 @@ function shiftDurationMs(shift, now = Date.now()) {
     ? (endRaw < 1e12 ? endRaw * 1000 : endRaw)
     : now;
   return Math.max(0, end - start);
-}
-
-function recordType(record) {
-  return String(record?.label || record?.type || record?.templateId || record?.agency || 'Report').trim();
 }
 
 export function cadRecordCreatedMs(record) {
@@ -196,7 +195,7 @@ async function loadWeeklyReports(apiKey, { start, end }) {
     }
     return records.filter((record) => {
       const ms = cadRecordCreatedMs(record);
-      return ms >= start && ms <= end;
+      return ms >= start && ms <= end && isPcsoStaffCadRecord(record);
     });
   } catch {
     return [];
@@ -212,18 +211,21 @@ export function clearPcsoAdminRosterCache() {
 
 export function sanitizeWeeklyReportPerson(raw = {}, discordId = '') {
   const id = String(discordId || raw.discordId || '').trim();
-  const reports = (Array.isArray(raw.reports) ? raw.reports : []).slice(0, 80).map((report) => ({
-    id: String(report?.id || '').slice(0, 80),
-    type: String(report?.type || 'Report').slice(0, 80),
-    createdAt: report?.createdAt ?? null,
-  }));
+  const reports = (Array.isArray(raw.reports) ? raw.reports : [])
+    .filter((report) => Boolean(reportTypeFor({ label: report?.type, type: report?.type })))
+    .slice(0, 80)
+    .map((report) => ({
+      id: String(report?.id || '').slice(0, 80),
+      type: String(report?.type || 'Report').slice(0, 80),
+      createdAt: report?.createdAt ?? null,
+    }));
   return {
     discordId: id,
     callsign: String(raw.callsign || '—').slice(0, 40),
     roleplayName: String(raw.roleplayName || 'Unknown').slice(0, 80),
     rank: String(raw.rank || '—').slice(0, 80),
     shiftHoursLabel: String(raw.shiftHoursLabel || '0m').slice(0, 40),
-    reportCount: Math.max(reports.length, Math.min(500, Number(raw.reportCount) || 0)),
+    reportCount: reports.length,
     reports,
   };
 }
@@ -294,10 +296,12 @@ async function buildPcsoAdminRosterFresh({ melonlyApiKey = '' } = {}) {
       discordId,
       roleplayName: `Member ${discordId.slice(-4)}`,
     });
+    const type = reportTypeFor(record);
+    if (!type) continue;
     person.reportCount += 1;
     person.reports.push({
       id: String(record?.id || ''),
-      type: recordType(record),
+      type: reportTitle(type, record),
       createdAt: record?.createdAt || null,
     });
     byDiscord.set(discordId, person);

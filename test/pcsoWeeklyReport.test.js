@@ -76,13 +76,18 @@ test('sanitizeWeeklyReportPerson keeps the on-screen report list for PDF', async
     reports: [
       { type: 'Vehicle Registration', createdAt: Date.now() },
       { type: 'General Citation', createdAt: Date.now() },
+      { type: 'Arrest Report', createdAt: Date.now() },
     ],
   }, '1128547120304095272');
   assert.equal(person.discordId, '1128547120304095272');
   assert.equal(person.callsign, '1100');
   assert.equal(person.reports.length, 2);
+  assert.equal(person.reportCount, 2);
+  assert.equal(person.reports.some((report) => /vehicle registration/i.test(report.type)), false);
   const pdf = await renderPcsoWeeklyReportPdf(person, '2026-09-11T00:00:00.000Z', '2026-09-18T00:00:00.000Z');
   const text = pdfVisibleText(pdf);
   assert.match(text, /COLE HARRISON/);
-  assert.match(text, /VEHICLE REGISTRATION/);
+  assert.match(text, /GENERAL CITATION/);
+  assert.match(text, /ARREST REPORT/);
+  assert.doesNotMatch(text, /VEHICLE REGISTRATION/);
 });

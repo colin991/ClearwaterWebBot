@@ -125,9 +125,20 @@ export function reportTypeFor(record) {
   return reportTypeAliases.find(([, aliases]) => aliases.some((alias) => text.includes(alias)))?.[0] || null;
 }
 
-function isPinellasRecord(record) {
+export function isPinellasRecord(record) {
   const text = recordText(record);
   return /pinellas|pcso|sheriff/.test(text);
+}
+
+/** Arrest, citation, MVA, OIS, and warrant only — not civilian CAD forms. */
+export function isPcsoStaffCadRecord(record) {
+  const type = reportTypeFor(record);
+  if (!type) return false;
+  return type === 'warrant' || isPinellasRecord(record);
+}
+
+export function reportTitle(type, record) {
+  return REPORT_TYPE_TITLES[type] || record?.label || `${String(type || 'CAD').toUpperCase()} Report`;
 }
 
 function objectKey(value, ...names) {
@@ -364,10 +375,6 @@ export async function resolveReportSubmitter(apiKey, record) {
   }
 
   return { label: `Melonly user ${melonlyId}`, discordId: null };
-}
-
-function reportTitle(type, record) {
-  return REPORT_TYPE_TITLES[type] || record?.label || `${String(type || 'CAD').toUpperCase()} Report`;
 }
 
 async function loadStarLogo() {

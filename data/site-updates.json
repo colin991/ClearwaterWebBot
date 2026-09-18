@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-18-pcso-weekly-no-civilian-cad",
+      "title": "Keep civilian CAD forms off PCSO weekly reports",
+      "summary": "Weekly personnel PDFs no longer list Vehicle Registration or other civilian CAD forms. Only Pinellas arrest, citation, MVA, OIS, and warrant reports count.",
+      "createdAt": "2026-09-18T03:35:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-vc-jail-after-comms-pm",
       "title": "Jail after every not-in-Discord PM",
       "summary": "Players missing Discord get a comms PM every minute, and each of those PMs is followed by a jail once they are on a team.",
