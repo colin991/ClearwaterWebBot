@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-priority-fast-buttons",
+      "title": "Make priority buttons respond immediately",
+      "summary": "Approve, Deny, Void, and extra time now update the Discord card first. In-game :prty / :pt / :m commands keep running in the background so clicks are not stuck on the 5-second ER:LC command queue.",
+      "createdAt": "2026-09-19T19:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-priority-ended-card",
       "title": "Rewrite the priority card to Ended",
       "summary": "When a priority timer ends or everyone listed dies, the original Active card is updated to Priority Request — Ended, with the Void and Started buttons replaced by Ended.",

@@ -613,27 +613,35 @@ export function createPriorityRequestService({
     await send(`:pt ${PRIORITY_PEACE_SECONDS}`);
   }
 
-  async function closeActive(request, status, { staffId, intro, title, dm } = {}) {
+  async function closeActive(request, status, {
+    staffId,
+    intro,
+    title,
+    dm,
+    skipStaffRefresh = false,
+    waitForInGame = true,
+    waitForDm = true,
+  } = {}) {
     request.status = status;
     request.endedAt = now();
     request.endTitle = title || (status === 'ended' ? 'Priority Request — Ended' : title);
     request.endIntro = intro;
     if (staffId && status === 'voided') request.voidedBy = staffId;
-    try {
-      await endInGame();
-    } catch (error) {
-      onError(error);
-    }
     await persist();
-    try {
-      await refreshStaff(request, staffPayloadFor(request));
-      await persist();
-    } catch (error) {
-      onError(error);
+    if (!skipStaffRefresh) {
+      try {
+        await refreshStaff(request, staffPayloadFor(request));
+        await persist();
+      } catch (error) {
+        onError(error);
+      }
     }
     if (dm) {
-      try { await dmUser(request.requesterId, dm); } catch (error) { onError(error); }
+      const mail = dmUser(request.requesterId, dm).catch(onError);
+      if (waitForDm) await mail;
     }
+    const game = endInGame().catch(onError);
+    if (waitForInGame) await game;
   }
 
   async function tick() {
@@ -742,7 +750,7 @@ export function createPriorityRequestService({
       return request;
     },
 
-    async approve(requestId, staffUser) {
+    async approve(requestId, staffUser, { skipStaffRefresh = false, waitForInGame = true } = {}) {
       const current = await ensure();
       const request = current.request;
       if (!request || request.id !== requestId || request.status !== 'pending') throw new Error('That priority request is no longer pending.');
@@ -751,22 +759,30 @@ export function createPriorityRequestService({
       request.startedAt = now();
       request.endsAt = request.startedAt + PRIORITY_REQUEST_SECONDS * 1000;
       if (!Array.isArray(request.deadParticipants)) request.deadParticipants = [];
-      await send(`:prty ${PRIORITY_REQUEST_SECONDS}`);
-      try {
-        await send(priorityStartMessageCommand(request));
-      } catch (error) {
-        onError(error);
-      }
       await persist();
-      try {
-        await refreshStaff(request, activePayload(request));
-        await persist();
-      } catch (error) { onError(error); }
-      try { await dmUser(request.requesterId, startedDmPayload(request)); } catch (error) { onError(error); }
+      if (!skipStaffRefresh) {
+        try {
+          await refreshStaff(request, activePayload(request));
+          await persist();
+        } catch (error) { onError(error); }
+      }
+      const mail = dmUser(request.requesterId, startedDmPayload(request)).catch(onError);
+      const game = (async () => {
+        await send(`:prty ${PRIORITY_REQUEST_SECONDS}`);
+        try {
+          await send(priorityStartMessageCommand(request));
+        } catch (error) {
+          onError(error);
+        }
+      })().catch(onError);
+      if (waitForInGame) {
+        await game;
+        await mail;
+      }
       return request;
     },
 
-    async deny(requestId, staffUser) {
+    async deny(requestId, staffUser, { skipStaffRefresh = false } = {}) {
       const current = await ensure();
       const request = current.request;
       if (!request || request.id !== requestId || request.status !== 'pending') throw new Error('That priority request is no longer pending.');
@@ -776,14 +792,16 @@ export function createPriorityRequestService({
       request.endTitle = 'Priority Request — Denied';
       request.endIntro = staffUser ? `This request was **denied** by <@${staffUser.id}>.` : 'This request was denied.';
       await persist();
-      try {
-        await refreshStaff(request, staffPayloadFor(request));
-        await persist();
-      } catch (error) { onError(error); }
+      if (!skipStaffRefresh) {
+        try {
+          await refreshStaff(request, staffPayloadFor(request));
+          await persist();
+        } catch (error) { onError(error); }
+      }
       return request;
     },
 
-    async voidActive(requestId, staffUser) {
+    async voidActive(requestId, staffUser, options = {}) {
       const current = await ensure();
       const request = current.request;
       if (!request || request.id !== requestId || request.status !== 'active') throw new Error('That priority is not running.');
@@ -792,29 +810,41 @@ export function createPriorityRequestService({
         title: 'Priority Request — Voided',
         intro: `This priority was **voided** by <@${staffUser.id}>. A **10 minute** peace timer is now running.`,
         dm: voidedDmPayload(staffUser.id),
+        ...options,
       });
       return request;
     },
 
-    async addApprovedTime(requestId, extraMinutes) {
+    async addApprovedTime(requestId, extraMinutes, { waitForInGame = true } = {}) {
       const current = await ensure();
       const request = current.request;
       if (!request || request.id !== requestId || request.status !== 'active') throw new Error('That priority is not running.');
       const seconds = extraTimeCommandSeconds(request.endsAt, extraMinutes, now());
       request.endsAt = now() + seconds * 1000;
-      await send(`:prty ${seconds}`);
       await persist();
-      try {
-        await refreshStaff(request, activePayload(request));
-        await persist();
-      } catch (error) { onError(error); }
-      try {
-        await dmUser(request.requesterId, v2Message({
-          title: '📶 Extra Time Approved',
-          body: `**${extraMinutes}m** was added. The in-game timer now ends ${ts(request.endsAt)}.`,
-        }));
-      } catch (error) { onError(error); }
+      const mail = dmUser(request.requesterId, v2Message({
+        title: '📶 Extra Time Approved',
+        body: `**${extraMinutes}m** was added. The in-game timer now ends ${ts(request.endsAt)}.`,
+      })).catch(onError);
+      const side = (async () => {
+        await send(`:prty ${seconds}`);
+        try {
+          await refreshStaff(request, activePayload(request));
+          await persist();
+        } catch (error) { onError(error); }
+      })().catch(onError);
+      if (waitForInGame) {
+        await side;
+        await mail;
+      }
       return request;
+    },
+
+    async markStaffCardSynced() {
+      const request = state.request;
+      if (!request) return;
+      request.staffCardStatus = request.status;
+      await persist();
     },
 
     tick() {
@@ -953,32 +983,36 @@ export async function handlePriorityRequest(interaction) {
       await interaction.deferUpdate();
       if (action === 'void') await requireStaff();
       if (action === 'timeok' || action === 'timeno') await requireExtraTimeApprover();
+      const immediate = { skipStaffRefresh: true, waitForInGame: false, waitForDm: false };
       let payload;
       let started;
       if (action === 'approve') {
-        started = await service.approve(requestId, interaction.user);
+        started = await service.approve(requestId, interaction.user, immediate);
         payload = activePayload(started);
       } else if (action === 'deny') {
-        const request = await service.deny(requestId, interaction.user);
+        const request = await service.deny(requestId, interaction.user, immediate);
         payload = closedPayload(
           request,
           'Priority Request — Denied',
           `This request was **denied** by <@${interaction.user.id}>.`,
         );
       } else if (action === 'void') {
-        const request = await service.voidActive(requestId, interaction.user);
+        const request = await service.voidActive(requestId, interaction.user, immediate);
         payload = closedPayload(
           request,
           'Priority Request — Voided',
           `This priority was **voided** by <@${interaction.user.id}>. A **10 minute** peace timer is now running.`,
         );
       } else if (action === 'timeok') {
-        const request = await service.addApprovedTime(requestId, extraMinutes);
+        const request = await service.addApprovedTime(requestId, extraMinutes, immediate);
         payload = extraTimeResolvedPayload(request, extraMinutes, true, interaction.user.id);
       } else if (action === 'timeno') {
         payload = extraTimeResolvedPayload(service.request, extraMinutes || 0, false, interaction.user.id);
       }
-      if (payload) await interaction.editReply(payload);
+      if (payload) {
+        await interaction.editReply(payload);
+        await service.markStaffCardSynced();
+      }
       if (started) {
         void announcePriorityStart(interaction.client, started).catch((error) => {
           logger.error('Priority start voice announce failed', error);

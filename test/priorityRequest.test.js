@@ -347,6 +347,72 @@ test('people without staff or the priority role cannot approve extra time', asyn
   assert.match(String(replies[0]?.content || ''), /priority role/);
 });
 
+test('void button rewrites the card before in-game commands finish', async () => {
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  const commands = [];
+  const edits = [];
+  const stored = {
+    request: {
+      id: 'p1',
+      status: 'active',
+      requesterId: 'u1',
+      startedAt: 1,
+      endsAt: 9e12,
+      staffMessageId: 'm',
+    },
+  };
+  const svc = createPriorityRequestService({
+    now: () => 2,
+    load: async () => stored,
+    save: async (value) => { stored.request = value.request; },
+    send: async (command) => {
+      commands.push(command);
+      if (command === ':prty 0') await held;
+    },
+    snapshot: async () => ({}),
+    postStaff: async () => ({ id: 'm' }),
+    editStaff: async () => {
+      throw new Error('staff fetch should not block the Void button');
+    },
+    dmUser: async () => {},
+    onError: () => {},
+  });
+  const interaction = {
+    customId: 'prq:void:p1',
+    user: { id: 'staff' },
+    member: { permissions: { has: () => true }, roles: { cache: { has: () => false } } },
+    isChatInputCommand: () => false,
+    isButton: () => true,
+    isModalSubmit: () => false,
+    deferred: false,
+    replied: false,
+    async deferUpdate() { interaction.deferred = true; },
+    async editReply(payload) { edits.push(payload); },
+    async followUp() {},
+    async reply() {},
+    client: { priorityRequest: svc },
+  };
+  const sawEdit = new Promise((resolve) => {
+    const original = interaction.editReply;
+    interaction.editReply = async (payload) => {
+      await original(payload);
+      resolve();
+    };
+  });
+  const finished = handlePriorityRequest(interaction);
+  await Promise.race([
+    sawEdit,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Void card did not update before in-game commands finished')), 100)),
+  ]);
+  assert.equal(interaction.deferred, true);
+  assert.equal(edits.length, 1);
+  assert.match(JSON.stringify(edits[0]), /Priority Request — Voided/);
+  assert.equal(stored.request.status, 'voided');
+  release();
+  await finished;
+});
+
 test('void runs prty 0 then a 10 minute peace timer and DMs the requester', async () => {
   const f = serviceFixture({
     id: 'p1', status: 'active', requesterId: 'u1', startedAt: 1, endsAt: 9e12, staffMessageId: 'm',
