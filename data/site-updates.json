@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-florida-ops-profile",
+      "title": "Set Florida Operations per-server bot profile",
+      "summary": "In server 1513609541483499790 the bot now uses the name Florida Operations with the provided logo and banner on that server only.",
+      "createdAt": "2026-09-19T15:44:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-exempt-role-team-vc",
       "title": "Exempt role 1514033321024426154 from team balance and the VC gate",
       "summary": "Members with role 1514033321024426154 are skipped by Sheriff team balance and VC checks, and they can pass the secondary-server VC gate with that role alone.",

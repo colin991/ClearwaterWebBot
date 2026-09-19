@@ -15,6 +15,7 @@ import { startDispatchChannelStatus } from '../utils/dispatchChannelStatus.js';
 import { startCorrectionsChannelStatus } from '../utils/correctionsChannelStatus.js';
 import { startFrequencyChangeGreeting } from '../utils/frequencyChangeGreeting.js';
 import { ensurePinellasServerProfile } from '../utils/pinellasServer.js';
+import { ensureFloridaServerProfile } from '../utils/floridaServer.js';
 import { startBotApiServer } from '../utils/botApiServer.js';
 import { fetchErlcServer } from '../utils/erlc.js';
 import { startOpenTicketPermissionSync } from '../utils/pinellasSupport.js';
@@ -37,6 +38,12 @@ export default {
         logger.error('Pinellas server profile setup failed', error);
       });
     }, 1200);
+
+    setTimeout(() => {
+      void ensureFloridaServerProfile(client).catch((error) => {
+        logger.error('Florida server profile setup failed', error);
+      });
+    }, 2800);
 
     const startGameServices = async () => {
       let warmed = false;
