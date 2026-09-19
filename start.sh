@@ -52,6 +52,12 @@ else
   echo "[start] No Clearwater Internet store on host yet (fresh data/)."
 fi
 
+if [[ -f data/priority-request.json ]]; then
+  echo "[start] Host data present: priority-request.json"
+elif [[ -f data/priority-request.json.bak ]]; then
+  echo "[start] WARNING: priority-request.json missing; backup .bak still exists on host."
+fi
+
 if [[ -f .env ]]; then
   echo "[start] Host .env present."
 else

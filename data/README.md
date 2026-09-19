@@ -10,6 +10,7 @@ This folder holds bot runtime files on the **bot host**.
 
 ## Host-only (gitignored — never delete when updating)
 
+- `priority-request.json` — active/pending priority request, timer, and recorded in-game deaths
 - `owner-config.json` — Discord sync settings
 - `department-salaries.json` — weekly department salary config and payout receipts
 - `clearwater-internet.json` — Clearwater Internet users, posts, wallets, messages

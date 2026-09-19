@@ -413,4 +413,100 @@ test('one listed player dying does not end the priority', async () => {
   await f.svc.tick();
   assert.equal(f.stored.request.status, 'active');
   assert.deepEqual(f.commands, []);
+  assert.equal(f.stored.request.deadParticipants.length, 1);
+});
+
+test('saved deaths still end the priority after a restart with empty kill logs', async () => {
+  const startedAt = 1_000_000;
+  const stored = {
+    request: {
+      id: 'p1',
+      status: 'active',
+      requesterId: 'u1',
+      participants: [
+        { username: 'Host', robloxId: '99' },
+        { username: 'Partner', robloxId: '88' },
+      ],
+      deadParticipants: [
+        { username: 'Host', robloxId: '99' },
+        { username: 'Partner', robloxId: '88' },
+      ],
+      startedAt,
+      endsAt: startedAt + PRIORITY_REQUEST_SECONDS * 1000,
+      staffMessageId: 'm',
+    },
+  };
+  const commands = [];
+  const svc = createPriorityRequestService({
+    now: () => startedAt + 5000,
+    load: async () => stored,
+    save: async (value) => { stored.request = value.request; },
+    send: async (command) => { commands.push(command); },
+    snapshot: async () => ({ KillLogs: [] }),
+    postStaff: async () => ({ id: 'm' }),
+    editStaff: async () => {},
+    dmUser: async () => {},
+  });
+  await svc.tick();
+  assert.equal(stored.request.status, 'ended');
+  assert.deepEqual(commands, [':prty 0', `:pt ${PRIORITY_PEACE_SECONDS}`]);
+});
+
+test('restart keeps saved deaths and ends when the remaining player dies', async () => {
+  const startedAt = 1_000_000;
+  const f = serviceFixture({
+    id: 'p1',
+    status: 'active',
+    requesterId: 'u1',
+    participants: [
+      { username: 'Host', robloxId: '99' },
+      { username: 'Partner', robloxId: '88' },
+    ],
+    deadParticipants: [{ username: 'Host', robloxId: '99' }],
+    startedAt,
+    endsAt: startedAt + PRIORITY_REQUEST_SECONDS * 1000,
+    staffMessageId: 'm',
+  }, {
+    time: startedAt + 5000,
+    server: {
+      KillLogs: [{ Killed: 'Partner:88', Timestamp: Math.floor((startedAt + 4000) / 1000) }],
+    },
+  });
+  await f.svc.tick();
+  assert.equal(f.stored.request.status, 'ended');
+  assert.equal(f.stored.request.deadParticipants.length, 2);
+  assert.deepEqual(f.commands, [':prty 0', `:pt ${PRIORITY_PEACE_SECONDS}`]);
+});
+
+test('restart still ends an active priority when its saved timer is up', async () => {
+  const startedAt = 1_000_000;
+  const f = serviceFixture({
+    id: 'p1',
+    status: 'active',
+    requesterId: 'u1',
+    participants: [{ username: 'Host', robloxId: '99' }],
+    startedAt,
+    endsAt: startedAt + PRIORITY_REQUEST_SECONDS * 1000,
+    staffMessageId: 'm',
+  }, { time: startedAt + PRIORITY_REQUEST_SECONDS * 1000 });
+  await f.svc.tick();
+  assert.equal(f.stored.request.status, 'ended');
+  assert.deepEqual(f.commands, [':prty 0', `:pt ${PRIORITY_PEACE_SECONDS}`]);
+});
+
+test('a restored pending request still blocks a new one', async () => {
+  const svc = createPriorityRequestService({
+    now: () => 1,
+    load: async () => ({ request: { id: 'p1', status: 'pending' } }),
+    save: async () => {},
+    send: async () => {},
+    snapshot: async () => ({}),
+    postStaff: async () => ({ id: 'm' }),
+    editStaff: async () => {},
+    dmUser: async () => {},
+  });
+  await assert.rejects(
+    () => svc.openForm({ user: { id: 'u1' } }, { players: [{ username: 'A', robloxId: '1' }], vehicles: [] }),
+    /already pending/,
+  );
 });

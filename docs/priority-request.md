@@ -22,4 +22,4 @@ On approve:
 
 **Request Added Time** asks for 1–30 extra minutes, posts to the same staff channel, and pings role `1515107822432419971`. Clearwater staff **or** that role can approve or deny extra time. Approve runs `:prty` with remaining time plus the extra minutes and updates that extra-time card.
 
-Runtime state is `data/priority-request.json` (Git-ignored). Preserve it across bot updates. Restart the bot after deploying this feature so slash commands register.
+Runtime state is `data/priority-request.json` (Git-ignored), with a `.bak` copy. Preserve it across bot updates. A restart reloads a pending or active priority, including who already died, so the timer and “everyone died” end still work. Restart the bot after deploying this feature so slash commands register.

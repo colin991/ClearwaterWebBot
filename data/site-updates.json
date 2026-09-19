@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-priority-persist-restart",
+      "title": "Keep priority requests across bot restarts",
+      "summary": "Pending and active priorities save to host data, including who already died. After a restart the bot keeps watching the timer and still ends the priority if everyone listed is down.",
+      "createdAt": "2026-09-19T18:42:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-priority-extra-time-role",
       "title": "Let role 1515107822432419971 approve extra time",
       "summary": "Extra time Approve and Deny can be used by Clearwater staff or by members with role 1515107822432419971.",

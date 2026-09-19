@@ -113,15 +113,68 @@ export function listedPriorityParticipants(request) {
   return [];
 }
 
-export function allPriorityParticipantsDied({ kills = [], participants = [], startedAt } = {}) {
+function participantKey(player) {
+  const id = String(player?.robloxId || '').trim();
+  if (id) return `id:${id}`;
+  const name = String(player?.username || '').trim().toLowerCase();
+  return name ? `name:${name}` : '';
+}
+
+export function recordedPriorityDeathMatches(player, recordedDeaths = []) {
+  const key = participantKey(player);
+  if (!key) return false;
+  return (Array.isArray(recordedDeaths) ? recordedDeaths : []).some((entry) => participantKey(entry) === key);
+}
+
+export function recordPriorityParticipantDeaths(request, kills = []) {
+  if (!request) return false;
+  const people = listedPriorityParticipants(request);
+  const recorded = Array.isArray(request.deadParticipants) ? [...request.deadParticipants] : [];
+  const seen = new Set(recorded.map(participantKey).filter(Boolean));
+  let added = false;
+  for (const player of people) {
+    const key = participantKey(player);
+    if (!key || seen.has(key)) continue;
+    if (!playerDiedDuringPriority({
+      kills,
+      robloxId: player.robloxId,
+      username: player.username,
+      startedAt: request.startedAt,
+    })) continue;
+    recorded.push({
+      robloxId: String(player.robloxId || ''),
+      username: String(player.username || ''),
+    });
+    seen.add(key);
+    added = true;
+  }
+  request.deadParticipants = recorded;
+  return added;
+}
+
+export function allPriorityParticipantsDied({
+  kills = [],
+  participants = [],
+  startedAt,
+  recordedDeaths = [],
+} = {}) {
   const people = (Array.isArray(participants) ? participants : []).filter((player) => player?.username || player?.robloxId);
   if (!people.length) return false;
-  return people.every((player) => playerDiedDuringPriority({
+  return people.every((player) => recordedPriorityDeathMatches(player, recordedDeaths) || playerDiedDuringPriority({
     kills,
     robloxId: player.robloxId,
     username: player.username,
     startedAt,
   }));
+}
+
+export function normalizePriorityStore(stored) {
+  if (!stored || typeof stored !== 'object') return { request: null };
+  if (stored.request !== undefined) {
+    return { request: stored.request && typeof stored.request === 'object' ? stored.request : null };
+  }
+  if (stored.id && stored.status) return { request: stored };
+  return { request: null };
 }
 
 export function hasBlockingPriority(request) {
@@ -490,8 +543,12 @@ export function createPriorityRequestService({
   async function ensure() {
     if (loaded) return state;
     const stored = await load();
-    state = stored && typeof stored === 'object' ? { request: stored.request || null } : { request: null };
+    state = normalizePriorityStore(stored);
     loaded = true;
+    const restored = state.request;
+    if (restored && (restored.status === 'pending' || restored.status === 'active')) {
+      logger.info(`Priority requests: restored ${restored.status} request ${restored.id}.`);
+    }
     return state;
   }
 
@@ -549,10 +606,13 @@ export function createPriorityRequestService({
     try {
       const server = await snapshot({ killLogs: true });
       const kills = (server.KillLogs || server.killLogs || []).map(parseErlcKill);
+      const recordedNewDeaths = recordPriorityParticipantDeaths(request, kills);
+      if (recordedNewDeaths) await persist();
       if (allPriorityParticipantsDied({
         kills,
         participants: listedPriorityParticipants(request),
         startedAt: request.startedAt,
+        recordedDeaths: request.deadParticipants,
       })) {
         await closeActive(request, 'ended', {
           title: 'Priority Request — Ended',
@@ -612,6 +672,7 @@ export function createPriorityRequestService({
         submittedAt: now(),
         pendingExpiresAt: now() + PRIORITY_PENDING_MS,
         staffChannelId: PRIORITY_REQUEST_CHANNEL,
+        deadParticipants: [],
       };
       const posted = await postStaff(pendingPayload(request));
       request.staffMessageId = posted?.id || null;
@@ -628,6 +689,7 @@ export function createPriorityRequestService({
       request.approvedBy = staffUser.id;
       request.startedAt = now();
       request.endsAt = request.startedAt + PRIORITY_REQUEST_SECONDS * 1000;
+      if (!Array.isArray(request.deadParticipants)) request.deadParticipants = [];
       await send(`:prty ${PRIORITY_REQUEST_SECONDS}`);
       try {
         await send(priorityStartMessageCommand(request));
@@ -873,8 +935,16 @@ export function startPriorityRequest(client) {
   const service = createPriorityRequestService({
     snapshot: options => fetchErlcServer(key, options),
     send: command => executeErlcCommand(key, command),
-    load: () => readJsonFile(path, { request: null }, { corruptFallback: false }),
-    save: value => writeJsonFile(path, value),
+    async load() {
+      try {
+        return await readJsonFile(path, { request: null }, { corruptFallback: false });
+      } catch (error) {
+        if (error?.code !== 'JSON_STORE_CORRUPT') throw error;
+        logger.warn('Priority request store was corrupt; loading the backup if it exists.');
+        return readJsonFile(`${path}.bak`, { request: null });
+      }
+    },
+    save: value => writeJsonFile(path, value, { backup: true }),
     async postStaff(payload) {
       const channel = await client.channels.fetch(PRIORITY_REQUEST_CHANNEL);
       if (!channel?.isTextBased()) throw new Error('Priority request channel is unavailable.');
