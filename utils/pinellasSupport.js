@@ -30,7 +30,13 @@ export const PINELLAS_SUPPORT_BUTTON_PREFIX = 'pcs:support:';
 export const PINELLAS_SUPPORT_TRANSCRIPT_CHANNEL_ID = '1542631874684526663';
 export const PINELLAS_SUPPORT_CLOSE_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}close`;
 export const PINELLAS_SUPPORT_CLAIM_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}claim`;
-export const PINELLAS_SUPPORT_CLAIM_ROLE_ID = '1514363218754142218';
+/** @deprecated Use PINELLAS_SUPPORT_STAFF_ROLE_IDS. Kept so older imports keep resolving. */
+export const PINELLAS_SUPPORT_CLAIM_ROLE_ID = '1514361384576618627';
+export const PINELLAS_SUPPORT_STAFF_ROLE_IDS = Object.freeze({
+  general: '1514361384576618627',
+  compliance: '1514851283817725962',
+  sheriff: '1514361105244356639',
+});
 export const PINELLAS_SUPPORT_CR_YES_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}cr:yes`;
 export const PINELLAS_SUPPORT_CR_NO_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}cr:no`;
 const PINELLAS_SUPPORT_STAFF_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}staff`;
@@ -394,40 +400,85 @@ export const TICKET_BOT_OVERWRITES = Object.freeze({
   ManageWebhooks: true,
 });
 
-export function memberHasPinellasClaimRole(member) {
-  const roles = member?.roles;
-  if (!roles) return false;
-  if (typeof roles.cache?.has === 'function') return roles.cache.has(PINELLAS_SUPPORT_CLAIM_ROLE_ID);
-  if (typeof roles.has === 'function') return roles.has(PINELLAS_SUPPORT_CLAIM_ROLE_ID);
-  if (Array.isArray(roles)) return roles.map(String).includes(PINELLAS_SUPPORT_CLAIM_ROLE_ID);
-  return false;
+export function staffRoleIdForTicketType(type) {
+  if (type && PINELLAS_SUPPORT_STAFF_ROLE_IDS[type]) {
+    return PINELLAS_SUPPORT_STAFF_ROLE_IDS[type];
+  }
+  return PINELLAS_SUPPORT_STAFF_ROLE_IDS.general;
 }
 
-export function canClaimPinellasTicket(member) {
+export function memberHasTicketStaffRole(member, type) {
+  const roles = member?.roles;
+  if (!roles) return false;
+  const allowed = type
+    ? [staffRoleIdForTicketType(type)]
+    : Object.values(PINELLAS_SUPPORT_STAFF_ROLE_IDS);
+  const has = (id) => {
+    if (typeof roles.cache?.has === 'function') return roles.cache.has(id);
+    if (typeof roles.has === 'function') return roles.has(id);
+    if (Array.isArray(roles)) return roles.map(String).includes(id);
+    return false;
+  };
+  return allowed.some((id) => has(id));
+}
+
+export function memberHasPinellasClaimRole(member) {
+  return memberHasTicketStaffRole(member);
+}
+
+export function canClaimPinellasTicket(member, type) {
   return Boolean(
     member?.permissions?.has?.(PermissionFlagsBits.Administrator)
-    || member?.permissions?.has?.(PermissionFlagsBits.ManageMessages)
-    || memberHasPinellasClaimRole(member),
+    || memberHasTicketStaffRole(member, type),
   );
 }
 
-/** Copy the category overwrites, then grant the opener and bot on top. */
-export async function syncTicketChannelToCategory(channel, { openerId, botId } = {}) {
-  if (channel?.parentId && typeof channel.lockPermissions === 'function') {
-    await channel.lockPermissions();
+function overwriteAllow(bits) {
+  return Object.entries(bits).filter(([, allowed]) => allowed).map(([name]) => PermissionFlagsBits[name]).filter(Boolean);
+}
+
+/** Replace inherited category roles so only the opener, bot, and typed staff role can see the ticket. */
+export async function syncTicketChannelToCategory(channel, { openerId, botId, type } = {}) {
+  const ticketType = type || ticketTypeFromTopic(channel);
+  const staffRoleId = staffRoleIdForTicketType(ticketType);
+  const guildId = channel?.guild?.id || channel?.guildId;
+  if (typeof channel?.permissionOverwrites?.set !== 'function') return channel;
+
+  const overwrites = [];
+  if (guildId) {
+    overwrites.push({
+      id: guildId,
+      deny: [PermissionFlagsBits.ViewChannel],
+    });
   }
-  const edits = [];
-  if (openerId && channel?.permissionOverwrites?.edit) {
-    edits.push(channel.permissionOverwrites.edit(openerId, TICKET_OPENER_OVERWRITES));
+  if (openerId) {
+    overwrites.push({ id: openerId, allow: overwriteAllow(TICKET_OPENER_OVERWRITES) });
   }
-  if (botId && channel?.permissionOverwrites?.edit) {
-    edits.push(channel.permissionOverwrites.edit(botId, TICKET_BOT_OVERWRITES));
+  if (botId) {
+    overwrites.push({ id: botId, allow: overwriteAllow(TICKET_BOT_OVERWRITES) });
   }
-  if (channel?.permissionOverwrites?.edit) {
-    edits.push(channel.permissionOverwrites.edit(PINELLAS_SUPPORT_CLAIM_ROLE_ID, TICKET_OPENER_OVERWRITES));
-  }
-  await Promise.all(edits);
+  overwrites.push({ id: staffRoleId, allow: overwriteAllow(TICKET_OPENER_OVERWRITES) });
+  await channel.permissionOverwrites.set(overwrites);
   return channel;
+}
+
+export async function syncOpenTicketPermissions(client) {
+  const guild = client?.guilds?.cache?.get(PINELLAS_SUPPORT_GUILD_ID)
+    || await client.guilds.fetch(PINELLAS_SUPPORT_GUILD_ID).catch(() => null);
+  if (!guild) return 0;
+  await guild.channels.fetch().catch(() => {});
+  const botMember = guild.members.me || await guild.members.fetchMe().catch(() => null);
+  let updated = 0;
+  for (const channel of guild.channels.cache.values()) {
+    if (!isPinellasSupportTicketChannel(channel)) continue;
+    await syncTicketChannelToCategory(channel, {
+      openerId: ticketOwnerId(channel),
+      botId: botMember?.id,
+      type: ticketTypeFromTopic(channel),
+    });
+    updated += 1;
+  }
+  return updated;
 }
 
 export function buildTicketOpenPingPayload(memberId) {
@@ -520,7 +571,7 @@ export async function createPinellasSupportTicketForMember(guild, member, type, 
     parent: categoryId,
     topic: `ticket-owner:${member.id} ticket-type:${type}`,
   });
-  await syncTicketChannelToCategory(channel, { openerId: member.id, botId: botMember.id });
+  await syncTicketChannelToCategory(channel, { openerId: member.id, botId: botMember.id, type });
   await channel.send(buildTicketOpenPingPayload(member.id));
   await channel.send(await buildTicketPayload(member, type, formatTicketInquiryNote(inquiry, options.source)));
   return { channel, existing: false };
@@ -566,9 +617,9 @@ export async function handlePinellasSupportInteraction(interaction) {
   if (!interaction.isButton() || !id.startsWith(PINELLAS_SUPPORT_BUTTON_PREFIX)) return false;
   const channel = interaction.channel;
   const ownerId = ticketOwnerId(channel);
-  const isStaff = Boolean(interaction.member?.permissions?.has(PermissionFlagsBits.Administrator)
-    || interaction.member?.permissions?.has(PermissionFlagsBits.ManageMessages));
-  const canClaim = canClaimPinellasTicket(interaction.member);
+  const ticketType = ticketTypeFromTopic(channel);
+  const isStaff = canClaimPinellasTicket(interaction.member, ticketType);
+  const canClaim = isStaff;
 
   if (id === PINELLAS_SUPPORT_CLOSE_ID) {
     if (!isStaff && interaction.user.id !== ownerId) {

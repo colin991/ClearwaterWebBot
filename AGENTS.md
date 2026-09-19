@@ -2,9 +2,9 @@
 
 ## Source
 
-- This repository hosts a **blank Discord bot** being rebuilt. Entry point: `index.js` → `bot.js`.
-- `commands/`, `prefixCommands/`, and `events/` are empty until new features are added.
-- The PCSO website files may still live in this repo for Vercel; do not treat leftover `utils/` as live bot features unless `bot.js` imports them.
+- This repository hosts a Discord bot being rebuilt. Entry point: `index.js` → `bot.js`.
+- Live bot features are PCSO support tickets (panel buttons, claim/close, `-cr`) only.
+- The PCSO website files may still live in this repo for Vercel; do not treat leftover `utils/` as live bot features unless `bot.js` or ticket events import them.
 
 ## Verification
 

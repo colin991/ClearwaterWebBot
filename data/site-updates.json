@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-ticket-view-roles",
+      "title": "Limit ticket visibility to Command Staff, IA, and General Support",
+      "summary": "Open PCSO tickets now hide inherited category roles. Only the opener, the bot, and the matching staff role can see them: General Support for general tickets, IA for OPC, and Command Staff for Office of the Sheriff. Claim and close use the same roles or Administrator.",
+      "createdAt": "2026-09-19T02:56:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-empty-bot",
       "title": "Clear the Discord bot for a rebuild",
       "summary": "The host bot now only logs into Discord. Slash commands, prefix commands, and all automations (VC checks, Sheriff balance, ER:LC, PCSO panels, Internet, and the rest) are removed so a new bot can be built.",
