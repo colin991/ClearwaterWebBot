@@ -5,6 +5,10 @@ import { logger } from './logger.js';
 
 export const FLORIDA_GUILD_ID = '1513609541483499790';
 
+export function shouldIgnoreGuildCommands(guildId) {
+  return String(guildId || '') === FLORIDA_GUILD_ID;
+}
+
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PROFILE_STATE_PATH = path.join(ROOT, 'data', 'florida-profile.json');
 

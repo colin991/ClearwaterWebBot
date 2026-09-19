@@ -7,6 +7,7 @@ import { handleNoticeChannelMessage } from '../utils/noticeChannel.js';
 import { parseArgs } from '../utils/prefixHelpers.js';
 import { handlePinellasApplyDm } from '../utils/pinellasApply.js';
 import { handleAutoReply } from '../utils/autoReplies.js';
+import { shouldIgnoreGuildCommands } from '../utils/floridaServer.js';
 
 export default {
   name: Events.MessageCreate,
@@ -47,6 +48,8 @@ export default {
     } catch (error) {
       logger.error('Automatic reply failed', error);
     }
+
+    if (shouldIgnoreGuildCommands(message.guildId)) return;
 
     const settings = await getOwnerConfig();
     const prefix = settings.prefix || '-';

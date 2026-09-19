@@ -13,10 +13,12 @@ import { handlePinellasShiftPanelInteraction } from '../utils/pinellasShiftPanel
 import { handlePinellasSupportInteraction } from '../utils/pinellasSupport.js';
 import { handleMarketInteraction } from '../utils/market.js';
 import { handlePcsoSiteFormInteraction } from '../utils/pcsoSiteFormDiscord.js';
+import { shouldIgnoreGuildCommands } from '../utils/floridaServer.js';
 
 export default {
   name: Events.InteractionCreate,
   async execute(interaction, client) {
+    if (shouldIgnoreGuildCommands(interaction.guildId)) return;
     try {
       if (await handlePriorityRequest(interaction)) return;
     } catch (error) {

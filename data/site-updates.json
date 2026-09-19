@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-ignore-florida-commands",
+      "title": "Ignore commands in the Florida Highway Patrol server",
+      "summary": "The bot no longer runs or replies to slash commands or prefix commands in server 1513609541483499790.",
+      "createdAt": "2026-09-19T16:19:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-remove-florida-profile-welcome",
       "title": "Remove Florida Operations profile and welcome",
       "summary": "The bot no longer uses a per-server name, logo, or banner in server 1513609541483499790, and it no longer posts a Florida Highway Patrol welcome when someone joins that server. A restart clears the leftover profile.",
