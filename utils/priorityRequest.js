@@ -39,6 +39,26 @@ const FOOTER = 'https://media.discordapp.net/attachments/1529616984755540088/154
 const PREFIX = 'prq:';
 const drafts = new Map();
 
+export function parsePriorityButton(customId) {
+  const match = String(customId || '').match(/^prq:(approve|deny|void|timeok|timeno):([^:]+)(?::(\d+))?$/);
+  if (!match) return null;
+  const extra = match[3] == null ? null : Number(match[3]);
+  return {
+    action: match[1],
+    requestId: match[2],
+    extraMinutes: Number.isInteger(extra) ? extra : null,
+  };
+}
+
+function interactionCustomId(interaction) {
+  return String(
+    interaction?.customId
+    || interaction?.component?.customId
+    || interaction?.component?.data?.custom_id
+    || '',
+  );
+}
+
 function newId() {
   return `p${randomBytes(4).toString('hex')}`;
 }
@@ -156,10 +176,10 @@ function pendingPayload(request) {
   return v2Message({
     title: 'Priority Request — Pending',
     body: `<@&${PRIORITY_REQUEST_STAFF_ROLE}> A new priority request is ready. Anyone can **approve** or **deny**. It auto-denies <t:${Math.floor(request.pendingExpiresAt / 1000)}:R> if nobody responds.\n\n${detailsBody(request)}\n- **Requested by:** <@${request.requesterId}>`,
-    buttons: [[
-      { type: 2, style: 3, label: 'Approve', custom_id: `${PREFIX}approve:${request.id}` },
-      { type: 2, style: 4, label: 'Deny', custom_id: `${PREFIX}deny:${request.id}` },
-    ]],
+    buttons: [
+      [{ type: 2, style: 3, label: 'Approve', custom_id: `${PREFIX}approve:${request.id}`, id: 11 }],
+      [{ type: 2, style: 4, label: 'Deny', custom_id: `${PREFIX}deny:${request.id}`, id: 12 }],
+    ],
     allowedMentions: {
       parse: [],
       users: uniqueMentionUsers(request.requesterId, request.participantDiscordIds),
@@ -209,8 +229,9 @@ function extraTimePayload(request, minutes) {
     title: 'Priority Extra Time',
     body: `<@&${PRIORITY_REQUEST_STAFF_ROLE}> <@${request.requesterId}> asked for **${minutes}m** more on the active priority. Anyone can **approve** or **deny**.`,
     buttons: [[
-      { type: 2, style: 3, label: 'Approve time', custom_id: `${PREFIX}timeok:${request.id}:${minutes}` },
-      { type: 2, style: 4, label: 'Deny time', custom_id: `${PREFIX}timeno:${request.id}:${minutes}` },
+      { type: 2, style: 3, label: 'Approve time', custom_id: `${PREFIX}timeok:${request.id}:${minutes}`, id: 21 },
+    ], [
+      { type: 2, style: 4, label: 'Deny time', custom_id: `${PREFIX}timeno:${request.id}:${minutes}`, id: 22 },
     ]],
     allowedMentions: { parse: [], users: uniqueMentionUsers(request.requesterId), roles: [PRIORITY_REQUEST_STAFF_ROLE] },
   });
@@ -673,7 +694,7 @@ export function createPriorityRequestService({
 }
 
 export async function handlePriorityRequest(interaction) {
-  const id = interaction.customId || '';
+  const id = interactionCustomId(interaction);
   const isCommand = interaction.isChatInputCommand?.() && interaction.commandName === 'request-priority';
   if (!isCommand && !String(id).startsWith(PREFIX)) return false;
   const service = interaction.client.priorityRequest;
@@ -746,7 +767,7 @@ export async function handlePriorityRequest(interaction) {
       return true;
     }
 
-    if (interaction.isButton() && id.startsWith(`${PREFIX}addtime:`)) {
+    if (id.startsWith(`${PREFIX}addtime:`)) {
       const requestId = id.split(':')[2];
       if (service.request?.id !== requestId || service.request?.status !== 'active' || interaction.user.id !== service.request.requesterId) {
         await interaction.reply({ content: 'You can only request extra time on your running priority.', flags: MessageFlags.Ephemeral });
@@ -775,11 +796,9 @@ export async function handlePriorityRequest(interaction) {
       return true;
     }
 
-    if (interaction.isButton() && /^(prq:(approve|deny|void|timeok|timeno)):/.test(id)) {
-      const parts = id.split(':');
-      const action = parts[1];
-      const requestId = parts[2];
-      const extraMinutes = Math.trunc(Number(parts[3]));
+    const clicked = parsePriorityButton(id);
+    if (clicked) {
+      const { action, requestId, extraMinutes } = clicked;
       await interaction.deferUpdate();
       if (action === 'void') await requireStaff();
       let payload;
@@ -805,7 +824,7 @@ export async function handlePriorityRequest(interaction) {
         const request = await service.addApprovedTime(requestId, extraMinutes);
         payload = extraTimeResolvedPayload(request, extraMinutes, true, interaction.user.id);
       } else if (action === 'timeno') {
-        payload = extraTimeResolvedPayload(service.request, Number.isInteger(extraMinutes) ? extraMinutes : 0, false, interaction.user.id);
+        payload = extraTimeResolvedPayload(service.request, extraMinutes || 0, false, interaction.user.id);
       }
       if (payload) await interaction.editReply(payload);
       if (started) {

@@ -4,6 +4,7 @@ import { civilianVehicles, formatPriorityVehicle, parseErlcKill, parseErlcVehicl
 import {
   allPriorityParticipantsDied,
   createPriorityRequestService,
+  parsePriorityButton,
   extraTimeCommandSeconds,
   extraTimeResolvedPayload,
   handlePriorityRequest,
@@ -219,6 +220,47 @@ test('resolved extra-time cards drop the approve and deny buttons', () => {
   assert.match(json, /Priority Extra Time — Approved/);
   assert.doesNotMatch(json, /Approve time/);
   assert.doesNotMatch(json, /Deny time/);
+});
+
+test('priority button ids keep approve distinct from deny', () => {
+  assert.deepEqual(parsePriorityButton('prq:approve:p1'), { action: 'approve', requestId: 'p1', extraMinutes: null });
+  assert.deepEqual(parsePriorityButton('prq:deny:p1'), { action: 'deny', requestId: 'p1', extraMinutes: null });
+  assert.deepEqual(parsePriorityButton('prq:timeok:p1:1'), { action: 'timeok', requestId: 'p1', extraMinutes: 1 });
+  assert.deepEqual(parsePriorityButton('prq:timeno:p1:1'), { action: 'timeno', requestId: 'p1', extraMinutes: 1 });
+  assert.equal(parsePriorityButton('prq:approve:p1').action === 'deny', false);
+});
+
+test('approve button starts the timer instead of denying', async () => {
+  const f = serviceFixture({
+    id: 'p1',
+    status: 'pending',
+    requesterId: 'u1',
+    requesterUsername: 'HostUser',
+    details: 'bank robbery downtown',
+    pendingExpiresAt: 9e12,
+    staffMessageId: 'm',
+  });
+  const edits = [];
+  const interaction = {
+    customId: 'prq:approve:p1',
+    user: { id: 'anyone' },
+    member: { permissions: { has: () => false }, roles: { cache: { has: () => false } } },
+    isChatInputCommand: () => false,
+    isButton: () => false,
+    isModalSubmit: () => false,
+    deferred: false,
+    replied: false,
+    async deferUpdate() { interaction.deferred = true; },
+    async editReply(payload) { edits.push(payload); },
+    async followUp() {},
+    async reply() {},
+    client: { priorityRequest: f.svc },
+  };
+  assert.equal(await handlePriorityRequest(interaction), true);
+  assert.equal(f.commands[0], `:prty ${PRIORITY_REQUEST_SECONDS}`);
+  const json = JSON.stringify(edits[0]);
+  assert.match(json, /Priority Request — Active/);
+  assert.doesNotMatch(json, /Denied/);
 });
 
 test('anyone can approve extra time and the clicked message updates', async () => {

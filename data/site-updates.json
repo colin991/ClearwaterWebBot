@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-priority-button-deny-fix",
+      "title": "Stop priority Approve from acting like Deny",
+      "summary": "Approve and Deny are on separate rows with unique button ids so Discord no longer treats every click as Deny. Extra-time Approve time is split the same way.",
+      "createdAt": "2026-09-19T18:26:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-priority-fix-buttons-voice",
       "title": "Fix priority approve buttons, extra time, and voice",
       "summary": "Approve, deny, and extra-time buttons now update the card you clicked. Anyone can approve extra time and that extends the in-game :prty timer. The start chime is softer and the voice announcement speaks more slowly.",
