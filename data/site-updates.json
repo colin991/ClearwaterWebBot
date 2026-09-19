@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-empty-bot",
+      "title": "Clear the Discord bot for a rebuild",
+      "summary": "The host bot now only logs into Discord. Slash commands, prefix commands, and all automations (VC checks, Sheriff balance, ER:LC, PCSO panels, Internet, and the rest) are removed so a new bot can be built.",
+      "createdAt": "2026-09-19T01:56:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-18-sheriff-limit-27",
       "title": "Raise the Sheriff team cap to 27",
       "summary": "Sheriff team balance now allows 27 players. The 27th join is allowed; extras over that are still wanted or rotated with the 10-minute leave warning.",
