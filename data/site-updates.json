@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-priority-ended-card",
+      "title": "Rewrite the priority card to Ended",
+      "summary": "When a priority timer ends or everyone listed dies, the original Active card is updated to Priority Request — Ended, with the Void and Started buttons replaced by Ended.",
+      "createdAt": "2026-09-19T19:01:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-priority-persist-restart",
       "title": "Keep priority requests across bot restarts",
       "summary": "Pending and active priorities save to host data, including who already died. After a restart the bot keeps watching the timer and still ends the priority if everyone listed is down.",

@@ -18,7 +18,7 @@ On approve:
 - The bot runs `:m` telling the server a new priority started and not to start any major roleplays.
 - The bot joins voice channel `1514128904783139018`, plays a short chime, then slowly speaks who started it and the priority details.
 
-**Void** (or a natural timer end, or **everyone listed on the request dying in-game**) runs `:prty 0` then `:pt 600` (10 minute peace timer). All listed deaths end it immediately — there is no 3 minute wait. Void also DMs the requester that staff voided it.
+**Void** (or a natural timer end, or **everyone listed on the request dying in-game**) runs `:prty 0` then `:pt 600` (10 minute peace timer). The original request card is rewritten to **Priority Request — Ended** (Void/Started removed, disabled **Ended** shown). All listed deaths end it immediately — there is no 3 minute wait. Void also DMs the requester that staff voided it.
 
 **Request Added Time** asks for 1–30 extra minutes, posts to the same staff channel, and pings role `1515107822432419971`. Clearwater staff **or** that role can approve or deny extra time. Approve runs `:prty` with remaining time plus the extra minutes and updates that extra-time card.
 

@@ -7,6 +7,7 @@ import {
   parsePriorityButton,
   canApprovePriorityExtraTime,
   extraTimeCommandSeconds,
+  endedPayload,
   extraTimeResolvedPayload,
   handlePriorityRequest,
   hasBlockingPriority,
@@ -127,6 +128,7 @@ test('priority ends only after every listed participant has died', () => {
 function serviceFixture(request, extras = {}) {
   const commands = [];
   const dms = [];
+  const staffEdits = [];
   let time = extras.time || 1_000_000;
   const stored = { request };
   const svc = createPriorityRequestService({
@@ -136,12 +138,14 @@ function serviceFixture(request, extras = {}) {
     send: async command => { commands.push(command); },
     snapshot: async () => extras.server || { KillLogs: [] },
     postStaff: async () => ({ id: 'msg1' }),
-    editStaff: async () => {},
+    editStaff: async (channelId, messageId, payload) => {
+      staffEdits.push({ channelId, messageId, payload });
+    },
     dmUser: async (id, payload) => { dms.push({ id, payload }); },
     announceStart: extras.announceStart,
-    onError: error => { throw error; },
+    onError: extras.onError || (error => { throw error; }),
   });
-  return { svc, commands, dms, stored, setTime: value => { time = value; } };
+  return { svc, commands, dms, staffEdits, stored, setTime: value => { time = value; } };
 }
 
 test('start speech and in-game :m use the requester and details', () => {
@@ -391,6 +395,12 @@ test('all listed deaths end the running priority immediately and start peace tim
   await f.svc.tick();
   assert.equal(f.stored.request.status, 'ended');
   assert.deepEqual(f.commands, [':prty 0', `:pt ${PRIORITY_PEACE_SECONDS}`]);
+  const endedJson = JSON.stringify(f.staffEdits.at(-1).payload);
+  assert.match(endedJson, /Priority Request — Ended/);
+  assert.match(endedJson, /"label":"Ended"/);
+  assert.doesNotMatch(endedJson, /Priority Request — Active/);
+  assert.doesNotMatch(endedJson, /"label":"Void"/);
+  assert.doesNotMatch(endedJson, /"label":"Started"/);
 });
 
 test('one listed player dying does not end the priority', async () => {
@@ -492,6 +502,53 @@ test('restart still ends an active priority when its saved timer is up', async (
   await f.svc.tick();
   assert.equal(f.stored.request.status, 'ended');
   assert.deepEqual(f.commands, [':prty 0', `:pt ${PRIORITY_PEACE_SECONDS}`]);
+});
+
+test('ending the timer rewrites the staff card to Ended', async () => {
+  const startedAt = 1_000_000;
+  const f = serviceFixture({
+    id: 'p1',
+    status: 'active',
+    requesterId: 'u1',
+    startedAt,
+    endsAt: startedAt + PRIORITY_REQUEST_SECONDS * 1000,
+    staffMessageId: 'm',
+  }, { time: startedAt + PRIORITY_REQUEST_SECONDS * 1000 });
+  await f.svc.tick();
+  assert.equal(f.stored.request.status, 'ended');
+  const json = JSON.stringify(f.staffEdits.at(-1).payload);
+  assert.match(json, /Priority Request — Ended/);
+  assert.match(json, /"label":"Ended"/);
+  assert.match(json, /\*\*Ended:\*\*/);
+});
+
+test('endedPayload replaces Started with a disabled Ended button', () => {
+  const json = JSON.stringify(endedPayload({
+    id: 'p1',
+    requesterId: 'u1',
+    endedAt: 1_000_000,
+    endIntro: 'Everyone listed on this priority died in-game.',
+  }));
+  assert.match(json, /Priority Request — Ended/);
+  assert.match(json, /"label":"Ended"/);
+  assert.match(json, /"disabled":true/);
+  assert.doesNotMatch(json, /"label":"Started"/);
+  assert.doesNotMatch(json, /"label":"Void"/);
+});
+
+test('a restored ended request still updates the Active card to Ended', async () => {
+  const f = serviceFixture({
+    id: 'p1',
+    status: 'ended',
+    requesterId: 'u1',
+    staffMessageId: 'm',
+    endedAt: 1_000_000,
+    endIntro: 'The in-game priority timer ended. A **10 minute** peace timer is now running.',
+  });
+  await f.svc.tick();
+  assert.equal(f.staffEdits.length, 1);
+  assert.match(JSON.stringify(f.staffEdits[0].payload), /Priority Request — Ended/);
+  assert.equal(f.stored.request.staffCardStatus, 'ended');
 });
 
 test('a restored pending request still blocks a new one', async () => {

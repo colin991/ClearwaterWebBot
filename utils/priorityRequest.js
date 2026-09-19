@@ -229,7 +229,8 @@ function detailsBody(request) {
     `- **Submitted:** ${ts(request.submittedAt)}`,
   ];
   if (request.startedAt) lines.push(`- **Started:** ${ts(request.startedAt)}`);
-  if (request.endsAt) lines.push(`- **Ends:** ${ts(request.endsAt)}`);
+  if (request.endedAt) lines.push(`- **Ended:** ${ts(request.endedAt)}`);
+  else if (request.endsAt) lines.push(`- **Ends:** ${ts(request.endsAt)}`);
   lines.push(`- **Background:** ${clip(request.background, 500)}`);
   lines.push(`- **Priority Details:** ${clip(request.details, 500)}`);
   if (request.approvedBy) lines.push(`- **Approved by:** <@${request.approvedBy}>`);
@@ -272,6 +273,42 @@ function closedPayload(request, title, intro) {
     body: `${intro}\n\n${detailsBody(request)}`,
     allowedMentions: { parse: [], users: uniqueMentionUsers(request.requesterId, request.approvedBy, request.voidedBy, request.deniedBy) },
   });
+}
+
+export function endedPayload(request, intro) {
+  const text = intro
+    || request?.endIntro
+    || 'This priority has **ended**. A **10 minute** peace timer is now running.';
+  return v2Message({
+    title: 'Priority Request — Ended',
+    body: `${text}\n\n${detailsBody(request)}`,
+    buttons: [
+      [{ type: 2, style: 4, label: 'Ended', custom_id: `${PREFIX}ended:${request?.id || 'x'}`, disabled: true }],
+    ],
+    allowedMentions: { parse: [], users: uniqueMentionUsers(request?.requesterId, request?.approvedBy, request?.voidedBy) },
+  });
+}
+
+function staffPayloadFor(request) {
+  const status = String(request?.status || '');
+  if (status === 'pending') return pendingPayload(request);
+  if (status === 'active') return activePayload(request);
+  if (status === 'ended') return endedPayload(request);
+  if (status === 'voided') {
+    return closedPayload(
+      request,
+      request.endTitle || 'Priority Request — Voided',
+      request.endIntro || 'This priority was **voided**. A **10 minute** peace timer is now running.',
+    );
+  }
+  if (status === 'denied') {
+    return closedPayload(
+      request,
+      request.endTitle || 'Priority Request — Denied',
+      request.endIntro || 'This request was denied.',
+    );
+  }
+  return null;
 }
 
 function startedDmPayload(request) {
@@ -553,8 +590,22 @@ export function createPriorityRequestService({
   }
 
   async function refreshStaff(request, payload) {
-    if (!request?.staffMessageId) return;
+    if (!payload) return false;
+    if (!request?.staffMessageId) return false;
     await editStaff(request.staffChannelId || PRIORITY_REQUEST_CHANNEL, request.staffMessageId, payload);
+    request.staffCardStatus = request.status;
+    return true;
+  }
+
+  async function syncStaffCard(request) {
+    if (!request || request.staffCardStatus === request.status) return;
+    const payload = staffPayloadFor(request);
+    try {
+      await refreshStaff(request, payload);
+      await persist();
+    } catch (error) {
+      onError(error);
+    }
   }
 
   async function endInGame() {
@@ -565,6 +616,8 @@ export function createPriorityRequestService({
   async function closeActive(request, status, { staffId, intro, title, dm } = {}) {
     request.status = status;
     request.endedAt = now();
+    request.endTitle = title || (status === 'ended' ? 'Priority Request — Ended' : title);
+    request.endIntro = intro;
     if (staffId && status === 'voided') request.voidedBy = staffId;
     try {
       await endInGame();
@@ -572,7 +625,12 @@ export function createPriorityRequestService({
       onError(error);
     }
     await persist();
-    await refreshStaff(request, closedPayload(request, title, intro));
+    try {
+      await refreshStaff(request, staffPayloadFor(request));
+      await persist();
+    } catch (error) {
+      onError(error);
+    }
     if (dm) {
       try { await dmUser(request.requesterId, dm); } catch (error) { onError(error); }
     }
@@ -587,12 +645,14 @@ export function createPriorityRequestService({
       request.status = 'denied';
       request.deniedBy = null;
       request.endedAt = time;
+      request.endTitle = 'Priority Request — Denied';
+      request.endIntro = 'This request was **automatically denied** because nobody responded within 25 minutes.';
       await persist();
-      await refreshStaff(request, closedPayload(
-        request,
-        'Priority Request — Denied',
-        'This request was **automatically denied** because nobody responded within 25 minutes.',
-      ));
+      await syncStaffCard(request);
+      return;
+    }
+    if (request.status === 'ended' || request.status === 'voided' || request.status === 'denied') {
+      await syncStaffCard(request);
       return;
     }
     if (request.status !== 'active') return;
@@ -676,6 +736,7 @@ export function createPriorityRequestService({
       };
       const posted = await postStaff(pendingPayload(request));
       request.staffMessageId = posted?.id || null;
+      request.staffCardStatus = posted?.id ? 'pending' : null;
       current.request = request;
       await persist();
       return request;
@@ -697,7 +758,10 @@ export function createPriorityRequestService({
         onError(error);
       }
       await persist();
-      try { await refreshStaff(request, activePayload(request)); } catch (error) { onError(error); }
+      try {
+        await refreshStaff(request, activePayload(request));
+        await persist();
+      } catch (error) { onError(error); }
       try { await dmUser(request.requesterId, startedDmPayload(request)); } catch (error) { onError(error); }
       return request;
     },
@@ -709,13 +773,12 @@ export function createPriorityRequestService({
       request.status = 'denied';
       request.deniedBy = staffUser?.id || null;
       request.endedAt = now();
+      request.endTitle = 'Priority Request — Denied';
+      request.endIntro = staffUser ? `This request was **denied** by <@${staffUser.id}>.` : 'This request was denied.';
       await persist();
       try {
-        await refreshStaff(request, closedPayload(
-          request,
-          'Priority Request — Denied',
-          staffUser ? `This request was **denied** by <@${staffUser.id}>.` : 'This request was denied.',
-        ));
+        await refreshStaff(request, staffPayloadFor(request));
+        await persist();
       } catch (error) { onError(error); }
       return request;
     },
@@ -741,7 +804,10 @@ export function createPriorityRequestService({
       request.endsAt = now() + seconds * 1000;
       await send(`:prty ${seconds}`);
       await persist();
-      try { await refreshStaff(request, activePayload(request)); } catch (error) { onError(error); }
+      try {
+        await refreshStaff(request, activePayload(request));
+        await persist();
+      } catch (error) { onError(error); }
       try {
         await dmUser(request.requesterId, v2Message({
           title: '📶 Extra Time Approved',
