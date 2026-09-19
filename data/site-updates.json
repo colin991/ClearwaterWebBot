@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-florida-welcome",
+      "title": "Welcome new Florida Highway Patrol members",
+      "summary": "When someone joins server 1513609541483499790, the bot posts a Florida Highway Patrol welcome in channel 1513609542007521528 that pings them and shows the current member count.",
+      "createdAt": "2026-09-19T15:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-florida-ops-profile",
       "title": "Set Florida Operations per-server bot profile",
       "summary": "In server 1513609541483499790 the bot now uses the name Florida Operations with the provided logo and banner on that server only.",

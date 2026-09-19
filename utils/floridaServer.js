@@ -1,3 +1,4 @@
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -6,6 +7,8 @@ import { logger } from './logger.js';
 
 export const FLORIDA_GUILD_ID = '1513609541483499790';
 export const FLORIDA_NICKNAME = 'Florida Operations';
+export const FLORIDA_WELCOME_CHANNEL_ID = '1513609542007521528';
+export const FLORIDA_WELCOME_BUTTON_ID = 'florida:welcome:members';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FLORIDA_LOGO_PATH = path.join(ROOT, 'assets', 'florida-ops-logo.gif');
@@ -121,4 +124,39 @@ export async function ensureFloridaServerProfile(client) {
     logger.error('Florida: failed to update server profile', error);
     return false;
   }
+}
+
+export function buildFloridaWelcomePayload(member) {
+  const memberCount = Number(member.guild?.memberCount) || member.guild?.members?.cache?.size || 0;
+  return {
+    content: `<:wave:1521080434488901682> Welcome aboard, <@${member.id}>. The **Florida Highway Patrol** is glad to have you!`,
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(FLORIDA_WELCOME_BUTTON_ID)
+          .setEmoji({ id: '1521081600354418750', name: 'person' })
+          .setLabel(String(memberCount))
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+      ),
+    ],
+    allowedMentions: { users: [member.id] },
+  };
+}
+
+/** Post the Florida Highway Patrol welcome when a member joins that server. */
+export async function sendFloridaWelcome(member) {
+  if (String(member.guild?.id) !== FLORIDA_GUILD_ID) return false;
+  if (member.user?.bot) return false;
+
+  const channel = member.guild.channels.cache.get(FLORIDA_WELCOME_CHANNEL_ID)
+    || await member.guild.channels.fetch(FLORIDA_WELCOME_CHANNEL_ID).catch(() => null);
+  if (!channel?.isTextBased?.()) {
+    logger.warn(`Florida: welcome channel ${FLORIDA_WELCOME_CHANNEL_ID} unavailable.`);
+    return false;
+  }
+
+  await channel.send(buildFloridaWelcomePayload(member));
+  logger.info(`Florida: welcomed ${member.user?.tag || member.id}.`);
+  return true;
 }

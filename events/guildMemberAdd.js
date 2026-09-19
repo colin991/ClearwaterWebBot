@@ -3,6 +3,7 @@ import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges } from '../
 import { readInternetStore, saveInternetStore, setInternetBan, upsertInternetUser } from '../utils/internetStore.js';
 import { handleSecondaryGateJoin } from '../utils/secondaryServerGate.js';
 import { sendPinellasWelcome } from '../utils/pinellasServer.js';
+import { sendFloridaWelcome } from '../utils/floridaServer.js';
 import { logger } from '../utils/logger.js';
 
 export default {
@@ -20,6 +21,13 @@ export default {
       if (welcomed) return;
     } catch (error) {
       logger.error('Pinellas welcome message failed', error);
+    }
+
+    try {
+      const welcomed = await sendFloridaWelcome(member);
+      if (welcomed) return;
+    } catch (error) {
+      logger.error('Florida welcome message failed', error);
     }
 
     if (member.guild.id !== CLEARWATER_GUILD_ID) return;
