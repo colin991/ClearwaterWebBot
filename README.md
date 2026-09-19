@@ -15,4 +15,4 @@ Ticket channels are visible only to the opener, the bot, and the matching staff 
 3. Optional: `MELONLY_API_KEY` (ticket account info) and `COOKIE_API_KEY` (transcripts).
 4. Run `npm install` and `npm start`.
 
-On Spark/Apollo, keep the locked startup command. Restart the host after pushing to `main`.
+On Spark/Apollo, keep the locked startup command. Restart the host after pushing to `main`. A restart rewrites view permissions on every open ticket.

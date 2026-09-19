@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { config, validateConfig } from './config.js';
 import { logger } from './utils/logger.js';
+import { startOpenTicketPermissionSync } from './utils/pinellasSupport.js';
 
 async function loadPrefixCommands(client) {
   const directory = join(process.cwd(), 'prefixCommands');
@@ -86,6 +87,10 @@ process.on('uncaughtException', (error) => {
 
 await loadPrefixCommands(client);
 await loadEvents(client);
+
+client.once(Events.ClientReady, (readyClient) => {
+  startOpenTicketPermissionSync(readyClient);
+});
 
 try {
   await clearSlashCommands();

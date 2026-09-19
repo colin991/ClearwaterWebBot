@@ -20,6 +20,7 @@ import {
   handlePinellasSupportInteraction,
   isPinellasSupportTicketChannel,
   staffRoleIdForTicketType,
+  syncOpenTicketPermissions,
   syncTicketChannelToCategory,
   ticketOwnerId,
   websiteTicketFields,
@@ -35,6 +36,10 @@ test('ticket owner is read from the channel topic', () => {
   assert.equal(ticketOwnerId({ topic: 'ticket-owner:1074411240757137589 ticket-type:compliance' }), '1074411240757137589');
   assert.equal(isPinellasSupportTicketChannel({ topic: 'general chat' }), false);
   assert.equal(isPinellasSupportTicketChannel({ topic: 'ticket-owner:1074411240757137589 ticket-type:general' }), true);
+  assert.equal(isPinellasSupportTicketChannel({
+    parentId: PINELLAS_SUPPORT_CATEGORY_IDS.general,
+    type: 0,
+  }), true);
 });
 
 test('close request asks the opener to click Yes', () => {
@@ -248,6 +253,47 @@ test('only the matching staff role or an administrator can claim a ticket', asyn
     reply: async (payload) => { denied = payload; },
   });
   assert.match(String(denied.content), /Only staff can claim/);
+});
+
+test('restart permission sync updates every open ticket and continues after a failure', async () => {
+  const updated = [];
+  const ticket = (id, extra = {}) => ({
+    id,
+    parentId: extra.parentId || PINELLAS_SUPPORT_CATEGORY_IDS.compliance,
+    type: 0,
+    topic: extra.topic,
+    guild: { id: PINELLAS_SUPPORT_GUILD_ID },
+    permissionOverwrites: {
+      set: async (list) => {
+        if (extra.fail) throw new Error('missing access');
+        updated.push({ id, ids: list.map((entry) => entry.id) });
+      },
+    },
+  });
+  const guild = {
+    id: PINELLAS_SUPPORT_GUILD_ID,
+    channels: {
+      cache: new Map([
+        ['1', ticket('1', { topic: 'ticket-owner:1074411240757137589 ticket-type:compliance' })],
+        ['2', ticket('2', { parentId: PINELLAS_SUPPORT_CATEGORY_IDS.sheriff })],
+        ['3', { id: '3', parentId: '0', topic: 'lounge', permissionOverwrites: { set: async () => {} } }],
+        ['4', ticket('4', { topic: 'ticket-owner:88 ticket-type:compliance', fail: true })],
+      ]),
+      fetch: async () => {},
+    },
+    members: { me: { id: 'bot' } },
+  };
+  const client = {
+    guilds: {
+      cache: { get: (id) => (id === PINELLAS_SUPPORT_GUILD_ID ? guild : null) },
+      fetch: async () => guild,
+    },
+  };
+  const count = await syncOpenTicketPermissions(client);
+  assert.equal(count, 2);
+  assert.deepEqual(updated.map((entry) => entry.id), ['1', '2']);
+  assert.deepEqual(updated[0].ids, [PINELLAS_SUPPORT_GUILD_ID, '1074411240757137589', 'bot', PINELLAS_SUPPORT_STAFF_ROLE_IDS.compliance]);
+  assert.deepEqual(updated[1].ids, [PINELLAS_SUPPORT_GUILD_ID, 'bot', PINELLAS_SUPPORT_STAFF_ROLE_IDS.sheriff]);
 });
 
 test('new ticket ping uses @here', () => {

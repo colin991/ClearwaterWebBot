@@ -8,6 +8,7 @@ import {
   MediaGalleryItemBuilder,
   MessageFlags,
   ModalBuilder,
+  OverwriteType,
   PermissionFlagsBits,
   SectionBuilder,
   SeparatorBuilder,
@@ -17,6 +18,7 @@ import {
   TextInputStyle,
 } from 'discord.js';
 import { config } from '../config.js';
+import { logger } from './logger.js';
 import { fetchMelonlyMemberByDiscordId } from './melonly.js';
 
 export const PINELLAS_SUPPORT_PANEL_CHANNEL_ID = '1514256566105276437';
@@ -99,6 +101,16 @@ export function pinellasSupportCategoryIds() {
 
 export function ticketTypeFromTopic(channel) {
   return channel?.topic?.match(/ticket-type:([a-z]+)/)?.[1] || 'general';
+}
+
+export function ticketTypeFromChannel(channel) {
+  const matched = channel?.topic?.match(/ticket-type:([a-z]+)/)?.[1];
+  if (matched && PINELLAS_SUPPORT_STAFF_ROLE_IDS[matched]) return matched;
+  const parentId = String(channel?.parentId || '');
+  for (const [type, id] of Object.entries(PINELLAS_SUPPORT_CATEGORY_IDS)) {
+    if (String(id) === parentId) return type;
+  }
+  return 'general';
 }
 
 export function formatTicketInquiryNote(inquiry, source) {
@@ -382,8 +394,27 @@ export function ticketOwnerId(channel) {
   return channel?.topic?.match(/ticket-owner:(\d{16,22})/)?.[1] || null;
 }
 
+export function ticketOwnerIdFromOverwrites(channel, botId) {
+  const cache = channel?.permissionOverwrites?.cache;
+  if (!cache?.values) return null;
+  for (const overwrite of cache.values()) {
+    const type = overwrite.type;
+    const isMember = type === OverwriteType.Member || type === 1;
+    if (!isMember) continue;
+    if (botId && String(overwrite.id) === String(botId)) continue;
+    const allowsView = overwrite.allow?.has?.(PermissionFlagsBits.ViewChannel);
+    if (allowsView === false) continue;
+    return String(overwrite.id);
+  }
+  return null;
+}
+
 export function isPinellasSupportTicketChannel(channel) {
-  return Boolean(ticketOwnerId(channel));
+  if (ticketOwnerId(channel)) return true;
+  const parentId = String(channel?.parentId || '');
+  if (!pinellasSupportCategoryIds().includes(parentId)) return false;
+  if (channel?.type === ChannelType.GuildCategory) return false;
+  return channel?.type == null || channel.type === ChannelType.GuildText;
 }
 
 export const TICKET_OPENER_OVERWRITES = Object.freeze({
@@ -439,11 +470,14 @@ function overwriteAllow(bits) {
 
 /** Replace inherited category roles so only the opener, bot, and typed staff role can see the ticket. */
 export async function syncTicketChannelToCategory(channel, { openerId, botId, type } = {}) {
-  const ticketType = type || ticketTypeFromTopic(channel);
+  const ticketType = type || ticketTypeFromChannel(channel);
   const staffRoleId = staffRoleIdForTicketType(ticketType);
   const guildId = channel?.guild?.id || channel?.guildId;
   if (typeof channel?.permissionOverwrites?.set !== 'function') return channel;
 
+  const resolvedOpener = openerId
+    || ticketOwnerId(channel)
+    || ticketOwnerIdFromOverwrites(channel, botId);
   const overwrites = [];
   if (guildId) {
     overwrites.push({
@@ -451,34 +485,69 @@ export async function syncTicketChannelToCategory(channel, { openerId, botId, ty
       deny: [PermissionFlagsBits.ViewChannel],
     });
   }
-  if (openerId) {
-    overwrites.push({ id: openerId, allow: overwriteAllow(TICKET_OPENER_OVERWRITES) });
+  if (resolvedOpener) {
+    overwrites.push({ id: resolvedOpener, allow: overwriteAllow(TICKET_OPENER_OVERWRITES) });
   }
   if (botId) {
     overwrites.push({ id: botId, allow: overwriteAllow(TICKET_BOT_OVERWRITES) });
   }
   overwrites.push({ id: staffRoleId, allow: overwriteAllow(TICKET_OPENER_OVERWRITES) });
-  await channel.permissionOverwrites.set(overwrites);
+  await channel.permissionOverwrites.set(overwrites, 'PCSO ticket staff view roles');
   return channel;
 }
 
+async function resolveTicketGuild(client) {
+  if (!client?.guilds) return null;
+  const cached = client.guilds.cache?.get?.(PINELLAS_SUPPORT_GUILD_ID);
+  if (cached) return cached;
+  const fetched = await client.guilds.fetch(PINELLAS_SUPPORT_GUILD_ID).catch(() => null);
+  if (fetched) return fetched;
+  await client.guilds.fetch().catch(() => {});
+  return client.guilds.cache?.get?.(PINELLAS_SUPPORT_GUILD_ID) || null;
+}
+
 export async function syncOpenTicketPermissions(client) {
-  const guild = client?.guilds?.cache?.get(PINELLAS_SUPPORT_GUILD_ID)
-    || await client.guilds.fetch(PINELLAS_SUPPORT_GUILD_ID).catch(() => null);
+  const guild = await resolveTicketGuild(client);
   if (!guild) return 0;
   await guild.channels.fetch().catch(() => {});
   const botMember = guild.members.me || await guild.members.fetchMe().catch(() => null);
   let updated = 0;
-  for (const channel of guild.channels.cache.values()) {
+  for (const cached of guild.channels.cache.values()) {
+    let channel = cached;
+    if (!channel.topic && typeof channel.fetch === 'function') {
+      channel = await channel.fetch().catch(() => cached);
+    }
     if (!isPinellasSupportTicketChannel(channel)) continue;
-    await syncTicketChannelToCategory(channel, {
-      openerId: ticketOwnerId(channel),
-      botId: botMember?.id,
-      type: ticketTypeFromTopic(channel),
-    });
-    updated += 1;
+    try {
+      await syncTicketChannelToCategory(channel, {
+        openerId: ticketOwnerId(channel) || ticketOwnerIdFromOverwrites(channel, botMember?.id),
+        botId: botMember?.id,
+        type: ticketTypeFromChannel(channel),
+      });
+      updated += 1;
+    } catch (error) {
+      logger.error(`Could not update ticket permissions for ${channel.id}`, error);
+    }
   }
   return updated;
+}
+
+export function startOpenTicketPermissionSync(client) {
+  if (client?.__pinellasTicketPermSyncStarted) return;
+  if (client) client.__pinellasTicketPermSyncStarted = true;
+  const delays = [0, 2_500, 10_000];
+  for (const delayMs of delays) {
+    const timer = setTimeout(() => {
+      void syncOpenTicketPermissions(client)
+        .then((updated) => {
+          logger.info(`Synced view permissions on ${updated} open ticket channel(s).`);
+        })
+        .catch((error) => {
+          logger.error('Could not sync open ticket view permissions', error);
+        });
+    }, delayMs);
+    timer.unref?.();
+  }
 }
 
 export function buildTicketOpenPingPayload(memberId) {
