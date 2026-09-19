@@ -8,18 +8,18 @@
 
 If a request is already **pending** or **active**, a new one cannot be submitted.
 
-New requests post to channel `1514341436139770017` and ping role `1515107822432419971`. **Anyone** can **Approve** or **Deny**. Unanswered pending requests are **auto-denied after 25 minutes**. Void and extra-time buttons stay staff-only.
+New requests post to channel `1514341436139770017` and ping role `1515107822432419971`. **Anyone** can **Approve** or **Deny**. Unanswered pending requests are **auto-denied after 25 minutes**. Void stays staff-only.
 
 On approve:
 
+- The clicked request card updates immediately (Active).
 - The requester is DMed the started card, including **Request Added Time**.
 - The bot runs `:prty 1800` (30 minutes).
 - The bot runs `:m` telling the server a new priority started and not to start any major roleplays.
-- The bot joins voice channel `1514128904783139018`, plays a beep, then speaks who started it and the priority details.
-- The staff message switches to **Active**, with **Void** available.
+- The bot joins voice channel `1514128904783139018`, plays a short chime, then slowly speaks who started it and the priority details.
 
 **Void** (or a natural timer end, or **everyone listed on the request dying in-game**) runs `:prty 0` then `:pt 600` (10 minute peace timer). All listed deaths end it immediately — there is no 3 minute wait. Void also DMs the requester that staff voided it.
 
-**Request Added Time** asks for 1–30 extra minutes, posts to the same staff channel, and pings role `1515107822432419971`. If staff approve, the bot runs `:prty` with remaining time plus the extra minutes.
+**Request Added Time** asks for 1–30 extra minutes, posts to the same staff channel, and pings role `1515107822432419971`. **Anyone** can approve or deny extra time. Approve runs `:prty` with remaining time plus the extra minutes and updates that extra-time card.
 
 Runtime state is `data/priority-request.json` (Git-ignored). Preserve it across bot updates. Restart the bot after deploying this feature so slash commands register.

@@ -207,12 +207,23 @@ function voidedDmPayload(staffId) {
 function extraTimePayload(request, minutes) {
   return v2Message({
     title: 'Priority Extra Time',
-    body: `<@&${PRIORITY_REQUEST_STAFF_ROLE}> <@${request.requesterId}> asked for **${minutes}m** more on the active priority.`,
+    body: `<@&${PRIORITY_REQUEST_STAFF_ROLE}> <@${request.requesterId}> asked for **${minutes}m** more on the active priority. Anyone can **approve** or **deny**.`,
     buttons: [[
       { type: 2, style: 3, label: 'Approve time', custom_id: `${PREFIX}timeok:${request.id}:${minutes}` },
-      { type: 2, style: 4, label: 'Deny time', custom_id: `${PREFIX}timeno:${request.id}` },
+      { type: 2, style: 4, label: 'Deny time', custom_id: `${PREFIX}timeno:${request.id}:${minutes}` },
     ]],
     allowedMentions: { parse: [], users: uniqueMentionUsers(request.requesterId), roles: [PRIORITY_REQUEST_STAFF_ROLE] },
+  });
+}
+
+export function extraTimeResolvedPayload(request, minutes, approved, userId) {
+  const extra = Math.trunc(Number(minutes) || 0);
+  const amount = extra > 0 ? `**${extra}m** extra time` : 'extra time';
+  const verb = approved ? 'approved' : 'denied';
+  return v2Message({
+    title: approved ? 'Priority Extra Time — Approved' : 'Priority Extra Time — Denied',
+    body: `<@${userId}> **${verb}** ${amount}${approved && request?.endsAt ? `. The in-game timer now ends ${ts(request.endsAt)}.` : '.'}\n\n${detailsBody(request)}`,
+    allowedMentions: { parse: [], users: uniqueMentionUsers(request?.requesterId, userId) },
   });
 }
 
@@ -390,11 +401,13 @@ function buildPriorityFormModal({ id, players, vehicles }) {
 export function priorityStartSpeech(request) {
   const username = clip(request?.requesterUsername, 40);
   const details = clip(request?.details, 220);
-  return `A new priority has now started by ${username} for ${details}`;
+  return `A new priority has now started, by ${username}, for ${details}.`;
 }
 
 export function priorityStartMessageCommand(request) {
-  return `:m ${priorityStartSpeech(request)}. Do not start any major roleplays`;
+  const username = clip(request?.requesterUsername, 40);
+  const details = clip(request?.details, 220);
+  return `:m A new priority has now started by ${username} for ${details}. Do not start any major roleplays`;
 }
 
 export async function announcePriorityStart(client, request) {
@@ -406,14 +419,17 @@ export async function announcePriorityStart(client, request) {
   if (!channel.permissionsFor(me)?.has(['Connect', 'Speak'])) {
     throw new Error('The bot needs Connect and Speak in the priority announce voice channel.');
   }
-  const speech = await synthesizeSpeechMp3(priorityStartSpeech(request));
+  const speech = await synthesizeSpeechMp3(priorityStartSpeech(request), undefined, { rate: 0.72 });
   await playMp3InVoiceChannel(channel, channel.guild.voiceAdapterCreator, PRIORITY_BEEP_PATH, {
     leaveAfter: false,
-    speakDelayMs: 400,
+    speakDelayMs: 600,
+    volume: 0.45,
   });
+  await new Promise((resolve) => setTimeout(resolve, 450));
   await playMp3InVoiceChannel(channel, channel.guild.voiceAdapterCreator, speech, {
     leaveAfter: true,
     speakDelayMs: 0,
+    volume: 1,
   });
 }
 
@@ -585,11 +601,8 @@ export function createPriorityRequestService({
         onError(error);
       }
       await persist();
-      await refreshStaff(request, activePayload(request));
+      try { await refreshStaff(request, activePayload(request)); } catch (error) { onError(error); }
       try { await dmUser(request.requesterId, startedDmPayload(request)); } catch (error) { onError(error); }
-      if (typeof announceStart === 'function') {
-        try { await announceStart(request); } catch (error) { onError(error); }
-      }
       return request;
     },
 
@@ -601,11 +614,13 @@ export function createPriorityRequestService({
       request.deniedBy = staffUser?.id || null;
       request.endedAt = now();
       await persist();
-      await refreshStaff(request, closedPayload(
-        request,
-        'Priority Request — Denied',
-        staffUser ? `This request was **denied** by <@${staffUser.id}>.` : 'This request was denied.',
-      ));
+      try {
+        await refreshStaff(request, closedPayload(
+          request,
+          'Priority Request — Denied',
+          staffUser ? `This request was **denied** by <@${staffUser.id}>.` : 'This request was denied.',
+        ));
+      } catch (error) { onError(error); }
       return request;
     },
 
@@ -630,11 +645,11 @@ export function createPriorityRequestService({
       request.endsAt = now() + seconds * 1000;
       await send(`:prty ${seconds}`);
       await persist();
-      await refreshStaff(request, activePayload(request));
+      try { await refreshStaff(request, activePayload(request)); } catch (error) { onError(error); }
       try {
         await dmUser(request.requesterId, v2Message({
           title: '📶 Extra Time Approved',
-          body: `Staff added **${extraMinutes}m**. The in-game timer now ends ${ts(request.endsAt)}.`,
+          body: `**${extraMinutes}m** was added. The in-game timer now ends ${ts(request.endsAt)}.`,
         }));
       } catch (error) { onError(error); }
       return request;
@@ -764,13 +779,40 @@ export async function handlePriorityRequest(interaction) {
       const parts = id.split(':');
       const action = parts[1];
       const requestId = parts[2];
-      if (action !== 'approve' && action !== 'deny') await requireStaff();
+      const extraMinutes = Math.trunc(Number(parts[3]));
       await interaction.deferUpdate();
-      if (action === 'approve') await service.approve(requestId, interaction.user);
-      else if (action === 'deny') await service.deny(requestId, interaction.user);
-      else if (action === 'void') await service.voidActive(requestId, interaction.user);
-      else if (action === 'timeok') await service.addApprovedTime(requestId, Number(parts[3]));
-      else if (action === 'timeno') await interaction.followUp({ content: 'Extra time was denied.', flags: MessageFlags.Ephemeral });
+      if (action === 'void') await requireStaff();
+      let payload;
+      let started;
+      if (action === 'approve') {
+        started = await service.approve(requestId, interaction.user);
+        payload = activePayload(started);
+      } else if (action === 'deny') {
+        const request = await service.deny(requestId, interaction.user);
+        payload = closedPayload(
+          request,
+          'Priority Request — Denied',
+          `This request was **denied** by <@${interaction.user.id}>.`,
+        );
+      } else if (action === 'void') {
+        const request = await service.voidActive(requestId, interaction.user);
+        payload = closedPayload(
+          request,
+          'Priority Request — Voided',
+          `This priority was **voided** by <@${interaction.user.id}>. A **10 minute** peace timer is now running.`,
+        );
+      } else if (action === 'timeok') {
+        const request = await service.addApprovedTime(requestId, extraMinutes);
+        payload = extraTimeResolvedPayload(request, extraMinutes, true, interaction.user.id);
+      } else if (action === 'timeno') {
+        payload = extraTimeResolvedPayload(service.request, Number.isInteger(extraMinutes) ? extraMinutes : 0, false, interaction.user.id);
+      }
+      if (payload) await interaction.editReply(payload);
+      if (started) {
+        void announcePriorityStart(interaction.client, started).catch((error) => {
+          logger.error('Priority start voice announce failed', error);
+        });
+      }
       return true;
     }
   } catch (error) {
@@ -804,7 +846,6 @@ export function startPriorityRequest(client) {
       const user = await client.users.fetch(userId);
       await user.send(payload);
     },
-    announceStart: (request) => announcePriorityStart(client, request),
   });
   client.priorityRequest = service;
   const timer = setInterval(() => { void service.tick(); }, 10000);

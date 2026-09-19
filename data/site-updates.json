@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-priority-fix-buttons-voice",
+      "title": "Fix priority approve buttons, extra time, and voice",
+      "summary": "Approve, deny, and extra-time buttons now update the card you clicked. Anyone can approve extra time and that extends the in-game :prty timer. The start chime is softer and the voice announcement speaks more slowly.",
+      "createdAt": "2026-09-19T18:21:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-priority-anyone-announce",
       "title": "Let anyone approve priorities and announce them in-game",
       "summary": "Anyone can approve or deny a priority request. New requests ping role 1515107822432419971. When one starts, the bot beeps and speaks it in voice channel 1514128904783139018 and sends an in-game :m not to start any major roleplays.",

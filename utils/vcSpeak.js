@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import {
   AudioPlayerStatus,
   NoSubscriberBehavior,
-  StreamType,
   createAudioPlayer,
   createAudioResource,
   entersState,
@@ -59,11 +58,24 @@ async function bufferFromReadable(stream) {
   return Buffer.concat(chunks);
 }
 
+function escapeSsml(text) {
+  return String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 /** Free Microsoft Edge TTS — no API key. */
-export async function synthesizeSpeechMp3(text, voice = SAY_VOICE) {
+export async function synthesizeSpeechMp3(text, voice = SAY_VOICE, prosody = {}) {
   const tts = new MsEdgeTTS();
   await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
-  const { audioStream } = tts.toStream(String(text || '').trim());
+  const { audioStream } = tts.toStream(escapeSsml(String(text || '').trim()), {
+    rate: prosody.rate ?? 1,
+    pitch: prosody.pitch ?? '+0Hz',
+    volume: prosody.volume ?? 100,
+  });
   const buffer = await bufferFromReadable(audioStream);
   if (!buffer.length) throw new Error('TTS returned empty audio.');
   return buffer;
@@ -77,6 +89,7 @@ export async function playMp3InVoiceChannel(voiceChannel, adapterCreator, mp3Pat
   leaveAfter = true,
   /** Extra wait after joining so Discord voice is audible before playback. */
   speakDelayMs = 500,
+  volume = 1,
 } = {}) {
   const existing = getVoiceConnection(voiceChannel.guild.id);
   const sameChannel = existing?.joinConfig?.channelId === voiceChannel.id;
@@ -122,10 +135,9 @@ export async function playMp3InVoiceChannel(voiceChannel, adapterCreator, mp3Pat
 
     const inputPath = Buffer.isBuffer(mp3PathOrBuffer) ? filePath : mp3PathOrBuffer;
     const resource = createAudioResource(createReadStream(inputPath), {
-      inputType: StreamType.Arbitrary,
       inlineVolume: true,
     });
-    resource.volume?.setVolume(1);
+    resource.volume?.setVolume(Math.max(0, Math.min(2, Number(volume) || 1)));
 
     player.play(resource);
     await entersState(player, AudioPlayerStatus.Playing, 8_000);

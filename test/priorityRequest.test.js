@@ -5,6 +5,8 @@ import {
   allPriorityParticipantsDied,
   createPriorityRequestService,
   extraTimeCommandSeconds,
+  extraTimeResolvedPayload,
+  handlePriorityRequest,
   hasBlockingPriority,
   PRIORITY_PENDING_MS,
   PRIORITY_PEACE_SECONDS,
@@ -142,7 +144,7 @@ function serviceFixture(request, extras = {}) {
 
 test('start speech and in-game :m use the requester and details', () => {
   const request = { requesterUsername: 'HostUser', details: 'bank robbery downtown' };
-  assert.equal(priorityStartSpeech(request), 'A new priority has now started by HostUser for bank robbery downtown');
+  assert.equal(priorityStartSpeech(request), 'A new priority has now started, by HostUser, for bank robbery downtown.');
   assert.equal(
     priorityStartMessageCommand(request),
     ':m A new priority has now started by HostUser for bank robbery downtown. Do not start any major roleplays',
@@ -177,7 +179,6 @@ test('new pending requests ping the priority role', async () => {
 });
 
 test('approve starts a 30 minute in-game timer and DMs the requester', async () => {
-  const announced = [];
   const f = serviceFixture({
     id: 'p1',
     status: 'pending',
@@ -186,15 +187,69 @@ test('approve starts a 30 minute in-game timer and DMs the requester', async () 
     details: 'bank robbery downtown',
     pendingExpiresAt: 9e12,
     staffMessageId: 'm',
-  }, {
-    announceStart: async (request) => { announced.push(request); },
   });
   await f.svc.approve('p1', { id: 'anyone' });
   assert.equal(f.commands[0], `:prty ${PRIORITY_REQUEST_SECONDS}`);
   assert.equal(f.commands[1], ':m A new priority has now started by HostUser for bank robbery downtown. Do not start any major roleplays');
   assert.equal(f.dms[0].id, 'u1');
   assert.match(f.dms[0].payload.components[0].components[2].content, /Priority Started/);
-  assert.equal(announced.length, 1);
+});
+
+test('extra time approve extends the in-game timer', async () => {
+  const f = serviceFixture({
+    id: 'p1',
+    status: 'active',
+    requesterId: 'u1',
+    startedAt: 1_000_000,
+    endsAt: 1_000_000 + 600_000,
+    staffMessageId: 'm',
+  });
+  await f.svc.addApprovedTime('p1', 1);
+  assert.equal(f.commands[0], ':prty 660');
+  assert.match(f.dms[0].payload.components[0].components[2].content, /Extra Time Approved/);
+});
+
+test('resolved extra-time cards drop the approve and deny buttons', () => {
+  const payload = extraTimeResolvedPayload({
+    requesterId: 'u1',
+    submittedAt: 1,
+    endsAt: 2,
+  }, 1, true, 'anyone');
+  const json = JSON.stringify(payload);
+  assert.match(json, /Priority Extra Time — Approved/);
+  assert.doesNotMatch(json, /Approve time/);
+  assert.doesNotMatch(json, /Deny time/);
+});
+
+test('anyone can approve extra time and the clicked message updates', async () => {
+  const f = serviceFixture({
+    id: 'p1',
+    status: 'active',
+    requesterId: 'u1',
+    startedAt: 1_000_000,
+    endsAt: 1_000_000 + 600_000,
+    staffMessageId: 'm',
+  });
+  const edits = [];
+  const interaction = {
+    customId: 'prq:timeok:p1:1',
+    user: { id: 'anyone' },
+    member: { permissions: { has: () => false }, roles: { cache: { has: () => false } } },
+    isChatInputCommand: () => false,
+    isButton: () => true,
+    isModalSubmit: () => false,
+    deferred: false,
+    replied: false,
+    async deferUpdate() { interaction.deferred = true; },
+    async editReply(payload) { edits.push(payload); },
+    async followUp() {},
+    async reply() {},
+    client: { priorityRequest: f.svc },
+  };
+  assert.equal(await handlePriorityRequest(interaction), true);
+  assert.equal(f.commands[0], ':prty 660');
+  assert.equal(edits.length, 1);
+  assert.match(JSON.stringify(edits[0]), /Priority Extra Time — Approved/);
 });
 
 test('void runs prty 0 then a 10 minute peace timer and DMs the requester', async () => {
