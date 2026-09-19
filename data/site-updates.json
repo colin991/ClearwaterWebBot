@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-remove-florida-profile-welcome",
+      "title": "Remove Florida Operations profile and welcome",
+      "summary": "The bot no longer uses a per-server name, logo, or banner in server 1513609541483499790, and it no longer posts a Florida Highway Patrol welcome when someone joins that server. A restart clears the leftover profile.",
+      "createdAt": "2026-09-19T16:16:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-florida-welcome",
       "title": "Welcome new Florida Highway Patrol members",
       "summary": "When someone joins server 1513609541483499790, the bot posts a Florida Highway Patrol welcome in channel 1513609542007521528 that pings them and shows the current member count.",
