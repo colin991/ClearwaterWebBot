@@ -33,6 +33,8 @@ export const PRIORITY_BEEP_PATH = path.join(path.dirname(fileURLToPath(import.me
 export const PRIORITY_REQUEST_SECONDS = 1800;
 export const PRIORITY_PEACE_SECONDS = 600;
 export const PRIORITY_PENDING_MS = 25 * 60 * 1000;
+export const PRIORITY_MAX_PARTICIPANTS = 4;
+export const PRIORITY_MAX_VEHICLES = 2;
 export const PRIORITY_CIVILIAN_KILL_PM = 'There is an active Priority. Please do not kill anyone.';
 export const PRIORITY_INFO_EMOJI = '<:info:1514347280105209928>';
 const HEADER = 'https://media.discordapp.net/attachments/1529616984755540088/1546535995736858644/clearwater_ban.png?format=webp&quality=lossless';
@@ -455,7 +457,7 @@ function byUsername(left, right) {
   return String(left?.username || '').localeCompare(String(right?.username || ''), undefined, { sensitivity: 'base' });
 }
 
-export function resolvePriorityPlayers(players, selectedValues, typedNames = '') {
+export function resolvePriorityPlayers(players, selectedValues, typedNames = '', { limit = PRIORITY_MAX_PARTICIPANTS } = {}) {
   const picked = [];
   const seen = new Set();
   const add = (player) => {
@@ -474,10 +476,10 @@ export function resolvePriorityPlayers(players, selectedValues, typedNames = '')
     add(players.find((player) => player.username.toLowerCase() === lower)
       || players.find((player) => player.username.toLowerCase().includes(lower)));
   }
-  return picked.slice(0, 4);
+  return Number.isFinite(limit) ? picked.slice(0, limit) : picked;
 }
 
-export function resolvePriorityVehicles(vehicles, selectedValues, typedNames = '') {
+export function resolvePriorityVehicles(vehicles, selectedValues, typedNames = '', { limit = PRIORITY_MAX_VEHICLES } = {}) {
   const picked = [];
   const seen = new Set();
   const add = (vehicle) => {
@@ -503,7 +505,7 @@ export function resolvePriorityVehicles(vehicles, selectedValues, typedNames = '
       || vehicles.find((vehicle) => String(vehicle.ownerUsername || '').toLowerCase() === lower)
       || vehicles.find((vehicle) => String(vehicle.ownerUsername || '').toLowerCase().includes(lower)));
   }
-  return picked.slice(0, 2);
+  return Number.isFinite(limit) ? picked.slice(0, limit) : picked;
 }
 
 function optionalSelectValues(fields, customId) {
@@ -530,7 +532,7 @@ function buildPriorityFormModal({ id, players, vehicles }) {
   const labels = [
     new LabelBuilder()
       .setLabel('Search users')
-      .setDescription('Type to search, then pick one in-game user. Add more names below.')
+      .setDescription('Type to search, then pick one in-game user. Extra names below — max 4 people.')
       .setStringSelectMenuComponent(
         new StringSelectMenuBuilder()
           .setCustomId('users')
@@ -545,7 +547,7 @@ function buildPriorityFormModal({ id, players, vehicles }) {
     labels.push(
       new LabelBuilder()
         .setLabel('Search vehicles')
-        .setDescription('Type to filter, pick one, or choose None. Add another below if needed.')
+        .setDescription('Type to filter, pick one, or choose None. Extra car below — max 2 cars.')
         .setStringSelectMenuComponent(
           new StringSelectMenuBuilder()
             .setCustomId('vehs')
@@ -560,14 +562,14 @@ function buildPriorityFormModal({ id, players, vehicles }) {
   labels.push(
     new LabelBuilder()
       .setLabel('Additional users or vehicles')
-      .setDescription('Comma-separated extra in-game names or vehicle/owner names.')
+      .setDescription('Comma-separated extras. Max 4 participants and 2 cars total.')
       .setTextInputComponent(
         new TextInputBuilder()
           .setCustomId('more_users')
           .setStyle(TextInputStyle.Short)
           .setRequired(false)
           .setMaxLength(150)
-          .setPlaceholder('Name2, Name3, vehicle or owner'),
+          .setPlaceholder('Name2, Name3, Name4, second car'),
       ),
     new LabelBuilder().setLabel('Background').setTextInputComponent(
       new TextInputBuilder().setCustomId('background').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(800),
@@ -816,6 +818,12 @@ export function createPriorityRequestService({
       if (hasBlockingPriority(current.request)) {
         throw new Error('A priority request is already pending or running.');
       }
+      if ((selectedPlayers || []).length > PRIORITY_MAX_PARTICIPANTS) {
+        throw new Error(`Priorities are limited to ${PRIORITY_MAX_PARTICIPANTS} participants.`);
+      }
+      if ((selectedVehicles || []).length > PRIORITY_MAX_VEHICLES) {
+        throw new Error(`Priorities are limited to ${PRIORITY_MAX_VEHICLES} cars.`);
+      }
       const identities = await discordIdsByRobloxId();
       const { text, discordIds } = await participantLine(selectedPlayers, identities);
       const identity = (await getIdentityCache()).byDiscord[user.id];
@@ -1024,16 +1032,32 @@ export async function handlePriorityRequest(interaction) {
         draft.players,
         interaction.fields.getStringSelectValues('users'),
         extra,
+        { limit: Infinity },
       );
       if (!selectedPlayers.length) {
         await interaction.reply({ content: 'Select or type at least one in-game user.', flags: MessageFlags.Ephemeral });
+        return true;
+      }
+      if (selectedPlayers.length > PRIORITY_MAX_PARTICIPANTS) {
+        await interaction.reply({
+          content: `Priorities are limited to **${PRIORITY_MAX_PARTICIPANTS} participants**. Remove extra names and try again.`,
+          flags: MessageFlags.Ephemeral,
+        });
         return true;
       }
       const selectedVehicles = resolvePriorityVehicles(
         draft.vehicles,
         optionalSelectValues(interaction.fields, 'vehs'),
         extra,
+        { limit: Infinity },
       );
+      if (selectedVehicles.length > PRIORITY_MAX_VEHICLES) {
+        await interaction.reply({
+          content: `Priorities are limited to **${PRIORITY_MAX_VEHICLES} cars**. Remove extra vehicles and try again.`,
+          flags: MessageFlags.Ephemeral,
+        });
+        return true;
+      }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await service.submitRequest({
         user: interaction.user,

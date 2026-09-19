@@ -15,6 +15,8 @@ import {
   PRIORITY_PEACE_SECONDS,
   PRIORITY_REQUEST_SECONDS,
   PRIORITY_REQUEST_STAFF_ROLE,
+  PRIORITY_MAX_PARTICIPANTS,
+  PRIORITY_MAX_VEHICLES,
   PRIORITY_CIVILIAN_KILL_PM,
   civilianKillersOutsidePriority,
   priorityStartMessageCommand,
@@ -58,6 +60,60 @@ test('typed search resolves extra civilian vehicles', () => {
   assert.deepEqual(resolvePriorityVehicles(vehicles, ['none'], '').map((vehicle) => vehicle.name), []);
 });
 
+test('priority requests cap at 4 participants and 2 cars', () => {
+  const players = ['A', 'B', 'C', 'D', 'E'].map((username, index) => ({ username, robloxId: String(index + 1) }));
+  const vehicles = ['Navara', 'Bullhorn', 'Interceptor'].map((name, index) => ({
+    name,
+    ownerUsername: `Owner${index}`,
+    ownerRobloxId: String(index + 1),
+    texture: 'Black',
+    plate: `P${index}`,
+  }));
+  assert.equal(PRIORITY_MAX_PARTICIPANTS, 4);
+  assert.equal(PRIORITY_MAX_VEHICLES, 2);
+  assert.deepEqual(resolvePriorityPlayers(players, ['0'], 'B, C, D, E').map((player) => player.username), ['A', 'B', 'C', 'D']);
+  assert.equal(resolvePriorityPlayers(players, ['0'], 'B, C, D, E', { limit: Infinity }).length, 5);
+  assert.deepEqual(resolvePriorityVehicles(vehicles, ['0'], 'Bullhorn, Interceptor').map((vehicle) => vehicle.name), ['Navara', 'Bullhorn']);
+  assert.equal(resolvePriorityVehicles(vehicles, ['0'], 'Bullhorn, Interceptor', { limit: Infinity }).length, 3);
+});
+
+test('submitRequest rejects more than 4 participants or 2 cars', async () => {
+  const svc = createPriorityRequestService({
+    now: () => 1,
+    load: async () => ({ request: null }),
+    save: async () => {},
+    send: async () => {},
+    snapshot: async () => ({}),
+    postStaff: async () => ({ id: 'm' }),
+    editStaff: async () => {},
+    dmUser: async () => {},
+  });
+  await assert.rejects(
+    () => svc.submitRequest({
+      user: { id: 'u1', username: 'x' },
+      selectedPlayers: [1, 2, 3, 4, 5].map((n) => ({ username: `P${n}`, robloxId: String(n) })),
+      selectedVehicles: [],
+      background: 'bg',
+      details: 'd',
+    }),
+    /4 participants/,
+  );
+  await assert.rejects(
+    () => svc.submitRequest({
+      user: { id: 'u1', username: 'x' },
+      selectedPlayers: [{ username: 'P1', robloxId: '1' }],
+      selectedVehicles: [
+        { name: 'A', ownerUsername: 'o', texture: 'Black', plate: '1' },
+        { name: 'B', ownerUsername: 'o', texture: 'Black', plate: '2' },
+        { name: 'C', ownerUsername: 'o', texture: 'Black', plate: '3' },
+      ],
+      background: 'bg',
+      details: 'd',
+    }),
+    /2 cars/,
+  );
+});
+
 test('priority form modal placeholders tell people they can search', async () => {
   const stored = { request: null };
   const svc = createPriorityRequestService({
@@ -76,7 +132,9 @@ test('priority form modal placeholders tell people they can search', async () =>
   });
   const payload = modal.toJSON();
   const json = JSON.stringify(payload);
-  assert.match(json, /Type to search in-game users/);
+  assert.match(json, /max 4 people/);
+  assert.match(json, /max 2 cars/);
+  assert.match(json, /Max 4 participants and 2 cars total/);
   assert.match(json, /Type to search civilian vehicles/);
   assert.match(json, /"value":"none"/);
   assert.match(json, /Alpha · /);

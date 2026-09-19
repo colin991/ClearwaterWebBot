@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-priority-max-4-2",
+      "title": "Cap priorities at 4 people and 2 cars",
+      "summary": "A priority request can list at most 4 participants and 2 cars. The form says so, and submitting more is rejected.",
+      "createdAt": "2026-09-19T19:23:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-priority-civ-kill-warn",
       "title": "Warn civilians who kill during an active priority",
       "summary": "If a civilian who is not listed on the running priority kills someone, they get an in-game :pm and a Discord DM telling them there is an active Priority and not to kill anyone.",

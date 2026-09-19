@@ -2,8 +2,8 @@
 
 `/request-priority` in the Clearwater Discord server opens a searchable form:
 
-1. **Search users** — type in the dropdown to filter, then pick one in-game player. Discord only shows search on a single choice, so extra names go in **Additional users or vehicles**.
-2. **Search vehicles** — type in that dropdown to filter by owner or vehicle. Discord only shows search on a required single choice, so pick **None** if you have no car. A second vehicle can be typed in the additional field.
+1. **Search users** — type in the dropdown to filter, then pick one in-game player. Discord only shows search on a single choice, so extra names go in **Additional users or vehicles**. **Max 4 participants.**
+2. **Search vehicles** — type in that dropdown to filter by owner or vehicle. Discord only shows search on a required single choice, so pick **None** if you have no car. A second vehicle can be typed in the additional field. **Max 2 cars.**
 3. Fill in **Background** and **Priority Details** on the same form.
 
 If a request is already **pending** or **active**, a new one cannot be submitted.
