@@ -63,5 +63,20 @@ if [[ -f package.json ]]; then
   npm install --omit=dev
 fi
 
+if [[ ! -f utils/creditStore.js || ! -f lib/credit-store.js ]]; then
+  echo "[start] WARN: credit-store file(s) missing; writing emergency fallback..."
+  bash scripts/fix-credit-store.sh || true
+fi
+
+if [[ ! -f utils/secondaryServerGate.js ]]; then
+  echo "[start] ERROR: utils/secondaryServerGate.js is missing. Update failed."
+  exit 1
+fi
+
+# This repo also hosts the PCSO website (vercel.json). That is not a failed update.
+if [[ -f utils/statusServer.js ]]; then
+  echo "[start] WARNING: leftover utils/statusServer.js from an old website split; starting anyway."
+fi
+
 echo "[start] Launching Discord bot..."
 exec node index.js

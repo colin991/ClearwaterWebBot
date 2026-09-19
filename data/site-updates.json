@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-restore-full-bot",
+      "title": "Restore the full Discord bot",
+      "summary": "Bring back slash commands, prefix commands, and automations from before the empty-bot wipe. Ticket view roles stay limited to Command Staff, IA, and General Support, and a restart still resyncs open ticket permissions.",
+      "createdAt": "2026-09-19T03:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-ticket-perm-resync",
       "title": "Resync ticket permissions on bot restart",
       "summary": "Restarting the bot now rewrites view permissions on every open PCSO ticket. It retries after the Discord cache settles so existing tickets pick up Command Staff, IA, and General Support access.",

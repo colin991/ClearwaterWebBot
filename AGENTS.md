@@ -2,9 +2,8 @@
 
 ## Source
 
-- This repository hosts a Discord bot being rebuilt. Entry point: `index.js` → `bot.js`.
-- Live bot features are PCSO support tickets (panel buttons, claim/close, `-cr`) only.
-- The PCSO website files may still live in this repo for Vercel; do not treat leftover `utils/` as live bot features unless `bot.js` or ticket events import them.
+- This repository is the **Clearwater Discord bot only** (no website / Vercel deploy).
+- Entry point: `index.js`. Slash commands live in `commands/`, prefix commands in `prefixCommands/`, events in `events/`.
 
 ## Verification
 
