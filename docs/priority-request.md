@@ -20,6 +20,8 @@ On approve:
 
 **Void** (or a natural timer end, or **everyone listed on the request dying in-game**) runs `:prty 0` then `:pt 600` (10 minute peace timer). The original request card is rewritten immediately to **Priority Request — Ended** / **Voided** (Void/Started removed). All listed deaths end it immediately — there is no 3 minute wait. Void also DMs the requester that staff voided it.
 
+While a priority is **active**, a **civilian who is not listed on the request** who kills someone is PMed in-game and DMed on Discord: there is an active Priority, please do not kill anyone. Priority participants and police/sheriff/fire/DOT teams are not warned. The same kill is not warned twice after a restart.
+
 **Request Added Time** asks for 1–30 extra minutes, posts to the same staff channel, and pings role `1515107822432419971`. Clearwater staff **or** that role can approve or deny extra time. Approve runs `:prty` with remaining time plus the extra minutes and updates that extra-time card.
 
 Runtime state is `data/priority-request.json` (Git-ignored), with a `.bak` copy. Preserve it across bot updates. A restart reloads a pending or active priority, including who already died, so the timer and “everyone died” end still work. Restart the bot after deploying this feature so slash commands register.

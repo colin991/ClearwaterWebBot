@@ -15,6 +15,8 @@ import {
   PRIORITY_PEACE_SECONDS,
   PRIORITY_REQUEST_SECONDS,
   PRIORITY_REQUEST_STAFF_ROLE,
+  PRIORITY_CIVILIAN_KILL_PM,
+  civilianKillersOutsidePriority,
   priorityStartMessageCommand,
   priorityStartSpeech,
   resolvePriorityPlayers,
@@ -143,6 +145,7 @@ function serviceFixture(request, extras = {}) {
     },
     dmUser: async (id, payload) => { dms.push({ id, payload }); },
     announceStart: extras.announceStart,
+    resolveDiscordIds: extras.resolveDiscordIds || (async () => extras.discordIds || new Map()),
     onError: extras.onError || (error => { throw error; }),
   });
   return { svc, commands, dms, staffEdits, stored, setTime: value => { time = value; } };
@@ -632,4 +635,86 @@ test('a restored pending request still blocks a new one', async () => {
     () => svc.openForm({ user: { id: 'u1' } }, { players: [{ username: 'A', robloxId: '1' }], vehicles: [] }),
     /already pending/,
   );
+});
+
+test('parseErlcKill keeps the killer and victim', () => {
+  const kill = parseErlcKill({
+    Killed: 'Victim:1',
+    Killer: 'Rando:77',
+    Timestamp: 1000,
+  });
+  assert.equal(kill.username, 'Victim');
+  assert.equal(kill.robloxId, '1');
+  assert.equal(kill.killerUsername, 'Rando');
+  assert.equal(kill.killerRobloxId, '77');
+});
+
+test('only civilian killers outside the priority are warned', () => {
+  const startedAt = 1_000_000;
+  const people = [{ username: 'Host', robloxId: '99' }];
+  const players = [
+    { username: 'Rando', robloxId: '77', team: 'Civilian' },
+    { username: 'Host', robloxId: '99', team: 'Civilian' },
+    { username: 'Deputy', robloxId: '55', team: 'Sheriff' },
+  ];
+  const civKill = parseErlcKill({
+    Killed: 'Bystander:2',
+    Killer: 'Rando:77',
+    Timestamp: (startedAt + 1000) / 1000,
+  });
+  assert.equal(civilianKillersOutsidePriority({
+    kills: [civKill],
+    players,
+    participants: people,
+    startedAt,
+  }).map((entry) => entry.username).join(','), 'Rando');
+  assert.deepEqual(civilianKillersOutsidePriority({
+    kills: [parseErlcKill({ Killed: 'Bystander:2', Killer: 'Host:99', Timestamp: (startedAt + 1000) / 1000 })],
+    players,
+    participants: people,
+    startedAt,
+  }), []);
+  assert.deepEqual(civilianKillersOutsidePriority({
+    kills: [parseErlcKill({ Killed: 'Bystander:2', Killer: 'Deputy:55', Timestamp: (startedAt + 1000) / 1000 })],
+    players,
+    participants: people,
+    startedAt,
+  }), []);
+});
+
+test('a civilian outside the priority is PM’d and DMed after a kill', async () => {
+  const startedAt = 1_000_000;
+  const f = serviceFixture({
+    id: 'p1',
+    status: 'active',
+    requesterId: 'u1',
+    participants: [{ username: 'Host', robloxId: '99' }],
+    startedAt,
+    endsAt: startedAt + PRIORITY_REQUEST_SECONDS * 1000,
+    staffMessageId: 'm',
+    warnedPriorityKills: [],
+  }, {
+    time: startedAt + 5000,
+    discordIds: new Map([['77', 'discord77']]),
+    server: {
+      Players: [
+        { Player: 'Host:99', Team: 'Civilian' },
+        { Player: 'Rando:77', Team: 'Civilian' },
+      ],
+      KillLogs: [{
+        Killed: 'Bystander:2',
+        Killer: 'Rando:77',
+        Timestamp: Math.floor((startedAt + 1000) / 1000),
+      }],
+    },
+  });
+  await f.svc.tick();
+  assert.equal(f.stored.request.status, 'active');
+  assert.equal(f.commands[0], `:pm Rando ${PRIORITY_CIVILIAN_KILL_PM}`);
+  assert.equal(f.dms[0].id, 'discord77');
+  assert.match(JSON.stringify(f.dms[0].payload), /active Priority/i);
+  assert.equal(f.stored.request.warnedPriorityKills.length, 1);
+  await f.svc.tick();
+  assert.equal(f.commands.length, 1);
+  assert.equal(f.dms.length, 1);
 });

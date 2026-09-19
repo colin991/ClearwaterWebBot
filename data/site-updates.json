@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-priority-civ-kill-warn",
+      "title": "Warn civilians who kill during an active priority",
+      "summary": "If a civilian who is not listed on the running priority kills someone, they get an in-game :pm and a Discord DM telling them there is an active Priority and not to kill anyone.",
+      "createdAt": "2026-09-19T19:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-priority-fast-buttons",
       "title": "Make priority buttons respond immediately",
       "summary": "Approve, Deny, Void, and extra time now update the Discord card first. In-game :prty / :pt / :m commands keep running in the background so clicks are not stuck on the 5-second ER:LC command queue.",

@@ -13,6 +13,7 @@ import {
   executeErlcCommand,
   fetchErlcServer,
   formatPriorityVehicle,
+  isCivilianTeam,
   parseErlcKill,
   parseErlcPlayer,
   parseErlcVehicle,
@@ -32,6 +33,7 @@ export const PRIORITY_BEEP_PATH = path.join(path.dirname(fileURLToPath(import.me
 export const PRIORITY_REQUEST_SECONDS = 1800;
 export const PRIORITY_PEACE_SECONDS = 600;
 export const PRIORITY_PENDING_MS = 25 * 60 * 1000;
+export const PRIORITY_CIVILIAN_KILL_PM = 'There is an active Priority. Please do not kill anyone.';
 export const PRIORITY_INFO_EMOJI = '<:info:1514347280105209928>';
 const HEADER = 'https://media.discordapp.net/attachments/1529616984755540088/1546535995736858644/clearwater_ban.png?format=webp&quality=lossless';
 const FOOTER = 'https://media.discordapp.net/attachments/1529616984755540088/1545833442040619018/clearwater_footer.png?format=webp&quality=lossless';
@@ -124,6 +126,62 @@ export function recordedPriorityDeathMatches(player, recordedDeaths = []) {
   const key = participantKey(player);
   if (!key) return false;
   return (Array.isArray(recordedDeaths) ? recordedDeaths : []).some((entry) => participantKey(entry) === key);
+}
+
+function findSnapshotPlayer(players, player) {
+  const id = String(player?.robloxId || '').trim();
+  const name = String(player?.username || '').trim().toLowerCase();
+  const list = Array.isArray(players) ? players : [];
+  return list.find((entry) => (id && String(entry?.robloxId || '') === id)
+    || (name && String(entry?.username || '').toLowerCase() === name)) || null;
+}
+
+export function priorityKillFingerprint(kill) {
+  const killer = participantKey({ robloxId: kill?.killerRobloxId, username: kill?.killerUsername });
+  const victim = participantKey({ robloxId: kill?.robloxId, username: kill?.username });
+  if (!killer) return '';
+  return `${Number(kill?.at) || 0}|${killer}|${victim}`;
+}
+
+export function civilianKillersOutsidePriority({
+  kills = [],
+  players = [],
+  participants = [],
+  startedAt,
+  recordedWarnings = [],
+} = {}) {
+  const people = (Array.isArray(participants) ? participants : []).filter((player) => player?.username || player?.robloxId);
+  const started = Number(startedAt) || 0;
+  const warned = new Set((Array.isArray(recordedWarnings) ? recordedWarnings : []).filter(Boolean));
+  const seen = new Set();
+  const out = [];
+  for (const kill of Array.isArray(kills) ? kills : []) {
+    if (!started || !kill?.at || Number(kill.at) < started) continue;
+    const killer = { robloxId: kill.killerRobloxId, username: kill.killerUsername };
+    const killerKey = participantKey(killer);
+    if (!killerKey) continue;
+    if (people.some((player) => participantKey(player) === killerKey)) continue;
+    const victimKey = participantKey({ robloxId: kill.robloxId, username: kill.username });
+    if (victimKey && victimKey === killerKey) continue;
+    const live = findSnapshotPlayer(players, killer);
+    if (!live || !isCivilianTeam(live.team)) continue;
+    const fingerprint = priorityKillFingerprint(kill);
+    if (!fingerprint || warned.has(fingerprint) || seen.has(fingerprint)) continue;
+    seen.add(fingerprint);
+    out.push({
+      fingerprint,
+      username: live.username || killer.username,
+      robloxId: String(live.robloxId || killer.robloxId || ''),
+    });
+  }
+  return out;
+}
+
+function civilianKillDmPayload() {
+  return v2Message({
+    title: '📶 Active Priority',
+    body: 'There is an **active Priority**. Please do not kill anyone.',
+  });
 }
 
 export function recordPriorityParticipantDeaths(request, kills = []) {
@@ -566,6 +624,7 @@ export function createPriorityRequestService({
   editStaff,
   dmUser,
   announceStart,
+  resolveDiscordIds = discordIdsByRobloxId,
   now = Date.now,
   onError = error => logger.error('Priority request failed', error),
 } = {}) {
@@ -674,8 +733,46 @@ export function createPriorityRequestService({
     try {
       const server = await snapshot({ killLogs: true });
       const kills = (server.KillLogs || server.killLogs || []).map(parseErlcKill);
+      const players = (server.Players || server.players || []).map(parseErlcPlayer);
       const recordedNewDeaths = recordPriorityParticipantDeaths(request, kills);
-      if (recordedNewDeaths) await persist();
+      if (!Array.isArray(request.warnedPriorityKills)) request.warnedPriorityKills = [];
+      const warnings = civilianKillersOutsidePriority({
+        kills,
+        players,
+        participants: listedPriorityParticipants(request),
+        startedAt: request.startedAt,
+        recordedWarnings: request.warnedPriorityKills,
+      });
+      if (warnings.length) {
+        request.warnedPriorityKills.push(...warnings.map((entry) => entry.fingerprint));
+      }
+      if (recordedNewDeaths || warnings.length) await persist();
+      if (warnings.length) {
+        let identities = new Map();
+        try {
+          identities = await resolveDiscordIds();
+        } catch (error) {
+          onError(error);
+        }
+        for (const warning of warnings) {
+          const username = String(warning.username || '').trim();
+          if (username) {
+            try {
+              await send(`:pm ${username} ${PRIORITY_CIVILIAN_KILL_PM}`);
+            } catch (error) {
+              onError(error);
+            }
+          }
+          const discordId = warning.robloxId ? identities.get(String(warning.robloxId)) : null;
+          if (discordId) {
+            try {
+              await dmUser(discordId, civilianKillDmPayload());
+            } catch (error) {
+              onError(error);
+            }
+          }
+        }
+      }
       if (allPriorityParticipantsDied({
         kills,
         participants: listedPriorityParticipants(request),
@@ -741,6 +838,7 @@ export function createPriorityRequestService({
         pendingExpiresAt: now() + PRIORITY_PENDING_MS,
         staffChannelId: PRIORITY_REQUEST_CHANNEL,
         deadParticipants: [],
+        warnedPriorityKills: [],
       };
       const posted = await postStaff(pendingPayload(request));
       request.staffMessageId = posted?.id || null;
@@ -759,6 +857,7 @@ export function createPriorityRequestService({
       request.startedAt = now();
       request.endsAt = request.startedAt + PRIORITY_REQUEST_SECONDS * 1000;
       if (!Array.isArray(request.deadParticipants)) request.deadParticipants = [];
+      if (!Array.isArray(request.warnedPriorityKills)) request.warnedPriorityKills = [];
       await persist();
       if (!skipStaffRefresh) {
         try {

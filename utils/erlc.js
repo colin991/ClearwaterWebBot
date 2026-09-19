@@ -467,9 +467,20 @@ export function civilianVehicles(vehicles, players) {
 
 export function parseErlcKill(entry) {
   const killed = splitOwner(entry?.Killed || entry?.killed);
+  const killer = splitOwner(entry?.Killer || entry?.killer);
   const raw = Number(entry?.Timestamp || entry?.timestamp || 0);
   const at = raw > 0 && raw < 1e12 ? raw * 1000 : raw;
-  return { username: killed.username, robloxId: killed.robloxId, at };
+  return {
+    username: killed.username,
+    robloxId: killed.robloxId,
+    at,
+    killerUsername: killer.username,
+    killerRobloxId: killer.robloxId,
+  };
+}
+
+export function isCivilianTeam(team) {
+  return /civilian/i.test(String(team || ''));
 }
 
 export function parseErlcCommandLog(entry) {
