@@ -2,7 +2,7 @@
 
 Logs go to channel `1549178818814812211`: wanted commands, private notices, over-capacity exempt arrivals, cancelled enforcement, and command failures. Each entry includes Roblox username/ID, observed team occupancy, and a timestamp. Discord log failures do not delay or repeat enforcement. The bot needs View Channel, Send Messages, and Embed Links there.
 
-Main-server role `1514033074948800683` bypasses enforcement, matched through a linked Roblox ID or Roblox username in the Discord member's name. Exempt players still count toward team occupancy and are never wanted or rotated off. Role lookups must succeed before enforcement.
+Main-server roles `1514033074948800683` and `1514033321024426154` bypass enforcement, matched through a linked Roblox ID or Roblox username in the Discord member's name. Exempt players still count toward team occupancy and are never wanted or rotated off. Role lookups must succeed before enforcement.
 
 Enabled on bot startup. The limit is 27 Sheriff players. A join that fills the 27th slot is allowed. If another player joins while the team is already at 27:
 

@@ -22,6 +22,15 @@ test('role exemption matches linked Roblox ID or Discord name and ends when role
   roles.clear();
   assert.equal(hasEnforcementExemption({ username: 'PlayerOne' }, members), false);
 });
+test('role 1514033321024426154 is immune to team balance and the VC gate', async () => {
+  const roles = new Set(['1514033321024426154']);
+  const members = new Map([['d', { id: 'd', nickname: 'Rank | ImmuneUser', roles: { cache: roles } }]]);
+  assert.equal(hasEnforcementExemption({ username: 'ImmuneUser' }, members), true);
+  assert.equal(isVcExempt({ username: 'ImmuneUser' }, members), true);
+  const client = { guilds: { cache: new Map([[SECONDARY_GATE_MAIN_GUILD_ID, {}]]) }, rest: { get: async () => ({ roles: ['1514033321024426154'] }) } };
+  const result = await enforceSecondaryGateMember(client, { id: 'user', user: { bot: false }, guild: { id: SECONDARY_GATE_GUILD_ID, ownerId: 'owner' } });
+  assert.equal(result, 'allowed');
+});
 test('VC exemption releases tracked jail and sends no reminders', async () => {
   const calls = [];
   const service = createVcChecks({ load: async () => [['1', { jailed: true }]],

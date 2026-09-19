@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-exempt-role-team-vc",
+      "title": "Exempt role 1514033321024426154 from team balance and the VC gate",
+      "summary": "Members with role 1514033321024426154 are skipped by Sheriff team balance and VC checks, and they can pass the secondary-server VC gate with that role alone.",
+      "createdAt": "2026-09-19T14:21:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-ticket-category-staff-roles",
       "title": "Limit each PCSO ticket category to one staff role",
       "summary": "General Support tickets are visible only to General Support, OPC tickets only to IA, and Office of the Sheriff tickets only to Command Staff. A bot restart rewrites those category permissions and every open ticket channel.",

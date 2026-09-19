@@ -1,6 +1,6 @@
 # In-game voice checks
 
-Main-server role `1514033074948800683` bypasses VC checks (linked Roblox ID or name match). Roblox usernames `Coleddev13` and `notj3dah` also bypass these checks, with exact case-insensitive matching. Exempt players receive no reminders; previously tracked VC-check jails are released. The role also permits entry through the secondary-server gate; the username exemptions apply only to VC checks. The role also permits entry through the secondary-server gate; the username exemptions apply only to VC checks.
+Main-server roles `1514033074948800683` and `1514033321024426154` bypass VC checks (linked Roblox ID or name match). Roblox usernames `Coleddev13` and `notj3dah` also bypass these checks, with exact case-insensitive matching. Exempt players receive no reminders; previously tracked VC-check jails are released. Those roles also permit entry through the secondary-server gate; the username exemptions apply only to VC checks.
 
 Use `/vc checks state:on` or `/vc checks state:off` in the configured Clearwater Discord server. Administrator permission is required both in the command registration and at execution. Checks start **on** at every bot startup.
 
