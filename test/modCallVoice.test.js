@@ -9,7 +9,9 @@ import {
   MOD_CALL_UNPICKED_MS,
   MOD_CALL_REMIND_CHANNEL,
   MOD_CALL_REMIND_MESSAGE,
+  MOD_CALL_REMIND_MIN_CALLS,
   MOD_CALL_REMIND_ROLE,
+  MOD_CALL_THANKS_MESSAGE,
   isModCallStale,
   modCallCallerInGame,
 } from '../utils/modCallVoice.js';
@@ -129,7 +131,7 @@ test('pair uses first empty room and never moves a disconnected member', async (
   assert.equal(await moveModCallPair(guild, offline, member('staff')), false);
 });
 
-test('unpicked mod call pings staff after 3 minutes once and does not infract', async () => {
+test('one unpicked mod call never scare-pings, even after two minutes', async () => {
   let time = NOW;
   let calls = [];
   const reminds = [];
@@ -142,15 +144,10 @@ test('unpicked mod call pings staff after 3 minutes once and does not infract', 
   await monitor.tick();
   calls = [{ Caller: 'Civ:9', Moderator: null, Timestamp: time / 1000 }];
   await monitor.tick();
-  assert.deepEqual(reminds, []);
-  time += MOD_CALL_UNPICKED_MS - 1000;
+  time += MOD_CALL_UNPICKED_MS + 2000;
   await monitor.tick();
   assert.deepEqual(reminds, []);
-  time += 2000;
-  await monitor.tick();
-  assert.equal(reminds.length, 1);
-  await monitor.tick();
-  assert.equal(reminds.length, 1);
+  assert.equal(MOD_CALL_REMIND_MIN_CALLS, 2);
   assert.match(MOD_CALL_REMIND_MESSAGE, new RegExp(`<@&${MOD_CALL_REMIND_ROLE}>`));
   assert.equal(MOD_CALL_REMIND_CHANNEL, '1514422317587890327');
 });
@@ -177,7 +174,7 @@ test('startup queue and picked-up calls do not send the unpicked reminder', asyn
   assert.deepEqual(reminds, []);
 });
 
-test('two overdue unpicked calls send one scare ping', async () => {
+test('two overdue unpicked calls send one scare ping after two minutes', async () => {
   let time = NOW;
   let calls = [];
   let reminds = 0;
@@ -193,9 +190,70 @@ test('two overdue unpicked calls send one scare ping', async () => {
     { Caller: 'B:2', Moderator: null, Timestamp: time / 1000 },
   ];
   await monitor.tick();
+  time += MOD_CALL_UNPICKED_MS - 1000;
+  await monitor.tick();
+  assert.equal(reminds, 0);
+  time += 2000;
+  await monitor.tick();
+  assert.equal(reminds, 1);
+  await monitor.tick();
+  assert.equal(reminds, 1);
+});
+
+test('two sitting calls do not ping until both are older than two minutes', async () => {
+  let time = NOW;
+  let calls = [];
+  let reminds = 0;
+  const monitor = createModCallMonitor({
+    now: () => time,
+    snapshot: async () => ({ calls, players: [] }),
+    move: async () => false,
+    remind: async () => { reminds += 1; },
+  });
+  await monitor.tick();
+  calls = [{ Caller: 'A:1', Moderator: null, Timestamp: time / 1000 }];
+  await monitor.tick();
+  time += MOD_CALL_UNPICKED_MS + 1000;
+  calls = [
+    calls[0],
+    { Caller: 'B:2', Moderator: null, Timestamp: time / 1000 },
+  ];
+  await monitor.tick();
+  assert.equal(reminds, 0);
   time += MOD_CALL_UNPICKED_MS + 1000;
   await monitor.tick();
   assert.equal(reminds, 1);
+});
+
+test('thanks posts once when overdue calls are all picked up', async () => {
+  let time = NOW;
+  let calls = [];
+  const posts = [];
+  const monitor = createModCallMonitor({
+    now: () => time,
+    snapshot: async () => ({ calls, players: [] }),
+    move: async () => false,
+    remind: async () => { posts.push('remind'); },
+    thanks: async () => { posts.push('thanks'); },
+  });
+  await monitor.tick();
+  calls = [
+    { Caller: 'A:1', Moderator: null, Timestamp: time / 1000 },
+    { Caller: 'B:2', Moderator: null, Timestamp: time / 1000 },
+  ];
+  await monitor.tick();
+  time += MOD_CALL_UNPICKED_MS + 1000;
+  await monitor.tick();
+  assert.deepEqual(posts, ['remind']);
+  calls[0].Moderator = 'Staff:3';
+  await monitor.tick();
+  assert.deepEqual(posts, ['remind']);
+  calls[1].Moderator = 'Staff:4';
+  await monitor.tick();
+  assert.deepEqual(posts, ['remind', 'thanks']);
+  await monitor.tick();
+  assert.deepEqual(posts, ['remind', 'thanks']);
+  assert.equal(MOD_CALL_THANKS_MESSAGE, 'Thank you, for picking up the mod calls');
 });
 
 test('waiting greeting triggers only for human entries, not mute changes or bot joins', () => {

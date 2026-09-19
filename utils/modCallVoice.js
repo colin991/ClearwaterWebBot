@@ -11,11 +11,13 @@ export const MOD_CALL_ROOMS = ['1514131750559813733', '1514131852393320519', '15
 export const MOD_CALL_MAX_AGE_MS = 2 * 60 * 1000;
 /** Retry a failed live move only briefly — never keep pulling people minutes later. */
 export const MOD_CALL_RETRY_MS = 30 * 1000;
-/** Scare ping if nobody has taken an in-game mod call after this long. Does not infract. */
-export const MOD_CALL_UNPICKED_MS = 3 * 60 * 1000;
+/** Scare ping only if at least this many unpicked calls have sat this long. Does not infract. */
+export const MOD_CALL_UNPICKED_MS = 2 * 60 * 1000;
+export const MOD_CALL_REMIND_MIN_CALLS = 2;
 export const MOD_CALL_REMIND_CHANNEL = '1514422317587890327';
 export const MOD_CALL_REMIND_ROLE = '1514107930721517570';
 export const MOD_CALL_REMIND_MESSAGE = `<@&${MOD_CALL_REMIND_ROLE}> - Pick up mod calls or be auto-infracted in 1 minutes`;
+export const MOD_CALL_THANKS_MESSAGE = 'Thank you, for picking up the mod calls';
 const reservedRooms = new Set();
 
 export function modCallTimestampMs(call) {
@@ -79,16 +81,18 @@ export function createModCallMonitor({
   snapshot,
   move,
   remind = null,
+  thanks = null,
   now = Date.now,
   onError = e => logger.error('Mod-call voice move failed', e),
   maxAgeMs = MOD_CALL_MAX_AGE_MS,
   retryMs = MOD_CALL_RETRY_MS,
   remindAfterMs = MOD_CALL_UNPICKED_MS,
+  remindMinCalls = MOD_CALL_REMIND_MIN_CALLS,
 }) {
   const done = new Set();
   const pending = new Map();
-  const reminded = new Set();
   let initialized = false;
+  let reminderOutstanding = false;
   let running;
   const callKey = call => `${call.Timestamp}:${call.Caller}`;
   const readSnapshot = async () => {
@@ -103,6 +107,15 @@ export function createModCallMonitor({
     done.add(id);
     pending.delete(id);
   };
+  function unpickedCalls(calls) {
+    return (Array.isArray(calls) ? calls : []).filter((call) => call?.Caller && call?.Timestamp && !call.Moderator);
+  }
+  function overdueUnpicked(calls, time) {
+    return unpickedCalls(calls).filter((call) => {
+      const at = modCallTimestampMs(call);
+      return at && time - at > remindAfterMs;
+    });
+  }
   async function cycle() {
     const { calls, players } = await readSnapshot();
     if (!Array.isArray(calls)) throw new Error('Mod-call data unavailable');
@@ -110,7 +123,6 @@ export function createModCallMonitor({
     if (!initialized) {
       for (const call of calls) {
         if (call.Moderator) done.add(callKey(call));
-        else if (call.Caller && call.Timestamp) reminded.add(callKey(call));
       }
       initialized = true;
       return;
@@ -138,23 +150,22 @@ export function createModCallMonitor({
     }
     const visible = new Set(calls.map(callKey));
     for (const id of done) if (!visible.has(id)) done.delete(id);
-    for (const id of reminded) if (!visible.has(id)) reminded.delete(id);
-    if (typeof remind === 'function') {
-      const overdue = [];
-      for (const call of calls) {
-        const id = callKey(call);
-        if (!call.Caller || !call.Timestamp || call.Moderator || reminded.has(id)) continue;
-        const at = modCallTimestampMs(call);
-        if (!at || now() - at < remindAfterMs) continue;
-        overdue.push(id);
+    const sitting = unpickedCalls(calls);
+    const overdue = overdueUnpicked(calls, now());
+    if (typeof remind === 'function' && !reminderOutstanding && overdue.length >= remindMinCalls) {
+      try {
+        await remind();
+        reminderOutstanding = true;
+      } catch (error) {
+        onError(error);
       }
-      if (overdue.length) {
-        try {
-          await remind();
-          for (const id of overdue) reminded.add(id);
-        } catch (error) {
-          onError(error);
-        }
+    }
+    if (typeof thanks === 'function' && reminderOutstanding && sitting.length === 0) {
+      try {
+        await thanks();
+        reminderOutstanding = false;
+      } catch (error) {
+        onError(error);
       }
     }
   }
@@ -191,6 +202,17 @@ export function startModCallVoice(client) {
       await channel.send({
         content: MOD_CALL_REMIND_MESSAGE,
         allowedMentions: { parse: [], roles: [MOD_CALL_REMIND_ROLE] },
+      });
+    },
+    thanks: async () => {
+      if (!client.isReady()) throw new Error('Discord unavailable; skipping mod-call thanks.');
+      const channel = await client.channels.fetch(MOD_CALL_REMIND_CHANNEL);
+      if (!channel?.isTextBased() || typeof channel.send !== 'function') {
+        throw new Error('Mod-call reminder channel unavailable.');
+      }
+      await channel.send({
+        content: MOD_CALL_THANKS_MESSAGE,
+        allowedMentions: { parse: [] },
       });
     },
   });

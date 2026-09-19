@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-mod-call-two-overdue",
+      "title": "Only scare-ping two overdue mod calls",
+      "summary": "The moderating ping now waits until at least two unpicked mod calls have both sat more than 2 minutes. When the queue is cleared, the same channel gets Thank you, for picking up the mod calls.",
+      "createdAt": "2026-09-19T19:25:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-priority-max-4-2",
       "title": "Cap priorities at 4 people and 2 cars",
       "summary": "A priority request can list at most 4 participants and 2 cars. The form says so, and submitting more is rejected.",
