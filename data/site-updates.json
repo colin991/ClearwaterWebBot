@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-ticket-staff-roles-all",
+      "title": "Grant Command Staff, IA, and General Support on every ticket",
+      "summary": "Every PCSO ticket now hides inherited category roles and is visible only to the opener, the bot, Command Staff, IA, and General Support. Those three roles can also claim and close any ticket, and a restart still rewrites current ticket permissions.",
+      "createdAt": "2026-09-19T03:12:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-restore-full-bot",
       "title": "Restore the full Discord bot",
       "summary": "Bring back slash commands, prefix commands, and automations from before the empty-bot wipe. Ticket view roles stay limited to Command Staff, IA, and General Support, and a restart still resyncs open ticket permissions.",

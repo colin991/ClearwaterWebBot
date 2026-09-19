@@ -9,6 +9,7 @@ import {
   PINELLAS_SUPPORT_CR_YES_ID,
   PINELLAS_SUPPORT_GUILD_ID,
   PINELLAS_SUPPORT_STAFF_ROLE_IDS,
+  PINELLAS_SUPPORT_STAFF_ROLE_LIST,
   TICKET_BOT_OVERWRITES,
   TICKET_OPENER_OVERWRITES,
   buildInquiryModal,
@@ -127,14 +128,14 @@ test('ticket staff roles are Command Staff, IA, and General Support only', () =>
   assert.equal(staffRoleIdForTicketType('general'), '1514361384576618627');
   assert.equal(staffRoleIdForTicketType('compliance'), '1514851283817725962');
   assert.equal(staffRoleIdForTicketType('sheriff'), '1514361105244356639');
-  assert.deepEqual(PINELLAS_SUPPORT_STAFF_ROLE_IDS, {
-    general: '1514361384576618627',
-    compliance: '1514851283817725962',
-    sheriff: '1514361105244356639',
-  });
+  assert.deepEqual(PINELLAS_SUPPORT_STAFF_ROLE_LIST, [
+    '1514361384576618627',
+    '1514851283817725962',
+    '1514361105244356639',
+  ]);
 });
 
-test('ticket channels only grant opener, bot, and the typed staff role', async () => {
+test('ticket channels only grant opener, bot, Command Staff, IA, and General Support', async () => {
   const edits = [];
   const channel = {
     parentId: '1514848054724005938',
@@ -145,7 +146,7 @@ test('ticket channels only grant opener, bot, and the typed staff role', async (
     },
   };
   await syncTicketChannelToCategory(channel, { openerId: '99', botId: 'bot', type: 'general' });
-  assert.deepEqual(edits.map((entry) => entry.id), ['guild', '99', 'bot', '1514361384576618627']);
+  assert.deepEqual(edits.map((entry) => entry.id), ['guild', '99', 'bot', ...PINELLAS_SUPPORT_STAFF_ROLE_LIST]);
   assert.equal(edits[0].deny.includes(PermissionFlagsBits.ViewChannel), true);
   assert.equal(TICKET_OPENER_OVERWRITES.SendMessages, true);
   assert.equal(TICKET_BOT_OVERWRITES.ManageWebhooks, true);
@@ -156,10 +157,10 @@ test('ticket channels only grant opener, bot, and the typed staff role', async (
     guild: { id: 'guild' },
     permissionOverwrites: { set: async (list) => { sheriffEdits.push(...list); } },
   }, { openerId: '99', botId: 'bot', type: 'sheriff' });
-  assert.deepEqual(sheriffEdits.map((entry) => entry.id), ['guild', '99', 'bot', '1514361105244356639']);
+  assert.deepEqual(sheriffEdits.map((entry) => entry.id), ['guild', '99', 'bot', ...PINELLAS_SUPPORT_STAFF_ROLE_LIST]);
 });
 
-test('new tickets replace inherited category roles with typed staff access', async () => {
+test('new tickets replace inherited category roles with Command Staff, IA, and General Support', async () => {
   const overwrites = [];
   let created;
   const sent = [];
@@ -196,14 +197,14 @@ test('new tickets replace inherited category roles with typed staff access', asy
     PINELLAS_SUPPORT_GUILD_ID,
     '99',
     'bot',
-    PINELLAS_SUPPORT_STAFF_ROLE_IDS.general,
+    ...PINELLAS_SUPPORT_STAFF_ROLE_LIST,
   ]);
   assert.match(String(sent[0].content), /@here/);
   assert.match(String(sent[0].content), /<@99>/);
   assert.deepEqual(sent[0].allowedMentions.parse, ['everyone']);
 });
 
-test('only the matching staff role or an administrator can claim a ticket', async () => {
+test('Command Staff, IA, or General Support can claim any ticket', async () => {
   const iaMember = {
     permissions: { has: () => false },
     roles: { cache: { has: (id) => id === PINELLAS_SUPPORT_STAFF_ROLE_IDS.compliance } },
@@ -212,12 +213,12 @@ test('only the matching staff role or an administrator can claim a ticket', asyn
     permissions: { has: () => false },
     roles: { cache: { has: (id) => id === PINELLAS_SUPPORT_STAFF_ROLE_IDS.general } },
   };
-  assert.equal(canClaimPinellasTicket(iaMember, 'compliance'), true);
-  assert.equal(canClaimPinellasTicket(generalMember, 'compliance'), false);
+  assert.equal(canClaimPinellasTicket(iaMember), true);
+  assert.equal(canClaimPinellasTicket(generalMember), true);
   assert.equal(canClaimPinellasTicket({
     permissions: { has: () => false },
     roles: { cache: { has: () => false } },
-  }, 'compliance'), false);
+  }), false);
 
   let reply;
   let sent;
@@ -244,7 +245,10 @@ test('only the matching staff role or an administrator can claim a ticket', asyn
     isButton: () => true,
     isModalSubmit: () => false,
     user: { id: '66' },
-    member: generalMember,
+    member: {
+      permissions: { has: () => false },
+      roles: { cache: { has: () => false } },
+    },
     channel: {
       topic: 'ticket-owner:1074411240757137589 ticket-type:compliance',
       setTopic: async () => {},
@@ -292,8 +296,8 @@ test('restart permission sync updates every open ticket and continues after a fa
   const count = await syncOpenTicketPermissions(client);
   assert.equal(count, 2);
   assert.deepEqual(updated.map((entry) => entry.id), ['1', '2']);
-  assert.deepEqual(updated[0].ids, [PINELLAS_SUPPORT_GUILD_ID, '1074411240757137589', 'bot', PINELLAS_SUPPORT_STAFF_ROLE_IDS.compliance]);
-  assert.deepEqual(updated[1].ids, [PINELLAS_SUPPORT_GUILD_ID, 'bot', PINELLAS_SUPPORT_STAFF_ROLE_IDS.sheriff]);
+  assert.deepEqual(updated[0].ids, [PINELLAS_SUPPORT_GUILD_ID, '1074411240757137589', 'bot', ...PINELLAS_SUPPORT_STAFF_ROLE_LIST]);
+  assert.deepEqual(updated[1].ids, [PINELLAS_SUPPORT_GUILD_ID, 'bot', ...PINELLAS_SUPPORT_STAFF_ROLE_LIST]);
 });
 
 test('new ticket ping uses @here', () => {

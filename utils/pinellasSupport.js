@@ -39,6 +39,7 @@ export const PINELLAS_SUPPORT_STAFF_ROLE_IDS = Object.freeze({
   compliance: '1514851283817725962',
   sheriff: '1514361105244356639',
 });
+export const PINELLAS_SUPPORT_STAFF_ROLE_LIST = Object.freeze(Object.values(PINELLAS_SUPPORT_STAFF_ROLE_IDS));
 export const PINELLAS_SUPPORT_CR_YES_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}cr:yes`;
 export const PINELLAS_SUPPORT_CR_NO_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}cr:no`;
 const PINELLAS_SUPPORT_STAFF_ID = `${PINELLAS_SUPPORT_BUTTON_PREFIX}staff`;
@@ -457,10 +458,10 @@ export function memberHasPinellasClaimRole(member) {
   return memberHasTicketStaffRole(member);
 }
 
-export function canClaimPinellasTicket(member, type) {
+export function canClaimPinellasTicket(member) {
   return Boolean(
     member?.permissions?.has?.(PermissionFlagsBits.Administrator)
-    || memberHasTicketStaffRole(member, type),
+    || memberHasTicketStaffRole(member),
   );
 }
 
@@ -468,10 +469,8 @@ function overwriteAllow(bits) {
   return Object.entries(bits).filter(([, allowed]) => allowed).map(([name]) => PermissionFlagsBits[name]).filter(Boolean);
 }
 
-/** Replace inherited category roles so only the opener, bot, and typed staff role can see the ticket. */
+/** Replace inherited category roles so only the opener, bot, Command Staff, IA, and General Support can see the ticket. */
 export async function syncTicketChannelToCategory(channel, { openerId, botId, type } = {}) {
-  const ticketType = type || ticketTypeFromChannel(channel);
-  const staffRoleId = staffRoleIdForTicketType(ticketType);
   const guildId = channel?.guild?.id || channel?.guildId;
   if (typeof channel?.permissionOverwrites?.set !== 'function') return channel;
 
@@ -491,7 +490,9 @@ export async function syncTicketChannelToCategory(channel, { openerId, botId, ty
   if (botId) {
     overwrites.push({ id: botId, allow: overwriteAllow(TICKET_BOT_OVERWRITES) });
   }
-  overwrites.push({ id: staffRoleId, allow: overwriteAllow(TICKET_OPENER_OVERWRITES) });
+  for (const staffRoleId of PINELLAS_SUPPORT_STAFF_ROLE_LIST) {
+    overwrites.push({ id: staffRoleId, allow: overwriteAllow(TICKET_OPENER_OVERWRITES) });
+  }
   await channel.permissionOverwrites.set(overwrites, 'PCSO ticket staff view roles');
   return channel;
 }
@@ -686,8 +687,7 @@ export async function handlePinellasSupportInteraction(interaction) {
   if (!interaction.isButton() || !id.startsWith(PINELLAS_SUPPORT_BUTTON_PREFIX)) return false;
   const channel = interaction.channel;
   const ownerId = ticketOwnerId(channel);
-  const ticketType = ticketTypeFromTopic(channel);
-  const isStaff = canClaimPinellasTicket(interaction.member, ticketType);
+  const isStaff = canClaimPinellasTicket(interaction.member);
   const canClaim = isStaff;
 
   if (id === PINELLAS_SUPPORT_CLOSE_ID) {
