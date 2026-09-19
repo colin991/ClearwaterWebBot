@@ -9,6 +9,9 @@ import {
   PRIORITY_PENDING_MS,
   PRIORITY_PEACE_SECONDS,
   PRIORITY_REQUEST_SECONDS,
+  PRIORITY_REQUEST_STAFF_ROLE,
+  priorityStartMessageCommand,
+  priorityStartSpeech,
   resolvePriorityPlayers,
   resolvePriorityVehicles,
   uniqueMentionUsers,
@@ -131,19 +134,67 @@ function serviceFixture(request, extras = {}) {
     postStaff: async () => ({ id: 'msg1' }),
     editStaff: async () => {},
     dmUser: async (id, payload) => { dms.push({ id, payload }); },
+    announceStart: extras.announceStart,
     onError: error => { throw error; },
   });
   return { svc, commands, dms, stored, setTime: value => { time = value; } };
 }
 
-test('approve starts a 30 minute in-game timer and DMs the requester', async () => {
-  const f = serviceFixture({
-    id: 'p1', status: 'pending', requesterId: 'u1', pendingExpiresAt: 9e12, staffMessageId: 'm',
+test('start speech and in-game :m use the requester and details', () => {
+  const request = { requesterUsername: 'HostUser', details: 'bank robbery downtown' };
+  assert.equal(priorityStartSpeech(request), 'A new priority has now started by HostUser for bank robbery downtown');
+  assert.equal(
+    priorityStartMessageCommand(request),
+    ':m A new priority has now started by HostUser for bank robbery downtown. Do not start any major roleplays',
+  );
+});
+
+test('new pending requests ping the priority role', async () => {
+  const posts = [];
+  const svc = createPriorityRequestService({
+    now: () => 1,
+    load: async () => ({ request: null }),
+    save: async () => {},
+    send: async () => {},
+    snapshot: async () => ({}),
+    postStaff: async (payload) => {
+      posts.push(payload);
+      return { id: 'm' };
+    },
+    editStaff: async () => {},
+    dmUser: async () => {},
   });
-  await f.svc.approve('p1', { id: 'staff' });
-  assert.deepEqual(f.commands, [`:prty ${PRIORITY_REQUEST_SECONDS}`]);
+  await svc.submitRequest({
+    user: { id: 'u1', username: 'DiscName' },
+    selectedPlayers: [{ username: 'RobloxHost', robloxId: '99' }],
+    selectedVehicles: [],
+    background: 'bg',
+    details: 'store robbery',
+  });
+  const json = JSON.stringify(posts[0]);
+  assert.match(json, new RegExp(`<@&${PRIORITY_REQUEST_STAFF_ROLE}>`));
+  assert.deepEqual(posts[0].allowedMentions.roles, [PRIORITY_REQUEST_STAFF_ROLE]);
+});
+
+test('approve starts a 30 minute in-game timer and DMs the requester', async () => {
+  const announced = [];
+  const f = serviceFixture({
+    id: 'p1',
+    status: 'pending',
+    requesterId: 'u1',
+    requesterUsername: 'HostUser',
+    details: 'bank robbery downtown',
+    pendingExpiresAt: 9e12,
+    staffMessageId: 'm',
+  }, {
+    announceStart: async (request) => { announced.push(request); },
+  });
+  await f.svc.approve('p1', { id: 'anyone' });
+  assert.equal(f.commands[0], `:prty ${PRIORITY_REQUEST_SECONDS}`);
+  assert.equal(f.commands[1], ':m A new priority has now started by HostUser for bank robbery downtown. Do not start any major roleplays');
   assert.equal(f.dms[0].id, 'u1');
   assert.match(f.dms[0].payload.components[0].components[2].content, /Priority Started/);
+  assert.equal(announced.length, 1);
 });
 
 test('void runs prty 0 then a 10 minute peace timer and DMs the requester', async () => {

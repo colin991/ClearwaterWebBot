@@ -8,12 +8,14 @@
 
 If a request is already **pending** or **active**, a new one cannot be submitted.
 
-Staff review is posted to channel `1514341436139770017`. Staff (Clearwater staff ranks or Discord Administrator) can **Approve** or **Deny**. Unanswered pending requests are **auto-denied after 25 minutes**.
+New requests post to channel `1514341436139770017` and ping role `1515107822432419971`. **Anyone** can **Approve** or **Deny**. Unanswered pending requests are **auto-denied after 25 minutes**. Void and extra-time buttons stay staff-only.
 
 On approve:
 
 - The requester is DMed the started card, including **Request Added Time**.
 - The bot runs `:prty 1800` (30 minutes).
+- The bot runs `:m` telling the server a new priority started and not to start any major roleplays.
+- The bot joins voice channel `1514128904783139018`, plays a beep, then speaks who started it and the priority details.
 - The staff message switches to **Active**, with **Void** available.
 
 **Void** (or a natural timer end, or **everyone listed on the request dying in-game**) runs `:prty 0` then `:pt 600` (10 minute peace timer). All listed deaths end it immediately — there is no 3 minute wait. Void also DMs the requester that staff voided it.

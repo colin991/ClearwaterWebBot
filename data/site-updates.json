@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-priority-anyone-announce",
+      "title": "Let anyone approve priorities and announce them in-game",
+      "summary": "Anyone can approve or deny a priority request. New requests ping role 1515107822432419971. When one starts, the bot beeps and speaks it in voice channel 1514128904783139018 and sends an in-game :m not to start any major roleplays.",
+      "createdAt": "2026-09-19T18:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-ignore-florida-commands",
       "title": "Ignore commands in the Florida Highway Patrol server",
       "summary": "The bot no longer runs or replies to slash commands or prefix commands in server 1513609541483499790.",

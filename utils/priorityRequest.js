@@ -21,9 +21,14 @@ import { discordIdsByRobloxId, getIdentityCache } from './identityStore.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
 import { memberIsStaff } from './prefixHelpers.js';
+import { playMp3InVoiceChannel, synthesizeSpeechMp3 } from './vcSpeak.js';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 export const PRIORITY_REQUEST_CHANNEL = '1514341436139770017';
 export const PRIORITY_REQUEST_STAFF_ROLE = '1515107822432419971';
+export const PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID = '1514128904783139018';
+export const PRIORITY_BEEP_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'priority-beep.mp3');
 export const PRIORITY_REQUEST_SECONDS = 1800;
 export const PRIORITY_PEACE_SECONDS = 600;
 export const PRIORITY_PENDING_MS = 25 * 60 * 1000;
@@ -150,12 +155,16 @@ function detailsBody(request) {
 function pendingPayload(request) {
   return v2Message({
     title: 'Priority Request — Pending',
-    body: `Staff: approve or deny this request. It auto-denies <t:${Math.floor(request.pendingExpiresAt / 1000)}:R> if nobody responds.\n\n${detailsBody(request)}\n- **Requested by:** <@${request.requesterId}>`,
+    body: `<@&${PRIORITY_REQUEST_STAFF_ROLE}> A new priority request is ready. Anyone can **approve** or **deny**. It auto-denies <t:${Math.floor(request.pendingExpiresAt / 1000)}:R> if nobody responds.\n\n${detailsBody(request)}\n- **Requested by:** <@${request.requesterId}>`,
     buttons: [[
       { type: 2, style: 3, label: 'Approve', custom_id: `${PREFIX}approve:${request.id}` },
       { type: 2, style: 4, label: 'Deny', custom_id: `${PREFIX}deny:${request.id}` },
     ]],
-    allowedMentions: { parse: [], users: uniqueMentionUsers(request.requesterId, request.participantDiscordIds) },
+    allowedMentions: {
+      parse: [],
+      users: uniqueMentionUsers(request.requesterId, request.participantDiscordIds),
+      roles: [PRIORITY_REQUEST_STAFF_ROLE],
+    },
   });
 }
 
@@ -378,6 +387,36 @@ function buildPriorityFormModal({ id, players, vehicles }) {
   return modal;
 }
 
+export function priorityStartSpeech(request) {
+  const username = clip(request?.requesterUsername, 40);
+  const details = clip(request?.details, 220);
+  return `A new priority has now started by ${username} for ${details}`;
+}
+
+export function priorityStartMessageCommand(request) {
+  return `:m ${priorityStartSpeech(request)}. Do not start any major roleplays`;
+}
+
+export async function announcePriorityStart(client, request) {
+  const channel = await client.channels.fetch(PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID).catch(() => null);
+  if (!channel?.isVoiceBased?.()) {
+    throw new Error(`Priority announce voice channel ${PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID} is unavailable.`);
+  }
+  const me = channel.guild.members.me || await channel.guild.members.fetchMe().catch(() => null);
+  if (!channel.permissionsFor(me)?.has(['Connect', 'Speak'])) {
+    throw new Error('The bot needs Connect and Speak in the priority announce voice channel.');
+  }
+  const speech = await synthesizeSpeechMp3(priorityStartSpeech(request));
+  await playMp3InVoiceChannel(channel, channel.guild.voiceAdapterCreator, PRIORITY_BEEP_PATH, {
+    leaveAfter: false,
+    speakDelayMs: 400,
+  });
+  await playMp3InVoiceChannel(channel, channel.guild.voiceAdapterCreator, speech, {
+    leaveAfter: true,
+    speakDelayMs: 0,
+  });
+}
+
 export function createPriorityRequestService({
   snapshot,
   send,
@@ -386,6 +425,7 @@ export function createPriorityRequestService({
   postStaff,
   editStaff,
   dmUser,
+  announceStart,
   now = Date.now,
   onError = error => logger.error('Priority request failed', error),
 } = {}) {
@@ -444,7 +484,7 @@ export function createPriorityRequestService({
       await refreshStaff(request, closedPayload(
         request,
         'Priority Request — Denied',
-        'This request was **automatically denied** because staff did not respond within 25 minutes.',
+        'This request was **automatically denied** because nobody responded within 25 minutes.',
       ));
       return;
     }
@@ -479,7 +519,7 @@ export function createPriorityRequestService({
       const current = await ensure();
       if (hasBlockingPriority(current.request)) {
         const status = current.request.status === 'active' ? 'already running' : 'already pending';
-        throw new Error(`A priority request is ${status}. Wait until staff finish it before submitting another.`);
+        throw new Error(`A priority request is ${status}. Wait until it finishes before submitting another.`);
       }
       const id = newId();
       const sorted = [...players].sort(byUsername);
@@ -509,7 +549,7 @@ export function createPriorityRequestService({
         status: 'pending',
         requesterId: user.id,
         requesterRobloxId: String(identity?.robloxId || selectedPlayers.find(p => identities.get(String(p.robloxId)) === user.id)?.robloxId || ''),
-        requesterUsername: selectedPlayers[0]?.username || identity?.robloxUsername || user.username,
+        requesterUsername: identity?.robloxUsername || selectedPlayers[0]?.username || user.username,
         participantsText: text,
         participants: selectedPlayers.map((player) => ({
           username: player.username,
@@ -539,9 +579,17 @@ export function createPriorityRequestService({
       request.startedAt = now();
       request.endsAt = request.startedAt + PRIORITY_REQUEST_SECONDS * 1000;
       await send(`:prty ${PRIORITY_REQUEST_SECONDS}`);
+      try {
+        await send(priorityStartMessageCommand(request));
+      } catch (error) {
+        onError(error);
+      }
       await persist();
       await refreshStaff(request, activePayload(request));
       try { await dmUser(request.requesterId, startedDmPayload(request)); } catch (error) { onError(error); }
+      if (typeof announceStart === 'function') {
+        try { await announceStart(request); } catch (error) { onError(error); }
+      }
       return request;
     },
 
@@ -679,7 +727,7 @@ export async function handlePriorityRequest(interaction) {
         details: interaction.fields.getTextInputValue('details'),
       });
       service.clearDraft(interaction.user.id);
-      await interaction.editReply('Your priority request was sent to staff.');
+      await interaction.editReply('Your priority request was posted.');
       return true;
     }
 
@@ -713,11 +761,11 @@ export async function handlePriorityRequest(interaction) {
     }
 
     if (interaction.isButton() && /^(prq:(approve|deny|void|timeok|timeno)):/.test(id)) {
-      await requireStaff();
-      await interaction.deferUpdate();
       const parts = id.split(':');
       const action = parts[1];
       const requestId = parts[2];
+      if (action !== 'approve' && action !== 'deny') await requireStaff();
+      await interaction.deferUpdate();
       if (action === 'approve') await service.approve(requestId, interaction.user);
       else if (action === 'deny') await service.deny(requestId, interaction.user);
       else if (action === 'void') await service.voidActive(requestId, interaction.user);
@@ -756,6 +804,7 @@ export function startPriorityRequest(client) {
       const user = await client.users.fetch(userId);
       await user.send(payload);
     },
+    announceStart: (request) => announcePriorityStart(client, request),
   });
   client.priorityRequest = service;
   const timer = setInterval(() => { void service.tick(); }, 10000);
