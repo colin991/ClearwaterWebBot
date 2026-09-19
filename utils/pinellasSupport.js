@@ -458,10 +458,10 @@ export function memberHasPinellasClaimRole(member) {
   return memberHasTicketStaffRole(member);
 }
 
-export function canClaimPinellasTicket(member) {
+export function canClaimPinellasTicket(member, type) {
   return Boolean(
     member?.permissions?.has?.(PermissionFlagsBits.Administrator)
-    || memberHasTicketStaffRole(member),
+    || memberHasTicketStaffRole(member, type),
   );
 }
 
@@ -469,14 +469,7 @@ function overwriteAllow(bits) {
   return Object.entries(bits).filter(([, allowed]) => allowed).map(([name]) => PermissionFlagsBits[name]).filter(Boolean);
 }
 
-/** Replace inherited category roles so only the opener, bot, Command Staff, IA, and General Support can see the ticket. */
-export async function syncTicketChannelToCategory(channel, { openerId, botId, type } = {}) {
-  const guildId = channel?.guild?.id || channel?.guildId;
-  if (typeof channel?.permissionOverwrites?.set !== 'function') return channel;
-
-  const resolvedOpener = openerId
-    || ticketOwnerId(channel)
-    || ticketOwnerIdFromOverwrites(channel, botId);
+function staffViewOverwrites({ guildId, openerId, botId, staffRoleId }) {
   const overwrites = [];
   if (guildId) {
     overwrites.push({
@@ -484,16 +477,63 @@ export async function syncTicketChannelToCategory(channel, { openerId, botId, ty
       deny: [PermissionFlagsBits.ViewChannel],
     });
   }
-  if (resolvedOpener) {
-    overwrites.push({ id: resolvedOpener, allow: overwriteAllow(TICKET_OPENER_OVERWRITES) });
+  if (openerId) {
+    overwrites.push({ id: openerId, allow: overwriteAllow(TICKET_OPENER_OVERWRITES) });
   }
   if (botId) {
     overwrites.push({ id: botId, allow: overwriteAllow(TICKET_BOT_OVERWRITES) });
   }
-  for (const staffRoleId of PINELLAS_SUPPORT_STAFF_ROLE_LIST) {
+  if (staffRoleId) {
     overwrites.push({ id: staffRoleId, allow: overwriteAllow(TICKET_OPENER_OVERWRITES) });
   }
-  await channel.permissionOverwrites.set(overwrites, 'PCSO ticket staff view roles');
+  return overwrites;
+}
+
+/** Hide the category from everyone except the matching staff role and the bot. */
+export async function syncTicketCategoryPermissions(guild, botId) {
+  if (!guild?.channels) return 0;
+  let updated = 0;
+  for (const [type, categoryId] of Object.entries(PINELLAS_SUPPORT_CATEGORY_IDS)) {
+    let category = guild.channels.cache?.get?.(categoryId);
+    if (!category && typeof guild.channels.fetch === 'function') {
+      category = await guild.channels.fetch(categoryId).catch(() => null);
+    }
+    if (typeof category?.permissionOverwrites?.set !== 'function') continue;
+    const guildId = category.guild?.id || guild.id;
+    try {
+      await category.permissionOverwrites.set(
+        staffViewOverwrites({
+          guildId,
+          botId,
+          staffRoleId: staffRoleIdForTicketType(type),
+        }),
+        'PCSO ticket category staff view',
+      );
+      updated += 1;
+    } catch (error) {
+      logger.error(`Could not update ticket category permissions for ${categoryId}`, error);
+    }
+  }
+  return updated;
+}
+
+/** Replace inherited roles so only the opener, bot, and matching category staff role can see the ticket. */
+export async function syncTicketChannelToCategory(channel, { openerId, botId, type } = {}) {
+  if (typeof channel?.permissionOverwrites?.set !== 'function') return channel;
+  const ticketType = type || ticketTypeFromChannel(channel);
+  const guildId = channel?.guild?.id || channel?.guildId;
+  const resolvedOpener = openerId
+    || ticketOwnerId(channel)
+    || ticketOwnerIdFromOverwrites(channel, botId);
+  await channel.permissionOverwrites.set(
+    staffViewOverwrites({
+      guildId,
+      openerId: resolvedOpener,
+      botId,
+      staffRoleId: staffRoleIdForTicketType(ticketType),
+    }),
+    'PCSO ticket staff view roles',
+  );
   return channel;
 }
 
@@ -512,6 +552,7 @@ export async function syncOpenTicketPermissions(client) {
   if (!guild) return 0;
   await guild.channels.fetch().catch(() => {});
   const botMember = guild.members.me || await guild.members.fetchMe().catch(() => null);
+  const categories = await syncTicketCategoryPermissions(guild, botMember?.id);
   let updated = 0;
   for (const cached of guild.channels.cache.values()) {
     let channel = cached;
@@ -529,6 +570,9 @@ export async function syncOpenTicketPermissions(client) {
     } catch (error) {
       logger.error(`Could not update ticket permissions for ${channel.id}`, error);
     }
+  }
+  if (categories) {
+    logger.info(`Synced view permissions on ${categories} ticket categor${categories === 1 ? 'y' : 'ies'}.`);
   }
   return updated;
 }
@@ -687,7 +731,8 @@ export async function handlePinellasSupportInteraction(interaction) {
   if (!interaction.isButton() || !id.startsWith(PINELLAS_SUPPORT_BUTTON_PREFIX)) return false;
   const channel = interaction.channel;
   const ownerId = ticketOwnerId(channel);
-  const isStaff = canClaimPinellasTicket(interaction.member);
+  const ticketType = ticketTypeFromChannel(channel);
+  const isStaff = canClaimPinellasTicket(interaction.member, ticketType);
   const canClaim = isStaff;
 
   if (id === PINELLAS_SUPPORT_CLOSE_ID) {

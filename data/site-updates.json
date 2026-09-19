@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-ticket-category-staff-roles",
+      "title": "Limit each PCSO ticket category to one staff role",
+      "summary": "General Support tickets are visible only to General Support, OPC tickets only to IA, and Office of the Sheriff tickets only to Command Staff. A bot restart rewrites those category permissions and every open ticket channel.",
+      "createdAt": "2026-09-19T14:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-ticket-staff-roles-all",
       "title": "Grant Command Staff, IA, and General Support on every ticket",
       "summary": "Every PCSO ticket now hides inherited category roles and is visible only to the opener, the bot, Command Staff, IA, and General Support. Those three roles can also claim and close any ticket, and a restart still rewrites current ticket permissions.",
