@@ -5,6 +5,7 @@ import {
   allPriorityParticipantsDied,
   createPriorityRequestService,
   parsePriorityButton,
+  canApprovePriorityExtraTime,
   extraTimeCommandSeconds,
   extraTimeResolvedPayload,
   handlePriorityRequest,
@@ -263,7 +264,22 @@ test('approve button starts the timer instead of denying', async () => {
   assert.doesNotMatch(json, /Denied/);
 });
 
-test('anyone can approve extra time and the clicked message updates', async () => {
+test('priority extra time can be approved by staff or role 1515107822432419971', () => {
+  assert.equal(canApprovePriorityExtraTime({
+    permissions: { has: () => false },
+    roles: { cache: { has: (id) => id === PRIORITY_REQUEST_STAFF_ROLE } },
+  }), true);
+  assert.equal(canApprovePriorityExtraTime({
+    permissions: { has: () => true },
+    roles: { cache: { has: () => false } },
+  }), true);
+  assert.equal(canApprovePriorityExtraTime({
+    permissions: { has: () => false },
+    roles: { cache: { has: () => false } },
+  }), false);
+});
+
+test('the priority role can approve extra time and the clicked message updates', async () => {
   const f = serviceFixture({
     id: 'p1',
     status: 'active',
@@ -276,7 +292,10 @@ test('anyone can approve extra time and the clicked message updates', async () =
   const interaction = {
     customId: 'prq:timeok:p1:1',
     user: { id: 'anyone' },
-    member: { permissions: { has: () => false }, roles: { cache: { has: () => false } } },
+    member: {
+      permissions: { has: () => false },
+      roles: { cache: { has: (id) => id === PRIORITY_REQUEST_STAFF_ROLE } },
+    },
     isChatInputCommand: () => false,
     isButton: () => true,
     isModalSubmit: () => false,
@@ -292,6 +311,36 @@ test('anyone can approve extra time and the clicked message updates', async () =
   assert.equal(f.commands[0], ':prty 660');
   assert.equal(edits.length, 1);
   assert.match(JSON.stringify(edits[0]), /Priority Extra Time — Approved/);
+});
+
+test('people without staff or the priority role cannot approve extra time', async () => {
+  const f = serviceFixture({
+    id: 'p1',
+    status: 'active',
+    requesterId: 'u1',
+    startedAt: 1_000_000,
+    endsAt: 1_000_000 + 600_000,
+    staffMessageId: 'm',
+  });
+  const replies = [];
+  const interaction = {
+    customId: 'prq:timeok:p1:1',
+    user: { id: 'anyone' },
+    member: { permissions: { has: () => false }, roles: { cache: { has: () => false } } },
+    isChatInputCommand: () => false,
+    isButton: () => true,
+    isModalSubmit: () => false,
+    deferred: false,
+    replied: false,
+    async deferUpdate() { interaction.deferred = true; },
+    async editReply() {},
+    async followUp(payload) { replies.push(payload); },
+    async reply() {},
+    client: { priorityRequest: f.svc },
+  };
+  assert.equal(await handlePriorityRequest(interaction), true);
+  assert.deepEqual(f.commands, []);
+  assert.match(String(replies[0]?.content || ''), /priority role/);
 });
 
 test('void runs prty 0 then a 10 minute peace timer and DMs the requester', async () => {

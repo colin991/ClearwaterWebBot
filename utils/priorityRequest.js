@@ -50,6 +50,19 @@ export function parsePriorityButton(customId) {
   };
 }
 
+export function memberHasPriorityStaffRole(member) {
+  const roles = member?.roles;
+  if (!roles) return false;
+  if (typeof roles.cache?.has === 'function') return roles.cache.has(PRIORITY_REQUEST_STAFF_ROLE);
+  if (typeof roles.has === 'function') return roles.has(PRIORITY_REQUEST_STAFF_ROLE);
+  const list = Array.isArray(roles) ? roles : [];
+  return list.map((role) => String(role?.id || role)).includes(PRIORITY_REQUEST_STAFF_ROLE);
+}
+
+export function canApprovePriorityExtraTime(member) {
+  return memberIsStaff(member) || memberHasPriorityStaffRole(member);
+}
+
 function interactionCustomId(interaction) {
   return String(
     interaction?.customId
@@ -227,7 +240,7 @@ function voidedDmPayload(staffId) {
 function extraTimePayload(request, minutes) {
   return v2Message({
     title: 'Priority Extra Time',
-    body: `<@&${PRIORITY_REQUEST_STAFF_ROLE}> <@${request.requesterId}> asked for **${minutes}m** more on the active priority. Anyone can **approve** or **deny**.`,
+    body: `<@&${PRIORITY_REQUEST_STAFF_ROLE}> <@${request.requesterId}> asked for **${minutes}m** more on the active priority. Staff or <@&${PRIORITY_REQUEST_STAFF_ROLE}> can **approve** or **deny**.`,
     buttons: [[
       { type: 2, style: 3, label: 'Approve time', custom_id: `${PREFIX}timeok:${request.id}:${minutes}`, id: 21 },
     ], [
@@ -710,6 +723,16 @@ export async function handlePriorityRequest(interaction) {
     if (!memberIsStaff(member)) throw new Error('Only Clearwater staff can do that.');
   };
 
+  const requireExtraTimeApprover = async () => {
+    let member = interaction.member;
+    if (interaction.guild) {
+      member = await interaction.guild.members.fetch(interaction.user.id).catch(() => member);
+    }
+    if (!canApprovePriorityExtraTime(member)) {
+      throw new Error('Only staff or the priority role can approve or deny extra time.');
+    }
+  };
+
   try {
     if (isCommand) {
       if (!interaction.inGuild() || interaction.guildId !== interaction.client.config.guildId) {
@@ -801,6 +824,7 @@ export async function handlePriorityRequest(interaction) {
       const { action, requestId, extraMinutes } = clicked;
       await interaction.deferUpdate();
       if (action === 'void') await requireStaff();
+      if (action === 'timeok' || action === 'timeno') await requireExtraTimeApprover();
       let payload;
       let started;
       if (action === 'approve') {

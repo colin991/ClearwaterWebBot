@@ -20,6 +20,6 @@ On approve:
 
 **Void** (or a natural timer end, or **everyone listed on the request dying in-game**) runs `:prty 0` then `:pt 600` (10 minute peace timer). All listed deaths end it immediately — there is no 3 minute wait. Void also DMs the requester that staff voided it.
 
-**Request Added Time** asks for 1–30 extra minutes, posts to the same staff channel, and pings role `1515107822432419971`. **Anyone** can approve or deny extra time. Approve runs `:prty` with remaining time plus the extra minutes and updates that extra-time card.
+**Request Added Time** asks for 1–30 extra minutes, posts to the same staff channel, and pings role `1515107822432419971`. Clearwater staff **or** that role can approve or deny extra time. Approve runs `:prty` with remaining time plus the extra minutes and updates that extra-time card.
 
 Runtime state is `data/priority-request.json` (Git-ignored). Preserve it across bot updates. Restart the bot after deploying this feature so slash commands register.

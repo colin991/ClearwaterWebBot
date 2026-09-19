@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-19-priority-extra-time-role",
+      "title": "Let role 1515107822432419971 approve extra time",
+      "summary": "Extra time Approve and Deny can be used by Clearwater staff or by members with role 1515107822432419971.",
+      "createdAt": "2026-09-19T18:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-priority-button-deny-fix",
       "title": "Stop priority Approve from acting like Deny",
       "summary": "Approve and Deny are on separate rows with unique button ids so Discord no longer treats every click as Deny. Extra-time Approve time is split the same way.",
