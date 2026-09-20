@@ -17,10 +17,12 @@ import {
   PRIORITY_REQUEST_STAFF_ROLE,
   PRIORITY_MAX_PARTICIPANTS,
   PRIORITY_MAX_VEHICLES,
+  PRIORITY_TYPE_MAX,
   PRIORITY_CIVILIAN_KILL_PM,
   civilianKillersOutsidePriority,
   priorityStartMessageCommand,
   priorityStartSpeech,
+  mergePriorityParticipants,
   resolvePriorityPlayers,
   resolvePriorityVehicles,
   uniqueMentionUsers,
@@ -75,6 +77,23 @@ test('priority requests cap at 4 participants and 2 cars', () => {
   assert.equal(resolvePriorityPlayers(players, ['0'], 'B, C, D, E', { limit: Infinity }).length, 5);
   assert.deepEqual(resolvePriorityVehicles(vehicles, ['0'], 'Bullhorn, Interceptor').map((vehicle) => vehicle.name), ['Navara', 'Bullhorn']);
   assert.equal(resolvePriorityVehicles(vehicles, ['0'], 'Bullhorn, Interceptor', { limit: Infinity }).length, 3);
+});
+
+test('mergePriorityParticipants always includes the requester first', () => {
+  const selected = [
+    { username: 'Partner', robloxId: '2' },
+    { username: 'Host', robloxId: '1' },
+  ];
+  const merged = mergePriorityParticipants(selected, { username: 'Host', robloxId: '1' });
+  assert.deepEqual(merged.map((player) => player.username), ['Host', 'Partner']);
+});
+
+test('mergePriorityParticipants adds a requester who was not selected', () => {
+  const selected = ['A', 'B', 'C', 'D'].map((username, index) => ({ username, robloxId: String(index + 2) }));
+  const merged = mergePriorityParticipants(selected, { username: 'Host', robloxId: '1' });
+  assert.equal(merged.length, PRIORITY_MAX_PARTICIPANTS);
+  assert.equal(merged[0].username, 'Host');
+  assert.deepEqual(merged.map((player) => player.username), ['Host', 'A', 'B', 'C']);
 });
 
 test('submitRequest rejects more than 4 participants or 2 cars', async () => {
@@ -132,10 +151,14 @@ test('priority form modal placeholders tell people they can search', async () =>
   });
   const payload = modal.toJSON();
   const json = JSON.stringify(payload);
-  assert.match(json, /max 4 people/);
+  assert.match(json, /max 4 people including you/);
   assert.match(json, /max 2 cars/);
-  assert.match(json, /Max 4 participants and 2 cars total/);
+  assert.match(json, /Max 4 participants including you, and 2 cars total/);
   assert.match(json, /Type to search civilian vehicles/);
+  assert.match(json, /"label":"Priority Type"/);
+  assert.match(json, /"max_length":25/);
+  assert.doesNotMatch(json, /Priority Details/);
+  assert.equal(PRIORITY_TYPE_MAX, 25);
   assert.match(json, /"value":"none"/);
   assert.match(json, /Alpha · /);
   const vehicleSelect = payload.components
@@ -209,13 +232,17 @@ function serviceFixture(request, extras = {}) {
   return { svc, commands, dms, staffEdits, stored, setTime: value => { time = value; } };
 }
 
-test('start speech and in-game :m use the requester and details', () => {
+test('start speech and in-game :m use the requester and clipped priority type', () => {
   const request = { requesterUsername: 'HostUser', details: 'bank robbery downtown' };
   assert.equal(priorityStartSpeech(request), 'A new priority has now started, by HostUser, for bank robbery downtown.');
   assert.equal(
     priorityStartMessageCommand(request),
     ':m A new priority has now started by HostUser for bank robbery downtown. Do not start any major roleplays',
   );
+  const long = { requesterUsername: 'HostUser', details: 'abcdefghijklmnopqrstuvwxyz' };
+  assert.equal(priorityStartSpeech(long), 'A new priority has now started, by HostUser, for abcdefghijklmnopqrstuvwxy.');
+  assert.match(priorityStartMessageCommand(long), /abcdefghijklmnopqrstuvwxy/);
+  assert.doesNotMatch(priorityStartMessageCommand(long), /abcdefghijklmnopqrstuvwxyz/);
 });
 
 test('new pending requests ping the priority role', async () => {
@@ -233,16 +260,20 @@ test('new pending requests ping the priority role', async () => {
     editStaff: async () => {},
     dmUser: async () => {},
   });
-  await svc.submitRequest({
+  const request = await svc.submitRequest({
     user: { id: 'u1', username: 'DiscName' },
     selectedPlayers: [{ username: 'RobloxHost', robloxId: '99' }],
     selectedVehicles: [],
     background: 'bg',
-    details: 'store robbery',
+    details: 'abcdefghijklmnopqrstuvwxyz extra',
   });
   const json = JSON.stringify(posts[0]);
   assert.match(json, new RegExp(`<@&${PRIORITY_REQUEST_STAFF_ROLE}>`));
   assert.deepEqual(posts[0].allowedMentions.roles, [PRIORITY_REQUEST_STAFF_ROLE]);
+  assert.deepEqual(request.participants.map((player) => player.username), ['DiscName', 'RobloxHost']);
+  assert.equal(request.details, 'abcdefghijklmnopqrstuvwxy');
+  assert.match(json, /\*\*Priority Type:\*\* abcdefghijklmnopqrstuvwxy/);
+  assert.doesNotMatch(json, /Priority Details/);
 });
 
 test('approve starts a 30 minute in-game timer and DMs the requester', async () => {

@@ -35,6 +35,7 @@ export const PRIORITY_PEACE_SECONDS = 600;
 export const PRIORITY_PENDING_MS = 25 * 60 * 1000;
 export const PRIORITY_MAX_PARTICIPANTS = 4;
 export const PRIORITY_MAX_VEHICLES = 2;
+export const PRIORITY_TYPE_MAX = 25;
 export const PRIORITY_CIVILIAN_KILL_PM = 'There is an active Priority. Please do not kill anyone.';
 export const PRIORITY_INFO_EMOJI = '<:info:1514347280105209928>';
 const HEADER = 'https://media.discordapp.net/attachments/1529616984755540088/1546535995736858644/clearwater_ban.png?format=webp&quality=lossless';
@@ -292,7 +293,7 @@ function detailsBody(request) {
   if (request.endedAt) lines.push(`- **Ended:** ${ts(request.endedAt)}`);
   else if (request.endsAt) lines.push(`- **Ends:** ${ts(request.endsAt)}`);
   lines.push(`- **Background:** ${clip(request.background, 500)}`);
-  lines.push(`- **Priority Details:** ${clip(request.details, 500)}`);
+  lines.push(`- **Priority Type:** ${clip(request.details, PRIORITY_TYPE_MAX)}`);
   if (request.approvedBy) lines.push(`- **Approved by:** <@${request.approvedBy}>`);
   if (request.voidedBy) lines.push(`- **Voided by:** <@${request.voidedBy}>`);
   if (request.deniedBy) lines.push(`- **Denied by:** <@${request.deniedBy}>`);
@@ -479,6 +480,24 @@ export function resolvePriorityPlayers(players, selectedValues, typedNames = '',
   return Number.isFinite(limit) ? picked.slice(0, limit) : picked;
 }
 
+export function mergePriorityParticipants(selectedPlayers, requester) {
+  const picked = [];
+  const seen = new Set();
+  const add = (player) => {
+    if (!player?.username && !player?.robloxId) return;
+    const key = participantKey(player);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    picked.push({
+      username: player.username || '',
+      robloxId: String(player.robloxId || ''),
+    });
+  };
+  add(requester);
+  for (const player of selectedPlayers || []) add(player);
+  return picked.slice(0, PRIORITY_MAX_PARTICIPANTS);
+}
+
 export function resolvePriorityVehicles(vehicles, selectedValues, typedNames = '', { limit = PRIORITY_MAX_VEHICLES } = {}) {
   const picked = [];
   const seen = new Set();
@@ -532,7 +551,7 @@ function buildPriorityFormModal({ id, players, vehicles }) {
   const labels = [
     new LabelBuilder()
       .setLabel('Search users')
-      .setDescription('Type to search, then pick one in-game user. Extra names below — max 4 people.')
+      .setDescription('Type to search, then pick one in-game user. Extra names below — max 4 people including you.')
       .setStringSelectMenuComponent(
         new StringSelectMenuBuilder()
           .setCustomId('users')
@@ -562,7 +581,7 @@ function buildPriorityFormModal({ id, players, vehicles }) {
   labels.push(
     new LabelBuilder()
       .setLabel('Additional users or vehicles')
-      .setDescription('Comma-separated extras. Max 4 participants and 2 cars total.')
+      .setDescription('Comma-separated extras. Max 4 participants including you, and 2 cars total.')
       .setTextInputComponent(
         new TextInputBuilder()
           .setCustomId('more_users')
@@ -574,8 +593,14 @@ function buildPriorityFormModal({ id, players, vehicles }) {
     new LabelBuilder().setLabel('Background').setTextInputComponent(
       new TextInputBuilder().setCustomId('background').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(800),
     ),
-    new LabelBuilder().setLabel('Priority Details').setTextInputComponent(
-      new TextInputBuilder().setCustomId('details').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(800),
+    new LabelBuilder().setLabel('Priority Type').setTextInputComponent(
+      new TextInputBuilder()
+        .setCustomId('details')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setMinLength(1)
+        .setMaxLength(PRIORITY_TYPE_MAX)
+        .setPlaceholder('e.g. bank robbery'),
     ),
   );
   modal.addLabelComponents(...labels.slice(0, 5));
@@ -584,13 +609,13 @@ function buildPriorityFormModal({ id, players, vehicles }) {
 
 export function priorityStartSpeech(request) {
   const username = clip(request?.requesterUsername, 40);
-  const details = clip(request?.details, 220);
+  const details = clip(request?.details, PRIORITY_TYPE_MAX);
   return `A new priority has now started, by ${username}, for ${details}.`;
 }
 
 export function priorityStartMessageCommand(request) {
   const username = clip(request?.requesterUsername, 40);
-  const details = clip(request?.details, 220);
+  const details = clip(request?.details, PRIORITY_TYPE_MAX);
   return `:m A new priority has now started by ${username} for ${details}. Do not start any major roleplays`;
 }
 
@@ -825,23 +850,31 @@ export function createPriorityRequestService({
         throw new Error(`Priorities are limited to ${PRIORITY_MAX_VEHICLES} cars.`);
       }
       const identities = await discordIdsByRobloxId();
-      const { text, discordIds } = await participantLine(selectedPlayers, identities);
       const identity = (await getIdentityCache()).byDiscord[user.id];
+      const requesterPlayer = {
+        username: identity?.robloxUsername || user.username,
+        robloxId: String(identity?.robloxId || selectedPlayers.find((player) => identities.get(String(player.robloxId)) === user.id)?.robloxId || ''),
+      };
+      const participants = mergePriorityParticipants(selectedPlayers, requesterPlayer);
+      if (participants.length > PRIORITY_MAX_PARTICIPANTS) {
+        throw new Error(`Priorities are limited to ${PRIORITY_MAX_PARTICIPANTS} participants.`);
+      }
+      if ((selectedVehicles || []).length > PRIORITY_MAX_VEHICLES) {
+        throw new Error(`Priorities are limited to ${PRIORITY_MAX_VEHICLES} cars.`);
+      }
+      const { text, discordIds } = await participantLine(participants, identities);
       const request = {
         id: newId(),
         status: 'pending',
         requesterId: user.id,
-        requesterRobloxId: String(identity?.robloxId || selectedPlayers.find(p => identities.get(String(p.robloxId)) === user.id)?.robloxId || ''),
-        requesterUsername: identity?.robloxUsername || selectedPlayers[0]?.username || user.username,
+        requesterRobloxId: String(requesterPlayer.robloxId || ''),
+        requesterUsername: requesterPlayer.username,
         participantsText: text,
-        participants: selectedPlayers.map((player) => ({
-          username: player.username,
-          robloxId: String(player.robloxId || ''),
-        })),
+        participants,
         participantDiscordIds: uniqueMentionUsers(user.id, discordIds),
         vehicles: selectedVehicles.map(formatPriorityVehicle),
         background: clip(background, 800),
-        details: clip(details, 800),
+        details: clip(details, PRIORITY_TYPE_MAX),
         submittedAt: now(),
         pendingExpiresAt: now() + PRIORITY_PENDING_MS,
         staffChannelId: PRIORITY_REQUEST_CHANNEL,

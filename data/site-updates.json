@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-20-priority-type-requester",
+      "title": "List the requester on priorities and cap Priority Type",
+      "summary": "The person who submits a priority is always added as a participant. The old Priority Details field is now Priority Type and is limited to 25 characters on the form and the Discord card.",
+      "createdAt": "2026-09-20T17:21:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-20-leo-briefing",
       "title": "Add /briefing for a server-wide LEO briefing",
       "summary": "Administrators can run /briefing to drag Police and Sheriff into their voice channel, announce a briefing, start a 20 minute peace timer, load BRIEFING WALLS, and DM a panel to load BRIEFING ROAD BLOCKS or end the briefing.",

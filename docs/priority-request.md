@@ -2,9 +2,9 @@
 
 `/request-priority` in the Clearwater Discord server opens a searchable form:
 
-1. **Search users** — type in the dropdown to filter, then pick one in-game player. Discord only shows search on a single choice, so extra names go in **Additional users or vehicles**. **Max 4 participants.**
+1. **Search users** — type in the dropdown to filter, then pick one in-game player. Discord only shows search on a single choice, so extra names go in **Additional users or vehicles**. The person who submitted the request is always listed as a **participant**. **Max 4 participants including the requester.**
 2. **Search vehicles** — type in that dropdown to filter by owner or vehicle. Discord only shows search on a required single choice, so pick **None** if you have no car. A second vehicle can be typed in the additional field. **Max 2 cars.**
-3. Fill in **Background** and **Priority Details** on the same form.
+3. Fill in **Background** and **Priority Type** on the same form. Priority Type is limited to **25 characters**.
 
 If a request is already **pending** or **active**, a new one cannot be submitted.
 
@@ -16,7 +16,7 @@ On approve:
 - The requester is DMed the started card, including **Request Added Time**.
 - The bot runs `:prty 1800` (30 minutes).
 - The bot runs `:m` telling the server a new priority started and not to start any major roleplays.
-- The bot joins voice channel `1514128904783139018`, plays a short chime, then slowly speaks who started it and the priority details.
+- The bot joins voice channel `1514128904783139018`, plays a short chime, then slowly speaks who started it and the priority type.
 
 **Void** (or a natural timer end, or **everyone listed on the request dying in-game**) runs `:prty 0` then `:pt 600` (10 minute peace timer). The original request card is rewritten immediately to **Priority Request — Ended** / **Voided** (Void/Started removed). All listed deaths end it immediately — there is no 3 minute wait. Void also DMs the requester that staff voided it.
 
