@@ -9,6 +9,13 @@
       "updatedBy": "colin991"
     },
     {
+      "id": "2026-09-20-briefing-breifing-name",
+      "title": "Load briefing maps with the in-game layout name",
+      "summary": "/briefing now runs :loadlayout BREIFING WALLS and :loadlayout BREIFING ROAD BLOCKS, matching the saved map layout names.",
+      "createdAt": "2026-09-20T20:44:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-20-remove-gta-driving",
       "title": "Remove the 130 MPH GTA driving check",
       "summary": "The bot no longer watches in-game speed or PMs people for going over 130 MPH. That GTA driving system is fully removed.",

@@ -30,8 +30,8 @@ test('police and sheriff count as LEO; fire and civilian do not', () => {
 });
 
 test('layout commands load and unload the briefing map names', () => {
-  assert.equal(briefingLayoutCommand('load', BRIEFING_WALLS_LAYOUT), ':loadlayout BRIEFING WALLS');
-  assert.equal(briefingLayoutCommand('unload', BRIEFING_ROADS_LAYOUT), ':unloadlayout BRIEFING ROAD BLOCKS');
+  assert.equal(briefingLayoutCommand('load', BRIEFING_WALLS_LAYOUT), ':loadlayout BREIFING WALLS');
+  assert.equal(briefingLayoutCommand('unload', BRIEFING_ROADS_LAYOUT), ':unloadlayout BREIFING ROAD BLOCKS');
   assert.equal(BRIEFING_PEACE_SECONDS, 1200);
 });
 
@@ -74,7 +74,7 @@ test('starting a briefing drags LEO, PMs the server, sets peace, and loads walls
   assert.deepEqual(f.commands, [
     `:m ${BRIEFING_START_MESSAGE}`,
     `:pt ${BRIEFING_PEACE_SECONDS}`,
-    ':loadlayout BRIEFING WALLS',
+    ':loadlayout BREIFING WALLS',
   ]);
   assert.equal(f.dms[0].id, 'admin');
   assert.match(JSON.stringify(f.dms[0].payload), /Load road blocks/);
@@ -87,10 +87,10 @@ test('road blocks load and unload from the DM panel', async () => {
   await f.svc.start({ user: { id: 'admin' }, voiceChannelId: 'vc1' });
   f.commands.length = 0;
   await f.svc.setRoadBlocks(true);
-  assert.deepEqual(f.commands, [':loadlayout BRIEFING ROAD BLOCKS']);
+  assert.deepEqual(f.commands, [':loadlayout BREIFING ROAD BLOCKS']);
   f.commands.length = 0;
   const panel = await f.svc.setRoadBlocks(false);
-  assert.deepEqual(f.commands, [':unloadlayout BRIEFING ROAD BLOCKS']);
+  assert.deepEqual(f.commands, [':unloadlayout BREIFING ROAD BLOCKS']);
   assert.match(JSON.stringify(panel.panel), /Load road blocks/);
 });
 
@@ -101,8 +101,8 @@ test('ending unloads both layouts and announces that roleplay can start', async 
   f.commands.length = 0;
   const ended = await f.svc.end();
   assert.deepEqual(f.commands, [
-    ':unloadlayout BRIEFING WALLS',
-    ':unloadlayout BRIEFING ROAD BLOCKS',
+    ':unloadlayout BREIFING WALLS',
+    ':unloadlayout BREIFING ROAD BLOCKS',
     `:m ${BRIEFING_END_MESSAGE}`,
   ]);
   assert.equal(f.stored.active, false);
@@ -138,6 +138,6 @@ test('briefing DM buttons still work when customId is on the component payload',
     editReply: async (payload) => { edited = payload; },
   };
   assert.equal(await handleLeoBriefing(interaction), true);
-  assert.deepEqual(f.commands, [':loadlayout BRIEFING ROAD BLOCKS']);
+  assert.deepEqual(f.commands, [':loadlayout BREIFING ROAD BLOCKS']);
   assert.match(JSON.stringify(edited), /Unload road blocks/);
 });

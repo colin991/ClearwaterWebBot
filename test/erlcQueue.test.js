@@ -202,9 +202,9 @@ test('map layout :loadlayout commands still hit the ER:LC API', async () => {
   try {
     const blocked = await executeErlcCommand('key', ':load Test');
     assert.equal(blocked, false);
-    const result = await executeErlcCommand('key', ':loadlayout BRIEFING WALLS');
+    const result = await executeErlcCommand('key', ':loadlayout BREIFING WALLS');
     assert.equal(result.message, 'ok');
-    assert.deepEqual(posts, [{ command: ':loadlayout BRIEFING WALLS' }]);
+    assert.deepEqual(posts, [{ command: ':loadlayout BREIFING WALLS' }]);
   } finally {
     globalThis.fetch = original;
     resetErlcNetworkForTests({ minIntervalMs: 5000 });

@@ -61,8 +61,8 @@ export default {
     await interaction.editReply([
       'LEO briefing started.',
       `Dragged **${moved}** Police/Sheriff member(s) into ${voiceChannel}. Skipped **${skipped}** (not in voice or not linked).`,
-      'In-game: start message, **20 minute** peace timer, and **BRIEFING WALLS** loaded.',
-      'Check your DMs for the panel to load/unload **BRIEFING ROAD BLOCKS** or end the briefing.',
+      'In-game: start message, **20 minute** peace timer, and **BREIFING WALLS** loaded.',
+      'Check your DMs for the panel to load/unload **BREIFING ROAD BLOCKS** or end the briefing.',
     ].join('\n'));
   },
 };

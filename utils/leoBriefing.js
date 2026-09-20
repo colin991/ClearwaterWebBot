@@ -12,8 +12,8 @@ import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
 import { ensureGuildMembers } from './guildMemberSnapshot.js';
 
-export const BRIEFING_WALLS_LAYOUT = 'BRIEFING WALLS';
-export const BRIEFING_ROADS_LAYOUT = 'BRIEFING ROAD BLOCKS';
+export const BRIEFING_WALLS_LAYOUT = 'BREIFING WALLS';
+export const BRIEFING_ROADS_LAYOUT = 'BREIFING ROAD BLOCKS';
 export const BRIEFING_PEACE_SECONDS = 20 * 60;
 export const BRIEFING_START_MESSAGE = 'A server wide LEO briefing is now starting please do not start any roleplay that LEO is needed please go to the police station if you are LEO';
 export const BRIEFING_END_MESSAGE = 'The server wide LEO briefing has now ended normal roleplay can start';
