@@ -31,7 +31,7 @@ export function briefingLayoutCommand(action, name) {
   const verb = String(action || '').toLowerCase() === 'unload' ? 'unloadlayout' : 'loadlayout';
   const title = String(name || '').replace(/\s+/g, ' ').trim();
   if (!title) throw new Error('Missing map layout name');
-  return `:${verb} "${title.replace(/"/g, '')}"`;
+  return `:${verb} ${title}`;
 }
 
 function briefingInteractionCustomId(interaction) {
