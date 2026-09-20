@@ -610,7 +610,7 @@ function buildPriorityFormModal({ id, players, vehicles }) {
 export function priorityStartSpeech(request) {
   const username = clip(request?.requesterUsername, 40);
   const details = clip(request?.details, PRIORITY_TYPE_MAX);
-  return `A new priority has now started, by ${username}, for ${details}.`;
+  return `A new priority has now started, by ${username}, for ${details}. Do not start any major roleplays.`;
 }
 
 export function priorityStartMessageCommand(request) {
@@ -628,16 +628,16 @@ export async function announcePriorityStart(client, request) {
   if (!channel.permissionsFor(me)?.has(['Connect', 'Speak'])) {
     throw new Error('The bot needs Connect and Speak in the priority announce voice channel.');
   }
-  const speech = await synthesizeSpeechMp3(priorityStartSpeech(request), undefined, { rate: 0.72 });
+  const speech = await synthesizeSpeechMp3(priorityStartSpeech(request), undefined, { rate: 'slow' });
   await playMp3InVoiceChannel(channel, channel.guild.voiceAdapterCreator, PRIORITY_BEEP_PATH, {
     leaveAfter: false,
-    speakDelayMs: 600,
+    speakDelayMs: 800,
     volume: 0.45,
   });
-  await new Promise((resolve) => setTimeout(resolve, 450));
+  await new Promise((resolve) => setTimeout(resolve, 1000));
   await playMp3InVoiceChannel(channel, channel.guild.voiceAdapterCreator, speech, {
     leaveAfter: true,
-    speakDelayMs: 0,
+    speakDelayMs: 400,
     volume: 1,
   });
 }
@@ -914,6 +914,13 @@ export function createPriorityRequestService({
         } catch (error) {
           onError(error);
         }
+        if (announceStart) {
+          try {
+            await announceStart(request);
+          } catch (error) {
+            onError(error);
+          }
+        }
       })().catch(onError);
       if (waitForInGame) {
         await game;
@@ -1169,11 +1176,6 @@ export async function handlePriorityRequest(interaction) {
         await interaction.editReply(payload);
         await service.markStaffCardSynced();
       }
-      if (started) {
-        void announcePriorityStart(interaction.client, started).catch((error) => {
-          logger.error('Priority start voice announce failed', error);
-        });
-      }
       return true;
     }
   } catch (error) {
@@ -1215,6 +1217,7 @@ export function startPriorityRequest(client) {
       const user = await client.users.fetch(userId);
       await user.send(payload);
     },
+    announceStart: (request) => announcePriorityStart(client, request),
   });
   client.priorityRequest = service;
   const timer = setInterval(() => { void service.tick(); }, 10000);

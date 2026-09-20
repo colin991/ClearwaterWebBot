@@ -113,9 +113,10 @@ export async function playMp3InVoiceChannel(voiceChannel, adapterCreator, mp3Pat
       connection.destroy();
       throw new Error(`Could not join the voice channel: ${error?.message || error}`);
     }
-    const delay = Math.max(0, Number(speakDelayMs) || 0);
-    if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
   }
+
+  const delay = Math.max(0, Number(speakDelayMs) || 0);
+  if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
 
   const player = createAudioPlayer({
     behaviors: { noSubscriber: NoSubscriberBehavior.Pause },

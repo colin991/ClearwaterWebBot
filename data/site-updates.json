@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-20-priority-voice-after-callout",
+      "title": "Speak the priority in voice after the in-game callout",
+      "summary": "When a priority is approved, the bot now waits until the in-game :m callout is sent, then beeps and talks in voice: who started it, the priority type, and not to start any major roleplays.",
+      "createdAt": "2026-09-20T18:08:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-20-briefing-layout-quotes",
       "title": "Fix briefing map layouts for walls and road blocks",
       "summary": "/briefing now sends :loadlayout and :unloadlayout with quoted names so BRIEFING WALLS and BRIEFING ROAD BLOCKS actually load in-game, and the DM panel buttons still fire.",

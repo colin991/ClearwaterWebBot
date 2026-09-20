@@ -218,7 +218,7 @@ function serviceFixture(request, extras = {}) {
     now: () => time,
     load: async () => stored,
     save: async value => { stored.request = value.request; },
-    send: async command => { commands.push(command); },
+    send: extras.send || (async command => { commands.push(command); }),
     snapshot: async () => extras.server || { KillLogs: [] },
     postStaff: async () => ({ id: 'msg1' }),
     editStaff: async (channelId, messageId, payload) => {
@@ -234,13 +234,13 @@ function serviceFixture(request, extras = {}) {
 
 test('start speech and in-game :m use the requester and clipped priority type', () => {
   const request = { requesterUsername: 'HostUser', details: 'bank robbery downtown' };
-  assert.equal(priorityStartSpeech(request), 'A new priority has now started, by HostUser, for bank robbery downtown.');
+  assert.equal(priorityStartSpeech(request), 'A new priority has now started, by HostUser, for bank robbery downtown. Do not start any major roleplays.');
   assert.equal(
     priorityStartMessageCommand(request),
     ':m A new priority has now started by HostUser for bank robbery downtown. Do not start any major roleplays',
   );
   const long = { requesterUsername: 'HostUser', details: 'abcdefghijklmnopqrstuvwxyz' };
-  assert.equal(priorityStartSpeech(long), 'A new priority has now started, by HostUser, for abcdefghijklmnopqrstuvwxy.');
+  assert.equal(priorityStartSpeech(long), 'A new priority has now started, by HostUser, for abcdefghijklmnopqrstuvwxy. Do not start any major roleplays.');
   assert.match(priorityStartMessageCommand(long), /abcdefghijklmnopqrstuvwxy/);
   assert.doesNotMatch(priorityStartMessageCommand(long), /abcdefghijklmnopqrstuvwxyz/);
 });
@@ -291,6 +291,27 @@ test('approve starts a 30 minute in-game timer and DMs the requester', async () 
   assert.equal(f.commands[1], ':m A new priority has now started by HostUser for bank robbery downtown. Do not start any major roleplays');
   assert.equal(f.dms[0].id, 'u1');
   assert.match(f.dms[0].payload.components[0].components[2].content, /Priority Started/);
+});
+
+test('voice talk runs after the in-game priority callout', async () => {
+  const order = [];
+  const f = serviceFixture({
+    id: 'p1',
+    status: 'pending',
+    requesterId: 'u1',
+    requesterUsername: 'HostUser',
+    details: 'bank robbery downtown',
+    pendingExpiresAt: 9e12,
+    staffMessageId: 'm',
+  }, {
+    send: async (command) => {
+      f.commands.push(command);
+      order.push(command.startsWith(':m') ? 'callout' : 'prty');
+    },
+    announceStart: async () => { order.push('voice'); },
+  });
+  await f.svc.approve('p1', { id: 'anyone' });
+  assert.deepEqual(order, ['prty', 'callout', 'voice']);
 });
 
 test('extra time approve extends the in-game timer', async () => {
