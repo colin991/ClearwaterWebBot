@@ -191,6 +191,26 @@ test('automatic :load commands never hit the ER:LC API', async () => {
   }
 });
 
+test('map layout :loadlayout commands still hit the ER:LC API', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 0 });
+  const posts = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    posts.push(JSON.parse(options.body));
+    return jsonResponse(200, { message: 'ok' });
+  };
+  try {
+    const blocked = await executeErlcCommand('key', ':load Test');
+    assert.equal(blocked, false);
+    const result = await executeErlcCommand('key', ':loadlayout "BRIEFING WALLS"');
+    assert.equal(result.message, 'ok');
+    assert.deepEqual(posts, [{ command: ':loadlayout "BRIEFING WALLS"' }]);
+  } finally {
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+  }
+});
+
 test('automatic :kick commands never hit the ER:LC API', async () => {
   resetErlcNetworkForTests({ minIntervalMs: 0 });
   let posts = 0;

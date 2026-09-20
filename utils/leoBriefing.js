@@ -29,7 +29,18 @@ export function leoPlayers(players = []) {
 
 export function briefingLayoutCommand(action, name) {
   const verb = String(action || '').toLowerCase() === 'unload' ? 'unloadlayout' : 'loadlayout';
-  return `:${verb} ${String(name || '').trim()}`;
+  const title = String(name || '').replace(/\s+/g, ' ').trim();
+  if (!title) throw new Error('Missing map layout name');
+  return `:${verb} "${title.replace(/"/g, '')}"`;
+}
+
+function briefingInteractionCustomId(interaction) {
+  return String(
+    interaction?.customId
+    || interaction?.component?.customId
+    || interaction?.component?.data?.custom_id
+    || '',
+  );
 }
 
 export function parseBriefingButton(customId) {
@@ -131,8 +142,16 @@ export function createLeoBriefingService({
     return state;
   }
 
-  async function runCommand(command) {
-    await send(command);
+  async function runCommand(command, options = {}) {
+    const result = await send(command, options);
+    if (result === false) {
+      throw new Error(`The in-game command was blocked: ${command}`);
+    }
+    return result;
+  }
+
+  async function runLayout(action, name) {
+    return runCommand(briefingLayoutCommand(action, name), { allowLoad: true });
   }
 
   return {
@@ -155,7 +174,7 @@ export function createLeoBriefingService({
       });
       await runCommand(`:m ${BRIEFING_START_MESSAGE}`);
       await runCommand(`:pt ${BRIEFING_PEACE_SECONDS}`);
-      await runCommand(briefingLayoutCommand('load', BRIEFING_WALLS_LAYOUT));
+      await runLayout('load', BRIEFING_WALLS_LAYOUT);
       state = {
         active: true,
         ownerId: user.id,
@@ -180,7 +199,7 @@ export function createLeoBriefingService({
       if (!current.active) throw new Error('No LEO briefing is running.');
       const next = Boolean(loadedRoads);
       if (current.roadBlocksLoaded === next) return { state: current, panel: briefingPanel(current) };
-      await runCommand(briefingLayoutCommand(next ? 'load' : 'unload', BRIEFING_ROADS_LAYOUT));
+      await runLayout(next ? 'load' : 'unload', BRIEFING_ROADS_LAYOUT);
       current.roadBlocksLoaded = next;
       await persist();
       return { state: current, panel: briefingPanel(current) };
@@ -194,10 +213,10 @@ export function createLeoBriefingService({
       const current = await ensure();
       if (!current.active) throw new Error('No LEO briefing is running.');
       try {
-        await runCommand(briefingLayoutCommand('unload', BRIEFING_WALLS_LAYOUT));
+        await runLayout('unload', BRIEFING_WALLS_LAYOUT);
       } catch (error) { onError(error); }
       try {
-        await runCommand(briefingLayoutCommand('unload', BRIEFING_ROADS_LAYOUT));
+        await runLayout('unload', BRIEFING_ROADS_LAYOUT);
       } catch (error) { onError(error); }
       await runCommand(`:m ${BRIEFING_END_MESSAGE}`);
       state = {
@@ -255,7 +274,7 @@ export function startLeoBriefing(client) {
   const key = client.config.erlcServerKey;
   const service = createLeoBriefingService({
     snapshot: () => fetchErlcServer(key),
-    send: (command) => executeErlcCommand(key, command),
+    send: (command, options) => executeErlcCommand(key, command, options),
     load: () => readJsonFile(path, emptyBriefingState()),
     save: (value) => writeJsonFile(path, value, { backup: true }),
     async dmUser(userId, payload) {
@@ -281,8 +300,9 @@ export function startLeoBriefing(client) {
 }
 
 export async function handleLeoBriefing(interaction) {
-  const id = String(interaction.customId || '');
+  const id = briefingInteractionCustomId(interaction);
   if (!id.startsWith(BRIEFING_PREFIX)) return false;
+  if (interaction.isChatInputCommand?.()) return false;
   const clicked = parseBriefingButton(id);
   if (!clicked) return false;
   const service = interaction.client.leoBriefing;

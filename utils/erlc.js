@@ -648,7 +648,8 @@ async function sendErlcCommand(serverKey, command, { shouldExecute, allowLoad = 
     if (!serverKey) throw new Error('ERLC_SERVER_KEY is not configured');
     const text = String(command || '').trim();
     if (!text.startsWith(':')) throw new Error('Invalid ER:LC command');
-    if (!allowLoad && /^:load\b/i.test(text)) {
+    // Only block player `:load Name`. Map-editor `:loadlayout` must still send.
+    if (!allowLoad && /^:load(?:\s|$)/i.test(text)) {
       logger.warn(`Blocked automatic ER:LC :load (${text.slice(0, 80)})`);
       return false;
     }
@@ -728,7 +729,7 @@ export async function runErlcRawCommand({ serverKey, command } = {}) {
   if (!/^:[A-Za-z]/.test(text)) throw new Error('Command must look like :h Hello or :kick Player');
 
   const response = await executeErlcCommand(serverKey, text, {
-    allowLoad: /^:load\b/i.test(text),
+    allowLoad: /^:load(?:layout)?(?:\s|$)/i.test(text),
     allowJail: /^:jail\b/i.test(text),
     allowKick: /^:kick\b/i.test(text),
   });

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-20-briefing-layout-quotes",
+      "title": "Fix briefing map layouts for walls and road blocks",
+      "summary": "/briefing now sends :loadlayout and :unloadlayout with quoted names so BRIEFING WALLS and BRIEFING ROAD BLOCKS actually load in-game, and the DM panel buttons still fire.",
+      "createdAt": "2026-09-20T17:40:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-20-priority-type-requester",
       "title": "List the requester on priorities and cap Priority Type",
       "summary": "The person who submits a priority is always added as a participant. The old Priority Details field is now Priority Type and is limited to 25 characters on the form and the Discord card.",
