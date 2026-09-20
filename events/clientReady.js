@@ -4,6 +4,7 @@ import { startGtaSpeeding } from '../utils/gtaSpeeding.js';
 import { startCommandAbuse } from '../utils/commandAbuse.js';
 import { startSheriffBalance } from '../utils/sheriffBalance.js';
 import { startPriorityRequest } from '../utils/priorityRequest.js';
+import { startLeoBriefing } from '../utils/leoBriefing.js';
 import { startVcChecks } from '../utils/vcChecks.js';
 import { logger } from '../utils/logger.js';
 import { ensureNoticeChannel } from '../utils/noticeChannel.js';
@@ -55,6 +56,7 @@ export default {
           logger.warn(`Could not warm the ER:LC player list: ${error?.message || error}`);
         }
       }
+      if (!client.leoBriefing && client.config.erlcServerKey) startLeoBriefing(client);
       if (!warmed && client.config.erlcServerKey) {
         logger.warn('Skipping ER:LC background loops until a snapshot succeeds. Prefix commands can still retry.');
         return;

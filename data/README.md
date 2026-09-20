@@ -10,6 +10,7 @@ This folder holds bot runtime files on the **bot host**.
 
 ## Host-only (gitignored — never delete when updating)
 
+- `leo-briefing.json` — active server-wide LEO briefing and which map layouts are loaded
 - `priority-request.json` — active/pending priority request, timer, recorded in-game deaths, and civilian kill warnings
 - `owner-config.json` — Discord sync settings
 - `department-salaries.json` — weekly department salary config and payout receipts

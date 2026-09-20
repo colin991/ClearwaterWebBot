@@ -1,5 +1,6 @@
 import { Events, MessageFlags } from 'discord.js';
 import { handlePriorityRequest } from '../utils/priorityRequest.js';
+import { handleLeoBriefing } from '../utils/leoBriefing.js';
 import { logger } from '../utils/logger.js';
 import { handleDiscordInternetInteraction } from '../utils/discordInternetPanel.js';
 import { handleDiscordInternetModerationInteraction } from '../utils/discordInternetModeration.js';
@@ -19,6 +20,18 @@ export default {
   name: Events.InteractionCreate,
   async execute(interaction, client) {
     if (shouldIgnoreGuildCommands(interaction.guildId)) return;
+    try {
+      if (await handleLeoBriefing(interaction)) return;
+    } catch (error) {
+      logger.error('LEO briefing interaction failed', error);
+      const reply = {
+        content: String(error?.message || 'That briefing action failed.').slice(0, 1800),
+        flags: MessageFlags.Ephemeral,
+      };
+      if (interaction.deferred || interaction.replied) await interaction.followUp(reply).catch(() => {});
+      else await interaction.reply(reply).catch(() => {});
+      return;
+    }
     try {
       if (await handlePriorityRequest(interaction)) return;
     } catch (error) {

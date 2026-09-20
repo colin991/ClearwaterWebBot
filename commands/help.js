@@ -12,6 +12,7 @@ export default {
       description: [
         '`/ping` - check the bot response time and latency',
         '`/server` - show Clearwater server information',
+        '`/briefing` - Discord Administrator only: start a server-wide LEO briefing',
         '`/request-priority` - request a 30 minute in-game priority; anyone can approve, deny, or add time',
         '`/help` - show this command list',
         '`/vc whitelist` - Discord Administrator only: stop VC checks from jailing or PMing a player',

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-20-leo-briefing",
+      "title": "Add /briefing for a server-wide LEO briefing",
+      "summary": "Administrators can run /briefing to drag Police and Sheriff into their voice channel, announce a briefing, start a 20 minute peace timer, load BRIEFING WALLS, and DM a panel to load BRIEFING ROAD BLOCKS or end the briefing.",
+      "createdAt": "2026-09-20T17:11:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-19-mod-call-two-overdue",
       "title": "Only scare-ping two overdue mod calls",
       "summary": "The moderating ping now waits until at least two unpicked mod calls have both sat more than 2 minutes. When the queue is cleared, the same channel gets Thank you, for picking up the mod calls.",
