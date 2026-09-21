@@ -10,6 +10,7 @@ This folder holds bot runtime files on the **bot host**.
 
 ## Host-only (gitignored — never delete when updating)
 
+- `police-cars.json` — last Police car whitelist PMs
 - `vehicle-presets.json` — last in-game PMs for emergency vehicles that are not on a server-saved preset
 - `leo-briefing.json` — active server-wide LEO briefing and which map layouts are loaded
 - `priority-request.json` — active/pending priority request, timer, recorded in-game deaths, and civilian kill warnings

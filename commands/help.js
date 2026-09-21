@@ -14,6 +14,7 @@ export default {
         '`/server` - show Clearwater server information',
         '`/briefing` - Discord Administrator only: start a server-wide LEO briefing',
         '`/request-priority` - request a 30 minute in-game priority; anyone can approve, deny, or add time',
+        '`/priority active` - see who currently has the in-game priority',
         '`/help` - show this command list',
         '`/vc whitelist` - Discord Administrator only: stop VC checks from jailing or PMing a player',
         '`/say` - Ownership only: speak text in a voice channel',

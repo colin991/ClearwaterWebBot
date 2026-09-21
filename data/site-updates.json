@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-priority-h-active-police-cars",
+      "title": "Priority hint, /priority active, and Police car whitelist",
+      "summary": "When a priority starts, the bot now sends the in-game hint \":h The priority timer is active, please refrain from triggering any priorities at this time.\" instead of a :m. Anyone can use /priority active to see who has the current priority. Police can only drive the Falcon Advance XET, 2015 Bullhorn Prancer, 2021 Chevlon Camion, or 2024 FPIU; other cars get an in-game PM and a Discord DM listing those cars, repeating every 3 minutes until they switch.",
+      "createdAt": "2026-09-21T19:16:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-priority-voice-beep",
       "title": "Change the priority voice beep",
       "summary": "When a priority starts, the bot plays the new beep in the announce voice channel before the spoken callout.",

@@ -607,16 +607,44 @@ function buildPriorityFormModal({ id, players, vehicles }) {
   return modal;
 }
 
+export const PRIORITY_START_HINT = ':h The priority timer is active, please refrain from triggering any priorities at this time.';
+
 export function priorityStartSpeech(request) {
   const username = clip(request?.requesterUsername, 40);
   const details = clip(request?.details, PRIORITY_TYPE_MAX);
   return `A new priority has now started, by ${username}, for ${details}. Do not start any major roleplays.`;
 }
 
-export function priorityStartMessageCommand(request) {
-  const username = clip(request?.requesterUsername, 40);
-  const details = clip(request?.details, PRIORITY_TYPE_MAX);
-  return `:m A new priority has now started by ${username} for ${details}. Do not start any major roleplays`;
+export function priorityStartMessageCommand(_request) {
+  return PRIORITY_START_HINT;
+}
+
+export function formatActivePriorityStatus(request, nowMs = Date.now()) {
+  if (!request || request.status !== 'active') {
+    return {
+      title: 'Priority',
+      description: 'There is no active priority right now.',
+    };
+  }
+  const remainingMs = Math.max(0, Number(request.endsAt || 0) - Number(nowMs || Date.now()));
+  const remainingMin = Math.max(0, Math.ceil(remainingMs / 60000));
+  const people = (request.participants || [])
+    .map((player) => String(player?.username || '').trim())
+    .filter(Boolean);
+  const names = people.length ? people.map((name) => `**${clip(name, 40)}**`).join(', ') : (request.participantsText || '—');
+  const vehicles = (request.vehicles || []).length
+    ? request.vehicles.map((name) => `**${clip(name, 80)}**`).join(', ')
+    : '—';
+  return {
+    title: 'Active priority',
+    description: [
+      `**Who:** ${names}`,
+      `**Requested by:** ${clip(request.requesterUsername, 40) || '—'}`,
+      `**Priority Type:** ${clip(request.details, PRIORITY_TYPE_MAX) || '—'}`,
+      `**Vehicles:** ${vehicles}`,
+      `**Time left:** **${remainingMin}m** (ends ${ts(request.endsAt)})`,
+    ].join('\n'),
+  };
 }
 
 export async function announcePriorityStart(client, request) {

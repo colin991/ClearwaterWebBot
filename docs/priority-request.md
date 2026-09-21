@@ -12,11 +12,13 @@ New requests post to channel `1514341436139770017` and ping role `15151078224324
 
 On approve:
 
-- The clicked request card updates immediately (Active). In-game `:prty` / `:m` and the voice line keep running in the background so the buttons do not sit on the ER:LC 5-second command queue.
+- The clicked request card updates immediately (Active). In-game `:prty` / `:h` and the voice line keep running in the background so the buttons do not sit on the ER:LC 5-second command queue.
 - The requester is DMed the started card, including **Request Added Time**.
 - The bot runs `:prty 1800` (30 minutes).
-- The bot runs `:m` telling the server a new priority started and not to start any major roleplays.
-- After that in-game callout, the bot joins voice channel `1514128904783139018`, plays the priority beep (`assets/priority-beep.ogg`), then speaks who started it, the priority type, and not to start any major roleplays.
+- The bot runs `:h The priority timer is active, please refrain from triggering any priorities at this time.`
+- After that in-game hint, the bot joins voice channel `1514128904783139018`, plays the priority beep (`assets/priority-beep.ogg`), then speaks who started it, the priority type, and not to start any major roleplays.
+
+Anyone can run **`/priority active`** to see who currently has the priority, the type, cars, and time left.
 
 **Void** (or a natural timer end, or **everyone listed on the request dying in-game**) runs `:prty 0` then `:pt 600` (10 minute peace timer). The original request card is rewritten immediately to **Priority Request — Ended** / **Voided** (Void/Started removed). All listed deaths end it immediately — there is no 3 minute wait. Void also DMs the requester that staff voided it.
 

@@ -234,17 +234,15 @@ function serviceFixture(request, extras = {}) {
   return { svc, commands, dms, staffEdits, stored, setTime: value => { time = value; } };
 }
 
-test('start speech and in-game :m use the requester and clipped priority type', () => {
+test('start speech and in-game :h use the requester and clipped priority type', () => {
   const request = { requesterUsername: 'HostUser', details: 'bank robbery downtown' };
   assert.equal(priorityStartSpeech(request), 'A new priority has now started, by HostUser, for bank robbery downtown. Do not start any major roleplays.');
   assert.equal(
     priorityStartMessageCommand(request),
-    ':m A new priority has now started by HostUser for bank robbery downtown. Do not start any major roleplays',
+    ':h The priority timer is active, please refrain from triggering any priorities at this time.',
   );
   const long = { requesterUsername: 'HostUser', details: 'abcdefghijklmnopqrstuvwxyz' };
   assert.equal(priorityStartSpeech(long), 'A new priority has now started, by HostUser, for abcdefghijklmnopqrstuvwxy. Do not start any major roleplays.');
-  assert.match(priorityStartMessageCommand(long), /abcdefghijklmnopqrstuvwxy/);
-  assert.doesNotMatch(priorityStartMessageCommand(long), /abcdefghijklmnopqrstuvwxyz/);
 });
 
 test('new pending requests ping the priority role', async () => {
@@ -290,7 +288,7 @@ test('approve starts a 30 minute in-game timer and DMs the requester', async () 
   });
   await f.svc.approve('p1', { id: 'anyone' });
   assert.equal(f.commands[0], `:prty ${PRIORITY_REQUEST_SECONDS}`);
-  assert.equal(f.commands[1], ':m A new priority has now started by HostUser for bank robbery downtown. Do not start any major roleplays');
+  assert.equal(f.commands[1], ':h The priority timer is active, please refrain from triggering any priorities at this time.');
   assert.equal(f.dms[0].id, 'u1');
   assert.match(f.dms[0].payload.components[0].components[2].content, /Priority Started/);
 });
@@ -313,7 +311,7 @@ test('voice talk runs after the in-game priority callout', async () => {
   }, {
     send: async (command) => {
       f.commands.push(command);
-      order.push(command.startsWith(':m') ? 'callout' : 'prty');
+      order.push(command.startsWith(':h') || command.startsWith(':m') ? 'callout' : 'prty');
     },
     announceStart: async () => { order.push('voice'); },
   });
