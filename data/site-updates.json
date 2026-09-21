@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-vehicle-server-preset",
+      "title": "PM emergency drivers who are not on a server-saved vehicle preset",
+      "summary": "Police, Sheriff, Fire, and DOT players who stay in a spawned car with a stock or custom paint instead of a named server livery get an in-game PM asking them to use a server saved preset.",
+      "createdAt": "2026-09-21T17:22:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-internet-v2-card-emojis",
       "title": "Use custom post buttons and a V2 reply card",
       "summary": "Internet posts send as a Components V2 card, not a classic embed. Photos sit on the right of the card. Like, repost, and reply use the custom emojis, and Send Post keeps the paper-plane emoji.",

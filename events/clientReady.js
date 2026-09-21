@@ -1,6 +1,7 @@
 import { Events } from 'discord.js';
 import { startModCallVoice } from '../utils/modCallVoice.js';
 import { startCommandAbuse } from '../utils/commandAbuse.js';
+import { startVehiclePresetCheck } from '../utils/vehiclePreset.js';
 import { startSheriffBalance } from '../utils/sheriffBalance.js';
 import { startPriorityRequest } from '../utils/priorityRequest.js';
 import { startLeoBriefing } from '../utils/leoBriefing.js';
@@ -64,6 +65,7 @@ export default {
       if (!client.stopVcChecks) client.stopVcChecks = startVcChecks(client, client.config);
       if (!client.stopSheriffBalance) client.stopSheriffBalance = startSheriffBalance(client);
       if (!client.stopCommandAbuse) client.stopCommandAbuse = startCommandAbuse(client);
+      if (!client.stopVehiclePresetCheck) client.stopVehiclePresetCheck = startVehiclePresetCheck(client);
       if (!client.stopModCallVoice) client.stopModCallVoice = startModCallVoice(client);
       if (!client.stopErlcZoneVoice) {
         client.stopErlcZoneVoice = startErlcZoneVoice(client, client.config);
