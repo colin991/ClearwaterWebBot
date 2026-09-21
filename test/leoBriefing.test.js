@@ -101,13 +101,26 @@ test('ending unloads both layouts and announces that roleplay can start', async 
   f.commands.length = 0;
   const ended = await f.svc.end();
   assert.deepEqual(f.commands, [
+    `:m ${BRIEFING_END_MESSAGE}`,
     ':unloadlayout BREIFING WALLS',
     ':unloadlayout BREIFING ROAD BLOCKS',
-    `:m ${BRIEFING_END_MESSAGE}`,
   ]);
   assert.equal(f.stored.active, false);
   assert.match(JSON.stringify(ended.panel), /Ended/);
   assert.match(JSON.stringify(briefingPanel(ended.state)), /disabled":true/);
+});
+
+test('a second End click does not send another :m', async () => {
+  const f = briefingFixture();
+  await f.svc.start({ user: { id: 'admin' }, voiceChannelId: 'vc1' });
+  f.commands.length = 0;
+  const first = await f.svc.end({ waitForInGame: false });
+  const second = await f.svc.end({ waitForInGame: false });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(f.commands.filter((command) => command.startsWith(`:m ${BRIEFING_END_MESSAGE}`)).length, 1);
+  assert.equal(first.alreadyEnded, undefined);
+  assert.equal(second.alreadyEnded, true);
+  assert.match(JSON.stringify(first.panel), /"disabled":true/);
 });
 
 test('a second briefing is blocked until the first ends', async () => {

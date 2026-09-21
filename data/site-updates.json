@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-briefing-end-once",
+      "title": "End briefing on the first click",
+      "summary": "Clicking End briefing now disables the button right away and sends the ended :m only once. Layout unloads keep running in the background so the panel does not sit on the in-game command queue.",
+      "createdAt": "2026-09-21T19:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-priority-h-active-police-cars",
       "title": "Priority hint, /priority active, and Police car whitelist",
       "summary": "When a priority starts, the bot now sends the in-game hint \":h The priority timer is active, please refrain from triggering any priorities at this time.\" instead of a :m. Anyone can use /priority active to see who has the current priority. Police can only drive the Falcon Advance XET, 2015 Bullhorn Prancer, 2021 Chevlon Camion, or 2024 FPIU; other cars get an in-game PM and a Discord DM listing those cars, repeating every 3 minutes until they switch.",

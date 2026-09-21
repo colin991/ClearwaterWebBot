@@ -129,6 +129,7 @@ export function createLeoBriefingService({
 } = {}) {
   let state = emptyBriefingState();
   let loaded = false;
+  let ending = false;
 
   async function persist() {
     await save(state);
@@ -209,16 +210,12 @@ export function createLeoBriefingService({
       return ensure();
     },
 
-    async end() {
+    async end({ waitForInGame = true } = {}) {
       const current = await ensure();
-      if (!current.active) throw new Error('No LEO briefing is running.');
-      try {
-        await runLayout('unload', BRIEFING_WALLS_LAYOUT);
-      } catch (error) { onError(error); }
-      try {
-        await runLayout('unload', BRIEFING_ROADS_LAYOUT);
-      } catch (error) { onError(error); }
-      await runCommand(`:m ${BRIEFING_END_MESSAGE}`);
+      if (!current.active || ending) {
+        return { state: current, panel: briefingPanel({ ...current, active: false }), alreadyEnded: true };
+      }
+      ending = true;
       state = {
         ...current,
         active: false,
@@ -227,7 +224,21 @@ export function createLeoBriefingService({
         endedAt: now(),
       };
       await persist();
-      return { state, panel: briefingPanel(state) };
+      const panel = briefingPanel(state);
+      const game = (async () => {
+        try {
+          await runCommand(`:m ${BRIEFING_END_MESSAGE}`);
+        } catch (error) { onError(error); }
+        try {
+          await runLayout('unload', BRIEFING_WALLS_LAYOUT);
+        } catch (error) { onError(error); }
+        try {
+          await runLayout('unload', BRIEFING_ROADS_LAYOUT);
+        } catch (error) { onError(error); }
+      })();
+      if (waitForInGame) await game;
+      else void game.catch(onError);
+      return { state, panel };
     },
   };
 }
@@ -322,7 +333,7 @@ export async function handleLeoBriefing(interaction) {
     let result;
     if (clicked.action === 'roads-on') result = await service.setRoadBlocks(true);
     else if (clicked.action === 'roads-off') result = await service.setRoadBlocks(false);
-    else result = await service.end();
+    else result = await service.end({ waitForInGame: false });
     await interaction.editReply(result.panel);
   } catch (error) {
     logger.error('LEO briefing panel failed', error);

@@ -10,6 +10,6 @@ On run the bot:
 4. Loads the **BREIFING WALLS** map layout (`:loadlayout BREIFING WALLS`)
 5. DMs you a panel to **load/unload BREIFING ROAD BLOCKS** and **End briefing**
 
-**End briefing** unloads **BREIFING WALLS** and **BREIFING ROAD BLOCKS**, then sends `:m The server wide LEO briefing has now ended normal roleplay can start`.
+**End briefing** immediately disables the button so it cannot be clicked again. It then sends `:m The server wide LEO briefing has now ended normal roleplay can start` once and unloads **BREIFING WALLS** and **BREIFING ROAD BLOCKS** in the background.
 
 Those layout names must exist on the ER:LC private server map-save list, matching the in-game titles. The in-game commands are `:loadlayout [Name]` and `:unloadlayout [Name]`. Runtime state is `data/leo-briefing.json` (Git-ignored). Restart the bot after deploying so `/briefing` registers.
