@@ -16,8 +16,10 @@ import {
   TextInputStyle,
 } from 'discord.js';
 import {
+  createInternetAccount,
   createInternetPost,
   deleteInternetPost,
+  hasInternetAccount,
   interactInternetPost,
   internetFeedDiscordRef,
   internetPreferences,
@@ -26,14 +28,18 @@ import {
   setInternetPostDiscordFeedMessage,
   updateInternetPreference,
   updateInternetProfile,
+  updateInternetSocial,
 } from './internetStore.js';
 import {
   createInternetFeedController,
   fetchInternetChannel,
+  INTERNET_POST_BOOKMARK_PREFIX,
   INTERNET_POST_COMMENT_PREFIX,
   INTERNET_POST_DELETE_PREFIX,
   INTERNET_POST_LIKE_PREFIX,
+  INTERNET_POST_MORE_PREFIX,
   INTERNET_POST_PROFILE_PREFIX,
+  INTERNET_POST_REPOST_PREFIX,
   isInternetForumChannel,
   requiredInternetForumTags,
 } from './discordInternetFeed.js';
@@ -42,6 +48,8 @@ import { internetActor, mutateDiscordInternetStore } from './discordInternetStor
 import { logger } from './logger.js';
 import { v2Container, v2Message } from './v2Message.js';
 
+export const INTERNET_PANEL_ACCOUNT_CUSTOM_ID = 'cw-internet-create-account';
+export const INTERNET_PANEL_PROFILE_CUSTOM_ID = 'cw-internet-my-profile';
 export const INTERNET_PANEL_POST_CUSTOM_ID = 'p_338115604705710082';
 export const INTERNET_PANEL_SETTINGS_CUSTOM_ID = 'p_338115612729413633';
 export const INTERNET_PANEL_HELP_CUSTOM_ID = 'p_338117502649241606';
@@ -49,6 +57,7 @@ export const INTERNET_PANEL_HELP_CUSTOM_ID = 'p_338117502649241606';
 const INTERNET_PANEL_NAME = 'Internet Panel';
 const POST_MODAL_ID = 'cw-internet-post-modal';
 const COMMENT_MODAL_PREFIX = 'cw-internet-comment-modal:';
+const ACCOUNT_MODAL_ID = 'cw-internet-account-modal';
 const SETTINGS_EDIT_CUSTOM_ID = 'cw-internet-settings-edit';
 const SETTINGS_DMS_CUSTOM_ID = 'cw-internet-settings-dms';
 const SETTINGS_MODAL_ID = 'cw-internet-settings-modal';
@@ -76,20 +85,34 @@ export function buildInternetPanelPayload({ includeBanners = true } = {}) {
       new TextDisplayBuilder().setContent([
         '# <:globeshield:1533214164955435240> Clearwater Internet',
         '',
-        '> Welcome to **Clearwater Internet**! Here you can manage your account, create and post messages across the internet, and access helpful resources.',
+        '> Welcome to **Clearwater Internet**! Create an account, add a profile, then send Chirper posts across the internet.',
         '',
-        '> **Send a Post** — Create and publish a message on Clearwater Internet.',
-        '> **Settings** — Update and manage your Clearwater Internet account & update your settings.',
-        '> **Need Help?** — Click the **Help** button below if you need assistance learning how to use Clearwater Internet.',
+        '> **Create Account** — Make your Internet username and profile.',
+        '> **Profile** — View or update your display name, handle, and bio.',
+        '> **Send a Post** — Publish a Chirper-style post on Clearwater Internet.',
+        '> **Settings** — Manage extra profile details and Discord notifications.',
+        '> **Need Help?** — Click **Help** if you need assistance.',
       ].join('\n')),
     )
     .addActionRowComponents(
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
+          .setCustomId(INTERNET_PANEL_ACCOUNT_CUSTOM_ID)
+          .setLabel('Create Account')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(INTERNET_PANEL_PROFILE_CUSTOM_ID)
+          .setLabel('Profile')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
           .setCustomId(INTERNET_PANEL_POST_CUSTOM_ID)
           .setLabel('Send Post')
           .setEmoji({ id: '1514354958592643177', name: 'd_plane' })
           .setStyle(ButtonStyle.Secondary),
+      ),
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(INTERNET_PANEL_SETTINGS_CUSTOM_ID)
           .setLabel('Settings')
@@ -145,7 +168,13 @@ export async function ensureInternetPanel(client) {
       if (thread.locked) await thread.setLocked(false, 'Keep the Internet Panel available').catch(() => {});
       const starter = await thread.fetchStarterMessage().catch(() => null);
       if (starter) {
-        logger.info(`Internet Panel already exists in forum channel ${channelId}.`);
+        try {
+          await starter.edit(payload);
+        } catch (error) {
+          logger.warn(`Internet Panel could not keep banners while updating (${error?.message || error}).`);
+          await starter.edit(buildInternetPanelPayload({ includeBanners: false })).catch(() => {});
+        }
+        logger.info(`Internet Panel updated in forum channel ${channelId}.`);
         return thread.id;
       }
     }
@@ -171,7 +200,13 @@ export async function ensureInternetPanel(client) {
   const messages = await channel.messages.fetch({ limit: 100 });
   const existing = messages.find((message) => message.author?.id === client.user.id && messageHasPanel(message));
   if (existing) {
-    logger.info(`Internet Panel already exists in text channel ${channelId}.`);
+    try {
+      await existing.edit(payload);
+    } catch (error) {
+      logger.warn(`Internet Panel could not keep banners while updating (${error?.message || error}).`);
+      await existing.edit(buildInternetPanelPayload({ includeBanners: false })).catch(() => {});
+    }
+    logger.info(`Internet Panel updated in text channel ${channelId}.`);
     return existing.id;
   }
   let message;
@@ -183,6 +218,56 @@ export async function ensureInternetPanel(client) {
   }
   logger.info(`Internet Panel created in text channel ${channelId}.`);
   return message.id;
+}
+
+function optionalValue(input, value, minLength = 1) {
+  const text = String(value || '');
+  if (text.length >= minLength) input.setValue(text);
+  return input;
+}
+
+function buildAccountModal(profile = {}) {
+  return new ModalBuilder()
+    .setCustomId(ACCOUNT_MODAL_ID)
+    .setTitle('Create Internet Account')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        optionalValue(
+          new TextInputBuilder()
+            .setCustomId('displayName')
+            .setLabel('Display name')
+            .setStyle(TextInputStyle.Short)
+            .setMaxLength(80)
+            .setRequired(true),
+          profile.displayName,
+        ),
+      ),
+      new ActionRowBuilder().addComponents(
+        optionalValue(
+          new TextInputBuilder()
+            .setCustomId('username')
+            .setLabel('Username (no @)')
+            .setPlaceholder('Iceberg2310')
+            .setStyle(TextInputStyle.Short)
+            .setMinLength(3)
+            .setMaxLength(20)
+            .setRequired(true),
+          String(profile.username || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 20),
+          3,
+        ),
+      ),
+      new ActionRowBuilder().addComponents(
+        optionalValue(
+          new TextInputBuilder()
+            .setCustomId('bio')
+            .setLabel('Bio')
+            .setStyle(TextInputStyle.Paragraph)
+            .setMaxLength(300)
+            .setRequired(false),
+          profile.bio,
+        ),
+      ),
+    );
 }
 
 function buildPostModal() {
@@ -231,36 +316,99 @@ function buildCommentModal(postId) {
 function buildSettingsModal(profile) {
   return new ModalBuilder()
     .setCustomId(SETTINGS_MODAL_ID)
-    .setTitle('Internet Profile Settings')
+    .setTitle('Internet Profile')
     .addComponents(
       new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('bio')
-          .setLabel('Bio')
-          .setStyle(TextInputStyle.Paragraph)
-          .setMaxLength(300)
-          .setRequired(false)
-          .setValue(String(profile?.bio || '').slice(0, 300)),
+        optionalValue(
+          new TextInputBuilder()
+            .setCustomId('displayName')
+            .setLabel('Display name')
+            .setStyle(TextInputStyle.Short)
+            .setMaxLength(80)
+            .setRequired(true),
+          profile?.displayName,
+        ),
       ),
       new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('pronouns')
-          .setLabel('Pronouns')
-          .setStyle(TextInputStyle.Short)
-          .setMaxLength(40)
-          .setRequired(false)
-          .setValue(String(profile?.pronouns || '').slice(0, 40)),
+        optionalValue(
+          new TextInputBuilder()
+            .setCustomId('username')
+            .setLabel('Username (no @)')
+            .setStyle(TextInputStyle.Short)
+            .setMinLength(3)
+            .setMaxLength(20)
+            .setRequired(true),
+          String(profile?.username || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 20),
+          3,
+        ),
       ),
       new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('location')
-          .setLabel('Location')
-          .setStyle(TextInputStyle.Short)
-          .setMaxLength(60)
-          .setRequired(false)
-          .setValue(String(profile?.location || '').slice(0, 60)),
+        optionalValue(
+          new TextInputBuilder()
+            .setCustomId('bio')
+            .setLabel('Bio')
+            .setStyle(TextInputStyle.Paragraph)
+            .setMaxLength(300)
+            .setRequired(false),
+          profile?.bio,
+        ),
+      ),
+      new ActionRowBuilder().addComponents(
+        optionalValue(
+          new TextInputBuilder()
+            .setCustomId('pronouns')
+            .setLabel('Pronouns')
+            .setStyle(TextInputStyle.Short)
+            .setMaxLength(40)
+            .setRequired(false),
+          profile?.pronouns,
+        ),
+      ),
+      new ActionRowBuilder().addComponents(
+        optionalValue(
+          new TextInputBuilder()
+            .setCustomId('location')
+            .setLabel('Location')
+            .setStyle(TextInputStyle.Short)
+            .setMaxLength(60)
+            .setRequired(false),
+          profile?.location,
+        ),
       ),
     );
+}
+
+async function showCreateAccountModal(interaction) {
+  const actor = internetActor(interaction);
+  const store = await readInternetStore();
+  if (store.users?.[actor.id]?.accountCreated === true) {
+    throw new Error('You already have a Clearwater Internet account. Use Profile to update it.');
+  }
+  await interaction.showModal(buildAccountModal({
+    displayName: actor.displayName,
+    username: String(actor.username || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 20),
+    bio: store.users?.[actor.id]?.bio || '',
+  }));
+}
+
+async function saveAccount(interaction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const profile = await mutateDiscordInternetStore((store) => createInternetAccount(store, {
+    actor: internetActor(interaction),
+    displayName: interaction.fields.getTextInputValue('displayName'),
+    username: interaction.fields.getTextInputValue('username'),
+    bio: interaction.fields.getTextInputValue('bio'),
+  }));
+  await interaction.editReply({
+    content: `Your Clearwater Internet account is ready. You post as **${profile.displayName}** (@${profile.username}).`,
+  });
+}
+
+async function requireInternetAccount(interaction) {
+  const actor = internetActor(interaction);
+  const store = await readInternetStore();
+  if (hasInternetAccount(store, actor.id)) return true;
+  throw new Error('Create a Clearwater Internet account from the panel first, then send a post.');
 }
 
 async function showSettings(interaction) {
@@ -296,15 +444,31 @@ async function showProfile(interaction, userId) {
   const user = store.users?.[userId];
   if (!user) throw new Error('That Internet profile could not be found.');
   const postCount = store.posts.filter((post) => post.authorId === userId && !post.parentId).length;
+  const followers = Object.values(store.users).filter((member) => Array.isArray(member.following) && member.following.includes(userId)).length;
   const text = [
     `## ${user.displayName || user.username || 'Internet Profile'}`,
     `**Username:** @${user.username || 'user'}`,
+    `**Followers:** ${followers}`,
     user.bio ? `**Bio:** ${user.bio}` : '',
     user.pronouns ? `**Pronouns:** ${user.pronouns}` : '',
     user.location ? `**Location:** ${user.location}` : '',
     `**Posts:** ${postCount}`,
   ].filter(Boolean).join('\n');
-  await interaction.reply(v2Message(text, { ephemeral: true }));
+  const isSelf = interaction.user?.id === userId;
+  if (!isSelf) {
+    await interaction.reply(v2Message(text, { ephemeral: true }));
+    return;
+  }
+  await interaction.reply(v2Container(text, (container) => {
+    container.addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(SETTINGS_EDIT_CUSTOM_ID)
+          .setLabel('Edit Profile')
+          .setStyle(ButtonStyle.Primary),
+      ),
+    );
+  }, { ephemeral: true }));
 }
 
 async function publishPost(interaction, client) {
@@ -337,10 +501,17 @@ async function publishPost(interaction, client) {
     imageDataUrl = `data:${mime};base64,${bytes.toString('base64')}`;
   }
   const result = await mutateDiscordInternetStore((store) => {
+    if (!hasInternetAccount(store, actor.id)) {
+      throw new Error('Create a Clearwater Internet account from the panel first, then send a post.');
+    }
+    const profile = internetProfile(store, actor);
+    const poster = store.users[actor.id];
+    poster.avatarUrl = actor.avatarUrl || poster.avatarUrl;
+    if (!profile.username) poster.username = actor.username;
     try {
       return {
         held: false,
-        post: createInternetPost(store, actor, content, imageDataUrl ? { image: { dataUrl: imageDataUrl } } : {}),
+        post: createInternetPost(store, poster, content, imageDataUrl ? { image: { dataUrl: imageDataUrl } } : {}),
       };
     } catch (error) {
       const held = error?.held === true || error?.name === 'AutomodHoldError';
@@ -369,7 +540,7 @@ async function publishPost(interaction, client) {
   }
   if (messageId) {
     await mutateDiscordInternetStore((store) => setInternetPostDiscordFeedMessage(store, post.id, messageId));
-    await interaction.editReply({ content: 'Your post was published to Clearwater Internet.' });
+    await interaction.editReply({ content: 'Your Chirper post was published to Clearwater Internet.' });
   } else {
     await interaction.editReply({
       content: publishError
@@ -377,6 +548,63 @@ async function publishPost(interaction, client) {
         : 'Your post was saved, but Discord could not publish it in the Internet channel. Check the bot can post there, then try again.',
     });
   }
+}
+
+async function toggleRepost(interaction, client, postId) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const result = await mutateDiscordInternetStore((store) => interactInternetPost(store, {
+    actor: internetActor(interaction),
+    postId,
+    type: 'repost',
+  }));
+  const parentId = result.post?.repostOf || postId;
+  const store = await readInternetStore();
+  const parent = store.posts.find((post) => post.id === String(parentId)) || result.post;
+  await createInternetFeedController(client, client.config).update(parent);
+  await interaction.editReply({
+    content: result.reposted === false ? 'You removed your repost.' : 'You reposted this Chirper post.',
+  });
+}
+
+async function toggleBookmark(interaction, client, postId) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const result = await mutateDiscordInternetStore((store) => {
+    const actor = internetActor(interaction);
+    const user = store.users?.[actor.id];
+    const already = Array.isArray(user?.bookmarks) && user.bookmarks.includes(String(postId));
+    updateInternetSocial(store, {
+      actor,
+      type: 'bookmark',
+      postId,
+      enabled: !already,
+    });
+    return {
+      saved: !already,
+      post: store.posts.find((post) => post.id === String(postId)),
+    };
+  });
+  if (result.post) await createInternetFeedController(client, client.config).update(result.post);
+  await interaction.editReply({ content: result.saved ? 'Saved to your bookmarks.' : 'Removed from your bookmarks.' });
+}
+
+async function showPostMore(interaction, postId) {
+  const store = await readInternetStore();
+  const post = store.posts.find((item) => item.id === String(postId));
+  if (!post) throw new Error('That post no longer exists.');
+  await interaction.reply(v2Container('## Chirper', (container) => {
+    container.addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${INTERNET_POST_PROFILE_PREFIX}${post.authorId}`)
+          .setLabel('Profile')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(`${INTERNET_POST_DELETE_PREFIX}${post.id}`)
+          .setLabel('Delete')
+          .setStyle(ButtonStyle.Danger),
+      ),
+    );
+  }, { ephemeral: true }));
 }
 
 async function toggleLike(interaction, client, postId) {
@@ -462,6 +690,8 @@ async function saveSettings(interaction) {
   await mutateDiscordInternetStore((store) => updateInternetProfile(store, {
     actor: internetActor(interaction),
     profile: {
+      displayName: interaction.fields.getTextInputValue('displayName'),
+      username: interaction.fields.getTextInputValue('username'),
       bio: interaction.fields.getTextInputValue('bio'),
       pronouns: interaction.fields.getTextInputValue('pronouns'),
       location: interaction.fields.getTextInputValue('location'),
@@ -488,12 +718,11 @@ async function toggleDmSettings(interaction) {
 async function showHelp(interaction) {
   await interaction.reply(v2Message([
     '## Clearwater Internet Help',
-    '**Send Post** opens a form where you can write a post and optionally upload an image or GIF from your device.',
-    '**Like** adds or removes your reaction from a post.',
-    '**Comment** opens a form and publishes your reply inside the post.',
-    '**Profile** shows a member’s Internet profile.',
-    '**Delete** removes your entire post thread. Discord Administrators can also delete any post.',
-    '**Settings** lets you edit your profile and Discord notification preference.',
+    '**Create Account** makes your Chirper profile: display name, @username, and bio.',
+    '**Profile** shows your account and lets you edit it.',
+    '**Send Post** publishes a Chirper-style post with like, repost, reply, and bookmark buttons.',
+    '**Like / Repost / Reply / Bookmark** work on the post itself. **⋯** opens profile and delete.',
+    '**Settings** lets you edit extra profile fields and Discord notification preference.',
   ].join('\n\n'), { ephemeral: true }));
 }
 
@@ -509,13 +738,19 @@ export async function handleDiscordInternetInteraction(interaction, client) {
   if (!interaction.isButton() && !interaction.isModalSubmit()) return false;
   const id = String(interaction.customId || '');
   const handled = id === INTERNET_PANEL_POST_CUSTOM_ID
+    || id === INTERNET_PANEL_ACCOUNT_CUSTOM_ID
+    || id === INTERNET_PANEL_PROFILE_CUSTOM_ID
     || id === INTERNET_PANEL_SETTINGS_CUSTOM_ID
     || id === INTERNET_PANEL_HELP_CUSTOM_ID
     || id === SETTINGS_EDIT_CUSTOM_ID
     || id === SETTINGS_DMS_CUSTOM_ID
     || id === SETTINGS_MODAL_ID
+    || id === ACCOUNT_MODAL_ID
     || id.startsWith(INTERNET_POST_LIKE_PREFIX)
+    || id.startsWith(INTERNET_POST_REPOST_PREFIX)
     || id.startsWith(INTERNET_POST_COMMENT_PREFIX)
+    || id.startsWith(INTERNET_POST_BOOKMARK_PREFIX)
+    || id.startsWith(INTERNET_POST_MORE_PREFIX)
     || id.startsWith(INTERNET_POST_PROFILE_PREFIX)
     || id.startsWith(INTERNET_POST_DELETE_PREFIX)
     || id.startsWith(COMMENT_MODAL_PREFIX)
@@ -523,15 +758,24 @@ export async function handleDiscordInternetInteraction(interaction, client) {
   if (!handled) return false;
 
   try {
-    if (id === INTERNET_PANEL_POST_CUSTOM_ID) await interaction.showModal(buildPostModal());
+    if (id === INTERNET_PANEL_ACCOUNT_CUSTOM_ID) await showCreateAccountModal(interaction);
+    else if (id === INTERNET_PANEL_PROFILE_CUSTOM_ID) await showProfile(interaction, interaction.user.id);
+    else if (id === INTERNET_PANEL_POST_CUSTOM_ID) {
+      await requireInternetAccount(interaction);
+      await interaction.showModal(buildPostModal());
+    }
     else if (id === INTERNET_PANEL_SETTINGS_CUSTOM_ID) await showSettings(interaction);
     else if (id === INTERNET_PANEL_HELP_CUSTOM_ID) await showHelp(interaction);
     else if (id === SETTINGS_EDIT_CUSTOM_ID) await showEditSettingsModal(interaction);
     else if (id === SETTINGS_DMS_CUSTOM_ID) await toggleDmSettings(interaction);
     else if (id === SETTINGS_MODAL_ID) await saveSettings(interaction);
+    else if (id === ACCOUNT_MODAL_ID) await saveAccount(interaction);
     else if (id === POST_MODAL_ID) await publishPost(interaction, client);
     else if (id.startsWith(INTERNET_POST_LIKE_PREFIX)) await toggleLike(interaction, client, id.slice(INTERNET_POST_LIKE_PREFIX.length));
+    else if (id.startsWith(INTERNET_POST_REPOST_PREFIX)) await toggleRepost(interaction, client, id.slice(INTERNET_POST_REPOST_PREFIX.length));
     else if (id.startsWith(INTERNET_POST_COMMENT_PREFIX)) await interaction.showModal(buildCommentModal(id.slice(INTERNET_POST_COMMENT_PREFIX.length)));
+    else if (id.startsWith(INTERNET_POST_BOOKMARK_PREFIX)) await toggleBookmark(interaction, client, id.slice(INTERNET_POST_BOOKMARK_PREFIX.length));
+    else if (id.startsWith(INTERNET_POST_MORE_PREFIX)) await showPostMore(interaction, id.slice(INTERNET_POST_MORE_PREFIX.length));
     else if (id.startsWith(COMMENT_MODAL_PREFIX)) await publishComment(interaction, client, id.slice(COMMENT_MODAL_PREFIX.length));
     else if (id.startsWith(INTERNET_POST_PROFILE_PREFIX)) await showProfile(interaction, id.slice(INTERNET_POST_PROFILE_PREFIX.length));
     else if (id.startsWith(INTERNET_POST_DELETE_PREFIX)) await removePost(interaction, client, id.slice(INTERNET_POST_DELETE_PREFIX.length));

@@ -5,17 +5,31 @@ import {
   requiredInternetForumTags,
 } from '../utils/discordInternetFeed.js';
 
-test('Internet feed payload uses unicode emojis and omits empty mention user lists', () => {
+test('Internet feed payload uses Chirper layout with like/repost/reply/bookmark', () => {
   const payload = buildInternetPostPayload({
     id: 'post-1',
     authorId: '123456789012345678',
-    username: 'Raven_21044',
-    content: 'Hello Internet',
-    likes: [],
-    createdAt: '2026-09-16T00:00:00.000Z',
+    displayName: 'Iceberg',
+    username: 'Iceberg2310',
+    content: 'Cxrsed is so tuff',
+    likes: ['1'],
+    avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png',
+    createdAt: '2026-09-20T21:14:00.000Z',
+  }, {
+    users: {
+      '999': { following: ['123456789012345678'] },
+    },
+    posts: [],
   });
   const json = JSON.stringify(payload);
+  assert.match(json, /Chirper/);
+  assert.match(json, /Iceberg/);
+  assert.match(json, /@Iceberg2310/);
+  assert.match(json, /1 follower/);
+  assert.match(json, /Cxrsed is so tuff/);
   assert.match(json, /❤️|❤/);
+  assert.match(json, /cw-internet-repost:/);
+  assert.match(json, /cw-internet-bookmark:/);
   assert.deepEqual(payload.allowedMentions, { parse: [] });
   assert.equal(Object.prototype.hasOwnProperty.call(payload.allowedMentions, 'users'), false);
 });

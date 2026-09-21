@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-internet-chirper-accounts",
+      "title": "Add Internet accounts and Chirper-style posts",
+      "summary": "The Internet Panel now has Create Account and Profile. Posts publish as Chirper cards with display name, @username, followers, and like/repost/reply/bookmark buttons.",
+      "createdAt": "2026-09-21T16:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-funds-card-layout",
       "title": "Fix -funds so balance, payouts, and sales are not smashed together",
       "summary": "-funds now shows the group balance, last 7 payouts, and last 7 sales in separate Discord sections instead of one mashed line.",

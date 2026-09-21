@@ -9,16 +9,20 @@ import {
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   MessageFlags,
+  SectionBuilder,
   TextDisplayBuilder,
+  ThumbnailBuilder,
 } from 'discord.js';
 import { readInternetStore } from './internetStore.js';
 import { logger } from './logger.js';
 
 const MAX_ATTACH_BYTES = 8 * 1024 * 1024;
-const INTERNET_EMOJI = '<:globeshield:1533214164955435240>';
 
 export const INTERNET_POST_LIKE_PREFIX = 'cw-internet-like:';
+export const INTERNET_POST_REPOST_PREFIX = 'cw-internet-repost:';
 export const INTERNET_POST_COMMENT_PREFIX = 'cw-internet-comment:';
+export const INTERNET_POST_BOOKMARK_PREFIX = 'cw-internet-bookmark:';
+export const INTERNET_POST_MORE_PREFIX = 'cw-internet-more:';
 export const INTERNET_POST_PROFILE_PREFIX = 'cw-internet-profile:';
 export const INTERNET_POST_DELETE_PREFIX = 'cw-internet-delete:';
 
@@ -49,6 +53,10 @@ function posterHandle(post) {
   return raw || 'user';
 }
 
+function posterName(post) {
+  return String(post?.displayName || post?.username || 'Internet user').replace(/[`]/g, '').trim().slice(0, 80) || 'Internet user';
+}
+
 function shouldAnnounceInternetPost(post) {
   if (!post?.id || post.parentId) return false;
   if (post.repostOf && !post.quoteId && !String(post.content || '').trim() && !post.imageUrl && !post.gifUrl && !post.videoUrl && !post.poll) {
@@ -63,23 +71,65 @@ function commentCount(store, postId) {
     : 0;
 }
 
+function followerCount(store, userId) {
+  const id = String(userId || '');
+  return Object.values(store?.users || {}).filter((member) => Array.isArray(member?.following) && member.following.includes(id)).length;
+}
+
+function repostCount(store, postId) {
+  const id = String(postId || '');
+  return Array.isArray(store?.posts)
+    ? store.posts.filter((post) => post.repostOf === id).length
+    : 0;
+}
+
+function bookmarkCount(store, postId) {
+  const id = String(postId || '');
+  return Object.values(store?.users || {}).filter((member) => Array.isArray(member?.bookmarks) && member.bookmarks.includes(id)).length;
+}
+
+export function formatChirperTimestamp(iso) {
+  const ms = new Date(iso || Date.now()).getTime();
+  if (!Number.isFinite(ms)) return '';
+  const formatted = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'America/New_York',
+    timeZoneName: 'short',
+  }).format(new Date(ms));
+  return formatted.replace(', ', ' · ');
+}
+
 function postTimestamp(post) {
   const seconds = Math.floor(new Date(post?.createdAt || Date.now()).getTime() / 1000);
   return Number.isFinite(seconds) ? `<t:${seconds}:R>` : 'just now';
 }
 
-function buildFeedText(post, store) {
-  const author = /^\d{16,22}$/.test(String(post?.authorId || ''))
-    ? `<@${post.authorId}>`
-    : `@${posterHandle(post)}`;
+export function buildChirperPostText(post, store) {
+  const followers = followerCount(store, post?.authorId);
   const body = String(post?.content || '').trim() || '_Shared a post._';
-  const likes = Array.isArray(post?.likes) ? post.likes.length : 0;
-  const comments = commentCount(store, post?.id);
+  const when = formatChirperTimestamp(post?.createdAt);
   return [
-    `## ${INTERNET_EMOJI} ${author}`,
+    `**${posterName(post)}**`,
+    `-# @${posterHandle(post)} · ${followers} follower${followers === 1 ? '' : 's'}`,
+    '',
     body,
-    `-# @${posterHandle(post)} • ${postTimestamp(post)} • ${likes} like${likes === 1 ? '' : 's'} • ${comments} comment${comments === 1 ? '' : 's'}`,
+    when ? `-# ${when}` : '',
+  ].filter((line) => line !== undefined).join('\n').slice(0, 4000);
+}
+
+function buildFeedText(post, store) {
+  return [
+    '🐦 **Chirper**',
+    buildChirperPostText(post, store),
   ].join('\n\n').slice(0, 4000);
+}
+
+function countLabel(count) {
+  return Number(count) > 0 ? String(count) : '\u200b';
 }
 
 function resolveFeedMessageId(post) {
@@ -107,25 +157,63 @@ function resolveMedia(post) {
   return { files, mediaUrl };
 }
 
-export function buildInternetPostPayload(post, store = null, { emojis = true, media = true } = {}) {
-  const { files, mediaUrl } = media ? resolveMedia(post) : { files: [], mediaUrl: '' };
+function chirperActionRow(post, store, { emojis = true } = {}) {
   const likes = Array.isArray(post?.likes) ? post.likes.length : 0;
   const comments = commentCount(store, post?.id);
+  const reposts = repostCount(store, post?.id);
+  const bookmarks = bookmarkCount(store, post?.id);
   const likeButton = new ButtonBuilder()
     .setCustomId(`${INTERNET_POST_LIKE_PREFIX}${post.id}`)
-    .setLabel(`Like${likes ? ` (${likes})` : ''}`)
+    .setLabel(countLabel(likes))
+    .setStyle(ButtonStyle.Secondary);
+  const repostButton = new ButtonBuilder()
+    .setCustomId(`${INTERNET_POST_REPOST_PREFIX}${post.id}`)
+    .setLabel(countLabel(reposts))
     .setStyle(ButtonStyle.Secondary);
   const commentButton = new ButtonBuilder()
     .setCustomId(`${INTERNET_POST_COMMENT_PREFIX}${post.id}`)
-    .setLabel(`Comment${comments ? ` (${comments})` : ''}`)
+    .setLabel(countLabel(comments))
+    .setStyle(ButtonStyle.Secondary);
+  const bookmarkButton = new ButtonBuilder()
+    .setCustomId(`${INTERNET_POST_BOOKMARK_PREFIX}${post.id}`)
+    .setLabel(countLabel(bookmarks))
+    .setStyle(ButtonStyle.Secondary);
+  const moreButton = new ButtonBuilder()
+    .setCustomId(`${INTERNET_POST_MORE_PREFIX}${post.id}`)
+    .setLabel('⋯')
     .setStyle(ButtonStyle.Secondary);
   if (emojis) {
     likeButton.setEmoji('❤️');
-    commentButton.setEmoji('💬');
+    repostButton.setEmoji('🔁');
+    commentButton.setEmoji('↩️');
+    bookmarkButton.setEmoji('🔖');
+  } else {
+    likeButton.setLabel(`Like${likes ? ` ${likes}` : ''}`);
+    repostButton.setLabel(`Repost${reposts ? ` ${reposts}` : ''}`);
+    commentButton.setLabel(`Reply${comments ? ` ${comments}` : ''}`);
+    bookmarkButton.setLabel(`Save${bookmarks ? ` ${bookmarks}` : ''}`);
+    moreButton.setLabel('More');
   }
+  return new ActionRowBuilder().addComponents(likeButton, repostButton, commentButton, bookmarkButton, moreButton);
+}
+
+export function buildInternetPostPayload(post, store = null, { emojis = true, media = true, thumbnail = true } = {}) {
+  const { files, mediaUrl } = media ? resolveMedia(post) : { files: [], mediaUrl: '' };
+  const avatarUrl = thumbnail && isHttpsUrl(post?.avatarUrl) ? post.avatarUrl : '';
   const container = new ContainerBuilder()
     .clearAccentColor()
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(buildFeedText(post, store)));
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('🐦 **Chirper**'));
+
+  const card = new TextDisplayBuilder().setContent(buildChirperPostText(post, store));
+  if (avatarUrl) {
+    container.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(card)
+        .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatarUrl).setDescription(posterName(post))),
+    );
+  } else {
+    container.addTextDisplayComponents(card);
+  }
 
   if (mediaUrl) {
     container.addMediaGalleryComponents(
@@ -133,20 +221,7 @@ export function buildInternetPostPayload(post, store = null, { emojis = true, me
     );
   }
 
-  container.addActionRowComponents(
-    new ActionRowBuilder().addComponents(
-      likeButton,
-      commentButton,
-      new ButtonBuilder()
-        .setCustomId(`${INTERNET_POST_PROFILE_PREFIX}${post.authorId}`)
-        .setLabel('Profile')
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`${INTERNET_POST_DELETE_PREFIX}${post.id}`)
-        .setLabel('Delete')
-        .setStyle(ButtonStyle.Danger),
-    ),
-  );
+  container.addActionRowComponents(chirperActionRow(post, store, { emojis }));
 
   const payload = {
     components: [container],
@@ -194,7 +269,8 @@ function payloadAttempts(post, store) {
   return [
     () => buildInternetPostPayload(post, store),
     () => buildInternetPostPayload(post, store, { emojis: false }),
-    () => buildInternetPostPayload(post, store, { emojis: false, media: false }),
+    () => buildInternetPostPayload(post, store, { emojis: false, thumbnail: false }),
+    () => buildInternetPostPayload(post, store, { emojis: false, thumbnail: false, media: false }),
     () => ({ content: buildFeedText(post, store).slice(0, 1900), allowedMentions: { parse: [] } }),
   ];
 }

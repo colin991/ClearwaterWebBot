@@ -876,9 +876,11 @@ export function upsertInternetUser(store, user) {
   const existing = store.users[id] || { verified: isBusiness, banned: false };
   const has = (key) => Object.prototype.hasOwnProperty.call(user || {}, key);
   if (!existing.createdAt) existing.createdAt = new Date().toISOString();
-  const nextUsername = has('username')
-    ? text(user?.username, 80) || existing.username || 'Discord user'
-    : existing.username || 'Discord user';
+  const incomingUsername = has('username') ? text(user?.username, 80) : '';
+  const lockHandle = existing.accountCreated === true && user?.forceProfile !== true;
+  const nextUsername = lockHandle
+    ? (existing.username || incomingUsername || 'Discord user')
+    : (incomingUsername || existing.username || 'Discord user');
   // Mutate the existing record in place. Callers often keep a local reference and
   // then set ban/mute/lock flags on it — replacing the object would drop those writes.
   existing.id = id;
@@ -888,10 +890,12 @@ export function upsertInternetUser(store, user) {
   // if profile display text drifts from Discord naming.
   existing.discordUsername = isBusiness
     ? (existing.discordUsername || nextUsername)
-    : (has('username')
-      ? text(user?.username, 80).replace(/^@/, '') || existing.discordUsername || nextUsername
-      : (existing.discordUsername || existing.username || nextUsername));
-  existing.displayName = has('displayName') ? text(user?.displayName, 80) || existing.displayName || 'Discord user' : existing.displayName || 'Discord user';
+    : (incomingUsername.replace(/^@/, '') || existing.discordUsername || nextUsername);
+  if (!lockHandle && has('displayName')) {
+    existing.displayName = text(user?.displayName, 80) || existing.displayName || 'Discord user';
+  } else {
+    existing.displayName = existing.displayName || text(user?.displayName, 80) || 'Discord user';
+  }
   existing.avatarUrl = has('avatarUrl') ? text(user?.avatarUrl, 300) || null : existing.avatarUrl || null;
   existing.staffRank = isBusiness ? null : (has('staffRank') ? text(user?.staffRank, 80) || null : existing.staffRank || null);
   if (!existing.lastSeenAt) existing.lastSeenAt = null;
@@ -1856,6 +1860,8 @@ function cleanProfileText(value, length, label) {
 
 function profilePayload(user) {
   return {
+    displayName: user.displayName || '',
+    username: user.username || '',
     bio: user.bio || '',
     pronouns: user.pronouns || '',
     location: user.location || '',
@@ -1863,9 +1869,56 @@ function profilePayload(user) {
     bannerUrl: user.bannerUrl || '',
     accentColor: user.accentColor || '',
     pinnedPostId: user.pinnedPostId || '',
+    accountCreated: user.accountCreated === true,
     deactivated: user.deactivated === true,
     presets: PROFILE_BANNER_PRESETS,
   };
+}
+
+export function normalizeInternetHandle(raw) {
+  const handle = String(raw || '').trim().replace(/^@/, '');
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(handle)) {
+    throw new Error('Username must be 3–20 letters, numbers, or underscores.');
+  }
+  return handle;
+}
+
+export function hasInternetAccount(store, actorId) {
+  const user = store?.users?.[String(actorId || '')];
+  if (!user) return false;
+  return user.accountCreated === true || Boolean(user.lastPostAt) || Boolean(user.walletStartedAt);
+}
+
+function internetHandleTaken(store, handle, exceptId) {
+  const key = String(handle || '').toLowerCase();
+  return Object.values(store?.users || {}).some((member) => {
+    if (!member || member.id === exceptId) return false;
+    return String(member.username || '').toLowerCase() === key;
+  });
+}
+
+export function createInternetAccount(store, { actor, username, displayName, bio = '' } = {}) {
+  const handle = normalizeInternetHandle(username);
+  const name = cleanProfileText(displayName, 80, 'display name');
+  if (!name) throw new Error('Add a display name for your profile.');
+  if (internetHandleTaken(store, handle, actor?.id)) {
+    throw new Error('That username is already taken.');
+  }
+  if (hasInternetAccount(store, actor?.id) && store.users[actor.id]?.accountCreated === true) {
+    throw new Error('You already have a Clearwater Internet account. Use Profile to update it.');
+  }
+  const user = upsertInternetUser(store, {
+    ...actor,
+    username: handle,
+    displayName: name,
+    forceProfile: true,
+  });
+  user.accountCreated = true;
+  user.bio = cleanProfileText(bio, 300, 'bio');
+  user.profileUpdatedAt = new Date().toISOString();
+  ensureInternetWallet(store, user);
+  addInternetLog(store, `${user.displayName} created a Clearwater Internet account (@${user.username}).`);
+  return profilePayload(user);
 }
 
 export function internetProfile(store, actor) {
@@ -1878,6 +1931,18 @@ export function updateInternetProfile(store, { actor, profile = {} }) {
   if (getActiveBan(user)) throw new Error('This account is banned from Clearwater Internet');
   if (flagActive(user, 'lockProfile', 'lockProfileUntil')) throw new Error('Staff locked profile edits on this account.');
   const has = (key) => Object.prototype.hasOwnProperty.call(profile, key);
+  if (has('displayName')) {
+    const name = cleanProfileText(profile.displayName, 80, 'display name');
+    if (!name) throw new Error('Add a display name for your profile.');
+    user.displayName = name;
+    user.accountCreated = true;
+  }
+  if (has('username')) {
+    const handle = normalizeInternetHandle(profile.username);
+    if (internetHandleTaken(store, handle, user.id)) throw new Error('That username is already taken.');
+    user.username = handle;
+    user.accountCreated = true;
+  }
   if (has('bio')) user.bio = cleanProfileText(profile.bio, 300, 'bio');
   if (has('pronouns')) user.pronouns = cleanProfileText(profile.pronouns, 40, 'pronouns');
   if (has('location')) user.location = cleanProfileText(profile.location, 60, 'location');
