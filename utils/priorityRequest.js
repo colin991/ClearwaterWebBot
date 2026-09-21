@@ -22,7 +22,7 @@ import { discordIdsByRobloxId, getIdentityCache } from './identityStore.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
 import { memberIsStaff } from './prefixHelpers.js';
-import { ensureGuildVoiceConnection, playMp3InVoiceChannel, synthesizeSpeechMp3 } from './vcSpeak.js';
+import { ensureGuildVoiceConnection, playMp3QueueInVoiceChannel, synthesizeSpeechMp3 } from './vcSpeak.js';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -661,26 +661,17 @@ export function formatActivePriorityStatus(request, nowMs = Date.now()) {
 export async function playPriorityStartAnnouncement(channel, request, {
   join = ensureGuildVoiceConnection,
   synthesize = synthesizeSpeechMp3,
-  play = playMp3InVoiceChannel,
+  playQueue = playMp3QueueInVoiceChannel,
   beepPath = PRIORITY_BEEP_PATH,
 } = {}) {
+  const speechPromise = synthesize(priorityStartSpeech(request), PRIORITY_VOICE, { rate: PRIORITY_VOICE_RATE });
   logger.info(`Priority announce: joining voice channel ${channel.id}`);
   await join(channel, channel.guild.voiceAdapterCreator);
-  const speechPromise = synthesize(priorityStartSpeech(request), PRIORITY_VOICE, { rate: PRIORITY_VOICE_RATE });
-  try {
-    await play(channel, channel.guild.voiceAdapterCreator, beepPath, {
-      leaveAfter: false,
-      speakDelayMs: 400,
-      volume: 0.7,
-    });
-  } catch (error) {
-    logger.warn('Priority announce beep failed; continuing with speech', error);
-  }
-  const speech = await speechPromise;
-  await play(channel, channel.guild.voiceAdapterCreator, speech, {
+  logger.info(`Priority announce: playing beep then speech in ${channel.id}`);
+  await playQueue(channel, channel.guild.voiceAdapterCreator, [beepPath, speechPromise], {
     leaveAfter: true,
-    speakDelayMs: 150,
-    volume: 1,
+    speakDelayMs: 400,
+    volumes: [0.7, 1],
   });
 }
 

@@ -1,4 +1,3 @@
-import { createReadStream } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -29,35 +28,40 @@ try {
 export const SAY_VOICE = 'en-US-GuyNeural';
 export const SAY_MAX_CHARS = 500;
 export const OPENAI_TTS_VOICES = Object.freeze(['alloy', 'ash', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer']);
+export const OPENAI_TTS_TIMEOUT_MS = 8_000;
+export const EDGE_TTS_TIMEOUT_MS = 12_000;
 const OPENAI_TTS_VOICE_SET = new Set(OPENAI_TTS_VOICES);
 
-function waitForPlayerIdle(player, timeoutMs = 60_000) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      cleanup();
-      resolve();
-    }, timeoutMs);
-    const onIdle = () => {
-      cleanup();
-      resolve();
-    };
-    const onError = (error) => {
-      cleanup();
-      reject(error);
-    };
-    const cleanup = () => {
-      clearTimeout(timer);
-      player.off(AudioPlayerStatus.Idle, onIdle);
-      player.off('error', onError);
-    };
-    player.once(AudioPlayerStatus.Idle, onIdle);
-    player.once('error', onError);
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+}
+
+export function toNodeAudioBuffer(value) {
+  if (!value) return null;
+  if (Buffer.isBuffer(value)) return value;
+  if (value instanceof Uint8Array) return Buffer.from(value);
+  if (ArrayBuffer.isView(value)) return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+  return null;
+}
+
+export async function promiseWithTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
   });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function bufferFromReadable(stream) {
   const chunks = [];
-  for await (const chunk of stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  for await (const chunk of stream) {
+    const converted = toNodeAudioBuffer(chunk) || Buffer.from(chunk);
+    chunks.push(converted);
+  }
   return Buffer.concat(chunks);
 }
 
@@ -90,7 +94,7 @@ async function synthesizeOpenAiMp3(text, voice, speed) {
       speed: Math.min(4, Math.max(0.25, Number(speed) || 1)),
       response_format: 'mp3',
     }),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(OPENAI_TTS_TIMEOUT_MS),
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
@@ -101,7 +105,7 @@ async function synthesizeOpenAiMp3(text, voice, speed) {
   return buffer;
 }
 
-async function synthesizeEdgeMp3(text, voice, prosody) {
+async function synthesizeEdgeMp3(text, voice, prosody = {}) {
   const tts = new MsEdgeTTS();
   await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
   const { audioStream } = tts.toStream(escapeSsml(String(text || '').trim()), {
@@ -109,8 +113,8 @@ async function synthesizeEdgeMp3(text, voice, prosody) {
     pitch: prosody.pitch ?? '+0Hz',
     volume: prosody.volume ?? 100,
   });
-  const buffer = await bufferFromReadable(audioStream);
-  if (!buffer.length) throw new Error('TTS returned empty audio.');
+  const buffer = toNodeAudioBuffer(await bufferFromReadable(audioStream));
+  if (!buffer?.length) throw new Error('TTS returned empty audio.');
   return buffer;
 }
 
@@ -118,14 +122,23 @@ async function synthesizeEdgeMp3(text, voice, prosody) {
 export async function synthesizeSpeechMp3(text, voice = SAY_VOICE, prosody = {}) {
   const chosen = String(voice || SAY_VOICE).trim() || SAY_VOICE;
   if (isOpenAiVoice(chosen)) {
+    const edgePromise = promiseWithTimeout(
+      synthesizeEdgeMp3(text, 'en-US-DavisNeural', { rate: 1, pitch: '+0Hz', volume: 100 }),
+      EDGE_TTS_TIMEOUT_MS,
+      'Edge TTS',
+    );
     try {
-      return await synthesizeOpenAiMp3(text, chosen, prosody.rate ?? 1);
+      return await promiseWithTimeout(
+        synthesizeOpenAiMp3(text, chosen, prosody.rate ?? 1),
+        OPENAI_TTS_TIMEOUT_MS,
+        'OpenAI TTS',
+      );
     } catch (error) {
       logger.warn(`OpenAI voice ${chosen} failed; using a deep Edge voice instead`, error);
-      return synthesizeEdgeMp3(text, 'en-US-DavisNeural', prosody);
+      return edgePromise;
     }
   }
-  return synthesizeEdgeMp3(text, chosen, prosody);
+  return promiseWithTimeout(synthesizeEdgeMp3(text, chosen, prosody), EDGE_TTS_TIMEOUT_MS, 'Edge TTS');
 }
 
 /**
@@ -166,48 +179,67 @@ export async function ensureGuildVoiceConnection(voiceChannel, adapterCreator) {
   return connection;
 }
 
+async function createMp3Resource(mp3PathOrBuffer, directory) {
+  const buffer = toNodeAudioBuffer(mp3PathOrBuffer);
+  if (buffer) {
+    const filePath = join(directory, `speech-${Date.now()}-${Math.random().toString(16).slice(2)}.mp3`);
+    await writeFile(filePath, buffer);
+    return createAudioResource(filePath, { inlineVolume: true });
+  }
+  const inputPath = String(mp3PathOrBuffer);
+  const oggOpus = /\.ogg$/i.test(inputPath);
+  return createAudioResource(inputPath, {
+    inlineVolume: true,
+    inputType: oggOpus ? StreamType.OggOpus : undefined,
+  });
+}
+
+async function playClipOnPlayer(player, audio, { volume, idleTimeoutMs, directory }) {
+  const resource = await createMp3Resource(audio, directory);
+  resource.volume?.setVolume(Math.max(0, Math.min(2, Number(volume) || 1)));
+  player.play(resource);
+  await entersState(player, AudioPlayerStatus.Playing, 8_000);
+  try {
+    await entersState(player, AudioPlayerStatus.Idle, idleTimeoutMs);
+  } catch (error) {
+    logger.warn('Voice clip did not go idle; stopping so the next clip can play', error);
+    player.stop(true);
+    await entersState(player, AudioPlayerStatus.Idle, 2_000).catch(() => {});
+  }
+}
+
 /**
- * Join (or reuse) a voice channel and play an MP3 file/buffer for everyone.
- * @param {{ leaveAfter?: boolean }} options
+ * Join a voice channel and play one or more MP3 files/buffers in order on the same player.
  */
-export async function playMp3InVoiceChannel(voiceChannel, adapterCreator, mp3PathOrBuffer, {
+export async function playMp3QueueInVoiceChannel(voiceChannel, adapterCreator, clips, {
   leaveAfter = true,
-  /** Extra wait after joining so Discord voice is audible before playback. */
   speakDelayMs = 500,
   volume = 1,
+  volumes = null,
+  idleTimeoutMs = 20_000,
 } = {}) {
+  const list = Array.isArray(clips) ? clips : [clips];
   const connection = await ensureGuildVoiceConnection(voiceChannel, adapterCreator);
-
-  const delay = Math.max(0, Number(speakDelayMs) || 0);
-  if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+  if (speakDelayMs) await delay(speakDelayMs);
 
   const player = createAudioPlayer({
-    behaviors: { noSubscriber: NoSubscriberBehavior.Pause },
+    behaviors: { noSubscriber: NoSubscriberBehavior.Play },
   });
+  const subscription = connection.subscribe(player);
+  if (!subscription) {
+    throw new Error('Could not subscribe the audio player to the voice connection.');
+  }
+
   const directory = await mkdtemp(join(tmpdir(), 'cw-vc-say-'));
-  const filePath = join(directory, 'speech.mp3');
-
   try {
-    if (Buffer.isBuffer(mp3PathOrBuffer)) {
-      await writeFile(filePath, mp3PathOrBuffer);
+    for (let index = 0; index < list.length; index += 1) {
+      const audio = await list[index];
+      if (audio == null) throw new Error('Voice clip was empty.');
+      const clipVolume = Array.isArray(volumes) ? (volumes[index] ?? volume) : volume;
+      const timeout = toNodeAudioBuffer(audio) ? Math.max(idleTimeoutMs, 45_000) : Math.min(idleTimeoutMs, 8_000);
+      await playClipOnPlayer(player, audio, { volume: clipVolume, idleTimeoutMs: timeout, directory });
+      if (index < list.length - 1) await delay(120);
     }
-
-    const subscription = connection.subscribe(player);
-    if (!subscription) {
-      throw new Error('Could not subscribe the audio player to the voice connection.');
-    }
-
-    const inputPath = Buffer.isBuffer(mp3PathOrBuffer) ? filePath : mp3PathOrBuffer;
-    const oggOpus = !Buffer.isBuffer(mp3PathOrBuffer) && /\.ogg$/i.test(String(mp3PathOrBuffer));
-    const resource = createAudioResource(createReadStream(inputPath), {
-      inlineVolume: true,
-      inputType: oggOpus ? StreamType.OggOpus : undefined,
-    });
-    resource.volume?.setVolume(Math.max(0, Math.min(2, Number(volume) || 1)));
-
-    player.play(resource);
-    await entersState(player, AudioPlayerStatus.Playing, 8_000);
-    await waitForPlayerIdle(player, 90_000);
   } catch (error) {
     player.stop(true);
     if (leaveAfter) connection.destroy();
@@ -216,8 +248,17 @@ export async function playMp3InVoiceChannel(voiceChannel, adapterCreator, mp3Pat
     await rm(directory, { recursive: true, force: true }).catch(() => {});
   }
 
+  player.stop(true);
   if (leaveAfter) connection.destroy();
   return connection;
+}
+
+/**
+ * Join (or reuse) a voice channel and play an MP3 file/buffer for everyone.
+ * @param {{ leaveAfter?: boolean }} options
+ */
+export async function playMp3InVoiceChannel(voiceChannel, adapterCreator, mp3PathOrBuffer, options = {}) {
+  return playMp3QueueInVoiceChannel(voiceChannel, adapterCreator, [mp3PathOrBuffer], options);
 }
 
 export function resolveSayVoiceChannel(source, explicitChannel = null) {

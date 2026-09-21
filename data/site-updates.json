@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-priority-voice-speech-after-beep",
+      "title": "Speak after the priority beep",
+      "summary": "After the LEO channel beep, the bot now plays the spoken priority line on the same voice connection. TTS starts immediately, OpenAI/Edge calls time out instead of hanging, and the player is stopped if the beep clip never goes idle so speech can still play.",
+      "createdAt": "2026-09-21T19:52:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-priority-voice-join-fix",
       "title": "Join the LEO channel as soon as a priority starts",
       "summary": "When a priority is approved, the bot now joins voice channel 1514128904783139018 right away and plays the beep plus spoken callout even if OpenAI TTS or the in-game command queue is slow.",

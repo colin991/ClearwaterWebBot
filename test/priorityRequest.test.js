@@ -358,14 +358,17 @@ test('priority voice joins the LEO channel before waiting on TTS', async () => {
       order.push('tts-done');
       return Buffer.from('mp3');
     },
-    play: async (_ch, _adapter, audio) => {
-      order.push(Buffer.isBuffer(audio) ? 'speech' : 'beep');
+    playQueue: async (_ch, _adapter, clips) => {
+      order.push(typeof clips[0] === 'string' ? 'beep' : 'bad-beep');
+      const speech = await clips[1];
+      order.push(Buffer.isBuffer(speech) ? 'speech' : 'bad-speech');
     },
     beepPath: '/beep.mp3',
   });
   assert.equal(PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID, '1514128904783139018');
-  assert.equal(order[0], 'join');
-  assert.ok(order.indexOf('beep') > order.indexOf('tts-start'));
+  assert.equal(order[0], 'tts-start');
+  assert.ok(order.indexOf('join') > order.indexOf('tts-start'));
+  assert.ok(order.indexOf('beep') > order.indexOf('join'));
   assert.ok(order.indexOf('beep') < order.indexOf('tts-done'));
   assert.ok(order.indexOf('speech') > order.indexOf('tts-done'));
 });
