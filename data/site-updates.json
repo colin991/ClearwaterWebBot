@@ -2,10 +2,10 @@
   "version": 1,
   "updates": [
     {
-      "id": "2026-09-20-briefing-loadlayout-cmd",
-      "title": "Use the in-game :loadlayout command for briefing maps",
-      "summary": "/briefing now loads and unloads map layouts with the in-game commands :loadlayout [Name] and :unloadlayout [Name], including BRIEFING WALLS and BRIEFING ROAD BLOCKS.",
-      "createdAt": "2026-09-20T20:42:00.000Z",
+      "id": "2026-09-21-funds-command",
+      "title": "Add -funds for Roblox group treasury",
+      "summary": "Ownership can run -funds to see this Roblox group’s Robux. Put the account cookie in ROBLOX_COOKIE on the bot host .env (never in Discord).",
+      "createdAt": "2026-09-21T03:06:00.000Z",
       "updatedBy": "colin991"
     },
     {
@@ -13,6 +13,13 @@
       "title": "Load briefing maps with the in-game layout name",
       "summary": "/briefing now runs :loadlayout BREIFING WALLS and :loadlayout BREIFING ROAD BLOCKS, matching the saved map layout names.",
       "createdAt": "2026-09-20T20:44:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-20-briefing-loadlayout-cmd",
+      "title": "Use the in-game :loadlayout command for briefing maps",
+      "summary": "/briefing now loads and unloads map layouts with the in-game commands :loadlayout [Name] and :unloadlayout [Name], including BRIEFING WALLS and BRIEFING ROAD BLOCKS.",
+      "createdAt": "2026-09-20T20:42:00.000Z",
       "updatedBy": "colin991"
     },
     {

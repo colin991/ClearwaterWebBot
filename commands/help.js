@@ -17,6 +17,7 @@ export default {
         '`/help` - show this command list',
         '`/vc whitelist` - Discord Administrator only: stop VC checks from jailing or PMing a player',
         '`/say` - Ownership only: speak text in a voice channel',
+        '`-funds` - Ownership only: show this Roblox group’s funds',
         '',
         'Ownership VC hold uses prefix commands: `-holdvc` / `-unholdvc` (auto-mutes joiners while held)',
         'Staff also have Circle-style prefix commands with `-`',

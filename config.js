@@ -13,6 +13,7 @@ export const config = Object.freeze({
     || '1gbwwPz8Sk9AE_AG6J8RRWGaEGLGPX6AdHW2FTxqY4Xc',
   robloxGroupId: process.env.ROBLOX_GROUP_ID?.trim(),
   robloxGroupApiKey: process.env.ROBLOX_GROUP_API_KEY?.trim(),
+  robloxCookie: process.env.ROBLOX_COOKIE?.trim() || process.env.ROBLOX_SECURITY_COOKIE?.trim(),
   robloxGroupAllowedRoleIds: (process.env.ROBLOX_GROUP_ALLOWED_ROLE_IDS || '1514033664306974752,1514744040778760252')
     .split(',').map((value) => value.trim()).filter(Boolean),
   robloxGroupLogChannelId: process.env.ROBLOX_GROUP_LOG_CHANNEL_ID?.trim() || '1536517651055120514',
