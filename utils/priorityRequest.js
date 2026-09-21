@@ -22,7 +22,7 @@ import { discordIdsByRobloxId, getIdentityCache } from './identityStore.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
 import { memberIsStaff } from './prefixHelpers.js';
-import { ensureGuildVoiceConnection, playMp3QueueInVoiceChannel, synthesizeSpeechMp3 } from './vcSpeak.js';
+import { ensureGuildVoiceConnection, playMp3QueueInVoiceChannel, SAY_VOICE, synthesizeSpeechMp3 } from './vcSpeak.js';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -664,14 +664,34 @@ export async function playPriorityStartAnnouncement(channel, request, {
   playQueue = playMp3QueueInVoiceChannel,
   beepPath = PRIORITY_BEEP_PATH,
 } = {}) {
-  const speechPromise = synthesize(priorityStartSpeech(request), PRIORITY_VOICE, { rate: PRIORITY_VOICE_RATE });
+  const text = priorityStartSpeech(request);
+  const speechPromise = synthesize(text, PRIORITY_VOICE, { rate: PRIORITY_VOICE_RATE });
   logger.info(`Priority announce: joining voice channel ${channel.id}`);
   await join(channel, channel.guild.voiceAdapterCreator);
-  logger.info(`Priority announce: playing beep then speech in ${channel.id}`);
-  await playQueue(channel, channel.guild.voiceAdapterCreator, [beepPath, speechPromise], {
+  logger.info(`Priority announce: playing beep in ${channel.id}`);
+  try {
+    await playQueue(channel, channel.guild.voiceAdapterCreator, [beepPath], {
+      leaveAfter: false,
+      speakDelayMs: 400,
+      volume: 0.7,
+      idleTimeoutMs: 5_000,
+      minPlayMs: 2_000,
+    });
+  } catch (error) {
+    logger.warn('Priority announce beep failed; continuing with speech', error);
+  }
+  let speech;
+  try {
+    speech = await speechPromise;
+  } catch (error) {
+    logger.warn('Priority announce first TTS failed; retrying a fallback voice', error);
+    speech = await synthesize(text, SAY_VOICE);
+  }
+  logger.info(`Priority announce: playing speech in ${channel.id}`);
+  await playQueue(channel, channel.guild.voiceAdapterCreator, [speech], {
     leaveAfter: true,
-    speakDelayMs: 400,
-    volumes: [0.7, 1],
+    speakDelayMs: 350,
+    volume: 1,
   });
 }
 

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-priority-voice-stay-for-speech",
+      "title": "Stay in the LEO channel and speak after the beep",
+      "summary": "The bot no longer leaves the priority voice channel after the beep. It stays connected, retries TTS if Onyx fails, and then plays the spoken callout before disconnecting.",
+      "createdAt": "2026-09-21T20:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-server-weather-wheel",
       "title": "Spin in-game weather every 30 minutes",
       "summary": "When notj3dah is not in-game, the bot rolls server weather every 30 minutes (Clear 65%, rain 15%, fog 11%, thunderstorms 9%). If that player is in-game or joins, weather is forced to clear and the wheel does not run.",

@@ -358,10 +358,11 @@ test('priority voice joins the LEO channel before waiting on TTS', async () => {
       order.push('tts-done');
       return Buffer.from('mp3');
     },
-    playQueue: async (_ch, _adapter, clips) => {
-      order.push(typeof clips[0] === 'string' ? 'beep' : 'bad-beep');
-      const speech = await clips[1];
-      order.push(Buffer.isBuffer(speech) ? 'speech' : 'bad-speech');
+    playQueue: async (_ch, _adapter, clips, options) => {
+      order.push(options.leaveAfter ? 'speech' : 'beep');
+      const clip = await clips[0];
+      if (options.leaveAfter) assert.equal(Buffer.isBuffer(clip), true);
+      else assert.equal(typeof clip, 'string');
     },
     beepPath: '/beep.mp3',
   });
@@ -371,6 +372,30 @@ test('priority voice joins the LEO channel before waiting on TTS', async () => {
   assert.ok(order.indexOf('beep') > order.indexOf('join'));
   assert.ok(order.indexOf('beep') < order.indexOf('tts-done'));
   assert.ok(order.indexOf('speech') > order.indexOf('tts-done'));
+});
+
+test('priority voice stays after the beep if the first TTS attempt fails', async () => {
+  const order = [];
+  let attempts = 0;
+  const channel = { id: PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID, guild: { voiceAdapterCreator: {} } };
+  await playPriorityStartAnnouncement(channel, {
+    requesterUsername: 'HostUser',
+    details: 'bank',
+    vehicles: ['car'],
+  }, {
+    join: async () => { order.push('join'); },
+    synthesize: async () => {
+      attempts += 1;
+      order.push(`tts-${attempts}`);
+      if (attempts === 1) throw new Error('onyx failed');
+      return Buffer.from('mp3');
+    },
+    playQueue: async (_ch, _adapter, _clips, options) => {
+      order.push(options.leaveAfter ? 'speech' : 'beep');
+    },
+    beepPath: '/beep.mp3',
+  });
+  assert.deepEqual(order, ['tts-1', 'join', 'beep', 'tts-2', 'speech']);
 });
 
 test('extra time approve extends the in-game timer', async () => {
