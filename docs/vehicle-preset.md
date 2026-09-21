@@ -1,7 +1,7 @@
-# Vehicle server-saved preset checks
+# ER:LC car Server Saved Preset checks
 
-Enabled on bot startup. The ER:LC snapshot includes spawned vehicles. Police, Sheriff, Fire, and DOT players who stay in a non-utility car without a **named server livery** are PMed in-game.
+Enabled on bot startup. The ER:LC snapshot includes spawned cars. Police, Sheriff, Fire, and DOT players who stay in a non-utility car **without loading a Server Saved Preset** from the in-game car customizer are PMed.
 
-A texture counts as a server-saved preset when it is a custom livery name (for example `Clearwater PD`). Stock values such as `Standard` and Roblox paint names such as `Really black` do not count.
+The PRC vehicle `Texture` field is the car preset name after you load a Server Saved Preset. Built-in packages such as `Standard`, `Unmarked`, or `Slicktop`, and paint-only names such as `Really black`, mean the car is not on a server-saved preset.
 
-The first two snapshots are a short grace so a just-spawned car can load a preset. After that the player is PMed, and reminded again after 90 seconds if they still have no preset. Exempt staff are skipped. Players are not kicked, jailed, or `:load`ed.
+The first two snapshots are a short grace so a just-spawned car can load a preset. After that the player is PMed, and reminded again after 90 seconds if the car still has no preset. Exempt staff are skipped. Players are not kicked, jailed, or `:load`ed.

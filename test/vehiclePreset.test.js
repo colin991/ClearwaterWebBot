@@ -13,7 +13,9 @@ import {
 test('named liveries count as server saved presets; colors and Standard do not', () => {
   assert.equal(usesServerSavedPreset({ texture: 'Clearwater PD' }), true);
   assert.equal(usesServerSavedPreset({ texture: 'PCSO Patrol' }), true);
-  assert.equal(usesServerSavedPreset({ texture: 'Standard' }), false);
+  assert.equal(usesServerSavedPreset({ texture: 'Standard', colorName: 'Red', colorHex: '#FF0000' }), false);
+  assert.equal(usesServerSavedPreset({ texture: 'Unmarked' }), false);
+  assert.equal(usesServerSavedPreset({ texture: 'Slicktop' }), false);
   assert.equal(usesServerSavedPreset({ texture: '' }), false);
   assert.equal(usesServerSavedPreset({ texture: 'Really black' }), false);
   assert.equal(usesServerSavedPreset({ texture: 'Sand yellow metallic' }), false);

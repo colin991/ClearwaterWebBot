@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-erlc-car-presets",
+      "title": "Check ER:LC Server Saved car presets",
+      "summary": "The bot looks at spawned ER:LC cars. If a Police, Sheriff, Fire, or DOT unit is driving without a Server Saved Preset loaded (Texture still Standard or a paint color), they get an in-game PM to load one.",
+      "createdAt": "2026-09-21T17:28:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-vehicle-server-preset",
       "title": "PM emergency drivers who are not on a server-saved vehicle preset",
       "summary": "Police, Sheriff, Fire, and DOT players who stay in a spawned car with a stock or custom paint instead of a named server livery get an in-game PM asking them to use a server saved preset.",

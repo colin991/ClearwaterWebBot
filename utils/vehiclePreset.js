@@ -13,14 +13,15 @@ import { getIdentityCache } from './identityStore.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { enforcementLogBody, postProximityLog } from './vcActionLog.js';
 
-export const VEHICLE_PRESET_WARN_PM = 'Please use a server saved vehicle preset.';
-export const VEHICLE_PRESET_REPEAT_PM = 'You still are not using a server saved vehicle preset.';
+export const VEHICLE_PRESET_WARN_PM = 'Please load a Server Saved Preset on your car.';
+export const VEHICLE_PRESET_REPEAT_PM = 'Your car is still not on a Server Saved Preset. Load one now.';
 export const VEHICLE_PRESET_GRACE_TICKS = 2;
 export const VEHICLE_PRESET_REPEAT_MS = 90 * 1000;
 
 const validUsername = (player) => /^[a-zA-Z0-9_]{3,20}$/.test(String(player?.username || ''));
 const playerKey = (player) => player?.robloxId || player?.username;
 
+/** Built-in ER:LC car packages — not Server Saved Presets from the customizer. */
 const STOCK_TEXTURES = new Set([
   '',
   'standard',
@@ -35,6 +36,13 @@ const STOCK_TEXTURES = new Set([
   'solid',
   'color',
   'colour',
+  'unmarked',
+  'slicktop',
+  'ghost',
+  'undercover',
+  'offroad',
+  'off road',
+  'off-road',
 ]);
 
 const COLOR_WORDS = new Set(`
@@ -69,7 +77,10 @@ export function isColorLikeTexture(value) {
   return words.every((word) => COLOR_WORDS.has(word) || COLOR_MODIFIERS.has(word));
 }
 
-/** True when Texture looks like a named server livery, not a stock/custom paint. */
+/**
+ * ER:LC Server Saved Presets set Texture to the saved preset name.
+ * Stock packages (Standard) and paint-only cars are not using one.
+ */
 export function usesServerSavedPreset(vehicle) {
   const texture = String(vehicle?.texture || '').trim();
   const color = String(vehicle?.colorName || '').trim();
@@ -182,7 +193,7 @@ export function createVehiclePresetMonitor({
         return Boolean(match && validUsername(match) && !match.enforcementExempt && needsServerSavedPreset(match, live.vehicles));
       };
 
-      const reason = `${player.team} ${vehicle.name || 'vehicle'} · ${vehicle.texture || vehicle.colorName || 'no preset'}`;
+      const reason = `${player.team} car ${vehicle.name || 'unknown'} · ${vehicle.texture || vehicle.colorName || vehicle.colorHex || 'no car preset'}`;
       const repeat = state.lastAction === 'warn';
       const message = repeat ? VEHICLE_PRESET_REPEAT_PM : VEHICLE_PRESET_WARN_PM;
       try {
@@ -233,7 +244,7 @@ export function startVehiclePresetCheck(client) {
     },
     send: (command, shouldExecute) => executeErlcCommand(key, command, { shouldExecute }),
     onLog: (event) => postProximityLog(client, {
-      tag: 'Preset',
+      tag: 'CarPreset',
       body: enforcementLogBody(event),
     }),
   });

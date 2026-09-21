@@ -451,6 +451,7 @@ export function parseErlcVehicle(vehicle) {
     ownerRobloxId: owner.robloxId,
     texture: String(vehicle?.Texture || vehicle?.texture || '').trim(),
     colorName: String(vehicle?.ColorName || vehicle?.colorName || '').trim(),
+    colorHex: String(vehicle?.ColorHex || vehicle?.colorHex || '').trim(),
     plate: String(vehicle?.Plate || vehicle?.LicensePlate || vehicle?.plate || '').trim(),
   };
 }
