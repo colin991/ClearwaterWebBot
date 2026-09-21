@@ -1,7 +1,7 @@
-import { getIdentityCache } from './identityStore.js';
+import { discordIdsByRobloxId, getIdentityCache } from './identityStore.js';
 import { logger } from './logger.js';
 import { v2Card } from './v2Message.js';
-import { ensureGuildMembers } from './guildMemberSnapshot.js';
+import { ensureGuildMembers, isDiscordRosterReady } from './guildMemberSnapshot.js';
 
 const ROBLOX_CLOUD = 'https://apis.roblox.com/cloud/v2';
 const TRANSIENT_HTTP = new Set([408, 425, 429, 500, 502, 503, 504]);
@@ -127,13 +127,49 @@ async function sendGroupApprovalDm(client, discordId, { robloxId, groupId } = {}
   }
 }
 
-function joinRequestRobloxId(request) {
-  const possible = [request?.user, request?.userId, request?.user?.id, request?.user?.userId, request?.user?.name, request?.user?.path, request?.requester, request?.requester?.id, request?.requester?.userId];
-  for (const value of possible) {
-    const match = String(value || '').match(/(?:users\/)?(\d+)$/);
+export function joinRequestRobloxId(request) {
+  const values = [
+    request?.user,
+    request?.userId,
+    request?.requester,
+    request?.requesterId,
+  ];
+  const strings = [];
+  for (const value of values) {
+    if (value == null || value === '') continue;
+    if (typeof value === 'object') {
+      for (const key of ['id', 'userId', 'user', 'path', 'name']) {
+        const inner = value[key];
+        if (inner != null && typeof inner !== 'object') strings.push(String(inner));
+      }
+      continue;
+    }
+    strings.push(String(value));
+  }
+  for (const value of strings) {
+    const match = String(value).match(/(?:users\/)?(\d{1,20})$/);
     if (match) return match[1];
   }
   return null;
+}
+
+export function joinRequestResourceName(request, groupId) {
+  const raw = String(request?.path || request?.name || '').replace(/^\/+/, '').split(':')[0];
+  if (/^groups\/[^/]+\/join-requests\/.+/i.test(raw)) return raw;
+  const requestId = request?.id
+    || request?.requestId
+    || request?.groupJoinRequestId
+    || request?.groupJoinRequest?.id
+    || (raw.includes('/') ? raw.split('/').at(-1) : raw)
+    || '';
+  return requestId ? `groups/${groupId}/join-requests/${requestId}` : '';
+}
+
+export function evaluateJoinRequest({ robloxId, discordId, rosterReady }) {
+  if (discordId) return 'accept';
+  if (!rosterReady) return 'skip';
+  if (!robloxId) return 'skip';
+  return 'decline';
 }
 
 async function pendingJoinRequests(groupId, apiKey) {
@@ -181,7 +217,7 @@ async function eligibleRobloxIds(guild, allowedRoleIds) {
   const nicknameFallbacks = [];
 
   for (const member of guild.members.cache.values()) {
-    if (member.user.bot || !allowedRoleIds.some((roleId) => member.roles.cache.has(roleId))) continue;
+    if (member.user.bot || !allowedRoleIds.some((roleId) => member.roles.cache.has(String(roleId)))) continue;
     const remembered = cache.byDiscord?.[member.id];
     // The cache is populated from Melonly verification and
     // the low-frequency application index refresh. Do not make one Melonly
@@ -194,32 +230,56 @@ async function eligibleRobloxIds(guild, allowedRoleIds) {
   return { allowed, nicknameFallbacks };
 }
 
+async function resolveEligibleDiscordId(robloxId, eligible, guild, allowedRoleIds) {
+  if (!robloxId) return { discordId: null, matchSource: null };
+  const linked = eligible.allowed.get(String(robloxId));
+  if (linked) return { discordId: linked, matchSource: 'Melonly Verify' };
+
+  const username = await robloxUsername(robloxId).catch(() => null);
+  const nicknameMatch = username && eligible.nicknameFallbacks.find((entry) => entry.nickname.includes(username.toLowerCase()));
+  if (nicknameMatch) {
+    return { discordId: nicknameMatch.discordId, matchSource: 'Discord server nickname' };
+  }
+
+  const identities = await discordIdsByRobloxId();
+  const discordId = identities.get(String(robloxId));
+  if (!discordId) return { discordId: null, matchSource: null };
+  let member = guild.members.cache.get(discordId);
+  if (!member) member = await guild.members.fetch(discordId).catch(() => null);
+  if (member && !member.user?.bot && allowedRoleIds.some((roleId) => member.roles.cache.has(String(roleId)))) {
+    return { discordId, matchSource: 'Melonly Verify' };
+  }
+  return { discordId: null, matchSource: null };
+}
+
 async function syncGroupJoinRequests(client, config) {
   if (!config.robloxGroupId || !config.robloxGroupApiKey) return;
   const guild = await client.guilds.fetch(config.guildId).catch(() => null);
   if (!guild) throw new Error('DISCORD_GUILD_ID could not be fetched for Roblox group sync');
 
   const eligible = await eligibleRobloxIds(guild, config.robloxGroupAllowedRoleIds);
+  const rosterReady = isDiscordRosterReady(guild);
+  if (!rosterReady) {
+    logger.warn(
+      `Roblox group sync: Discord member roster is incomplete `
+      + `(${guild.members.cache.size}/${guild.memberCount || '?'}); `
+      + 'accepting known matches only and skipping declines this pass.',
+    );
+  }
   const requests = await pendingJoinRequests(config.robloxGroupId, config.robloxGroupApiKey);
   logger.info(`Roblox group sync reviewing ${requests.length} pending join request(s) (including any backlog) against ${eligible.allowed.size} Melonly-linked Roblox account(s).`);
   let accepted = 0;
   let declined = 0;
+  let skipped = 0;
   let failed = 0;
   const declinedLines = [];
 
   for (const request of requests) {
     const robloxId = joinRequestRobloxId(request);
-    const requestId = request?.id
-      || request?.requestId
-      || request?.groupJoinRequestId
-      || request?.groupJoinRequest?.id
-      || String(request?.path || '').split('/').at(-1)
-      || String(request?.name || '').split('/').at(-1);
-    const requestName = requestId
-      ? `groups/${config.robloxGroupId}/join-requests/${requestId}`
-      : String(request?.name || '');
+    const requestName = joinRequestResourceName(request, config.robloxGroupId);
     if (!requestName) {
       logger.warn(`Skipped a Roblox group join request because it did not include an ID. Fields: ${Object.keys(request || {}).join(', ') || 'none'}.`);
+      skipped += 1;
       continue;
     }
 
@@ -229,26 +289,27 @@ async function syncGroupJoinRequests(client, config) {
       : '';
 
     try {
-      let discordId = robloxId ? eligible.allowed.get(robloxId) : null;
-      let matchSource = 'Melonly Verify';
-      if (!discordId && robloxId) {
-        const username = await robloxUsername(robloxId).catch(() => null);
-        const nicknameMatch = username && eligible.nicknameFallbacks.find((entry) => entry.nickname.includes(username.toLowerCase()));
-        if (nicknameMatch) {
-          discordId = nicknameMatch.discordId;
-          matchSource = 'Discord server nickname';
-        }
-      }
+      const matched = await resolveEligibleDiscordId(
+        robloxId,
+        eligible,
+        guild,
+        config.robloxGroupAllowedRoleIds,
+      );
+      const action = evaluateJoinRequest({
+        robloxId,
+        discordId: matched.discordId,
+        rosterReady,
+      });
 
-      if (robloxId && discordId) {
+      if (action === 'accept') {
         await groupFetch(`/${requestName}:accept`, config.robloxGroupApiKey, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: '{}',
         });
         accepted += 1;
-        logger.info(`Accepted Roblox group join request for Discord ${discordId} / Roblox ${robloxId}.`);
-        await sendGroupApprovalDm(client, discordId, {
+        logger.info(`Accepted Roblox group join request for Discord ${matched.discordId} / Roblox ${robloxId}.`);
+        await sendGroupApprovalDm(client, matched.discordId, {
           robloxId,
           groupId: config.robloxGroupId,
         });
@@ -256,12 +317,20 @@ async function syncGroupJoinRequests(client, config) {
           client,
           config,
           'Roblox group request accepted',
-          `<@${discordId}> was accepted into the Roblox group.\nRoblox user ID: \`${robloxId}\`\nMatched through: ${matchSource}${pendingSince}`,
+          `<@${matched.discordId}> was accepted into the Roblox group.\nRoblox user ID: \`${robloxId}\`\nMatched through: ${matched.matchSource}${pendingSince}`,
         );
         continue;
       }
 
-      // Decline anyone without an allowed Discord role — including older pending backlog.
+      if (action === 'skip') {
+        skipped += 1;
+        logger.warn(
+          `Skipped Roblox group join request for ${robloxId || 'unknown user'} `
+          + 'until Discord roles can be confirmed.',
+        );
+        continue;
+      }
+
       await groupFetch(`/${requestName}:decline`, config.robloxGroupApiKey, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -298,8 +367,8 @@ async function syncGroupJoinRequests(client, config) {
         );
   }
 
-  if (accepted || declined || failed) {
-    logger.info(`Roblox group sync finished: accepted ${accepted}, declined ${declined}, failed ${failed}.`);
+  if (accepted || declined || failed || skipped) {
+    logger.info(`Roblox group sync finished: accepted ${accepted}, declined ${declined}, skipped ${skipped}, failed ${failed}.`);
   }
 }
 

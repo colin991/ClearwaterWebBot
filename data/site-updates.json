@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-group-request-whitelist-fix",
+      "title": "Fix whitelisted Roblox group join requests",
+      "summary": "Group join requests from Discord members with the allowed whitelist roles are accepted again. If Discord’s member list is incomplete, unmatched requests are skipped instead of declined so whitelist players are not rejected by accident.",
+      "createdAt": "2026-09-21T21:28:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-weather-log-channel",
       "title": "Log every weather roll in Discord",
       "summary": "Each 30-minute weather wheel result is posted to channel 1549178818814812211, including when weather stays the same, when notj3dah being in-game skips the wheel, and when weather is forced to clear.",
