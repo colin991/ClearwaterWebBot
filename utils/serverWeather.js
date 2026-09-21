@@ -4,6 +4,7 @@ import { logger } from './logger.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
 export const WEATHER_PROTECTED_USERNAME = 'notj3dah';
+export const WEATHER_LOG_CHANNEL = '1549178818814812211';
 export const WEATHER_SPIN_MS = 30 * 60 * 1000;
 export const WEATHER_TICK_MS = 5_000;
 
@@ -17,6 +18,14 @@ export const WEATHER_CHANCES = Object.freeze([
 export function weatherCommand(id) {
   const match = WEATHER_CHANCES.find((entry) => entry.id === id);
   return match?.command || ':weather clear';
+}
+
+export function weatherDisplayName(id) {
+  if (id === 'clear') return 'Clear';
+  if (id === 'rain') return 'Rain';
+  if (id === 'fog') return 'Fog';
+  if (id === 'thunderstorm') return 'Thunderstorms';
+  return 'Unknown';
 }
 
 export function isWeatherProtectedPlayer(player, username = WEATHER_PROTECTED_USERNAME) {
@@ -57,11 +66,16 @@ export function createServerWeatherService({
   save,
   now = Date.now,
   random = Math.random,
+  onLog = () => {},
   onError = (error) => logger.error('Server weather failed', error),
 } = {}) {
   let state = normalizeStore(null);
   let loaded = false;
   let running;
+
+  const log = (event) => {
+    void Promise.resolve().then(() => onLog(event)).catch((error) => logger.error('Weather log delivery failed', error));
+  };
 
   async function persist() {
     await save(state);
@@ -74,9 +88,12 @@ export function createServerWeatherService({
     return state;
   }
 
-  async function applyWeather(id, { spin = false } = {}) {
+  async function applyWeather(id, { spin = false, reason = 'spin' } = {}) {
     const kind = WEATHER_CHANCES.some((entry) => entry.id === id) ? id : 'clear';
-    await send(weatherCommand(kind));
+    const previous = state.currentWeather;
+    const changed = previous !== kind;
+    const command = weatherCommand(kind);
+    await send(command);
     const time = now();
     state.currentWeather = kind;
     if (spin) {
@@ -84,6 +101,14 @@ export function createServerWeatherService({
       state.nextSpinAt = time + WEATHER_SPIN_MS;
     }
     await persist();
+    log({
+      action: reason,
+      weather: kind,
+      previous,
+      changed,
+      command,
+      sent: true,
+    });
     return kind;
   }
 
@@ -96,13 +121,22 @@ export function createServerWeatherService({
     state.protectedOnline = online;
 
     if (online) {
-      if (!state.nextSpinAt || state.nextSpinAt <= time) {
-        state.nextSpinAt = time + WEATHER_SPIN_MS;
-      }
+      const spinDue = !state.nextSpinAt || state.nextSpinAt <= time;
+      if (spinDue) state.nextSpinAt = time + WEATHER_SPIN_MS;
       if (state.currentWeather !== 'clear') {
         logger.info(`Server weather: ${WEATHER_PROTECTED_USERNAME} is in-game; setting weather to clear.`);
-        await applyWeather('clear');
+        await applyWeather('clear', { reason: 'forced-clear' });
       } else {
+        if (spinDue) {
+          log({
+            action: 'skipped',
+            weather: 'clear',
+            previous: state.currentWeather,
+            changed: false,
+            command: weatherCommand('clear'),
+            sent: false,
+          });
+        }
         await persist();
       }
       return state;
@@ -112,7 +146,7 @@ export function createServerWeatherService({
     if (time >= state.nextSpinAt) {
       const picked = pickWeather(random);
       logger.info(`Server weather: spinning the wheel → ${picked}.`);
-      await applyWeather(picked, { spin: true });
+      await applyWeather(picked, { spin: true, reason: 'spin' });
     } else if (wasOnline) {
       await persist();
     }
@@ -144,6 +178,7 @@ export function startServerWeather(client) {
       return { players: (data.Players || data.players || []).map(parseErlcPlayer) };
     },
     send: (command, options) => executeErlcCommand(key, command, options),
+    onLog: (event) => postWeatherLog(client, event),
   });
   client.serverWeather = service;
   let stopped = false;
@@ -158,4 +193,41 @@ export function startServerWeather(client) {
   void run();
   logger.info(`Server weather enabled (30 minute wheel unless ${WEATHER_PROTECTED_USERNAME} is in-game).`);
   return () => { stopped = true; clearTimeout(timer); };
+}
+
+export function weatherLogPayload(event) {
+  const weather = weatherDisplayName(event?.weather);
+  const previous = event?.previous ? weatherDisplayName(event.previous) : 'Unknown';
+  const changed = event?.changed ? 'changed' : 'unchanged';
+  const command = event?.command || weatherCommand(event?.weather);
+  let description;
+  if (event?.action === 'forced-clear') {
+    description = `Forced **Clear** because **${WEATHER_PROTECTED_USERNAME}** is in-game.`;
+  } else if (event?.action === 'skipped') {
+    description = `Skipped the wheel because **${WEATHER_PROTECTED_USERNAME}** is in-game. Weather stays **${weather}**.`;
+  } else {
+    description = `Wheel landed on **${weather}** (${changed}).`;
+  }
+  return {
+    allowedMentions: { parse: [] },
+    embeds: [{
+      title: 'Server Weather',
+      description,
+      color: event?.changed ? 0x5b8def : 0x8a8f98,
+      fields: [
+        { name: 'Weather', value: weather, inline: true },
+        { name: 'Previous', value: previous, inline: true },
+        { name: 'In-game command', value: event?.sent === false ? 'not sent' : `\`${command}\``, inline: true },
+      ],
+      timestamp: new Date().toISOString(),
+    }],
+  };
+}
+
+export async function postWeatherLog(client, event) {
+  const channel = await client.channels.fetch(WEATHER_LOG_CHANNEL);
+  if (!channel?.isTextBased() || typeof channel.send !== 'function') {
+    throw new Error('Weather log channel unavailable.');
+  }
+  await channel.send(weatherLogPayload(event));
 }
