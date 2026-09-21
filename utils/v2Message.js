@@ -62,6 +62,38 @@ export function v2Card({
 }
 
 /**
+ * One TextDisplay per section so Discord V2 cannot smash headings onto one line.
+ */
+export function v2Sections(sections, {
+  ephemeral = false,
+  replace = false,
+  files,
+} = {}) {
+  const container = new ContainerBuilder().clearAccentColor();
+  const chunks = (Array.isArray(sections) ? sections : [sections])
+    .map((section) => String(section || '').trim())
+    .filter(Boolean)
+    .slice(0, 10);
+  if (!chunks.length) chunks.push('\u200b');
+  for (const chunk of chunks) {
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(chunk.slice(0, 4000)),
+    );
+  }
+
+  let flags = MessageFlags.IsComponentsV2;
+  if (ephemeral) flags |= MessageFlags.Ephemeral;
+
+  const payload = { components: [container], flags };
+  if (replace) {
+    payload.content = null;
+    payload.embeds = [];
+  }
+  if (files?.length) payload.files = files;
+  return payload;
+}
+
+/**
  * Attach extra builders (action rows, media, etc.) onto a no-accent V2 container.
  * @param {string} text
  * @param {(container: ContainerBuilder) => void} decorate

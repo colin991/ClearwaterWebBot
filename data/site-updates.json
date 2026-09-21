@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-funds-card-layout",
+      "title": "Fix -funds so balance, payouts, and sales are not smashed together",
+      "summary": "-funds now shows the group balance, last 7 payouts, and last 7 sales in separate Discord sections instead of one mashed line.",
+      "createdAt": "2026-09-21T03:18:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-funds-admin-transactions",
       "title": "Let admins run -funds with recent payouts and sales",
       "summary": "-funds is Administrator-only and now shows the group balance plus the last 7 payouts sent and the last 7 sales from people buying group items.",

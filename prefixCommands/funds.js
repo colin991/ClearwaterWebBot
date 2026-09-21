@@ -5,7 +5,7 @@ import {
   looksLikeRobloxCookie,
   resolveFundsGroupId,
 } from '../utils/robloxGroupFunds.js';
-import { v2Card } from '../utils/v2Message.js';
+import { v2Sections } from '../utils/v2Message.js';
 
 export default {
   name: 'funds',
@@ -22,6 +22,7 @@ export default {
       groupId: resolveFundsGroupId(config),
       cookie: config.robloxCookie,
     });
-    await message.reply(v2Card(groupFundsCard(info)));
+    const card = groupFundsCard(info);
+    await message.reply(v2Sections(card.sections));
   },
 };

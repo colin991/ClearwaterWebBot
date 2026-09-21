@@ -63,8 +63,15 @@ export function formatTransactionLine(entry, kind) {
   return when ? `${line} · ${when}` : line;
 }
 
-function transactionList(entries, kind) {
-  if (!Array.isArray(entries) || !entries.length) return '_None in the last records._';
+function transactionList(entries, kind, error) {
+  if (error) {
+    return kind === 'payout'
+      ? `_Could not load payouts (${error})._`
+      : `_Could not load sales (${error})._`;
+  }
+  if (!Array.isArray(entries) || !entries.length) {
+    return kind === 'payout' ? '_No payouts in recent records._' : '_No sales in recent records._';
+  }
   return entries.map((entry) => formatTransactionLine(entry, kind)).join('\n');
 }
 
@@ -79,6 +86,8 @@ async function robloxGet(url, cookie, fetchImpl) {
     Cookie: `.ROBLOSECURITY=${cookie}`,
     Accept: 'application/json',
     'User-Agent': ROBLOX_UA,
+    Referer: 'https://www.roblox.com/',
+    Origin: 'https://www.roblox.com',
   };
   let response = await fetchImpl(url, {
     method: 'GET',
@@ -111,13 +120,30 @@ function transactionUrl(groupId, type) {
   return `https://economy.roblox.com/v2/groups/${groupId}/transactions?${params}`;
 }
 
+function transactionHttpError(status) {
+  if (status === 401) return 'cookie invalid or expired';
+  if (status === 403) return 'no permission';
+  if (status === 429) return 'rate limited';
+  return `HTTP ${status}`;
+}
+
 async function fetchTransactionPage(groupId, type, cookie, fetchImpl) {
-  const response = await robloxGet(transactionUrl(groupId, type), cookie, fetchImpl);
-  if (!response.ok) return [];
-  const body = await readJson(response);
-  const rows = Array.isArray(body.data) ? body.data : (Array.isArray(body) ? body : []);
   const kind = type === 'GroupPayout' ? 'payout' : 'sale';
-  return rows.map((entry) => parseGroupTransaction(entry, kind)).slice(0, FUNDS_TRANSACTION_COUNT);
+  try {
+    const response = await robloxGet(transactionUrl(groupId, type), cookie, fetchImpl);
+    if (!response.ok) {
+      return { items: [], error: transactionHttpError(response.status) };
+    }
+    const body = await readJson(response);
+    const rows = Array.isArray(body.data)
+      ? body.data
+      : (Array.isArray(body.Data) ? body.Data : (Array.isArray(body) ? body : []));
+    return {
+      items: rows.map((entry) => parseGroupTransaction(entry, kind)).slice(0, FUNDS_TRANSACTION_COUNT),
+    };
+  } catch (error) {
+    return { items: [], error: error?.message || 'request failed' };
+  }
 }
 
 function fundsError(status) {
@@ -147,7 +173,7 @@ export async function fetchRobloxGroupFunds({
     throw new Error('Set ROBLOX_COOKIE in the bot host .env (your .ROBLOSECURITY value). Never paste it in Discord.');
   }
 
-  const [groupResponse, fundsResponse, payouts, sales] = await Promise.all([
+  const [groupResponse, fundsResponse, payoutPage, salePage] = await Promise.all([
     robloxGet(`https://groups.roblox.com/v1/groups/${id}`, token, fetchImpl),
     robloxGet(`https://economy.roblox.com/v1/groups/${id}/currency`, token, fetchImpl),
     fetchTransactionPage(id, 'GroupPayout', token, fetchImpl),
@@ -168,8 +194,10 @@ export async function fetchRobloxGroupFunds({
     name: String(group.name || group.Name || `Group ${id}`),
     memberCount: Number.isFinite(Number(group.memberCount)) ? Number(group.memberCount) : null,
     robux,
-    payouts,
-    sales,
+    payouts: payoutPage.items,
+    sales: salePage.items,
+    payoutsError: payoutPage.error || null,
+    salesError: salePage.error || null,
   };
 }
 
@@ -177,17 +205,26 @@ export function groupFundsCard(info) {
   const members = Number.isFinite(info.memberCount)
     ? `${info.memberCount.toLocaleString('en-US')} members`
     : null;
+  const payouts = transactionList(info.payouts, 'payout', info.payoutsError);
+  const sales = transactionList(info.sales, 'sale', info.salesError);
+  const header = [
+    `**${info.name}**`,
+    members,
+    `**Balance:** ${formatRobux(info.robux)}`,
+  ].filter(Boolean).join('\n');
   return {
     title: 'Group Funds',
-    description: [
-      `**${info.name}**`,
-      members,
-      `**Balance:** ${formatRobux(info.robux)}`,
-      `**Payouts sent** (last ${FUNDS_TRANSACTION_COUNT})`,
-      transactionList(info.payouts, 'payout'),
-      `**Sales** (last ${FUNDS_TRANSACTION_COUNT})`,
-      transactionList(info.sales, 'sale'),
+    description: header,
+    fields: [
+      { name: `Payouts sent (last ${FUNDS_TRANSACTION_COUNT})`, value: payouts },
+      { name: `Sales (last ${FUNDS_TRANSACTION_COUNT})`, value: sales },
+    ],
+    footer: `Group ID \`${info.groupId}\``,
+    sections: [
+      `## Group Funds\n${header}`,
+      `**Payouts sent (last ${FUNDS_TRANSACTION_COUNT})**\n${payouts}`,
+      `**Sales (last ${FUNDS_TRANSACTION_COUNT})**\n${sales}`,
       `-# Group ID \`${info.groupId}\``,
-    ].filter(Boolean).join('\n'),
+    ],
   };
 }

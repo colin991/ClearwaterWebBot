@@ -99,10 +99,67 @@ test('fetchRobloxGroupFunds reads economy.roblox.com with the cookie', async () 
   assert.equal(info.payouts[0].username, 'Payee');
   assert.equal(info.sales[0].item, 'Shirt');
   assert.ok(calls.every((call) => call.cookie === '.ROBLOSECURITY=host-secret'));
+  const card = groupFundsCard(info);
+  assert.match(card.sections[0], /5,400 Robux/);
+  assert.equal(card.sections[0].includes('Payouts sent'), false);
+  assert.match(card.sections[1], /Paid \*\*Payee\*\*/);
+  assert.match(card.sections[2], /bought Shirt/);
+});
+
+test('groupFundsCard keeps balance and payouts in separate V2 sections', async () => {
+  const { v2Sections } = await import('../utils/v2Message.js');
+  const card = groupFundsCard({
+    name: 'Clearwater Roleplay',
+    memberCount: 10,
+    robux: 2994,
+    groupId: '163783791',
+    payouts: [{ username: 'Payee', amount: 100 }],
+    sales: [],
+  });
+  assert.match(card.sections[0], /\*\*Balance:\*\* 2,994 Robux/);
+  assert.match(card.sections[1], /Payouts sent \(last 7\)/);
+  assert.match(card.sections[1], /Paid \*\*Payee\*\*/);
+  assert.match(card.sections[2], /No sales in recent records/);
+  const payload = v2Sections(card.sections);
+  const json = payload.components[0].toJSON();
+  assert.equal(json.components.length, 4);
+});
+
+test('fetchRobloxGroupFunds still shows the balance if transaction pages fail', async () => {
+  const fetchImpl = async (url) => {
+    if (String(url).includes('/transactions')) {
+      return {
+        ok: false,
+        status: 403,
+        headers: { get: () => null },
+        json: async () => ({}),
+      };
+    }
+    if (String(url).includes('/currency')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        json: async () => ({ robux: 2994 }),
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => ({ name: 'Clearwater Roleplay', memberCount: 1 }),
+    };
+  };
+  const info = await fetchRobloxGroupFunds({
+    groupId: '163783791',
+    cookie: 'host-secret',
+    fetchImpl,
+  });
+  assert.equal(info.robux, 2994);
+  assert.equal(info.payoutsError, 'no permission');
   const card = JSON.stringify(groupFundsCard(info));
-  assert.match(card, /5,400 Robux/);
-  assert.match(card, /Paid \*\*Payee\*\*/);
-  assert.match(card, /bought Shirt/);
+  assert.match(card, /Could not load payouts/);
+  assert.match(card, /Could not load sales/);
 });
 
 test('fetchRobloxGroupFunds explains a missing cookie or expired cookie', async () => {
