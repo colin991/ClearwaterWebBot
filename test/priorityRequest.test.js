@@ -234,15 +234,25 @@ function serviceFixture(request, extras = {}) {
   return { svc, commands, dms, staffEdits, stored, setTime: value => { time = value; } };
 }
 
-test('start speech and in-game :h use the requester and clipped priority type', () => {
-  const request = { requesterUsername: 'HostUser', details: 'bank robbery downtown' };
-  assert.equal(priorityStartSpeech(request), 'A new priority has now started, by HostUser, for bank robbery downtown. Do not start any major roleplays.');
+test('start speech uses requester, vehicles, and priority type at a normal pace', () => {
+  const request = {
+    requesterUsername: 'HostUser',
+    details: 'bank robbery downtown',
+    vehicles: ['Really black Navara [GOV-884]'],
+  };
+  assert.equal(
+    priorityStartSpeech(request),
+    'A new priority has been started by HostUser, vehicle description and priority is as follows: Really black Navara [GOV-884], and bank robbery downtown.',
+  );
   assert.equal(
     priorityStartMessageCommand(request),
     ':h The priority timer is active, please refrain from triggering any priorities at this time.',
   );
-  const long = { requesterUsername: 'HostUser', details: 'abcdefghijklmnopqrstuvwxyz' };
-  assert.equal(priorityStartSpeech(long), 'A new priority has now started, by HostUser, for abcdefghijklmnopqrstuvwxy. Do not start any major roleplays.');
+  const long = { requesterUsername: 'HostUser', details: 'abcdefghijklmnopqrstuvwxyz', vehicles: [] };
+  assert.equal(
+    priorityStartSpeech(long),
+    'A new priority has been started by HostUser, vehicle description and priority is as follows: no vehicle, and abcdefghijklmnopqrstuvwxy.',
+  );
 });
 
 test('new pending requests ping the priority role', async () => {

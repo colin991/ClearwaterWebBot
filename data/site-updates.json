@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-priority-voice-faster",
+      "title": "Speed up the priority voice line and lengthen the beep",
+      "summary": "The LEO channel callout now uses a longer beep, then speaks at a normal pace: who started the priority, the vehicle description, and the priority type.",
+      "createdAt": "2026-09-21T19:27:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-briefing-end-once",
       "title": "End briefing on the first click",
       "summary": "Clicking End briefing now disables the button right away and sends the ended :m only once. Layout unloads keep running in the background so the panel does not sit on the in-game command queue.",

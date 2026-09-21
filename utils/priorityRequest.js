@@ -608,11 +608,21 @@ function buildPriorityFormModal({ id, players, vehicles }) {
 }
 
 export const PRIORITY_START_HINT = ':h The priority timer is active, please refrain from triggering any priorities at this time.';
+export const PRIORITY_VOICE_RATE = 1.15;
+
+export function priorityStartVehicleSpeech(request) {
+  const list = (Array.isArray(request?.vehicles) ? request.vehicles : [])
+    .map((name) => String(name || '').replace(/\s+/g, ' ').trim())
+    .filter((name) => name && name !== '—')
+    .map((name) => name.slice(0, 80));
+  return list.length ? list.join(', ') : 'no vehicle';
+}
 
 export function priorityStartSpeech(request) {
-  const username = clip(request?.requesterUsername, 40);
-  const details = clip(request?.details, PRIORITY_TYPE_MAX);
-  return `A new priority has now started, by ${username}, for ${details}. Do not start any major roleplays.`;
+  const username = String(request?.requesterUsername || 'unknown').replace(/\s+/g, ' ').trim().slice(0, 40) || 'unknown';
+  const vehicles = priorityStartVehicleSpeech(request);
+  const type = String(request?.details || 'unknown').replace(/\s+/g, ' ').trim().slice(0, PRIORITY_TYPE_MAX) || 'unknown';
+  return `A new priority has been started by ${username}, vehicle description and priority is as follows: ${vehicles}, and ${type}.`;
 }
 
 export function priorityStartMessageCommand(_request) {
@@ -656,16 +666,16 @@ export async function announcePriorityStart(client, request) {
   if (!channel.permissionsFor(me)?.has(['Connect', 'Speak'])) {
     throw new Error('The bot needs Connect and Speak in the priority announce voice channel.');
   }
-  const speech = await synthesizeSpeechMp3(priorityStartSpeech(request), undefined, { rate: 'slow' });
+  const speech = await synthesizeSpeechMp3(priorityStartSpeech(request), undefined, { rate: PRIORITY_VOICE_RATE });
   await playMp3InVoiceChannel(channel, channel.guild.voiceAdapterCreator, PRIORITY_BEEP_PATH, {
     leaveAfter: false,
-    speakDelayMs: 800,
-    volume: 0.45,
+    speakDelayMs: 400,
+    volume: 0.7,
   });
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await new Promise((resolve) => setTimeout(resolve, 250));
   await playMp3InVoiceChannel(channel, channel.guild.voiceAdapterCreator, speech, {
     leaveAfter: true,
-    speakDelayMs: 400,
+    speakDelayMs: 150,
     volume: 1,
   });
 }
