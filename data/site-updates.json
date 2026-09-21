@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-priority-voice-beep",
+      "title": "Change the priority voice beep",
+      "summary": "When a priority starts, the bot plays the new beep in the announce voice channel before the spoken callout.",
+      "createdAt": "2026-09-21T18:48:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-erlc-car-presets",
       "title": "Check ER:LC Server Saved car presets",
       "summary": "The bot looks at spawned ER:LC cars. If a Police, Sheriff, Fire, or DOT unit is driving without a Server Saved Preset loaded (Texture still Standard or a paint color), they get an in-game PM to load one.",

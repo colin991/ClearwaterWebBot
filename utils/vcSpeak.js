@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
   AudioPlayerStatus,
   NoSubscriberBehavior,
+  StreamType,
   createAudioPlayer,
   createAudioResource,
   entersState,
@@ -135,8 +136,10 @@ export async function playMp3InVoiceChannel(voiceChannel, adapterCreator, mp3Pat
     }
 
     const inputPath = Buffer.isBuffer(mp3PathOrBuffer) ? filePath : mp3PathOrBuffer;
+    const oggOpus = !Buffer.isBuffer(mp3PathOrBuffer) && /\.ogg$/i.test(String(mp3PathOrBuffer));
     const resource = createAudioResource(createReadStream(inputPath), {
       inlineVolume: true,
+      inputType: oggOpus ? StreamType.OggOpus : undefined,
     });
     resource.volume?.setVolume(Math.max(0, Math.min(2, Number(volume) || 1)));
 

@@ -29,7 +29,7 @@ import path from 'node:path';
 export const PRIORITY_REQUEST_CHANNEL = '1514341436139770017';
 export const PRIORITY_REQUEST_STAFF_ROLE = '1515107822432419971';
 export const PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID = '1514128904783139018';
-export const PRIORITY_BEEP_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'priority-beep.mp3');
+export const PRIORITY_BEEP_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'priority-beep.ogg');
 export const PRIORITY_REQUEST_SECONDS = 1800;
 export const PRIORITY_PEACE_SECONDS = 600;
 export const PRIORITY_PENDING_MS = 25 * 60 * 1000;

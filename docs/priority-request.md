@@ -16,7 +16,7 @@ On approve:
 - The requester is DMed the started card, including **Request Added Time**.
 - The bot runs `:prty 1800` (30 minutes).
 - The bot runs `:m` telling the server a new priority started and not to start any major roleplays.
-- After that in-game callout, the bot joins voice channel `1514128904783139018`, plays a short chime, then speaks who started it, the priority type, and not to start any major roleplays.
+- After that in-game callout, the bot joins voice channel `1514128904783139018`, plays the priority beep (`assets/priority-beep.ogg`), then speaks who started it, the priority type, and not to start any major roleplays.
 
 **Void** (or a natural timer end, or **everyone listed on the request dying in-game**) runs `:prty 0` then `:pt 600` (10 minute peace timer). The original request card is rewritten immediately to **Priority Request — Ended** / **Voided** (Void/Started removed). All listed deaths end it immediately — there is no 3 minute wait. Void also DMs the requester that staff voided it.
 

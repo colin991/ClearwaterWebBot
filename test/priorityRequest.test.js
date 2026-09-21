@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { civilianVehicles, formatPriorityVehicle, parseErlcKill, parseErlcVehicle } from '../utils/erlc.js';
 import {
   allPriorityParticipantsDied,
@@ -11,6 +12,7 @@ import {
   extraTimeResolvedPayload,
   handlePriorityRequest,
   hasBlockingPriority,
+  PRIORITY_BEEP_PATH,
   PRIORITY_PENDING_MS,
   PRIORITY_PEACE_SECONDS,
   PRIORITY_REQUEST_SECONDS,
@@ -291,6 +293,11 @@ test('approve starts a 30 minute in-game timer and DMs the requester', async () 
   assert.equal(f.commands[1], ':m A new priority has now started by HostUser for bank robbery downtown. Do not start any major roleplays');
   assert.equal(f.dms[0].id, 'u1');
   assert.match(f.dms[0].payload.components[0].components[2].content, /Priority Started/);
+});
+
+test('priority voice announcement uses the uploaded ogg beep', () => {
+  assert.match(PRIORITY_BEEP_PATH, /priority-beep\.ogg$/);
+  assert.equal(existsSync(PRIORITY_BEEP_PATH), true);
 });
 
 test('voice talk runs after the in-game priority callout', async () => {
