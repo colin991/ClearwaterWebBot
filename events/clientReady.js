@@ -17,6 +17,7 @@ import { startErlcZoneVoice } from '../utils/erlcZoneVoice.js';
 import { startDispatchChannelStatus } from '../utils/dispatchChannelStatus.js';
 import { startCorrectionsChannelStatus } from '../utils/correctionsChannelStatus.js';
 import { startFrequencyChangeGreeting } from '../utils/frequencyChangeGreeting.js';
+import { startSoundboardAccess } from '../utils/soundboardAccess.js';
 import { ensurePinellasServerProfile } from '../utils/pinellasServer.js';
 import { clearFloridaServerProfile } from '../utils/floridaServer.js';
 import { startBotApiServer } from '../utils/botApiServer.js';
@@ -92,6 +93,10 @@ export default {
 
     if (!client.stopFrequencyChangeGreeting) {
       client.stopFrequencyChangeGreeting = startFrequencyChangeGreeting(client);
+    }
+
+    if (!client.stopSoundboardAccess) {
+      client.stopSoundboardAccess = startSoundboardAccess(client);
     }
 
     if (!client.stopBotApiServer) {

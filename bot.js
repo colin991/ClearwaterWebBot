@@ -152,6 +152,7 @@ const shutDown = async (signal) => {
   client.stopDispatchChannelStatus?.();
   client.stopCorrectionsChannelStatus?.();
   client.stopFrequencyChangeGreeting?.();
+  client.stopSoundboardAccess?.();
   client.destroy();
   process.exit(0);
 };

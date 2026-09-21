@@ -5,6 +5,7 @@ import { handleSecondaryGateMainRoleUpdate } from '../utils/secondaryServerGate.
 import { handleDispatchMemberUpdate } from '../utils/dispatchChannelStatus.js';
 import { handleCorrectionsMemberUpdate } from '../utils/correctionsChannelStatus.js';
 import { handlePinellasEmployeeRoleWelcome } from '../utils/pinellasServer.js';
+import { handleSoundboardMemberUpdate } from '../utils/soundboardAccess.js';
 import { logger } from '../utils/logger.js';
 
 export default {
@@ -32,6 +33,12 @@ export default {
       await handlePinellasEmployeeRoleWelcome(previousMember, member);
     } catch (error) {
       logger.warn(`Pinellas employee welcome failed: ${error?.message || error}`);
+    }
+
+    try {
+      await handleSoundboardMemberUpdate(previousMember, member, client || member.client);
+    } catch (error) {
+      logger.warn(`Soundboard access member update failed: ${error?.message || error}`);
     }
 
     if (member.guild.id !== CLEARWATER_GUILD_ID) return;

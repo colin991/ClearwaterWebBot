@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-soundboard-role-access",
+      "title": "Grant LEO voice soundboard from the other server role",
+      "summary": "Members with role 1515129421898448996 in Discord 1515101455525085337 now get Use Soundboard (and Use External Sounds) in main-server voice channel 1514128904783139018.",
+      "createdAt": "2026-09-21T21:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-split-roblox-groups",
       "title": "Use separate Roblox groups for join requests and funds",
       "summary": "Join-request whitelist sync now uses Clearwater Roleplay ERLC (163783791). -funds uses Clearwater-Whitelisted (140437562). The two IDs are no longer shared, even if the host env had them swapped.",

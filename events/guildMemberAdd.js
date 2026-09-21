@@ -3,6 +3,7 @@ import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges } from '../
 import { readInternetStore, saveInternetStore, setInternetBan, upsertInternetUser } from '../utils/internetStore.js';
 import { handleSecondaryGateJoin } from '../utils/secondaryServerGate.js';
 import { sendPinellasWelcome } from '../utils/pinellasServer.js';
+import { handleSoundboardMemberAdd } from '../utils/soundboardAccess.js';
 import { logger } from '../utils/logger.js';
 
 export default {
@@ -20,6 +21,12 @@ export default {
       if (welcomed) return;
     } catch (error) {
       logger.error('Pinellas welcome message failed', error);
+    }
+
+    try {
+      await handleSoundboardMemberAdd(member, client || member.client);
+    } catch (error) {
+      logger.warn(`Soundboard access join failed: ${error?.message || error}`);
     }
 
     if (member.guild.id !== CLEARWATER_GUILD_ID) return;
