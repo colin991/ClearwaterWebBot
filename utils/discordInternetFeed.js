@@ -6,8 +6,6 @@ import {
   ChannelFlagsBitField,
   ChannelType,
   ContainerBuilder,
-  MediaGalleryBuilder,
-  MediaGalleryItemBuilder,
   MessageFlags,
   SectionBuilder,
   TextDisplayBuilder,
@@ -16,6 +14,7 @@ import {
 import { followerDiscordIds, readInternetStore } from './internetStore.js';
 import { logger } from './logger.js';
 
+const MAX_ATTACH_BYTES = 8 * 1024 * 1024;
 const DEFAULT_AVATAR_URL = 'https://cdn.discordapp.com/embed/avatars/0.png';
 
 export const INTERNET_POST_LIKE_PREFIX = 'cw-internet-like:';
@@ -28,6 +27,12 @@ export const INTERNET_POST_DELETE_PREFIX = 'cw-internet-delete:';
 export const INTERNET_POST_FOLLOW_PREFIX = 'cw-internet-follow:';
 export const INTERNET_POST_REACT_PREFIX = 'cw-internet-react:';
 export const INTERNET_REACT_EMOJI_PREFIX = 'cw-internet-rx:';
+
+const INTERNET_BUTTON_EMOJIS = Object.freeze({
+  like: { id: '1551629795316600942', name: 'like' },
+  repost: { id: '1518386518387851425', name: 'DownArrow' },
+  reply: { id: '1540761931797758013', name: 'chat' },
+});
 
 export const INTERNET_REACT_EMOJIS = Object.freeze({
   heart: '❤️',
@@ -207,9 +212,9 @@ function internetActionRow(post, store, { emojis = true, bookmark = true } = {})
   }
   buttons.push(moreButton);
   if (emojis) {
-    likeButton.setEmoji('❤️');
-    repostButton.setEmoji('🔁');
-    commentButton.setEmoji('↩️');
+    likeButton.setEmoji(INTERNET_BUTTON_EMOJIS.like);
+    repostButton.setEmoji(INTERNET_BUTTON_EMOJIS.repost);
+    commentButton.setEmoji(INTERNET_BUTTON_EMOJIS.reply);
   } else {
     likeButton.setLabel(`Like${likes ? ` ${likes}` : ''}`);
     repostButton.setLabel(`Repost${reposts ? ` ${reposts}` : ''}`);
@@ -235,7 +240,8 @@ function internetMetaRow(post) {
 function addPostCard(container, post, store, { thumbnail = true, media = true } = {}) {
   const { files, mediaUrl } = media ? resolveMedia(post) : { files: [], mediaUrl: '' };
   const avatar = thumbnail ? resolveAvatar(post, store) : { url: '', files: [] };
-  files.push(...avatar.files);
+  const accessoryUrl = (media && mediaUrl) || avatar.url;
+  if (accessoryUrl === avatar.url) files.push(...avatar.files);
   const followers = followerCount(store, post?.authorId);
   const body = String(post?.content || '').trim() || '_Shared a post._';
   const when = formatFeedTimestamp(post?.createdAt);
@@ -244,19 +250,14 @@ function addPostCard(container, post, store, { thumbnail = true, media = true } 
   );
   const bodyText = new TextDisplayBuilder().setContent(body.slice(0, 2000));
   const footer = new TextDisplayBuilder().setContent(when ? `-# ${when}` : '\u200b');
-  if (avatar.url) {
+  if (accessoryUrl) {
     container.addSectionComponents(
       new SectionBuilder()
         .addTextDisplayComponents(header, bodyText, footer)
-        .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatar.url).setDescription(posterName(post))),
+        .setThumbnailAccessory(new ThumbnailBuilder().setURL(accessoryUrl).setDescription(posterName(post))),
     );
   } else {
     container.addTextDisplayComponents(header, bodyText, footer);
-  }
-  if (mediaUrl) {
-    container.addMediaGalleryComponents(
-      new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(mediaUrl)),
-    );
   }
   return files;
 }
@@ -271,7 +272,7 @@ export function buildInternetPostPayload(post, store = null, {
   const container = new ContainerBuilder().clearAccentColor();
   if (isReply) {
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`↩ **@${posterHandle(post)}** replied to this post.`),
+      new TextDisplayBuilder().setContent(`↩ @${posterHandle(post)} replied to this post.`),
     );
   }
 
@@ -395,8 +396,7 @@ function forumThreadName(post) {
 }
 
 function editablePayload(payload) {
-  const next = { ...payload };
-  delete next.flags;
+  const next = { ...payload, content: null, embeds: [] };
   return next;
 }
 

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-internet-v2-card-emojis",
+      "title": "Use custom post buttons and a V2 reply card",
+      "summary": "Internet posts send as a Components V2 card, not a classic embed. Photos sit on the right of the card. Like, repost, and reply use the custom emojis, and Send Post keeps the paper-plane emoji.",
+      "createdAt": "2026-09-21T16:26:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-internet-follow-ghost-ping",
       "title": "Show profile pictures on posts and follow from ⋯",
       "summary": "Internet posts now include the profile picture on the card. The ⋯ button opens a hidden Follow action. Followers get a ping when that account posts, then the ping is deleted.",
