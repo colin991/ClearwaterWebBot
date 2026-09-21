@@ -608,8 +608,8 @@ function buildPriorityFormModal({ id, players, vehicles }) {
 }
 
 export const PRIORITY_START_HINT = ':h The priority timer is active, please refrain from triggering any priorities at this time.';
-export const PRIORITY_VOICE = 'onyx';
-export const PRIORITY_VOICE_RATE = 1.15;
+export const PRIORITY_VOICE = SAY_VOICE;
+export const PRIORITY_VOICE_RATE = 'slow';
 
 export function priorityStartVehicleSpeech(request) {
   const list = (Array.isArray(request?.vehicles) ? request.vehicles : [])
@@ -685,7 +685,7 @@ export async function playPriorityStartAnnouncement(channel, request, {
     speech = await speechPromise;
   } catch (error) {
     logger.warn('Priority announce first TTS failed; retrying a fallback voice', error);
-    speech = await synthesize(text, SAY_VOICE);
+    speech = await synthesize(text, PRIORITY_VOICE, { rate: PRIORITY_VOICE_RATE });
   }
   logger.info(`Priority announce: playing speech in ${channel.id}`);
   await playQueue(channel, channel.guild.voiceAdapterCreator, [speech], {

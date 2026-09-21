@@ -1,9 +1,7 @@
-import { execFile as execFileCallback } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 import {
   AudioPlayerStatus,
   NoSubscriberBehavior,
@@ -30,10 +28,9 @@ try {
 export const SAY_VOICE = 'en-US-GuyNeural';
 export const SAY_MAX_CHARS = 500;
 export const OPENAI_TTS_VOICES = Object.freeze(['alloy', 'ash', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer']);
-export const OPENAI_TTS_TIMEOUT_MS = 8_000;
+export const OPENAI_TTS_TIMEOUT_MS = 30_000;
 export const EDGE_TTS_TIMEOUT_MS = 20_000;
 const OPENAI_TTS_VOICE_SET = new Set(OPENAI_TTS_VOICES);
-const execFile = promisify(execFileCallback);
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
@@ -121,89 +118,26 @@ async function synthesizeEdgeMp3(text, voice, prosody = {}) {
   return buffer;
 }
 
-async function synthesizeGoogleMp3(text) {
-  const phrase = String(text || '').trim().slice(0, 200);
-  const url = new URL('https://translate.google.com/translate_tts');
-  url.searchParams.set('ie', 'UTF-8');
-  url.searchParams.set('q', phrase);
-  url.searchParams.set('tl', 'en');
-  url.searchParams.set('client', 'tw-ob');
-  const response = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36' },
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!response.ok) throw new Error(`Google TTS failed (${response.status})`);
-  const buffer = Buffer.from(await response.arrayBuffer());
-  if (buffer.length < 250) throw new Error('Google TTS returned empty audio.');
-  return buffer;
-}
-
-async function synthesizeLocalMp3(text) {
-  let speak = 'espeak-ng';
-  try {
-    await execFile(speak, ['--version'], { timeout: 3000 });
-  } catch {
-    speak = 'espeak';
-    await execFile(speak, ['--version'], { timeout: 3000 });
-  }
-  const directory = await mkdtemp(join(tmpdir(), 'cw-tts-'));
-  const wavPath = join(directory, 'speech.wav');
-  const mp3Path = join(directory, 'speech.mp3');
-  try {
-    await execFile(speak, ['-s', '140', '-v', 'en+m3', '-w', wavPath, String(text || '').trim().slice(0, SAY_MAX_CHARS)], { timeout: 15_000 });
-    const ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg';
-    await execFile(ffmpeg, ['-y', '-i', wavPath, '-codec:a', 'libmp3lame', '-qscale:a', '4', mp3Path], { timeout: 15_000 });
-    const buffer = await readFile(mp3Path);
-    if (!buffer.length) throw new Error('Local TTS returned empty audio.');
-    return buffer;
-  } finally {
-    await rm(directory, { recursive: true, force: true }).catch(() => {});
-  }
-}
-
-async function firstSpeechBuffer(attempts) {
-  let lastError;
-  for (const attempt of attempts) {
-    try {
-      const buffer = toNodeAudioBuffer(await attempt());
-      if (buffer?.length) return buffer;
-      lastError = new Error('TTS returned empty audio.');
-    } catch (error) {
-      lastError = error;
-      logger.warn('TTS attempt failed', error);
-    }
-  }
-  throw lastError || new Error('TTS failed.');
-}
-
 /** OpenAI TTS for named voices such as onyx; otherwise free Microsoft Edge TTS. */
 export async function synthesizeSpeechMp3(text, voice = SAY_VOICE, prosody = {}) {
   const chosen = String(voice || SAY_VOICE).trim() || SAY_VOICE;
-  const edge = (name) => promiseWithTimeout(
-    synthesizeEdgeMp3(text, name, { rate: 1, pitch: '+0Hz', volume: 100 }),
-    EDGE_TTS_TIMEOUT_MS,
-    `Edge TTS (${name})`,
-  );
-  const fallbacks = [
-    () => edge('en-US-DavisNeural'),
-    () => edge('en-US-GuyNeural'),
-    () => promiseWithTimeout(synthesizeGoogleMp3(text), 10_000, 'Google TTS'),
-    () => synthesizeLocalMp3(text),
-  ];
   if (isOpenAiVoice(chosen)) {
-    return firstSpeechBuffer([
-      () => promiseWithTimeout(
+    try {
+      return await promiseWithTimeout(
         synthesizeOpenAiMp3(text, chosen, prosody.rate ?? 1),
         OPENAI_TTS_TIMEOUT_MS,
         'OpenAI TTS',
-      ),
-      ...fallbacks,
-    ]);
+      );
+    } catch (error) {
+      logger.warn(`OpenAI voice ${chosen} failed; using Edge Guy instead`, error);
+      return promiseWithTimeout(
+        synthesizeEdgeMp3(text, SAY_VOICE, { rate: 'slow', pitch: '+0Hz', volume: 100 }),
+        EDGE_TTS_TIMEOUT_MS,
+        'Edge TTS',
+      );
+    }
   }
-  return firstSpeechBuffer([
-    () => promiseWithTimeout(synthesizeEdgeMp3(text, chosen, prosody), EDGE_TTS_TIMEOUT_MS, 'Edge TTS'),
-    ...fallbacks,
-  ]);
+  return promiseWithTimeout(synthesizeEdgeMp3(text, chosen, prosody), EDGE_TTS_TIMEOUT_MS, 'Edge TTS');
 }
 
 /**

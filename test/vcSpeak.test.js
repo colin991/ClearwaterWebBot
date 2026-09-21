@@ -16,7 +16,7 @@ test('TTS audio from Edge-style bytes is treated as an mp3 buffer', () => {
 });
 
 test('TTS helpers time out instead of hanging after the beep', async () => {
-  assert.equal(OPENAI_TTS_TIMEOUT_MS, 8_000);
+  assert.equal(OPENAI_TTS_TIMEOUT_MS, 30_000);
   assert.equal(EDGE_TTS_TIMEOUT_MS, 20_000);
   await assert.rejects(
     () => promiseWithTimeout(new Promise(() => {}), 20, 'Edge TTS'),

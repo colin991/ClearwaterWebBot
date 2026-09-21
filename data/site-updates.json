@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-priority-voice-guy-slow",
+      "title": "Restore the original priority voice",
+      "summary": "Priority callouts in the LEO voice channel use the original Edge Guy voice at a slow pace again, instead of Onyx or the robotic fallback voices.",
+      "createdAt": "2026-09-21T20:06:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-priority-voice-stay-for-speech",
       "title": "Stay in the LEO channel and speak after the beep",
       "summary": "The bot no longer leaves the priority voice channel after the beep. It stays connected, retries TTS if Onyx fails, and then plays the spoken callout before disconnecting.",
