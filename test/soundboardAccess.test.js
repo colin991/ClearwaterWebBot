@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import { OverwriteType, PermissionFlagsBits } from 'discord.js';
 import {
   SOUNDBOARD_CHANNEL_ID,
+  SOUNDBOARD_CHANNEL_IDS,
   SOUNDBOARD_SOURCE_GUILD_ID,
   SOUNDBOARD_SOURCE_ROLE_ID,
   SOUNDBOARD_TARGET_GUILD_ID,
+  handleSoundboardMemberRemove,
   handleSoundboardMemberUpdate,
   memberHasSoundboardSourceRole,
   overwriteAllowsOnlySoundboard,
@@ -15,10 +17,11 @@ import {
 } from '../utils/soundboardAccess.js';
 import { CLEARWATER_GUILD_ID } from '../utils/staffRanks.js';
 
-test('soundboard access uses the source role, source guild, and main LEO voice channel', () => {
+test('soundboard access uses the source role and both main-server voice channels', () => {
   assert.equal(SOUNDBOARD_SOURCE_ROLE_ID, '1515129421898448996');
   assert.equal(SOUNDBOARD_SOURCE_GUILD_ID, '1515101455525085337');
   assert.equal(SOUNDBOARD_CHANNEL_ID, '1514128904783139018');
+  assert.deepEqual(SOUNDBOARD_CHANNEL_IDS, ['1514128904783139018', '1514128961951760515']);
   assert.equal(SOUNDBOARD_TARGET_GUILD_ID, CLEARWATER_GUILD_ID);
 });
 
@@ -85,18 +88,31 @@ test('setSoundboardOverwrite deletes a soundboard-only overwrite when the role i
   assert.deepEqual(channel.deletes, ['111111111111111111']);
 });
 
-test('gaining the source role grants the channel overwrite', async () => {
-  const channel = mockChannel();
-  const client = {
+function mockClient(channelMap) {
+  return {
     channels: {
       cache: new Map(),
-      fetch: async () => ({
-        isVoiceBased: () => true,
-        guild: { id: CLEARWATER_GUILD_ID },
-        permissionOverwrites: channel.permissionOverwrites,
-      }),
+      fetch: async (id) => {
+        const channel = channelMap.get(String(id));
+        if (!channel) return null;
+        return {
+          id,
+          isVoiceBased: () => true,
+          guild: { id: CLEARWATER_GUILD_ID },
+          permissionOverwrites: channel.permissionOverwrites,
+        };
+      },
     },
   };
+}
+
+test('gaining the source role grants soundboard on both main-server channels', async () => {
+  const first = mockChannel();
+  const second = mockChannel();
+  const client = mockClient(new Map([
+    ['1514128904783139018', first],
+    ['1514128961951760515', second],
+  ]));
   const previous = {
     user: { bot: false },
     guild: { id: SOUNDBOARD_SOURCE_GUILD_ID },
@@ -110,4 +126,64 @@ test('gaining the source role grants the channel overwrite', async () => {
   };
   const result = await handleSoundboardMemberUpdate(previous, next, client);
   assert.equal(result, 'granted');
+  assert.equal(first.edits.length, 1);
+  assert.equal(second.edits.length, 1);
+});
+
+test('losing the source role removes the soundboard overwrites on both channels', async () => {
+  const existing = () => new Map([['222222222222222222', {
+    id: '222222222222222222',
+    type: OverwriteType.Member,
+    allow: {
+      bitfield: PermissionFlagsBits.UseSoundboard | PermissionFlagsBits.UseExternalSounds,
+      has: (bit) => bit === PermissionFlagsBits.UseSoundboard || bit === PermissionFlagsBits.UseExternalSounds,
+    },
+    deny: { bitfield: 0n },
+  }]]);
+  const first = mockChannel(existing());
+  const second = mockChannel(existing());
+  const client = mockClient(new Map([
+    ['1514128904783139018', first],
+    ['1514128961951760515', second],
+  ]));
+  const previous = {
+    user: { bot: false },
+    guild: { id: SOUNDBOARD_SOURCE_GUILD_ID },
+    roles: { cache: { has: (id) => id === SOUNDBOARD_SOURCE_ROLE_ID } },
+  };
+  const next = {
+    id: '222222222222222222',
+    user: { bot: false },
+    guild: { id: SOUNDBOARD_SOURCE_GUILD_ID },
+    roles: { cache: { has: () => false } },
+  };
+  const result = await handleSoundboardMemberUpdate(previous, next, client);
+  assert.equal(result, 'removed');
+  assert.deepEqual(first.deletes, ['222222222222222222']);
+  assert.deepEqual(second.deletes, ['222222222222222222']);
+});
+
+test('leaving the source server also removes the soundboard overwrites', async () => {
+  const existing = new Map([['222222222222222222', {
+    id: '222222222222222222',
+    type: OverwriteType.Member,
+    allow: {
+      bitfield: PermissionFlagsBits.UseSoundboard | PermissionFlagsBits.UseExternalSounds,
+      has: (bit) => bit === PermissionFlagsBits.UseSoundboard || bit === PermissionFlagsBits.UseExternalSounds,
+    },
+    deny: { bitfield: 0n },
+  }]]);
+  const first = mockChannel(existing);
+  const second = mockChannel(new Map(existing));
+  const client = mockClient(new Map([
+    ['1514128904783139018', first],
+    ['1514128961951760515', second],
+  ]));
+  const result = await handleSoundboardMemberRemove({
+    id: '222222222222222222',
+    guild: { id: SOUNDBOARD_SOURCE_GUILD_ID },
+  }, client);
+  assert.equal(result, 'removed');
+  assert.deepEqual(first.deletes, ['222222222222222222']);
+  assert.deepEqual(second.deletes, ['222222222222222222']);
 });

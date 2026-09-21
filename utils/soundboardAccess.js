@@ -6,8 +6,12 @@ import { ensureGuildMembers } from './guildMemberSnapshot.js';
 /** Discord where the qualifying role lives. */
 export const SOUNDBOARD_SOURCE_GUILD_ID = '1515101455525085337';
 export const SOUNDBOARD_SOURCE_ROLE_ID = '1515129421898448996';
-/** Main-server LEO / dispatch voice channel. */
+/** Main-server voice channels that get Use Soundboard. */
 export const SOUNDBOARD_CHANNEL_ID = '1514128904783139018';
+export const SOUNDBOARD_CHANNEL_IDS = Object.freeze([
+  '1514128904783139018',
+  '1514128961951760515',
+]);
 export const SOUNDBOARD_TARGET_GUILD_ID = CLEARWATER_GUILD_ID;
 export const SOUNDBOARD_SYNC_MS = 10 * 60 * 1000;
 
@@ -75,17 +79,26 @@ export async function sourceMemberHasSoundboardRole(client, userId) {
   }
 }
 
-async function resolveSoundboardChannel(client) {
-  const channel = client.channels.cache.get(SOUNDBOARD_CHANNEL_ID)
-    || await client.channels.fetch(SOUNDBOARD_CHANNEL_ID).catch((error) => {
-      logger.warn(`Soundboard access: could not fetch channel ${SOUNDBOARD_CHANNEL_ID}`, error);
+async function resolveSoundboardChannel(client, channelId) {
+  const channel = client.channels.cache.get(channelId)
+    || await client.channels.fetch(channelId).catch((error) => {
+      logger.warn(`Soundboard access: could not fetch channel ${channelId}`, error);
       return null;
     });
   if (!channel?.isVoiceBased?.() || String(channel.guild?.id) !== SOUNDBOARD_TARGET_GUILD_ID) {
-    logger.warn(`Soundboard access: ${SOUNDBOARD_CHANNEL_ID} is not the main-server voice channel.`);
+    logger.warn(`Soundboard access: ${channelId} is not a main-server voice channel.`);
     return null;
   }
   return channel;
+}
+
+async function resolveSoundboardChannels(client) {
+  const channels = [];
+  for (const channelId of SOUNDBOARD_CHANNEL_IDS) {
+    const channel = await resolveSoundboardChannel(client, channelId);
+    if (channel) channels.push(channel);
+  }
+  return channels;
 }
 
 export async function setSoundboardOverwrite(channel, userId, grant, {
@@ -124,11 +137,7 @@ export async function eligibleSoundboardUserIds(client) {
   return ids;
 }
 
-export async function syncSoundboardAccess(client) {
-  const channel = await resolveSoundboardChannel(client);
-  if (!channel) return { ok: false, granted: 0, removed: 0, reason: 'channel_unavailable' };
-
-  const eligible = new Set(await eligibleSoundboardUserIds(client));
+async function syncChannelSoundboardAccess(channel, eligible) {
   let granted = 0;
   let removed = 0;
 
@@ -137,41 +146,66 @@ export async function syncSoundboardAccess(client) {
       const result = await setSoundboardOverwrite(channel, userId, true);
       if (result === 'granted') granted += 1;
     } catch (error) {
-      logger.warn(`Soundboard access: could not grant ${userId}`, error);
+      logger.warn(`Soundboard access: could not grant ${userId} on ${channel.id}`, error);
     }
   }
 
   const overwrites = [...(channel.permissionOverwrites?.cache?.values?.() || [])];
   for (const overwrite of overwrites) {
-    if (!overwriteAllowsOnlySoundboard(overwrite) && !overwrite?.allow?.has?.(PermissionFlagsBits.UseSoundboard)) {
-      continue;
-    }
-    if (!isMemberOverwrite(overwrite)) continue;
+    const hasSound = overwriteAllowsOnlySoundboard(overwrite)
+      || overwrite?.allow?.has?.(PermissionFlagsBits.UseSoundboard)
+      || overwrite?.allow?.has?.(PermissionFlagsBits.UseExternalSounds);
+    if (!hasSound || !isMemberOverwrite(overwrite)) continue;
     const userId = String(overwrite.id);
     if (eligible.has(userId)) continue;
     try {
       const result = await setSoundboardOverwrite(channel, userId, false);
       if (result === 'removed' || result === 'cleared') removed += 1;
     } catch (error) {
-      logger.warn(`Soundboard access: could not revoke ${userId}`, error);
+      logger.warn(`Soundboard access: could not revoke ${userId} on ${channel.id}`, error);
     }
   }
 
   if (granted || removed) {
-    logger.info(`Soundboard access synced on ${SOUNDBOARD_CHANNEL_ID}: granted ${granted}, removed ${removed}.`);
+    logger.info(`Soundboard access synced on ${channel.id}: granted ${granted}, removed ${removed}.`);
   }
-  return { ok: true, granted, removed, eligible: eligible.size };
+  return { granted, removed };
+}
+
+export async function syncSoundboardAccess(client) {
+  const channels = await resolveSoundboardChannels(client);
+  if (!channels.length) return { ok: false, granted: 0, removed: 0, reason: 'channel_unavailable' };
+
+  const eligible = new Set(await eligibleSoundboardUserIds(client));
+  let granted = 0;
+  let removed = 0;
+  for (const channel of channels) {
+    const result = await syncChannelSoundboardAccess(channel, eligible);
+    granted += result.granted;
+    removed += result.removed;
+  }
+  return { ok: true, granted, removed, eligible: eligible.size, channels: channels.length };
+}
+
+function summarizeResults(results) {
+  if (results.includes('granted')) return 'granted';
+  if (results.includes('removed') || results.includes('cleared')) return 'removed';
+  if (results.includes('unchanged')) return 'unchanged';
+  return results[0] || null;
 }
 
 async function applyForUser(client, userId, grant) {
-  const channel = await resolveSoundboardChannel(client);
-  if (!channel) return null;
-  try {
-    return await setSoundboardOverwrite(channel, userId, grant);
-  } catch (error) {
-    logger.warn(`Soundboard access: could not update ${userId}`, error);
-    return null;
+  const channels = await resolveSoundboardChannels(client);
+  if (!channels.length) return null;
+  const results = [];
+  for (const channel of channels) {
+    try {
+      results.push(await setSoundboardOverwrite(channel, userId, grant));
+    } catch (error) {
+      logger.warn(`Soundboard access: could not update ${userId} on ${channel.id}`, error);
+    }
   }
+  return summarizeResults(results);
 }
 
 export async function handleSoundboardMemberUpdate(previousMember, member, client) {
@@ -197,9 +231,14 @@ export async function handleSoundboardMemberAdd(member, client) {
   return null;
 }
 
+export async function handleSoundboardMemberRemove(member, client) {
+  if (String(member?.guild?.id) !== SOUNDBOARD_SOURCE_GUILD_ID) return null;
+  return applyForUser(client || member.client, member.id, false);
+}
+
 export async function handleSoundboardVoiceJoin(oldState, newState, client) {
-  if (newState?.channelId !== SOUNDBOARD_CHANNEL_ID) return null;
-  if (oldState?.channelId === SOUNDBOARD_CHANNEL_ID) return null;
+  if (!SOUNDBOARD_CHANNEL_IDS.includes(String(newState?.channelId || ''))) return null;
+  if (String(oldState?.channelId || '') === String(newState.channelId)) return null;
   const userId = newState.id || newState.member?.id;
   if (!userId || newState.member?.user?.bot) return null;
   const allowed = await sourceMemberHasSoundboardRole(client || newState.client, userId);
@@ -219,7 +258,7 @@ export function startSoundboardAccess(client) {
   }, 6_000);
   logger.info(
     `Soundboard access armed: role ${SOUNDBOARD_SOURCE_ROLE_ID} in ${SOUNDBOARD_SOURCE_GUILD_ID} `
-    + `→ Use Soundboard in VC ${SOUNDBOARD_CHANNEL_ID}.`,
+    + `→ Use Soundboard in VCs ${SOUNDBOARD_CHANNEL_IDS.join(', ')}.`,
   );
   return () => { stopped = true; clearTimeout(timer); };
 }

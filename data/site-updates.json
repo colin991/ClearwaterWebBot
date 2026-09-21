@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-soundboard-second-channel",
+      "title": "Soundboard on a second LEO voice channel, and revoke on role loss",
+      "summary": "The other-server soundboard role now also unlocks Use Soundboard in main-server voice channel 1514128961951760515. If that role is removed, or they leave that Discord, the bot takes the soundboard overwrites off both LEO voice channels.",
+      "createdAt": "2026-09-21T21:53:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-soundboard-role-access",
       "title": "Grant LEO voice soundboard from the other server role",
       "summary": "Members with role 1515129421898448996 in Discord 1515101455525085337 now get Use Soundboard (and Use External Sounds) in main-server voice channel 1514128904783139018.",
