@@ -59,11 +59,13 @@ export const SOUNDBOARD_OVERWRITE_CLEAR = Object.freeze({
 });
 
 async function fetchGuild(client, guildId) {
-  return client.guilds?.cache?.get(String(guildId))
-    || await client.guilds.fetch(String(guildId)).catch((error) => {
-      logger.warn(`Soundboard access: could not fetch guild ${guildId}`, error);
-      return null;
-    });
+  const cached = client.guilds?.cache?.get(String(guildId));
+  if (cached) return cached;
+  if (typeof client.guilds?.fetch !== 'function') return null;
+  return client.guilds.fetch(String(guildId)).catch((error) => {
+    logger.warn(`Soundboard access: could not fetch guild ${guildId}`, error);
+    return null;
+  });
 }
 
 export async function sourceMemberHasSoundboardRole(client, userId) {
