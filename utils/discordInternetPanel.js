@@ -40,6 +40,7 @@ import {
   INTERNET_POST_BOOKMARK_PREFIX,
   INTERNET_POST_COMMENT_PREFIX,
   INTERNET_POST_DELETE_PREFIX,
+  INTERNET_POST_FOLLOW_PREFIX,
   INTERNET_POST_LIKE_PREFIX,
   INTERNET_POST_MORE_PREFIX,
   INTERNET_POST_PROFILE_PREFIX,
@@ -710,20 +711,57 @@ async function showPostMore(interaction, postId) {
   const store = await readInternetStore();
   const post = store.posts.find((item) => item.id === String(postId));
   if (!post) throw new Error('That post no longer exists.');
-  await interaction.reply(v2Container('## Post options', (container) => {
-    container.addActionRowComponents(
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`${INTERNET_POST_PROFILE_PREFIX}${post.authorId}`)
-          .setLabel('Profile')
-          .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-          .setCustomId(`${INTERNET_POST_DELETE_PREFIX}${post.id}`)
-          .setLabel('Delete')
-          .setStyle(ButtonStyle.Danger),
-      ),
-    );
-  }, { ephemeral: true }));
+  const author = store.users?.[post.authorId] || post;
+  const actor = internetActor(interaction);
+  const owner = store.users?.[actor.id];
+  const following = Array.isArray(owner?.following) && owner.following.includes(String(post.authorId));
+  const mine = post.authorId === actor.id || author?.ownerDiscordId === actor.id;
+  const name = author.displayName || author.username || 'this account';
+  const handle = author.username || 'user';
+  if (mine) {
+    await interaction.reply(v2Message(`That's **${name}** (@${handle}) — your account.`, { ephemeral: true }));
+    return;
+  }
+  await interaction.reply(v2Container(
+    `Follow **${name}** (@${handle})?\nYou will get a ping whenever they post.`,
+    (container) => {
+      container.addActionRowComponents(
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`${INTERNET_POST_FOLLOW_PREFIX}${post.authorId}`)
+            .setLabel(following ? 'Unfollow' : 'Follow')
+            .setStyle(following ? ButtonStyle.Secondary : ButtonStyle.Primary),
+        ),
+      );
+    },
+    { ephemeral: true },
+  ));
+}
+
+async function toggleFollow(interaction, targetId) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const actor = internetActor(interaction);
+  const result = await mutateDiscordInternetStore((store) => {
+    const owner = store.users?.[actor.id];
+    const already = Array.isArray(owner?.following) && owner.following.includes(String(targetId));
+    updateInternetSocial(store, {
+      actor,
+      targetId,
+      type: 'follow',
+      enabled: !already,
+    });
+    const target = store.users?.[targetId];
+    return {
+      following: !already,
+      name: target?.displayName || target?.username || 'that account',
+      handle: target?.username || 'user',
+    };
+  });
+  await interaction.editReply({
+    content: result.following
+      ? `You follow **${result.name}** (@${result.handle}). You'll get a ping when they post.`
+      : `You unfollowed **${result.name}** (@${result.handle}).`,
+  });
 }
 
 async function toggleLike(interaction, client, postId) {
@@ -841,7 +879,7 @@ async function showHelp(interaction) {
     '**Switch Account** chooses which profile new posts and replies use.',
     '**Profile** shows the selected account. **Set Picture** uploads a profile photo.',
     '**Send Post** publishes as the selected account, with like, repost, reply, and bookmark buttons.',
-    '**Like / Repost / Reply / Bookmark** work on the post itself. **⋯** opens profile and delete.',
+    '**⋯** opens a hidden Follow button. Following someone pings you when they post.',
     '**Settings** lets you edit extra profile fields and Discord notification preference.',
   ].join('\n\n'), { ephemeral: true }));
 }
@@ -875,6 +913,7 @@ export async function handleDiscordInternetInteraction(interaction, client) {
     || id.startsWith(INTERNET_POST_COMMENT_PREFIX)
     || id.startsWith(INTERNET_POST_BOOKMARK_PREFIX)
     || id.startsWith(INTERNET_POST_MORE_PREFIX)
+    || id.startsWith(INTERNET_POST_FOLLOW_PREFIX)
     || id.startsWith(INTERNET_POST_PROFILE_PREFIX)
     || id.startsWith(INTERNET_POST_DELETE_PREFIX)
     || id.startsWith(COMMENT_MODAL_PREFIX)
@@ -908,6 +947,7 @@ export async function handleDiscordInternetInteraction(interaction, client) {
     else if (id.startsWith(INTERNET_POST_COMMENT_PREFIX)) await interaction.showModal(buildCommentModal(id.slice(INTERNET_POST_COMMENT_PREFIX.length)));
     else if (id.startsWith(INTERNET_POST_BOOKMARK_PREFIX)) await toggleBookmark(interaction, client, id.slice(INTERNET_POST_BOOKMARK_PREFIX.length));
     else if (id.startsWith(INTERNET_POST_MORE_PREFIX)) await showPostMore(interaction, id.slice(INTERNET_POST_MORE_PREFIX.length));
+    else if (id.startsWith(INTERNET_POST_FOLLOW_PREFIX)) await toggleFollow(interaction, id.slice(INTERNET_POST_FOLLOW_PREFIX.length));
     else if (id.startsWith(COMMENT_MODAL_PREFIX)) await publishComment(interaction, client, id.slice(COMMENT_MODAL_PREFIX.length));
     else if (id.startsWith(INTERNET_POST_PROFILE_PREFIX)) await showProfile(interaction, id.slice(INTERNET_POST_PROFILE_PREFIX.length));
     else if (id.startsWith(INTERNET_POST_DELETE_PREFIX)) await removePost(interaction, client, id.slice(INTERNET_POST_DELETE_PREFIX.length));

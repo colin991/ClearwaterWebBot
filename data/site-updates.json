@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-internet-follow-ghost-ping",
+      "title": "Show profile pictures on posts and follow from ⋯",
+      "summary": "Internet posts now include the profile picture on the card. The ⋯ button opens a hidden Follow action. Followers get a ping when that account posts, then the ping is deleted.",
+      "createdAt": "2026-09-21T16:22:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-internet-multi-account-pictures",
       "title": "Allow extra Internet accounts, switching, and profile pictures",
       "summary": "You can create more than one Internet account, switch which one posts and replies, and upload a profile picture for the selected account.",

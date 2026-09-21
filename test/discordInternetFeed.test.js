@@ -29,7 +29,9 @@ test('Internet feed payload uses profile layout with like/repost/reply/bookmark'
   assert.match(json, /Cxrsed is so tuff/);
   assert.match(json, /❤️|❤/);
   assert.match(json, /cw-internet-repost:/);
-  assert.match(json, /cw-internet-bookmark:/);
+  assert.match(json, /cdn\.discordapp\.com\/embed\/avatars/);
+  assert.match(json, /cw-internet-more:/);
+  assert.doesNotMatch(json, /React to Post/);
   assert.deepEqual(payload.allowedMentions, { parse: [] });
   assert.equal(Object.prototype.hasOwnProperty.call(payload.allowedMentions, 'users'), false);
 });

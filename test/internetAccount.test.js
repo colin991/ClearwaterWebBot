@@ -8,6 +8,8 @@ import {
   switchInternetAccount,
   activeInternetAccount,
   listOwnedInternetAccounts,
+  followerDiscordIds,
+  updateInternetSocial,
 } from '../utils/internetStore.js';
 import { buildInternetPanelPayload } from '../utils/discordInternetPanel.js';
 
@@ -67,6 +69,21 @@ test('Profile edits can change display name and username', () => {
   assert.equal(next.displayName, 'Berg');
   assert.equal(next.username, 'Berg2310');
   assert.equal(next.bio, 'hello');
+});
+
+test('followers of an account are pinged by Discord id', () => {
+  const store = emptyStore();
+  const poster = { id: '123456789012345678', username: 'poster' };
+  const fan = { id: '223456789012345678', username: 'fan' };
+  createInternetAccount(store, { actor: poster, displayName: 'Poster', username: 'poster' });
+  createInternetAccount(store, { actor: fan, displayName: 'Fan', username: 'fanacc' });
+  updateInternetSocial(store, {
+    actor: fan,
+    targetId: poster.id,
+    type: 'follow',
+    enabled: true,
+  });
+  assert.deepEqual(followerDiscordIds(store, poster.id), [fan.id]);
 });
 
 test('Internet Panel includes Create Account, Profile, and Switch Account', () => {

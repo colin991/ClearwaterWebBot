@@ -13,10 +13,10 @@ import {
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from 'discord.js';
-import { readInternetStore } from './internetStore.js';
+import { followerDiscordIds, readInternetStore } from './internetStore.js';
 import { logger } from './logger.js';
 
-const MAX_ATTACH_BYTES = 8 * 1024 * 1024;
+const DEFAULT_AVATAR_URL = 'https://cdn.discordapp.com/embed/avatars/0.png';
 
 export const INTERNET_POST_LIKE_PREFIX = 'cw-internet-like:';
 export const INTERNET_POST_REPOST_PREFIX = 'cw-internet-repost:';
@@ -46,14 +46,14 @@ function isHttpsUrl(value) {
   }
 }
 
-function parseDataImage(value) {
+function parseDataImage(value, fileName = 'post') {
   const match = String(value || '').replace(/\s+/g, '').match(/^data:(image\/(?:png|jpeg|jpg|webp|gif));base64,([a-z0-9+/]+=*)$/i);
   if (!match) return null;
   const buffer = Buffer.from(match[2], 'base64');
   if (!buffer.length || buffer.length > MAX_ATTACH_BYTES) return null;
   const mime = match[1].toLowerCase();
   const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : mime.includes('gif') ? 'gif' : 'jpg';
-  return { buffer, name: `post.${ext}` };
+  return { buffer, name: `${fileName}.${ext}` };
 }
 
 function posterHandle(post) {
@@ -140,6 +140,20 @@ function resolveFeedMessageId(post) {
   return /^\d{16,22}$/.test(id) ? id : '';
 }
 
+function resolveAvatar(post, store) {
+  const author = store?.users?.[post?.authorId];
+  const raw = author?.avatarUrl || post?.avatarUrl || '';
+  if (isHttpsUrl(raw)) return { url: raw, files: [] };
+  const data = parseDataImage(raw, 'avatar');
+  if (data) {
+    return {
+      url: `attachment://${data.name}`,
+      files: [new AttachmentBuilder(data.buffer, { name: data.name })],
+    };
+  }
+  return { url: DEFAULT_AVATAR_URL, files: [] };
+}
+
 function resolveMedia(post) {
   const files = [];
   let mediaUrl = '';
@@ -220,26 +234,24 @@ function internetMetaRow(post) {
 
 function addPostCard(container, post, store, { thumbnail = true, media = true } = {}) {
   const { files, mediaUrl } = media ? resolveMedia(post) : { files: [], mediaUrl: '' };
-  let avatarUrl = '';
-  if (thumbnail && isHttpsUrl(post?.avatarUrl)) {
-    avatarUrl = post.avatarUrl;
-  } else if (thumbnail) {
-    const data = parseDataImage(post?.avatarUrl);
-    if (data) {
-      const name = `avatar.${data.name.split('.').pop()}`;
-      files.push(new AttachmentBuilder(data.buffer, { name }));
-      avatarUrl = `attachment://${name}`;
-    }
-  }
-  const card = new TextDisplayBuilder().setContent(buildFeedPostText(post, store));
-  if (avatarUrl) {
+  const avatar = thumbnail ? resolveAvatar(post, store) : { url: '', files: [] };
+  files.push(...avatar.files);
+  const followers = followerCount(store, post?.authorId);
+  const body = String(post?.content || '').trim() || '_Shared a post._';
+  const when = formatFeedTimestamp(post?.createdAt);
+  const header = new TextDisplayBuilder().setContent(
+    `**${posterName(post)}**\n-# @${posterHandle(post)} · ${followers} follower${followers === 1 ? '' : 's'}`,
+  );
+  const bodyText = new TextDisplayBuilder().setContent(body.slice(0, 2000));
+  const footer = new TextDisplayBuilder().setContent(when ? `-# ${when}` : '\u200b');
+  if (avatar.url) {
     container.addSectionComponents(
       new SectionBuilder()
-        .addTextDisplayComponents(card)
-        .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatarUrl).setDescription(posterName(post))),
+        .addTextDisplayComponents(header, bodyText, footer)
+        .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatar.url).setDescription(posterName(post))),
     );
   } else {
-    container.addTextDisplayComponents(card);
+    container.addTextDisplayComponents(header, bodyText, footer);
   }
   if (mediaUrl) {
     container.addMediaGalleryComponents(
@@ -265,7 +277,6 @@ export function buildInternetPostPayload(post, store = null, {
 
   const files = addPostCard(container, post, store, { thumbnail, media });
   container.addActionRowComponents(internetActionRow(post, store, { emojis, bookmark: !isReply }));
-  if (!isReply) container.addActionRowComponents(internetMetaRow(post));
 
   const payload = {
     components: [container],
@@ -397,6 +408,27 @@ async function fetchForumThread(channel, id) {
   }
 }
 
+async function ghostPingFollowers(channel, post, store, feedId) {
+  const userIds = followerDiscordIds(store, post?.authorId);
+  if (!userIds.length) return;
+  let dest = channel;
+  if (isInternetForumChannel(channel) && feedId) {
+    dest = await fetchForumThread(channel, feedId) || channel;
+  }
+  if (!dest?.send) return;
+  for (const userId of userIds) {
+    try {
+      const ping = await dest.send({
+        content: `<@${userId}>`,
+        allowedMentions: { parse: [], users: [userId] },
+      });
+      await ping.delete().catch(() => {});
+    } catch (error) {
+      logger.warn(`Could not notify Internet follower ${userId}`, error);
+    }
+  }
+}
+
 export function createInternetFeedController(client, config = {}) {
   const channelId = String(config.internetFeedChannelId || '').trim();
 
@@ -410,7 +442,12 @@ export function createInternetFeedController(client, config = {}) {
     for (const build of payloadAttempts(post, store)) {
       try {
         const id = await sendFeedPayload(channel, post, build());
-        if (id) return id;
+        if (id) {
+          await ghostPingFollowers(channel, post, store, id).catch((error) => {
+            logger.warn('Could not notify Internet followers', error);
+          });
+          return id;
+        }
       } catch (error) {
         lastError = error;
         logger.warn('Could not publish Clearwater Internet post to Discord', error);

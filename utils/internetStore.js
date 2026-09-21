@@ -1934,6 +1934,21 @@ export function listOwnedInternetAccounts(store, discordId) {
   return list;
 }
 
+export function followerDiscordIds(store, authorId) {
+  const target = String(authorId || '');
+  const author = store?.users?.[target];
+  const authorDiscord = author?.ownerDiscordId
+    || (/^\d{16,22}$/.test(target) ? target : '');
+  const followed = new Set([target, authorDiscord].filter(Boolean));
+  const ids = new Set();
+  for (const member of Object.values(store?.users || {})) {
+    if (!Array.isArray(member?.following) || !member.following.some((id) => followed.has(String(id)))) continue;
+    const pingId = /^\d{16,22}$/.test(member.id) ? member.id : member.ownerDiscordId;
+    if (/^\d{16,22}$/.test(String(pingId || '')) && pingId !== authorDiscord) ids.add(String(pingId));
+  }
+  return [...ids].slice(0, 40);
+}
+
 export function hasInternetAccount(store, actorId) {
   return listOwnedInternetAccounts(store, actorId).some((user) => (
     user.accountCreated === true || Boolean(user.lastPostAt) || Boolean(user.walletStartedAt)
@@ -3258,8 +3273,9 @@ export function updateInternetSocial(store, { actor, targetId, type, enabled, po
   }
   if (!['follow', 'block', 'mute'].includes(type)) throw new Error('Unsupported social action');
   const target = String(targetId || '');
-  const validTarget = /^\d{16,22}$/.test(target) || isBusinessAccountId(target);
+  const validTarget = /^\d{16,22}$/.test(target) || isBusinessAccountId(target) || isInternetAltAccountId(target);
   if (!validTarget || target === user.id) throw new Error('Choose another member');
+  if (store.users[target]?.ownerDiscordId === user.id) throw new Error('Choose another member');
   const key = `${type === 'follow' ? 'following' : `${type}ed`}`;
   user[key] = Array.isArray(user[key]) ? user[key] : [];
   user[key] = enabled ? [...new Set([...user[key], target])].slice(-500) : user[key].filter((id) => id !== target);
