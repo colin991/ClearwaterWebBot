@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-priority-voice-rate-115",
+      "title": "Speak priority callouts at 1.15x",
+      "summary": "The LEO channel priority voice still uses Edge Guy, now at 1.15x speed instead of slow.",
+      "createdAt": "2026-09-21T21:31:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-group-request-whitelist-fix",
       "title": "Fix whitelisted Roblox group join requests",
       "summary": "Group join requests from Discord members with the allowed whitelist roles are accepted again. If Discord’s member list is incomplete, unmatched requests are skipped instead of declined so whitelist players are not rejected by accident.",

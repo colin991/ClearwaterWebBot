@@ -609,7 +609,7 @@ function buildPriorityFormModal({ id, players, vehicles }) {
 
 export const PRIORITY_START_HINT = ':h The priority timer is active, please refrain from triggering any priorities at this time.';
 export const PRIORITY_VOICE = SAY_VOICE;
-export const PRIORITY_VOICE_RATE = 'slow';
+export const PRIORITY_VOICE_RATE = 1.15;
 
 export function priorityStartVehicleSpeech(request) {
   const list = (Array.isArray(request?.vehicles) ? request.vehicles : [])
