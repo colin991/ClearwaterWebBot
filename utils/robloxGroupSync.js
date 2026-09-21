@@ -101,11 +101,63 @@ async function groupFetch(path, apiKey, options = {}, { retries = 3 } = {}) {
   throw lastError || new Error('Roblox Groups API failed after retries');
 }
 
-async function sendGroupLog(client, config, title, description) {
-  if (!config.robloxGroupLogChannelId) return;
-  const channel = await client.channels.fetch(config.robloxGroupLogChannelId).catch(() => null);
-  if (!channel?.isTextBased()) return;
-  await channel.send(v2Card({ title, description })).catch(() => null);
+export const GROUP_SKIP_LOG_MS = 15 * 60 * 1000;
+
+export function createSkipLogGate(intervalMs = GROUP_SKIP_LOG_MS) {
+  let lastAt = 0;
+  let lastCount = null;
+  return (skipped, now = Date.now()) => {
+    const count = Math.max(0, Number(skipped) || 0);
+    if (!count) return false;
+    if (count !== lastCount || now - lastAt >= intervalMs) {
+      lastAt = now;
+      lastCount = count;
+      return true;
+    }
+    return false;
+  };
+}
+
+const shouldPostSkipLog = createSkipLogGate();
+
+function mentionedUserIds(text) {
+  return [...String(text || '').matchAll(/<@(\d{16,22})>/g)].map((match) => match[1]);
+}
+
+export function groupLogPayload(title, description) {
+  const users = mentionedUserIds(description);
+  return {
+    allowedMentions: users.length ? { parse: [], users } : { parse: [] },
+    embeds: [{
+      title: String(title || 'Roblox group').slice(0, 256),
+      description: String(description || '\u200b').slice(0, 4000),
+      color: 0x5b8def,
+      timestamp: new Date().toISOString(),
+    }],
+  };
+}
+
+export async function sendGroupLog(client, config, title, description) {
+  const channelId = String(config?.robloxGroupLogChannelId || '').trim();
+  if (!channelId) {
+    logger.warn('Roblox group Discord log skipped: no log channel id.');
+    return false;
+  }
+  const channel = await client.channels.fetch(channelId).catch((error) => {
+    logger.warn(`Roblox group log channel ${channelId} could not be fetched`, error);
+    return null;
+  });
+  if (!channel?.isTextBased() || typeof channel.send !== 'function') {
+    logger.warn(`Roblox group log channel ${channelId} is unavailable.`);
+    return false;
+  }
+  try {
+    await channel.send(groupLogPayload(title, description));
+    return true;
+  } catch (error) {
+    logger.error('Roblox group Discord log failed', error);
+    return false;
+  }
 }
 
 async function sendGroupApprovalDm(client, discordId, { robloxId, groupId } = {}) {
@@ -273,6 +325,7 @@ async function syncGroupJoinRequests(client, config) {
   let skipped = 0;
   let failed = 0;
   const declinedLines = [];
+  const skippedLines = [];
 
   for (const request of requests) {
     const robloxId = joinRequestRobloxId(request);
@@ -280,6 +333,7 @@ async function syncGroupJoinRequests(client, config) {
     if (!requestName) {
       logger.warn(`Skipped a Roblox group join request because it did not include an ID. Fields: ${Object.keys(request || {}).join(', ') || 'none'}.`);
       skipped += 1;
+      skippedLines.push(robloxId ? `Roblox user ID \`${robloxId}\` (missing request id)` : 'Unknown request (missing request id)');
       continue;
     }
 
@@ -324,6 +378,11 @@ async function syncGroupJoinRequests(client, config) {
 
       if (action === 'skip') {
         skipped += 1;
+        skippedLines.push(
+          robloxId
+            ? `Roblox user ID \`${robloxId}\`${rosterReady ? '' : ' (Discord member list incomplete)'}`
+            : 'Unknown Roblox user (no user id)',
+        );
         logger.warn(
           `Skipped Roblox group join request for ${robloxId || 'unknown user'} `
           + 'until Discord roles can be confirmed.',
@@ -360,11 +419,25 @@ async function syncGroupJoinRequests(client, config) {
     const preview = declinedLines.slice(0, 15).map((line) => `• ${line}`).join('\n');
     const extra = declinedLines.length > 15 ? `\n…and ${declinedLines.length - 15} more.` : '';
     await sendGroupLog(
-          client,
-          config,
-          'Roblox pending queue cleared',
-          `Declined **${declined}** pending join request(s) with no allowed Discord role (includes older backlog).\n\n${preview}${extra}`,
-        );
+      client,
+      config,
+      'Roblox pending queue cleared',
+      `Declined **${declined}** pending join request(s) with no allowed Discord role (includes older backlog).\n\n${preview}${extra}`,
+    );
+  }
+
+  if (skipped && shouldPostSkipLog(skipped)) {
+    const preview = skippedLines.slice(0, 15).map((line) => `• ${line}`).join('\n');
+    const extra = skippedLines.length > 15 ? `\n…and ${skippedLines.length - 15} more.` : '';
+    const reason = rosterReady
+      ? 'those requests did not include enough information to accept or decline yet'
+      : 'the Discord member list is incomplete, so whitelist roles cannot be confirmed yet';
+    await sendGroupLog(
+      client,
+      config,
+      'Roblox group request waiting',
+      `Skipped **${skipped}** pending join request(s) because ${reason}. Known whitelist matches are still accepted.\n\n${preview}${extra}`,
+    );
   }
 
   if (accepted || declined || failed || skipped) {
