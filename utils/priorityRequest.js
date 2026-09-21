@@ -29,7 +29,7 @@ import path from 'node:path';
 export const PRIORITY_REQUEST_CHANNEL = '1514341436139770017';
 export const PRIORITY_REQUEST_STAFF_ROLE = '1515107822432419971';
 export const PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID = '1514128904783139018';
-export const PRIORITY_BEEP_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'priority-beep.ogg');
+export const PRIORITY_BEEP_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'priority-beep.mp3');
 export const PRIORITY_REQUEST_SECONDS = 1800;
 export const PRIORITY_PEACE_SECONDS = 600;
 export const PRIORITY_PENDING_MS = 25 * 60 * 1000;
@@ -608,6 +608,7 @@ function buildPriorityFormModal({ id, players, vehicles }) {
 }
 
 export const PRIORITY_START_HINT = ':h The priority timer is active, please refrain from triggering any priorities at this time.';
+export const PRIORITY_VOICE = 'onyx';
 export const PRIORITY_VOICE_RATE = 1.15;
 
 export function priorityStartVehicleSpeech(request) {
@@ -666,7 +667,7 @@ export async function announcePriorityStart(client, request) {
   if (!channel.permissionsFor(me)?.has(['Connect', 'Speak'])) {
     throw new Error('The bot needs Connect and Speak in the priority announce voice channel.');
   }
-  const speech = await synthesizeSpeechMp3(priorityStartSpeech(request), undefined, { rate: PRIORITY_VOICE_RATE });
+  const speech = await synthesizeSpeechMp3(priorityStartSpeech(request), PRIORITY_VOICE, { rate: PRIORITY_VOICE_RATE });
   await playMp3InVoiceChannel(channel, channel.guild.voiceAdapterCreator, PRIORITY_BEEP_PATH, {
     leaveAfter: false,
     speakDelayMs: 400,

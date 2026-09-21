@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-priority-onyx-radio-beep",
+      "title": "Use Onyx at 1.15 and the new radio beep for priority voice",
+      "summary": "Priority callouts in the LEO voice channel now play the 101-1-star radio beep, then speak with the Onyx voice at speed 1.15.",
+      "createdAt": "2026-09-21T19:33:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-priority-voice-faster",
       "title": "Speed up the priority voice line and lengthen the beep",
       "summary": "The LEO channel callout now uses a longer beep, then speaks at a normal pace: who started the priority, the vehicle description, and the priority type.",

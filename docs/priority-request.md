@@ -16,7 +16,7 @@ On approve:
 - The requester is DMed the started card, including **Request Added Time**.
 - The bot runs `:prty 1800` (30 minutes).
 - The bot runs `:h The priority timer is active, please refrain from triggering any priorities at this time.`
-- After that in-game hint, the bot joins voice channel `1514128904783139018`, plays a longer priority beep, then speaks at a normal pace: who started it, the vehicle description, and the priority type.
+- After that in-game hint, the bot joins voice channel `1514128904783139018`, plays `assets/priority-beep.mp3`, then speaks with OpenAI **onyx** at speed **1.15**: who started it, the vehicle description, and the priority type. Set `OPENAI_API_KEY` on the bot host for that voice.
 
 Anyone can run **`/priority active`** to see who currently has the priority, the type, cars, and time left.
 

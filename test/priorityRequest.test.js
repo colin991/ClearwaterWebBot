@@ -13,6 +13,8 @@ import {
   handlePriorityRequest,
   hasBlockingPriority,
   PRIORITY_BEEP_PATH,
+  PRIORITY_VOICE,
+  PRIORITY_VOICE_RATE,
   PRIORITY_PENDING_MS,
   PRIORITY_PEACE_SECONDS,
   PRIORITY_REQUEST_SECONDS,
@@ -303,8 +305,10 @@ test('approve starts a 30 minute in-game timer and DMs the requester', async () 
   assert.match(f.dms[0].payload.components[0].components[2].content, /Priority Started/);
 });
 
-test('priority voice announcement uses the uploaded ogg beep', () => {
-  assert.match(PRIORITY_BEEP_PATH, /priority-beep\.ogg$/);
+test('priority voice uses Onyx at 1.15 and the radio beep mp3', () => {
+  assert.equal(PRIORITY_VOICE, 'onyx');
+  assert.equal(PRIORITY_VOICE_RATE, 1.15);
+  assert.match(PRIORITY_BEEP_PATH, /priority-beep\.mp3$/);
   assert.equal(existsSync(PRIORITY_BEEP_PATH), true);
 });
 

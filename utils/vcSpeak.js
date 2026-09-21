@@ -28,6 +28,8 @@ try {
 
 export const SAY_VOICE = 'en-US-GuyNeural';
 export const SAY_MAX_CHARS = 500;
+export const OPENAI_TTS_VOICES = Object.freeze(['alloy', 'ash', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer']);
+const OPENAI_TTS_VOICE_SET = new Set(OPENAI_TTS_VOICES);
 
 function waitForPlayerIdle(player, timeoutMs = 60_000) {
   return new Promise((resolve, reject) => {
@@ -68,8 +70,38 @@ function escapeSsml(text) {
     .replace(/'/g, '&apos;');
 }
 
-/** Free Microsoft Edge TTS — no API key. */
-export async function synthesizeSpeechMp3(text, voice = SAY_VOICE, prosody = {}) {
+function isOpenAiVoice(voice) {
+  return OPENAI_TTS_VOICE_SET.has(String(voice || '').trim().toLowerCase());
+}
+
+async function synthesizeOpenAiMp3(text, voice, speed) {
+  const key = String(process.env.OPENAI_API_KEY || '').trim();
+  if (!key) throw new Error('OPENAI_API_KEY is not set');
+  const response = await fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'tts-1',
+      input: String(text || '').trim().slice(0, SAY_MAX_CHARS),
+      voice: String(voice || 'onyx').toLowerCase(),
+      speed: Math.min(4, Math.max(0.25, Number(speed) || 1)),
+      response_format: 'mp3',
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    throw new Error(`OpenAI TTS failed (${response.status})${detail ? `: ${detail.slice(0, 180)}` : ''}`);
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (!buffer.length) throw new Error('OpenAI TTS returned empty audio.');
+  return buffer;
+}
+
+async function synthesizeEdgeMp3(text, voice, prosody) {
   const tts = new MsEdgeTTS();
   await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
   const { audioStream } = tts.toStream(escapeSsml(String(text || '').trim()), {
@@ -80,6 +112,20 @@ export async function synthesizeSpeechMp3(text, voice = SAY_VOICE, prosody = {})
   const buffer = await bufferFromReadable(audioStream);
   if (!buffer.length) throw new Error('TTS returned empty audio.');
   return buffer;
+}
+
+/** OpenAI TTS for named voices such as onyx; otherwise free Microsoft Edge TTS. */
+export async function synthesizeSpeechMp3(text, voice = SAY_VOICE, prosody = {}) {
+  const chosen = String(voice || SAY_VOICE).trim() || SAY_VOICE;
+  if (isOpenAiVoice(chosen)) {
+    try {
+      return await synthesizeOpenAiMp3(text, chosen, prosody.rate ?? 1);
+    } catch (error) {
+      logger.warn(`OpenAI voice ${chosen} failed; using a deep Edge voice instead`, error);
+      return synthesizeEdgeMp3(text, 'en-US-DavisNeural', prosody);
+    }
+  }
+  return synthesizeEdgeMp3(text, chosen, prosody);
 }
 
 /**
