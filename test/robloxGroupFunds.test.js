@@ -1,12 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { PermissionFlagsBits } from 'discord.js';
 import fundsCommand from '../prefixCommands/funds.js';
 import {
   fetchRobloxGroupFunds,
   formatRobux,
+  formatTransactionLine,
+  FUNDS_TRANSACTION_COUNT,
   groupFundsCard,
   looksLikeRobloxCookie,
   normalizeRobloxCookie,
+  parseGroupTransaction,
   resolveFundsGroupId,
   ROBLOX_FUNDS_GROUP_ID,
 } from '../utils/robloxGroupFunds.js';
@@ -35,6 +39,23 @@ test('formatRobux uses thousands separators', () => {
   assert.equal(formatRobux('40'), '40 Robux');
 });
 
+test('parseGroupTransaction formats payouts and sales', () => {
+  assert.equal(FUNDS_TRANSACTION_COUNT, 7);
+  const payout = parseGroupTransaction({
+    created: '2026-09-21T00:00:00.000Z',
+    agent: { id: 1, name: 'Payee' },
+    currency: { amount: 250 },
+  }, 'payout');
+  const unix = Math.floor(Date.parse('2026-09-21T00:00:00.000Z') / 1000);
+  assert.equal(formatTransactionLine(payout, 'payout'), `• Paid **Payee** — **250 Robux** · <t:${unix}:R>`);
+  const sale = parseGroupTransaction({
+    agent: { id: 2, name: 'Buyer' },
+    details: { name: 'Clearwater Shirt' },
+    currency: { amount: 5 },
+  }, 'sale');
+  assert.equal(formatTransactionLine(sale, 'sale'), '• **Buyer** bought Clearwater Shirt — **5 Robux**');
+});
+
 test('fetchRobloxGroupFunds reads economy.roblox.com with the cookie', async () => {
   const calls = [];
   const fetchImpl = async (url, options) => {
@@ -45,6 +66,19 @@ test('fetchRobloxGroupFunds reads economy.roblox.com with the cookie', async () 
         status: 200,
         headers: { get: () => null },
         json: async () => ({ robux: 5400 }),
+      };
+    }
+    if (String(url).includes('/transactions')) {
+      const payout = String(url).includes('GroupPayout');
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        json: async () => ({
+          data: payout
+            ? [{ agent: { name: 'Payee' }, currency: { amount: 100 } }]
+            : [{ agent: { name: 'Buyer' }, details: { name: 'Shirt' }, currency: { amount: 12 } }],
+        }),
       };
     }
     return {
@@ -62,8 +96,13 @@ test('fetchRobloxGroupFunds reads economy.roblox.com with the cookie', async () 
   assert.equal(info.name, 'Clearwater Roleplay');
   assert.equal(info.robux, 5400);
   assert.equal(info.memberCount, 1200);
+  assert.equal(info.payouts[0].username, 'Payee');
+  assert.equal(info.sales[0].item, 'Shirt');
   assert.ok(calls.every((call) => call.cookie === '.ROBLOSECURITY=host-secret'));
-  assert.match(JSON.stringify(groupFundsCard(info)), /5,400 Robux/);
+  const card = JSON.stringify(groupFundsCard(info));
+  assert.match(card, /5,400 Robux/);
+  assert.match(card, /Paid \*\*Payee\*\*/);
+  assert.match(card, /bought Shirt/);
 });
 
 test('fetchRobloxGroupFunds explains a missing cookie or expired cookie', async () => {
@@ -86,19 +125,19 @@ test('fetchRobloxGroupFunds explains a missing cookie or expired cookie', async 
   );
 });
 
-test('-funds requires Ownership and rejects cookies typed in Discord', async () => {
+test('-funds requires Administrator and rejects cookies typed in Discord', async () => {
   await assert.rejects(
     () => fundsCommand.execute({
-      member: { id: '1', roles: { cache: { has: () => false } } },
-      client: { config: { ownerDiscordIds: [], ownerRoleIds: [] } },
+      member: { permissions: { has: () => false } },
+      client: { config: {} },
       content: '-funds',
     }, []),
-    /Ownership/,
+    /Administrator/,
   );
   await assert.rejects(
     () => fundsCommand.execute({
-      member: { id: 'owner', roles: { cache: { has: () => false } } },
-      client: { config: { ownerDiscordIds: ['owner'], ownerRoleIds: [] } },
+      member: { permissions: { has: (bit) => bit === PermissionFlagsBits.Administrator } },
+      client: { config: {} },
       content: '-funds .ROBLOSECURITY=do-not-share',
     }, ['.ROBLOSECURITY=do-not-share']),
     /Do not paste/,

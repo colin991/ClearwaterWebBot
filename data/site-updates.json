@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-funds-admin-transactions",
+      "title": "Let admins run -funds with recent payouts and sales",
+      "summary": "-funds is Administrator-only and now shows the group balance plus the last 7 payouts sent and the last 7 sales from people buying group items.",
+      "createdAt": "2026-09-21T03:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-funds-group-163783791",
       "title": "Point -funds at Roblox group 163783791",
       "summary": "-funds now reads the treasury for Roblox group 163783791 by default. ROBLOX_COOKIE still has to be set on the bot host.",

@@ -39,7 +39,7 @@ const GROUPS = [
       `\`-nick\` — Nickname · **${RANK_FLOOR.administrator}+**`,
       '`-callsign [@member]` — PCSO roster callsign · **Administrator**',
       `\`-bans\` — Timed ban cases · **${RANK_FLOOR.supervisor}+**`,
-      '`-funds` — Roblox group funds · **Ownership**',
+      '`-funds` — Roblox group funds, last 7 payouts, and last 7 sales · **Administrator**',
     ],
   },
 ];

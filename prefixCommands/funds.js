@@ -1,4 +1,4 @@
-import { requireOwnership } from '../utils/prefixHelpers.js';
+import { requireAdministrator } from '../utils/prefixHelpers.js';
 import {
   fetchRobloxGroupFunds,
   groupFundsCard,
@@ -10,9 +10,9 @@ import { v2Card } from '../utils/v2Message.js';
 export default {
   name: 'funds',
   aliases: ['robux', 'groupfunds'],
-  description: 'Ownership-only: show this Roblox group’s funds.',
+  description: 'Administrator: show this Roblox group’s funds, last 7 payouts, and last 7 sales.',
   async execute(message, args, client) {
-    requireOwnership(message);
+    requireAdministrator(message);
     if (looksLikeRobloxCookie(args.join(' ')) || looksLikeRobloxCookie(message.content)) {
       throw new Error('Do not paste your Roblox cookie in Discord. Put it in ROBLOX_COOKIE on the bot host .env and restart.');
     }
