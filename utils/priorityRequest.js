@@ -22,7 +22,7 @@ import { discordIdsByRobloxId, getIdentityCache } from './identityStore.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
 import { memberIsStaff } from './prefixHelpers.js';
-import { playMp3InVoiceChannel, synthesizeSpeechMp3 } from './vcSpeak.js';
+import { ensureGuildVoiceConnection, playMp3InVoiceChannel, synthesizeSpeechMp3 } from './vcSpeak.js';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -658,27 +658,45 @@ export function formatActivePriorityStatus(request, nowMs = Date.now()) {
   };
 }
 
+export async function playPriorityStartAnnouncement(channel, request, {
+  join = ensureGuildVoiceConnection,
+  synthesize = synthesizeSpeechMp3,
+  play = playMp3InVoiceChannel,
+  beepPath = PRIORITY_BEEP_PATH,
+} = {}) {
+  logger.info(`Priority announce: joining voice channel ${channel.id}`);
+  await join(channel, channel.guild.voiceAdapterCreator);
+  const speechPromise = synthesize(priorityStartSpeech(request), PRIORITY_VOICE, { rate: PRIORITY_VOICE_RATE });
+  try {
+    await play(channel, channel.guild.voiceAdapterCreator, beepPath, {
+      leaveAfter: false,
+      speakDelayMs: 400,
+      volume: 0.7,
+    });
+  } catch (error) {
+    logger.warn('Priority announce beep failed; continuing with speech', error);
+  }
+  const speech = await speechPromise;
+  await play(channel, channel.guild.voiceAdapterCreator, speech, {
+    leaveAfter: true,
+    speakDelayMs: 150,
+    volume: 1,
+  });
+}
+
 export async function announcePriorityStart(client, request) {
   const channel = await client.channels.fetch(PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID).catch(() => null);
   if (!channel?.isVoiceBased?.()) {
     throw new Error(`Priority announce voice channel ${PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID} is unavailable.`);
   }
   const me = channel.guild.members.me || await channel.guild.members.fetchMe().catch(() => null);
-  if (!channel.permissionsFor(me)?.has(['Connect', 'Speak'])) {
-    throw new Error('The bot needs Connect and Speak in the priority announce voice channel.');
+  if (me) {
+    const perms = channel.permissionsFor(me);
+    if (perms && !perms.has(['Connect', 'Speak'])) {
+      throw new Error('The bot needs Connect and Speak in the priority announce voice channel.');
+    }
   }
-  const speech = await synthesizeSpeechMp3(priorityStartSpeech(request), PRIORITY_VOICE, { rate: PRIORITY_VOICE_RATE });
-  await playMp3InVoiceChannel(channel, channel.guild.voiceAdapterCreator, PRIORITY_BEEP_PATH, {
-    leaveAfter: false,
-    speakDelayMs: 400,
-    volume: 0.7,
-  });
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  await playMp3InVoiceChannel(channel, channel.guild.voiceAdapterCreator, speech, {
-    leaveAfter: true,
-    speakDelayMs: 150,
-    volume: 1,
-  });
+  return playPriorityStartAnnouncement(channel, request);
 }
 
 export function createPriorityRequestService({
@@ -946,6 +964,9 @@ export function createPriorityRequestService({
         } catch (error) { onError(error); }
       }
       const mail = dmUser(request.requesterId, startedDmPayload(request)).catch(onError);
+      const voice = announceStart
+        ? Promise.resolve().then(() => announceStart(request)).catch(onError)
+        : Promise.resolve();
       const game = (async () => {
         await send(`:prty ${PRIORITY_REQUEST_SECONDS}`);
         try {
@@ -953,17 +974,9 @@ export function createPriorityRequestService({
         } catch (error) {
           onError(error);
         }
-        if (announceStart) {
-          try {
-            await announceStart(request);
-          } catch (error) {
-            onError(error);
-          }
-        }
       })().catch(onError);
       if (waitForInGame) {
-        await game;
-        await mail;
+        await Promise.all([game, voice, mail]);
       }
       return request;
     },

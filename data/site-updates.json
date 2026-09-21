@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-priority-voice-join-fix",
+      "title": "Join the LEO channel as soon as a priority starts",
+      "summary": "When a priority is approved, the bot now joins voice channel 1514128904783139018 right away and plays the beep plus spoken callout even if OpenAI TTS or the in-game command queue is slow.",
+      "createdAt": "2026-09-21T19:45:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-priority-onyx-radio-beep",
       "title": "Use Onyx at 1.15 and the new radio beep for priority voice",
       "summary": "Priority callouts in the LEO voice channel now play the 101-1-star radio beep, then speak with the Onyx voice at speed 1.15.",

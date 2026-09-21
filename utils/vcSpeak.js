@@ -129,6 +129,44 @@ export async function synthesizeSpeechMp3(text, voice = SAY_VOICE, prosody = {})
 }
 
 /**
+ * Join a guild voice channel (or reuse the existing connection in the same channel).
+ */
+export async function ensureGuildVoiceConnection(voiceChannel, adapterCreator) {
+  const existing = getVoiceConnection(voiceChannel.guild.id);
+  const sameChannel = existing?.joinConfig?.channelId === voiceChannel.id;
+  if (sameChannel && existing) {
+    if (existing.state?.status === VoiceConnectionStatus.Ready) return existing;
+    try {
+      await entersState(existing, VoiceConnectionStatus.Ready, 20_000);
+      return existing;
+    } catch (error) {
+      existing.destroy();
+      logger.warn('Stale voice connection was not ready; rejoining', error);
+    }
+  } else {
+    existing?.destroy();
+  }
+
+  const connection = joinVoiceChannel({
+    channelId: voiceChannel.id,
+    guildId: voiceChannel.guild.id,
+    adapterCreator: adapterCreator || voiceChannel.guild.voiceAdapterCreator,
+    selfDeaf: false,
+    selfMute: false,
+  });
+  connection.on('error', (error) => {
+    logger.error('Voice connection error', error);
+  });
+  try {
+    await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+  } catch (error) {
+    connection.destroy();
+    throw new Error(`Could not join the voice channel: ${error?.message || error}`);
+  }
+  return connection;
+}
+
+/**
  * Join (or reuse) a voice channel and play an MP3 file/buffer for everyone.
  * @param {{ leaveAfter?: boolean }} options
  */
@@ -138,29 +176,7 @@ export async function playMp3InVoiceChannel(voiceChannel, adapterCreator, mp3Pat
   speakDelayMs = 500,
   volume = 1,
 } = {}) {
-  const existing = getVoiceConnection(voiceChannel.guild.id);
-  const sameChannel = existing?.joinConfig?.channelId === voiceChannel.id;
-  let connection = sameChannel ? existing : null;
-
-  if (!connection) {
-    existing?.destroy();
-    connection = joinVoiceChannel({
-      channelId: voiceChannel.id,
-      guildId: voiceChannel.guild.id,
-      adapterCreator,
-      selfDeaf: false,
-      selfMute: false,
-    });
-    connection.on('error', (error) => {
-      logger.error('Voice connection error', error);
-    });
-    try {
-      await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
-    } catch (error) {
-      connection.destroy();
-      throw new Error(`Could not join the voice channel: ${error?.message || error}`);
-    }
-  }
+  const connection = await ensureGuildVoiceConnection(voiceChannel, adapterCreator);
 
   const delay = Math.max(0, Number(speakDelayMs) || 0);
   if (delay) await new Promise((resolve) => setTimeout(resolve, delay));

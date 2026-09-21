@@ -12,9 +12,11 @@ import {
   extraTimeResolvedPayload,
   handlePriorityRequest,
   hasBlockingPriority,
+  PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID,
   PRIORITY_BEEP_PATH,
   PRIORITY_VOICE,
   PRIORITY_VOICE_RATE,
+  playPriorityStartAnnouncement,
   PRIORITY_PENDING_MS,
   PRIORITY_PEACE_SECONDS,
   PRIORITY_REQUEST_SECONDS,
@@ -312,8 +314,10 @@ test('priority voice uses Onyx at 1.15 and the radio beep mp3', () => {
   assert.equal(existsSync(PRIORITY_BEEP_PATH), true);
 });
 
-test('voice talk runs after the in-game priority callout', async () => {
-  const order = [];
+test('voice talk starts even if the in-game command queue is slow', async () => {
+  let releaseSend;
+  const sendGate = new Promise((resolve) => { releaseSend = resolve; });
+  let voiceStarted = false;
   const f = serviceFixture({
     id: 'p1',
     status: 'pending',
@@ -324,13 +328,46 @@ test('voice talk runs after the in-game priority callout', async () => {
     staffMessageId: 'm',
   }, {
     send: async (command) => {
+      await sendGate;
       f.commands.push(command);
-      order.push(command.startsWith(':h') || command.startsWith(':m') ? 'callout' : 'prty');
     },
-    announceStart: async () => { order.push('voice'); },
+    announceStart: async () => { voiceStarted = true; },
   });
-  await f.svc.approve('p1', { id: 'anyone' });
-  assert.deepEqual(order, ['prty', 'callout', 'voice']);
+  const done = f.svc.approve('p1', { id: 'anyone' });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(voiceStarted, true);
+  releaseSend();
+  await done;
+  assert.equal(f.commands[0], `:prty ${PRIORITY_REQUEST_SECONDS}`);
+  assert.equal(f.commands[1], ':h The priority timer is active, please refrain from triggering any priorities at this time.');
+});
+
+test('priority voice joins the LEO channel before waiting on TTS', async () => {
+  const order = [];
+  const channel = { id: PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID, guild: { voiceAdapterCreator: {} } };
+  await playPriorityStartAnnouncement(channel, {
+    requesterUsername: 'HostUser',
+    details: 'bank',
+    vehicles: ['car'],
+  }, {
+    join: async () => { order.push('join'); },
+    synthesize: async () => {
+      order.push('tts-start');
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      order.push('tts-done');
+      return Buffer.from('mp3');
+    },
+    play: async (_ch, _adapter, audio) => {
+      order.push(Buffer.isBuffer(audio) ? 'speech' : 'beep');
+    },
+    beepPath: '/beep.mp3',
+  });
+  assert.equal(PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID, '1514128904783139018');
+  assert.equal(order[0], 'join');
+  assert.ok(order.indexOf('beep') > order.indexOf('tts-start'));
+  assert.ok(order.indexOf('beep') < order.indexOf('tts-done'));
+  assert.ok(order.indexOf('speech') > order.indexOf('tts-done'));
 });
 
 test('extra time approve extends the in-game timer', async () => {
