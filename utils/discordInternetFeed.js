@@ -220,7 +220,17 @@ function internetMetaRow(post) {
 
 function addPostCard(container, post, store, { thumbnail = true, media = true } = {}) {
   const { files, mediaUrl } = media ? resolveMedia(post) : { files: [], mediaUrl: '' };
-  const avatarUrl = thumbnail && isHttpsUrl(post?.avatarUrl) ? post.avatarUrl : '';
+  let avatarUrl = '';
+  if (thumbnail && isHttpsUrl(post?.avatarUrl)) {
+    avatarUrl = post.avatarUrl;
+  } else if (thumbnail) {
+    const data = parseDataImage(post?.avatarUrl);
+    if (data) {
+      const name = `avatar.${data.name.split('.').pop()}`;
+      files.push(new AttachmentBuilder(data.buffer, { name }));
+      avatarUrl = `attachment://${name}`;
+    }
+  }
   const card = new TextDisplayBuilder().setContent(buildFeedPostText(post, store));
   if (avatarUrl) {
     container.addSectionComponents(

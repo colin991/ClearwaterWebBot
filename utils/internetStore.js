@@ -206,6 +206,22 @@ function sanitizeHttpsUrl(value, length = 300) {
   }
 }
 
+const AVATAR_DATA_URL_RE = /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i;
+
+export function sanitizeAvatarUrl(value) {
+  const raw = String(value || '').replace(/\s+/g, '');
+  if (!raw) return '';
+  if (AVATAR_DATA_URL_RE.test(raw) && raw.length <= 4_200_000) return raw;
+  return sanitizeHttpsUrl(raw, 500);
+}
+
+export const MAX_INTERNET_ACCOUNTS = 5;
+export const INTERNET_ALT_ID_RE = /^ia_[a-z0-9-]{8,80}$/i;
+
+export function isInternetAltAccountId(id) {
+  return INTERNET_ALT_ID_RE.test(String(id || ''));
+}
+
 function sanitizeSiteBanner(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const message = text(raw.message, 160);
@@ -784,6 +800,13 @@ export function assertNotBanned(user) {
 
 export function assertCanPost(store, user, { reel = false } = {}) {
   if (user?.id === OFFICIAL_INTERNET_ACCOUNT_ID || user?.official === true) return;
+  const owner = user?.ownerDiscordId ? store.users[user.ownerDiscordId] : null;
+  if (owner && owner !== user) {
+    assertNotBanned(owner);
+    const ownerMute = getActiveMute(owner);
+    if (ownerMute) throw new Error(`This account is muted. ${ownerMute.reason}`);
+    if (flagActive(owner, 'lockPosts', 'lockPostsUntil')) throw new Error('This account is locked from posting');
+  }
   assertNotBanned(user);
   const mute = getActiveMute(user);
   if (mute) throw new Error(`This account is muted. ${mute.reason}`);
@@ -872,7 +895,8 @@ export function clearExpiredInternetPosts() {
 export function upsertInternetUser(store, user) {
   const id = text(user?.id, 80);
   const isBusiness = /^biz_[a-z0-9-]{8,80}$/i.test(id);
-  if (!isBusiness && !/^\d{16,22}$/.test(id)) throw new Error('Invalid user');
+  const isAlt = isInternetAltAccountId(id);
+  if (!isBusiness && !isAlt && !/^\d{16,22}$/.test(id)) throw new Error('Invalid user');
   const existing = store.users[id] || { verified: isBusiness, banned: false };
   const has = (key) => Object.prototype.hasOwnProperty.call(user || {}, key);
   if (!existing.createdAt) existing.createdAt = new Date().toISOString();
@@ -884,11 +908,15 @@ export function upsertInternetUser(store, user) {
   // Mutate the existing record in place. Callers often keep a local reference and
   // then set ban/mute/lock flags on it — replacing the object would drop those writes.
   existing.id = id;
-  existing.discordId = isBusiness ? (existing.discordId || null) : id;
+  existing.altAccount = isAlt || existing.altAccount === true;
+  existing.ownerDiscordId = isAlt
+    ? (text(user?.ownerDiscordId, 24) || existing.ownerDiscordId || null)
+    : (existing.ownerDiscordId || null);
+  existing.discordId = isAlt ? (existing.ownerDiscordId || existing.discordId || null) : (isBusiness ? (existing.discordId || null) : id);
   existing.username = nextUsername;
   // Keep the latest Discord handle separately so staff can find accounts even
   // if profile display text drifts from Discord naming.
-  existing.discordUsername = isBusiness
+  existing.discordUsername = isBusiness || isAlt
     ? (existing.discordUsername || nextUsername)
     : (incomingUsername.replace(/^@/, '') || existing.discordUsername || nextUsername);
   if (!lockHandle && has('displayName')) {
@@ -896,7 +924,13 @@ export function upsertInternetUser(store, user) {
   } else {
     existing.displayName = existing.displayName || text(user?.displayName, 80) || 'Discord user';
   }
-  existing.avatarUrl = has('avatarUrl') ? text(user?.avatarUrl, 300) || null : existing.avatarUrl || null;
+  if (has('avatarUrl') && (!existing.customAvatar || user?.forceAvatar === true)) {
+    const avatar = sanitizeAvatarUrl(user?.avatarUrl);
+    existing.avatarUrl = avatar || null;
+    if (user?.forceAvatar === true) existing.customAvatar = Boolean(avatar);
+  } else if (!existing.avatarUrl) {
+    existing.avatarUrl = null;
+  }
   existing.staffRank = isBusiness ? null : (has('staffRank') ? text(user?.staffRank, 80) || null : existing.staffRank || null);
   if (!existing.lastSeenAt) existing.lastSeenAt = null;
   existing.business = isBusiness;
@@ -1860,6 +1894,7 @@ function cleanProfileText(value, length, label) {
 
 function profilePayload(user) {
   return {
+    id: user.id,
     displayName: user.displayName || '',
     username: user.username || '',
     bio: user.bio || '',
@@ -1869,6 +1904,8 @@ function profilePayload(user) {
     bannerUrl: user.bannerUrl || '',
     accentColor: user.accentColor || '',
     pinnedPostId: user.pinnedPostId || '',
+    avatarUrl: user.avatarUrl || '',
+    customAvatar: user.customAvatar === true,
     accountCreated: user.accountCreated === true,
     deactivated: user.deactivated === true,
     presets: PROFILE_BANNER_PRESETS,
@@ -1883,10 +1920,50 @@ export function normalizeInternetHandle(raw) {
   return handle;
 }
 
+export function listOwnedInternetAccounts(store, discordId) {
+  const id = String(discordId || '');
+  const primary = store?.users?.[id];
+  const alts = Object.values(store?.users || {})
+    .filter((user) => user?.altAccount === true && user.ownerDiscordId === id)
+    .sort((left, right) => String(left.createdAt || '').localeCompare(String(right.createdAt || '')));
+  const list = [];
+  if (primary && (primary.accountCreated === true || primary.lastPostAt || primary.walletStartedAt || alts.length)) {
+    list.push(primary);
+  }
+  list.push(...alts);
+  return list;
+}
+
 export function hasInternetAccount(store, actorId) {
-  const user = store?.users?.[String(actorId || '')];
-  if (!user) return false;
-  return user.accountCreated === true || Boolean(user.lastPostAt) || Boolean(user.walletStartedAt);
+  return listOwnedInternetAccounts(store, actorId).some((user) => (
+    user.accountCreated === true || Boolean(user.lastPostAt) || Boolean(user.walletStartedAt)
+  ));
+}
+
+export function activeInternetAccount(store, actor) {
+  const ownerId = String(actor?.id || '');
+  if (!ownerId) return null;
+  const owner = store.users[ownerId] || (typeof actor === 'object' ? upsertInternetUser(store, actor) : null);
+  if (!owner) return null;
+  const activeId = String(owner.activeAccountId || owner.id);
+  const account = store.users[activeId];
+  if (account && (account.id === owner.id || account.ownerDiscordId === owner.id)) return account;
+  return owner;
+}
+
+export function ownsInternetAccount(store, discordId, accountId) {
+  const account = store?.users?.[String(accountId || '')];
+  if (!account) return false;
+  return account.id === String(discordId) || account.ownerDiscordId === String(discordId);
+}
+
+export function switchInternetAccount(store, { actor, accountId }) {
+  const owner = upsertInternetUser(store, actor);
+  if (!ownsInternetAccount(store, owner.id, accountId)) {
+    throw new Error('That Internet account is not yours.');
+  }
+  owner.activeAccountId = String(accountId);
+  return profilePayload(store.users[accountId]);
 }
 
 function internetHandleTaken(store, handle, exceptId) {
@@ -1897,36 +1974,73 @@ function internetHandleTaken(store, handle, exceptId) {
   });
 }
 
-export function createInternetAccount(store, { actor, username, displayName, bio = '' } = {}) {
+export function createInternetAccount(store, { actor, username, displayName, bio = '', avatarUrl = '' } = {}) {
   const handle = normalizeInternetHandle(username);
   const name = cleanProfileText(displayName, 80, 'display name');
   if (!name) throw new Error('Add a display name for your profile.');
-  if (internetHandleTaken(store, handle, actor?.id)) {
+  const owned = listOwnedInternetAccounts(store, actor?.id);
+  if (owned.length >= MAX_INTERNET_ACCOUNTS) {
+    throw new Error(`You can have up to ${MAX_INTERNET_ACCOUNTS} Internet accounts.`);
+  }
+  const owner = upsertInternetUser(store, actor);
+  const exceptId = owner.accountCreated === true ? null : owner.id;
+  if (internetHandleTaken(store, handle, exceptId)) {
     throw new Error('That username is already taken.');
   }
-  if (hasInternetAccount(store, actor?.id) && store.users[actor.id]?.accountCreated === true) {
-    throw new Error('You already have a Clearwater Internet account. Use Profile to update it.');
+  const avatar = sanitizeAvatarUrl(avatarUrl);
+  if (!owner.accountCreated && !owned.some((item) => item.altAccount)) {
+    const user = upsertInternetUser(store, {
+      ...actor,
+      username: handle,
+      displayName: name,
+      avatarUrl: avatar || actor.avatarUrl,
+      forceProfile: true,
+      forceAvatar: Boolean(avatar),
+    });
+    user.accountCreated = true;
+    user.bio = cleanProfileText(bio, 300, 'bio');
+    user.profileUpdatedAt = new Date().toISOString();
+    user.activeAccountId = user.id;
+    if (avatar) {
+      user.avatarUrl = avatar;
+      user.customAvatar = true;
+    }
+    ensureInternetWallet(store, user);
+    addInternetLog(store, `${user.displayName} created a Clearwater Internet account (@${user.username}).`);
+    return profilePayload(user);
   }
-  const user = upsertInternetUser(store, {
-    ...actor,
+  const alt = upsertInternetUser(store, {
+    id: `ia_${randomUUID()}`,
+    ownerDiscordId: owner.id,
     username: handle,
     displayName: name,
+    avatarUrl: avatar || null,
     forceProfile: true,
+    forceAvatar: Boolean(avatar),
   });
-  user.accountCreated = true;
-  user.bio = cleanProfileText(bio, 300, 'bio');
-  user.profileUpdatedAt = new Date().toISOString();
-  ensureInternetWallet(store, user);
-  addInternetLog(store, `${user.displayName} created a Clearwater Internet account (@${user.username}).`);
-  return profilePayload(user);
+  alt.accountCreated = true;
+  alt.altAccount = true;
+  alt.ownerDiscordId = owner.id;
+  alt.bio = cleanProfileText(bio, 300, 'bio');
+  alt.profileUpdatedAt = new Date().toISOString();
+  if (avatar) {
+    alt.avatarUrl = avatar;
+    alt.customAvatar = true;
+  }
+  owner.activeAccountId = alt.id;
+  ensureInternetWallet(store, alt);
+  addInternetLog(store, `${alt.displayName} created another Clearwater Internet account (@${alt.username}).`);
+  return profilePayload(alt);
 }
 
 export function internetProfile(store, actor) {
-  return profilePayload(upsertInternetUser(store, actor));
+  return profilePayload(activeInternetAccount(store, actor) || upsertInternetUser(store, actor));
 }
 
 export function updateInternetProfile(store, { actor, profile = {} }) {
-  const user = upsertInternetUser(store, actor);
+  upsertInternetUser(store, actor);
+  const user = activeInternetAccount(store, actor);
+  if (!user) throw new Error('Create a Clearwater Internet account first.');
   if (user.official === true) throw new Error('Edit the official account from the staff controls.');
   if (getActiveBan(user)) throw new Error('This account is banned from Clearwater Internet');
   if (flagActive(user, 'lockProfile', 'lockProfileUntil')) throw new Error('Staff locked profile edits on this account.');
@@ -1946,6 +2060,11 @@ export function updateInternetProfile(store, { actor, profile = {} }) {
   if (has('bio')) user.bio = cleanProfileText(profile.bio, 300, 'bio');
   if (has('pronouns')) user.pronouns = cleanProfileText(profile.pronouns, 40, 'pronouns');
   if (has('location')) user.location = cleanProfileText(profile.location, 60, 'location');
+  if (has('avatarUrl')) {
+    const avatar = sanitizeAvatarUrl(profile.avatarUrl);
+    user.avatarUrl = avatar || null;
+    user.customAvatar = Boolean(avatar);
+  }
   if (has('website')) user.website = safeWebsiteUrl(profile.website);
   if (has('bannerUrl')) user.bannerUrl = safeBannerUrl(profile.bannerUrl);
   if (has('accentColor')) user.accentColor = safeAccentColor(profile.accentColor);
@@ -2191,9 +2310,12 @@ function nativeRepostByUser(store, userId, postId) {
 }
 
 export function interactInternetPost(store, { actor, postId, type, content = '', quote = false }) {
-  const user = upsertInternetUser(store, actor);
+  const owner = upsertInternetUser(store, actor);
+  const user = activeInternetAccount(store, actor) || owner;
   if (type === 'reply' || type === 'repost') assertCanPost(store, user);
-  else if (getActiveBan(user) || getActiveMute(user)) throw new Error(getActiveBan(user) ? 'This account is banned from Clearwater Internet' : 'This account is muted');
+  else if (getActiveBan(user) || getActiveMute(user) || getActiveBan(owner) || getActiveMute(owner)) {
+    throw new Error(getActiveBan(user) || getActiveBan(owner) ? 'This account is banned from Clearwater Internet' : 'This account is muted');
+  }
   const requested = store.posts.find((item) => item.id === String(postId || ''));
   if (!requested) throw new Error('Post not found');
   const post = sourceInternetPost(store, requested);
@@ -2272,8 +2394,11 @@ export function deleteInternetPost(store, { postId, actorId, owner = false }) {
   if (index < 0) throw new Error('Post not found');
   const [post] = store.posts.splice(index, 1);
   if (!owner && post.authorId !== String(actorId)) {
-    store.posts.splice(index, 0, post);
-    throw new Error('You can only delete your own posts');
+    const author = store.users[post.authorId];
+    if (author?.ownerDiscordId !== String(actorId)) {
+      store.posts.splice(index, 0, post);
+      throw new Error('You can only delete your own posts');
+    }
   }
   store.reports = store.reports.filter((report) => report.postId !== post.id);
   return post;

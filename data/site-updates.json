@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-internet-multi-account-pictures",
+      "title": "Allow extra Internet accounts, switching, and profile pictures",
+      "summary": "You can create more than one Internet account, switch which one posts and replies, and upload a profile picture for the selected account.",
+      "createdAt": "2026-09-21T16:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-internet-no-product-name",
       "title": "Drop the extra name off Internet posts",
       "summary": "Clearwater Internet posts now start with the profile card. They no longer show a separate product name above the post.",

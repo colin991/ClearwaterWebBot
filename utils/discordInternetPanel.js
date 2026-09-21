@@ -11,6 +11,7 @@ import {
   ModalBuilder,
   PermissionFlagsBits,
   SeparatorBuilder,
+  StringSelectMenuBuilder,
   TextDisplayBuilder,
   TextInputBuilder,
   TextInputStyle,
@@ -24,8 +25,11 @@ import {
   internetFeedDiscordRef,
   internetPreferences,
   internetProfile,
+  listOwnedInternetAccounts,
+  activeInternetAccount,
   readInternetStore,
   setInternetPostDiscordFeedMessage,
+  switchInternetAccount,
   updateInternetPreference,
   updateInternetProfile,
   updateInternetSocial,
@@ -53,6 +57,10 @@ export const INTERNET_PANEL_PROFILE_CUSTOM_ID = 'cw-internet-my-profile';
 export const INTERNET_PANEL_POST_CUSTOM_ID = 'p_338115604705710082';
 export const INTERNET_PANEL_SETTINGS_CUSTOM_ID = 'p_338115612729413633';
 export const INTERNET_PANEL_HELP_CUSTOM_ID = 'p_338117502649241606';
+export const INTERNET_PANEL_SWITCH_CUSTOM_ID = 'cw-internet-switch-account';
+export const INTERNET_SWITCH_SELECT_ID = 'cw-internet-switch-select';
+export const INTERNET_AVATAR_BUTTON_ID = 'cw-internet-set-avatar';
+export const INTERNET_AVATAR_MODAL_ID = 'cw-internet-avatar-modal';
 
 const INTERNET_PANEL_NAME = 'Internet Panel';
 const POST_MODAL_ID = 'cw-internet-post-modal';
@@ -69,8 +77,11 @@ function hasDiscordAdministrator(interaction) {
   return interaction.memberPermissions?.has?.(PermissionFlagsBits.Administrator) === true;
 }
 
-export function canDeleteInternetPost(interaction, post) {
-  return post?.authorId === interaction.user?.id || hasDiscordAdministrator(interaction);
+export function canDeleteInternetPost(interaction, post, store = null) {
+  if (hasDiscordAdministrator(interaction)) return true;
+  if (post?.authorId === interaction.user?.id) return true;
+  const author = store?.users?.[post?.authorId];
+  return author?.ownerDiscordId === interaction.user?.id;
 }
 
 export function buildInternetPanelPayload({ includeBanners = true } = {}) {
@@ -87,9 +98,10 @@ export function buildInternetPanelPayload({ includeBanners = true } = {}) {
         '',
         '> Welcome to **Clearwater Internet**! Create an account, add a profile, then send posts across the internet.',
         '',
-        '> **Create Account** — Make your Internet username and profile.',
-        '> **Profile** — View or update your display name, handle, and bio.',
-        '> **Send a Post** — Publish a post on Clearwater Internet.',
+        '> **Create Account** — Make an Internet username and profile. You can have more than one.',
+        '> **Profile** — View or update the account you are posting as, including picture.',
+        '> **Switch Account** — Choose which account posts and replies use.',
+        '> **Send a Post** — Publish a post as the selected account.',
         '> **Settings** — Manage extra profile details and Discord notifications.',
         '> **Need Help?** — Click **Help** if you need assistance.',
       ].join('\n')),
@@ -117,6 +129,10 @@ export function buildInternetPanelPayload({ includeBanners = true } = {}) {
           .setCustomId(INTERNET_PANEL_SETTINGS_CUSTOM_ID)
           .setLabel('Settings')
           .setEmoji({ id: '1514354007416504400', name: 'Settings' })
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(INTERNET_PANEL_SWITCH_CUSTOM_ID)
+          .setLabel('Switch Account')
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId(INTERNET_PANEL_HELP_CUSTOM_ID)
@@ -230,43 +246,74 @@ function buildAccountModal(profile = {}) {
   return new ModalBuilder()
     .setCustomId(ACCOUNT_MODAL_ID)
     .setTitle('Create Internet Account')
-    .addComponents(
-      new ActionRowBuilder().addComponents(
-        optionalValue(
-          new TextInputBuilder()
-            .setCustomId('displayName')
-            .setLabel('Display name')
-            .setStyle(TextInputStyle.Short)
-            .setMaxLength(80)
-            .setRequired(true),
-          profile.displayName,
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel('Display name')
+        .setTextInputComponent(
+          optionalValue(
+            new TextInputBuilder()
+              .setCustomId('displayName')
+              .setStyle(TextInputStyle.Short)
+              .setMaxLength(80)
+              .setRequired(true),
+            profile.displayName,
+          ),
         ),
-      ),
-      new ActionRowBuilder().addComponents(
-        optionalValue(
-          new TextInputBuilder()
-            .setCustomId('username')
-            .setLabel('Username (no @)')
-            .setPlaceholder('Iceberg2310')
-            .setStyle(TextInputStyle.Short)
-            .setMinLength(3)
-            .setMaxLength(20)
-            .setRequired(true),
-          String(profile.username || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 20),
-          3,
+      new LabelBuilder()
+        .setLabel('Username (no @)')
+        .setTextInputComponent(
+          optionalValue(
+            new TextInputBuilder()
+              .setCustomId('username')
+              .setPlaceholder('Iceberg2310')
+              .setStyle(TextInputStyle.Short)
+              .setMinLength(3)
+              .setMaxLength(20)
+              .setRequired(true),
+            String(profile.username || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 20),
+            3,
+          ),
         ),
-      ),
-      new ActionRowBuilder().addComponents(
-        optionalValue(
-          new TextInputBuilder()
-            .setCustomId('bio')
-            .setLabel('Bio')
-            .setStyle(TextInputStyle.Paragraph)
-            .setMaxLength(300)
+      new LabelBuilder()
+        .setLabel('Bio')
+        .setTextInputComponent(
+          optionalValue(
+            new TextInputBuilder()
+              .setCustomId('bio')
+              .setStyle(TextInputStyle.Paragraph)
+              .setMaxLength(300)
+              .setRequired(false),
+            profile.bio,
+          ),
+        ),
+      new LabelBuilder()
+        .setLabel('Profile picture')
+        .setDescription('Optional — PNG, JPG, WEBP, or GIF (max 2.8 MB).')
+        .setFileUploadComponent(
+          new FileUploadBuilder()
+            .setCustomId('avatar_file')
+            .setMinValues(0)
+            .setMaxValues(1)
             .setRequired(false),
-          profile.bio,
         ),
-      ),
+    );
+}
+
+function buildAvatarModal() {
+  return new ModalBuilder()
+    .setCustomId(INTERNET_AVATAR_MODAL_ID)
+    .setTitle('Profile Picture')
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel('Profile picture')
+        .setDescription('PNG, JPG, WEBP, or GIF (max 2.8 MB).')
+        .setFileUploadComponent(
+          new FileUploadBuilder()
+            .setCustomId('avatar_file')
+            .setMinValues(1)
+            .setMaxValues(1)
+            .setRequired(true),
+        ),
     );
 }
 
@@ -378,29 +425,69 @@ function buildSettingsModal(profile) {
     );
 }
 
+async function readUploadedImage(interaction, customId) {
+  const files = interaction.fields.getUploadedFiles(customId);
+  const attachment = files?.first?.() || null;
+  if (!attachment) return '';
+  const type = String(attachment.contentType || '').toLowerCase();
+  const supportedName = /\.(?:png|jpe?g|webp|gif)$/i.test(String(attachment.name || ''));
+  if (!/^image\/(?:png|jpeg|webp|gif)$/.test(type) && !supportedName) {
+    throw new Error('Choose a PNG, JPG, WEBP, or GIF file.');
+  }
+  if (attachment.size > 2_800_000) throw new Error('The image must be 2.8 MB or smaller.');
+  const response = await fetch(attachment.url);
+  if (!response.ok) throw new Error('Discord could not read that uploaded file. Please try again.');
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (!bytes.length || bytes.length > 2_800_000) throw new Error('The image must be 2.8 MB or smaller.');
+  const mime = /^image\/(?:png|jpeg|webp|gif)$/.test(type)
+    ? type
+    : attachment.name?.toLowerCase().endsWith('.gif')
+      ? 'image/gif'
+      : attachment.name?.toLowerCase().endsWith('.webp')
+        ? 'image/webp'
+        : attachment.name?.toLowerCase().endsWith('.png')
+          ? 'image/png'
+          : 'image/jpeg';
+  return `data:${mime};base64,${bytes.toString('base64')}`;
+}
+
+function accountSwitchRow(accounts, activeId) {
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(INTERNET_SWITCH_SELECT_ID)
+      .setPlaceholder('Switch account')
+      .addOptions(accounts.slice(0, 5).map((account) => ({
+        label: String(account.displayName || account.username || 'Account').slice(0, 100),
+        description: `@${account.username || 'user'}`.slice(0, 100),
+        value: String(account.id).slice(0, 100),
+        default: account.id === activeId,
+      }))),
+  );
+}
+
 async function showCreateAccountModal(interaction) {
   const actor = internetActor(interaction);
   const store = await readInternetStore();
-  if (store.users?.[actor.id]?.accountCreated === true) {
-    throw new Error('You already have a Clearwater Internet account. Use Profile to update it.');
-  }
+  const extra = hasInternetAccount(store, actor.id);
   await interaction.showModal(buildAccountModal({
-    displayName: actor.displayName,
-    username: String(actor.username || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 20),
-    bio: store.users?.[actor.id]?.bio || '',
+    displayName: extra ? '' : actor.displayName,
+    username: extra ? '' : String(actor.username || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 20),
+    bio: extra ? '' : (store.users?.[actor.id]?.bio || ''),
   }));
 }
 
 async function saveAccount(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const avatarUrl = await readUploadedImage(interaction, 'avatar_file');
   const profile = await mutateDiscordInternetStore((store) => createInternetAccount(store, {
     actor: internetActor(interaction),
     displayName: interaction.fields.getTextInputValue('displayName'),
     username: interaction.fields.getTextInputValue('username'),
     bio: interaction.fields.getTextInputValue('bio'),
+    avatarUrl,
   }));
   await interaction.editReply({
-    content: `Your Clearwater Internet account is ready. You post as **${profile.displayName}** (@${profile.username}).`,
+    content: `Your Clearwater Internet account is ready. You now post as **${profile.displayName}** (@${profile.username}).`,
   });
 }
 
@@ -419,7 +506,8 @@ async function showSettings(interaction) {
   }));
   const text = [
     '## Internet Settings',
-    `**Account:** <@${actor.id}>`,
+    `**Posting as:** **${profile.displayName || 'Internet user'}** (@${profile.username || 'user'})`,
+    `**Discord:** <@${actor.id}>`,
     `**Bio:** ${profile.bio || 'Not set'}`,
     `**Discord notifications:** ${preferences.discordDmNotifications ? 'On' : 'Off'}`,
   ].join('\n');
@@ -441,21 +529,28 @@ async function showSettings(interaction) {
 
 async function showProfile(interaction, userId) {
   const store = await readInternetStore();
-  const user = store.users?.[userId];
+  const actor = internetActor(interaction);
+  const requestedId = String(userId || actor.id);
+  const user = store.users?.[requestedId]
+    || (requestedId === actor.id ? activeInternetAccount(store, actor) : null);
   if (!user) throw new Error('That Internet profile could not be found.');
-  const postCount = store.posts.filter((post) => post.authorId === userId && !post.parentId).length;
-  const followers = Object.values(store.users).filter((member) => Array.isArray(member.following) && member.following.includes(userId)).length;
+  const postCount = store.posts.filter((post) => post.authorId === user.id && !post.parentId).length;
+  const followers = Object.values(store.users).filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).length;
+  const owned = listOwnedInternetAccounts(store, actor.id);
+  const isOwner = user.id === actor.id || user.ownerDiscordId === actor.id;
+  const active = isOwner ? activeInternetAccount(store, actor) : user;
   const text = [
     `## ${user.displayName || user.username || 'Internet Profile'}`,
     `**Username:** @${user.username || 'user'}`,
     `**Followers:** ${followers}`,
+    user.customAvatar ? '**Picture:** Custom' : '',
     user.bio ? `**Bio:** ${user.bio}` : '',
     user.pronouns ? `**Pronouns:** ${user.pronouns}` : '',
     user.location ? `**Location:** ${user.location}` : '',
     `**Posts:** ${postCount}`,
+    isOwner && owned.length ? `**Posting as:** @${active?.username || user.username}` : '',
   ].filter(Boolean).join('\n');
-  const isSelf = interaction.user?.id === userId;
-  if (!isSelf) {
+  if (!isOwner) {
     await interaction.reply(v2Message(text, { ephemeral: true }));
     return;
   }
@@ -466,48 +561,72 @@ async function showProfile(interaction, userId) {
           .setCustomId(SETTINGS_EDIT_CUSTOM_ID)
           .setLabel('Edit Profile')
           .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(INTERNET_AVATAR_BUTTON_ID)
+          .setLabel('Set Picture')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(INTERNET_PANEL_ACCOUNT_CUSTOM_ID)
+          .setLabel('Add Account')
+          .setStyle(ButtonStyle.Secondary),
       ),
     );
+    if (owned.length > 1) container.addActionRowComponents(accountSwitchRow(owned, active?.id));
   }, { ephemeral: true }));
+}
+
+async function showSwitchAccounts(interaction) {
+  const actor = internetActor(interaction);
+  const store = await readInternetStore();
+  const owned = listOwnedInternetAccounts(store, actor.id);
+  if (!owned.length) throw new Error('Create a Clearwater Internet account first.');
+  const active = activeInternetAccount(store, actor);
+  await interaction.reply(v2Container(
+    `You are posting as **${active.displayName}** (@${active.username}). Replies and new posts use this account.`,
+    (container) => {
+      container.addActionRowComponents(accountSwitchRow(owned, active.id));
+    },
+    { ephemeral: true },
+  ));
+}
+
+async function saveSwitchedAccount(interaction) {
+  const accountId = interaction.values?.[0];
+  const profile = await mutateDiscordInternetStore((store) => switchInternetAccount(store, {
+    actor: internetActor(interaction),
+    accountId,
+  }));
+  const content = `Switched. New posts and replies will use **${profile.displayName}** (@${profile.username}).`;
+  if (interaction.deferred || interaction.replied) await interaction.editReply({ content, components: [] });
+  else await interaction.update({ content, components: [] }).catch(async () => {
+    await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+  });
+}
+
+async function saveAvatar(interaction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const avatarUrl = await readUploadedImage(interaction, 'avatar_file');
+  if (!avatarUrl) throw new Error('Choose a profile picture.');
+  const profile = await mutateDiscordInternetStore((store) => updateInternetProfile(store, {
+    actor: internetActor(interaction),
+    profile: { avatarUrl },
+  }));
+  await interaction.editReply({
+    content: `Saved the picture for **${profile.displayName}** (@${profile.username}).`,
+  });
 }
 
 async function publishPost(interaction, client) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const actor = internetActor(interaction);
   const content = interaction.fields.getTextInputValue('content');
-  const files = interaction.fields.getUploadedFiles('media_file');
-  const attachment = files?.first?.() || null;
-  let imageDataUrl = '';
-  if (attachment) {
-    const type = String(attachment.contentType || '').toLowerCase();
-    const supportedName = /\.(?:png|jpe?g|webp|gif)$/i.test(String(attachment.name || ''));
-    if (!/^image\/(?:png|jpeg|webp|gif)$/.test(type) && !supportedName) {
-      throw new Error('Choose a PNG, JPG, WEBP, or GIF file.');
-    }
-    if (attachment.size > 2_800_000) throw new Error('The image or GIF must be 2.8 MB or smaller.');
-    const response = await fetch(attachment.url);
-    if (!response.ok) throw new Error('Discord could not read that uploaded file. Please try again.');
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (!bytes.length || bytes.length > 2_800_000) throw new Error('The image or GIF must be 2.8 MB or smaller.');
-    const mime = /^image\/(?:png|jpeg|webp|gif)$/.test(type)
-      ? type
-      : attachment.name?.toLowerCase().endsWith('.gif')
-        ? 'image/gif'
-        : attachment.name?.toLowerCase().endsWith('.webp')
-          ? 'image/webp'
-          : attachment.name?.toLowerCase().endsWith('.png')
-            ? 'image/png'
-            : 'image/jpeg';
-    imageDataUrl = `data:${mime};base64,${bytes.toString('base64')}`;
-  }
+  const imageDataUrl = await readUploadedImage(interaction, 'media_file');
   const result = await mutateDiscordInternetStore((store) => {
     if (!hasInternetAccount(store, actor.id)) {
       throw new Error('Create a Clearwater Internet account from the panel first, then send a post.');
     }
-    const profile = internetProfile(store, actor);
-    const poster = store.users[actor.id];
-    poster.avatarUrl = actor.avatarUrl || poster.avatarUrl;
-    if (!profile.username) poster.username = actor.username;
+    const poster = activeInternetAccount(store, actor);
+    if (!poster.customAvatar && actor.avatarUrl) poster.avatarUrl = actor.avatarUrl;
     try {
       return {
         held: false,
@@ -518,7 +637,7 @@ async function publishPost(interaction, client) {
       if (!held) throw error;
       const report = store.reports.find((item) => item.status === 'open'
         && item.source === 'automod'
-        && item.authorId === actor.id
+        && item.authorId === poster.id
         && item.content === String(content).trim().slice(0, 500));
       return { held: true, report: report ? { ...report } : null };
     }
@@ -663,7 +782,7 @@ async function removePost(interaction, client, postId) {
     const existing = store.posts.find((post) => post.id === String(postId));
     if (!existing) throw new Error('That post no longer exists.');
     const isAdministrator = hasDiscordAdministrator(interaction);
-    if (!canDeleteInternetPost(interaction, existing)) {
+    if (!canDeleteInternetPost(interaction, existing, store)) {
       throw new Error('Only the post author or a Discord Administrator can delete this post.');
     }
     const ref = internetFeedDiscordRef(store, existing);
@@ -718,9 +837,10 @@ async function toggleDmSettings(interaction) {
 async function showHelp(interaction) {
   await interaction.reply(v2Message([
     '## Clearwater Internet Help',
-    '**Create Account** makes your Internet profile: display name, @username, and bio.',
-    '**Profile** shows your account and lets you edit it.',
-    '**Send Post** publishes a post with like, repost, reply, and bookmark buttons.',
+    '**Create Account** makes a profile: display name, @username, bio, and optional picture. You can make more than one.',
+    '**Switch Account** chooses which profile new posts and replies use.',
+    '**Profile** shows the selected account. **Set Picture** uploads a profile photo.',
+    '**Send Post** publishes as the selected account, with like, repost, reply, and bookmark buttons.',
     '**Like / Repost / Reply / Bookmark** work on the post itself. **⋯** opens profile and delete.',
     '**Settings** lets you edit extra profile fields and Discord notification preference.',
   ].join('\n\n'), { ephemeral: true }));
@@ -735,17 +855,21 @@ async function respondWithError(interaction, error) {
 }
 
 export async function handleDiscordInternetInteraction(interaction, client) {
-  if (!interaction.isButton() && !interaction.isModalSubmit()) return false;
+  if (!interaction.isButton() && !interaction.isModalSubmit() && !interaction.isStringSelectMenu()) return false;
   const id = String(interaction.customId || '');
   const handled = id === INTERNET_PANEL_POST_CUSTOM_ID
     || id === INTERNET_PANEL_ACCOUNT_CUSTOM_ID
     || id === INTERNET_PANEL_PROFILE_CUSTOM_ID
+    || id === INTERNET_PANEL_SWITCH_CUSTOM_ID
     || id === INTERNET_PANEL_SETTINGS_CUSTOM_ID
     || id === INTERNET_PANEL_HELP_CUSTOM_ID
     || id === SETTINGS_EDIT_CUSTOM_ID
     || id === SETTINGS_DMS_CUSTOM_ID
     || id === SETTINGS_MODAL_ID
     || id === ACCOUNT_MODAL_ID
+    || id === INTERNET_AVATAR_BUTTON_ID
+    || id === INTERNET_AVATAR_MODAL_ID
+    || id === INTERNET_SWITCH_SELECT_ID
     || id.startsWith(INTERNET_POST_LIKE_PREFIX)
     || id.startsWith(INTERNET_POST_REPOST_PREFIX)
     || id.startsWith(INTERNET_POST_COMMENT_PREFIX)
@@ -759,7 +883,13 @@ export async function handleDiscordInternetInteraction(interaction, client) {
 
   try {
     if (id === INTERNET_PANEL_ACCOUNT_CUSTOM_ID) await showCreateAccountModal(interaction);
-    else if (id === INTERNET_PANEL_PROFILE_CUSTOM_ID) await showProfile(interaction, interaction.user.id);
+    else if (id === INTERNET_PANEL_PROFILE_CUSTOM_ID) {
+      const store = await readInternetStore();
+      const active = activeInternetAccount(store, internetActor(interaction));
+      await showProfile(interaction, active?.id || interaction.user.id);
+    }
+    else if (id === INTERNET_PANEL_SWITCH_CUSTOM_ID) await showSwitchAccounts(interaction);
+    else if (id === INTERNET_SWITCH_SELECT_ID) await saveSwitchedAccount(interaction);
     else if (id === INTERNET_PANEL_POST_CUSTOM_ID) {
       await requireInternetAccount(interaction);
       await interaction.showModal(buildPostModal());
@@ -770,6 +900,8 @@ export async function handleDiscordInternetInteraction(interaction, client) {
     else if (id === SETTINGS_DMS_CUSTOM_ID) await toggleDmSettings(interaction);
     else if (id === SETTINGS_MODAL_ID) await saveSettings(interaction);
     else if (id === ACCOUNT_MODAL_ID) await saveAccount(interaction);
+    else if (id === INTERNET_AVATAR_BUTTON_ID) await interaction.showModal(buildAvatarModal());
+    else if (id === INTERNET_AVATAR_MODAL_ID) await saveAvatar(interaction);
     else if (id === POST_MODAL_ID) await publishPost(interaction, client);
     else if (id.startsWith(INTERNET_POST_LIKE_PREFIX)) await toggleLike(interaction, client, id.slice(INTERNET_POST_LIKE_PREFIX.length));
     else if (id.startsWith(INTERNET_POST_REPOST_PREFIX)) await toggleRepost(interaction, client, id.slice(INTERNET_POST_REPOST_PREFIX.length));
