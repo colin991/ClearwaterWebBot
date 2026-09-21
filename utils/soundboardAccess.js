@@ -59,7 +59,7 @@ export const SOUNDBOARD_OVERWRITE_CLEAR = Object.freeze({
 });
 
 async function fetchGuild(client, guildId) {
-  return client.guilds.cache.get(String(guildId))
+  return client.guilds?.cache?.get(String(guildId))
     || await client.guilds.fetch(String(guildId)).catch((error) => {
       logger.warn(`Soundboard access: could not fetch guild ${guildId}`, error);
       return null;
@@ -126,18 +126,51 @@ export async function setSoundboardOverwrite(channel, userId, grant, {
   return 'unchanged';
 }
 
+export async function listSourceMembersWithRole(client) {
+  const ids = [];
+  let after = '0';
+  let complete = false;
+  for (let page = 0; page < 50; page += 1) {
+    const path = `/guilds/${SOUNDBOARD_SOURCE_GUILD_ID}/members?limit=1000&after=${encodeURIComponent(after)}`;
+    const batch = await client.rest.get(path);
+    const list = Array.isArray(batch) ? batch : [];
+    if (!list.length) {
+      complete = page > 0;
+      break;
+    }
+    for (const raw of list) {
+      const userId = String(raw?.user?.id || '');
+      if (!userId || raw?.user?.bot) continue;
+      if (sourceRolesIncludeSoundboard(raw.roles)) ids.push(userId);
+    }
+    after = String(list.at(-1)?.user?.id || '');
+    if (!after || list.length < 1000) {
+      complete = true;
+      break;
+    }
+  }
+  return { ids, complete };
+}
+
 export async function eligibleSoundboardUserIds(client) {
+  try {
+    const listed = await listSourceMembersWithRole(client);
+    return { ids: listed.ids, complete: listed.complete, source: 'rest' };
+  } catch (error) {
+    logger.warn('Soundboard access: REST member list failed; trying the cached roster', error);
+  }
+
   const source = await fetchGuild(client, SOUNDBOARD_SOURCE_GUILD_ID);
-  if (!source) return [];
+  if (!source) return { ids: [], complete: false, source: 'none' };
   await ensureGuildMembers(source, { allowStale: true });
   const ids = [];
   for (const member of source.members.cache.values()) {
     if (memberHasSoundboardSourceRole(member)) ids.push(member.id);
   }
-  return ids;
+  return { ids, complete: ids.length > 0, source: 'cache' };
 }
 
-async function syncChannelSoundboardAccess(channel, eligible) {
+async function syncChannelSoundboardAccess(channel, eligible, { revokeMissing = true } = {}) {
   let granted = 0;
   let removed = 0;
 
@@ -149,6 +182,8 @@ async function syncChannelSoundboardAccess(channel, eligible) {
       logger.warn(`Soundboard access: could not grant ${userId} on ${channel.id}`, error);
     }
   }
+
+  if (!revokeMissing) return { granted, removed };
 
   const overwrites = [...(channel.permissionOverwrites?.cache?.values?.() || [])];
   for (const overwrite of overwrites) {
@@ -172,19 +207,37 @@ async function syncChannelSoundboardAccess(channel, eligible) {
   return { granted, removed };
 }
 
-export async function syncSoundboardAccess(client) {
+export async function syncSoundboardAccess(client, { revokeMissing } = {}) {
   const channels = await resolveSoundboardChannels(client);
   if (!channels.length) return { ok: false, granted: 0, removed: 0, reason: 'channel_unavailable' };
 
-  const eligible = new Set(await eligibleSoundboardUserIds(client));
+  const listed = await eligibleSoundboardUserIds(client);
+  const eligible = new Set(listed.ids);
+  const canRevoke = revokeMissing ?? listed.complete;
+  if (!eligible.size) {
+    logger.warn(
+      `Soundboard access: found 0 role holders via ${listed.source || 'unknown'}`
+      + `${canRevoke ? '' : '; granting skipped and revoke skipped until the roster loads'}.`,
+    );
+  } else {
+    logger.info(`Soundboard access: granting ${eligible.size} role holder(s) on ${channels.length} voice channel(s).`);
+  }
+
   let granted = 0;
   let removed = 0;
   for (const channel of channels) {
-    const result = await syncChannelSoundboardAccess(channel, eligible);
+    const result = await syncChannelSoundboardAccess(channel, eligible, { revokeMissing: canRevoke });
     granted += result.granted;
     removed += result.removed;
   }
-  return { ok: true, granted, removed, eligible: eligible.size, channels: channels.length };
+  return {
+    ok: true,
+    granted,
+    removed,
+    eligible: eligible.size,
+    channels: channels.length,
+    complete: listed.complete,
+  };
 }
 
 function summarizeResults(results) {
@@ -249,16 +302,28 @@ export async function handleSoundboardVoiceJoin(oldState, newState, client) {
 export function startSoundboardAccess(client) {
   let stopped = false;
   let timer;
-  const run = async () => {
-    await syncSoundboardAccess(client);
-    if (!stopped) timer = setTimeout(run, SOUNDBOARD_SYNC_MS);
+  let attempts = 0;
+  const run = async (reason) => {
+    attempts += 1;
+    const result = await syncSoundboardAccess(client);
+    logger.info(
+      `Soundboard access ${reason}: eligible ${result.eligible || 0}, `
+      + `granted ${result.granted || 0}, removed ${result.removed || 0}.`,
+    );
+    if (!stopped && reason === 'restart' && !result.eligible && attempts < 4) {
+      timer = setTimeout(() => {
+        void run('restart-retry').catch((error) => logger.error('Soundboard access: restart retry failed', error));
+      }, attempts * 8_000);
+      return;
+    }
+    if (!stopped) timer = setTimeout(() => {
+      void run('interval').catch((error) => logger.error('Soundboard access: interval sync failed', error));
+    }, SOUNDBOARD_SYNC_MS);
   };
-  setTimeout(() => {
-    void run().catch((error) => logger.error('Soundboard access: initial sync failed', error));
-  }, 6_000);
+  void run('restart').catch((error) => logger.error('Soundboard access: restart sync failed', error));
   logger.info(
     `Soundboard access armed: role ${SOUNDBOARD_SOURCE_ROLE_ID} in ${SOUNDBOARD_SOURCE_GUILD_ID} `
-    + `→ Use Soundboard in VCs ${SOUNDBOARD_CHANNEL_IDS.join(', ')}.`,
+    + `→ Use Soundboard in VCs ${SOUNDBOARD_CHANNEL_IDS.join(', ')} (granted again on every bot restart).`,
   );
   return () => { stopped = true; clearTimeout(timer); };
 }

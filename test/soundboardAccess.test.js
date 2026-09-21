@@ -9,11 +9,13 @@ import {
   SOUNDBOARD_TARGET_GUILD_ID,
   handleSoundboardMemberRemove,
   handleSoundboardMemberUpdate,
+  listSourceMembersWithRole,
   memberHasSoundboardSourceRole,
   overwriteAllowsOnlySoundboard,
   setSoundboardOverwrite,
   shouldDeleteOverwriteAfterRevoke,
   sourceRolesIncludeSoundboard,
+  syncSoundboardAccess,
 } from '../utils/soundboardAccess.js';
 import { CLEARWATER_GUILD_ID } from '../utils/staffRanks.js';
 
@@ -186,4 +188,60 @@ test('leaving the source server also removes the soundboard overwrites', async (
   assert.equal(result, 'removed');
   assert.deepEqual(first.deletes, ['222222222222222222']);
   assert.deepEqual(second.deletes, ['222222222222222222']);
+});
+
+test('REST listing keeps people who currently have the source role', async () => {
+  const client = {
+    rest: {
+      get: async () => ([
+        { user: { id: '333333333333333333' }, roles: [SOUNDBOARD_SOURCE_ROLE_ID] },
+        { user: { id: '444444444444444444', bot: true }, roles: [SOUNDBOARD_SOURCE_ROLE_ID] },
+        { user: { id: '555555555555555555' }, roles: ['1'] },
+      ]),
+    },
+  };
+  const listed = await listSourceMembersWithRole(client);
+  assert.deepEqual(listed.ids, ['333333333333333333']);
+  assert.equal(listed.complete, true);
+});
+
+test('restart sync grants current role holders on both channels', async () => {
+  const first = mockChannel();
+  const second = mockChannel();
+  const client = mockClient(new Map([
+    ['1514128904783139018', first],
+    ['1514128961951760515', second],
+  ]));
+  client.rest = {
+    get: async () => ([{ user: { id: '333333333333333333' }, roles: [SOUNDBOARD_SOURCE_ROLE_ID] }]),
+  };
+  const result = await syncSoundboardAccess(client);
+  assert.equal(result.ok, true);
+  assert.equal(result.eligible, 1);
+  assert.equal(result.granted, 2);
+  assert.equal(first.edits[0].id, '333333333333333333');
+  assert.equal(second.edits[0].id, '333333333333333333');
+});
+
+test('an empty restart roster does not wipe existing soundboard overwrites', async () => {
+  const existing = new Map([['333333333333333333', {
+    id: '333333333333333333',
+    type: OverwriteType.Member,
+    allow: {
+      bitfield: PermissionFlagsBits.UseSoundboard | PermissionFlagsBits.UseExternalSounds,
+      has: (bit) => bit === PermissionFlagsBits.UseSoundboard || bit === PermissionFlagsBits.UseExternalSounds,
+    },
+    deny: { bitfield: 0n },
+  }]]);
+  const first = mockChannel(existing);
+  const second = mockChannel(new Map(existing));
+  const client = mockClient(new Map([
+    ['1514128904783139018', first],
+    ['1514128961951760515', second],
+  ]));
+  client.rest = { get: async () => [] };
+  const result = await syncSoundboardAccess(client);
+  assert.equal(result.removed, 0);
+  assert.deepEqual(first.deletes, []);
+  assert.deepEqual(second.deletes, []);
 });

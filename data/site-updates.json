@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-soundboard-restart-grant",
+      "title": "Re-grant soundboard on bot restart",
+      "summary": "On every bot restart the bot looks up who currently has role 1515129421898448996 and immediately gives them Use Soundboard in both LEO voice channels. An empty roster on boot no longer wipes existing overwrites.",
+      "createdAt": "2026-09-21T21:56:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-soundboard-second-channel",
       "title": "Soundboard on a second LEO voice channel, and revoke on role loss",
       "summary": "The other-server soundboard role now also unlocks Use Soundboard in main-server voice channel 1514128961951760515. If that role is removed, or they leave that Discord, the bot takes the soundboard overwrites off both LEO voice channels.",
