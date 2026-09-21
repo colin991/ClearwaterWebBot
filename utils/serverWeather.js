@@ -5,7 +5,7 @@ import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
 export const WEATHER_PROTECTED_USERNAME = 'notj3dah';
 export const WEATHER_LOG_CHANNEL = '1549178818814812211';
-export const WEATHER_SPIN_MS = 30 * 60 * 1000;
+export const WEATHER_SPIN_MS = 20 * 60 * 1000;
 export const WEATHER_TICK_MS = 5_000;
 
 export const WEATHER_CHANCES = Object.freeze([
@@ -191,7 +191,7 @@ export function startServerWeather(client) {
     }
   };
   void run();
-  logger.info(`Server weather enabled (30 minute wheel unless ${WEATHER_PROTECTED_USERNAME} is in-game).`);
+  logger.info(`Server weather enabled (20 minute wheel unless ${WEATHER_PROTECTED_USERNAME} is in-game).`);
   return () => { stopped = true; clearTimeout(timer); };
 }
 
