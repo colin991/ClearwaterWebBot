@@ -1,4 +1,5 @@
 const ROBLOX_UA = 'Mozilla/5.0 (compatible; ClearwaterBot/1.0; +https://github.com/colin991/ClearwaterWebBot)';
+export const ROBLOX_FUNDS_GROUP_ID = '163783791';
 
 export function normalizeRobloxCookie(raw) {
   let value = String(raw || '').trim().replace(/^["']+|["']+$/g, '');
@@ -14,6 +15,11 @@ export function looksLikeRobloxCookie(text) {
   if (/\.ROBLOSECURITY=/i.test(value)) return true;
   if (/_\|WARNING:-DO-NOT-SHARE-THIS/i.test(value)) return true;
   return false;
+}
+
+export function resolveFundsGroupId(config = {}) {
+  const id = String(config.robloxFundsGroupId || config.robloxGroupId || ROBLOX_FUNDS_GROUP_ID).trim();
+  return /^\d+$/.test(id) ? id : ROBLOX_FUNDS_GROUP_ID;
 }
 
 export function formatRobux(amount) {

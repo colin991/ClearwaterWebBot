@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-funds-group-163783791",
+      "title": "Point -funds at Roblox group 163783791",
+      "summary": "-funds now reads the treasury for Roblox group 163783791 by default. ROBLOX_COOKIE still has to be set on the bot host.",
+      "createdAt": "2026-09-21T03:09:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-funds-command",
       "title": "Add -funds for Roblox group treasury",
       "summary": "Ownership can run -funds to see this Roblox group’s Robux. Put the account cookie in ROBLOX_COOKIE on the bot host .env (never in Discord).",

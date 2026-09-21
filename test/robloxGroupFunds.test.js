@@ -7,7 +7,16 @@ import {
   groupFundsCard,
   looksLikeRobloxCookie,
   normalizeRobloxCookie,
+  resolveFundsGroupId,
+  ROBLOX_FUNDS_GROUP_ID,
 } from '../utils/robloxGroupFunds.js';
+
+test('resolveFundsGroupId defaults to the Clearwater share group 163783791', () => {
+  assert.equal(ROBLOX_FUNDS_GROUP_ID, '163783791');
+  assert.equal(resolveFundsGroupId({}), '163783791');
+  assert.equal(resolveFundsGroupId({ robloxGroupId: '1' }), '1');
+  assert.equal(resolveFundsGroupId({ robloxFundsGroupId: '2', robloxGroupId: '1' }), '2');
+});
 
 test('normalizeRobloxCookie accepts a raw value or a full cookie header', () => {
   assert.equal(normalizeRobloxCookie('  abc123  '), 'abc123');

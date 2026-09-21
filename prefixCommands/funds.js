@@ -3,6 +3,7 @@ import {
   fetchRobloxGroupFunds,
   groupFundsCard,
   looksLikeRobloxCookie,
+  resolveFundsGroupId,
 } from '../utils/robloxGroupFunds.js';
 import { v2Card } from '../utils/v2Message.js';
 
@@ -18,7 +19,7 @@ export default {
 
     const config = client?.config || message.client?.config || {};
     const info = await fetchRobloxGroupFunds({
-      groupId: config.robloxGroupId,
+      groupId: resolveFundsGroupId(config),
       cookie: config.robloxCookie,
     });
     await message.reply(v2Card(groupFundsCard(info)));
