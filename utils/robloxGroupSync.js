@@ -1,5 +1,6 @@
 import { discordIdsByRobloxId, getIdentityCache } from './identityStore.js';
 import { logger } from './logger.js';
+import { resolveFundsGroupId, resolveJoinGroupId } from './robloxGroups.js';
 import { v2Card } from './v2Message.js';
 import { ensureGuildMembers, isDiscordRosterReady } from './guildMemberSnapshot.js';
 
@@ -305,7 +306,8 @@ async function resolveEligibleDiscordId(robloxId, eligible, guild, allowedRoleId
 }
 
 async function syncGroupJoinRequests(client, config) {
-  if (!config.robloxGroupId || !config.robloxGroupApiKey) return;
+  const groupId = resolveJoinGroupId(config);
+  if (!groupId || !config.robloxGroupApiKey) return;
   const guild = await client.guilds.fetch(config.guildId).catch(() => null);
   if (!guild) throw new Error('DISCORD_GUILD_ID could not be fetched for Roblox group sync');
 
@@ -318,8 +320,8 @@ async function syncGroupJoinRequests(client, config) {
       + 'accepting known matches only and skipping declines this pass.',
     );
   }
-  const requests = await pendingJoinRequests(config.robloxGroupId, config.robloxGroupApiKey);
-  logger.info(`Roblox group sync reviewing ${requests.length} pending join request(s) (including any backlog) against ${eligible.allowed.size} Melonly-linked Roblox account(s).`);
+  const requests = await pendingJoinRequests(groupId, config.robloxGroupApiKey);
+  logger.info(`Roblox group sync reviewing ${requests.length} pending join request(s) for group ${groupId} against ${eligible.allowed.size} Melonly-linked Roblox account(s).`);
   let accepted = 0;
   let declined = 0;
   let skipped = 0;
@@ -329,7 +331,7 @@ async function syncGroupJoinRequests(client, config) {
 
   for (const request of requests) {
     const robloxId = joinRequestRobloxId(request);
-    const requestName = joinRequestResourceName(request, config.robloxGroupId);
+    const requestName = joinRequestResourceName(request, groupId);
     if (!requestName) {
       logger.warn(`Skipped a Roblox group join request because it did not include an ID. Fields: ${Object.keys(request || {}).join(', ') || 'none'}.`);
       skipped += 1;
@@ -365,7 +367,7 @@ async function syncGroupJoinRequests(client, config) {
         logger.info(`Accepted Roblox group join request for Discord ${matched.discordId} / Roblox ${robloxId}.`);
         await sendGroupApprovalDm(client, matched.discordId, {
           robloxId,
-          groupId: config.robloxGroupId,
+          groupId,
         });
         await sendGroupLog(
           client,
@@ -449,6 +451,10 @@ export function startRobloxGroupSync(client, config) {
   let stopped = false;
   let timer;
   let lastError = '';
+  logger.info(
+    `Roblox groups: join requests use ${resolveJoinGroupId(config)}; `
+    + `-funds uses ${resolveFundsGroupId(config)}.`,
+  );
   const run = async () => {
     let nextDelayMs = 60_000;
     try {

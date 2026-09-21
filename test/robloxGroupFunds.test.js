@@ -15,11 +15,12 @@ import {
   ROBLOX_FUNDS_GROUP_ID,
 } from '../utils/robloxGroupFunds.js';
 
-test('resolveFundsGroupId defaults to the Clearwater share group 163783791', () => {
-  assert.equal(ROBLOX_FUNDS_GROUP_ID, '163783791');
-  assert.equal(resolveFundsGroupId({}), '163783791');
-  assert.equal(resolveFundsGroupId({ robloxGroupId: '1' }), '1');
-  assert.equal(resolveFundsGroupId({ robloxFundsGroupId: '2', robloxGroupId: '1' }), '2');
+test('resolveFundsGroupId uses the treasury group 140437562 and ignores the join-request group', () => {
+  assert.equal(ROBLOX_FUNDS_GROUP_ID, '140437562');
+  assert.equal(resolveFundsGroupId({}), '140437562');
+  assert.equal(resolveFundsGroupId({ robloxGroupId: '163783791' }), '140437562');
+  assert.equal(resolveFundsGroupId({ robloxFundsGroupId: '163783791', robloxGroupId: '163783791' }), '140437562');
+  assert.equal(resolveFundsGroupId({ robloxFundsGroupId: '999', robloxGroupId: '163783791' }), '999');
 });
 
 test('normalizeRobloxCookie accepts a raw value or a full cookie header', () => {

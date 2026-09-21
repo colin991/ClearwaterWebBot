@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { ROBLOX_FUNDS_GROUP_ID, ROBLOX_JOIN_GROUP_ID } from './utils/robloxGroups.js';
 
 export const config = Object.freeze({
   token: process.env.DISCORD_TOKEN?.trim(),
@@ -11,8 +12,8 @@ export const config = Object.freeze({
   googlePrivateKey: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n').trim(),
   pcsoRosterSpreadsheetId: process.env.PCSO_ROSTER_SPREADSHEET_ID?.trim()
     || '1gbwwPz8Sk9AE_AG6J8RRWGaEGLGPX6AdHW2FTxqY4Xc',
-  robloxGroupId: process.env.ROBLOX_GROUP_ID?.trim(),
-  robloxFundsGroupId: process.env.ROBLOX_FUNDS_GROUP_ID?.trim() || process.env.ROBLOX_GROUP_ID?.trim() || '163783791',
+  robloxGroupId: process.env.ROBLOX_GROUP_ID?.trim() || ROBLOX_JOIN_GROUP_ID,
+  robloxFundsGroupId: process.env.ROBLOX_FUNDS_GROUP_ID?.trim() || ROBLOX_FUNDS_GROUP_ID,
   robloxGroupApiKey: process.env.ROBLOX_GROUP_API_KEY?.trim(),
   robloxCookie: process.env.ROBLOX_COOKIE?.trim() || process.env.ROBLOX_SECURITY_COOKIE?.trim(),
   robloxGroupAllowedRoleIds: (process.env.ROBLOX_GROUP_ALLOWED_ROLE_IDS || '1514033664306974752,1514744040778760252')

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-split-roblox-groups",
+      "title": "Use separate Roblox groups for join requests and funds",
+      "summary": "Join-request whitelist sync now uses Clearwater Roleplay ERLC (163783791). -funds uses Clearwater-Whitelisted (140437562). The two IDs are no longer shared, even if the host env had them swapped.",
+      "createdAt": "2026-09-21T21:42:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-group-request-discord-log",
       "title": "Log Roblox group join requests in Discord",
       "summary": "Whitelist group join-request activity is posted to Discord channel 1536517651055120514 again. Accepts, declines, and waiting/skipped requests use a normal embed, and log send failures are no longer swallowed.",

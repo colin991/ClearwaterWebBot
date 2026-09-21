@@ -6,7 +6,9 @@ Discord bot for Clearwater Roleplay — moderation, voice tools, ER:LC sync, Rob
 
 1. Copy `.env.example` to `.env` on the bot host.
 2. Set `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, and `DISCORD_GUILD_ID`.
-3. Add optional keys (`ERLC_SERVER_KEY`, `ROBLOX_GROUP_ID`, `ROBLOX_COOKIE` for `-funds`, etc.) as needed.
+3. Add optional keys (`ERLC_SERVER_KEY`, `ROBLOX_GROUP_API_KEY`, `ROBLOX_COOKIE` for `-funds`, etc.) as needed.
+   - Join-request whitelist group: `163783791` (Clearwater Roleplay ERLC)
+   - Funds group: `140437562` (Clearwater-Whitelisted). Do not point both at the same id.
 4. Run `npm install` and `npm start`.
 
 ### Spark Hosting / Apollo panel (important)

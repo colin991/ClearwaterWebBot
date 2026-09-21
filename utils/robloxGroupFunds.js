@@ -1,4 +1,4 @@
-export const ROBLOX_FUNDS_GROUP_ID = '163783791';
+export { ROBLOX_FUNDS_GROUP_ID, resolveFundsGroupId } from './robloxGroups.js';
 export const FUNDS_TRANSACTION_COUNT = 7;
 
 const ROBLOX_UA = 'Mozilla/5.0 (compatible; ClearwaterBot/1.0; +https://github.com/colin991/ClearwaterWebBot)';
@@ -17,11 +17,6 @@ export function looksLikeRobloxCookie(text) {
   if (/\.ROBLOSECURITY=/i.test(value)) return true;
   if (/_\|WARNING:-DO-NOT-SHARE-THIS/i.test(value)) return true;
   return false;
-}
-
-export function resolveFundsGroupId(config = {}) {
-  const id = String(config.robloxFundsGroupId || config.robloxGroupId || ROBLOX_FUNDS_GROUP_ID).trim();
-  return /^\d+$/.test(id) ? id : ROBLOX_FUNDS_GROUP_ID;
 }
 
 export function formatRobux(amount) {
@@ -154,7 +149,7 @@ function fundsError(status) {
     return new Error('That Roblox account cannot view this group’s funds. Use a cookie for an account with group economy permission.');
   }
   if (status === 404) {
-    return new Error('That Roblox group was not found. Check ROBLOX_GROUP_ID.');
+    return new Error('That Roblox group was not found. Check ROBLOX_FUNDS_GROUP_ID.');
   }
   return new Error(`Roblox funds lookup failed (${status}).`);
 }
@@ -166,7 +161,7 @@ export async function fetchRobloxGroupFunds({
 } = {}) {
   const id = String(groupId || '').trim();
   if (!/^\d+$/.test(id)) {
-    throw new Error('Set ROBLOX_GROUP_ID in the bot host .env.');
+    throw new Error('Set ROBLOX_FUNDS_GROUP_ID in the bot host .env.');
   }
   const token = normalizeRobloxCookie(cookie);
   if (!token) {
