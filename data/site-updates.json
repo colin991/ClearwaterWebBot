@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-remove-mod-call-pickup-ping",
+      "title": "Remove the pick up mod calls ping",
+      "summary": "The bot no longer scare-pings staff to pick up sitting mod calls, and it no longer posts Thank you, for picking up the mod calls. Accepted calls can still be moved into a support voice room.",
+      "createdAt": "2026-09-21T23:06:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-soundboard-restart-grant",
       "title": "Re-grant soundboard on bot restart",
       "summary": "On every bot restart the bot looks up who currently has role 1515129421898448996 and immediately gives them Use Soundboard in both LEO voice channels. An empty roster on boot no longer wipes existing overwrites.",
