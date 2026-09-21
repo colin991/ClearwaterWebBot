@@ -1,3 +1,4 @@
+import { renderInternetPostImage } from './internetPostImage.js';
 import {
   ActionRowBuilder,
   AttachmentBuilder,
@@ -7,15 +8,12 @@ import {
   ChannelType,
   ContainerBuilder,
   MessageFlags,
-  SectionBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
   TextDisplayBuilder,
-  ThumbnailBuilder,
 } from 'discord.js';
 import { followerDiscordIds, readInternetStore } from './internetStore.js';
 import { logger } from './logger.js';
-
-const MAX_ATTACH_BYTES = 8 * 1024 * 1024;
-const DEFAULT_AVATAR_URL = 'https://cdn.discordapp.com/embed/avatars/0.png';
 
 export const INTERNET_POST_LIKE_PREFIX = 'cw-internet-like:';
 export const INTERNET_POST_REPOST_PREFIX = 'cw-internet-repost:';
@@ -41,25 +39,6 @@ export const INTERNET_REACT_EMOJIS = Object.freeze({
   wow: '😮',
   sad: '😢',
 });
-
-function isHttpsUrl(value) {
-  try {
-    const url = new URL(String(value || ''));
-    return url.protocol === 'https:' && !url.username && !url.password;
-  } catch {
-    return false;
-  }
-}
-
-function parseDataImage(value, fileName = 'post') {
-  const match = String(value || '').replace(/\s+/g, '').match(/^data:(image\/(?:png|jpeg|jpg|webp|gif));base64,([a-z0-9+/]+=*)$/i);
-  if (!match) return null;
-  const buffer = Buffer.from(match[2], 'base64');
-  if (!buffer.length || buffer.length > MAX_ATTACH_BYTES) return null;
-  const mime = match[1].toLowerCase();
-  const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : mime.includes('gif') ? 'gif' : 'jpg';
-  return { buffer, name: `${fileName}.${ext}` };
-}
 
 function posterHandle(post) {
   const raw = String(post?.username || post?.displayName || 'user')
@@ -99,11 +78,6 @@ function repostCount(store, postId) {
     : 0;
 }
 
-function bookmarkCount(store, postId) {
-  const id = String(postId || '');
-  return Object.values(store?.users || {}).filter((member) => Array.isArray(member?.bookmarks) && member.bookmarks.includes(id)).length;
-}
-
 export function formatFeedTimestamp(iso) {
   const ms = new Date(iso || Date.now()).getTime();
   if (!Number.isFinite(ms)) return '';
@@ -132,10 +106,6 @@ export function buildFeedPostText(post, store) {
   ].filter((line) => line !== undefined).join('\n').slice(0, 4000);
 }
 
-function buildFeedText(post, store) {
-  return buildFeedPostText(post, store);
-}
-
 function countLabel(count) {
   return Number(count) > 0 ? String(count) : '\u200b';
 }
@@ -145,45 +115,10 @@ function resolveFeedMessageId(post) {
   return /^\d{16,22}$/.test(id) ? id : '';
 }
 
-function resolveAvatar(post, store) {
-  const author = store?.users?.[post?.authorId];
-  const raw = author?.avatarUrl || post?.avatarUrl || '';
-  if (isHttpsUrl(raw)) return { url: raw, files: [] };
-  const data = parseDataImage(raw, 'avatar');
-  if (data) {
-    return {
-      url: `attachment://${data.name}`,
-      files: [new AttachmentBuilder(data.buffer, { name: data.name })],
-    };
-  }
-  return { url: DEFAULT_AVATAR_URL, files: [] };
-}
-
-function resolveMedia(post) {
-  const files = [];
-  let mediaUrl = '';
-  const gifUrl = String(post?.gifUrl || '');
-  const imageUrl = String(post?.imageUrl || '');
-
-  if (gifUrl && isHttpsUrl(gifUrl)) {
-    mediaUrl = gifUrl;
-  } else if (imageUrl && isHttpsUrl(imageUrl) && !imageUrl.includes('/api/media')) {
-    mediaUrl = imageUrl;
-  } else {
-    const data = parseDataImage(imageUrl);
-    if (data) {
-      files.push(new AttachmentBuilder(data.buffer, { name: data.name }));
-      mediaUrl = `attachment://${data.name}`;
-    }
-  }
-  return { files, mediaUrl };
-}
-
-function internetActionRow(post, store, { emojis = true, bookmark = true } = {}) {
+function internetActionRow(post, store, { emojis = true } = {}) {
   const likes = Array.isArray(post?.likes) ? post.likes.length : 0;
   const comments = commentCount(store, post?.id);
   const reposts = repostCount(store, post?.id);
-  const bookmarks = bookmarkCount(store, post?.id);
   const likeButton = new ButtonBuilder()
     .setCustomId(`${INTERNET_POST_LIKE_PREFIX}${post.id}`)
     .setLabel(countLabel(likes))
@@ -201,15 +136,6 @@ function internetActionRow(post, store, { emojis = true, bookmark = true } = {})
     .setLabel('⋯')
     .setStyle(ButtonStyle.Secondary);
   const buttons = [likeButton, repostButton, commentButton];
-  if (bookmark) {
-    const bookmarkButton = new ButtonBuilder()
-      .setCustomId(`${INTERNET_POST_BOOKMARK_PREFIX}${post.id}`)
-      .setLabel(countLabel(bookmarks))
-      .setStyle(ButtonStyle.Secondary);
-    if (emojis) bookmarkButton.setEmoji('🔖');
-    else bookmarkButton.setLabel(`Save${bookmarks ? ` ${bookmarks}` : ''}`);
-    buttons.push(bookmarkButton);
-  }
   buttons.push(moreButton);
   if (emojis) {
     likeButton.setEmoji(INTERNET_BUTTON_EMOJIS.like);
@@ -224,68 +150,22 @@ function internetActionRow(post, store, { emojis = true, bookmark = true } = {})
   return new ActionRowBuilder().addComponents(...buttons);
 }
 
-function internetMetaRow(post) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`${INTERNET_POST_REACT_PREFIX}${post.id}`)
-      .setLabel('React to Post')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(`${INTERNET_POST_FOLLOW_PREFIX}${post.authorId}`)
-      .setLabel('Follow')
-      .setStyle(ButtonStyle.Secondary),
-  );
-}
-
-function addPostCard(container, post, store, { thumbnail = true, media = true } = {}) {
-  const { files, mediaUrl } = media ? resolveMedia(post) : { files: [], mediaUrl: '' };
-  const avatar = thumbnail ? resolveAvatar(post, store) : { url: '', files: [] };
-  const accessoryUrl = (media && mediaUrl) || avatar.url;
-  if (accessoryUrl === avatar.url) files.push(...avatar.files);
-  const followers = followerCount(store, post?.authorId);
-  const body = String(post?.content || '').trim() || '_Shared a post._';
-  const when = formatFeedTimestamp(post?.createdAt);
-  const header = new TextDisplayBuilder().setContent(
-    `**${posterName(post)}**\n-# @${posterHandle(post)} · ${followers} follower${followers === 1 ? '' : 's'}`,
-  );
-  const bodyText = new TextDisplayBuilder().setContent(body.slice(0, 2000));
-  const footer = new TextDisplayBuilder().setContent(when ? `-# ${when}` : '\u200b');
-  if (accessoryUrl) {
-    container.addSectionComponents(
-      new SectionBuilder()
-        .addTextDisplayComponents(header, bodyText, footer)
-        .setThumbnailAccessory(new ThumbnailBuilder().setURL(accessoryUrl).setDescription(posterName(post))),
-    );
-  } else {
-    container.addTextDisplayComponents(header, bodyText, footer);
-  }
-  return files;
-}
-
-export function buildInternetPostPayload(post, store = null, {
-  emojis = true,
-  media = true,
-  thumbnail = true,
-  variant = 'post',
-} = {}) {
+export async function buildInternetPostPayload(post, store = null, { emojis = true, variant = 'post' } = {}) {
   const isReply = variant === 'reply' || Boolean(post?.parentId);
-  const container = new ContainerBuilder().clearAccentColor();
-  if (isReply) {
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`↩ @${posterHandle(post)} replied to this post.`),
-    );
-  }
-
-  const files = addPostCard(container, post, store, { thumbnail, media });
-  container.addActionRowComponents(internetActionRow(post, store, { emojis, bookmark: !isReply }));
-
-  const payload = {
-    components: [container],
-    flags: MessageFlags.IsComponentsV2,
-    allowedMentions: { parse: [] },
+  const png = await renderInternetPostImage(post, {
+    followers: followerCount(store, post?.authorId),
+    avatarUrl: store?.users?.[post?.authorId]?.avatarUrl || post?.avatarUrl || '',
+    timestamp: formatFeedTimestamp(post?.createdAt), reply: isReply,
+  });
+  const components = [];
+  if (isReply) components.push(new TextDisplayBuilder().setContent(`↩ @${posterHandle(post)} replied to this post.`));
+  components.push(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder()
+    .setURL('attachment://internet-post.png').setDescription(buildFeedPostText(post, store).slice(0, 1024))));
+  components.push(internetActionRow(post, store, { emojis }));
+  return {
+    components, files: [new AttachmentBuilder(png, { name: 'internet-post.png' })],
+    flags: MessageFlags.IsComponentsV2, allowedMentions: { parse: [] },
   };
-  if (files.length) payload.files = files;
-  return payload;
 }
 
 export function buildRepostPayload(post) {
@@ -335,12 +215,10 @@ async function findThreadByName(channel, name) {
 }
 
 function payloadAttempts(post, store) {
+  // Emoji rejection may use text buttons, but the post must remain an image card.
   return [
     () => buildInternetPostPayload(post, store),
     () => buildInternetPostPayload(post, store, { emojis: false }),
-    () => buildInternetPostPayload(post, store, { emojis: false, thumbnail: false }),
-    () => buildInternetPostPayload(post, store, { emojis: false, thumbnail: false, media: false }),
-    () => ({ content: buildFeedText(post, store).slice(0, 1900), allowedMentions: { parse: [] } }),
   ];
 }
 
@@ -396,7 +274,7 @@ function forumThreadName(post) {
 }
 
 function editablePayload(payload) {
-  const next = { ...payload, content: null, embeds: [] };
+  const next = { ...payload, content: null, embeds: [], attachments: [] };
   return next;
 }
 
@@ -441,7 +319,7 @@ export function createInternetFeedController(client, config = {}) {
     let lastError = null;
     for (const build of payloadAttempts(post, store)) {
       try {
-        const id = await sendFeedPayload(channel, post, build());
+        const id = await sendFeedPayload(channel, post, await build());
         if (id) {
           await ghostPingFollowers(channel, post, store, id).catch((error) => {
             logger.warn('Could not notify Internet followers', error);
@@ -463,7 +341,7 @@ export function createInternetFeedController(client, config = {}) {
     const channel = await fetchInternetChannel(client, channelId);
     if (!channel) return;
     const store = knownStore || await readInternetStore().catch(() => null);
-    const payload = editablePayload(buildInternetPostPayload(post, store));
+    const payload = editablePayload(await buildInternetPostPayload(post, store));
 
     try {
       if (isInternetForumChannel(channel)) {
@@ -488,11 +366,11 @@ export function createInternetFeedController(client, config = {}) {
       if (isInternetForumChannel(channel)) {
         const thread = await fetchForumThread(channel, messageId);
         if (thread?.archived) await thread.setArchived(false, 'New Internet comment').catch(() => {});
-        if (thread) await thread.send(buildInternetPostPayload(comment, await readInternetStore().catch(() => null), { variant: 'reply' }));
+        if (thread) await thread.send(await buildInternetPostPayload(comment, await readInternetStore().catch(() => null), { variant: 'reply' }));
         return;
       }
       const message = await channel.messages.fetch(messageId);
-      if (message) await message.reply(buildInternetPostPayload(comment, await readInternetStore().catch(() => null), { variant: 'reply' }));
+      if (message) await message.reply(await buildInternetPostPayload(comment, await readInternetStore().catch(() => null), { variant: 'reply' }));
     } catch (error) {
       logger.error(`Could not publish comment for Internet post ${parentPost?.id}`, error);
     }

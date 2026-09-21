@@ -308,9 +308,9 @@ test('hour-long Retry-After values are honored so the host is not IP-blocked aga
   const original = globalThis.fetch;
   globalThis.fetch = async () => jsonResponse(429, {}, { 'retry-after': '4857' });
   try {
-    await assert.rejects(() => fetchErlcServer('key'), /rate-limited.*4857 seconds/);
+    await assert.rejects(() => fetchErlcServer('key'), /rate-limited.*4858 seconds/);
     assert.ok(erlcCooldownRemainingMs() > 4_000_000);
-    assert.ok(erlcCooldownRemainingMs() <= 4_857_050);
+    assert.ok(erlcCooldownRemainingMs() <= 4_858_050);
   } finally {
     globalThis.fetch = original;
     resetErlcNetworkForTests({ minIntervalMs: 5000 });

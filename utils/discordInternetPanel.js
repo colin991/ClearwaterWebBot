@@ -878,7 +878,7 @@ async function showHelp(interaction) {
     '**Create Account** makes a profile: display name, @username, bio, and optional picture. You can make more than one.',
     '**Switch Account** chooses which profile new posts and replies use.',
     '**Profile** shows the selected account. **Set Picture** uploads a profile photo.',
-    '**Send Post** publishes as the selected account, with like, repost, reply, and bookmark buttons.',
+    '**Send Post** publishes as the selected account, with like, repost, reply, and more buttons.',
     '**⋯** opens a hidden Follow button. Following someone pings you when they post.',
     '**Settings** lets you edit extra profile fields and Discord notification preference.',
   ].join('\n\n'), { ephemeral: true }));

@@ -2069,6 +2069,13 @@
       "summary": "The -dc command, Sheriff balancing, VC checks, mod-call routing, and role sync now share member-list refreshes, reuse the live cache, and respect retry cooldowns instead of issuing duplicate opcode 8 requests.",
       "createdAt": "2026-09-15T22:19:52.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-21-internet-image-cards-reset-headers",
+      "title": "Image cards for Internet posts and replies",
+      "summary": "Posts and replies now display rendered image cards with profile photos, content, media, and timestamps. Removed the bookmark button. ERLC cooldowns now respect reset headers and response-body retry durations.",
+      "createdAt": "2026-09-21T16:35:22.002923Z",
+      "updatedBy": "colin991"
     }
   ]
 }

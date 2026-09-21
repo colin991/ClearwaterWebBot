@@ -40,6 +40,19 @@ export function normalizeErlcRetryAfterSeconds(retryAfterSeconds = 0) {
   return seconds;
 }
 
+/** Respect the longest advertised wait, including exhausted successful responses. */
+export function erlcResponseRetrySeconds(response, body = {}, now = Date.now()) {
+  const header = response.headers.get('retry-after');
+  const headerSeconds = header && !Number.isFinite(Number(header))
+    ? Math.max(0, (Date.parse(header) - now) / 1000) || 0 : Number(header) || 0;
+  const reset = Number(response.headers.get('x-ratelimit-reset')) || 0;
+  const exhausted = response.status === 429 || response.headers.get('x-ratelimit-remaining') === '0';
+  const resetSeconds = exhausted ? Math.max(0, ((reset > 1e12 ? reset : reset * 1000) - now) / 1000) : 0;
+  const wait = Math.max(normalizeErlcRetryAfterSeconds(body.retry_after),
+    normalizeErlcRetryAfterSeconds(headerSeconds), resetSeconds, response.status === 429 ? 5 : 0);
+  return wait > 0 ? wait + 1 : 0;
+}
+
 function rememberErlcCooldown(retryAfterSeconds = 0, { command = false } = {}) {
   const extra = normalizeErlcRetryAfterSeconds(retryAfterSeconds) * 1000;
   const now = Date.now();
@@ -240,7 +253,8 @@ async function fetchErlcBundle(serverKey) {
     wrapped.code = 'ERLC_TIMEOUT';
     throw wrapped;
   });
-  const retryAfter = Number(response.headers.get('retry-after') || 0);
+  const json = await response.json().catch(() => ({}));
+  const retryAfter = erlcResponseRetrySeconds(response, json);
   if (response.status === 401 || response.status === 403) {
     const error = erlcKeyError(response.status);
     haltErlc(error, 10 * 60 * 1000);
@@ -257,7 +271,6 @@ async function fetchErlcBundle(serverKey) {
     throw error;
   }
   rememberErlcCooldown(retryAfter);
-  const json = await response.json();
   const fetchedAt = Date.now();
   bundleCache = {
     value: json,
@@ -677,7 +690,7 @@ async function sendErlcCommand(serverKey, command, { shouldExecute, allowLoad = 
       signal: AbortSignal.timeout(8000),
     }));
     const result = await response.json().catch(() => ({}));
-    const retryAfterSeconds = normalizeErlcRetryAfterSeconds(result.retry_after || response.headers.get('retry-after') || 0);
+    const retryAfterSeconds = erlcResponseRetrySeconds(response, result);
     rememberErlcCooldown(retryAfterSeconds, { command: true });
     if (response.ok) return result;
     if (response.status === 401 || response.status === 403) {
