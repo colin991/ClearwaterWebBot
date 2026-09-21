@@ -13,6 +13,7 @@ This folder holds bot runtime files on the **bot host**.
 - `police-cars.json` — last Police car whitelist PMs
 - `vehicle-presets.json` — last in-game PMs for emergency vehicles that are not on a server-saved preset
 - `leo-briefing.json` — active server-wide LEO briefing and which map layouts are loaded
+- `server-weather.json` — last in-game weather roll and when the next 30-minute spin is due
 - `priority-request.json` — active/pending priority request, timer, recorded in-game deaths, and civilian kill warnings
 - `owner-config.json` — Discord sync settings
 - `department-salaries.json` — weekly department salary config and payout receipts

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-21-server-weather-wheel",
+      "title": "Spin in-game weather every 30 minutes",
+      "summary": "When notj3dah is not in-game, the bot rolls server weather every 30 minutes (Clear 65%, rain 15%, fog 11%, thunderstorms 9%). If that player is in-game or joins, weather is forced to clear and the wheel does not run.",
+      "createdAt": "2026-09-21T19:56:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-priority-voice-speech-after-beep",
       "title": "Speak after the priority beep",
       "summary": "After the LEO channel beep, the bot now plays the spoken priority line on the same voice connection. TTS starts immediately, OpenAI/Edge calls time out instead of hanging, and the player is stopped if the beep clip never goes idle so speech can still play.",
