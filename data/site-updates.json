@@ -2,9 +2,16 @@
   "version": 1,
   "updates": [
     {
-      "id": "2026-09-21-internet-chirper-accounts",
-      "title": "Add Internet accounts and Chirper-style posts",
-      "summary": "The Internet Panel now has Create Account and Profile. Posts publish as Chirper cards with display name, @username, followers, and like/repost/reply/bookmark buttons.",
+      "id": "2026-09-21-internet-no-product-name",
+      "title": "Drop the extra name off Internet posts",
+      "summary": "Clearwater Internet posts now start with the profile card. They no longer show a separate product name above the post.",
+      "createdAt": "2026-09-21T16:12:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-21-internet-profile-accounts",
+      "title": "Add Internet accounts and profile-style posts",
+      "summary": "The Internet Panel now has Create Account and Profile. Posts publish as profile cards with display name, @username, followers, and like/repost/reply/bookmark buttons.",
       "createdAt": "2026-09-21T16:05:00.000Z",
       "updatedBy": "colin991"
     },

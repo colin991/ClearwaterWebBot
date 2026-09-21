@@ -25,6 +25,17 @@ export const INTERNET_POST_BOOKMARK_PREFIX = 'cw-internet-bookmark:';
 export const INTERNET_POST_MORE_PREFIX = 'cw-internet-more:';
 export const INTERNET_POST_PROFILE_PREFIX = 'cw-internet-profile:';
 export const INTERNET_POST_DELETE_PREFIX = 'cw-internet-delete:';
+export const INTERNET_POST_FOLLOW_PREFIX = 'cw-internet-follow:';
+export const INTERNET_POST_REACT_PREFIX = 'cw-internet-react:';
+export const INTERNET_REACT_EMOJI_PREFIX = 'cw-internet-rx:';
+
+export const INTERNET_REACT_EMOJIS = Object.freeze({
+  heart: '❤️',
+  fire: '🔥',
+  laugh: '😂',
+  wow: '😮',
+  sad: '😢',
+});
 
 function isHttpsUrl(value) {
   try {
@@ -88,7 +99,7 @@ function bookmarkCount(store, postId) {
   return Object.values(store?.users || {}).filter((member) => Array.isArray(member?.bookmarks) && member.bookmarks.includes(id)).length;
 }
 
-export function formatChirperTimestamp(iso) {
+export function formatFeedTimestamp(iso) {
   const ms = new Date(iso || Date.now()).getTime();
   if (!Number.isFinite(ms)) return '';
   const formatted = new Intl.DateTimeFormat('en-US', {
@@ -103,15 +114,10 @@ export function formatChirperTimestamp(iso) {
   return formatted.replace(', ', ' · ');
 }
 
-function postTimestamp(post) {
-  const seconds = Math.floor(new Date(post?.createdAt || Date.now()).getTime() / 1000);
-  return Number.isFinite(seconds) ? `<t:${seconds}:R>` : 'just now';
-}
-
-export function buildChirperPostText(post, store) {
+export function buildFeedPostText(post, store) {
   const followers = followerCount(store, post?.authorId);
   const body = String(post?.content || '').trim() || '_Shared a post._';
-  const when = formatChirperTimestamp(post?.createdAt);
+  const when = formatFeedTimestamp(post?.createdAt);
   return [
     `**${posterName(post)}**`,
     `-# @${posterHandle(post)} · ${followers} follower${followers === 1 ? '' : 's'}`,
@@ -122,10 +128,7 @@ export function buildChirperPostText(post, store) {
 }
 
 function buildFeedText(post, store) {
-  return [
-    '🐦 **Chirper**',
-    buildChirperPostText(post, store),
-  ].join('\n\n').slice(0, 4000);
+  return buildFeedPostText(post, store);
 }
 
 function countLabel(count) {
@@ -157,7 +160,7 @@ function resolveMedia(post) {
   return { files, mediaUrl };
 }
 
-function chirperActionRow(post, store, { emojis = true } = {}) {
+function internetActionRow(post, store, { emojis = true, bookmark = true } = {}) {
   const likes = Array.isArray(post?.likes) ? post.likes.length : 0;
   const comments = commentCount(store, post?.id);
   const reposts = repostCount(store, post?.id);
@@ -174,37 +177,51 @@ function chirperActionRow(post, store, { emojis = true } = {}) {
     .setCustomId(`${INTERNET_POST_COMMENT_PREFIX}${post.id}`)
     .setLabel(countLabel(comments))
     .setStyle(ButtonStyle.Secondary);
-  const bookmarkButton = new ButtonBuilder()
-    .setCustomId(`${INTERNET_POST_BOOKMARK_PREFIX}${post.id}`)
-    .setLabel(countLabel(bookmarks))
-    .setStyle(ButtonStyle.Secondary);
   const moreButton = new ButtonBuilder()
     .setCustomId(`${INTERNET_POST_MORE_PREFIX}${post.id}`)
     .setLabel('⋯')
     .setStyle(ButtonStyle.Secondary);
+  const buttons = [likeButton, repostButton, commentButton];
+  if (bookmark) {
+    const bookmarkButton = new ButtonBuilder()
+      .setCustomId(`${INTERNET_POST_BOOKMARK_PREFIX}${post.id}`)
+      .setLabel(countLabel(bookmarks))
+      .setStyle(ButtonStyle.Secondary);
+    if (emojis) bookmarkButton.setEmoji('🔖');
+    else bookmarkButton.setLabel(`Save${bookmarks ? ` ${bookmarks}` : ''}`);
+    buttons.push(bookmarkButton);
+  }
+  buttons.push(moreButton);
   if (emojis) {
     likeButton.setEmoji('❤️');
     repostButton.setEmoji('🔁');
     commentButton.setEmoji('↩️');
-    bookmarkButton.setEmoji('🔖');
   } else {
     likeButton.setLabel(`Like${likes ? ` ${likes}` : ''}`);
     repostButton.setLabel(`Repost${reposts ? ` ${reposts}` : ''}`);
     commentButton.setLabel(`Reply${comments ? ` ${comments}` : ''}`);
-    bookmarkButton.setLabel(`Save${bookmarks ? ` ${bookmarks}` : ''}`);
     moreButton.setLabel('More');
   }
-  return new ActionRowBuilder().addComponents(likeButton, repostButton, commentButton, bookmarkButton, moreButton);
+  return new ActionRowBuilder().addComponents(...buttons);
 }
 
-export function buildInternetPostPayload(post, store = null, { emojis = true, media = true, thumbnail = true } = {}) {
+function internetMetaRow(post) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${INTERNET_POST_REACT_PREFIX}${post.id}`)
+      .setLabel('React to Post')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`${INTERNET_POST_FOLLOW_PREFIX}${post.authorId}`)
+      .setLabel('Follow')
+      .setStyle(ButtonStyle.Secondary),
+  );
+}
+
+function addPostCard(container, post, store, { thumbnail = true, media = true } = {}) {
   const { files, mediaUrl } = media ? resolveMedia(post) : { files: [], mediaUrl: '' };
   const avatarUrl = thumbnail && isHttpsUrl(post?.avatarUrl) ? post.avatarUrl : '';
-  const container = new ContainerBuilder()
-    .clearAccentColor()
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent('🐦 **Chirper**'));
-
-  const card = new TextDisplayBuilder().setContent(buildChirperPostText(post, store));
+  const card = new TextDisplayBuilder().setContent(buildFeedPostText(post, store));
   if (avatarUrl) {
     container.addSectionComponents(
       new SectionBuilder()
@@ -214,14 +231,31 @@ export function buildInternetPostPayload(post, store = null, { emojis = true, me
   } else {
     container.addTextDisplayComponents(card);
   }
-
   if (mediaUrl) {
     container.addMediaGalleryComponents(
       new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(mediaUrl)),
     );
   }
+  return files;
+}
 
-  container.addActionRowComponents(chirperActionRow(post, store, { emojis }));
+export function buildInternetPostPayload(post, store = null, {
+  emojis = true,
+  media = true,
+  thumbnail = true,
+  variant = 'post',
+} = {}) {
+  const isReply = variant === 'reply' || Boolean(post?.parentId);
+  const container = new ContainerBuilder().clearAccentColor();
+  if (isReply) {
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`↩ **@${posterHandle(post)}** replied to this post.`),
+    );
+  }
+
+  const files = addPostCard(container, post, store, { thumbnail, media });
+  container.addActionRowComponents(internetActionRow(post, store, { emojis, bookmark: !isReply }));
+  if (!isReply) container.addActionRowComponents(internetMetaRow(post));
 
   const payload = {
     components: [container],
@@ -232,20 +266,33 @@ export function buildInternetPostPayload(post, store = null, { emojis = true, me
   return payload;
 }
 
-function buildCommentPayload(comment) {
-  const author = /^\d{16,22}$/.test(String(comment?.authorId || ''))
-    ? `<@${comment.authorId}>`
-    : `@${posterHandle(comment)}`;
-  const text = [
-    `**${author}**`,
-    String(comment?.content || '').trim(),
-    `-# ${postTimestamp(comment)}`,
-  ].filter(Boolean).join('\n').slice(0, 4000);
+export function buildRepostPayload(post) {
+  const text = `↩ **@${posterHandle(post)}** reposted this post.`;
   return {
     components: [new ContainerBuilder()
       .clearAccentColor()
       .addTextDisplayComponents(new TextDisplayBuilder().setContent(text))],
     flags: MessageFlags.IsComponentsV2,
+    allowedMentions: { parse: [] },
+  };
+}
+
+export function buildReactPicker(postId) {
+  return {
+    components: [new ContainerBuilder()
+      .clearAccentColor()
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent('**React to Post**'))
+      .addActionRowComponents(
+        new ActionRowBuilder().addComponents(
+          ...Object.entries(INTERNET_REACT_EMOJIS).map(([name, emoji]) => (
+            new ButtonBuilder()
+              .setCustomId(`${INTERNET_REACT_EMOJI_PREFIX}${name}:${postId}`)
+              .setEmoji(emoji)
+              .setStyle(ButtonStyle.Secondary)
+          )),
+        ),
+      )],
+    flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
     allowedMentions: { parse: [] },
   };
 }
@@ -394,11 +441,11 @@ export function createInternetFeedController(client, config = {}) {
       if (isInternetForumChannel(channel)) {
         const thread = await fetchForumThread(channel, messageId);
         if (thread?.archived) await thread.setArchived(false, 'New Internet comment').catch(() => {});
-        if (thread) await thread.send(buildCommentPayload(comment));
+        if (thread) await thread.send(buildInternetPostPayload(comment, await readInternetStore().catch(() => null), { variant: 'reply' }));
         return;
       }
       const message = await channel.messages.fetch(messageId);
-      if (message) await message.reply(buildCommentPayload(comment));
+      if (message) await message.reply(buildInternetPostPayload(comment, await readInternetStore().catch(() => null), { variant: 'reply' }));
     } catch (error) {
       logger.error(`Could not publish comment for Internet post ${parentPost?.id}`, error);
     }

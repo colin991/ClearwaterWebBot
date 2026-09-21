@@ -85,11 +85,11 @@ export function buildInternetPanelPayload({ includeBanners = true } = {}) {
       new TextDisplayBuilder().setContent([
         '# <:globeshield:1533214164955435240> Clearwater Internet',
         '',
-        '> Welcome to **Clearwater Internet**! Create an account, add a profile, then send Chirper posts across the internet.',
+        '> Welcome to **Clearwater Internet**! Create an account, add a profile, then send posts across the internet.',
         '',
         '> **Create Account** — Make your Internet username and profile.',
         '> **Profile** — View or update your display name, handle, and bio.',
-        '> **Send a Post** — Publish a Chirper-style post on Clearwater Internet.',
+        '> **Send a Post** — Publish a post on Clearwater Internet.',
         '> **Settings** — Manage extra profile details and Discord notifications.',
         '> **Need Help?** — Click **Help** if you need assistance.',
       ].join('\n')),
@@ -540,7 +540,7 @@ async function publishPost(interaction, client) {
   }
   if (messageId) {
     await mutateDiscordInternetStore((store) => setInternetPostDiscordFeedMessage(store, post.id, messageId));
-    await interaction.editReply({ content: 'Your Chirper post was published to Clearwater Internet.' });
+    await interaction.editReply({ content: 'Your post was published to Clearwater Internet.' });
   } else {
     await interaction.editReply({
       content: publishError
@@ -562,7 +562,7 @@ async function toggleRepost(interaction, client, postId) {
   const parent = store.posts.find((post) => post.id === String(parentId)) || result.post;
   await createInternetFeedController(client, client.config).update(parent);
   await interaction.editReply({
-    content: result.reposted === false ? 'You removed your repost.' : 'You reposted this Chirper post.',
+    content: result.reposted === false ? 'You removed your repost.' : 'You reposted this post.',
   });
 }
 
@@ -591,7 +591,7 @@ async function showPostMore(interaction, postId) {
   const store = await readInternetStore();
   const post = store.posts.find((item) => item.id === String(postId));
   if (!post) throw new Error('That post no longer exists.');
-  await interaction.reply(v2Container('## Chirper', (container) => {
+  await interaction.reply(v2Container('## Post options', (container) => {
     container.addActionRowComponents(
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -718,9 +718,9 @@ async function toggleDmSettings(interaction) {
 async function showHelp(interaction) {
   await interaction.reply(v2Message([
     '## Clearwater Internet Help',
-    '**Create Account** makes your Chirper profile: display name, @username, and bio.',
+    '**Create Account** makes your Internet profile: display name, @username, and bio.',
     '**Profile** shows your account and lets you edit it.',
-    '**Send Post** publishes a Chirper-style post with like, repost, reply, and bookmark buttons.',
+    '**Send Post** publishes a post with like, repost, reply, and bookmark buttons.',
     '**Like / Repost / Reply / Bookmark** work on the post itself. **⋯** opens profile and delete.',
     '**Settings** lets you edit extra profile fields and Discord notification preference.',
   ].join('\n\n'), { ephemeral: true }));

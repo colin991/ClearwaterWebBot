@@ -5,7 +5,7 @@ import {
   requiredInternetForumTags,
 } from '../utils/discordInternetFeed.js';
 
-test('Internet feed payload uses Chirper layout with like/repost/reply/bookmark', () => {
+test('Internet feed payload uses profile layout with like/repost/reply/bookmark', () => {
   const payload = buildInternetPostPayload({
     id: 'post-1',
     authorId: '123456789012345678',
@@ -22,7 +22,7 @@ test('Internet feed payload uses Chirper layout with like/repost/reply/bookmark'
     posts: [],
   });
   const json = JSON.stringify(payload);
-  assert.match(json, /Chirper/);
+  assert.doesNotMatch(json, /Chirper/i);
   assert.match(json, /Iceberg/);
   assert.match(json, /@Iceberg2310/);
   assert.match(json, /1 follower/);
