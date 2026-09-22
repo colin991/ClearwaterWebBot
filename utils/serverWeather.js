@@ -9,10 +9,10 @@ export const WEATHER_SPIN_MS = 10 * 60 * 1000;
 export const WEATHER_TICK_MS = 5_000;
 
 export const WEATHER_CHANCES = Object.freeze([
-  Object.freeze({ id: 'clear', weight: 65, command: ':weather clear' }),
+  Object.freeze({ id: 'clear', weight: 70, command: ':weather clear' }),
   Object.freeze({ id: 'rain', weight: 15, command: ':weather rain' }),
   Object.freeze({ id: 'fog', weight: 11, command: ':weather fog' }),
-  Object.freeze({ id: 'thunderstorm', weight: 9, command: ':weather thunderstorm' }),
+  Object.freeze({ id: 'thunderstorm', weight: 4, command: ':weather thunderstorm' }),
 ]);
 
 export function weatherCommand(id) {
@@ -36,7 +36,7 @@ export function weatherProtectedIsOnline(players, username = WEATHER_PROTECTED_U
   return (Array.isArray(players) ? players : []).some((player) => isWeatherProtectedPlayer(player, username));
 }
 
-/** Weighted roll: Clear 65%, rain 15%, fog 11%, thunderstorms 9%. */
+/** Weighted roll: Clear 70%, rain 15%, fog 11%, thunderstorms 4%. */
 export function pickWeather(random = Math.random) {
   const total = WEATHER_CHANCES.reduce((sum, entry) => sum + entry.weight, 0);
   let roll = Number(random()) * total;

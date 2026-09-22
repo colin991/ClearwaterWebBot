@@ -26,14 +26,14 @@ test('weather chances sum to 100 and map to ER:LC commands', () => {
   assert.equal(weatherCommand('thunderstorm'), ':weather thunderstorm');
 });
 
-test('the wheel uses Clear 65, rain 15, fog 11, thunderstorms 9', () => {
+test('the wheel uses Clear 70, rain 15, fog 11, thunderstorms 4', () => {
   assert.equal(pickWeather(() => 0), 'clear');
-  assert.equal(pickWeather(() => 0.649), 'clear');
-  assert.equal(pickWeather(() => 0.65), 'rain');
-  assert.equal(pickWeather(() => 0.799), 'rain');
-  assert.equal(pickWeather(() => 0.80), 'fog');
-  assert.equal(pickWeather(() => 0.909), 'fog');
-  assert.equal(pickWeather(() => 0.91), 'thunderstorm');
+  assert.equal(pickWeather(() => 0.699), 'clear');
+  assert.equal(pickWeather(() => 0.70), 'rain');
+  assert.equal(pickWeather(() => 0.849), 'rain');
+  assert.equal(pickWeather(() => 0.85), 'fog');
+  assert.equal(pickWeather(() => 0.959), 'fog');
+  assert.equal(pickWeather(() => 0.96), 'thunderstorm');
   assert.equal(pickWeather(() => 0.999), 'thunderstorm');
 });
 
