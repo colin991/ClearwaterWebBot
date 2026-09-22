@@ -28,14 +28,14 @@ async function imageBytes(value) {
   return Buffer.concat(chunks);
 }
 
-async function textImage(text, { size = 28, width = 940, color = '#e7e9ea', bold = false } = {}) {
+async function textImage(text, { size = 28, width = 940, color = '#dce3e7', bold = false } = {}) {
   return sharp({ text: {
     text: `<span foreground="${color}"${bold ? ' weight="bold"' : ''}>${xml(text)}</span>`,
     font: `Arial ${size}`, width, rgba: true, wrap: 'word-char', spacing: 8,
   } }).png().toBuffer({ resolveWithObject: true });
 }
 
-export async function renderInternetPostImage(post, { followers = 0, avatarUrl = '', timestamp = '', reply = false } = {}) {
+export async function renderInternetPostImage(post, { followers = 0, avatarUrl = '', timestamp = '', replyTo = '' } = {}) {
   const name = String(post.displayName || post.username || 'Internet user').slice(0, 80);
   const handle = String(post.username || 'user').replace(/@/g, '').slice(0, 80);
   const [body, avatar, media] = await Promise.all([
@@ -52,10 +52,17 @@ export async function renderInternetPostImage(post, { followers = 0, avatarUrl =
   }
   if (avatarPng) layers.push({ input: avatarPng, left: 30, top: 30 });
   const title = await textImage(name, { size: 28, width: 840, bold: true });
-  const subtitle = await textImage(`@${handle} · ${followers} follower${followers === 1 ? '' : 's'}`, { size: 25, width: 840, color: '#71767b' });
+  const subtitle = await textImage(`@${handle}`, { size: 25, width: 840, color: '#8899a6' });
   layers.push({ input: title.data, left: 122, top: 38 });
   layers.push({ input: subtitle.data, left: 122, top: 44 + title.info.height });
-  const bodyTop = Math.max(128, 64 + title.info.height + subtitle.info.height);
+  let bodyTop = Math.max(120, 64 + title.info.height + subtitle.info.height);
+  if (replyTo) {
+    const label = await textImage('Replying to', { size: 24, color: '#8899a6' });
+    const target = await textImage(`@${String(replyTo).replace(/^@/, '').slice(0, 80)}`, { size: 24, width: 780, color: '#1da1f2' });
+    layers.push({ input: label.data, left: 30, top: bodyTop });
+    layers.push({ input: target.data, left: 30 + label.info.width + 10, top: bodyTop });
+    bodyTop += Math.max(label.info.height, target.info.height) + 16;
+  }
   layers.push({ input: body.data, left: 30, top: bodyTop });
   let y = bodyTop + body.info.height + 22;
   if (media) {
@@ -65,12 +72,13 @@ export async function renderInternetPostImage(post, { followers = 0, avatarUrl =
       y += resized.info.height + 24;
     }
   }
-  if (timestamp) {
-    const footer = await textImage(timestamp, { size: 25, color: '#71767b' });
+  y += 26;
+  {
+    const footer = await textImage([timestamp, `${followers} follower${followers === 1 ? '' : 's'}`].filter(Boolean).join(' · '), { size: 17, color: '#8899a6' });
     layers.push({ input: footer.data, left: 30, top: y });
     y += footer.info.height;
   }
-  const height = y + 32;
-  const base = Buffer.from(`<svg width="${WIDTH}" height="${height}"><rect x="1" y="1" width="998" height="${height - 2}" rx="28" fill="${reply ? '#0b1b28' : '#16191c'}" stroke="#272c30" stroke-width="2"/>${avatarPng ? '' : '<circle cx="66" cy="66" r="36" fill="#71767b"/><circle cx="66" cy="57" r="12" fill="#cfd3d6"/><path d="M44 89 Q44 68 66 68 Q88 68 88 89" fill="#cfd3d6"/>'}</svg>`);
+  const height = y + 24;
+  const base = Buffer.from(`<svg width="${WIDTH}" height="${height}"><rect width="1000" height="${height}" rx="22" fill="#1e1e1e"/>${avatarPng ? '' : '<circle cx="66" cy="66" r="36" fill="#71767b"/><circle cx="66" cy="57" r="12" fill="#cfd3d6"/><path d="M44 89 Q44 68 66 68 Q88 68 88 89" fill="#cfd3d6"/>'}</svg>`);
   return sharp(base).composite(layers).png().toBuffer();
 }

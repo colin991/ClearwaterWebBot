@@ -81,16 +81,10 @@ function repostCount(store, postId) {
 export function formatFeedTimestamp(iso) {
   const ms = new Date(iso || Date.now()).getTime();
   if (!Number.isFinite(ms)) return '';
-  const formatted = new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-    timeZone: 'America/New_York',
-    timeZoneName: 'short',
-  }).format(new Date(ms));
-  return formatted.replace(', ', ' · ');
+  const date = new Date(ms);
+  const time = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'UTC', timeZoneName: 'short' }).format(date);
+  const day = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(date);
+  return `${time} · ${day}`;
 }
 
 export function buildFeedPostText(post, store) {
@@ -99,10 +93,10 @@ export function buildFeedPostText(post, store) {
   const when = formatFeedTimestamp(post?.createdAt);
   return [
     `**${posterName(post)}**`,
-    `-# @${posterHandle(post)} · ${followers} follower${followers === 1 ? '' : 's'}`,
+    `-# @${posterHandle(post)}`,
     '',
     body,
-    when ? `-# ${when}` : '',
+    `-# ${when}${when ? " · " : ""}${followers} follower${followers === 1 ? "" : "s"}`,
   ].filter((line) => line !== undefined).join('\n').slice(0, 4000);
 }
 
@@ -150,12 +144,13 @@ function internetActionRow(post, store, { emojis = true } = {}) {
   return new ActionRowBuilder().addComponents(...buttons);
 }
 
-export async function buildInternetPostPayload(post, store = null, { emojis = true, variant = 'post' } = {}) {
+export async function buildInternetPostPayload(post, store = null, { emojis = true, variant = 'post', replyTo = '' } = {}) {
   const isReply = variant === 'reply' || Boolean(post?.parentId);
   const png = await renderInternetPostImage(post, {
     followers: followerCount(store, post?.authorId),
     avatarUrl: store?.users?.[post?.authorId]?.avatarUrl || post?.avatarUrl || '',
-    timestamp: formatFeedTimestamp(post?.createdAt), reply: isReply,
+    timestamp: formatFeedTimestamp(post?.createdAt),
+    replyTo: isReply ? (replyTo || store?.posts?.find(parent => parent.id === post.parentId)?.username || '') : '',
   });
   const components = [];
   if (isReply) components.push(new TextDisplayBuilder().setContent(`↩ @${posterHandle(post)} replied to this post.`));
@@ -366,11 +361,11 @@ export function createInternetFeedController(client, config = {}) {
       if (isInternetForumChannel(channel)) {
         const thread = await fetchForumThread(channel, messageId);
         if (thread?.archived) await thread.setArchived(false, 'New Internet comment').catch(() => {});
-        if (thread) await thread.send(await buildInternetPostPayload(comment, await readInternetStore().catch(() => null), { variant: 'reply' }));
+        if (thread) await thread.send(await buildInternetPostPayload(comment, await readInternetStore().catch(() => null), { variant: 'reply', replyTo: posterHandle(parentPost) }));
         return;
       }
       const message = await channel.messages.fetch(messageId);
-      if (message) await message.reply(await buildInternetPostPayload(comment, await readInternetStore().catch(() => null), { variant: 'reply' }));
+      if (message) await message.reply(await buildInternetPostPayload(comment, await readInternetStore().catch(() => null), { variant: 'reply', replyTo: posterHandle(parentPost) }));
     } catch (error) {
       logger.error(`Could not publish comment for Internet post ${parentPost?.id}`, error);
     }

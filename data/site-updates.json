@@ -2251,6 +2251,13 @@
       "summary": "Posts and replies now display rendered image cards with profile photos, content, media, and timestamps. Removed the bookmark button. ERLC cooldowns now respect reset headers and response-body retry durations.",
       "createdAt": "2026-09-21T16:35:22.002923Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-21-dark-post-card-footer",
+      "title": "Dark post cards with follower counts beside the date",
+      "summary": "Matched post and reply cards to the dark reference layout, moved followers to the timestamp footer, and added the reply recipient inside reply images.",
+      "createdAt": "2026-09-22T02:40:30.633718Z",
+      "updatedBy": "colin991"
     }
   ]
 }
