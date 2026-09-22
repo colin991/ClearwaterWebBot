@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-22-addfollowers-ping-default",
+      "title": "Add followers to the pinged default Internet account",
+      "summary": "-addfollowers now accepts a Discord ping. Followers are added to that member’s default Internet account, not an active alt. @handle still works.",
+      "createdAt": "2026-09-22T02:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-22-group-join-accept-both",
       "title": "Fix Roblox group join-request accepts",
       "summary": "Join-request sync now watches both Roblox groups (163783791 and 140437562), can accept with the Roblox cookie if Open Cloud fails, and matches Discord whitelist roles from a REST member list so requests are not stuck waiting.",
