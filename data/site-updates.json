@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-22-weather-spin-10min",
+      "title": "Spin in-game weather every 10 minutes",
+      "summary": "The weather wheel now rolls every 10 minutes when notj3dah is not in-game (Clear 65%, rain 15%, fog 11%, thunderstorms 9%). Weather is still forced to clear while that player is in-game.",
+      "createdAt": "2026-09-22T00:03:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-21-remove-mod-call-pickup-ping",
       "title": "Remove the pick up mod calls ping",
       "summary": "The bot no longer scare-pings staff to pick up sitting mod calls, and it no longer posts Thank you, for picking up the mod calls. Accepted calls can still be moved into a support voice room.",

@@ -18,7 +18,7 @@ test('weather chances sum to 100 and map to ER:LC commands', () => {
   assert.equal(WEATHER_PROTECTED_USERNAME, 'notj3dah');
   assert.equal(WEATHER_LOG_CHANNEL, '1549178818814812211');
   assert.equal(weatherDisplayName('thunderstorm'), 'Thunderstorms');
-  assert.equal(WEATHER_SPIN_MS, 20 * 60 * 1000);
+  assert.equal(WEATHER_SPIN_MS, 10 * 60 * 1000);
   assert.equal(WEATHER_CHANCES.reduce((sum, entry) => sum + entry.weight, 0), 100);
   assert.equal(weatherCommand('clear'), ':weather clear');
   assert.equal(weatherCommand('rain'), ':weather rain');
@@ -133,7 +133,7 @@ test('logs an unchanged wheel result when it lands on the same weather', async (
   assert.equal(payload.embeds[0].fields[2].value, '`:weather clear`');
 });
 
-test('overdue spins wait until 20 minutes after notj3dah leaves', async () => {
+test('overdue spins wait until 10 minutes after notj3dah leaves', async () => {
   let time = 50_000;
   let players = [{ username: 'notj3dah' }];
   const commands = [];
@@ -157,7 +157,7 @@ test('overdue spins wait until 20 minutes after notj3dah leaves', async () => {
   assert.deepEqual(commands, [':weather rain']);
 });
 
-test('waits 20 minutes before the next spin', async () => {
+test('waits 10 minutes before the next spin', async () => {
   let time = 1_000;
   let players = [{ username: 'Alpha' }];
   const commands = [];
