@@ -698,7 +698,7 @@ export function publicUsers(store, viewerId) {
       following: user.preferences?.hideFollowing === true && user.id !== viewer ? [] : (Array.isArray(user.following) ? user.following : []),
       followingCount: Array.isArray(user.following) ? user.following.length : 0,
       followers: users.filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).map((member) => member.id),
-      followerCount: users.filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).length,
+      followerCount: internetFollowerCount(store, user.id),
     };
   });
   const peopleIds = new Set(people.map((user) => user.id));
@@ -1920,6 +1920,33 @@ export function normalizeInternetHandle(raw) {
   return handle;
 }
 
+export function ensureDefaultInternetAccount(store, actor) {
+  if (!/^\d{16,22}$/.test(String(actor?.id || ''))) return upsertInternetUser(store, actor);
+  const user = upsertInternetUser(store, { ...actor, forceProfile: true, forceAvatar: true });
+  user.accountCreated = true;
+  user.defaultAccount = true;
+  user.customAvatar = false;
+  return user;
+}
+
+export function internetFollowerCount(store, accountId) {
+  const actual = Object.values(store?.users || {}).filter(member => Array.isArray(member.following) && member.following.includes(String(accountId))).length;
+  const extra = Number(store?.users?.[accountId]?.addedFollowers || 0);
+  return actual + (Number.isSafeInteger(extra) && extra > 0 ? extra : 0);
+}
+
+export function addInternetFollowers(store, { actorId, handle, amount }) {
+  if (String(actorId) !== '1074411240757137589') throw new Error('Not authorized');
+  if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error('Amount must be a positive whole number.');
+  const name = String(handle || '').replace(/^@/, '').toLowerCase();
+  const matches = Object.values(store.users).filter(user => String(user.username || '').toLowerCase() === name);
+  if (matches.length !== 1) throw new Error(matches.length ? 'That handle matches more than one account.' : 'Account not found.');
+  const user = matches[0];
+  if (!Number.isSafeInteger(internetFollowerCount(store, user.id) + amount)) throw new Error('Amount is too large.');
+  user.addedFollowers = (Number(user.addedFollowers) || 0) + amount;
+  return { username: user.username, followerCount: internetFollowerCount(store, user.id) };
+}
+
 export function listOwnedInternetAccounts(store, discordId) {
   const id = String(discordId || '');
   const primary = store?.users?.[id];
@@ -1958,7 +1985,7 @@ export function hasInternetAccount(store, actorId) {
 export function activeInternetAccount(store, actor) {
   const ownerId = String(actor?.id || '');
   if (!ownerId) return null;
-  const owner = store.users[ownerId] || (typeof actor === 'object' ? upsertInternetUser(store, actor) : null);
+  const owner = ensureDefaultInternetAccount(store, actor);
   if (!owner) return null;
   const activeId = String(owner.activeAccountId || owner.id);
   const account = store.users[activeId];
@@ -1993,37 +2020,16 @@ export function createInternetAccount(store, { actor, username, displayName, bio
   const handle = normalizeInternetHandle(username);
   const name = cleanProfileText(displayName, 80, 'display name');
   if (!name) throw new Error('Add a display name for your profile.');
+  const owner = ensureDefaultInternetAccount(store, actor);
   const owned = listOwnedInternetAccounts(store, actor?.id);
   if (owned.length >= MAX_INTERNET_ACCOUNTS) {
     throw new Error(`You can have up to ${MAX_INTERNET_ACCOUNTS} Internet accounts.`);
   }
-  const owner = upsertInternetUser(store, actor);
-  const exceptId = owner.accountCreated === true ? null : owner.id;
+  const exceptId = null;
   if (internetHandleTaken(store, handle, exceptId)) {
     throw new Error('That username is already taken.');
   }
   const avatar = sanitizeAvatarUrl(avatarUrl);
-  if (!owner.accountCreated && !owned.some((item) => item.altAccount)) {
-    const user = upsertInternetUser(store, {
-      ...actor,
-      username: handle,
-      displayName: name,
-      avatarUrl: avatar || actor.avatarUrl,
-      forceProfile: true,
-      forceAvatar: Boolean(avatar),
-    });
-    user.accountCreated = true;
-    user.bio = cleanProfileText(bio, 300, 'bio');
-    user.profileUpdatedAt = new Date().toISOString();
-    user.activeAccountId = user.id;
-    if (avatar) {
-      user.avatarUrl = avatar;
-      user.customAvatar = true;
-    }
-    ensureInternetWallet(store, user);
-    addInternetLog(store, `${user.displayName} created a Clearwater Internet account (@${user.username}).`);
-    return profilePayload(user);
-  }
   const alt = upsertInternetUser(store, {
     id: `ia_${randomUUID()}`,
     ownerDiscordId: owner.id,
@@ -2057,6 +2063,9 @@ export function updateInternetProfile(store, { actor, profile = {} }) {
   const user = activeInternetAccount(store, actor);
   if (!user) throw new Error('Create a Clearwater Internet account first.');
   if (user.official === true) throw new Error('Edit the official account from the staff controls.');
+  if (user.defaultAccount && ['username', 'displayName', 'avatarUrl'].some(key => Object.hasOwn(profile, key) && profile[key] !== user[key])) {
+    throw new Error('Your default account uses your Discord profile. Switch to an additional account to customize its name or picture.');
+  }
   if (getActiveBan(user)) throw new Error('This account is banned from Clearwater Internet');
   if (flagActive(user, 'lockProfile', 'lockProfileUntil')) throw new Error('Staff locked profile edits on this account.');
   const has = (key) => Object.prototype.hasOwnProperty.call(profile, key);

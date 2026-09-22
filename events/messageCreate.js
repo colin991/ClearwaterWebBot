@@ -12,6 +12,7 @@ import { shouldIgnoreGuildCommands } from '../utils/floridaServer.js';
 export default {
   name: Events.MessageCreate,
   async execute(message, client) {
+    if (/^[-;]addfollowers(?:\s|$)/i.test(message.content || '') && message.author.id !== '1074411240757137589') return;
     try {
       if (await handlePinellasApplyDm(message)) return;
     } catch (error) {

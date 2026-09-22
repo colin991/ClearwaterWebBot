@@ -34,8 +34,8 @@ test('Create Account stores a unique handle and profile', () => {
     username: 'discordname',
     displayName: 'Discord Name',
   });
-  assert.equal(store.users['123456789012345678'].username, 'Iceberg2310');
-  assert.equal(store.users['123456789012345678'].displayName, 'Iceberg');
+  assert.equal(store.users['123456789012345678'].username, 'discordname');
+  assert.equal(store.users['123456789012345678'].displayName, 'Discord Name');
 });
 
 test('Create Account rejects a taken username', () => {
@@ -75,7 +75,7 @@ test('followers of an account are pinged by Discord id', () => {
   const store = emptyStore();
   const poster = { id: '123456789012345678', username: 'poster' };
   const fan = { id: '223456789012345678', username: 'fan' };
-  createInternetAccount(store, { actor: poster, displayName: 'Poster', username: 'poster' });
+  createInternetAccount(store, { actor: poster, displayName: 'Poster', username: 'posteralt' });
   createInternetAccount(store, { actor: fan, displayName: 'Fan', username: 'fanacc' });
   updateInternetSocial(store, {
     actor: fan,
@@ -109,18 +109,19 @@ test('a Discord user can own more than one Internet account and switch who posts
     username: 'anonymous',
     avatarUrl: 'https://cdn.discordapp.com/embed/avatars/1.png',
   });
-  assert.equal(listOwnedInternetAccounts(store, actor.id).length, 2);
+  assert.equal(listOwnedInternetAccounts(store, actor.id).length, 3);
   assert.equal(activeInternetAccount(store, actor).username, 'anonymous');
   assert.equal(second.customAvatar, true);
   assert.match(second.id, /^ia_/);
   const switched = switchInternetAccount(store, { actor, accountId: actor.id });
-  assert.equal(switched.username, 'Iceberg2310');
-  assert.equal(activeInternetAccount(store, actor).username, 'Iceberg2310');
+  assert.equal(switched.username, 'discordname');
+  assert.equal(activeInternetAccount(store, actor).username, 'discordname');
+  switchInternetAccount(store, { actor, accountId: second.id });
   updateInternetProfile(store, {
     actor,
     profile: { avatarUrl: 'https://cdn.discordapp.com/embed/avatars/2.png' },
   });
-  assert.equal(store.users[actor.id].customAvatar, true);
+  assert.equal(store.users[second.id].customAvatar, true);
   switchInternetAccount(store, { actor, accountId: second.id });
   assert.equal(activeInternetAccount(store, actor).id, second.id);
 });

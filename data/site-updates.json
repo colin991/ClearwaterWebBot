@@ -2258,6 +2258,13 @@
       "summary": "Matched post and reply cards to the dark reference layout, moved followers to the timestamp footer, and added the reply recipient inside reply images.",
       "createdAt": "2026-09-22T02:40:30.633718Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-22-default-internet-accounts-followers",
+      "title": "Default Discord profiles and additional Internet accounts",
+      "summary": "Internet starts with a Discord-based default profile and supports additional accounts. Added a restricted follower-count command.",
+      "createdAt": "2026-09-22T02:47:41.866032Z",
+      "updatedBy": "colin991"
     }
   ]
 }

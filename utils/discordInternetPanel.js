@@ -18,9 +18,10 @@ import {
 } from 'discord.js';
 import {
   createInternetAccount,
+  ensureDefaultInternetAccount,
+  internetFollowerCount,
   createInternetPost,
   deleteInternetPost,
-  hasInternetAccount,
   interactInternetPost,
   internetFeedDiscordRef,
   internetPreferences,
@@ -97,7 +98,7 @@ export function buildInternetPanelPayload({ includeBanners = true } = {}) {
       new TextDisplayBuilder().setContent([
         '# <:globeshield:1533214164955435240> Clearwater Internet',
         '',
-        '> Welcome to **Clearwater Internet**! Create an account, add a profile, then send posts across the internet.',
+        '> Welcome to **Clearwater Internet**! Your default account uses your Discord profile. Create additional accounts or send a post right away.',
         '',
         '> **Create Account** — Make an Internet username and profile. You can have more than one.',
         '> **Profile** — View or update the account you are posting as, including picture.',
@@ -467,14 +468,7 @@ function accountSwitchRow(accounts, activeId) {
 }
 
 async function showCreateAccountModal(interaction) {
-  const actor = internetActor(interaction);
-  const store = await readInternetStore();
-  const extra = hasInternetAccount(store, actor.id);
-  await interaction.showModal(buildAccountModal({
-    displayName: extra ? '' : actor.displayName,
-    username: extra ? '' : String(actor.username || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 20),
-    bio: extra ? '' : (store.users?.[actor.id]?.bio || ''),
-  }));
+  await interaction.showModal(buildAccountModal({ displayName: '', username: '', bio: '' }));
 }
 
 async function saveAccount(interaction) {
@@ -494,9 +488,8 @@ async function saveAccount(interaction) {
 
 async function requireInternetAccount(interaction) {
   const actor = internetActor(interaction);
-  const store = await readInternetStore();
-  if (hasInternetAccount(store, actor.id)) return true;
-  throw new Error('Create a Clearwater Internet account from the panel first, then send a post.');
+  await mutateDiscordInternetStore(store => ensureDefaultInternetAccount(store, actor));
+  return true;
 }
 
 async function showSettings(interaction) {
@@ -536,7 +529,7 @@ async function showProfile(interaction, userId) {
     || (requestedId === actor.id ? activeInternetAccount(store, actor) : null);
   if (!user) throw new Error('That Internet profile could not be found.');
   const postCount = store.posts.filter((post) => post.authorId === user.id && !post.parentId).length;
-  const followers = Object.values(store.users).filter((member) => Array.isArray(member.following) && member.following.includes(user.id)).length;
+  const followers = internetFollowerCount(store, user.id);
   const owned = listOwnedInternetAccounts(store, actor.id);
   const isOwner = user.id === actor.id || user.ownerDiscordId === actor.id;
   const active = isOwner ? activeInternetAccount(store, actor) : user;
@@ -623,9 +616,7 @@ async function publishPost(interaction, client) {
   const content = interaction.fields.getTextInputValue('content');
   const imageDataUrl = await readUploadedImage(interaction, 'media_file');
   const result = await mutateDiscordInternetStore((store) => {
-    if (!hasInternetAccount(store, actor.id)) {
-      throw new Error('Create a Clearwater Internet account from the panel first, then send a post.');
-    }
+    ensureDefaultInternetAccount(store, actor);
     const poster = activeInternetAccount(store, actor);
     if (!poster.customAvatar && actor.avatarUrl) poster.avatarUrl = actor.avatarUrl;
     try {
@@ -921,6 +912,7 @@ export async function handleDiscordInternetInteraction(interaction, client) {
   if (!handled) return false;
 
   try {
+    await mutateDiscordInternetStore(store => ensureDefaultInternetAccount(store, internetActor(interaction)));
     if (id === INTERNET_PANEL_ACCOUNT_CUSTOM_ID) await showCreateAccountModal(interaction);
     else if (id === INTERNET_PANEL_PROFILE_CUSTOM_ID) {
       const store = await readInternetStore();

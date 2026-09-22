@@ -12,7 +12,7 @@ import {
   MediaGalleryItemBuilder,
   TextDisplayBuilder,
 } from 'discord.js';
-import { followerDiscordIds, readInternetStore } from './internetStore.js';
+import { followerDiscordIds, readInternetStore, internetFollowerCount } from './internetStore.js';
 import { logger } from './logger.js';
 
 export const INTERNET_POST_LIKE_PREFIX = 'cw-internet-like:';
@@ -68,7 +68,7 @@ function commentCount(store, postId) {
 
 function followerCount(store, userId) {
   const id = String(userId || '');
-  return Object.values(store?.users || {}).filter((member) => Array.isArray(member?.following) && member.following.includes(id)).length;
+  return internetFollowerCount(store, id);
 }
 
 function repostCount(store, postId) {
