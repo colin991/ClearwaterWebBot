@@ -27,3 +27,8 @@ export function resolveFundsGroupId(config = {}) {
   if (!id || id === ROBLOX_JOIN_GROUP_ID) return ROBLOX_FUNDS_GROUP_ID;
   return id;
 }
+
+/** Join-request sync checks both communities so a request on either group is not missed. */
+export function joinRequestGroupIds(config = {}) {
+  return [...new Set([resolveJoinGroupId(config), resolveFundsGroupId(config)].filter(Boolean))];
+}

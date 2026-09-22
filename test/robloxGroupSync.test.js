@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  collectEligibleFromMembers,
   createSkipLogGate,
   evaluateJoinRequest,
   groupLogPayload,
@@ -9,11 +10,26 @@ import {
   sendGroupLog,
 } from '../utils/robloxGroupSync.js';
 
-test('join request user ids come from Open Cloud user strings or objects', () => {
+test('join request user ids come from Open Cloud user strings, objects, or the join-request path', () => {
   assert.equal(joinRequestRobloxId({ user: 'users/123456' }), '123456');
   assert.equal(joinRequestRobloxId({ user: { id: 'users/99' } }), '99');
   assert.equal(joinRequestRobloxId({ requester: { userId: 88 } }), '88');
-  assert.equal(joinRequestRobloxId({ path: 'groups/1/join-requests/55' }), null);
+  assert.equal(joinRequestRobloxId({ path: 'groups/163783791/join-requests/55' }), '55');
+  assert.equal(joinRequestRobloxId({ path: 'groups/1/join-requests/users/77' }), '77');
+});
+
+test('REST-shaped Discord members with an allowed role are treated as whitelist matches', () => {
+  const eligible = collectEligibleFromMembers(
+    [{
+      user: { id: '111', bot: false },
+      roles: ['1514033664306974752'],
+      nick: 'PlayerOne',
+    }],
+    ['1514033664306974752'],
+    { 111: { robloxId: '222' } },
+  );
+  assert.equal(eligible.allowed.get('222'), '111');
+  assert.equal(eligible.nicknameFallbacks[0].discordId, '111');
 });
 
 test('join request resource names keep the Open Cloud path', () => {

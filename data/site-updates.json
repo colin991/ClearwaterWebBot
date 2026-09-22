@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-22-group-join-accept-both",
+      "title": "Fix Roblox group join-request accepts",
+      "summary": "Join-request sync now watches both Roblox groups (163783791 and 140437562), can accept with the Roblox cookie if Open Cloud fails, and matches Discord whitelist roles from a REST member list so requests are not stuck waiting.",
+      "createdAt": "2026-09-22T01:54:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-22-weather-less-thunder",
       "title": "Lower thunderstorm odds on the weather wheel",
       "summary": "Thunderstorms are now 4% of weather rolls (was 9%). Clear is 70%, rain 15%, and fog 11%. The 10-minute spin and notj3dah clear override are unchanged.",

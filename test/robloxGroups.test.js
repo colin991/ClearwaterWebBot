@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   ROBLOX_FUNDS_GROUP_ID,
   ROBLOX_JOIN_GROUP_ID,
+  joinRequestGroupIds,
   resolveFundsGroupId,
   resolveJoinGroupId,
 } from '../utils/robloxGroups.js';
@@ -25,4 +26,8 @@ test('swapped host env still keeps the two Roblox groups separate', () => {
   );
   assert.equal(resolveJoinGroupId({ robloxGroupId: '555' }), '555');
   assert.equal(resolveFundsGroupId({ robloxFundsGroupId: '555' }), '555');
+});
+
+test('join-request sync watches both the ERLC group and the funds group', () => {
+  assert.deepEqual(joinRequestGroupIds({}), [ROBLOX_JOIN_GROUP_ID, ROBLOX_FUNDS_GROUP_ID]);
 });

@@ -1,6 +1,7 @@
 import { discordIdsByRobloxId, getIdentityCache } from './identityStore.js';
 import { logger } from './logger.js';
-import { resolveFundsGroupId, resolveJoinGroupId } from './robloxGroups.js';
+import { joinRequestGroupIds, resolveFundsGroupId } from './robloxGroups.js';
+import { normalizeRobloxCookie } from './robloxGroupFunds.js';
 import { v2Card } from './v2Message.js';
 import { ensureGuildMembers, isDiscordRosterReady } from './guildMemberSnapshot.js';
 
@@ -200,10 +201,15 @@ export function joinRequestRobloxId(request) {
     strings.push(String(value));
   }
   for (const value of strings) {
-    const match = String(value).match(/(?:users\/)?(\d{1,20})$/);
-    if (match) return match[1];
+    const userMatch = String(value).match(/users\/(\d{1,20})/i);
+    if (userMatch) return userMatch[1];
   }
-  return null;
+  for (const value of strings) {
+    if (/^\d{1,20}$/.test(String(value).trim())) return String(value).trim();
+  }
+  const path = String(request?.path || request?.name || '');
+  const pathMatch = path.match(/join-requests\/(?:users\/)?(\d{1,20})(?:\/|$)/i);
+  return pathMatch?.[1] || null;
 }
 
 export function joinRequestResourceName(request, groupId) {
@@ -225,16 +231,65 @@ export function evaluateJoinRequest({ robloxId, discordId, rosterReady }) {
   return 'decline';
 }
 
-async function pendingJoinRequests(groupId, apiKey) {
+export function memberRoleIds(member) {
+  if (member?.roles?.cache?.keys) return [...member.roles.cache.keys()].map(String);
+  if (Array.isArray(member?.roles)) return member.roles.map(String);
+  return [];
+}
+
+export function memberHasAllowedRole(member, allowedRoleIds) {
+  const roles = memberRoleIds(member);
+  return (Array.isArray(allowedRoleIds) ? allowedRoleIds : []).some((roleId) => roles.includes(String(roleId)));
+}
+
+export function collectEligibleFromMembers(members, allowedRoleIds, identityByDiscord = {}) {
+  const allowed = new Map();
+  const nicknameFallbacks = [];
+  const allowedRoles = (Array.isArray(allowedRoleIds) ? allowedRoleIds : []).map(String);
+  for (const member of Array.isArray(members) ? members : []) {
+    const user = member?.user || {};
+    if (user.bot) continue;
+    const discordId = String(member.id || user.id || '').trim();
+    if (!discordId) continue;
+    const roles = memberRoleIds(member);
+    if (!allowedRoles.some((roleId) => roles.includes(roleId))) continue;
+    const remembered = identityByDiscord[discordId] || identityByDiscord[String(discordId)];
+    if (remembered?.robloxId) allowed.set(String(remembered.robloxId), discordId);
+    const nick = member.nickname || member.nick;
+    if (nick) nicknameFallbacks.push({ discordId, nickname: String(nick).toLowerCase() });
+  }
+  return { allowed, nicknameFallbacks };
+}
+
+function joinRequestPageItems(page) {
+  if (Array.isArray(page?.groupJoinRequests)) return page.groupJoinRequests;
+  if (Array.isArray(page?.joinRequests)) return page.joinRequests;
+  if (Array.isArray(page?.requests)) return page.requests;
+  if (Array.isArray(page?.data)) return page.data;
+  return null;
+}
+
+function cookieJoinRequest(entry, groupId) {
+  const userId = String(entry?.requester?.userId || entry?.requester?.id || entry?.userId || '').trim();
+  if (!/^\d{1,20}$/.test(userId)) return null;
+  return {
+    path: `groups/${groupId}/join-requests/${userId}`,
+    user: `users/${userId}`,
+    createTime: entry?.created || entry?.createdTime || null,
+    requester: entry?.requester,
+  };
+}
+
+async function pendingJoinRequestsCloud(groupId, apiKey) {
   const requests = [];
   let firstResponse = null;
   let pageToken = '';
   do {
-    const query = new URLSearchParams({ maxPageSize: '100' });
+    const query = new URLSearchParams({ maxPageSize: '20' });
     if (pageToken) query.set('pageToken', pageToken);
     const page = await groupFetch(`/groups/${encodeURIComponent(groupId)}/join-requests?${query}`, apiKey);
     firstResponse ||= page;
-    const pageRequests = page?.groupJoinRequests || page?.joinRequests || page?.requests || page?.data || [];
+    const pageRequests = joinRequestPageItems(page);
     if (!Array.isArray(pageRequests)) {
       logger.warn(`Roblox join-request response used an unexpected format: ${Object.keys(page || {}).join(', ') || 'no fields'}`);
     } else {
@@ -250,6 +305,154 @@ async function pendingJoinRequests(groupId, apiKey) {
   return requests;
 }
 
+function headerGet(headers, name) {
+  if (!headers) return '';
+  if (typeof headers.get === 'function') return String(headers.get(name) || '');
+  return String(headers[name] || headers[name.toLowerCase()] || '');
+}
+
+async function fetchRobloxCsrf(cookie) {
+  const token = normalizeRobloxCookie(cookie);
+  if (!token) return '';
+  try {
+    const response = await fetch('https://auth.roblox.com/v2/logout', {
+      method: 'POST',
+      headers: {
+        Cookie: `.ROBLOSECURITY=${token}`,
+        'User-Agent': 'Mozilla/5.0 (compatible; ClearwaterBot/1.0)',
+      },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(8_000),
+    });
+    return headerGet(response.headers, 'x-csrf-token');
+  } catch {
+    return '';
+  }
+}
+
+async function robloxWebsiteFetch(url, cookie, { method = 'GET', body } = {}) {
+  const token = normalizeRobloxCookie(cookie);
+  const headers = {
+    Cookie: `.ROBLOSECURITY=${token}`,
+    Accept: 'application/json',
+    'User-Agent': 'Mozilla/5.0 (compatible; ClearwaterBot/1.0)',
+    Referer: 'https://www.roblox.com/',
+    Origin: 'https://www.roblox.com',
+  };
+  if (method !== 'GET') headers['Content-Type'] = 'application/json';
+  const send = (extra = {}) => fetch(url, {
+    method,
+    headers: { ...headers, ...extra },
+    body: method === 'GET' ? undefined : (body ?? '{}'),
+    redirect: 'manual',
+    signal: AbortSignal.timeout(15_000),
+  });
+  let response = await send();
+  let csrf = headerGet(response.headers, 'x-csrf-token');
+  if ((response.status === 403 || response.status === 401) && !csrf && method !== 'GET') {
+    csrf = await fetchRobloxCsrf(cookie);
+  }
+  if ((response.status === 403 || response.status === 401) && csrf) {
+    response = await send({ 'x-csrf-token': csrf });
+  }
+  return response;
+}
+
+async function pendingJoinRequestsCookie(groupId, cookie) {
+  const requests = [];
+  let cursor = '';
+  for (let page = 0; page < 20; page += 1) {
+    const params = new URLSearchParams({ limit: '100', sortOrder: 'Desc' });
+    if (cursor) params.set('cursor', cursor);
+    const response = await robloxWebsiteFetch(
+      `https://groups.roblox.com/v1/groups/${encodeURIComponent(groupId)}/join-requests?${params}`,
+      cookie,
+    );
+    if (!response.ok) {
+      throw new Error(`Roblox cookie join-request list failed (${response.status}) for group ${groupId}`);
+    }
+    const body = await response.json().catch(() => ({}));
+    const rows = Array.isArray(body.data) ? body.data : [];
+    for (const entry of rows) {
+      const mapped = cookieJoinRequest(entry, groupId);
+      if (mapped) requests.push(mapped);
+    }
+    cursor = String(body.nextPageCursor || '');
+    if (!cursor || !rows.length) break;
+  }
+  return requests;
+}
+
+async function pendingJoinRequests(groupId, apiKey, cookie) {
+  let cloudError = null;
+  let listed = [];
+  if (apiKey) {
+    try {
+      listed = await pendingJoinRequestsCloud(groupId, apiKey);
+      if (listed.length) return listed.map((request) => ({ ...request, groupId }));
+    } catch (error) {
+      cloudError = error;
+      logger.warn(`Open Cloud join-request list failed for group ${groupId}`, error);
+    }
+  }
+  if (cookie) {
+    try {
+      const cookieListed = await pendingJoinRequestsCookie(groupId, cookie);
+      if (cookieListed.length || !listed.length) {
+        return cookieListed.map((request) => ({ ...request, groupId }));
+      }
+    } catch (error) {
+      logger.warn(`Cookie join-request list failed for group ${groupId}`, error);
+      if (cloudError && !listed.length) throw cloudError;
+    }
+  }
+  if (cloudError && !listed.length && !cookie) throw cloudError;
+  return listed.map((request) => ({ ...request, groupId }));
+}
+
+async function decideJoinRequest(kind, { requestName, robloxId, groupId, apiKey, cookie }) {
+  if (apiKey) {
+    try {
+      await groupFetch(`/${requestName}:${kind}`, apiKey, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      return 'cloud';
+    } catch (error) {
+      if (!cookie || !robloxId) throw error;
+      logger.warn(`Open Cloud ${kind} failed for ${requestName}; trying cookie`, error);
+    }
+  }
+  if (!cookie || !robloxId) {
+    throw new Error(`Cannot ${kind} Roblox join request without ROBLOX_GROUP_API_KEY or ROBLOX_COOKIE`);
+  }
+  const path = kind === 'decline'
+    ? `https://groups.roblox.com/v1/groups/${encodeURIComponent(groupId)}/join-requests/users/${encodeURIComponent(robloxId)}/decline`
+    : `https://groups.roblox.com/v1/groups/${encodeURIComponent(groupId)}/join-requests/users/${encodeURIComponent(robloxId)}`;
+  const response = await robloxWebsiteFetch(path, cookie, { method: 'POST', body: '{}' });
+  if (!response.ok && response.status !== 200 && response.status !== 204) {
+    const detail = await response.text().catch(() => '');
+    throw new Error(`Cookie ${kind} failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`);
+  }
+  return 'cookie';
+}
+
+async function listDiscordGuildMembers(client, guildId) {
+  const members = [];
+  let after = '0';
+  if (typeof client?.rest?.get !== 'function') return members;
+  for (let page = 0; page < 50; page += 1) {
+    const batch = await client.rest.get(`/guilds/${guildId}/members?limit=1000&after=${encodeURIComponent(after)}`);
+    const list = Array.isArray(batch) ? batch : [];
+    if (!list.length) break;
+    members.push(...list);
+    after = String(list.at(-1)?.user?.id || '');
+    if (!after || list.length < 1000) break;
+  }
+  return members;
+}
+
 async function robloxUsername(robloxId) {
   const cached = robloxUsernameCache.get(robloxId);
   if (cached) return cached;
@@ -263,24 +466,19 @@ async function robloxUsername(robloxId) {
   return username;
 }
 
-async function eligibleRobloxIds(guild, allowedRoleIds) {
-  await ensureGuildMembers(guild, { allowStale: true });
+async function eligibleRobloxIds(guild, allowedRoleIds, client) {
   const cache = await getIdentityCache();
-  const allowed = new Map();
-  const nicknameFallbacks = [];
-
-  for (const member of guild.members.cache.values()) {
-    if (member.user.bot || !allowedRoleIds.some((roleId) => member.roles.cache.has(String(roleId)))) continue;
-    const remembered = cache.byDiscord?.[member.id];
-    // The cache is populated from Melonly verification and
-    // the low-frequency application index refresh. Do not make one Melonly
-    // call per member every minute: that triggers Melonly's rate limit.
-    if (remembered?.robloxId) {
-      allowed.set(String(remembered.robloxId), member.id);
-    }
-    if (member.nickname) nicknameFallbacks.push({ discordId: member.id, nickname: member.nickname.toLowerCase() });
+  let members = [];
+  try {
+    members = await listDiscordGuildMembers(client, guild.id);
+  } catch (error) {
+    logger.warn('Roblox group sync: REST member list failed; using the cached roster', error);
   }
-  return { allowed, nicknameFallbacks };
+  if (!members.length) {
+    await ensureGuildMembers(guild, { allowStale: true });
+    members = [...guild.members.cache.values()];
+  }
+  return collectEligibleFromMembers(members, allowedRoleIds, cache.byDiscord || {});
 }
 
 async function resolveEligibleDiscordId(robloxId, eligible, guild, allowedRoleIds) {
@@ -299,20 +497,29 @@ async function resolveEligibleDiscordId(robloxId, eligible, guild, allowedRoleId
   if (!discordId) return { discordId: null, matchSource: null };
   let member = guild.members.cache.get(discordId);
   if (!member) member = await guild.members.fetch(discordId).catch(() => null);
-  if (member && !member.user?.bot && allowedRoleIds.some((roleId) => member.roles.cache.has(String(roleId)))) {
+  if (member && !member.user?.bot && memberHasAllowedRole(member, allowedRoleIds)) {
+    return { discordId, matchSource: 'Melonly Verify' };
+  }
+  const rawRoles = Array.isArray(member?.roles) ? member.roles : memberRoleIds(member);
+  if (rawRoles.length && allowedRoleIds.some((roleId) => rawRoles.map(String).includes(String(roleId)))) {
     return { discordId, matchSource: 'Melonly Verify' };
   }
   return { discordId: null, matchSource: null };
 }
 
 async function syncGroupJoinRequests(client, config) {
-  const groupId = resolveJoinGroupId(config);
-  if (!groupId || !config.robloxGroupApiKey) return;
+  const groupIds = joinRequestGroupIds(config);
+  const apiKey = config.robloxGroupApiKey;
+  const cookie = normalizeRobloxCookie(config.robloxCookie);
+  if (!groupIds.length || (!apiKey && !cookie)) {
+    logger.warn('Roblox group sync skipped: set ROBLOX_GROUP_API_KEY or ROBLOX_COOKIE.');
+    return;
+  }
   const guild = await client.guilds.fetch(config.guildId).catch(() => null);
   if (!guild) throw new Error('DISCORD_GUILD_ID could not be fetched for Roblox group sync');
 
-  const eligible = await eligibleRobloxIds(guild, config.robloxGroupAllowedRoleIds);
-  const rosterReady = isDiscordRosterReady(guild);
+  const eligible = await eligibleRobloxIds(guild, config.robloxGroupAllowedRoleIds, client);
+  const rosterReady = isDiscordRosterReady(guild) || eligible.allowed.size > 0;
   if (!rosterReady) {
     logger.warn(
       `Roblox group sync: Discord member roster is incomplete `
@@ -320,8 +527,21 @@ async function syncGroupJoinRequests(client, config) {
       + 'accepting known matches only and skipping declines this pass.',
     );
   }
-  const requests = await pendingJoinRequests(groupId, config.robloxGroupApiKey);
-  logger.info(`Roblox group sync reviewing ${requests.length} pending join request(s) for group ${groupId} against ${eligible.allowed.size} Melonly-linked Roblox account(s).`);
+  const requests = [];
+  const listErrors = [];
+  for (const groupId of groupIds) {
+    try {
+      const listed = await pendingJoinRequests(groupId, apiKey, cookie);
+      requests.push(...listed);
+    } catch (error) {
+      listErrors.push({ groupId, error });
+      logger.warn(`Roblox join-request list failed for group ${groupId}`, error);
+    }
+  }
+  if (!requests.length && listErrors.length === groupIds.length) {
+    throw listErrors[0].error;
+  }
+  logger.info(`Roblox group sync reviewing ${requests.length} pending join request(s) for groups ${groupIds.join(', ')} against ${eligible.allowed.size} Melonly-linked Roblox account(s).`);
   let accepted = 0;
   let declined = 0;
   let skipped = 0;
@@ -330,6 +550,7 @@ async function syncGroupJoinRequests(client, config) {
   const skippedLines = [];
 
   for (const request of requests) {
+    const groupId = request.groupId || joinRequestGroupIds(config)[0];
     const robloxId = joinRequestRobloxId(request);
     const requestName = joinRequestResourceName(request, groupId);
     if (!requestName) {
@@ -358,10 +579,12 @@ async function syncGroupJoinRequests(client, config) {
       });
 
       if (action === 'accept') {
-        await groupFetch(`/${requestName}:accept`, config.robloxGroupApiKey, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: '{}',
+        await decideJoinRequest('accept', {
+          requestName,
+          robloxId,
+          groupId,
+          apiKey,
+          cookie,
         });
         accepted += 1;
         logger.info(`Accepted Roblox group join request for Discord ${matched.discordId} / Roblox ${robloxId}.`);
@@ -373,7 +596,7 @@ async function syncGroupJoinRequests(client, config) {
           client,
           config,
           'Roblox group request accepted',
-          `<@${matched.discordId}> was accepted into the Roblox group.\nRoblox user ID: \`${robloxId}\`\nMatched through: ${matched.matchSource}${pendingSince}`,
+          `<@${matched.discordId}> was accepted into Roblox group \`${groupId}\`.\nRoblox user ID: \`${robloxId}\`\nMatched through: ${matched.matchSource}${pendingSince}`,
         );
         continue;
       }
@@ -392,10 +615,12 @@ async function syncGroupJoinRequests(client, config) {
         continue;
       }
 
-      await groupFetch(`/${requestName}:decline`, config.robloxGroupApiKey, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}',
+      await decideJoinRequest('decline', {
+        requestName,
+        robloxId,
+        groupId,
+        apiKey,
+        cookie,
       });
       declined += 1;
       const username = robloxId ? await robloxUsername(robloxId).catch(() => null) : null;
@@ -409,7 +634,7 @@ async function syncGroupJoinRequests(client, config) {
           client,
           config,
           'Roblox group request declined',
-          `${who} was declined because they are not a Discord member with an allowed group role.${pendingSince}`,
+          `${who} was declined for group \`${groupId}\` because they are not a Discord member with an allowed group role.${pendingSince}`,
         );
     } catch (error) {
       failed += 1;
@@ -452,7 +677,7 @@ export function startRobloxGroupSync(client, config) {
   let timer;
   let lastError = '';
   logger.info(
-    `Roblox groups: join requests use ${resolveJoinGroupId(config)}; `
+    `Roblox groups: join-request sync watches ${joinRequestGroupIds(config).join(' and ')}; `
     + `-funds uses ${resolveFundsGroupId(config)}.`,
   );
   const run = async () => {
