@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-23-erlc-scene-commands",
+      "title": "In-game ;ss ;ts ;scene ;fc ;civ ;team voice drags",
+      "summary": "Typing those commands in ER:LC now drags you to an empty Discord VC named like Civilian 4. ;team goes to Fire, Police/Sheriff, or DOT voice depending on your in-game team, and does nothing on other teams. You must already be in a Discord VC.",
+      "createdAt": "2026-09-23T01:34:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-22-addfollowers-ping-default",
       "title": "Add followers to the pinged default Internet account",
       "summary": "-addfollowers now accepts a Discord ping. Followers are added to that member’s default Internet account, not an active alt. @handle still works.",

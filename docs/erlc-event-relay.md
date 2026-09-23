@@ -17,9 +17,12 @@ key or Melonly API key is needed for webhook signature verification.
    `data/erlc-events.json` before returning acceptance.
 3. The bot emits `erlcEvent(payload, eventId)` for local integrations, and sends
    the original bytes and original signature headers to `https://melon.ly/events`.
-4. Failed deliveries stay queued through restarts. A worker retries every five
+4. In-game `;` commands drag the player to an empty numbered Discord VC:
+   `;ss` Mod Scene, `;ts` Traffic Stop, `;scene` Scene, `;fc` Frequency Change,
+   `;civ` Civilian. `;team` moves Fire / Police-Sheriff / DOT to their team VCs
+   and does nothing on other teams. The player must already be in a Discord VC.
+5. Failed deliveries stay queued through restarts. A worker retries every five
    seconds when eligible, using exponential backoff and Melonly's Retry-After.
-   It does not execute game commands from event text.
 
 The queue holds up to 128 undelivered events and the last 100 completed events.
 Exact repeat requests in the retained inbox are deduplicated. Network ambiguity
