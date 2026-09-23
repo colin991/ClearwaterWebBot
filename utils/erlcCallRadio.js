@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { ChannelType } from 'discord.js';
 import { fetchErlcServer, parseErlcPlayer } from './erlc.js';
 import { logger } from './logger.js';
-import { PRIORITY_BEEP_PATH, PRIORITY_VOICE, PRIORITY_VOICE_RATE } from './priorityRequest.js';
+import { PRIORITY_BEEP_PATH, PRIORITY_VOICE } from './priorityRequest.js';
 import {
   ensureGuildVoiceConnection,
   playMp3QueueInVoiceChannel,
@@ -18,6 +18,7 @@ export const CALL_RADIO_CHANNELS = Object.freeze({
 
 export const FD_TONE_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'fd-tone.ogg');
 export const CALL_RADIO_POLL_MS = 5_000;
+export const CALL_RADIO_VOICE_RATE = 1.1;
 
 const DEDUP_MS = 2 * 60 * 1000;
 const recentKeys = new Map();
@@ -230,7 +231,7 @@ export async function playRadioCallAnnouncement(channel, call, classified, {
   if (!text) return { played: false, reason: 'no_speech' };
   const tone = radioCallTonePath(classified);
   await join(channel, channel.guild.voiceAdapterCreator);
-  const speechPromise = synthesize(text, PRIORITY_VOICE, { rate: PRIORITY_VOICE_RATE });
+  const speechPromise = synthesize(text, PRIORITY_VOICE, { rate: CALL_RADIO_VOICE_RATE });
   const clips = [];
   if (tone) clips.push(tone);
   clips.push(speechPromise);

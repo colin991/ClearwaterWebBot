@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-23-call-radio-voice-11",
+      "title": "Speak in-game call radio at 1.1x",
+      "summary": "LEO, Fire, and DOT in-game call dispatch lines now speak at 1.1x. Priority request voice is still 1.15x.",
+      "createdAt": "2026-09-23T23:55:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-23-erlc-call-radio",
       "title": "In-game calls speak on LEO, Fire, and DOT radio",
       "summary": "Cash-register, house, and ATM robberies plus 911 calls now beep and speak on LEO radio. Structure fires and Fire 911 use the FD tone. Every DOT call speaks on DOT radio. The bot joins that team's voice channel, plays the tone, then the dispatch line.",

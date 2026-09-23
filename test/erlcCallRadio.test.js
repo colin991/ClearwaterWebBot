@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import {
   CALL_RADIO_CHANNELS,
+  CALL_RADIO_VOICE_RATE,
   FD_TONE_PATH,
   classifyRadioCall,
   handleErlcCallEvent,
@@ -80,6 +81,7 @@ test('builds the spoken scripts without saying beep or fd tone', () => {
 test('uses the priority beep for LEO, the FD tone for Fire, and no tone for DOT', () => {
   assert.equal(existsSync(PRIORITY_BEEP_PATH), true);
   assert.equal(existsSync(FD_TONE_PATH), true);
+  assert.equal(CALL_RADIO_VOICE_RATE, 1.1);
   assert.equal(radioCallTonePath({ team: 'leo', kind: 'leo_server' }), PRIORITY_BEEP_PATH);
   assert.equal(radioCallTonePath({ team: 'fire', kind: 'fire_structure' }), FD_TONE_PATH);
   assert.equal(radioCallTonePath({ team: 'dot', kind: 'dot' }), null);
