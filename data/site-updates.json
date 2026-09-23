@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-23-erlc-call-radio",
+      "title": "In-game calls speak on LEO, Fire, and DOT radio",
+      "summary": "Cash-register, house, and ATM robberies plus 911 calls now beep and speak on LEO radio. Structure fires and Fire 911 use the FD tone. Every DOT call speaks on DOT radio. The bot joins that team's voice channel, plays the tone, then the dispatch line.",
+      "createdAt": "2026-09-23T23:25:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-23-scene-keep-majority-vc",
       "title": "Scene commands keep the VC most people are already in",
       "summary": ";ss, ;ts, ;scene, ;fc, and ;civ no longer open a new empty channel when most of the nearby group is already in that scene VC. People already there stay put; only stragglers are dragged in.",

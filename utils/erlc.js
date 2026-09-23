@@ -240,6 +240,7 @@ async function fetchErlcBundle(serverKey) {
   url.searchParams.set('Vehicles', 'true');
   url.searchParams.set('KillLogs', 'true');
   url.searchParams.set('ModCalls', 'true');
+  url.searchParams.set('EmergencyCalls', 'true');
   url.searchParams.set('CommandLogs', 'true');
   url.searchParams.set('Staff', 'true');
 

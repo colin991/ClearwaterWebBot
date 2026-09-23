@@ -25,7 +25,9 @@ key or Melonly API key is needed for webhook signature verification.
    who are not in it yet. `;team` moves Fire / Police-Sheriff / DOT to their
    team VCs and does nothing on other teams. The player must already be in a
    Discord VC.
-5. Failed deliveries stay queued through restarts. A worker retries every five
+5. In-game emergency calls on Police/Sheriff, Fire, or DOT speak a dispatch
+   line in that team's radio channel. See `docs/erlc-call-radio.md`.
+6. Failed deliveries stay queued through restarts. A worker retries every five
    seconds when eligible, using exponential backoff and Melonly's Retry-After.
 
 The queue holds up to 128 undelivered events and the last 100 completed events.

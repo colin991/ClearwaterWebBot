@@ -22,6 +22,7 @@ import { ensurePinellasServerProfile } from '../utils/pinellasServer.js';
 import { clearFloridaServerProfile } from '../utils/floridaServer.js';
 import { startBotApiServer } from '../utils/botApiServer.js';
 import { startErlcSceneCommands } from '../utils/erlcSceneCommands.js';
+import { startErlcCallRadio } from '../utils/erlcCallRadio.js';
 import { fetchErlcServer } from '../utils/erlc.js';
 import { startOpenTicketPermissionSync } from '../utils/pinellasSupport.js';
 
@@ -106,6 +107,10 @@ export default {
 
     if (!client.stopErlcSceneCommands) {
       client.stopErlcSceneCommands = startErlcSceneCommands(client);
+    }
+
+    if (!client.stopErlcCallRadio) {
+      client.stopErlcCallRadio = startErlcCallRadio(client);
     }
 
     // Guild/channel cache can still be settling right after ready.

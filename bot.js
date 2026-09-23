@@ -154,6 +154,7 @@ const shutDown = async (signal) => {
   client.stopFrequencyChangeGreeting?.();
   client.stopSoundboardAccess?.();
   client.stopErlcSceneCommands?.();
+  client.stopErlcCallRadio?.();
   client.destroy();
   process.exit(0);
 };
