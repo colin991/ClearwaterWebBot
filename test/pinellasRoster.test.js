@@ -5,6 +5,7 @@ import {
   activityForPinellasRoster,
   assignPinellasCallsign,
   parsePinellasRosterRows,
+  planPinellasCallsignRepairs,
   resolvePinellasRosterMemberStatus,
   summarizePinellasPunishments,
 } from '../utils/pinellasRoster.js';
@@ -146,7 +147,66 @@ test('roster parser keeps the manual notes column separate', () => {
     ['Corporal', null, '1132', null, 'Taylor West', null, '123456789012345678', null, 'Manual only', null, 'Active', null, 'Clean Record'],
   ]);
   assert.equal(row.rowNumber, 11);
+  assert.equal(row.rank, 'Corporal');
+  assert.equal(row.callsign, '1132');
+  assert.equal(row.callsignColumn, 'F');
   assert.equal(row.notes, 'Manual only');
   assert.equal(row.activity, 'Active');
   assert.equal(row.punishment, 'Clean Record');
+});
+
+test('roster parser treats a numeric left column as the callsign', () => {
+  const [row] = parsePinellasRosterRows([
+    ['2100', '09/21/2026', 'Master Sergeant', null, 'SpookySleepyyZ', null, '107', null, '', null, 'Active', null, 'Juan Martinez'],
+  ]);
+  assert.equal(row.rank, 'Master Sergeant');
+  assert.equal(row.callsign, '2100');
+  assert.equal(row.callsignColumn, 'D');
+});
+
+function rankRows(rank, callsigns) {
+  return callsigns.map((callsign) => ({
+    rank,
+    callsign: String(callsign),
+    callsignColumn: 'D',
+    rowNumber: 11,
+  }));
+}
+
+test('repairs duplicated Staff Sergeant callsigns and cascades Sergeant', () => {
+  const rows = [
+    ...rankRows('Master Sergeant', [2100, 2101, 2102, 2103, 2104, 2105, 2106, 2107, 2108, 2109]),
+    ...rankRows('Staff Sergeant', [2110, 2111, 2112, 2113, 2114, 2115, 2112, 2113, 2114, 2115]),
+    ...rankRows('Sergeant', [2116, 2117, 2118, 2119, 2120, 2121, 2122, 2123, 2124, 2125]),
+    { rank: '', callsign: '', callsignColumn: 'D', rowNumber: 41 },
+    ...rankRows('Master Deputy', [1201, 1202, 1203]),
+  ];
+  rows.forEach((row, index) => { row.rowNumber = index + 11; });
+
+  const repairs = planPinellasCallsignRepairs(rows);
+  assert.deepEqual(
+    repairs.map((entry) => `${entry.from}->${entry.to}`),
+    ['2112->2116', '2113->2117', '2114->2118', '2115->2119',
+      '2116->2120', '2117->2121', '2118->2122', '2119->2123',
+      '2120->2124', '2121->2125', '2122->2126', '2123->2127',
+      '2124->2128', '2125->2129'],
+  );
+  assert.equal(repairs.every((entry) => entry.column === 'D'), true);
+  assert.deepEqual(
+    rows.filter((row) => row.rank === 'Staff Sergeant').map((row) => row.callsign),
+    ['2110', '2111', '2112', '2113', '2114', '2115', '2116', '2117', '2118', '2119'],
+  );
+  assert.deepEqual(
+    rows.filter((row) => row.rank === 'Sergeant').map((row) => row.callsign),
+    ['2120', '2121', '2122', '2123', '2124', '2125', '2126', '2127', '2128', '2129'],
+  );
+  assert.deepEqual(
+    rows.filter((row) => row.rank === 'Master Deputy').map((row) => row.callsign),
+    ['1201', '1202', '1203'],
+  );
+});
+
+test('does not rewrite unique sequential callsigns', () => {
+  const rows = rankRows('Staff Sergeant', [2110, 2111, 2112, 2113, 2114, 2115, 2116, 2117, 2118, 2119]);
+  assert.deepEqual(planPinellasCallsignRepairs(rows), []);
 });

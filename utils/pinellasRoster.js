@@ -110,17 +110,100 @@ async function dmPinellasCallsignChange(member, nickname, reason = 'your PCSO ra
   ).catch(() => {});
 }
 
+function isCallsignNumber(value) {
+  return /^\d{3,5}$/.test(String(value || '').trim());
+}
+
+function looksLikeRankName(value) {
+  const rank = text(value);
+  return Boolean(rank) && !isCallsignNumber(rank) && /[A-Za-z]/.test(rank);
+}
+
 export function parsePinellasRosterRows(values = []) {
-  return values.map((row, index) => ({
-    rowNumber: index + 11,
-    rank: text(row?.[0]),
-    callsign: text(row?.[2]),
-    roleplayName: text(row?.[4]),
-    discordId: text(row?.[6]),
-    notes: text(row?.[8]),
-    activity: text(row?.[10]),
-    punishment: text(row?.[12]),
-  }));
+  return values.map((row, index) => {
+    const colD = text(row?.[0]);
+    const colF = text(row?.[2]);
+    const swapped = isCallsignNumber(colD) && looksLikeRankName(colF);
+    return {
+      rowNumber: index + 11,
+      rank: swapped ? colF : colD,
+      callsign: swapped ? colD : colF,
+      callsignColumn: swapped ? 'D' : 'F',
+      roleplayName: text(row?.[4]),
+      discordId: text(row?.[6]),
+      notes: text(row?.[8]),
+      activity: text(row?.[10]),
+      punishment: text(row?.[12]),
+    };
+  });
+}
+
+function callsignHundred(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? Math.floor(number / 100) : null;
+}
+
+/**
+ * Fix duplicated / overlapping numeric callsigns in consecutive rank blocks.
+ * Staff Sergeant currently repeats 2112-2115 instead of continuing 2116-2119;
+ * Sergeant is then shifted so they no longer collide.
+ */
+export function planPinellasCallsignRepairs(rows = []) {
+  const updates = [];
+  let index = 0;
+  let cascadeStart = null;
+  let cascadeHundred = null;
+
+  while (index < rows.length) {
+    const rank = text(rows[index].rank);
+    if (!rank) {
+      cascadeStart = null;
+      cascadeHundred = null;
+      index += 1;
+      continue;
+    }
+    let end = index + 1;
+    while (end < rows.length && rankKey(rows[end].rank) === rankKey(rank)) end += 1;
+    const block = rows.slice(index, end);
+    index = end;
+
+    const numbers = block.map((row) => Number(row.callsign));
+    if (!numbers.every((value) => Number.isInteger(value) && value > 0)) {
+      cascadeStart = null;
+      cascadeHundred = null;
+      continue;
+    }
+
+    const hundred = callsignHundred(block[0].callsign);
+    if (cascadeHundred != null && hundred !== cascadeHundred) {
+      cascadeStart = null;
+      cascadeHundred = null;
+    }
+
+    const start = cascadeStart ?? numbers[0];
+    const expected = block.map((_, offset) => String(start + offset));
+    const hasDuplicate = new Set(block.map((row) => String(row.callsign))).size !== block.length;
+    const overlapsCascade = cascadeStart != null && numbers.some((value) => value < cascadeStart);
+    if (hasDuplicate || overlapsCascade) {
+      for (let offset = 0; offset < block.length; offset += 1) {
+        const next = expected[offset];
+        if (String(block[offset].callsign) === next) continue;
+        updates.push({
+          rowNumber: block[offset].rowNumber,
+          column: block[offset].callsignColumn || 'F',
+          from: String(block[offset].callsign),
+          to: next,
+        });
+        block[offset].callsign = next;
+      }
+    }
+
+    const max = Math.max(...block.map((row) => Number(row.callsign)));
+    cascadeStart = max + 1;
+    cascadeHundred = hundred;
+  }
+
+  return updates;
 }
 
 function infractionIsActive(entry, now = Date.now()) {
@@ -574,6 +657,12 @@ export async function syncPinellasRoster(client) {
   return serializeRosterWork(async () => {
     const state = await loadRosterState(client);
     const updates = [];
+    for (const repair of planPinellasCallsignRepairs(state.rows)) {
+      updates.push({ range: rosterCell(repair.column, repair.rowNumber), value: repair.to });
+    }
+    if (updates.length) {
+      logger.info(`PCSO roster: repairing ${updates.length} duplicated or overlapping callsign(s).`);
+    }
     let members = 0;
     const guild = client.guilds.cache.get(PINELLAS_GUILD_ID)
       || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
