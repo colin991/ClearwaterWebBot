@@ -42,3 +42,15 @@ test('unauthorized command is silent before command parsing and other message ha
   await command.execute(message, []);
   await messageEvent.execute(message, {});
 });
+
+
+test('mention target receives followers on default even with a different active account and duplicate handle', () => {
+  const store = empty();
+  ensureDefaultInternetAccount(store, actor);
+  const alt = createInternetAccount(store, { actor, username: 'alternate', displayName: 'Alternate' });
+  store.users[alt.id].username = actor.username;
+  const result = addInternetFollowers(store, { actorId: '1074411240757137589', accountId: actor.id, amount: 10 });
+  assert.equal(result.followerCount, 10);
+  assert.equal(internetFollowerCount(store, alt.id), 0);
+  assert.equal(store.users[actor.id].activeAccountId, alt.id);
+});

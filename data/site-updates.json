@@ -2265,6 +2265,13 @@
       "summary": "Internet starts with a Discord-based default profile and supports additional accounts. Added a restricted follower-count command.",
       "createdAt": "2026-09-22T02:47:41.866032Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-22-addfollowers-discord-mentions",
+      "title": "Add followers using Discord mentions",
+      "summary": "The restricted addfollowers command now accepts Discord user mentions and applies the amount to their default account, creating it when needed. Handles still target specific Internet accounts.",
+      "createdAt": "2026-09-22T02:49:10.294488Z",
+      "updatedBy": "colin991"
     }
   ]
 }

@@ -1935,11 +1935,13 @@ export function internetFollowerCount(store, accountId) {
   return actual + (Number.isSafeInteger(extra) && extra > 0 ? extra : 0);
 }
 
-export function addInternetFollowers(store, { actorId, handle, amount }) {
+export function addInternetFollowers(store, { actorId, handle, accountId, amount }) {
   if (String(actorId) !== '1074411240757137589') throw new Error('Not authorized');
   if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error('Amount must be a positive whole number.');
   const name = String(handle || '').replace(/^@/, '').toLowerCase();
-  const matches = Object.values(store.users).filter(user => String(user.username || '').toLowerCase() === name);
+  const matches = accountId
+    ? [store.users[String(accountId)]].filter(Boolean)
+    : Object.values(store.users).filter(user => String(user.username || '').toLowerCase() === name);
   if (matches.length !== 1) throw new Error(matches.length ? 'That handle matches more than one account.' : 'Account not found.');
   const user = matches[0];
   if (!Number.isSafeInteger(internetFollowerCount(store, user.id) + amount)) throw new Error('Amount is too large.');
