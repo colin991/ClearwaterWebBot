@@ -18,7 +18,7 @@ export const CALL_RADIO_CHANNELS = Object.freeze({
 
 export const FD_TONE_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'fd-tone.ogg');
 export const CALL_RADIO_POLL_MS = 5_000;
-export const CALL_RADIO_VOICE_RATE = 1.1;
+export const CALL_RADIO_VOICE_RATE = 1;
 
 const DEDUP_MS = 2 * 60 * 1000;
 const recentKeys = new Map();
