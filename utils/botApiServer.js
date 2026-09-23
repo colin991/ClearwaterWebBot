@@ -1,3 +1,5 @@
+import { readEventBytes, verifyErlcEvent } from '../lib/erlc-webhook.js';
+import { createErlcEventRelay } from './erlcEventRelay.js';
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
@@ -54,11 +56,31 @@ export function startBotApiServer(client, {
     return () => {};
   }
 
+  const eventRelay = createErlcEventRelay({ onEvent: (event, id) => { client.emit('erlcEvent', event, id); } });
+  const flushEvents = () => { void eventRelay.tick().catch(error => logger.error('ERLC event relay failed', error)); };
+  const eventTimer = setInterval(flushEvents, 5000);
+  eventTimer.unref();
+  flushEvents();
+
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url || '/', `http://127.0.0.1:${listenPort}`);
       if (!authorized(request, apiKey)) {
         return sendJson(response, 401, { error: 'Unauthorized' });
+      }
+
+      if (url.pathname === '/api/erlc/events') {
+        if (request.method === 'GET') return sendJson(response, 200, await eventRelay.inspect());
+        if (request.method !== 'POST') return sendJson(response, 405, { error: 'Method not allowed' });
+        try {
+          const event = verifyErlcEvent(await readEventBytes(request), request.headers);
+          const receipt = await eventRelay.accept(event);
+          sendJson(response, 200, receipt);
+          flushEvents();
+          return;
+        } catch (error) {
+          return sendJson(response, error.status || 503, { error: error.status ? error.message : 'Event persistence unavailable' });
+        }
       }
 
       if (request.method === 'GET' && url.pathname === '/api/status') {
@@ -148,6 +170,7 @@ export function startBotApiServer(client, {
   });
 
   return () => {
+    clearInterval(eventTimer);
     try { server.close(); } catch { /* ignore */ }
   };
 }
