@@ -1,6 +1,5 @@
 import { addInternetFollowers, ensureDefaultInternetAccount } from '../utils/internetStore.js';
 import { mutateDiscordInternetStore } from '../utils/discordInternetStore.js';
-
 export default {
   name: 'addfollowers',
   async execute(message, args) {

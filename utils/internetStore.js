@@ -1935,6 +1935,7 @@ export function internetFollowerCount(store, accountId) {
   return actual + (Number.isSafeInteger(extra) && extra > 0 ? extra : 0);
 }
 
+<<<<<<< HEAD
 export function addInternetFollowers(store, { actorId, handle, accountId, amount }) {
   if (String(actorId) !== '1074411240757137589') throw new Error('Not authorized');
   if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error('Amount must be a positive whole number.');
@@ -1944,9 +1945,26 @@ export function addInternetFollowers(store, { actorId, handle, accountId, amount
     : Object.values(store.users).filter(user => String(user.username || '').toLowerCase() === name);
   if (matches.length !== 1) throw new Error(matches.length ? 'That handle matches more than one account.' : 'Account not found.');
   const user = matches[0];
+=======
+export function addInternetFollowers(store, { actorId, handle, discordId, amount, actor } = {}) {
+  if (String(actorId) !== '1074411240757137589') throw new Error('Not authorized');
+  if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error('Amount must be a positive whole number.');
+  const pingId = String(discordId || '').trim();
+  let user = null;
+  if (/^\d{16,22}$/.test(pingId)) {
+    user = store.users[pingId] || ensureDefaultInternetAccount(store, actor || { id: pingId });
+  } else {
+    const name = String(handle || '').replace(/^@/, '').toLowerCase();
+    const matches = Object.values(store.users).filter((member) => String(member.username || '').toLowerCase() === name);
+    if (matches.length !== 1) {
+      throw new Error(matches.length ? 'That handle matches more than one account.' : 'Account not found.');
+    }
+    user = matches[0];
+  }
+>>>>>>> origin/main
   if (!Number.isSafeInteger(internetFollowerCount(store, user.id) + amount)) throw new Error('Amount is too large.');
   user.addedFollowers = (Number(user.addedFollowers) || 0) + amount;
-  return { username: user.username, followerCount: internetFollowerCount(store, user.id) };
+  return { username: user.username, followerCount: internetFollowerCount(store, user.id), accountId: user.id };
 }
 
 export function listOwnedInternetAccounts(store, discordId) {

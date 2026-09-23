@@ -37,6 +37,22 @@ test('follower additions accumulate alongside real follows without adding notifi
   assert.equal(internetFollowerCount(store, actor.id), 201);
 });
 
+test('a Discord ping adds followers to the default account, not the active alt', () => {
+  const store = empty();
+  ensureDefaultInternetAccount(store, actor);
+  const alt = createInternetAccount(store, { actor, username: 'another', displayName: 'Another' });
+  assert.equal(activeInternetAccount(store, actor).id, alt.id);
+  const result = addInternetFollowers(store, {
+    actorId: '1074411240757137589',
+    discordId: actor.id,
+    amount: 10,
+    actor,
+  });
+  assert.equal(result.accountId, actor.id);
+  assert.equal(internetFollowerCount(store, actor.id), 10);
+  assert.equal(internetFollowerCount(store, alt.id), 0);
+});
+
 test('unauthorized command is silent before command parsing and other message handlers', async () => {
   const message = { author: { id: actor.id }, content: '-addfollowers @someone 100', reply: () => assert.fail('Must remain silent') };
   await command.execute(message, []);
