@@ -134,6 +134,41 @@ export function pickEmptyNumberedVoiceChannel(channels, baseName, { exceptMember
   return empty[0]?.channel || null;
 }
 
+function channelById(channels, id) {
+  const want = String(id || '');
+  if (!want) return null;
+  return (Array.isArray(channels) ? channels : []).find((channel) => String(channel?.id) === want) || null;
+}
+
+export function voiceChannelForMember(member, channels = []) {
+  return member?.voice?.channel
+    || channelById(channels, member?.voice?.channelId);
+}
+
+/**
+ * If most of the in-voice group is already in the same matching numbered VC
+ * (Civilian 4, Scene 2, …), keep that channel instead of opening a new empty one.
+ */
+export function majorityMatchingVoiceChannel(members, baseName, { channels = [] } = {}) {
+  const group = (Array.isArray(members) ? members : []).filter((member) => member?.voice?.channelId);
+  if (!group.length) return null;
+  const counts = new Map();
+  for (const member of group) {
+    const channel = voiceChannelForMember(member, channels);
+    if (!channel || parseNumberedVoiceName(channel.name, baseName) == null) continue;
+    const id = String(channel.id);
+    const entry = counts.get(id) || { channel, count: 0 };
+    entry.count += 1;
+    counts.set(id, entry);
+  }
+  let best = null;
+  for (const entry of counts.values()) {
+    if (!best || entry.count > best.count) best = entry;
+  }
+  if (!best || best.count * 2 <= group.length) return null;
+  return best.channel;
+}
+
 function alreadyInMatchingEmpty(channel, baseName, memberId) {
   if (!channel || parseNumberedVoiceName(channel.name, baseName) == null) return false;
   return humanVoiceMembers(channel, memberId).length === 0;
@@ -287,6 +322,22 @@ export async function handleErlcSceneEvent(payload, {
     return { handled: false, reason: 'not_in_voice' };
   }
 
+  const nearbyMembers = [];
+  if (command.kind === 'numbered' && rosterPlayer) {
+    for (const nearby of playersWithinStuds(rosterPlayer, rosterPlayers)) {
+      try {
+        const nearbyMember = (await resolveZoneDiscordMember(guild, nearby, identityMap)).member;
+        if (!nearbyMember?.voice?.channelId) continue;
+        if (nearbyMember.id === member.id) continue;
+        nearbyMembers.push(nearbyMember);
+      } catch (error) {
+        logger.warn(
+          `ER:LC ;${command.name}: could not resolve nearby ${nearby.username || nearby.robloxId}: ${error?.message || error}`,
+        );
+      }
+    }
+  }
+
   let destination = null;
   let originReason = 'moved';
   if (command.kind === 'team') {
@@ -300,15 +351,26 @@ export async function handleErlcSceneEvent(payload, {
     if (!destination || destination.type !== ChannelType.GuildVoice) {
       return { handled: false, reason: 'team_channel_missing' };
     }
-  } else if (alreadyInMatchingEmpty(member.voice.channel, command.baseName, member.id)) {
-    destination = member.voice.channel;
-    originReason = 'already_in_empty';
   } else {
     const channels = await listGuildVoiceChannels(guild);
-    destination = pickEmptyNumberedVoiceChannel(channels, command.baseName, { exceptMemberId: member.id });
+    const group = [member, ...nearbyMembers];
+    const clustered = majorityMatchingVoiceChannel(group, command.baseName, { channels });
+    const sittingEmpty = alreadyInMatchingEmpty(
+      voiceChannelForMember(member, channels),
+      command.baseName,
+      member.id,
+    ) ? voiceChannelForMember(member, channels) : null;
+    destination = clustered
+      || sittingEmpty
+      || pickEmptyNumberedVoiceChannel(channels, command.baseName, { exceptMemberId: member.id });
     if (!destination) {
       logger.info(`ER:LC ;${command.name}: no empty "${command.baseName} {number}" VC.`);
       return { handled: false, reason: 'no_empty_channel' };
+    }
+    if (clustered && clustered.id === destination.id && member.voice.channelId === destination.id) {
+      originReason = 'already_there';
+    } else if (sittingEmpty && sittingEmpty.id === destination.id) {
+      originReason = 'already_in_empty';
     }
   }
 
@@ -329,26 +391,20 @@ export async function handleErlcSceneEvent(payload, {
   }
 
   let nearbyMoved = 0;
-  if (command.kind === 'numbered' && rosterPlayer) {
-    for (const nearby of playersWithinStuds(rosterPlayer, rosterPlayers)) {
-      try {
-        const nearbyResolved = await resolveZoneDiscordMember(guild, nearby, identityMap);
-        const nearbyMember = nearbyResolved.member;
-        if (!nearbyMember?.voice?.channelId) continue;
-        if (nearbyMember.id === member.id) continue;
-        if (nearbyMember.voice.channelId === destination.id) continue;
-        await moveMember(
-          nearbyMember,
-          destination,
-          `In-game ;${command.name} nearby ${player.username || player.robloxId}`,
-          { skipGreetingMark },
-        );
-        nearbyMoved += 1;
-      } catch (error) {
-        logger.warn(
-          `ER:LC ;${command.name}: could not move nearby ${nearby.username || nearby.robloxId}: ${error?.message || error}`,
-        );
-      }
+  for (const nearbyMember of nearbyMembers) {
+    if (nearbyMember.voice.channelId === destination.id) continue;
+    try {
+      await moveMember(
+        nearbyMember,
+        destination,
+        `In-game ;${command.name} nearby ${player.username || player.robloxId}`,
+        { skipGreetingMark },
+      );
+      nearbyMoved += 1;
+    } catch (error) {
+      logger.warn(
+        `ER:LC ;${command.name}: could not move nearby ${nearbyMember.user?.tag || nearbyMember.id}: ${error?.message || error}`,
+      );
     }
   }
 

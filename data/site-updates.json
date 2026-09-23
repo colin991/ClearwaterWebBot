@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-23-scene-keep-majority-vc",
+      "title": "Scene commands keep the VC most people are already in",
+      "summary": ";ss, ;ts, ;scene, ;fc, and ;civ no longer open a new empty channel when most of the nearby group is already in that scene VC. People already there stay put; only stragglers are dragged in.",
+      "createdAt": "2026-09-23T22:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-23-scene-nearby-drag",
       "title": "Scene commands drag nearby players into the same VC",
       "summary": ";ss, ;ts, ;scene, ;fc, and ;civ now also drag anyone within 50 studs in ER:LC into the same Discord voice channel, if they are already in a VC. ;team is unchanged.",

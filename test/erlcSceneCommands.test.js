@@ -10,6 +10,7 @@ import {
   pickEmptyNumberedVoiceChannel,
   playerStudDistance,
   playersWithinStuds,
+  majorityMatchingVoiceChannel,
   resolveSceneCommand,
   SCENE_NEARBY_STUDS,
   teamVoiceChannelId,
@@ -318,4 +319,93 @@ test(';team does not drag nearby players', async () => {
   assert.equal(commander.movedTo, TEAM_VOICE_CHANNEL_IDS.fire);
   assert.equal(result.nearbyMoved, 0);
   assert.equal(nearby.movedTo, undefined);
+});
+
+test('majority already in a matching VC stays there instead of opening a new empty one', () => {
+  const civ4 = voice('c4', 'Civilian 4');
+  const lobby = voice('lobby', 'Lobby');
+  const a = { id: '1', voice: { channelId: 'c4', channel: civ4 } };
+  const b = { id: '2', voice: { channelId: 'c4', channel: civ4 } };
+  const c = { id: '3', voice: { channelId: 'lobby', channel: lobby } };
+  const d = { id: '4', voice: { channelId: 'c5', channel: voice('c5', 'Civilian 5') } };
+  assert.equal(majorityMatchingVoiceChannel([a, b, c], 'Civilian').id, 'c4');
+  assert.equal(majorityMatchingVoiceChannel([a, d], 'Civilian'), null);
+  assert.equal(majorityMatchingVoiceChannel([a], 'Civilian').id, 'c4');
+});
+
+test(';civ keeps the existing scene VC and only drags people who are missing', async () => {
+  const civ4 = voice('c4', 'Civilian 4', [{ id: 'discord1', user: { bot: false } }, { id: 'discord2', user: { bot: false } }]);
+  const empty = voice('c2', 'Civilian 2');
+  const lobby = voice('lobby', 'Lobby');
+  function voiceUser(id, channel) {
+    const user = {
+      id,
+      user: { bot: false, tag: id },
+      voice: {
+        channelId: channel.id,
+        channel,
+        setChannel: async (next) => {
+          user.voice.channelId = next.id;
+          user.movedTo = next.id;
+        },
+      },
+    };
+    return user;
+  }
+  const commander = voiceUser('discord1', civ4);
+  const already = voiceUser('discord2', civ4);
+  const missing = voiceUser('discord3', lobby);
+  const members = new Map([
+    [commander.id, commander],
+    [already.id, already],
+    [missing.id, missing],
+  ]);
+  const client = {
+    guilds: {
+      cache: {
+        get: () => ({
+          members: {
+            me: { permissions: { has: () => true } },
+            cache: { get: (id) => members.get(id) || null, size: members.size, values: () => members.values() },
+            fetch: async (id) => members.get(id) || null,
+          },
+          channels: {
+            cache: {
+              size: 10,
+              get: (id) => ({ c4: civ4, c2: empty, lobby }[id] || null),
+              values: () => [civ4, empty, lobby].values(),
+            },
+            fetch: async () => {},
+          },
+        }),
+      },
+      fetch: async () => client.guilds.cache.get(),
+    },
+  };
+  const result = await handleErlcSceneEvent(
+    { Player: 'Colin:99', Message: ';civ' },
+    {
+      client,
+      config: { guildId: 'guild' },
+      now: 80_000,
+      identities: new Map([
+        ['99', 'discord1'],
+        ['100', 'discord2'],
+        ['101', 'discord3'],
+      ]),
+      snapshot: async () => ({
+        Players: [
+          { username: 'Colin', robloxId: '99', team: 'Civilian', location: { x: 100, z: 100 } },
+          { username: 'Already', robloxId: '100', team: 'Civilian', location: { x: 110, z: 100 } },
+          { username: 'Missing', robloxId: '101', team: 'Civilian', location: { x: 120, z: 100 } },
+        ],
+      }),
+    },
+  );
+  assert.equal(result.handled, true);
+  assert.equal(result.channelId, 'c4');
+  assert.equal(result.nearbyMoved, 1);
+  assert.equal(commander.movedTo, undefined);
+  assert.equal(already.movedTo, undefined);
+  assert.equal(missing.movedTo, 'c4');
 });
