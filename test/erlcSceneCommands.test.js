@@ -8,7 +8,10 @@ import {
   parseCustomCommand,
   parseNumberedVoiceName,
   pickEmptyNumberedVoiceChannel,
+  playerStudDistance,
+  playersWithinStuds,
   resolveSceneCommand,
+  SCENE_NEARBY_STUDS,
   teamVoiceChannelId,
   TEAM_VOICE_CHANNEL_IDS,
 } from '../utils/erlcSceneCommands.js';
@@ -111,6 +114,7 @@ test('handleErlcSceneEvent moves a linked member into an empty Civilian VC', asy
     {
       client,
       config: { guildId: 'guild', erlcServerKey: 'key' },
+      now: 1_000,
       identities: new Map([['99', 'discord1']]),
       snapshot: async () => ({ Players: [{ username: 'Colin', robloxId: '99', team: 'Civilian' }] }),
     },
@@ -163,4 +167,155 @@ test(';team does not drag civilians and does drag fire to the fire VC', async ()
   );
   assert.equal(moved.reason, 'moved');
   assert.equal(user.movedTo, TEAM_VOICE_CHANNEL_IDS.fire);
+  assert.equal(moved.nearbyMoved, 0);
+});
+
+test('50-stud nearby includes the edge and skips farther or missing coords', () => {
+  const origin = { username: 'Colin', robloxId: '1', location: { x: 100, z: 100 } };
+  const close = { username: 'Close', robloxId: '2', location: { x: 130, z: 140 } };
+  const edge = { username: 'Edge', robloxId: '3', location: { x: 150, z: 100 } };
+  const far = { username: 'Far', robloxId: '4', location: { x: 151, z: 100 } };
+  const lost = { username: 'Lost', robloxId: '5', location: {} };
+  assert.equal(playerStudDistance(origin, close), 50);
+  assert.equal(SCENE_NEARBY_STUDS, 50);
+  assert.deepEqual(
+    playersWithinStuds(origin, [origin, close, edge, far, lost]).map((player) => player.username),
+    ['Close', 'Edge'],
+  );
+});
+
+test(';civ also drags in-game players within 50 studs into the same VC', async () => {
+  const dest = voice('civ2', 'Civilian 2');
+  const lobby = voice('lobby', 'Lobby');
+  const other = voice('other', 'Other');
+  function voiceUser(id, channel) {
+    const user = {
+      id,
+      user: { bot: false, tag: id },
+      voice: {
+        channelId: channel.id,
+        channel,
+        setChannel: async (next) => {
+          user.voice.channelId = next.id;
+          user.movedTo = next.id;
+        },
+      },
+    };
+    return user;
+  }
+  const commander = voiceUser('discord1', lobby);
+  const nearby = voiceUser('discord2', other);
+  const far = voiceUser('discord3', other);
+  const silent = voiceUser('discord4', { id: null });
+  silent.voice.channelId = null;
+  const members = new Map([
+    [commander.id, commander],
+    [nearby.id, nearby],
+    [far.id, far],
+    [silent.id, silent],
+  ]);
+  const client = {
+    guilds: {
+      cache: {
+        get: () => ({
+          members: {
+            me: { permissions: { has: () => true } },
+            cache: { get: (id) => members.get(id) || null, size: members.size, values: () => members.values() },
+            fetch: async (id) => members.get(id) || null,
+          },
+          channels: {
+            cache: {
+              size: 10,
+              get: (id) => (id === dest.id ? dest : id === lobby.id ? lobby : id === other.id ? other : null),
+              values: () => [lobby, dest, other].values(),
+            },
+            fetch: async () => {},
+          },
+        }),
+      },
+      fetch: async () => client.guilds.cache.get(),
+    },
+  };
+  const result = await handleErlcSceneEvent(
+    { Player: 'Colin:99', Message: ';civ' },
+    {
+      client,
+      config: { guildId: 'guild' },
+      now: 50_000,
+      identities: new Map([
+        ['99', 'discord1'],
+        ['100', 'discord2'],
+        ['101', 'discord3'],
+        ['102', 'discord4'],
+      ]),
+      snapshot: async () => ({
+        Players: [
+          { username: 'Colin', robloxId: '99', team: 'Civilian', location: { x: 100, z: 100 } },
+          { username: 'Near', robloxId: '100', team: 'Civilian', location: { x: 120, z: 110 } },
+          { username: 'Far', robloxId: '101', team: 'Civilian', location: { x: 400, z: 400 } },
+          { username: 'Silent', robloxId: '102', team: 'Civilian', location: { x: 101, z: 101 } },
+        ],
+      }),
+    },
+  );
+  assert.equal(result.handled, true);
+  assert.equal(result.nearbyMoved, 1);
+  assert.equal(commander.movedTo, 'civ2');
+  assert.equal(nearby.movedTo, 'civ2');
+  assert.equal(far.movedTo, undefined);
+  assert.equal(silent.movedTo, undefined);
+});
+
+test(';team does not drag nearby players', async () => {
+  const fire = voice('1514128961951760515', 'Fire Dispatch');
+  const lobby = voice('lobby', 'Lobby');
+  function voiceUser(id) {
+    const user = {
+      id,
+      user: { bot: false, tag: id },
+      voice: {
+        channelId: 'lobby',
+        channel: lobby,
+        setChannel: async (channel) => { user.movedTo = channel.id; },
+      },
+    };
+    return user;
+  }
+  const commander = voiceUser('discord1');
+  const nearby = voiceUser('discord2');
+  const members = new Map([[commander.id, commander], [nearby.id, nearby]]);
+  const guild = {
+    members: {
+      me: { permissions: { has: () => true } },
+      cache: { get: (id) => members.get(id) || null, size: 2, values: () => members.values() },
+      fetch: async (id) => members.get(id) || null,
+    },
+    channels: {
+      cache: {
+        size: 10,
+        get: (id) => (id === fire.id ? fire : null),
+        values: () => [fire].values(),
+      },
+      fetch: async (id) => (id === fire.id ? fire : null),
+    },
+  };
+  const result = await handleErlcSceneEvent(
+    { Player: 'Colin:99', Message: ';team' },
+    {
+      client: { guilds: { cache: { get: () => guild }, fetch: async () => guild } },
+      config: { guildId: 'guild' },
+      identities: new Map([['99', 'discord1'], ['100', 'discord2']]),
+      now: 40_000,
+      snapshot: async () => ({
+        Players: [
+          { username: 'Colin', robloxId: '99', team: 'Fire', location: { x: 10, z: 10 } },
+          { username: 'Near', robloxId: '100', team: 'Fire', location: { x: 11, z: 10 } },
+        ],
+      }),
+    },
+  );
+  assert.equal(result.reason, 'moved');
+  assert.equal(commander.movedTo, TEAM_VOICE_CHANNEL_IDS.fire);
+  assert.equal(result.nearbyMoved, 0);
+  assert.equal(nearby.movedTo, undefined);
 });

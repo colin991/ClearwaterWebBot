@@ -19,8 +19,10 @@ key or Melonly API key is needed for webhook signature verification.
    the original bytes and original signature headers to `https://melon.ly/events`.
 4. In-game `;` commands drag the player to an empty numbered Discord VC:
    `;ss` Mod Scene, `;ts` Traffic Stop, `;scene` Scene, `;fc` Frequency Change,
-   `;civ` Civilian. `;team` moves Fire / Police-Sheriff / DOT to their team VCs
-   and does nothing on other teams. The player must already be in a Discord VC.
+   `;civ` Civilian. Anyone else in-game within 50 studs who is already in a
+   Discord VC is dragged into that same channel. `;team` moves Fire /
+   Police-Sheriff / DOT to their team VCs and does nothing on other teams. The
+   player must already be in a Discord VC.
 5. Failed deliveries stay queued through restarts. A worker retries every five
    seconds when eligible, using exponential backoff and Melonly's Retry-After.
 

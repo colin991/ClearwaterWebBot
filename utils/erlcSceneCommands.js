@@ -21,6 +21,8 @@ export const TEAM_VOICE_CHANNEL_IDS = Object.freeze({
   dot: '1514130037052407932',
 });
 
+export const SCENE_NEARBY_STUDS = 50;
+
 const DEDUP_MS = 4_000;
 const recentCommands = new Map();
 
@@ -155,6 +157,32 @@ function markRecentCommand(key, now) {
   }
 }
 
+export function playerStudDistance(left, right) {
+  const ax = Number(left?.location?.x);
+  const az = Number(left?.location?.z);
+  const bx = Number(right?.location?.x);
+  const bz = Number(right?.location?.z);
+  if (![ax, az, bx, bz].every(Number.isFinite)) return null;
+  return Math.hypot(ax - bx, az - bz);
+}
+
+export function sameRosterPlayer(left, right) {
+  const leftId = String(left?.robloxId || '').trim();
+  const rightId = String(right?.robloxId || '').trim();
+  if (leftId && rightId) return leftId === rightId;
+  const leftName = String(left?.username || '').trim().toLowerCase();
+  const rightName = String(right?.username || '').trim().toLowerCase();
+  return Boolean(leftName && rightName && leftName === rightName);
+}
+
+export function playersWithinStuds(origin, players = [], maxStuds = SCENE_NEARBY_STUDS) {
+  return (Array.isArray(players) ? players : []).filter((player) => {
+    if (!player || sameRosterPlayer(origin, player)) return false;
+    const distance = playerStudDistance(origin, player);
+    return distance != null && distance <= maxStuds;
+  });
+}
+
 function findRosterPlayer(players, webhookPlayer) {
   const id = String(webhookPlayer.robloxId || '').trim();
   const name = String(webhookPlayer.username || '').trim().toLowerCase();
@@ -220,14 +248,23 @@ export async function handleErlcSceneEvent(payload, {
   }
 
   let rosterPlayer = null;
+  let rosterPlayers = [];
   try {
     const server = snapshot
       ? await snapshot()
       : (config.erlcServerKey ? await fetchErlcServer(config.erlcServerKey) : null);
-    const players = (server?.Players || server?.players || []).map((entry) => (
-      entry?.username != null ? entry : parseErlcPlayer(entry)
-    ));
-    rosterPlayer = findRosterPlayer(players, webhookPlayer);
+    rosterPlayers = (server?.Players || server?.players || []).map((entry) => {
+      const parsed = parseErlcPlayer(entry);
+      if (entry?.username == null) return parsed;
+      return {
+        ...parsed,
+        username: entry.username || parsed.username,
+        robloxId: entry.robloxId || parsed.robloxId,
+        team: entry.team || parsed.team,
+        location: entry.location || parsed.location,
+      };
+    });
+    rosterPlayer = findRosterPlayer(rosterPlayers, webhookPlayer);
   } catch (error) {
     logger.warn(`ER:LC ;${command.name}: player list unavailable (${error?.message || error})`);
   }
@@ -251,6 +288,7 @@ export async function handleErlcSceneEvent(payload, {
   }
 
   let destination = null;
+  let originReason = 'moved';
   if (command.kind === 'team') {
     const channelId = teamVoiceChannelId(player.team);
     if (!channelId) {
@@ -262,11 +300,10 @@ export async function handleErlcSceneEvent(payload, {
     if (!destination || destination.type !== ChannelType.GuildVoice) {
       return { handled: false, reason: 'team_channel_missing' };
     }
+  } else if (alreadyInMatchingEmpty(member.voice.channel, command.baseName, member.id)) {
+    destination = member.voice.channel;
+    originReason = 'already_in_empty';
   } else {
-    if (alreadyInMatchingEmpty(member.voice.channel, command.baseName, member.id)) {
-      markRecentCommand(commandKey(player, command.name), now);
-      return { handled: true, reason: 'already_in_empty', channelId: member.voice.channelId };
-    }
     const channels = await listGuildVoiceChannels(guild);
     destination = pickEmptyNumberedVoiceChannel(channels, command.baseName, { exceptMemberId: member.id });
     if (!destination) {
@@ -275,28 +312,54 @@ export async function handleErlcSceneEvent(payload, {
     }
   }
 
-  if (member.voice.channelId === destination.id) {
-    markRecentCommand(commandKey(player, command.name), now);
-    return { handled: true, reason: 'already_there', channelId: destination.id };
+  if (!destination) return { handled: false, reason: 'no_empty_channel' };
+  if (member.voice.channelId === destination.id && originReason === 'moved') {
+    originReason = 'already_there';
   }
 
+  const skipGreetingMark = command.name === 'fc';
   try {
-    await moveMember(
-      member,
-      destination,
-      `In-game ;${command.name}`,
-      { skipGreetingMark: command.name === 'fc' },
-    );
-    markRecentCommand(commandKey(player, command.name), now);
-    logger.info(
-      `ER:LC ;${command.name}: moved ${member.user?.tag || member.id} (${player.username}) `
-      + `into #${destination.name} (${destination.id})${eventId ? ` event ${eventId}` : ''}.`,
-    );
-    return { handled: true, reason: 'moved', channelId: destination.id };
+    if (member.voice.channelId !== destination.id) {
+      await moveMember(member, destination, `In-game ;${command.name}`, { skipGreetingMark });
+      originReason = 'moved';
+    }
   } catch (error) {
     logger.error(`ER:LC ;${command.name}: could not move ${member.id}`, error);
     return { handled: false, reason: 'move_failed', error: error?.message || String(error) };
   }
+
+  let nearbyMoved = 0;
+  if (command.kind === 'numbered' && rosterPlayer) {
+    for (const nearby of playersWithinStuds(rosterPlayer, rosterPlayers)) {
+      try {
+        const nearbyResolved = await resolveZoneDiscordMember(guild, nearby, identityMap);
+        const nearbyMember = nearbyResolved.member;
+        if (!nearbyMember?.voice?.channelId) continue;
+        if (nearbyMember.id === member.id) continue;
+        if (nearbyMember.voice.channelId === destination.id) continue;
+        await moveMember(
+          nearbyMember,
+          destination,
+          `In-game ;${command.name} nearby ${player.username || player.robloxId}`,
+          { skipGreetingMark },
+        );
+        nearbyMoved += 1;
+      } catch (error) {
+        logger.warn(
+          `ER:LC ;${command.name}: could not move nearby ${nearby.username || nearby.robloxId}: ${error?.message || error}`,
+        );
+      }
+    }
+  }
+
+  markRecentCommand(commandKey(player, command.name), now);
+  logger.info(
+    `ER:LC ;${command.name}: ${originReason} ${member.user?.tag || member.id} (${player.username}) `
+    + `into #${destination.name} (${destination.id})`
+    + `${nearbyMoved ? `, dragged ${nearbyMoved} nearby` : ''}`
+    + `${eventId ? ` event ${eventId}` : ''}.`,
+  );
+  return { handled: true, reason: originReason, channelId: destination.id, nearbyMoved };
 }
 
 export function startErlcSceneCommands(client) {
