@@ -65,7 +65,7 @@ test('builds the spoken scripts without saying beep or fd tone', () => {
   });
   assert.equal(
     structure,
-    'Attention station 48. Attention station 48. Structure Fire reported Main Street. Engine 48, ladder 48. Medic 48, and all command please respond.',
+    'Attention station 48. Attention station 48. Structure Fire reported Main Street, Engine 48, ladder 48. Medic 48, and all command please respond.',
   );
 
   const fire911 = radioCallSpeech({
@@ -75,7 +75,7 @@ test('builds the spoken scripts without saying beep or fd tone', () => {
   });
   assert.equal(
     fire911,
-    'Attention station 48. Attention station 48. smoke in the kitchen reported Oak Ave. Engine 48, ladder 48. Medic 48, and all command please respond.',
+    'Attention station 48. Attention station 48. smoke in the kitchen reported Oak Ave, Engine 48, ladder 48. Medic 48, and all command please respond.',
   );
 
   const dot = radioCallSpeech({

@@ -165,7 +165,7 @@ export function radioCallSpeech(call, classified = classifyRadioCall(call)) {
     return `${classified.label} reported at ${location} any nearby units please attach.`;
   }
   if (classified.kind === 'fire_structure' || classified.kind === 'fire_911') {
-    return `Attention station 48. Attention station 48. ${classified.label} reported ${location}. Engine 48, ladder 48. Medic 48, and all command please respond.`;
+    return `Attention station 48. Attention station 48. ${classified.label} reported ${location}, Engine 48, ladder 48. Medic 48, and all command please respond.`;
   }
   return `${classified.label} reported at ${location} nearby trucks please respond.`;
 }

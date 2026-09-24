@@ -17,7 +17,7 @@ When an in-game emergency call starts, the bot joins that team's radio and speak
 
 **Fire**
 
-- FD tone, then `Attention station 48. Attention station 48. {fire type} reported {location}. Engine 48, ladder 48. Medic 48, and all command please respond.`
+- FD tone, then `Attention station 48. Attention station 48. {fire type} reported {location}, Engine 48, ladder 48. Medic 48, and all command please respond.`
 - Dumpster / dumper fires are not announced.
 
 **DOT**
