@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-belleair-welcome",
+      "title": "Welcome new Belleair Police members",
+      "summary": "When someone joins the Belleair Police Discord, the bot now pings them in the welcome channel and points them to the department application channel.",
+      "createdAt": "2026-09-24T03:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-belleair-ops-profile",
       "title": "Set Belleair Operations per-server bot profile",
       "summary": "In the Belleair Police Discord, the bot now uses the nickname Belleair Operations with the Belleair badge as its server logo and the Belleair police car as its server banner.",

@@ -7,6 +7,9 @@ import { logger } from './logger.js';
 /** Belleair Police Department Discord server. */
 export const BELLEAIR_GUILD_ID = '1526890993327280240';
 export const BELLEAIR_NICKNAME = 'Belleair Operations';
+export const BELLEAIR_WELCOME_CHANNEL_ID = '1535138419972513832';
+export const BELLEAIR_APPLY_CHANNEL_URL =
+  'https://discord.com/channels/1526890993327280240/1535143007551225926';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BELLEAIR_LOGO_PATH = path.join(ROOT, 'assets', 'belleair-ops-logo.webp');
@@ -118,4 +121,28 @@ export async function ensureBelleairServerProfile(client) {
     logger.error('Belleair: failed to update server profile', error);
     return false;
   }
+}
+
+/** Post the Belleair welcome message when a member joins that server. */
+export async function sendBelleairWelcome(member) {
+  if (String(member.guild?.id) !== BELLEAIR_GUILD_ID) return false;
+  if (member.user?.bot) return false;
+
+  const channel = member.guild.channels.cache.get(BELLEAIR_WELCOME_CHANNEL_ID)
+    || await member.guild.channels.fetch(BELLEAIR_WELCOME_CHANNEL_ID).catch(() => null);
+  if (!channel?.isTextBased?.()) {
+    logger.warn(`Belleair: welcome channel ${BELLEAIR_WELCOME_CHANNEL_ID} unavailable.`);
+    return false;
+  }
+
+  const content = [
+    `<:wave:1514337303907274902> **Welcome** <@${member.id}> to the <:bpd_logo:1535160817606074378> **Belleair Police Department**, you can apply to our department here ${BELLEAIR_APPLY_CHANNEL_URL}`,
+  ].join('\n');
+
+  await channel.send({
+    content,
+    allowedMentions: { users: [member.id] },
+  });
+  logger.info(`Belleair: welcomed ${member.user?.tag || member.id}.`);
+  return true;
 }
