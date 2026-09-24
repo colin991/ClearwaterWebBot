@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-ban-appeal-dm",
+      "title": "DM banned members a Clearwater appeal link",
+      "summary": "When someone is banned from the main Clearwater Discord, the bot DMs them the Melonly ban appeal form. On restart it DMs anyone already banned who has not received that message yet, and every attempt is logged in the staff log channel.",
+      "createdAt": "2026-09-24T11:48:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-belleair-ops-logo-cutout",
       "title": "Use the cutout Belleair badge as the server logo",
       "summary": "The Belleair Police Discord per-server bot avatar is now the badge on a black background, without the blurred car behind it.",

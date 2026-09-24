@@ -21,6 +21,7 @@ This folder holds bot runtime files on the **bot host**.
 - `clearwater-internet.json.bak` / `.bak.1` — rotating backups before each save
 - `identity-cache.json` — Melonly identity cache (may be encrypted)
 - `circle-moderation.json` — moderation store
+- `ban-appeal-dms.json` — who already received a main-server ban appeal DM
 - other `data/*.json` created by the live bot
 
 **Updating the bot:** click Restart with `bash start.sh`. Do **not** delete all files and re-upload a zip — that wipes this host-only data.

@@ -26,6 +26,7 @@ import { startErlcSceneCommands } from '../utils/erlcSceneCommands.js';
 import { startErlcCallRadio } from '../utils/erlcCallRadio.js';
 import { fetchErlcServer } from '../utils/erlc.js';
 import { startOpenTicketPermissionSync } from '../utils/pinellasSupport.js';
+import { startBanAppealDms } from '../utils/banAppealDm.js';
 
 export default {
   name: Events.ClientReady,
@@ -118,6 +119,10 @@ export default {
 
     if (!client.stopErlcCallRadio) {
       client.stopErlcCallRadio = startErlcCallRadio(client);
+    }
+
+    if (!client.stopBanAppealDms) {
+      client.stopBanAppealDms = startBanAppealDms(client);
     }
 
     // Guild/channel cache can still be settling right after ready.

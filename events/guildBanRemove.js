@@ -1,4 +1,5 @@
 import { Events, PermissionFlagsBits } from 'discord.js';
+import { forgetBanAppealDm } from '../utils/banAppealDm.js';
 import { CLEARWATER_GUILD_ID } from '../utils/staffRanks.js';
 import { logger } from '../utils/logger.js';
 
@@ -49,6 +50,9 @@ export default {
   name: Events.GuildBanRemove,
   async execute(ban, client) {
     try {
+      if (String(ban?.guild?.id || '') === CLEARWATER_GUILD_ID) {
+        await forgetBanAppealDm(ban?.user?.id);
+      }
       await propagateMainServerUnban(ban, client || ban?.client);
     } catch (error) {
       logger.error('Main-server unban mirror failed', error);
