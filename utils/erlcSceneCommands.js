@@ -47,21 +47,79 @@ export const SCENE_NEARBY_STUDS = 50;
 const DEDUP_MS = 4_000;
 const recentCommands = new Map();
 
-function mappings(payload) {
-  if (!payload || typeof payload !== 'object') return [];
-  const nested = [payload.Data, payload.data, payload.Payload, payload.payload, payload.Event, payload.event];
-  return [payload, ...nested.filter((value) => value && typeof value === 'object' && !Array.isArray(value))];
+function asObject(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  if (!text.startsWith('{') || !text.endsWith('}')) return null;
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
-function firstString(objects, keys) {
-  for (const object of objects) {
-    for (const key of keys) {
-      const value = object?.[key];
-      if (typeof value === 'string' && value.trim()) return value.trim();
-      if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+function mappings(payload) {
+  if (!payload || typeof payload !== 'object') return [];
+  const seen = new Set();
+  const out = [];
+  const add = (value) => {
+    const object = asObject(value) || (value && typeof value === 'object' && !Array.isArray(value) ? value : null);
+    if (!object || seen.has(object)) return;
+    seen.add(object);
+    out.push(object);
+  };
+  add(payload);
+  for (const key of ['Data', 'data', 'Payload', 'payload', 'Body', 'body', 'Origin', 'origin', 'Player', 'player', 'User', 'user', 'Actor', 'actor', 'Source', 'source']) {
+    add(payload[key]);
+    const nested = asObject(payload[key]);
+    if (nested) {
+      for (const inner of ['Data', 'data', 'Player', 'player', 'User', 'user', 'Origin', 'origin']) {
+        add(nested[inner]);
+      }
     }
   }
-  return '';
+  return out;
+}
+
+function playerFromRaw(raw, { allowPlainName = false } = {}) {
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    return playerFromRaw(String(Math.trunc(raw)), { allowPlainName });
+  }
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      const parsed = playerFromRaw(item, { allowPlainName });
+      if (parsed) return parsed;
+    }
+    return null;
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    const text = raw.trim();
+    const parsedObject = asObject(text);
+    if (parsedObject) return playerFromRaw(parsedObject, { allowPlainName });
+    const separator = text.lastIndexOf(':');
+    if (separator > 0 && /^\d{1,20}$/.test(text.slice(separator + 1))) {
+      return { username: text.slice(0, separator), robloxId: text.slice(separator + 1) };
+    }
+    if (/^\d{1,20}$/.test(text)) return { username: '', robloxId: text };
+    if (allowPlainName && !/^(command|customcommand|event|origin|server|webhook)$/i.test(text)) {
+      return { username: text, robloxId: '' };
+    }
+    return null;
+  }
+  if (raw && typeof raw === 'object') {
+    const username = String(raw.Name || raw.Username || raw.username || raw.Player || raw.player || raw.DisplayName || '').trim();
+    const robloxId = String(raw.Id || raw.id || raw.PlayerId || raw.playerId || raw.UserId || raw.userId || raw.RobloxId || raw.robloxId || '').trim();
+    if (username || robloxId) return { username, robloxId };
+    for (const value of Object.values(raw)) {
+      if (typeof value === 'string' && value.includes(':')) {
+        const nested = playerFromRaw(value);
+        if (nested?.robloxId) return nested;
+      }
+    }
+  }
+  return null;
 }
 
 export function extractWebhookCommandText(payload) {
@@ -73,25 +131,35 @@ export function extractWebhookCommandText(payload) {
 export function extractWebhookPlayer(payload) {
   const objects = mappings(payload);
   for (const object of objects) {
-    const raw = object.Player || object.player || object.Caller || object.caller;
-    if (typeof raw === 'string' && raw.trim()) {
-      const text = raw.trim();
-      const separator = text.lastIndexOf(':');
-      if (separator > 0 && /^\d{1,20}$/.test(text.slice(separator + 1))) {
-        return { username: text.slice(0, separator), robloxId: text.slice(separator + 1) };
-      }
-      return { username: text, robloxId: '' };
+    for (const key of ['Player', 'player', 'Caller', 'caller']) {
+      const parsed = playerFromRaw(object[key], { allowPlainName: true });
+      if (parsed) return parsed;
     }
-    if (raw && typeof raw === 'object') {
-      const username = String(raw.Name || raw.Username || raw.username || raw.Player || '').trim();
-      const robloxId = String(raw.Id || raw.id || raw.PlayerId || raw.playerId || raw.UserId || raw.userId || '').trim();
-      if (username || robloxId) return { username, robloxId };
+    for (const key of [
+      'User', 'user', 'Origin', 'origin', 'Actor', 'actor', 'Source', 'source',
+      'Executioner', 'executioner', 'Sender', 'sender', 'Author', 'author',
+    ]) {
+      const parsed = playerFromRaw(object[key]);
+      if (parsed) return parsed;
     }
   }
-  const username = firstString(objects, ['Username', 'username', 'PlayerName', 'playerName']);
+  const username = firstString(objects, ['Username', 'username', 'PlayerName', 'playerName', 'DisplayName', 'displayName']);
   const robloxId = firstString(objects, ['PlayerId', 'playerId', 'UserId', 'userId', 'RobloxId', 'robloxId']);
-  if (username || robloxId) return { username, robloxId };
+  if (username || (robloxId && /^\d{1,20}$/.test(robloxId))) {
+    return { username, robloxId: /^\d{1,20}$/.test(robloxId) ? robloxId : '' };
+  }
   return { username: '', robloxId: '' };
+}
+
+function firstString(objects, keys) {
+  for (const object of objects) {
+    for (const key of keys) {
+      const value = object?.[key];
+      if (typeof value === 'string' && value.trim()) return value.trim();
+      if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+    }
+  }
+  return '';
 }
 
 export function extractWebhookEventType(payload) {
@@ -308,7 +376,24 @@ export function resolveSceneCommand(payload) {
 function payloadKeyHint(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return 'no payload object';
   const keys = Object.keys(payload).slice(0, 12);
-  return keys.length ? `payload keys ${keys.join(', ')}` : 'empty payload';
+  const parts = [keys.length ? `payload keys ${keys.join(', ')}` : 'empty payload'];
+  for (const nest of ['data', 'Data', 'origin', 'Origin']) {
+    const value = payload[nest];
+    if (typeof value === 'string' && value.trim()) {
+      parts.push(`${nest} ${value.trim().slice(0, 80)}`);
+      continue;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      parts.push(`${nest} ${value}`);
+      continue;
+    }
+    const nested = asObject(value);
+    if (nested) {
+      const nestedKeys = Object.keys(nested).slice(0, 12);
+      if (nestedKeys.length) parts.push(`${nest} keys ${nestedKeys.join(', ')}`);
+    }
+  }
+  return parts.join(' · ');
 }
 
 export function sceneCommandLogBody({

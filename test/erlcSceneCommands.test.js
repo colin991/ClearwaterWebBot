@@ -82,6 +82,23 @@ test('webhook payloads expose ;command text and Player:Id', () => {
   assert.equal(resolveSceneCommand(short).command.name, 'civ');
   assert.equal(resolveSceneCommand({ Type: 'EmergencyCall', Team: 'Fire', Description: 'Structure Fire' }), null);
   assert.equal(resolveSceneCommand({ Message: ';ping' }).reason, 'unknown_command');
+  const wrapped = {
+    timestamp: '2026-09-24T01:30:00.000Z',
+    event: 'CustomCommand',
+    origin: 'Colin:123456',
+    data: { command: ';scene' },
+  };
+  assert.equal(extractWebhookCommandText(wrapped), ';scene');
+  assert.deepEqual(extractWebhookPlayer(wrapped), { username: 'Colin', robloxId: '123456' });
+  assert.equal(resolveSceneCommand(wrapped).command.name, 'scene');
+  const wrappedObject = {
+    timestamp: Date.now(),
+    event: 'Command',
+    origin: { username: 'Colin', userId: 123456 },
+    data: { Command: 'scene' },
+  };
+  assert.deepEqual(extractWebhookPlayer(wrappedObject), { username: 'Colin', robloxId: '123456' });
+  assert.equal(resolveSceneCommand(wrappedObject).command.name, 'scene');
   assert.equal(SCENE_COMMAND_LOG_CHANNEL_ID, '1514547037537046688');
   assert.match(
     sceneCommandLogBody({

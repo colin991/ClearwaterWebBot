@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-scene-webhook-origin-player",
+      "title": "Read the player from ER:LC origin webhooks",
+      "summary": "In-game ;scene and the other ; commands now take the player from the webhook origin field (Name:Id or username/userId), including wrapped { data, timestamp, event, origin } payloads that previously logged unknown and failed with webhook had no player.",
+      "createdAt": "2026-09-24T01:32:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-log-all-erlc-commands",
       "title": "Log every in-game ER:LC command webhook",
       "summary": "Every ER:LC ; command webhook now posts to the VC action log when it arrives, including unknown payloads and failures, so staff can see why a drag did not run.",
