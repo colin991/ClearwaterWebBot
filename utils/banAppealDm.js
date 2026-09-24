@@ -166,32 +166,6 @@ export async function notifyBannedUser(client, user, {
   });
 }
 
-export async function notifyExistingMainServerBans(client) {
-  const guild = client.guilds?.cache?.get(CLEARWATER_GUILD_ID)
-    || await client.guilds?.fetch?.(CLEARWATER_GUILD_ID).catch(() => null);
-  if (!guild) {
-    logger.warn(`Ban appeal DMs: main guild ${CLEARWATER_GUILD_ID} unavailable.`);
-    return { scanned: 0, sent: 0 };
-  }
-
-  const bans = await guild.bans.fetch().catch((error) => {
-    logger.warn(`Ban appeal DMs: could not fetch bans (${error?.message || error})`);
-    return null;
-  });
-  if (!bans) return { scanned: 0, sent: 0 };
-
-  let sent = 0;
-  for (const ban of bans.values()) {
-    const result = await notifyBannedUser(client, ban.user, {
-      reason: ban.reason || '',
-      source: 'restart',
-    });
-    if (result.sent) sent += 1;
-  }
-  logger.info(`Ban appeal DMs: scanned ${bans.size} main-server ban(s), sent ${sent}.`);
-  return { scanned: bans.size, sent };
-}
-
 export async function handleMainServerBan(ban, client) {
   if (String(ban?.guild?.id || '') !== CLEARWATER_GUILD_ID) {
     return { skipped: true, reason: 'not-main' };
@@ -200,14 +174,4 @@ export async function handleMainServerBan(ban, client) {
     reason: ban.reason || '',
     source: 'ban',
   });
-}
-
-export function startBanAppealDms(client) {
-  const timer = setTimeout(() => {
-    void notifyExistingMainServerBans(client).catch((error) => {
-      logger.error('Ban appeal restart scan failed', error);
-    });
-  }, 5_000);
-  timer.unref?.();
-  return () => clearTimeout(timer);
 }

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-ban-appeal-no-restart-dm",
+      "title": "Only DM new Discord bans",
+      "summary": "The bot no longer DMs everyone who is already banned when it restarts. Ban appeal DMs go only to people banned from the main Clearwater Discord after that restart.",
+      "createdAt": "2026-09-24T11:56:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-ban-appeal-dm",
       "title": "DM banned members a Clearwater appeal link",
       "summary": "When someone is banned from the main Clearwater Discord, the bot DMs them the Melonly ban appeal form. On restart it DMs anyone already banned who has not received that message yet, and every attempt is logged in the staff log channel.",

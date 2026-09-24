@@ -11,7 +11,6 @@ import {
   buildBanAppealDmPayload,
   forgetBanAppealDm,
   handleMainServerBan,
-  notifyExistingMainServerBans,
   setBanAppealDmDelayMs,
   setBanAppealStorePath,
 } from '../utils/banAppealDm.js';
@@ -76,51 +75,5 @@ test('new main-server bans DM once, log the result, and skip other guilds', asyn
   }, client);
   assert.equal(afterUnban.sent, true);
   assert.equal(dms.length, 2);
-  await rm(directory, { recursive: true, force: true });
-});
-
-test('restart scan DMs existing main-server bans that were not notified yet', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'ban-appeal-'));
-  setBanAppealStorePath(join(directory, 'store.json'));
-  setBanAppealDmDelayMs(0);
-  const dms = [];
-  const already = {
-    id: '111111111111111111',
-    tag: 'old#1',
-    bot: false,
-    send: async () => { dms.push('old'); },
-  };
-  const fresh = {
-    id: '222222222222222222',
-    tag: 'new#2',
-    bot: false,
-    send: async () => { dms.push('new'); },
-  };
-  const client = {
-    guilds: {
-      cache: {
-        get: (id) => (id === CLEARWATER_GUILD_ID
-          ? {
-            bans: {
-              fetch: async () => new Map([
-                [already.id, { user: already, reason: 'old ban' }],
-                [fresh.id, { user: fresh, reason: 'new ban' }],
-              ]),
-            },
-          }
-          : null),
-      },
-    },
-    channels: {
-      cache: { get: () => ({ isTextBased: () => true, send: async () => {} }) },
-    },
-  };
-
-  await handleMainServerBan({ guild: { id: CLEARWATER_GUILD_ID }, user: already, reason: 'old ban' }, client);
-  dms.length = 0;
-  const result = await notifyExistingMainServerBans(client);
-  assert.equal(result.scanned, 2);
-  assert.equal(result.sent, 1);
-  assert.deepEqual(dms, ['new']);
   await rm(directory, { recursive: true, force: true });
 });

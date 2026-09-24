@@ -155,7 +155,6 @@ const shutDown = async (signal) => {
   client.stopSoundboardAccess?.();
   client.stopErlcSceneCommands?.();
   client.stopErlcCallRadio?.();
-  client.stopBanAppealDms?.();
   client.destroy();
   process.exit(0);
 };
