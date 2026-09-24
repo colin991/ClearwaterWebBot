@@ -12,7 +12,7 @@ export const BELLEAIR_APPLY_CHANNEL_URL =
   'https://discord.com/channels/1526890993327280240/1535143007551225926';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const BELLEAIR_LOGO_PATH = path.join(ROOT, 'assets', 'belleair-ops-logo.webp');
+const BELLEAIR_LOGO_PATH = path.join(ROOT, 'assets', 'belleair-ops-logo.png');
 const BELLEAIR_BANNER_PATH = path.join(ROOT, 'assets', 'belleair-ops-banner.webp');
 const PROFILE_STATE_PATH = path.join(ROOT, 'data', 'belleair-profile.json');
 

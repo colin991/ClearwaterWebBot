@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-belleair-ops-logo",
+      "title": "Update the Belleair Operations server logo",
+      "summary": "The Belleair Police Discord per-server bot avatar now uses the supplied badge with the blurred background.",
+      "createdAt": "2026-09-24T03:24:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-belleair-welcome",
       "title": "Welcome new Belleair Police members",
       "summary": "When someone joins the Belleair Police Discord, the bot now pings them in the welcome channel and points them to the department application channel.",
