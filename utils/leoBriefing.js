@@ -124,6 +124,7 @@ export function createLeoBriefingService({
   save,
   dmUser,
   moveLeoMembers,
+  notePeaceTimer,
   now = Date.now,
   onError = (error) => logger.error('LEO briefing failed', error),
 } = {}) {
@@ -175,6 +176,7 @@ export function createLeoBriefingService({
       });
       await runCommand(`:m ${BRIEFING_START_MESSAGE}`);
       await runCommand(`:pt ${BRIEFING_PEACE_SECONDS}`);
+      await notePeaceTimer?.(BRIEFING_PEACE_SECONDS);
       await runLayout('load', BRIEFING_WALLS_LAYOUT);
       state = {
         active: true,
@@ -304,6 +306,7 @@ export function startLeoBriefing(client) {
         identities,
       });
     },
+    notePeaceTimer: (seconds) => client.priorityRequest?.notePeaceTimer?.(seconds),
   });
   client.leoBriefing = service;
   logger.info('LEO briefing command enabled.');

@@ -17,6 +17,7 @@ import {
   parseErlcKill,
   parseErlcPlayer,
   parseErlcVehicle,
+  parseErlcCommandLog,
 } from './erlc.js';
 import { discordIdsByRobloxId, getIdentityCache } from './identityStore.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
@@ -230,17 +231,61 @@ export function allPriorityParticipantsDied({
 }
 
 export function normalizePriorityStore(stored) {
-  if (!stored || typeof stored !== 'object') return { request: null };
+  if (!stored || typeof stored !== 'object') return { request: null, peace: null };
+  let request = null;
   if (stored.request !== undefined) {
-    return { request: stored.request && typeof stored.request === 'object' ? stored.request : null };
+    request = stored.request && typeof stored.request === 'object' ? stored.request : null;
+  } else if (stored.id && stored.status) {
+    request = stored;
   }
-  if (stored.id && stored.status) return { request: stored };
-  return { request: null };
+  const peace = stored.peace && typeof stored.peace === 'object'
+    ? { at: Number(stored.peace.at) || 0, seconds: Number(stored.peace.seconds) || 0 }
+    : null;
+  return { request, peace };
 }
 
 export function hasBlockingPriority(request) {
   const status = String(request?.status || '');
   return status === 'pending' || status === 'active';
+}
+
+export function parsePeaceTimerCommand(command) {
+  const text = String(command || '').trim();
+  const match = text.match(/^:?pt(?:ime)?\s+(\d+)\s*$/i);
+  if (!match) return null;
+  return Number(match[1]);
+}
+
+export function resolvePeaceTimer({ storedPeace = null, commandLogs = [], now = Date.now() } = {}) {
+  const events = [];
+  const storedAt = Number(storedPeace?.at || 0);
+  const storedSeconds = Number(storedPeace?.seconds);
+  if (storedAt > 0 && Number.isFinite(storedSeconds) && storedSeconds >= 0) {
+    events.push({ at: storedAt, seconds: storedSeconds });
+  }
+  for (const entry of Array.isArray(commandLogs) ? commandLogs : []) {
+    const parsed = entry?.command != null || entry?.username != null ? entry : parseErlcCommandLog(entry);
+    const seconds = parsePeaceTimerCommand(parsed.command);
+    if (seconds == null) continue;
+    const at = Number(parsed.at || 0);
+    if (!at) continue;
+    events.push({ at, seconds });
+  }
+  events.sort((left, right) => left.at - right.at || left.seconds - right.seconds);
+  const last = events.at(-1);
+  if (!last || last.seconds <= 0) {
+    return { active: false, remainingMs: 0, endsAt: 0, seconds: last?.seconds || 0 };
+  }
+  const endsAt = last.at + last.seconds * 1000;
+  const remainingMs = Math.max(0, endsAt - now);
+  return { active: remainingMs > 0, remainingMs, endsAt, seconds: last.seconds };
+}
+
+export function peaceTimerBlockMessage(peace) {
+  if (!peace?.active) return '';
+  const ends = Number(peace.endsAt) || 0;
+  const when = ends ? `<t:${Math.floor(ends / 1000)}:R>` : 'soon';
+  return `A peace timer is active in-game. You can request a priority ${when}.`;
 }
 
 export function uniqueMentionUsers(...lists) {
@@ -723,7 +768,7 @@ export function createPriorityRequestService({
   now = Date.now,
   onError = error => logger.error('Priority request failed', error),
 } = {}) {
-  let state = { request: null };
+  let state = { request: null, peace: null };
   let loaded = false;
   let running;
 
@@ -765,6 +810,23 @@ export function createPriorityRequestService({
   async function endInGame() {
     await send(':prty 0');
     await send(`:pt ${PRIORITY_PEACE_SECONDS}`);
+    state.peace = { at: now(), seconds: PRIORITY_PEACE_SECONDS };
+    await persist();
+  }
+
+  async function commandLogsFrom(source) {
+    if (Array.isArray(source)) return source;
+    const server = source && typeof source === 'object'
+      ? source
+      : await snapshot({ commandLogs: true }).catch(() => ({}));
+    return server?.CommandLogs || server?.commandLogs || [];
+  }
+
+  async function assertPeaceTimerClear(commandLogs) {
+    const current = await ensure();
+    const logs = await commandLogsFrom(commandLogs);
+    const peace = resolvePeaceTimer({ storedPeace: current.peace, commandLogs: logs, now: now() });
+    if (peace.active) throw new Error(peaceTimerBlockMessage(peace));
   }
 
   async function closeActive(request, status, {
@@ -885,12 +947,13 @@ export function createPriorityRequestService({
   }
 
   return {
-    async openForm(interaction, { players, vehicles }) {
+    async openForm(interaction, { players, vehicles, commandLogs } = {}) {
       const current = await ensure();
       if (hasBlockingPriority(current.request)) {
         const status = current.request.status === 'active' ? 'already running' : 'already pending';
         throw new Error(`A priority request is ${status}. Wait until it finishes before submitting another.`);
       }
+      await assertPeaceTimerClear(commandLogs);
       const id = newId();
       const sorted = [...players].sort(byUsername);
       drafts.set(interaction.user.id, {
@@ -906,11 +969,12 @@ export function createPriorityRequestService({
       return buildPriorityFormModal({ id, players: sorted, vehicles });
     },
 
-    async submitRequest({ user, selectedPlayers, selectedVehicles, background, details }) {
+    async submitRequest({ user, selectedPlayers, selectedVehicles, background, details, commandLogs }) {
       const current = await ensure();
       if (hasBlockingPriority(current.request)) {
         throw new Error('A priority request is already pending or running.');
       }
+      await assertPeaceTimerClear(commandLogs);
       if ((selectedPlayers || []).length > PRIORITY_MAX_PARTICIPANTS) {
         throw new Error(`Priorities are limited to ${PRIORITY_MAX_PARTICIPANTS} participants.`);
       }
@@ -1071,6 +1135,13 @@ export function createPriorityRequestService({
     },
     clearDraft(userId) { drafts.delete(userId); },
     get request() { return state.request; },
+    async notePeaceTimer(seconds, at = now()) {
+      await ensure();
+      const value = Math.max(0, Math.trunc(Number(seconds) || 0));
+      state.peace = { at: Number(at) || now(), seconds: value };
+      await persist();
+      return state.peace;
+    },
   };
 }
 
@@ -1120,7 +1191,11 @@ export async function handlePriorityRequest(interaction) {
       });
       const players = (server.Players || []).map(parseErlcPlayer).filter(p => p.username);
       const vehicles = civilianVehicles((server.Vehicles || []).map(parseErlcVehicle), players);
-      await interaction.showModal(await service.openForm(interaction, { players, vehicles }));
+      await interaction.showModal(await service.openForm(interaction, {
+        players,
+        vehicles,
+        commandLogs: server.CommandLogs || server.commandLogs,
+      }));
       return true;
     }
 

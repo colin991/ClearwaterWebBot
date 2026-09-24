@@ -6,7 +6,7 @@
 2. **Search vehicles** — type in that dropdown to filter by owner or vehicle. Discord only shows search on a required single choice, so pick **None** if you have no car. A second vehicle can be typed in the additional field. **Max 2 cars.**
 3. Fill in **Background** and **Priority Type** on the same form. Priority Type is limited to **25 characters**.
 
-If a request is already **pending** or **active**, a new one cannot be submitted.
+If a request is already **pending** or **active**, a new one cannot be submitted. An **in-game peace timer** (`:pt`) also blocks new requests until it expires, including the 10 minute peace after a priority ends and the 20 minute peace from `/briefing`.
 
 New requests post to channel `1514341436139770017` and ping role `1515107822432419971`. **Anyone** can **Approve** or **Deny**. Unanswered pending requests are **auto-denied after 25 minutes**. Void stays staff-only.
 

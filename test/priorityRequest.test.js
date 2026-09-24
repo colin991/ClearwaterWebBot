@@ -32,6 +32,9 @@ import {
   resolvePriorityPlayers,
   resolvePriorityVehicles,
   uniqueMentionUsers,
+  parsePeaceTimerCommand,
+  resolvePeaceTimer,
+  peaceTimerBlockMessage,
 } from '../utils/priorityRequest.js';
 
 test('civilian vehicles keep civilian-owned cars and format the staff label', () => {
@@ -186,6 +189,44 @@ test('pending and active requests block a new submission', () => {
   assert.equal(hasBlockingPriority({ status: 'voided' }), false);
 });
 
+test('an in-game peace timer blocks a new priority request', async () => {
+  assert.equal(parsePeaceTimerCommand(':pt 600'), 600);
+  assert.equal(parsePeaceTimerCommand(':pt 0'), 0);
+  const now = 1_700_000_000_000;
+  const active = resolvePeaceTimer({
+    commandLogs: [{ command: ':pt 600', at: now - 120_000 }],
+    now,
+  });
+  assert.equal(active.active, true);
+  assert.equal(active.remainingMs, 480_000);
+  assert.match(peaceTimerBlockMessage(active), /peace timer is active/i);
+  const cleared = resolvePeaceTimer({
+    commandLogs: [
+      { command: ':pt 600', at: now - 200_000 },
+      { command: ':pt 0', at: now - 10_000 },
+    ],
+    now,
+  });
+  assert.equal(cleared.active, false);
+
+  const f = serviceFixture(null, {
+    time: now,
+    server: {
+      CommandLogs: [{ Command: ':pt 600', Timestamp: Math.floor((now - 60_000) / 1000) }],
+    },
+  });
+  await assert.rejects(
+    () => f.svc.submitRequest({
+      user: { id: 'u1', username: 'DiscName' },
+      selectedPlayers: [{ username: 'RobloxHost', robloxId: '99' }],
+      selectedVehicles: [],
+      background: 'bg',
+      details: 'type',
+    }),
+    /peace timer is active/i,
+  );
+});
+
 test('extra time adds minutes onto remaining seconds', () => {
   assert.equal(extraTimeCommandSeconds(10_000, 5, 0), 310);
   assert.equal(extraTimeCommandSeconds(0, 5, 10_000), 300);
@@ -223,7 +264,7 @@ function serviceFixture(request, extras = {}) {
   const svc = createPriorityRequestService({
     now: () => time,
     load: async () => stored,
-    save: async value => { stored.request = value.request; },
+    save: async value => { stored.request = value.request; stored.peace = value.peace; },
     send: extras.send || (async command => { commands.push(command); }),
     snapshot: async () => extras.server || { KillLogs: [] },
     postStaff: async () => ({ id: 'msg1' }),
@@ -617,6 +658,17 @@ test('void runs prty 0 then a 10 minute peace timer and DMs the requester', asyn
   await f.svc.voidActive('p1', { id: 'staff' });
   assert.deepEqual(f.commands, [':prty 0', `:pt ${PRIORITY_PEACE_SECONDS}`]);
   assert.match(f.dms[0].payload.components[0].components[2].content, /Voided/);
+  assert.equal(f.stored.peace.seconds, PRIORITY_PEACE_SECONDS);
+  await assert.rejects(
+    () => f.svc.submitRequest({
+      user: { id: 'u2', username: 'Other' },
+      selectedPlayers: [{ username: 'RobloxHost', robloxId: '99' }],
+      selectedVehicles: [],
+      background: 'bg',
+      details: 'type',
+    }),
+    /peace timer is active/i,
+  );
 });
 
 test('unanswered pending requests auto-deny after 25 minutes', async () => {

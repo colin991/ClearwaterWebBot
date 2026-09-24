@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-block-priority-peace",
+      "title": "Block priority requests during a peace timer",
+      "summary": "/request-priority cannot be sent while an in-game peace timer is running, including the 10 minute peace after a priority ends and the 20 minute peace from a LEO briefing.",
+      "createdAt": "2026-09-24T01:25:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-leo-no-fd-tone",
       "title": "Keep the FD tone off LEO radio",
       "summary": "Fire Department tone and Fire dispatch no longer play in the LEO radio channel. The FD tone is now a mono MP3 so Discord does not glitch, and in-game ; commands are not treated as emergency calls.",

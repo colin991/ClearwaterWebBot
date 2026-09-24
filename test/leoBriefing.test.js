@@ -46,6 +46,7 @@ function briefingFixture() {
   const commands = [];
   const dms = [];
   const moves = [];
+  const peaces = [];
   const stored = { active: false };
   const svc = createLeoBriefingService({
     now: () => 1,
@@ -63,8 +64,9 @@ function briefingFixture() {
       moves.push({ voiceChannelId, names: players.map((player) => player.username) });
       return { moved: players.map((player) => player.username), skipped: [] };
     },
+    notePeaceTimer: async (seconds) => { peaces.push(seconds); },
   });
-  return { svc, commands, dms, moves, stored };
+  return { svc, commands, dms, moves, stored, peaces };
 }
 
 test('starting a briefing drags LEO, PMs the server, sets peace, and loads walls', async () => {
@@ -79,6 +81,7 @@ test('starting a briefing drags LEO, PMs the server, sets peace, and loads walls
   assert.equal(f.dms[0].id, 'admin');
   assert.match(JSON.stringify(f.dms[0].payload), /Load road blocks/);
   assert.equal(f.stored.active, true);
+  assert.deepEqual(f.peaces, [BRIEFING_PEACE_SECONDS]);
   assert.equal(result.moved.moved[0], 'Cop');
 });
 
