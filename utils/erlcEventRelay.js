@@ -1,6 +1,10 @@
 import { resolve } from 'node:path';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { eventHeaders } from '../lib/erlc-webhook.js';
+import { logger } from './logger.js';
+
+/** Public Melonly URL 307s here. POSTing the alias with redirect:error never delivered. */
+export const MELONLY_EVENTS_WEBHOOK_URL = 'https://erlc-wh.melon.ly/';
 
 export function createErlcEventRelay({
   path = resolve('data', 'erlc-events.json'),
@@ -35,16 +39,21 @@ export function createErlcEventRelay({
     for (const event of due) {
       let delivered = false, status = 0, retryAfter = 0;
       try {
-        const response = await fetchImpl('https://melon.ly/events', {
+        const response = await fetchImpl(MELONLY_EVENTS_WEBHOOK_URL, {
           method: 'POST', redirect: 'error', headers: eventHeaders(event),
           body: Buffer.from(event.raw, 'base64'), signal: AbortSignal.timeout(8000),
         });
         delivered = response.ok;
         status = response.status;
+        if (!delivered) {
+          logger.warn(`Melonly event relay HTTP ${status} for ${event.id?.slice?.(0, 12) || 'event'}`);
+        }
         const retry = response.headers.get('retry-after');
         retryAfter = Number.isFinite(Number(retry)) ? Number(retry) * 1000 : Math.max(0, Date.parse(retry) - now()) || 0;
         await response.body?.cancel();
-      } catch { /* Retain the original signature and payload for retry. */ }
+      } catch (error) {
+        logger.warn(`Melonly event relay failed: ${error?.message || error}`);
+      }
       await transaction(async events => {
         const stored = events.find(item => item.id === event.id);
         if (!stored) return;

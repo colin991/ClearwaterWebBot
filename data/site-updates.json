@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-melonly-events-relay",
+      "title": "Fix in-game events going to Melonly",
+      "summary": "ER:LC event webhooks are forwarded to Melonly’s live receiver (erlc-wh.melon.ly) instead of the melon.ly/events redirect that was dropping every POST.",
+      "createdAt": "2026-09-24T00:16:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-brian-voice-115",
       "title": "Use Brian at 1.15x for all bot speech",
       "summary": "Priority callouts, in-game call radio, frequency-change greetings, and other spoken lines now use Brian at 1.15x.",

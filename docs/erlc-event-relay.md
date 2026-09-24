@@ -16,7 +16,8 @@ key or Melonly API key is needed for webhook signature verification.
 2. The bot verifies again and atomically persists the event to
    `data/erlc-events.json` before returning acceptance.
 3. The bot emits `erlcEvent(payload, eventId)` for local integrations, and sends
-   the original bytes and original signature headers to `https://melon.ly/events`.
+   the original bytes and original signature headers to Melonly's events receiver
+   (`https://erlc-wh.melon.ly/`, which is where `https://melon.ly/events` redirects).
 4. In-game `;` commands drag the player to an empty numbered Discord VC:
    `;ss` Mod Scene, `;ts` Traffic Stop, `;scene` Scene, `;fc` Frequency Change,
    `;civ` Civilian. Anyone else in-game within 50 studs who is already in a

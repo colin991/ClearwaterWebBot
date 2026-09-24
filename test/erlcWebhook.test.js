@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { verifyErlcEvent, readEventBytes, MAX_EVENT_BYTES, eventHeaders } from '../lib/erlc-webhook.js';
 import { createEventsHandler } from '../api/erlc/events.js';
-import { createErlcEventRelay } from '../utils/erlcEventRelay.js';
+import { createErlcEventRelay, MELONLY_EVENTS_WEBHOOK_URL } from '../utils/erlcEventRelay.js';
 
 const { publicKey, privateKey } = generateKeyPairSync('ed25519');
 const timestamp = String(Math.floor(Date.now() / 1000));
@@ -80,7 +80,8 @@ test('durable inbox survives restart, deduplicates and forwards byte-for-byte to
     assert.equal(emitted, 1);
     const restarted = createErlcEventRelay({ path, fetchImpl: async (url, options) => {
       sent++;
-      assert.equal(url, 'https://melon.ly/events');
+      assert.equal(url, MELONLY_EVENTS_WEBHOOK_URL);
+      assert.equal(MELONLY_EVENTS_WEBHOOK_URL, 'https://erlc-wh.melon.ly/');
       assert.deepEqual(options.body, raw);
       assert.deepEqual(options.headers, eventHeaders(event));
       assert.equal(options.redirect, 'error');
