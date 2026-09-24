@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -32,9 +33,32 @@ export const OPENAI_TTS_VOICES = Object.freeze(['alloy', 'ash', 'coral', 'echo',
 export const OPENAI_TTS_TIMEOUT_MS = 30_000;
 export const EDGE_TTS_TIMEOUT_MS = 20_000;
 const OPENAI_TTS_VOICE_SET = new Set(OPENAI_TTS_VOICES);
+const guildVoiceHold = new AsyncLocalStorage();
+const guildVoiceTails = new Map();
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+}
+
+function guildVoiceKey(guildId) {
+  return String(guildId || '_');
+}
+
+/**
+ * One Discord guild can only play in one voice channel at a time.
+ * Nested calls from the job that already holds the lock run immediately
+ * so a beep-then-speech session is not split by a Fire radio join.
+ */
+export function enqueueGuildVoice(guildId, work) {
+  const id = guildVoiceKey(guildId);
+  if (guildVoiceHold.getStore() === id) {
+    return Promise.resolve().then(work);
+  }
+  const run = () => guildVoiceHold.run(id, work);
+  const previous = guildVoiceTails.get(id) || Promise.resolve();
+  const current = previous.then(run, run);
+  guildVoiceTails.set(id, current.then(() => {}, () => {}));
+  return current;
 }
 
 export function toNodeAudioBuffer(value) {
@@ -217,10 +241,7 @@ async function playClipOnPlayer(player, audio, { volume, idleTimeoutMs, minPlayM
   if (remaining) await delay(remaining);
 }
 
-/**
- * Join a voice channel and play one or more MP3 files/buffers in order on the same player.
- */
-export async function playMp3QueueInVoiceChannel(voiceChannel, adapterCreator, clips, {
+async function playMp3QueueUnlocked(voiceChannel, adapterCreator, clips, {
   leaveAfter = true,
   speakDelayMs = 500,
   volume = 1,
@@ -268,6 +289,16 @@ export async function playMp3QueueInVoiceChannel(voiceChannel, adapterCreator, c
   player.stop(true);
   if (leaveAfter) connection.destroy();
   return connection;
+}
+
+/**
+ * Join a voice channel and play one or more MP3 files/buffers in order on the same player.
+ * Jobs for the same guild wait until the current clip (and its whole speak session) finishes.
+ */
+export async function playMp3QueueInVoiceChannel(voiceChannel, adapterCreator, clips, options = {}) {
+  return enqueueGuildVoice(voiceChannel?.guild?.id, () => (
+    playMp3QueueUnlocked(voiceChannel, adapterCreator, clips, options)
+  ));
 }
 
 /**

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-voice-speak-queue",
+      "title": "Queue bot speech so it finishes before switching channels",
+      "summary": "The bot no longer leaves mid-sentence to join another radio channel. Priority, LEO, Fire, and DOT lines wait in one guild queue and play the next clip only after the current one finishes.",
+      "createdAt": "2026-09-24T02:24:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-scene-webhook-origin-player",
       "title": "Read the player from ER:LC origin webhooks",
       "summary": "In-game ;scene and the other ; commands now take the player from the webhook origin field (Name:Id or username/userId), including wrapped { data, timestamp, event, origin } payloads that previously logged unknown and failed with webhook had no player.",

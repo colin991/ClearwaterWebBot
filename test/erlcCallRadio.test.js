@@ -188,3 +188,47 @@ test('playRadioCallAnnouncement joins, plays the tone, then speech', async () =>
     /refused to play fire audio/,
   );
 });
+
+test('playRadioCallAnnouncement waits for the current speak session before joining another channel', async () => {
+  const order = [];
+  let releaseLeo;
+  const leoHold = new Promise((resolve) => { releaseLeo = resolve; });
+  const leo = {
+    id: CALL_RADIO_CHANNELS.leo,
+    guild: { id: 'guild-1', voiceAdapterCreator: {} },
+  };
+  const fire = {
+    id: CALL_RADIO_CHANNELS.fire,
+    guild: { id: 'guild-1', voiceAdapterCreator: {} },
+  };
+  const leoCall = playRadioCallAnnouncement(leo, {
+    team: 'Police',
+    description: 'Cash Register Robbery',
+    callerName: 'Colin',
+    location: 'Park Street',
+  }, classifyRadioCall({ team: 'Police', description: 'Cash Register Robbery' }), {
+    join: async () => { order.push('leo-join'); },
+    synthesize: async () => Buffer.from('mp3'),
+    playQueue: async () => {
+      order.push('leo-speak');
+      await leoHold;
+      order.push('leo-done');
+    },
+  });
+  const fireCall = playRadioCallAnnouncement(fire, {
+    team: 'Fire',
+    description: 'Structure Fire',
+    location: 'Main Street',
+  }, classifyRadioCall({ team: 'Fire', description: 'Structure Fire' }), {
+    join: async () => { order.push('fire-join'); },
+    synthesize: async () => Buffer.from('mp3'),
+    playQueue: async () => { order.push('fire-speak'); },
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(order, ['leo-join', 'leo-speak']);
+  releaseLeo();
+  await leoCall;
+  await fireCall;
+  assert.deepEqual(order, ['leo-join', 'leo-speak', 'leo-done', 'fire-join', 'fire-speak']);
+});

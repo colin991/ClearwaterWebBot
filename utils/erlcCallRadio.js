@@ -5,6 +5,7 @@ import { fetchErlcServer, parseErlcPlayer } from './erlc.js';
 import { logger } from './logger.js';
 import { PRIORITY_BEEP_PATH } from './priorityRequest.js';
 import {
+  enqueueGuildVoice,
   ensureGuildVoiceConnection,
   playMp3QueueInVoiceChannel,
   SAY_VOICE,
@@ -238,19 +239,21 @@ export async function playRadioCallAnnouncement(channel, call, classified, {
     throw new Error(`Call radio refused to play ${classified.team} audio in ${channel?.id || 'no channel'}.`);
   }
   const tone = radioCallTonePath(classified, channel.id);
-  await join(channel, channel.guild.voiceAdapterCreator);
-  const speechPromise = synthesize(text, CALL_RADIO_VOICE, { rate: CALL_RADIO_VOICE_RATE });
-  const clips = [];
-  if (tone) clips.push(tone);
-  clips.push(speechPromise);
-  await playQueue(channel, channel.guild.voiceAdapterCreator, clips, {
-    leaveAfter: true,
-    speakDelayMs: 400,
-    volume: 1,
-    volumes: tone ? [0.7, 1] : [1],
-    idleTimeoutMs: 20_000,
+  return enqueueGuildVoice(channel.guild?.id, async () => {
+    await join(channel, channel.guild.voiceAdapterCreator);
+    const speechPromise = synthesize(text, CALL_RADIO_VOICE, { rate: CALL_RADIO_VOICE_RATE });
+    const clips = [];
+    if (tone) clips.push(tone);
+    clips.push(speechPromise);
+    await playQueue(channel, channel.guild.voiceAdapterCreator, clips, {
+      leaveAfter: true,
+      speakDelayMs: 400,
+      volume: 1,
+      volumes: tone ? [0.7, 1] : [1],
+      idleTimeoutMs: 20_000,
+    });
+    return { played: true, channelId: channel.id, text };
   });
-  return { played: true, channelId: channel.id, text };
 }
 
 async function announceOnChannel(client, call, classified) {
