@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-belleair-ops-logo-cutout",
+      "title": "Use the cutout Belleair badge as the server logo",
+      "summary": "The Belleair Police Discord per-server bot avatar is now the badge on a black background, without the blurred car behind it.",
+      "createdAt": "2026-09-24T03:27:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-belleair-ops-logo",
       "title": "Update the Belleair Operations server logo",
       "summary": "The Belleair Police Discord per-server bot avatar now uses the supplied badge with the blurred background.",
