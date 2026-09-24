@@ -476,7 +476,7 @@ function playerOptions(players) {
   return players.slice(0, 25).map((player, index) => ({
     label: clip(`${player.username} · ${player.team || 'Civilian'}`, 100),
     value: String(index),
-    description: clip(player.robloxId ? `ID ${player.robloxId}` : 'In-game', 100),
+    description: clip(player.robloxId ? `ID ${player.robloxId}` : 'In-game civilian', 100),
   }));
 }
 
@@ -501,6 +501,20 @@ function vehicleOptions(vehicles) {
 
 function byUsername(left, right) {
   return String(left?.username || '').localeCompare(String(right?.username || ''), undefined, { sensitivity: 'base' });
+}
+
+export function isPrioritySelectablePlayer(player, requester = {}) {
+  if (!player?.username && !player?.robloxId) return false;
+  if (!isCivilianTeam(player.team)) return false;
+  const requesterId = String(requester.robloxId || '').trim();
+  const requesterName = String(requester.username || '').trim().toLowerCase();
+  if (requesterId && String(player.robloxId || '') === requesterId) return false;
+  if (requesterName && String(player.username || '').toLowerCase() === requesterName) return false;
+  return true;
+}
+
+export function prioritySelectablePlayers(players, requester = {}) {
+  return (Array.isArray(players) ? players : []).filter((player) => isPrioritySelectablePlayer(player, requester));
 }
 
 export function resolvePriorityPlayers(players, selectedValues, typedNames = '', { limit = PRIORITY_MAX_PARTICIPANTS } = {}) {
@@ -593,20 +607,23 @@ function buildPriorityFormModal({ id, players, vehicles }) {
   const vehicleOpts = vehicleOptions(vehicles);
   const modal = new ModalBuilder().setCustomId(`${PREFIX}form:${id}`).setTitle('Priority request');
   // Discord only shows type-to-search on single-select menus. Extra people/cars are typed.
-  const labels = [
-    new LabelBuilder()
-      .setLabel('Search users')
-      .setDescription('Type to search, then pick one in-game user. Extra names below — max 4 people including you.')
-      .setStringSelectMenuComponent(
-        new StringSelectMenuBuilder()
-          .setCustomId('users')
-          .setPlaceholder('Type to search in-game users')
-          .setMinValues(1)
-          .setMaxValues(1)
-          .setRequired(true)
-          .addOptions(playerOpts),
-      ),
-  ];
+  const labels = [];
+  if (playerOpts.length) {
+    labels.push(
+      new LabelBuilder()
+        .setLabel('Search civilians')
+        .setDescription('Type to search civilians besides you. Extra names below — max 4 people including you.')
+        .setStringSelectMenuComponent(
+          new StringSelectMenuBuilder()
+            .setCustomId('users')
+            .setPlaceholder('Type to search civilians (you are already included)')
+            .setMinValues(0)
+            .setMaxValues(1)
+            .setRequired(false)
+            .addOptions(playerOpts),
+        ),
+    );
+  }
   if (vehicleOpts.length) {
     labels.push(
       new LabelBuilder()
@@ -957,7 +974,12 @@ export function createPriorityRequestService({
       }
       await assertPeaceTimerClear(commandLogs);
       const id = newId();
-      const sorted = [...players].sort(byUsername);
+      const identity = (await getIdentityCache().catch(() => ({ byDiscord: {} }))).byDiscord?.[interaction.user.id];
+      const requester = {
+        robloxId: String(identity?.robloxId || ''),
+        username: String(identity?.robloxUsername || interaction.user.username || ''),
+      };
+      const sorted = prioritySelectablePlayers(players, requester).sort(byUsername);
       drafts.set(interaction.user.id, {
         id,
         userId: interaction.user.id,
@@ -967,7 +989,6 @@ export function createPriorityRequestService({
         selectedVehicles: [],
         createdAt: now(),
       });
-      if (!sorted.length) throw new Error('No in-game players are available to add to a priority.');
       return buildPriorityFormModal({ id, players: sorted, vehicles });
     },
 
@@ -1210,14 +1231,10 @@ export async function handlePriorityRequest(interaction) {
       const extra = optionalText(interaction.fields, 'more_users');
       const selectedPlayers = resolvePriorityPlayers(
         draft.players,
-        interaction.fields.getStringSelectValues('users'),
+        optionalSelectValues(interaction.fields, 'users'),
         extra,
         { limit: Infinity },
       );
-      if (!selectedPlayers.length) {
-        await interaction.reply({ content: 'Select or type at least one in-game user.', flags: MessageFlags.Ephemeral });
-        return true;
-      }
       if (selectedPlayers.length > PRIORITY_MAX_PARTICIPANTS) {
         await interaction.reply({
           content: `Priorities are limited to **${PRIORITY_MAX_PARTICIPANTS} participants**. Remove extra names and try again.`,

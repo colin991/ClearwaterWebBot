@@ -29,6 +29,8 @@ import {
   priorityStartMessageCommand,
   priorityStartSpeech,
   mergePriorityParticipants,
+  isPrioritySelectablePlayer,
+  prioritySelectablePlayers,
   resolvePriorityPlayers,
   resolvePriorityVehicles,
   uniqueMentionUsers,
@@ -86,6 +88,28 @@ test('priority requests cap at 4 participants and 2 cars', () => {
   assert.equal(resolvePriorityPlayers(players, ['0'], 'B, C, D, E', { limit: Infinity }).length, 5);
   assert.deepEqual(resolvePriorityVehicles(vehicles, ['0'], 'Bullhorn, Interceptor').map((vehicle) => vehicle.name), ['Navara', 'Bullhorn']);
   assert.equal(resolvePriorityVehicles(vehicles, ['0'], 'Bullhorn, Interceptor', { limit: Infinity }).length, 3);
+});
+
+test('priority people menu only lists civilians besides the requester', () => {
+  const players = [
+    { username: 'Host', robloxId: '1', team: 'Civilian' },
+    { username: 'Partner', robloxId: '2', team: 'Civilian' },
+    { username: 'Cop', robloxId: '3', team: 'Sheriff' },
+    { username: 'NoTeam', robloxId: '4', team: '' },
+  ];
+  const requester = { username: 'Host', robloxId: '1' };
+  assert.equal(isPrioritySelectablePlayer(players[0], requester), false);
+  assert.equal(isPrioritySelectablePlayer(players[1], requester), true);
+  assert.equal(isPrioritySelectablePlayer(players[2], requester), false);
+  assert.equal(isPrioritySelectablePlayer(players[3], requester), false);
+  assert.deepEqual(
+    prioritySelectablePlayers(players, requester).map((player) => player.username),
+    ['Partner'],
+  );
+  assert.deepEqual(
+    prioritySelectablePlayers(players, { username: 'host', robloxId: '' }).map((player) => player.username),
+    ['Partner'],
+  );
 });
 
 test('mergePriorityParticipants always includes the requester first', () => {
@@ -160,6 +184,8 @@ test('priority form modal placeholders tell people they can search', async () =>
   });
   const payload = modal.toJSON();
   const json = JSON.stringify(payload);
+  assert.match(json, /Search civilians/);
+  assert.match(json, /Type to search civilians \(you are already included\)/);
   assert.match(json, /max 4 people including you/);
   assert.match(json, /max 2 cars/);
   assert.match(json, /Max 4 participants including you, and 2 cars total/);
@@ -170,12 +196,51 @@ test('priority form modal placeholders tell people they can search', async () =>
   assert.equal(PRIORITY_TYPE_MAX, 25);
   assert.match(json, /"value":"none"/);
   assert.match(json, /Alpha · /);
-  const vehicleSelect = payload.components
-    .map((label) => label.component)
-    .find((component) => component?.custom_id === 'vehs');
+  const components = payload.components.map((label) => label.component);
+  const userSelect = components.find((component) => component?.custom_id === 'users');
+  const vehicleSelect = components.find((component) => component?.custom_id === 'vehs');
+  assert.equal(userSelect.max_values, 1);
+  assert.equal(userSelect.min_values, 0);
+  assert.equal(userSelect.required, false);
   assert.equal(vehicleSelect.max_values, 1);
   assert.equal(vehicleSelect.min_values, 1);
   assert.equal(vehicleSelect.required, true);
+});
+
+test('priority form hides cops, the requester, and still opens with no other civilians', async () => {
+  const svc = createPriorityRequestService({
+    now: () => 1,
+    load: async () => ({ request: null }),
+    save: async () => {},
+    send: async () => {},
+    snapshot: async () => ({}),
+    postStaff: async () => ({ id: 'm' }),
+    editStaff: async () => {},
+    dmUser: async () => {},
+  });
+  const mixed = await svc.openForm({ user: { id: 'u1', username: 'Host' } }, {
+    players: [
+      { username: 'Host', robloxId: '1', team: 'Civilian' },
+      { username: 'Partner', robloxId: '2', team: 'Civilian' },
+      { username: 'Cop', robloxId: '3', team: 'Police' },
+    ],
+    vehicles: [],
+  });
+  const mixedJson = JSON.stringify(mixed.toJSON());
+  assert.match(mixedJson, /Partner · Civilian/);
+  assert.doesNotMatch(mixedJson, /Host · Civilian/);
+  assert.doesNotMatch(mixedJson, /Cop · Police/);
+
+  const solo = await svc.openForm({ user: { id: 'u1', username: 'Host' } }, {
+    players: [
+      { username: 'Host', robloxId: '1', team: 'Civilian' },
+      { username: 'Deputy', robloxId: '9', team: 'Sheriff' },
+    ],
+    vehicles: [],
+  });
+  const soloJson = JSON.stringify(solo.toJSON());
+  assert.doesNotMatch(soloJson, /"custom_id":"users"/);
+  assert.match(soloJson, /"custom_id":"more_users"/);
 });
 
 test('priority Discord mentions drop duplicate user ids', () => {

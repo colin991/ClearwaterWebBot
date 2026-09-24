@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-priority-civ-picker",
+      "title": "Limit priority people search to other civilians",
+      "summary": "The /request-priority people menu now lists only in-game civilians, and it hides the person who ran the command so they cannot pick themselves twice. The requester is still included on the request automatically.",
+      "createdAt": "2026-09-24T20:58:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-ban-appeal-no-restart-dm",
       "title": "Only DM new Discord bans",
       "summary": "The bot no longer DMs everyone who is already banned when it restarts. Ban appeal DMs go only to people banned from the main Clearwater Discord after that restart.",
