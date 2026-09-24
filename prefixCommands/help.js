@@ -40,6 +40,7 @@ const GROUPS = [
       '`-callsign [@member]` — PCSO roster callsign · **Administrator**',
       `\`-bans\` — Timed ban cases · **${RANK_FLOOR.supervisor}+**`,
       '`-funds` — Roblox group funds, last 7 payouts, and last 7 sales · **Administrator**',
+      '`-eco` — Post the Clearwater Economy panel · **Administrator**',
     ],
   },
 ];

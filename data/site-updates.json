@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-eco-panel",
+      "title": "Post the Clearwater Economy panel with -eco",
+      "summary": "Administrators can run -eco to post the Clearwater Economy hub in the economy channel. Robberies, jobs, and department funds open from the buttons; send, wallet, and the rest of the money system will be wired next.",
+      "createdAt": "2026-09-24T03:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-fire-radio-no-repeat",
       "title": "Stop repeating the same Fire radio call",
       "summary": "In-game Fire and other emergency calls are announced once. Later webhooks for the same call (including a new timestamp every couple of seconds) are ignored until that call ends.",

@@ -13,6 +13,7 @@ import { handlePinellasCallsignInteraction } from '../utils/pinellasRoster.js';
 import { handlePinellasShiftPanelInteraction } from '../utils/pinellasShiftPanel.js';
 import { handlePinellasSupportInteraction } from '../utils/pinellasSupport.js';
 import { handleMarketInteraction } from '../utils/market.js';
+import { handleEconomyInteraction } from '../utils/economyPanel.js';
 import { handlePcsoSiteFormInteraction } from '../utils/pcsoSiteFormDiscord.js';
 import { shouldIgnoreGuildCommands } from '../utils/floridaServer.js';
 
@@ -51,6 +52,19 @@ export default {
       if (await handleMarketInteraction(interaction)) return;
     } catch (error) {
       logger.error('Marketplace interaction failed', error);
+    }
+
+    try {
+      if (await handleEconomyInteraction(interaction)) return;
+    } catch (error) {
+      logger.error('Economy panel interaction failed', error);
+      const reply = {
+        content: String(error?.message || 'That economy action failed.').slice(0, 1800),
+        flags: MessageFlags.Ephemeral,
+      };
+      if (interaction.deferred || interaction.replied) await interaction.followUp(reply).catch(() => {});
+      else await interaction.reply(reply).catch(() => {});
+      return;
     }
 
     try {
