@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-voice-cutoff",
+      "title": "Stop cutting off bot voice lines mid-sentence",
+      "summary": "Priority, radio, and other bot speech now wait for the full clip to finish instead of leaving or stopping when Discord briefly reports idle. The bot also waits a moment after talking so the last words are not cut off.",
+      "createdAt": "2026-09-24T23:24:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-priority-civ-picker",
       "title": "Limit priority people search to other civilians",
       "summary": "The /request-priority people menu now lists only in-game civilians, and it hides the person who ran the command so they cannot pick themselves twice. The requester is still included on the request automatically.",

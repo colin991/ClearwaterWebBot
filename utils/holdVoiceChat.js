@@ -15,6 +15,7 @@ import {
 } from '@discordjs/voice';
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
 import { FULL_STAFF_PANEL_ROLE_ID } from './staffRanks.js';
+import { enqueueGuildVoice } from './vcSpeak.js';
 import { logger } from './logger.js';
 
 const require = createRequire(import.meta.url);
@@ -205,7 +206,9 @@ export async function holdVoiceChat(source, config = {}, explicitChannel = null)
     throw new Error('Hold VC audio file is missing on the bot host (assets/hold-vc.mp3).');
   }
 
-  await joinAndStartAnnouncement(voiceChannel, guild.voiceAdapterCreator, HOLD_VC_AUDIO_PATH);
+  await enqueueGuildVoice(guild.id, () => (
+    joinAndStartAnnouncement(voiceChannel, guild.voiceAdapterCreator, HOLD_VC_AUDIO_PATH)
+  ));
 
   const previous = activeHolds.get(guild.id);
   const mutedIds = new Set(previous?.channelId === voiceChannel.id ? previous.mutedIds : []);
@@ -337,7 +340,9 @@ export async function releaseVoiceChat(source) {
   const unmuted = results.filter((result) => result?.ok && result.value === true).length;
 
   activeHolds.delete(guild.id);
-  getVoiceConnection(guild.id)?.destroy();
+  await enqueueGuildVoice(guild.id, async () => {
+    getVoiceConnection(guild.id)?.destroy();
+  });
 
   return { voiceChannel, unmuted };
 }

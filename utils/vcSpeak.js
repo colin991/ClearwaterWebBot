@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,7 +31,10 @@ export const SAY_VOICE_RATE = 1.15;
 export const SAY_MAX_CHARS = 500;
 export const OPENAI_TTS_VOICES = Object.freeze(['alloy', 'ash', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer']);
 export const OPENAI_TTS_TIMEOUT_MS = 30_000;
-export const EDGE_TTS_TIMEOUT_MS = 20_000;
+export const EDGE_TTS_TIMEOUT_MS = 45_000;
+export const EDGE_MP3_BITRATE_BPS = 48_000;
+export const VOICE_PLAYBACK_TAIL_MS = 600;
+export const VOICE_CLIP_HARD_STOP_MS = 180_000;
 const OPENAI_TTS_VOICE_SET = new Set(OPENAI_TTS_VOICES);
 const guildVoiceHold = new AsyncLocalStorage();
 const guildVoiceTails = new Map();
@@ -67,6 +70,92 @@ export function toNodeAudioBuffer(value) {
   if (value instanceof Uint8Array) return Buffer.from(value);
   if (ArrayBuffer.isView(value)) return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
   return null;
+}
+
+export function estimateMp3DurationMs(audio, byteLength = 0) {
+  const buffer = toNodeAudioBuffer(audio);
+  const size = buffer?.length || Number(byteLength) || 0;
+  if (size <= 0) return 0;
+  return Math.ceil((size * 8) / EDGE_MP3_BITRATE_BPS * 1000);
+}
+
+export function isEarlyVoiceIdle(elapsedMs, estimatedMs) {
+  const estimated = Number(estimatedMs) || 0;
+  if (estimated < 2_500) return false;
+  return Number(elapsedMs) < estimated * 0.8;
+}
+
+export function voiceClipPlaybackWindow(audio, {
+  idleTimeoutMs = 20_000,
+  minPlayMs = 0,
+  byteLength = 0,
+} = {}) {
+  const buffer = toNodeAudioBuffer(audio);
+  const estimatedMs = estimateMp3DurationMs(audio, byteLength);
+  const speech = Boolean(buffer?.length);
+  return {
+    estimatedMs,
+    minPlayMs: Math.max(Number(minPlayMs) || 0, speech ? Math.floor(estimatedMs * 0.8) : 0),
+    idleTimeoutMs: Math.max(
+      Number(idleTimeoutMs) || 0,
+      estimatedMs + 20_000,
+      speech ? 90_000 : 8_000,
+    ),
+  };
+}
+
+export async function waitForVoiceClipEnd(player, {
+  minPlayMs = 0,
+  idleTimeoutMs = 60_000,
+  estimatedMs = 0,
+} = {}, {
+  sleep = delay,
+  waitUntil = entersState,
+  now = Date.now,
+} = {}) {
+  const started = now();
+  const deadline = started + Math.max(1_000, Number(idleTimeoutMs) || 0);
+  const finished = (elapsed) => (
+    !isEarlyVoiceIdle(elapsed, estimatedMs) && elapsed >= (Number(minPlayMs) || 0)
+  );
+
+  while (now() < deadline) {
+    const status = player?.state?.status;
+    const elapsed = now() - started;
+    if (status === AudioPlayerStatus.Idle
+      || status === AudioPlayerStatus.Paused
+      || status === AudioPlayerStatus.AutoPaused) {
+      if (finished(elapsed)) return 'idle';
+      const remainMin = Math.max(
+        0,
+        (Number(minPlayMs) || 0) - elapsed,
+        Math.floor((Number(estimatedMs) || 0) * 0.8) - elapsed,
+      );
+      const waitMs = Math.max(100, Math.min(deadline - now(), remainMin || 5_000, 5_000));
+      await Promise.race([
+        waitUntil(player, AudioPlayerStatus.Playing, waitMs).catch(() => null),
+        sleep(waitMs),
+      ]);
+      continue;
+    }
+    const waitMs = Math.max(100, Math.min(deadline - now(), 8_000));
+    try {
+      await waitUntil(player, AudioPlayerStatus.Idle, waitMs);
+    } catch {
+      // Still playing or buffering — keep waiting until the clip should be done.
+    }
+  }
+
+  if (player?.state?.status && player.state.status !== AudioPlayerStatus.Idle) {
+    const leftover = Math.max(0, (Number(minPlayMs) || 0) - (now() - started));
+    if (leftover) await sleep(Math.min(leftover, 8_000));
+    if (player.state?.status !== AudioPlayerStatus.Idle) {
+      player.stop?.(true);
+      await waitUntil(player, AudioPlayerStatus.Idle, 2_000).catch(() => {});
+      return 'stopped';
+    }
+  }
+  return 'idle';
 }
 
 export async function promiseWithTimeout(promise, ms, label) {
@@ -132,15 +221,19 @@ async function synthesizeOpenAiMp3(text, voice, speed) {
 
 async function synthesizeEdgeMp3(text, voice, prosody = {}) {
   const tts = new MsEdgeTTS();
-  await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
-  const { audioStream } = tts.toStream(escapeSsml(String(text || '').trim()), {
-    rate: prosody.rate ?? 1,
-    pitch: prosody.pitch ?? '+0Hz',
-    volume: prosody.volume ?? 100,
-  });
-  const buffer = toNodeAudioBuffer(await bufferFromReadable(audioStream));
-  if (!buffer?.length) throw new Error('TTS returned empty audio.');
-  return buffer;
+  try {
+    await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+    const { audioStream } = tts.toStream(escapeSsml(String(text || '').trim()), {
+      rate: prosody.rate ?? 1,
+      pitch: prosody.pitch ?? '+0Hz',
+      volume: prosody.volume ?? 100,
+    });
+    const buffer = toNodeAudioBuffer(await bufferFromReadable(audioStream));
+    if (!buffer?.length) throw new Error('TTS returned empty audio.');
+    return buffer;
+  } finally {
+    try { tts.close(); } catch { /* ignore */ }
+  }
 }
 
 /** OpenAI TTS for named voices such as onyx; otherwise free Microsoft Edge TTS. */
@@ -209,36 +302,51 @@ export async function ensureGuildVoiceConnection(voiceChannel, adapterCreator) {
   return connection;
 }
 
-async function createMp3Resource(mp3PathOrBuffer, directory) {
+async function writeClipFile(mp3PathOrBuffer, directory) {
   const buffer = toNodeAudioBuffer(mp3PathOrBuffer);
   if (buffer) {
     const filePath = join(directory, `speech-${Date.now()}-${Math.random().toString(16).slice(2)}.mp3`);
     await writeFile(filePath, buffer);
-    return createAudioResource(filePath, { inlineVolume: true });
+    return { filePath, byteLength: buffer.length, buffer };
   }
-  const inputPath = String(mp3PathOrBuffer);
-  const oggOpus = /\.ogg$/i.test(inputPath);
-  return createAudioResource(inputPath, {
-    inlineVolume: true,
+  const filePath = String(mp3PathOrBuffer);
+  let byteLength = 0;
+  try {
+    byteLength = (await stat(filePath)).size || 0;
+  } catch {
+    byteLength = 0;
+  }
+  return { filePath, byteLength, buffer: null };
+}
+
+function createClipResource(filePath, volume) {
+  const oggOpus = /\.ogg$/i.test(filePath);
+  const useVolume = Math.max(0, Math.min(2, Number(volume) || 1));
+  const resource = createAudioResource(filePath, {
+    inlineVolume: useVolume !== 1,
     inputType: oggOpus ? StreamType.OggOpus : undefined,
   });
+  if (useVolume !== 1) resource.volume?.setVolume(useVolume);
+  return resource;
 }
 
 async function playClipOnPlayer(player, audio, { volume, idleTimeoutMs, minPlayMs, directory }) {
-  const resource = await createMp3Resource(audio, directory);
-  resource.volume?.setVolume(Math.max(0, Math.min(2, Number(volume) || 1)));
-  player.play(resource);
+  const clip = await writeClipFile(audio, directory);
+  const window = voiceClipPlaybackWindow(clip.buffer || audio, {
+    idleTimeoutMs,
+    minPlayMs,
+    byteLength: clip.byteLength,
+  });
+  player.play(createClipResource(clip.filePath, volume));
   await entersState(player, AudioPlayerStatus.Playing, 8_000);
-  const started = Date.now();
-  try {
-    await entersState(player, AudioPlayerStatus.Idle, idleTimeoutMs);
-  } catch (error) {
-    logger.warn('Voice clip did not go idle; stopping so the next clip can play', error);
-    player.stop(true);
-    await entersState(player, AudioPlayerStatus.Idle, 2_000).catch(() => {});
+  const result = await waitForVoiceClipEnd(player, {
+    minPlayMs: window.minPlayMs,
+    idleTimeoutMs: Math.min(VOICE_CLIP_HARD_STOP_MS, window.idleTimeoutMs),
+    estimatedMs: window.estimatedMs,
+  });
+  if (result === 'stopped') {
+    logger.warn(`Voice clip was still playing after ${window.idleTimeoutMs}ms; stopped so the next clip can play`);
   }
-  const remaining = Math.max(0, (Number(minPlayMs) || 0) - (Date.now() - started));
-  if (remaining) await delay(remaining);
 }
 
 async function playMp3QueueUnlocked(voiceChannel, adapterCreator, clips, {
@@ -256,6 +364,9 @@ async function playMp3QueueUnlocked(voiceChannel, adapterCreator, clips, {
   const player = createAudioPlayer({
     behaviors: { noSubscriber: NoSubscriberBehavior.Play },
   });
+  player.on('error', (error) => {
+    logger.warn('Voice player error', error);
+  });
   const subscription = connection.subscribe(player);
   if (!subscription) {
     throw new Error('Could not subscribe the audio player to the voice connection.');
@@ -267,27 +378,28 @@ async function playMp3QueueUnlocked(voiceChannel, adapterCreator, clips, {
       const audio = await list[index];
       if (audio == null) throw new Error('Voice clip was empty.');
       const clipVolume = Array.isArray(volumes) ? (volumes[index] ?? volume) : volume;
-      const timeout = toNodeAudioBuffer(audio)
-        ? Math.max(idleTimeoutMs, 45_000)
-        : Math.max(Number(idleTimeoutMs) || 0, 8_000);
       await playClipOnPlayer(player, audio, {
         volume: clipVolume,
-        idleTimeoutMs: timeout,
-        minPlayMs: toNodeAudioBuffer(audio) ? 0 : minPlayMs,
+        idleTimeoutMs,
+        minPlayMs,
         directory,
       });
       if (index < list.length - 1) await delay(120);
     }
-  } catch (error) {
-    player.stop(true);
-    if (leaveAfter) connection.destroy();
-    throw error;
+    await delay(VOICE_PLAYBACK_TAIL_MS);
   } finally {
+    try {
+      player.stop(true);
+      await delay(leaveAfter ? VOICE_PLAYBACK_TAIL_MS : 80);
+      if (leaveAfter && connection.state?.status !== VoiceConnectionStatus.Destroyed) {
+        connection.destroy();
+      }
+    } catch (error) {
+      logger.warn('Voice cleanup failed', error);
+    }
     await rm(directory, { recursive: true, force: true }).catch(() => {});
   }
 
-  player.stop(true);
-  if (leaveAfter) connection.destroy();
   return connection;
 }
 
