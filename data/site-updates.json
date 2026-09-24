@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-leo-no-fd-tone",
+      "title": "Keep the FD tone off LEO radio",
+      "summary": "Fire Department tone and Fire dispatch no longer play in the LEO radio channel. The FD tone is now a mono MP3 so Discord does not glitch, and in-game ; commands are not treated as emergency calls.",
+      "createdAt": "2026-09-24T01:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-scene-command-fail-log",
       "title": "Log in-game ; commands even when they fail",
       "summary": ";ss, ;ts, ;scene, ;fc, ;civ, and ;team now accept the game’s short command payloads (command name without a leading semicolon, numeric userId). Every attempt is posted to the VC action log channel, including failures and the reason.",

@@ -159,6 +159,7 @@ export async function ensureGuildVoiceConnection(voiceChannel, adapterCreator) {
     }
   } else {
     existing?.destroy();
+    await delay(300);
   }
 
   const connection = joinVoiceChannel({
@@ -176,6 +177,10 @@ export async function ensureGuildVoiceConnection(voiceChannel, adapterCreator) {
   } catch (error) {
     connection.destroy();
     throw new Error(`Could not join the voice channel: ${error?.message || error}`);
+  }
+  if (String(connection.joinConfig?.channelId) !== String(voiceChannel.id)) {
+    connection.destroy();
+    throw new Error(`Voice connection joined ${connection.joinConfig?.channelId} instead of ${voiceChannel.id}`);
   }
   return connection;
 }
@@ -241,7 +246,9 @@ export async function playMp3QueueInVoiceChannel(voiceChannel, adapterCreator, c
       const audio = await list[index];
       if (audio == null) throw new Error('Voice clip was empty.');
       const clipVolume = Array.isArray(volumes) ? (volumes[index] ?? volume) : volume;
-      const timeout = toNodeAudioBuffer(audio) ? Math.max(idleTimeoutMs, 45_000) : Math.min(idleTimeoutMs, 8_000);
+      const timeout = toNodeAudioBuffer(audio)
+        ? Math.max(idleTimeoutMs, 45_000)
+        : Math.max(Number(idleTimeoutMs) || 0, 8_000);
       await playClipOnPlayer(player, audio, {
         volume: clipVolume,
         idleTimeoutMs: timeout,

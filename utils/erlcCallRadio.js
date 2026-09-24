@@ -18,7 +18,7 @@ export const CALL_RADIO_CHANNELS = Object.freeze({
   dot: '1514130037052407932',
 });
 
-export const FD_TONE_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'fd-tone.ogg');
+export const FD_TONE_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'fd-tone.mp3');
 export const CALL_RADIO_POLL_MS = 5_000;
 export const CALL_RADIO_VOICE = SAY_VOICE;
 export const CALL_RADIO_VOICE_RATE = SAY_VOICE_RATE;
@@ -74,6 +74,8 @@ export function radioTeam(team) {
 }
 
 export function isErlcCommandEvent(payload) {
+  const type = firstString(mappings(payload), ['Type', 'type', 'Event', 'event', 'EventType', 'eventType']);
+  if (/custom\s*command/i.test(type) || /^commands?$/i.test(type)) return true;
   const text = firstString(mappings(payload), ['Command', 'command', 'Message', 'message', 'Content', 'content', 'Text', 'text']);
   return text.startsWith(';');
 }
@@ -170,10 +172,11 @@ export function radioCallSpeech(call, classified = classifyRadioCall(call)) {
   return `${classified.label} reported at ${location} nearby trucks please respond.`;
 }
 
-export function radioCallTonePath(classified) {
+export function radioCallTonePath(classified, channelId = '') {
   if (!classified) return null;
-  if (classified.team === 'leo') return PRIORITY_BEEP_PATH;
-  if (classified.team === 'fire') return FD_TONE_PATH;
+  const dest = String(channelId || callRadioChannelId(classified.team) || '');
+  if (dest === CALL_RADIO_CHANNELS.leo) return PRIORITY_BEEP_PATH;
+  if (dest === CALL_RADIO_CHANNELS.fire && classified.team === 'fire') return FD_TONE_PATH;
   return null;
 }
 
@@ -230,7 +233,11 @@ export async function playRadioCallAnnouncement(channel, call, classified, {
 } = {}) {
   const text = radioCallSpeech(call, classified);
   if (!text) return { played: false, reason: 'no_speech' };
-  const tone = radioCallTonePath(classified);
+  const expectedId = callRadioChannelId(classified.team);
+  if (!expectedId || String(channel?.id) !== String(expectedId)) {
+    throw new Error(`Call radio refused to play ${classified.team} audio in ${channel?.id || 'no channel'}.`);
+  }
+  const tone = radioCallTonePath(classified, channel.id);
   await join(channel, channel.guild.voiceAdapterCreator);
   const speechPromise = synthesize(text, CALL_RADIO_VOICE, { rate: CALL_RADIO_VOICE_RATE });
   const clips = [];
@@ -283,8 +290,10 @@ export async function handleErlcCallEvent(payload, {
         const match = live.find((entry) => (
           (call.callNumber && entry.callNumber === call.callNumber)
           || (call.startedAt && entry.startedAt === call.startedAt)
-        )) || live[live.length - 1];
-        if (match) call = { ...match, ...Object.fromEntries(Object.entries(call).filter(([, value]) => value)) };
+        )) || live.filter((entry) => !call.team || radioTeam(entry.team) === radioTeam(call.team)).at(-1);
+        if (match && (!call.team || !radioTeam(match.team) || radioTeam(match.team) === radioTeam(call.team))) {
+          call = { ...match, ...Object.fromEntries(Object.entries(call).filter(([, value]) => value)) };
+        }
       }
     }
   } catch (error) {

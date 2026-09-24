@@ -93,6 +93,7 @@ test('uses the priority beep for LEO, the FD tone for Fire, and no tone for DOT'
   assert.equal(CALL_RADIO_VOICE, 'en-US-BrianNeural');
   assert.equal(radioCallTonePath({ team: 'leo', kind: 'leo_server' }), PRIORITY_BEEP_PATH);
   assert.equal(radioCallTonePath({ team: 'fire', kind: 'fire_structure' }), FD_TONE_PATH);
+  assert.equal(radioCallTonePath({ team: 'fire', kind: 'fire_structure' }, CALL_RADIO_CHANNELS.leo), PRIORITY_BEEP_PATH);
   assert.equal(radioCallTonePath({ team: 'dot', kind: 'dot' }), null);
   assert.equal(callRadioChannelId('leo'), CALL_RADIO_CHANNELS.leo);
   assert.equal(callRadioChannelId('fire'), '1514128961951760515');
@@ -119,6 +120,8 @@ test('parses emergency-call webhooks and ignores in-game ; commands', () => {
     startedAt: 0,
   });
   assert.equal(isEmergencyCallEvent({ Type: 'Command', Player: 'Colin:99', Message: ';ss' }), false);
+  assert.equal(isEmergencyCallEvent({ Type: 'Command', Player: 'Colin:99', Command: 'civ' }), false);
+  assert.equal(isEmergencyCallEvent({ event: 'CustomCommand', userId: 99, command: 'scene' }), false);
 });
 
 test('fills the robber username from the live player list', () => {
@@ -174,4 +177,14 @@ test('playRadioCallAnnouncement joins, plays the tone, then speech', async () =>
   assert.equal(order.includes('join'), true);
   assert.equal(order.includes('clips:2'), true);
   assert.ok(order.indexOf('join') < order.indexOf('clips:2'));
+
+  await assert.rejects(
+    () => playRadioCallAnnouncement(
+      { id: CALL_RADIO_CHANNELS.leo, guild: { voiceAdapterCreator: {} } },
+      { team: 'Fire', description: 'Structure Fire', location: 'Main Street' },
+      classifyRadioCall({ team: 'Fire', description: 'Structure Fire' }),
+      { join: async () => {}, synthesize: async () => Buffer.from('mp3'), playQueue: async () => {} },
+    ),
+    /refused to play fire audio/,
+  );
 });
