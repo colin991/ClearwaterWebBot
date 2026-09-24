@@ -4,6 +4,7 @@ import { discordIdsByRobloxId } from './identityStore.js';
 import { resolveZoneDiscordMember } from './erlcZoneVoice.js';
 import { markBotVoiceMove } from './botVoiceMoves.js';
 import { logger } from './logger.js';
+import { postProximityLog, VC_ACTION_LOG_CHANNEL_ID } from './vcActionLog.js';
 
 export const SCENE_COMMANDS = Object.freeze({
   ss: { kind: 'numbered', baseName: 'Mod Scene' },
@@ -12,6 +13,24 @@ export const SCENE_COMMANDS = Object.freeze({
   fc: { kind: 'numbered', baseName: 'Frequency Change' },
   civ: { kind: 'numbered', baseName: 'Civilian' },
   team: { kind: 'team' },
+});
+
+export const SCENE_COMMAND_LOG_CHANNEL_ID = VC_ACTION_LOG_CHANNEL_ID;
+
+export const SCENE_COMMAND_FAILURE_REASONS = Object.freeze({
+  unknown_command: 'not a known ;ss ;ts ;scene ;fc ;civ ;team command',
+  missing_player: 'webhook had no player',
+  duplicate: 'duplicate of the same command from the last 4 seconds',
+  missing_guild: 'bot is missing DISCORD_GUILD_ID',
+  guild_unavailable: 'Discord guild is unavailable',
+  missing_move_members: 'bot is missing Move Members',
+  unlinked: 'no Discord member linked for that Roblox user',
+  not_in_voice: 'player is not in a Discord voice channel',
+  no_team: 'player team has no mapped voice channel (Fire / Police / Sheriff / DOT only)',
+  team_channel_missing: 'mapped team voice channel is missing',
+  no_empty_channel: 'no empty numbered scene voice channel',
+  move_failed: 'Discord refused the voice move',
+  handler_error: 'scene command handler threw',
 });
 
 export const TEAM_VOICE_CHANNEL_IDS = Object.freeze({
@@ -37,6 +56,7 @@ function firstString(objects, keys) {
     for (const key of keys) {
       const value = object?.[key];
       if (typeof value === 'string' && value.trim()) return value.trim();
+      if (typeof value === 'number' && Number.isFinite(value)) return String(value);
     }
   }
   return '';
@@ -72,13 +92,30 @@ export function extractWebhookPlayer(payload) {
   return { username: '', robloxId: '' };
 }
 
+export function extractWebhookEventType(payload) {
+  return firstString(mappings(payload), [
+    'Type', 'type', 'Event', 'event', 'EventType', 'eventType', 'Name', 'name',
+  ]);
+}
+
 export function parseCustomCommand(text) {
   const cleaned = String(text || '').trim();
-  if (!cleaned.startsWith(';')) return null;
-  const name = cleaned.slice(1).trim().split(/\s+/)[0]?.toLowerCase() || '';
+  if (!cleaned) return null;
+  const name = cleaned.replace(/^;+/, '').trim().split(/\s+/)[0]?.toLowerCase() || '';
   const spec = SCENE_COMMANDS[name];
   if (!spec) return null;
   return { name, ...spec, raw: cleaned };
+}
+
+export function isCustomCommandEvent(payload) {
+  if (!payload || typeof payload !== 'object') return false;
+  const type = extractWebhookEventType(payload);
+  if (/custom\s*command/i.test(type) || /^commands?$/i.test(type)) return true;
+  const text = extractWebhookCommandText(payload);
+  if (text.startsWith(';')) return true;
+  const commandField = firstString(mappings(payload), ['Command', 'command']);
+  if (!commandField) return false;
+  return Boolean(parseCustomCommand(commandField));
 }
 
 export function teamVoiceChannelId(team) {
@@ -232,14 +269,61 @@ function findRosterPlayer(players, webhookPlayer) {
 }
 
 export function resolveSceneCommand(payload) {
-  const command = parseCustomCommand(extractWebhookCommandText(payload));
-  if (!command) return null;
-  return { command, player: extractWebhookPlayer(payload) };
+  if (!isCustomCommandEvent(payload)) return null;
+  const text = extractWebhookCommandText(payload);
+  const player = extractWebhookPlayer(payload);
+  const command = parseCustomCommand(text);
+  if (!command) {
+    return { command: null, player, text, reason: 'unknown_command' };
+  }
+  return { command, player, text };
 }
 
-async function listGuildVoiceChannels(guild) {
+function payloadKeyHint(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return 'no payload object';
+  const keys = Object.keys(payload).slice(0, 12);
+  return keys.length ? `payload keys ${keys.join(', ')}` : 'empty payload';
+}
+
+export function sceneCommandLogBody({
+  handled = false,
+  reason = '',
+  commandName = '',
+  rawText = '',
+  player = {},
+  channelName = '',
+  nearbyMoved = 0,
+  error = '',
+  payloadHint = '',
+} = {}) {
+  const who = `${player?.username || 'unknown'} (${player?.robloxId || 'unknown'})`;
+  const cmd = commandName ? `;${commandName}` : String(rawText || 'unknown command').slice(0, 40);
+  if (handled) {
+    const extra = nearbyMoved ? ` · dragged ${nearbyMoved} nearby` : '';
+    return `OK — ${cmd} ${who} ${reason || 'moved'} into #${channelName || 'unknown'}${extra}`;
+  }
+  const why = SCENE_COMMAND_FAILURE_REASONS[reason] || reason || 'unknown failure';
+  const detail = [error, payloadHint].map((part) => String(part || '').trim()).filter(Boolean).join(' · ');
+  return `FAIL — ${cmd} ${who} · ${why}${detail ? ` · ${detail}` : ''}`;
+}
+
+export async function logSceneCommandResult(client, details = {}) {
+  if (!client) return false;
+  try {
+    return await postProximityLog(client, {
+      channelId: SCENE_COMMAND_LOG_CHANNEL_ID,
+      tag: 'SceneCmd',
+      body: sceneCommandLogBody(details),
+    });
+  } catch (error) {
+    logger.warn(`Scene command Discord log failed: ${error?.message || error}`);
+    return false;
+  }
+}
+
+async function listGuildVoiceChannels(guild, { forceFetch = false } = {}) {
   if (!guild?.channels?.cache) return [];
-  if (guild.channels.cache.size < 8) {
+  if (forceFetch || guild.channels.cache.size < 8) {
     await guild.channels.fetch().catch(() => {});
   }
   return [...guild.channels.cache.values()].filter((channel) => channel.type === ChannelType.GuildVoice);
@@ -261,25 +345,66 @@ export async function handleErlcSceneEvent(payload, {
   const parsed = resolveSceneCommand(payload);
   if (!parsed) return { handled: false, reason: 'not_scene_command' };
 
+  let result;
+  try {
+    result = await executeErlcSceneCommand(payload, parsed, {
+      client, config, eventId, now, snapshot, identities,
+    });
+  } catch (error) {
+    logger.error('ER:LC scene command failed', error);
+    result = {
+      handled: false,
+      reason: 'handler_error',
+      error: error?.message || String(error),
+      player: parsed.player,
+    };
+  }
+
+  await logSceneCommandResult(client, {
+    handled: result.handled,
+    reason: result.reason,
+    commandName: parsed.command?.name || '',
+    rawText: parsed.text,
+    player: result.player || parsed.player,
+    channelName: result.channelName,
+    nearbyMoved: result.nearbyMoved,
+    error: result.error,
+    payloadHint: result.handled ? '' : payloadKeyHint(payload),
+  });
+  return result;
+}
+
+async function executeErlcSceneCommand(payload, parsed, {
+  client,
+  config,
+  eventId = '',
+  now = Date.now(),
+  snapshot,
+  identities,
+}) {
+  if (!parsed.command) {
+    return { handled: false, reason: 'unknown_command', player: parsed.player };
+  }
+
   const { command, player: webhookPlayer } = parsed;
   if (!webhookPlayer.username && !webhookPlayer.robloxId) {
     logger.warn(`ER:LC ;${command.name} ignored: webhook had no player.`);
-    return { handled: false, reason: 'missing_player' };
+    return { handled: false, reason: 'missing_player', player: webhookPlayer };
   }
 
   if (wasRecentCommand(commandKey(webhookPlayer, command.name), now)) {
-    return { handled: false, reason: 'duplicate' };
+    return { handled: false, reason: 'duplicate', player: webhookPlayer };
   }
 
   const guildId = config.guildId;
-  if (!guildId || !client?.guilds) return { handled: false, reason: 'missing_guild' };
+  if (!guildId || !client?.guilds) return { handled: false, reason: 'missing_guild', player: webhookPlayer };
   const guild = client.guilds.cache.get(guildId) || await client.guilds.fetch(guildId).catch(() => null);
-  if (!guild) return { handled: false, reason: 'guild_unavailable' };
+  if (!guild) return { handled: false, reason: 'guild_unavailable', player: webhookPlayer };
 
   const me = guild.members.me || await guild.members.fetchMe().catch(() => null);
   if (!me?.permissions?.has(PermissionFlagsBits.MoveMembers)) {
     logger.warn(`ER:LC ;${command.name}: bot is missing Move Members.`);
-    return { handled: false, reason: 'missing_move_members' };
+    return { handled: false, reason: 'missing_move_members', player: webhookPlayer };
   }
 
   let rosterPlayer = null;
@@ -289,14 +414,14 @@ export async function handleErlcSceneEvent(payload, {
       ? await snapshot()
       : (config.erlcServerKey ? await fetchErlcServer(config.erlcServerKey) : null);
     rosterPlayers = (server?.Players || server?.players || []).map((entry) => {
-      const parsed = parseErlcPlayer(entry);
-      if (entry?.username == null) return parsed;
+      const mapped = parseErlcPlayer(entry);
+      if (entry?.username == null) return mapped;
       return {
-        ...parsed,
-        username: entry.username || parsed.username,
-        robloxId: entry.robloxId || parsed.robloxId,
-        team: entry.team || parsed.team,
-        location: entry.location || parsed.location,
+        ...mapped,
+        username: entry.username || mapped.username,
+        robloxId: entry.robloxId || mapped.robloxId,
+        team: entry.team || mapped.team,
+        location: entry.location || mapped.location,
       };
     });
     rosterPlayer = findRosterPlayer(rosterPlayers, webhookPlayer);
@@ -315,11 +440,11 @@ export async function handleErlcSceneEvent(payload, {
   const member = resolved.member;
   if (!member) {
     logger.info(`ER:LC ;${command.name}: no Discord member for ${player.username || player.robloxId}.`);
-    return { handled: false, reason: 'unlinked' };
+    return { handled: false, reason: 'unlinked', player };
   }
   if (!member.voice?.channelId) {
     logger.info(`ER:LC ;${command.name}: <@${member.id}> is not in a Discord VC.`);
-    return { handled: false, reason: 'not_in_voice' };
+    return { handled: false, reason: 'not_in_voice', player };
   }
 
   const nearbyMembers = [];
@@ -344,37 +469,49 @@ export async function handleErlcSceneEvent(payload, {
     const channelId = teamVoiceChannelId(player.team);
     if (!channelId) {
       logger.info(`ER:LC ;team: ${player.username} is on ${player.team || 'no'} team — not dragging.`);
-      return { handled: false, reason: 'no_team' };
+      return { handled: false, reason: 'no_team', player };
     }
     destination = guild.channels.cache.get(channelId)
       || await guild.channels.fetch(channelId).catch(() => null);
     if (!destination || destination.type !== ChannelType.GuildVoice) {
-      return { handled: false, reason: 'team_channel_missing' };
+      return { handled: false, reason: 'team_channel_missing', player };
     }
   } else {
-    const channels = await listGuildVoiceChannels(guild);
+    let channels = await listGuildVoiceChannels(guild);
     const group = [member, ...nearbyMembers];
-    const clustered = majorityMatchingVoiceChannel(group, command.baseName, { channels });
-    const sittingEmpty = alreadyInMatchingEmpty(
-      voiceChannelForMember(member, channels),
-      command.baseName,
-      member.id,
-    ) ? voiceChannelForMember(member, channels) : null;
-    destination = clustered
-      || sittingEmpty
-      || pickEmptyNumberedVoiceChannel(channels, command.baseName, { exceptMemberId: member.id });
+    const pickDestination = (list) => {
+      const clustered = majorityMatchingVoiceChannel(group, command.baseName, { channels: list });
+      const sittingEmpty = alreadyInMatchingEmpty(
+        voiceChannelForMember(member, list),
+        command.baseName,
+        member.id,
+      ) ? voiceChannelForMember(member, list) : null;
+      return {
+        clustered,
+        sittingEmpty,
+        channel: clustered
+          || sittingEmpty
+          || pickEmptyNumberedVoiceChannel(list, command.baseName, { exceptMemberId: member.id }),
+      };
+    };
+    let picked = pickDestination(channels);
+    if (!picked.channel) {
+      channels = await listGuildVoiceChannels(guild, { forceFetch: true });
+      picked = pickDestination(channels);
+    }
+    destination = picked.channel;
     if (!destination) {
       logger.info(`ER:LC ;${command.name}: no empty "${command.baseName} {number}" VC.`);
-      return { handled: false, reason: 'no_empty_channel' };
+      return { handled: false, reason: 'no_empty_channel', player };
     }
-    if (clustered && clustered.id === destination.id && member.voice.channelId === destination.id) {
+    if (picked.clustered && picked.clustered.id === destination.id && member.voice.channelId === destination.id) {
       originReason = 'already_there';
-    } else if (sittingEmpty && sittingEmpty.id === destination.id) {
+    } else if (picked.sittingEmpty && picked.sittingEmpty.id === destination.id) {
       originReason = 'already_in_empty';
     }
   }
 
-  if (!destination) return { handled: false, reason: 'no_empty_channel' };
+  if (!destination) return { handled: false, reason: 'no_empty_channel', player };
   if (member.voice.channelId === destination.id && originReason === 'moved') {
     originReason = 'already_there';
   }
@@ -387,7 +524,7 @@ export async function handleErlcSceneEvent(payload, {
     }
   } catch (error) {
     logger.error(`ER:LC ;${command.name}: could not move ${member.id}`, error);
-    return { handled: false, reason: 'move_failed', error: error?.message || String(error) };
+    return { handled: false, reason: 'move_failed', error: error?.message || String(error), player };
   }
 
   let nearbyMoved = 0;
@@ -415,13 +552,26 @@ export async function handleErlcSceneEvent(payload, {
     + `${nearbyMoved ? `, dragged ${nearbyMoved} nearby` : ''}`
     + `${eventId ? ` event ${eventId}` : ''}.`,
   );
-  return { handled: true, reason: originReason, channelId: destination.id, nearbyMoved };
+  return {
+    handled: true,
+    reason: originReason,
+    channelId: destination.id,
+    channelName: destination.name,
+    nearbyMoved,
+    player,
+  };
 }
 
 export function startErlcSceneCommands(client) {
   const listener = (payload, eventId) => {
-    void handleErlcSceneEvent(payload, { client, config: client.config, eventId }).catch((error) => {
+    void handleErlcSceneEvent(payload, { client, config: client.config, eventId }).catch(async (error) => {
       logger.error('ER:LC scene command failed', error);
+      await logSceneCommandResult(client, {
+        handled: false,
+        reason: 'handler_error',
+        error: error?.message || String(error),
+        payloadHint: payloadKeyHint(payload),
+      });
     });
   };
   client.on('erlcEvent', listener);

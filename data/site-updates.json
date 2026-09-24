@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-scene-command-fail-log",
+      "title": "Log in-game ; commands even when they fail",
+      "summary": ";ss, ;ts, ;scene, ;fc, ;civ, and ;team now accept the game’s short command payloads (command name without a leading semicolon, numeric userId). Every attempt is posted to the VC action log channel, including failures and the reason.",
+      "createdAt": "2026-09-24T01:12:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-fire-radio-location-comma",
       "title": "Pause after Fire radio location",
       "summary": "Fire dispatch now puts a comma after the location so Brian takes a short pause before calling engine, ladder, and medic 48.",

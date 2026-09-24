@@ -12,6 +12,8 @@ import {
   playersWithinStuds,
   majorityMatchingVoiceChannel,
   resolveSceneCommand,
+  sceneCommandLogBody,
+  SCENE_COMMAND_LOG_CHANNEL_ID,
   SCENE_NEARBY_STUDS,
   teamVoiceChannelId,
   TEAM_VOICE_CHANNEL_IDS,
@@ -32,6 +34,7 @@ function member(id, { bot = false, channelId = 'here', channel = null } = {}) {
 
 test('parses in-game scene commands and ignores other chat', () => {
   assert.equal(parseCustomCommand(';ss').baseName, 'Mod Scene');
+  assert.equal(parseCustomCommand('ss').name, 'ss');
   assert.equal(parseCustomCommand(';TS extra').name, 'ts');
   assert.equal(parseCustomCommand(';scene').baseName, 'Scene');
   assert.equal(parseCustomCommand(';fc').baseName, 'Frequency Change');
@@ -72,6 +75,21 @@ test('webhook payloads expose ;command text and Player:Id', () => {
   assert.equal(extractWebhookCommandText(payload), ';ss');
   assert.deepEqual(extractWebhookPlayer(payload), { username: 'Colin', robloxId: '123456' });
   assert.equal(resolveSceneCommand(payload).command.name, 'ss');
+  const short = { event: 'CustomCommand', userId: 123456, command: 'civ' };
+  assert.deepEqual(extractWebhookPlayer(short), { username: '', robloxId: '123456' });
+  assert.equal(resolveSceneCommand(short).command.name, 'civ');
+  assert.equal(resolveSceneCommand({ Type: 'EmergencyCall', Team: 'Fire', Description: 'Structure Fire' }), null);
+  assert.equal(resolveSceneCommand({ Message: ';ping' }).reason, 'unknown_command');
+  assert.equal(SCENE_COMMAND_LOG_CHANNEL_ID, '1514547037537046688');
+  assert.match(
+    sceneCommandLogBody({
+      handled: false,
+      reason: 'not_in_voice',
+      commandName: 'civ',
+      player: { username: 'Colin', robloxId: '99' },
+    }),
+    /FAIL — ;civ Colin \(99\) · player is not in a Discord voice channel/,
+  );
 });
 
 test('handleErlcSceneEvent moves a linked member into an empty Civilian VC', async () => {
@@ -111,7 +129,7 @@ test('handleErlcSceneEvent moves a linked member into an empty Civilian VC', asy
     },
   };
   const result = await handleErlcSceneEvent(
-    { Player: 'Colin:99', Message: ';civ' },
+    { Type: 'Command', Player: 'Colin:99', Command: 'civ' },
     {
       client,
       config: { guildId: 'guild', erlcServerKey: 'key' },

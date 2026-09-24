@@ -25,7 +25,8 @@ key or Melonly API key is needed for webhook signature verification.
    already in a matching numbered VC, keep that channel and only move people
    who are not in it yet. `;team` moves Fire / Police-Sheriff / DOT to their
    team VCs and does nothing on other teams. The player must already be in a
-   Discord VC.
+   Discord VC. Every `;` command attempt is logged to channel `1514547037537046688`,
+   including failures and the reason (not in VC, unlinked, no empty scene channel, unknown command, etc.).
 5. In-game emergency calls on Police/Sheriff, Fire, or DOT speak a dispatch
    line in that team's radio channel. See `docs/erlc-call-radio.md`.
 6. Failed deliveries stay queued through restarts. A worker retries every five
