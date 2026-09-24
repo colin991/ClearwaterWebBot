@@ -63,16 +63,20 @@ test('builds the spoken scripts without saying beep or fd tone', () => {
     description: 'Structure Fire',
     location: 'Main Street',
   });
-  assert.match(structure, /Attention station 48/i);
-  assert.match(structure, /Structure Fire reported at Main Street/i);
-  assert.match(structure, /Engine 48, ladder 48, medic 48/i);
+  assert.equal(
+    structure,
+    'Attention station 48. Attention station 48. Structure Fire reported Main Street. Engine 48, ladder 48. Medic 48, and all command please respond.',
+  );
 
   const fire911 = radioCallSpeech({
     team: 'Fire',
     description: 'smoke in the kitchen',
     location: 'Oak Ave',
   });
-  assert.equal(fire911, 'smoke in the kitchen reported at Oak Ave available apparatus please attach.');
+  assert.equal(
+    fire911,
+    'Attention station 48. Attention station 48. smoke in the kitchen reported Oak Ave. Engine 48, ladder 48. Medic 48, and all command please respond.',
+  );
 
   const dot = radioCallSpeech({
     team: 'DOT',

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-fire-radio-script",
+      "title": "Use the station 48 script for Fire radio",
+      "summary": "Every Fire Department radio call now speaks: Attention station 48 twice, then the fire type reported plus the location, then engine 48, ladder 48, medic 48, and all command please respond. Dumpster fires stay silent.",
+      "createdAt": "2026-09-24T01:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-skip-dumper-fire-radio",
       "title": "Skip dumpster fire radio for Fire",
       "summary": "Dumpster and dumper fires no longer play the Fire Department tone or dispatch line. Structure fires and other Fire 911 calls still announce.",
