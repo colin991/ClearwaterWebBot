@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-brian-voice-115",
+      "title": "Use Brian at 1.15x for all bot speech",
+      "summary": "Priority callouts, in-game call radio, frequency-change greetings, and other spoken lines now use Brian at 1.15x.",
+      "createdAt": "2026-09-24T00:08:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-call-radio-brian",
       "title": "Use Brian for in-game call radio",
       "summary": "LEO, Fire, and DOT dispatch lines now speak with Brian (en-US-BrianNeural) instead of Guy. Priority request voice is unchanged.",

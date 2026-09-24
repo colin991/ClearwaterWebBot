@@ -307,8 +307,8 @@ test('approve starts a 30 minute in-game timer and DMs the requester', async () 
   assert.match(f.dms[0].payload.components[0].components[2].content, /Priority Started/);
 });
 
-test('priority voice uses Edge Guy at 1.15x and the radio beep mp3', () => {
-  assert.equal(PRIORITY_VOICE, 'en-US-GuyNeural');
+test('priority voice uses Edge Brian at 1.15x and the radio beep mp3', () => {
+  assert.equal(PRIORITY_VOICE, 'en-US-BrianNeural');
   assert.equal(PRIORITY_VOICE_RATE, 1.15);
   assert.match(PRIORITY_BEEP_PATH, /priority-beep\.mp3$/);
   assert.equal(existsSync(PRIORITY_BEEP_PATH), true);

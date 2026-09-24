@@ -82,7 +82,7 @@ test('builds the spoken scripts without saying beep or fd tone', () => {
 test('uses the priority beep for LEO, the FD tone for Fire, and no tone for DOT', () => {
   assert.equal(existsSync(PRIORITY_BEEP_PATH), true);
   assert.equal(existsSync(FD_TONE_PATH), true);
-  assert.equal(CALL_RADIO_VOICE_RATE, 1);
+  assert.equal(CALL_RADIO_VOICE_RATE, 1.15);
   assert.equal(CALL_RADIO_VOICE, 'en-US-BrianNeural');
   assert.equal(radioCallTonePath({ team: 'leo', kind: 'leo_server' }), PRIORITY_BEEP_PATH);
   assert.equal(radioCallTonePath({ team: 'fire', kind: 'fire_structure' }), FD_TONE_PATH);

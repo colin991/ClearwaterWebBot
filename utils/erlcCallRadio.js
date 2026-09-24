@@ -7,6 +7,8 @@ import { PRIORITY_BEEP_PATH } from './priorityRequest.js';
 import {
   ensureGuildVoiceConnection,
   playMp3QueueInVoiceChannel,
+  SAY_VOICE,
+  SAY_VOICE_RATE,
   synthesizeSpeechMp3,
 } from './vcSpeak.js';
 
@@ -18,8 +20,8 @@ export const CALL_RADIO_CHANNELS = Object.freeze({
 
 export const FD_TONE_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'fd-tone.ogg');
 export const CALL_RADIO_POLL_MS = 5_000;
-export const CALL_RADIO_VOICE = 'en-US-BrianNeural';
-export const CALL_RADIO_VOICE_RATE = 1;
+export const CALL_RADIO_VOICE = SAY_VOICE;
+export const CALL_RADIO_VOICE_RATE = SAY_VOICE_RATE;
 
 const DEDUP_MS = 2 * 60 * 1000;
 const recentKeys = new Map();

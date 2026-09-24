@@ -25,7 +25,8 @@ try {
   // System ffmpeg on PATH is fine.
 }
 
-export const SAY_VOICE = 'en-US-GuyNeural';
+export const SAY_VOICE = 'en-US-BrianNeural';
+export const SAY_VOICE_RATE = 1.15;
 export const SAY_MAX_CHARS = 500;
 export const OPENAI_TTS_VOICES = Object.freeze(['alloy', 'ash', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer']);
 export const OPENAI_TTS_TIMEOUT_MS = 30_000;
@@ -121,23 +122,24 @@ async function synthesizeEdgeMp3(text, voice, prosody = {}) {
 /** OpenAI TTS for named voices such as onyx; otherwise free Microsoft Edge TTS. */
 export async function synthesizeSpeechMp3(text, voice = SAY_VOICE, prosody = {}) {
   const chosen = String(voice || SAY_VOICE).trim() || SAY_VOICE;
+  const rate = prosody.rate ?? SAY_VOICE_RATE;
   if (isOpenAiVoice(chosen)) {
     try {
       return await promiseWithTimeout(
-        synthesizeOpenAiMp3(text, chosen, prosody.rate ?? 1),
+        synthesizeOpenAiMp3(text, chosen, rate),
         OPENAI_TTS_TIMEOUT_MS,
         'OpenAI TTS',
       );
     } catch (error) {
-      logger.warn(`OpenAI voice ${chosen} failed; using Edge Guy instead`, error);
+      logger.warn(`OpenAI voice ${chosen} failed; using Edge ${SAY_VOICE} instead`, error);
       return promiseWithTimeout(
-        synthesizeEdgeMp3(text, SAY_VOICE, { rate: 'slow', pitch: '+0Hz', volume: 100 }),
+        synthesizeEdgeMp3(text, SAY_VOICE, { rate, pitch: '+0Hz', volume: 100 }),
         EDGE_TTS_TIMEOUT_MS,
         'Edge TTS',
       );
     }
   }
-  return promiseWithTimeout(synthesizeEdgeMp3(text, chosen, prosody), EDGE_TTS_TIMEOUT_MS, 'Edge TTS');
+  return promiseWithTimeout(synthesizeEdgeMp3(text, chosen, { ...prosody, rate }), EDGE_TTS_TIMEOUT_MS, 'Edge TTS');
 }
 
 /**
