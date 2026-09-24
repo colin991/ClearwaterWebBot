@@ -24,6 +24,6 @@ When an in-game emergency call starts, the bot joins that team's radio and speak
 
 - Every in-game call: `{call input} reported at {location} nearby trucks please respond.` (no tone)
 
-The LEO beep is `assets/priority-beep.mp3` (same as priority start). The FD tone is `assets/fd-tone.ogg`. Speech is Edge Guy at 1x.
+The LEO beep is `assets/priority-beep.mp3` (same as priority start). The FD tone is `assets/fd-tone.ogg`. Speech is Edge **Brian** at 1x (`en-US-BrianNeural`). Dragon HD Latest is Azure-only, so the bot uses the same Brian Neural voice that Edge TTS can play.
 
 Calls are read from the ER:LC event webhook and from `EmergencyCalls` on the regular server snapshot. Existing calls at bot start are not replayed. Restart the bot host after deploying.
