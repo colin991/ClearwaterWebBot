@@ -24,8 +24,9 @@ export const CALL_RADIO_POLL_MS = 5_000;
 export const CALL_RADIO_VOICE = SAY_VOICE;
 export const CALL_RADIO_VOICE_RATE = SAY_VOICE_RATE;
 
-const DEDUP_MS = 2 * 60 * 1000;
+const DEDUP_MS = 30 * 60 * 1000;
 const recentKeys = new Map();
+const liveCallKeys = new Set();
 let radioQueue = Promise.resolve();
 
 function enqueueRadio(work) {
@@ -34,10 +35,16 @@ function enqueueRadio(work) {
   return run;
 }
 
+function isCallObject(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
 function mappings(payload) {
-  if (!payload || typeof payload !== 'object') return [];
-  const nested = [payload.Data, payload.data, payload.Payload, payload.payload, payload.Event, payload.event, payload.Call, payload.call];
-  return [payload, ...nested.filter((value) => value && typeof value === 'object' && !Array.isArray(value))];
+  if (!isCallObject(payload)) return [];
+  const inner = [payload.Data, payload.data, payload.Payload, payload.payload, payload.Call, payload.call]
+    .filter(isCallObject);
+  const extra = [payload.Event, payload.event].filter(isCallObject);
+  return inner.length ? [...inner, payload, ...extra] : [payload, ...extra];
 }
 
 function firstString(objects, keys) {
@@ -121,8 +128,8 @@ export function parseErlcEmergencyCall(payload = {}) {
     ]),
     callerName: caller.username || firstString(objects, ['CallerName', 'callerName', 'Username', 'username', 'PlayerName', 'playerName']),
     callerId: String(callerId || caller.robloxId || ''),
-    callNumber: firstNumber(objects, ['CallNumber', 'callNumber', 'call_number', 'Number', 'number', 'Id', 'id']),
-    startedAt: firstNumber(objects, ['StartedAt', 'startedAt', 'started_at', 'Timestamp', 'timestamp']),
+    callNumber: firstNumber(objects, ['CallNumber', 'callNumber', 'call_number']),
+    startedAt: firstNumber(objects, ['StartedAt', 'startedAt', 'started_at']),
   };
 }
 
@@ -182,12 +189,12 @@ export function radioCallTonePath(classified, channelId = '') {
 }
 
 export function radioCallKey(call = {}) {
+  const team = radioTeam(call.team) || String(call.team || '').toLowerCase();
+  const number = Number(call.callNumber);
+  if (Number.isFinite(number) && number > 0) return `${team}|#${number}`;
   return [
-    call.callNumber || '',
-    call.startedAt || '',
-    radioTeam(call.team) || call.team || '',
+    team,
     cleanSpeech(call.description).toLowerCase(),
-    cleanSpeech(call.location).toLowerCase(),
   ].join('|');
 }
 
@@ -281,6 +288,15 @@ export async function handleErlcCallEvent(payload, {
 } = {}) {
   if (!isEmergencyCallEvent(payload)) return { handled: false, reason: 'not_emergency_call' };
   let call = parseErlcEmergencyCall(payload);
+  const early = classifyRadioCall(call);
+  if (early) {
+    const earlyKey = radioCallKey(call);
+    if (liveCallKeys.has(earlyKey) || wasRecentRadioCall(earlyKey, now)) {
+      liveCallKeys.add(earlyKey);
+      rememberCall(earlyKey, now);
+      return { handled: false, reason: 'duplicate' };
+    }
+  }
   let players = [];
   try {
     const server = snapshot
@@ -306,14 +322,18 @@ export async function handleErlcCallEvent(payload, {
   const classified = classifyRadioCall(call);
   if (!classified) return { handled: false, reason: 'ignored_call' };
   const key = radioCallKey(call);
-  if (wasRecentRadioCall(key, now)) return { handled: false, reason: 'duplicate' };
+  if (liveCallKeys.has(key) || wasRecentRadioCall(key, now)) {
+    liveCallKeys.add(key);
+    rememberCall(key, now);
+    return { handled: false, reason: 'duplicate' };
+  }
   rememberCall(key, now);
+  liveCallKeys.add(key);
   try {
     const result = await enqueueRadio(() => announce(client, call, classified));
     logger.info(`Call radio: ${classified.kind} on ${classified.team} (${call.description || 'call'})`);
     return { handled: true, reason: 'announced', classified, text: radioCallSpeech(call, classified), ...result };
   } catch (error) {
-    recentKeys.delete(key);
     logger.error(`Call radio failed for ${classified.kind}`, error);
     return { handled: false, reason: 'announce_failed', error: error?.message || String(error) };
   }
@@ -334,10 +354,22 @@ export function startErlcCallRadio(client) {
       const server = await fetchErlcServer(client.config.erlcServerKey);
       const now = Date.now();
       const calls = listEmergencyCalls(server);
+      const nextLive = new Set();
+      for (const call of calls) {
+        const classified = classifyRadioCall(withCallerName(call, listPlayers(server)));
+        if (!classified) continue;
+        nextLive.add(radioCallKey(call));
+      }
       if (!primed) {
-        for (const call of calls) rememberCall(radioCallKey(call), now);
+        for (const key of nextLive) {
+          liveCallKeys.add(key);
+          rememberCall(key, now);
+        }
         primed = true;
         return;
+      }
+      for (const key of [...liveCallKeys]) {
+        if (!nextLive.has(key) && !wasRecentRadioCall(key, now)) liveCallKeys.delete(key);
       }
       for (const call of calls) {
         const classified = classifyRadioCall(withCallerName(call, listPlayers(server)));

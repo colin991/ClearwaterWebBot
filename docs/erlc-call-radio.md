@@ -26,4 +26,4 @@ When an in-game emergency call starts, the bot joins that team's radio and speak
 
 The LEO beep is `assets/priority-beep.mp3` (same as priority start). The FD tone is `assets/fd-tone.mp3` (mono) and only plays in the Fire radio VC. Speech is Edge **Brian** at 1.15x (`en-US-BrianNeural`).
 
-Calls are read from the ER:LC event webhook and from `EmergencyCalls` on the regular server snapshot. Existing calls at bot start are not replayed. Restart the bot host after deploying.
+Calls are read from the ER:LC event webhook and from `EmergencyCalls` on the regular server snapshot. Each call is announced once; later webhooks or polls for the same fire or 911 do not play again while it is still active. Existing calls at bot start are not replayed. Restart the bot host after deploying.

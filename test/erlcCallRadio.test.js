@@ -12,6 +12,7 @@ import {
   parseErlcEmergencyCall,
   playRadioCallAnnouncement,
   callRadioChannelId,
+  radioCallKey,
   radioCallSpeech,
   radioCallTonePath,
   radioTeam,
@@ -158,6 +159,37 @@ test('handleErlcCallEvent announces a cash register on LEO radio and skips a dup
   assert.equal(announced[0].call.callerName, 'Colin');
   assert.match(announced[0].text, /Cash register robbery reported by Colin at Park Street/);
   assert.equal(second.reason, 'duplicate');
+  assert.equal(announced.length, 1);
+});
+
+test('the same fire is not re-announced when webhook timestamps change', async () => {
+  const announced = [];
+  const deps = {
+    now: 50_000,
+    snapshot: async () => ({ Players: [] }),
+    announce: async (_client, call) => {
+      announced.push(call);
+      return { played: true };
+    },
+  };
+  const wrapped = (timestamp) => ({
+    timestamp,
+    event: 'EmergencyCall',
+    origin: 'Colin:99',
+    data: {
+      Team: 'Fire',
+      Description: 'Structure Fire',
+      PositionDescriptor: 'Main Street',
+    },
+  });
+  const first = await handleErlcCallEvent(wrapped(1_700_000_001), deps);
+  const second = await handleErlcCallEvent(wrapped(1_700_000_003), { ...deps, now: 52_000 });
+  const later = await handleErlcCallEvent(wrapped(1_700_000_010), { ...deps, now: 50_000 + (3 * 60 * 1000) });
+  assert.equal(first.handled, true);
+  assert.equal(first.classified.kind, 'fire_structure');
+  assert.equal(radioCallKey(parseErlcEmergencyCall(wrapped(1))), 'fire|structure fire');
+  assert.equal(second.reason, 'duplicate');
+  assert.equal(later.reason, 'duplicate');
   assert.equal(announced.length, 1);
 });
 

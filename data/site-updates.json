@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-fire-radio-no-repeat",
+      "title": "Stop repeating the same Fire radio call",
+      "summary": "In-game Fire and other emergency calls are announced once. Later webhooks for the same call (including a new timestamp every couple of seconds) are ignored until that call ends.",
+      "createdAt": "2026-09-24T02:28:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-voice-speak-queue",
       "title": "Queue bot speech so it finishes before switching channels",
       "summary": "The bot no longer leaves mid-sentence to join another radio channel. Priority, LEO, Fire, and DOT lines wait in one guild queue and play the next clip only after the current one finishes.",
