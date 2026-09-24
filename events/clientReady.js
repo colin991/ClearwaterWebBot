@@ -19,6 +19,7 @@ import { startCorrectionsChannelStatus } from '../utils/correctionsChannelStatus
 import { startFrequencyChangeGreeting } from '../utils/frequencyChangeGreeting.js';
 import { startSoundboardAccess } from '../utils/soundboardAccess.js';
 import { ensurePinellasServerProfile } from '../utils/pinellasServer.js';
+import { ensureBelleairServerProfile } from '../utils/belleairServer.js';
 import { clearFloridaServerProfile } from '../utils/floridaServer.js';
 import { startBotApiServer } from '../utils/botApiServer.js';
 import { startErlcSceneCommands } from '../utils/erlcSceneCommands.js';
@@ -44,6 +45,12 @@ export default {
         logger.error('Pinellas server profile setup failed', error);
       });
     }, 1200);
+
+    setTimeout(() => {
+      void ensureBelleairServerProfile(client).catch((error) => {
+        logger.error('Belleair server profile setup failed', error);
+      });
+    }, 2000);
 
     setTimeout(() => {
       void clearFloridaServerProfile(client).catch((error) => {

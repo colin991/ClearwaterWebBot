@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-belleair-ops-profile",
+      "title": "Set Belleair Operations per-server bot profile",
+      "summary": "In the Belleair Police Discord, the bot now uses the nickname Belleair Operations with the Belleair badge as its server logo and the Belleair police car as its server banner.",
+      "createdAt": "2026-09-24T03:18:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-eco-dept-funds-layout",
       "title": "Update Department Funds logos and agencies",
       "summary": "Department Funds now uses each agency logo, lists Pinellas County 911 Center instead of CPD, and adds Belleair Police Department without a Transactions button.",
