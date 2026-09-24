@@ -30,6 +30,9 @@ test('classifies LEO, Fire, and DOT in-game calls and skips other teams', () => 
   assert.equal(classifyRadioCall({ team: 'Sheriff', description: 'ATM robbery in progress' }).kind, 'leo_server');
   assert.equal(classifyRadioCall({ team: 'Police', description: 'someone is shooting' }).kind, 'leo_911');
   assert.equal(classifyRadioCall({ team: 'Fire', description: 'Structure Fire' }).kind, 'fire_structure');
+  assert.equal(classifyRadioCall({ team: 'Fire', description: 'Dumper Fire' }), null);
+  assert.equal(classifyRadioCall({ team: 'Fire', description: 'Dumpster Fire' }), null);
+  assert.equal(classifyRadioCall({ team: 'Fire', description: 'dumpers on fire behind the store' }), null);
   assert.equal(classifyRadioCall({ team: 'Fire', description: 'person trapped in a car' }).kind, 'fire_911');
   assert.equal(classifyRadioCall({ team: 'DOT', description: 'debris in roadway' }).kind, 'dot');
   assert.equal(classifyRadioCall({ team: 'Civilian', description: 'help' }), null);

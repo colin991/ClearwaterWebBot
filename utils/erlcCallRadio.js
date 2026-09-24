@@ -130,6 +130,7 @@ export function classifyRadioCall(call = {}) {
   const lower = description.toLowerCase();
   if (team === 'dot') return { team, kind: 'dot', label: description || 'A call' };
   if (team === 'fire') {
+    if (/\bdump(st)?ers?\b/.test(lower)) return null;
     if (/\bstructure\s*fire\b|\bbuilding\s*fire\b/.test(lower) || /^structure\s*fire$/i.test(description)) {
       return { team, kind: 'fire_structure', label: description || 'Structure fire' };
     }

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-skip-dumper-fire-radio",
+      "title": "Skip dumpster fire radio for Fire",
+      "summary": "Dumpster and dumper fires no longer play the Fire Department tone or dispatch line. Structure fires and other Fire 911 calls still announce.",
+      "createdAt": "2026-09-24T01:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-melonly-events-relay",
       "title": "Fix in-game events going to Melonly",
       "summary": "ER:LC event webhooks are forwarded to Melonly’s live receiver (erlc-wh.melon.ly) instead of the melon.ly/events redirect that was dropping every POST.",
