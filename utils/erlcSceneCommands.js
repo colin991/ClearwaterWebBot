@@ -4,7 +4,7 @@ import { discordIdsByRobloxId } from './identityStore.js';
 import { resolveZoneDiscordMember } from './erlcZoneVoice.js';
 import { markBotVoiceMove } from './botVoiceMoves.js';
 import { logger } from './logger.js';
-import { postProximityLog, VC_ACTION_LOG_CHANNEL_ID } from './vcActionLog.js';
+import { postProximityLog, proximityStyleContent, VC_ACTION_LOG_CHANNEL_ID } from './vcActionLog.js';
 
 export const SCENE_COMMANDS = Object.freeze({
   ss: { kind: 'numbered', baseName: 'Mod Scene' },
@@ -30,6 +30,8 @@ export const SCENE_COMMAND_FAILURE_REASONS = Object.freeze({
   team_channel_missing: 'mapped team voice channel is missing',
   no_empty_channel: 'no empty numbered scene voice channel',
   move_failed: 'Discord refused the voice move',
+  unparsed_event: 'webhook was not a recognized ; command payload',
+  received: 'webhook received',
   handler_error: 'scene command handler threw',
 });
 
@@ -113,9 +115,33 @@ export function isCustomCommandEvent(payload) {
   if (/custom\s*command/i.test(type) || /^commands?$/i.test(type)) return true;
   const text = extractWebhookCommandText(payload);
   if (text.startsWith(';')) return true;
+  if (parseCustomCommand(text)) return true;
   const commandField = firstString(mappings(payload), ['Command', 'command']);
   if (!commandField) return false;
   return Boolean(parseCustomCommand(commandField));
+}
+
+export function looksLikeEmergencyCallEvent(payload) {
+  if (!payload || typeof payload !== 'object') return false;
+  if (isCustomCommandEvent(payload)) return false;
+  const type = extractWebhookEventType(payload);
+  if (/emergency\s*call/i.test(type) || /^calls?$/i.test(type) || /^911$/i.test(type)) return true;
+  const team = firstString(mappings(payload), ['Team', 'team']);
+  const description = firstString(mappings(payload), ['Description', 'description']);
+  const callNumber = firstString(mappings(payload), ['CallNumber', 'callNumber', 'call_number']);
+  return Boolean(team && (description || callNumber));
+}
+
+export function erlcEventPayloads(payload) {
+  if (Array.isArray(payload)) {
+    return payload.filter((item) => item && typeof item === 'object' && !Array.isArray(item));
+  }
+  if (!payload || typeof payload !== 'object') return [];
+  const nested = payload.events || payload.Events;
+  if (Array.isArray(nested)) {
+    return nested.filter((item) => item && typeof item === 'object' && !Array.isArray(item));
+  }
+  return [payload];
 }
 
 export function teamVoiceChannelId(team) {
@@ -297,7 +323,11 @@ export function sceneCommandLogBody({
   payloadHint = '',
 } = {}) {
   const who = `${player?.username || 'unknown'} (${player?.robloxId || 'unknown'})`;
-  const cmd = commandName ? `;${commandName}` : String(rawText || 'unknown command').slice(0, 40);
+  const cmd = commandName ? `;${commandName}` : String(rawText || 'unknown command').slice(0, 80);
+  if (reason === 'received') {
+    const detail = [payloadHint].map((part) => String(part || '').trim()).filter(Boolean).join(' · ');
+    return `RECV — ${cmd} ${who}${detail ? ` · ${detail}` : ''}`;
+  }
   if (handled) {
     const extra = nearbyMoved ? ` · dragged ${nearbyMoved} nearby` : '';
     return `OK — ${cmd} ${who} ${reason || 'moved'} into #${channelName || 'unknown'}${extra}`;
@@ -308,16 +338,54 @@ export function sceneCommandLogBody({
 }
 
 export async function logSceneCommandResult(client, details = {}) {
-  if (!client) return false;
+  const body = sceneCommandLogBody(details);
+  logger.info(`[SceneCmd] ${body}`);
+  if (!client?.channels) return false;
   try {
+    const channel = client.channels?.cache?.get(SCENE_COMMAND_LOG_CHANNEL_ID)
+      || await client.channels?.fetch?.(SCENE_COMMAND_LOG_CHANNEL_ID).catch((error) => {
+        logger.error(`Scene command log channel fetch failed (${SCENE_COMMAND_LOG_CHANNEL_ID})`, error);
+        return null;
+      });
+    if (channel?.isTextBased?.() && typeof channel.send === 'function') {
+      await channel.send({ content: proximityStyleContent('SceneCmd', body) });
+      return true;
+    }
     return await postProximityLog(client, {
       channelId: SCENE_COMMAND_LOG_CHANNEL_ID,
       tag: 'SceneCmd',
-      body: sceneCommandLogBody(details),
+      body,
     });
   } catch (error) {
     logger.warn(`Scene command Discord log failed: ${error?.message || error}`);
     return false;
+  }
+}
+
+export async function logIncomingErlcWebhook(client, payload, eventId = '') {
+  const items = erlcEventPayloads(payload);
+  if (!items.length && payload != null) {
+    await logSceneCommandResult(client, {
+      handled: false,
+      reason: 'unparsed_event',
+      rawText: 'erlc event',
+      payloadHint: `${payloadKeyHint(payload)}${eventId ? ` · id ${String(eventId).slice(0, 12)}` : ''}`,
+    });
+    return;
+  }
+  for (const item of items) {
+    if (looksLikeEmergencyCallEvent(item)) continue;
+    const text = extractWebhookCommandText(item);
+    const type = extractWebhookEventType(item);
+    const command = parseCustomCommand(text);
+    await logSceneCommandResult(client, {
+      handled: false,
+      reason: 'received',
+      commandName: command?.name || '',
+      rawText: text || type || 'erlc event',
+      player: extractWebhookPlayer(item),
+      payloadHint: `${payloadKeyHint(item)}${eventId ? ` · id ${String(eventId).slice(0, 12)}` : ''}`,
+    });
   }
 }
 
@@ -343,7 +411,18 @@ export async function handleErlcSceneEvent(payload, {
   identities,
 } = {}) {
   const parsed = resolveSceneCommand(payload);
-  if (!parsed) return { handled: false, reason: 'not_scene_command' };
+  if (!parsed) {
+    if (!looksLikeEmergencyCallEvent(payload)) {
+      await logSceneCommandResult(client, {
+        handled: false,
+        reason: 'unparsed_event',
+        rawText: extractWebhookCommandText(payload) || extractWebhookEventType(payload) || 'erlc event',
+        player: extractWebhookPlayer(payload),
+        payloadHint: payloadKeyHint(payload),
+      });
+    }
+    return { handled: false, reason: 'not_scene_command' };
+  }
 
   let result;
   try {
@@ -564,7 +643,16 @@ async function executeErlcSceneCommand(payload, parsed, {
 
 export function startErlcSceneCommands(client) {
   const listener = (payload, eventId) => {
-    void handleErlcSceneEvent(payload, { client, config: client.config, eventId }).catch(async (error) => {
+    void (async () => {
+      const items = erlcEventPayloads(payload);
+      if (!items.length) {
+        await logIncomingErlcWebhook(client, payload, eventId);
+        return;
+      }
+      for (const item of items) {
+        await handleErlcSceneEvent(item, { client, config: client.config, eventId });
+      }
+    })().catch(async (error) => {
       logger.error('ER:LC scene command failed', error);
       await logSceneCommandResult(client, {
         handled: false,

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-log-all-erlc-commands",
+      "title": "Log every in-game ER:LC command webhook",
+      "summary": "Every ER:LC ; command webhook now posts to the VC action log when it arrives, including unknown payloads and failures, so staff can see why a drag did not run.",
+      "createdAt": "2026-09-24T01:28:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-block-priority-peace",
       "title": "Block priority requests during a peace timer",
       "summary": "/request-priority cannot be sent while an in-game peace timer is running, including the 10 minute peace after a priority ends and the 20 minute peace from a LEO briefing.",

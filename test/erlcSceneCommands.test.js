@@ -5,6 +5,7 @@ import {
   extractWebhookCommandText,
   extractWebhookPlayer,
   handleErlcSceneEvent,
+  logIncomingErlcWebhook,
   parseCustomCommand,
   parseNumberedVoiceName,
   pickEmptyNumberedVoiceChannel,
@@ -35,6 +36,7 @@ function member(id, { bot = false, channelId = 'here', channel = null } = {}) {
 test('parses in-game scene commands and ignores other chat', () => {
   assert.equal(parseCustomCommand(';ss').baseName, 'Mod Scene');
   assert.equal(parseCustomCommand('ss').name, 'ss');
+  assert.equal(resolveSceneCommand({ Player: 'Colin:1', Message: 'ss' }).command.name, 'ss');
   assert.equal(parseCustomCommand(';TS extra').name, 'ts');
   assert.equal(parseCustomCommand(';scene').baseName, 'Scene');
   assert.equal(parseCustomCommand(';fc').baseName, 'Frequency Change');
@@ -90,6 +92,36 @@ test('webhook payloads expose ;command text and Player:Id', () => {
     }),
     /FAIL — ;civ Colin \(99\) · player is not in a Discord voice channel/,
   );
+  assert.match(
+    sceneCommandLogBody({
+      handled: false,
+      reason: 'received',
+      commandName: 'civ',
+      player: { username: 'Colin', robloxId: '99' },
+      payloadHint: 'payload keys Type, Player, Command',
+    }),
+    /RECV — ;civ Colin \(99\) · payload keys Type, Player, Command/,
+  );
+});
+
+test('incoming ER:LC command webhooks post to the action log even when unparsed', async () => {
+  const sent = [];
+  const client = {
+    channels: {
+      cache: { get: () => ({ isTextBased: () => true, send: async (payload) => { sent.push(payload.content); } }) },
+      fetch: async () => ({ isTextBased: () => true, send: async (payload) => { sent.push(payload.content); } }),
+    },
+  };
+  await logIncomingErlcWebhook(client, { Type: 'Command', Player: 'Colin:99', Command: 'civ' }, 'abc123');
+  assert.match(sent[0], /RECV — ;civ/);
+  sent.length = 0;
+  const result = await handleErlcSceneEvent(
+    { Type: 'SomethingElse', Foo: 'bar' },
+    { client, config: { guildId: 'guild' } },
+  );
+  assert.equal(result.reason, 'not_scene_command');
+  assert.match(sent[0], /FAIL — /);
+  assert.match(sent[0], /not a recognized/);
 });
 
 test('handleErlcSceneEvent moves a linked member into an empty Civilian VC', async () => {

@@ -1,5 +1,6 @@
 import { readEventBytes, verifyErlcEvent } from '../lib/erlc-webhook.js';
 import { createErlcEventRelay } from './erlcEventRelay.js';
+import { logIncomingErlcWebhook } from './erlcSceneCommands.js';
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
@@ -56,7 +57,15 @@ export function startBotApiServer(client, {
     return () => {};
   }
 
-  const eventRelay = createErlcEventRelay({ onEvent: (event, id) => { client.emit('erlcEvent', event, id); } });
+  const eventRelay = createErlcEventRelay({
+    onEvent: (event, id) => {
+      logger.info(`ER:LC event received ${String(id || '').slice(0, 12)} keys=${Object.keys(event || {}).slice(0, 12).join(',')}`);
+      client.emit('erlcEvent', event, id);
+      void logIncomingErlcWebhook(client, event, id).catch((error) => {
+        logger.warn(`ER:LC command webhook log failed: ${error?.message || error}`);
+      });
+    },
+  });
   const flushEvents = () => { void eventRelay.tick().catch(error => logger.error('ERLC event relay failed', error)); };
   const eventTimer = setInterval(flushEvents, 5000);
   eventTimer.unref();
