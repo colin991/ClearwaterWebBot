@@ -56,7 +56,10 @@ test('economy sub-panels match the robbery, jobs, and department layouts', () =>
   assert.match(textOf(buildJobsPanel()), /View Public Jobs/);
   assert.match(textOf(buildDepartmentFundsPanel()), /Department Funds/);
   assert.match(textOf(buildDepartmentFundsPanel()), /Florida Highway Patrol/);
+  assert.match(textOf(buildDepartmentFundsPanel()), /Pinellas County 911 Center/);
+  assert.match(textOf(buildDepartmentFundsPanel()), /Belleair Police Department/);
   assert.match(textOf(buildDepartmentFundsPanel()), /Clearwater Fire & Rescue/);
+  assert.doesNotMatch(textOf(buildDepartmentFundsPanel()), /Clearwater Police Department/);
   assert.equal(Boolean(buildRobberyPanel().flags & MessageFlags.Ephemeral), true);
 });
 

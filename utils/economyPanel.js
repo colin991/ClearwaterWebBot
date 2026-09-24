@@ -39,6 +39,7 @@ export const ECO_IDS = Object.freeze({
   jobsHow: 'eco:jobs:how',
   deptFhp: 'eco:dept:fhp',
   deptPcso: 'eco:dept:pcso',
+  dept911: 'eco:dept:911',
   deptCpd: 'eco:dept:cpd',
   deptCfr: 'eco:dept:cfr',
   deptAll: 'eco:dept:all',
@@ -238,13 +239,17 @@ export function buildJobsPanel() {
   return v2(container, { ephemeral: true });
 }
 
-function departmentSection(name, id) {
-  return featureSection([
-    `## <:MP_Shield:1518377512839675944> ${name}`,
+function departmentFundsText(emoji, name) {
+  return [
+    `## ${emoji} ${name}`,
     '<:DownArrow:1518386518387851425> **Available Funds:** `$25,000`',
     '<:DownArrow:1518386518387851425> **Pending Funds:** `$2,500`',
     '<:DownArrow:1518386518387851425> **Spent This Week:** `$4,250`',
-  ].join('\n'), 'Transactions', id);
+  ].join('\n');
+}
+
+function departmentSection(emoji, name, id) {
+  return featureSection(departmentFundsText(emoji, name), 'Transactions', id);
 }
 
 export function buildDepartmentFundsPanel() {
@@ -262,13 +267,17 @@ export function buildDepartmentFundsPanel() {
       '## Department Financial Overview\nThe information below displays the current financial status of each Clearwater department.',
     ))
     .addSeparatorComponents(divider())
-    .addSectionComponents(departmentSection('Florida Highway Patrol', ECO_IDS.deptFhp))
+    .addSectionComponents(departmentSection('<:FHP_Logo:1514421266776461314>', 'Florida Highway Patrol', ECO_IDS.deptFhp))
     .addSeparatorComponents(divider())
-    .addSectionComponents(departmentSection('Pinellas County Sheriff\'s Office', ECO_IDS.deptPcso))
+    .addSectionComponents(departmentSection('<:slogo:1546245229420744804>', 'Pinellas County Sheriff\'s Office', ECO_IDS.deptPcso))
     .addSeparatorComponents(divider())
-    .addSectionComponents(departmentSection('Clearwater Police Department', ECO_IDS.deptCpd))
+    .addSectionComponents(departmentSection('<:dispatch:1522721479370870825>', 'Pinellas County 911 Center', ECO_IDS.dept911))
     .addSeparatorComponents(divider())
-    .addSectionComponents(departmentSection('Clearwater Fire & Rescue', ECO_IDS.deptCfr))
+    .addSectionComponents(departmentSection('<:CFD:1514806304621989978>', 'Clearwater Fire & Rescue', ECO_IDS.deptCfr))
+    .addSeparatorComponents(divider())
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+      departmentFundsText('<:bpd_logo:1535160817606074378>', 'Belleair Police Department'),
+    ))
     .addSeparatorComponents(divider())
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(
       '## <:moneybag1:1545436887404122205> Weekly Spending\n**Spent This Week** tracks the total amount each department has spent since the beginning of the current week.',
@@ -300,7 +309,8 @@ const COMING_SOON = Object.freeze({
   [ECO_IDS.jobsHow]: 'How Jobs Work',
   [ECO_IDS.deptFhp]: 'FHP Transactions',
   [ECO_IDS.deptPcso]: 'PCSO Transactions',
-  [ECO_IDS.deptCpd]: 'CPD Transactions',
+  [ECO_IDS.dept911]: '911 Center Transactions',
+  [ECO_IDS.deptCpd]: '911 Center Transactions',
   [ECO_IDS.deptCfr]: 'CFR Transactions',
   [ECO_IDS.deptAll]: 'Department Transactions',
   [ECO_IDS.deptInfo]: 'Finance Information',

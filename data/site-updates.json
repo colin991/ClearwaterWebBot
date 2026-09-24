@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-24-eco-dept-funds-layout",
+      "title": "Update Department Funds logos and agencies",
+      "summary": "Department Funds now uses each agency logo, lists Pinellas County 911 Center instead of CPD, and adds Belleair Police Department without a Transactions button.",
+      "createdAt": "2026-09-24T03:13:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-eco-panel",
       "title": "Post the Clearwater Economy panel with -eco",
       "summary": "Administrators can run -eco to post the Clearwater Economy hub in the economy channel. Robberies, jobs, and department funds open from the buttons; send, wallet, and the rest of the money system will be wired next.",
