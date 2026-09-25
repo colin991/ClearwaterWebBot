@@ -11,6 +11,7 @@ import {
   grantWeeklyDepartmentFunds,
   payDepartmentShift,
   payJobInterval,
+  recentTransactions,
   reserveRobbery,
   beginRobbery,
   robberyStatus,
@@ -111,15 +112,34 @@ test('department weekly grants run once per week and payroll comes from treasury
   assert.equal(store.departments.fhp.balance, 500_000);
   grantWeeklyDepartmentFunds(store, { now: Date.parse('2026-09-25T18:00:00Z') });
   assert.equal(store.departments.fhp.balance, 500_000);
-  const pay = payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 's1', elapsedMs: 20 * 60_000 });
+  const armed = payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 's1', elapsedMs: 20 * 60_000 });
+  assert.equal(armed.paid, false);
+  assert.equal(armed.reason, 'armed');
+  assert.equal(store.users.cop, undefined);
+  const pay = payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 's1', elapsedMs: 30 * 60_000 });
   assert.equal(pay.paid, true);
-  assert.equal(pay.amount, 400);
-  assert.equal(store.departments.fhp.balance, 499_600);
-  assert.equal(store.users.cop.cash, 400);
+  assert.equal(pay.amount, 200);
+  assert.equal(store.departments.fhp.balance, 499_800);
+  assert.equal(store.users.cop.cash, 200);
+  const duplicate = payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 'other', elapsedMs: 30 * 60_000 });
+  assert.equal(duplicate.paid, false);
   store.departments.fhp.balance = 50;
-  const broke = payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 's2', elapsedMs: 10 * 60_000 });
+  const broke = payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 's1', elapsedMs: 40 * 60_000 });
   assert.equal(broke.reason, 'insufficient');
-  assert.equal(store.users.cop.cash, 400);
+  assert.equal(store.users.cop.cash, 200);
+});
+
+test('department and player transaction lists keep payroll as one row', () => {
+  const store = emptyEconomyStore();
+  grantWeeklyDepartmentFunds(store, { now: Date.parse('2026-09-25T12:00:00Z') });
+  payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 's1', elapsedMs: 0 });
+  payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 's1', elapsedMs: 10 * 60_000 });
+  const deptRows = recentTransactions(store, { deptId: 'fhp', limit: 20 });
+  const userRows = recentTransactions(store, { userId: 'cop', limit: 20 });
+  assert.equal(deptRows.filter((tx) => tx.type === 'DEPARTMENT_SHIFT_PAY').length, 0);
+  assert.equal(deptRows.filter((tx) => tx.type === 'DEPARTMENT_PAYROLL').length, 1);
+  assert.equal(userRows.filter((tx) => tx.type === 'DEPARTMENT_PAYROLL').length, 0);
+  assert.equal(userRows.filter((tx) => tx.type === 'DEPARTMENT_SHIFT_PAY').length, 1);
 });
 
 test('robberies block priorities while reserved/active and pay once', () => {

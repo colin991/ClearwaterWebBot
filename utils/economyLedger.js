@@ -520,14 +520,39 @@ export function payDepartmentShift(store, deptId, discordId, {
     row.spentThisWeek = 0;
     row.payrollThisWeek = 0;
   }
-  const key = `${dept.id}:${discordId}:${shiftKey}`;
-  let track = store.payroll[key];
-  if (!track) {
-    track = store.payroll[key] = { paidIntervals: 0, startedAt: now, shiftKey };
+  const personKey = `${dept.id}:${discordId}`;
+  const legacyKey = shiftKey ? `${personKey}:${shiftKey}` : '';
+  let track = store.payroll[personKey] || (legacyKey ? store.payroll[legacyKey] : null);
+  if (legacyKey && store.payroll[legacyKey] && store.payroll[personKey] !== track) {
+    store.payroll[personKey] = track;
+    delete store.payroll[legacyKey];
   }
   const due = Math.floor(Math.max(0, elapsedMs) / ECONOMY_PAY_INTERVAL_MS);
+  if (!track) {
+    store.payroll[personKey] = {
+      paidIntervals: due,
+      startedAt: now,
+      shiftKey: String(shiftKey || ''),
+      lastElapsed: elapsedMs,
+    };
+    return { paid: false, reason: 'armed' };
+  }
+  if (
+    shiftKey
+    && track.shiftKey
+    && String(track.shiftKey) !== String(shiftKey)
+    && elapsedMs + ECONOMY_PAY_INTERVAL_MS < Number(track.lastElapsed || 0)
+  ) {
+    track.shiftKey = String(shiftKey);
+    track.paidIntervals = due;
+    track.lastElapsed = elapsedMs;
+    track.startedAt = now;
+    return { paid: false, reason: 'new-shift' };
+  }
+  track.shiftKey = String(shiftKey || track.shiftKey || '');
+  track.lastElapsed = elapsedMs;
   if (due <= track.paidIntervals) return { paid: false, reason: 'waiting' };
-  const intervals = due - track.paidIntervals;
+  const intervals = 1;
   const amount = intervals * dept.shiftPay;
   if (row.balance < amount) {
     row.lastPayrollFail = {
@@ -538,7 +563,7 @@ export function payDepartmentShift(store, deptId, discordId, {
     };
     return { paid: false, reason: 'insufficient', needed: amount, balance: row.balance, dept };
   }
-  track.paidIntervals = due;
+  track.paidIntervals += intervals;
   row.balance -= amount;
   row.payrollThisWeek += amount;
   row.spentThisWeek += amount;
@@ -552,7 +577,7 @@ export function payDepartmentShift(store, deptId, discordId, {
     amount,
     toId: user.discordId,
     fromDept: dept.id,
-    note: `${dept.short} shift pay × ${intervals}`,
+    note: `${dept.short} shift pay`,
     referenceId,
     cashAfter: user.cash,
     bankAfter: user.bank,
@@ -705,7 +730,9 @@ export function recentTransactions(store, { userId = '', deptId = '', limit = 12
     const tx = store.transactions[id];
     if (!tx) continue;
     if (userId && tx.fromId !== userId && tx.toId !== userId) continue;
+    if (userId && tx.type === ECONOMY_TX.DEPARTMENT_PAYROLL) continue;
     if (deptId && tx.fromDept !== deptId && tx.toDept !== deptId) continue;
+    if (deptId && tx.type === ECONOMY_TX.DEPARTMENT_SHIFT_PAY) continue;
     out.push(tx);
     if (out.length >= limit) break;
   }

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-25-economy-payroll-once",
+      "title": "Stop department payroll from showing or paying twice",
+      "summary": "Melonly department pay now tracks one shift per person, does not back-pay time from before the economy started watching, and department transaction lists show a single treasury line instead of both the employee credit and the department debit.",
+      "createdAt": "2026-09-25T02:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-25-economy-v2",
       "title": "Launch Clearwater Economy accounts, robberies, and department payroll",
       "summary": "The existing Clearwater Economy panel now uses saved Cash and Bank balances, a one-time $1,000 starter grant, Send/Wallet/Transactions, civilian job pay, robberies with LEO and priority checks, ;steal, death fees, and department treasuries with Melonly shift payroll and -funds in each department Discord.",

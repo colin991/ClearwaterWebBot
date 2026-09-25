@@ -387,10 +387,14 @@ export async function tickEconomy(client) {
       if (!dept.melonlyDepartmentId) continue;
       const shifts = await fetchPinellasDepartmentShifts(apiKey, dept.melonlyDepartmentId, { cacheTtlMs: 25_000 }).catch(() => []);
       const active = (Array.isArray(shifts) ? shifts : []).filter(isActiveMelonlyShift);
+      const seen = new Set();
       for (const shift of active) {
         const memberId = String(shift.memberId || shift.userId || '');
         const discordId = await resolveShiftDiscord(client, memberId);
         if (!discordId) continue;
+        const personKey = `${dept.id}:${discordId}`;
+        if (seen.has(personKey)) continue;
+        seen.add(personKey);
         const started = shiftCreatedMs(shift) || Date.now();
         const elapsed = Date.now() - started;
         const paid = await withEconomy((store) => payDepartmentShift(store, dept.id, discordId, {
