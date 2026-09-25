@@ -1,3 +1,4 @@
+import { rejectWrongGuild } from '../utils/commandGuilds.js';
 import { requireAdministrator } from '../utils/prefixHelpers.js';
 import { postPinellasShiftPanel } from '../utils/pinellasShiftPanel.js';
 import { v2Card } from '../utils/v2Message.js';
@@ -7,12 +8,10 @@ export default {
   name: 'shiftpanel',
   aliases: ['shift-panel', 'dutypanel'],
   description: 'Post or refresh the Pinellas Melonly shift panel (Administrator only).',
+  guildIds: [PINELLAS_GUILD_ID],
   async execute(message) {
+    if (String(message.guild?.id) !== PINELLAS_GUILD_ID) rejectWrongGuild();
     requireAdministrator(message);
-
-    if (String(message.guild?.id) !== PINELLAS_GUILD_ID) {
-      throw new Error('This command can only be used in the Pinellas County Sheriff\'s Office server.');
-    }
 
     const result = await postPinellasShiftPanel(message.client, { issuer: message.member });
     const count = result?.snapshot?.deputies?.length || 0;

@@ -9,6 +9,7 @@ import {
   PINELLAS_GUILD_ID,
   requirePinellasCommandAccess,
 } from '../utils/pinellasServer.js';
+import { rejectWrongGuild } from '../utils/commandGuilds.js';
 
 const TYPE_LABELS = Object.freeze({
   warning: 'Warning',
@@ -71,11 +72,10 @@ export default {
         .setName('user')
         .setDescription('The member whose infractions you want to view')
         .setRequired(true))),
+  guildIds: [PINELLAS_GUILD_ID],
 
   async execute(interaction) {
-    if (String(interaction.guildId) !== PINELLAS_GUILD_ID) {
-      throw new Error('This command can only be used in the Pinellas County Sheriff\'s Office server.');
-    }
+    if (String(interaction.guildId) !== PINELLAS_GUILD_ID) rejectWrongGuild();
 
     const issuerMember = interaction.member
       || await interaction.guild.members.fetch(interaction.user.id);

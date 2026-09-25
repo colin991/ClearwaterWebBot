@@ -10,6 +10,7 @@ import {
   PINELLAS_GUILD_ID,
   requirePinellasInfractionAccess,
 } from '../utils/pinellasServer.js';
+import { rejectWrongGuild } from '../utils/commandGuilds.js';
 
 const typeChoices = INFRACTION_TYPES.map((type) => ({
   name: type.charAt(0).toUpperCase() + type.slice(1),
@@ -52,11 +53,10 @@ export default {
       .setDescription('New expiry like 12h, 3d, or never')
       .setRequired(false)
       .setMaxLength(20)),
+  guildIds: [PINELLAS_GUILD_ID],
 
   async execute(interaction) {
-    if (String(interaction.guildId) !== PINELLAS_GUILD_ID) {
-      throw new Error('This command can only be used in the Pinellas County Sheriff\'s Office server.');
-    }
+    if (String(interaction.guildId) !== PINELLAS_GUILD_ID) rejectWrongGuild();
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 

@@ -653,6 +653,7 @@ async function closePinellasSupportTicket(channel, { client, user, ownerId, reas
 }
 
 export async function requestPinellasTicketClose(message) {
+  if (String(message.guild?.id) !== PINELLAS_SUPPORT_GUILD_ID) return;
   const channel = message.channel;
   if (!isPinellasSupportTicketChannel(channel)) {
     throw new Error('Use `-cr` in an open PCSO support ticket.');

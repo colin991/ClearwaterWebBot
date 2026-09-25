@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-25-dept-cmd-guild",
+      "title": "Keep PCSO commands quiet outside the PCSO Discord",
+      "summary": "PCSO commands such as -cr, -callsign, and /infract no longer reply in Clearwater or Belleair. They only run in the Pinellas County Sheriff's Office server. BPD-only commands will work the same way in the Belleair Discord.",
+      "createdAt": "2026-09-25T00:44:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-24-voice-cutoff",
       "title": "Stop cutting off bot voice lines mid-sentence",
       "summary": "Priority, radio, and other bot speech now wait for the full clip to finish instead of leaving or stopping when Discord briefly reports idle. The bot also waits a moment after talking so the last words are not cut off.",

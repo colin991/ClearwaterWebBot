@@ -15,6 +15,7 @@ import { handlePinellasSupportInteraction } from '../utils/pinellasSupport.js';
 import { handleMarketInteraction } from '../utils/market.js';
 import { handleEconomyInteraction } from '../utils/economyPanel.js';
 import { handlePcsoSiteFormInteraction } from '../utils/pcsoSiteFormDiscord.js';
+import { commandAllowedInGuild } from '../utils/commandGuilds.js';
 import { shouldIgnoreGuildCommands } from '../utils/floridaServer.js';
 
 export default {
@@ -163,10 +164,12 @@ export default {
     if (!interaction.isChatInputCommand()) return;
     const command = client.commands.get(interaction.commandName);
     if (!command) return;
+    if (!commandAllowedInGuild(command, interaction.guildId)) return;
 
     try {
       await command.execute(interaction);
     } catch (error) {
+      if (error?.code === 'WRONG_GUILD') return;
       logger.error(`Command failed: /${interaction.commandName}`, error);
       const reply = {
         content: String(error?.message || 'That command could not be completed. Please try again.').slice(0, 1800),

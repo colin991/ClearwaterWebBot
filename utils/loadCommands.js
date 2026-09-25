@@ -6,7 +6,7 @@ import { logger } from './logger.js';
 export async function loadCommands(client) {
   const directory = join(process.cwd(), 'commands');
   const files = (await readdir(directory)).filter((file) => file.endsWith('.js')).sort();
-  const commandJson = [];
+  const commandModules = [];
 
   for (const file of files) {
     const module = await import(pathToFileURL(join(directory, file)).href);
@@ -17,9 +17,9 @@ export async function loadCommands(client) {
     }
 
     client.commands.set(command.data.name, command);
-    commandJson.push(command.data.toJSON());
+    commandModules.push(command);
   }
 
-  logger.info(`Loaded ${commandJson.length} slash commands.`);
-  return commandJson;
+  logger.info(`Loaded ${commandModules.length} slash commands.`);
+  return commandModules;
 }

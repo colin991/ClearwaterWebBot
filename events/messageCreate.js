@@ -7,6 +7,7 @@ import { handleNoticeChannelMessage } from '../utils/noticeChannel.js';
 import { parseArgs } from '../utils/prefixHelpers.js';
 import { handlePinellasApplyDm } from '../utils/pinellasApply.js';
 import { handleAutoReply } from '../utils/autoReplies.js';
+import { commandAllowedInGuild } from '../utils/commandGuilds.js';
 import { shouldIgnoreGuildCommands } from '../utils/floridaServer.js';
 
 export default {
@@ -64,10 +65,12 @@ export default {
 
     const command = client.prefixCommands?.get(name);
     if (!command) return;
+    if (!commandAllowedInGuild(command, message.guildId)) return;
 
     try {
       await command.execute(message, args, client);
     } catch (error) {
+      if (error?.code === 'WRONG_GUILD') return;
       logger.error(`Prefix command failed: ${prefix}${name}`, error);
       const text = error?.message || 'That command could not be completed.';
       if (message.channel?.isTextBased()) {

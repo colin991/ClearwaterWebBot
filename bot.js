@@ -8,6 +8,7 @@ import { logger } from './utils/logger.js';
 import { startErlcRoleSync } from './utils/erlcRoleSync.js';
 import { startRobloxGroupSync } from './utils/robloxGroupSync.js';
 import { startDepartmentSalaryJob } from './utils/departmentSalary.js';
+import { slashCommandsForGuild } from './utils/commandGuilds.js';
 import { PINELLAS_GUILD_ID } from './utils/pinellasServer.js';
 
 // Keep boot loaders in the entry module so an incomplete host upload cannot
@@ -15,7 +16,7 @@ import { PINELLAS_GUILD_ID } from './utils/pinellasServer.js';
 async function loadCommands(client) {
   const directory = join(process.cwd(), 'commands');
   const files = (await readdir(directory)).filter((file) => file.endsWith('.js')).sort();
-  const commandJson = [];
+  const commandModules = [];
 
   for (const file of files) {
     const module = await import(pathToFileURL(join(directory, file)).href);
@@ -26,11 +27,11 @@ async function loadCommands(client) {
     }
 
     client.commands.set(command.data.name, command);
-    commandJson.push(command.data.toJSON());
+    commandModules.push(command);
   }
 
-  logger.info(`Loaded ${commandJson.length} slash commands.`);
-  return commandJson;
+  logger.info(`Loaded ${commandModules.length} slash commands.`);
+  return commandModules;
 }
 
 function registerPrefixCommand(client, command, file) {
@@ -89,7 +90,7 @@ async function loadEvents(client) {
   logger.info(`Loaded ${loaded} event handlers.`);
 }
 
-async function registerCommands(commands, settings) {
+async function registerCommands(commandModules, settings) {
   const rest = new REST({ version: '10' }).setToken(settings.token);
   const guildIds = [...new Set([
     settings.guildId,
@@ -97,8 +98,9 @@ async function registerCommands(commands, settings) {
   ].filter(Boolean))];
 
   for (const guildId of guildIds) {
-    await rest.put(Routes.applicationGuildCommands(settings.clientId, guildId), { body: commands });
-    logger.info(`Registered ${commands.length} commands in guild ${guildId}.`);
+    const body = slashCommandsForGuild(commandModules, guildId);
+    await rest.put(Routes.applicationGuildCommands(settings.clientId, guildId), { body });
+    logger.info(`Registered ${body.length} commands in guild ${guildId}.`);
   }
 }
 

@@ -1,8 +1,9 @@
-import { PINELLAS_GUILD_ID } from './pinellasServer.js';
 import { REST, Routes } from 'discord.js';
+import { slashCommandsForGuild } from './commandGuilds.js';
 import { logger } from './logger.js';
+import { PINELLAS_GUILD_ID } from './pinellasServer.js';
 
-export async function registerCommands(commands, config) {
+export async function registerCommands(commandModules, config) {
   const rest = new REST({ version: '10' }).setToken(config.token);
   const guildIds = [...new Set([
     config.guildId,
@@ -10,7 +11,8 @@ export async function registerCommands(commands, config) {
   ].filter(Boolean))];
 
   for (const guildId of guildIds) {
-    await rest.put(Routes.applicationGuildCommands(config.clientId, guildId), { body: commands });
-    logger.info(`Registered ${commands.length} commands in guild ${guildId}.`);
+    const body = slashCommandsForGuild(commandModules, guildId);
+    await rest.put(Routes.applicationGuildCommands(config.clientId, guildId), { body });
+    logger.info(`Registered ${body.length} commands in guild ${guildId}.`);
   }
 }
