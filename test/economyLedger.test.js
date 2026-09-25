@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  applyCitationFine,
   applyDeathFee,
   completeRobberyIfReady,
   confirmRobbery,
@@ -87,6 +88,26 @@ test('death fee can go negative and is charged once per fingerprint', () => {
   assert.equal(second.charged, false);
   assert.equal(store.users.u1.cash, 200 - ECONOMY_DEATH_FEE);
   assert.equal(first.tx.type, 'DEATH_FEE');
+});
+
+test('citation fines take cash then bank, can go negative, and credit the server once', () => {
+  const store = emptyEconomyStore();
+  grantStarter(store, 'u1');
+  depositCash(store, 'u1', 400);
+  const first = applyCitationFine(store, 'u1', 900, { recordId: 'cad-1', note: 'speeding' });
+  assert.equal(first.charged, true);
+  assert.equal(first.tx.type, 'CITATION_FINE');
+  assert.equal(store.users.u1.cash, 0);
+  assert.equal(store.users.u1.bank, 100);
+  assert.equal(store.server.balance, 900);
+  const dup = applyCitationFine(store, 'u1', 900, { recordId: 'cad-1' });
+  assert.equal(dup.charged, false);
+  assert.equal(store.server.balance, 900);
+  const overdraft = applyCitationFine(store, 'u1', 250, { recordId: 'cad-2' });
+  assert.equal(overdraft.charged, true);
+  assert.equal(store.users.u1.cash, -150);
+  assert.equal(store.users.u1.bank, 0);
+  assert.equal(store.server.balance, 1150);
 });
 
 test('steal only takes cash and can fail server-side', () => {

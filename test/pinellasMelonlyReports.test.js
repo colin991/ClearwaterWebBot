@@ -7,6 +7,7 @@ import {
   personNameMatches,
   recordFields,
   isPcsoStaffCadRecord,
+  citationFineAmount,
   reportTypeFor,
   resolveReportSubjectDiscordId,
   resolveReportSubmitter,
@@ -64,6 +65,28 @@ test('warrant CAD logs are not treated as arrest reports', () => {
     label: 'Arrest Report',
     agency: 'Pinellas County Sheriff',
   }), 'arrest');
+});
+
+test('citationFineAmount sums charge fines and ignores ticket numbers', () => {
+  assert.equal(citationFineAmount(sampleArrest), 10500);
+  assert.equal(citationFineAmount({
+    id: '2026-001500',
+    label: 'General Citation',
+    previewData: {
+      ticketNumber: { name: 'Ticket Number', value: '2026001446' },
+      fine: { name: 'Fine', value: '$250' },
+    },
+  }), 250);
+  assert.equal(citationFineAmount({
+    id: '2026-001501',
+    label: 'General Citation',
+    ticketAmount: 75,
+  }), 75);
+  assert.equal(citationFineAmount({
+    id: '2026-001502',
+    label: 'Arrest Report',
+    previewData: { charges: [{ code: '§316', class: 'misdemeanor', counts: 1, jail: 10 }] },
+  }), 0);
 });
 
 test('recordFields flattens Melonly arrest preview data', () => {

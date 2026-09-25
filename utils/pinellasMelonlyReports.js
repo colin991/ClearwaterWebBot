@@ -31,6 +31,10 @@ import {
   PINELLAS_SHIFT_REPORT_CHANNELS,
   resolvePinellasMelonlyMemberDiscordId,
 } from './pinellasShiftPanel.js';
+import { formatMoney } from './economyConfig.js';
+import { applyCitationFine } from './economyLedger.js';
+import { withEconomy } from './economyStore.js';
+import { dmEconomyUser, postEconomyLog } from './economyService.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const STORE_PATH = path.join(ROOT, 'data', 'pinellas-melonly-reports.json');
@@ -186,6 +190,52 @@ function isChargeObject(value) {
   return keys.has('code')
     || keys.has('charge')
     || ((keys.has('class') || keys.has('act')) && (keys.has('counts') || keys.has('count') || keys.has('fine') || keys.has('jail')));
+}
+
+function parseMoneyAmount(value) {
+  if (value == null || value === '') return 0;
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.trunc(value);
+  const cleaned = String(value).replace(/[$,\s]/g, '');
+  const number = Number(cleaned);
+  return Number.isFinite(number) ? Math.trunc(number) : 0;
+}
+
+/** Sum Melonly CAD ticket/citation fines from charges and labeled fine fields. */
+export function citationFineAmount(record) {
+  const chargeFines = [];
+  const labeledFines = [];
+  const visit = (value) => {
+    if (value == null || value === '') return;
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (typeof value !== 'object') return;
+    if (isChargeObject(value)) {
+      const fine = parseMoneyAmount(objectValue(value, 'fine', 'amount', 'ticketAmount', 'penalty'));
+      if (fine > 0) chargeFines.push(fine);
+      return;
+    }
+    if (isMelonlyFieldObject(value)) {
+      const label = melonlyFieldLabel(value);
+      if (/\b(fine|ticket amount|amount due|total fine|citation amount|penalty)\b/i.test(label)
+        && !/\b(jail|count|class|number|id)\b/i.test(label)) {
+        const fine = parseMoneyAmount(objectValue(value, 'value'));
+        if (fine > 0) labeledFines.push(fine);
+        return;
+      }
+      visit(objectValue(value, 'value'));
+      return;
+    }
+    for (const entry of Object.values(value)) visit(entry);
+  };
+  visit(record?.previewData);
+  visit(record?.data);
+  visit(record?.objects);
+  visit(record?.meta);
+  if (chargeFines.length) return chargeFines.reduce((sum, fine) => sum + fine, 0);
+  if (labeledFines.length) return labeledFines.reduce((sum, fine) => sum + fine, 0);
+  return parseMoneyAmount(record?.fine ?? record?.amount ?? record?.ticketAmount);
 }
 
 function formatCharge(charge, index) {
@@ -1117,6 +1167,37 @@ export async function fetchMelonlyCadRecords(apiKey) {
   return Array.isArray(result?.data) ? result.data : [];
 }
 
+export async function chargeCitationFine(client, record) {
+  if (reportTypeFor(record) !== 'citation') return { charged: false, reason: 'type' };
+  const amount = citationFineAmount(record);
+  if (amount <= 0) return { charged: false, reason: 'zero' };
+  const discordId = await resolveReportSubjectDiscordId(config.melonlyApiKey, record, client);
+  if (!discordId) {
+    logger.info(
+      `Melonly citation ${record?.id || 'unknown'}: no Discord match for the cited player — skipping ticket fine`,
+    );
+    return { charged: false, reason: 'unresolved' };
+  }
+  const result = await withEconomy((store) => applyCitationFine(store, discordId, amount, {
+    recordId: String(record?.id || '').trim(),
+    note: `Melonly CAD ticket ${record?.id || ''}`.trim(),
+  }));
+  if (!result.charged) return result;
+  await dmEconomyUser(client, discordId, {
+    title: 'Citation fine',
+    description: `A LEO ticket in Melonly CAD deducted ${formatMoney(result.amount)} from your account (cash first, then bank).`,
+  });
+  await postEconomyLog(
+    client,
+    'Citation fine',
+    `<@${discordId}> ${formatMoney(-result.amount)} · CAD ${record?.id || 'unknown'} · \`${result.tx.id}\``,
+  );
+  logger.info(
+    `Charged Melonly citation fine ${formatMoney(result.amount)} to Discord ${discordId} for case ${record?.id || 'unknown'}`,
+  );
+  return result;
+}
+
 async function importRecord(client, record, type) {
   const channelId = PINELLAS_SHIFT_REPORT_CHANNELS[type];
   const channel = await client.channels.fetch(channelId).catch(() => null);
@@ -1165,7 +1246,16 @@ export async function syncPinellasMelonlyReports(client) {
       skipped += 1;
       continue;
     }
-    if (!isPinellasRecord(record) && type !== 'warrant') {
+    const pinellasOrWarrant = isPinellasRecord(record) || type === 'warrant';
+    if (type === 'citation') {
+      try {
+        const billed = await chargeCitationFine(client, record);
+        if (!pinellasOrWarrant && billed.reason !== 'unresolved') seen.add(id);
+      } catch (error) {
+        logger.warn(`Could not charge Melonly citation ${id}: ${error?.message || error}`);
+      }
+    }
+    if (!pinellasOrWarrant) {
       skipped += 1;
       continue;
     }

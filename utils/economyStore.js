@@ -20,6 +20,7 @@ function normalize(raw) {
   base.payroll = data.payroll && typeof data.payroll === 'object' ? data.payroll : {};
   base.steals = data.steals && typeof data.steals === 'object' ? data.steals : {};
   base.deaths = data.deaths && typeof data.deaths === 'object' ? data.deaths : {};
+  base.citationFines = data.citationFines && typeof data.citationFines === 'object' ? data.citationFines : {};
   base.audit = Array.isArray(data.audit) ? data.audit : [];
   base.starterSweepAt = data.starterSweepAt || null;
   base.server = {

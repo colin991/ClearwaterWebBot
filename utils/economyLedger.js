@@ -47,6 +47,7 @@ export function emptyEconomyStore() {
     payroll: {},
     steals: {},
     deaths: {},
+    citationFines: {},
     audit: [],
     starterSweepAt: null,
     server: { balance: 0 },
@@ -284,6 +285,49 @@ export function applyDeathFee(store, discordId, fingerprint, { now = Date.now(),
       note: 'Death fee',
       cashAfter: user.cash,
       bankAfter: user.bank,
+    }, now),
+  };
+}
+
+export function applyCitationFine(store, discordId, amount, {
+  now = Date.now(),
+  recordId = '',
+  note = '',
+} = {}) {
+  const value = money(amount);
+  if (value <= 0) return { charged: false, reason: 'zero' };
+  const key = String(recordId || '').trim();
+  if (!store.citationFines || typeof store.citationFines !== 'object') store.citationFines = {};
+  if (key && store.citationFines[key]) return { charged: false, reason: 'duplicate' };
+  const user = ensureEconomyUser(store, discordId, { now });
+  let remaining = value;
+  const fromCash = Math.min(Math.max(0, user.cash), remaining);
+  user.cash -= fromCash;
+  remaining -= fromCash;
+  if (remaining > 0) {
+    const fromBank = Math.min(Math.max(0, user.bank), remaining);
+    user.bank -= fromBank;
+    remaining -= fromBank;
+  }
+  if (remaining > 0) user.cash -= remaining;
+  user.totalSpent += value;
+  const server = ensureServerTreasury(store);
+  server.balance += value;
+  if (key) store.citationFines[key] = now;
+  touch(user, now);
+  return {
+    charged: true,
+    amount: value,
+    user,
+    tx: pushTx(store, {
+      type: ECONOMY_TX.CITATION_FINE,
+      amount: -value,
+      fromId: user.discordId,
+      note: note || 'Melonly CAD ticket',
+      referenceId: key ? `citation:${key}` : '',
+      cashAfter: user.cash,
+      bankAfter: user.bank,
+      serverAfter: server.balance,
     }, now),
   };
 }
