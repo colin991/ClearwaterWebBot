@@ -433,6 +433,18 @@ export function payJobInterval(store, discordId, { now = Date.now(), team = '', 
   };
 }
 
+/** Stop timers for players no longer present in the live roster. */
+export function stopMissingJobSessions(store, presentDiscordIds = []) {
+  const present = new Set(Array.from(presentDiscordIds, String));
+  let stopped = 0;
+  for (const discordId of Object.keys(store.jobs || {})) {
+    if (present.has(String(discordId))) continue;
+    delete store.jobs[discordId];
+    stopped += 1;
+  }
+  return stopped;
+}
+
 export function robberyStatus(store, { now = Date.now(), leoCount = 0, priorityBlocked = false } = {}) {
   const session = store.robbery || { status: 'idle' };
   if (session.status === 'reserved' && now >= Number(session.reservedUntil || 0)) {
@@ -510,7 +522,7 @@ export function confirmRobbery(store, discordId, { now = Date.now(), callKey = '
   }
   const robbery = robberyById(session.kind);
   if (!robbery) return { confirmed: false, reason: 'unknown' };
-  const amount = session.payoutAmount > 0 ? money(session.payoutAmount) : randomInt(robbery.min, robbery.max + 1);
+  const amount = money(robbery.payout);
   session.status = 'active';
   session.preparing = false;
   session.startedAt = now;
@@ -563,7 +575,7 @@ export function completeRobberyIfReady(store, discordId, { now = Date.now(), pay
   if (String(session.reservedBy) !== String(discordId)) return { paid: false };
   if (now < Number(session.holdUntil || 0)) return { paid: false, reason: 'hold' };
   const robbery = robberyById(session.kind);
-  const amount = payout == null ? money(session.payoutAmount) || randomInt(robbery.min, robbery.max + 1) : money(payout);
+  const amount = payout == null ? money(session.payoutAmount) || money(robbery.payout) : money(payout);
   const user = ensureEconomyUser(store, discordId, { now });
   user.cash += amount;
   user.totalEarned += amount;
@@ -890,6 +902,10 @@ export function recentTransactions(store, { userId = '', deptId = '', server = f
     const tx = store.transactions[id];
     if (!tx) continue;
     if (userId && tx.fromId !== userId && tx.toId !== userId) continue;
+    if (userId && [ECONOMY_TX.TRANSFER, ECONOMY_TX.STEAL].includes(tx.type)) {
+      if (tx.amount < 0 && tx.fromId !== userId) continue;
+      if (tx.amount > 0 && tx.toId !== userId) continue;
+    }
     if (userId && tx.type === ECONOMY_TX.DEPARTMENT_PAYROLL) continue;
     if (userId && tx.type === ECONOMY_TX.TRANSFER_TAX) continue;
     if (userId && tx.fromDept && tx.amount < 0) continue;

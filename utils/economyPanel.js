@@ -290,7 +290,7 @@ export function buildRobberyPanel(state = null, { userId = '' } = {}) {
       .addSeparatorComponents(divider())
       .addSectionComponents(featureSection([
         `##  ${robbery.name}`,
-        `**Payout:** \`${formatMoney(robbery.min)} - ${formatMoney(robbery.max)}\``,
+        `**Payout:** \`${formatMoney(robbery.payout)}\``,
         `**Scene Requirement:** ${scene}`,
         `**Survival Requirement:** **${formatRemain(robbery.survivalMs)}** plus a **5:00** payout hold`,
       ].join('\n'), label, buttonId, ButtonStyle.Secondary, { disabled }));
@@ -550,7 +550,7 @@ function jobsInfoPanel(kind) {
     ].join('\n'),
     public: [
       '## Public Jobs',
-      'Civilian / public ER:LC jobs (bank, delivery, taxi, and other working jobs) pay **$50 every 10 complete minutes** while you stay on that job.',
+      `Civilian / public ER:LC jobs (bank, delivery, taxi, and other working jobs) pay **${formatMoney(ECONOMY_JOB_PAY)} every 10 complete minutes** while you stay on that job.`,
       'Just being on the Civilian team does not pay. You have to be on an actual job.',
       'Pay goes to **Cash**.',
     ].join('\n'),
@@ -558,7 +558,7 @@ function jobsInfoPanel(kind) {
       '## Payout Information',
       `- Civilian job (bank, delivery, taxi, etc.): ${formatMoney(ECONOMY_JOB_PAY)} / 10 minutes into Cash`,
       '- Department Melonly shifts: paid from that department treasury at the department rate',
-      '- Robberies: random Cash payout between the listed minimum and maximum after survival',
+      '- Robberies: the exact listed Cash payout after all survival requirements are completed',
       `- Death fee: ${formatMoney(ECONOMY_DEATH_FEE)} from Cash`,
     ].join('\n'),
     how: [

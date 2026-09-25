@@ -17,6 +17,7 @@ import {
   ECONOMY_PAY_INTERVAL_MS,
   ECONOMY_PAYOUT_HOLD_MS,
   ECONOMY_ROBBERY_ABSENT_MS,
+  ECONOMY_STARTER_GRANT,
   ECONOMY_STEAL_DISTANCE,
   isPaidCivilianJob,
   departmentByGuildId,
@@ -50,6 +51,7 @@ import {
   robberyStatus,
   setFrozen,
   spendDepartmentFunds,
+  stopMissingJobSessions,
   totalBalance,
   transferCash,
   trySteal,
@@ -101,7 +103,7 @@ export async function grantStartersForGuild(guild, client) {
     const result = await ensureStarterAccount(member.id);
     if (result.granted) {
       granted += 1;
-      await postEconomyLog(client, 'Starter grant', `<@${member.id}> received ${formatMoney(1000)} · \`${result.tx.id}\``);
+      await postEconomyLog(client, 'Starter grant', `<@${member.id}> received ${formatMoney(ECONOMY_STARTER_GRANT)} · \`${result.tx.id}\``);
     }
   }
   await withEconomy((store) => {
@@ -148,6 +150,13 @@ export function takePendingSend(userId) {
 
 export async function listUserTransactions(discordId, limit = 15) {
   return withEconomy((store) => recentTransactions(store, { userId: discordId, limit }));
+}
+
+export async function getEconomyLeaderboard(limit = 10) {
+  return withEconomy((store) => Object.values(store.users)
+    .map((user) => ({ ...user, total: totalBalance(user) }))
+    .sort((a, b) => b.total - a.total || String(a.discordId).localeCompare(String(b.discordId)))
+    .slice(0, Math.max(1, Math.min(10, Number(limit) || 10))));
 }
 
 export async function listDeptTransactions(deptId, limit = 15) {
@@ -588,6 +597,7 @@ export async function tickEconomy(client) {
   const calls = listEmergencyCalls(server);
   const logs = listCommandLogs(server);
   const identities = await discordIdsByRobloxId().catch(() => new Map());
+  const presentEconomyIds = new Set();
 
   const weekly = await withEconomy((store) => grantWeeklyDepartmentFunds(store));
   for (const tx of weekly) {
@@ -597,6 +607,7 @@ export async function tickEconomy(client) {
   for (const player of players) {
     const discordId = identities.get(String(player.robloxId || '')) || await identityMatch(player.username);
     if (!discordId) continue;
+    presentEconomyIds.add(String(discordId));
     await withEconomy((store) => {
       grantStarter(store, discordId, { robloxId: player.robloxId });
       if (isPaidCivilianJob(player.team, player.job)) {
@@ -612,6 +623,9 @@ export async function tickEconomy(client) {
         delete store.jobs[discordId];
       }
     });
+  }
+  if (server && Array.isArray(server.Players || server.players)) {
+    await withEconomy((store) => stopMissingJobSessions(store, presentEconomyIds));
   }
 
   for (const kill of kills) {

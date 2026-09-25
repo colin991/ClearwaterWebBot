@@ -418,20 +418,26 @@ export function parseErlcPlayer(player) {
     : (Array.isArray(loc.position) ? loc.position : null);
   const x = firstFinite(loc.LocationX, loc.x, player?.x, player?.X, position?.[0]);
   const z = firstFinite(loc.LocationZ, loc.z, player?.z, player?.Z, position?.[1]);
+  const jobValue = player?.Job
+    ?? player?.job
+    ?? player?.Occupation
+    ?? player?.occupation
+    ?? player?.CurrentJob
+    ?? player?.currentJob
+    ?? player?.Role
+    ?? player?.role
+    ?? player?.Employment
+    ?? player?.employment
+    ?? '';
+  const job = typeof jobValue === 'object' && jobValue
+    ? String(jobValue.Name ?? jobValue.name ?? jobValue.Title ?? jobValue.title ?? jobValue.Job ?? jobValue.job ?? '').trim()
+    : String(jobValue || '').trim();
   return {
     username: separator >= 0 ? raw.slice(0, separator) : raw,
     displayName: String(player?.PlayerDisplayName || player?.DisplayName || player?.displayName || '').trim(),
     robloxId: separator >= 0 ? raw.slice(separator + 1) : String(player?.PlayerId || player?.id || ''),
     team: player?.Team || player?.team || 'Civilian',
-    job: String(
-      player?.Job
-      || player?.job
-      || player?.Occupation
-      || player?.occupation
-      || player?.CurrentJob
-      || player?.currentJob
-      || '',
-    ).trim(),
+    job,
     callsign: player?.Callsign || player?.callsign || '',
     speed: firstFinite(player?.Speed, player?.speed, player?.VehicleSpeed, player?.vehicleSpeed, loc.Speed, loc.speed),
     location: {

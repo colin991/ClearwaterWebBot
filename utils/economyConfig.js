@@ -1,8 +1,8 @@
 /** Central Clearwater Economy V2 configuration. */
 
-export const ECONOMY_STARTER_GRANT = 1_000;
+export const ECONOMY_STARTER_GRANT = 500;
 export const ECONOMY_DEATH_FEE = 500;
-export const ECONOMY_JOB_PAY = 50;
+export const ECONOMY_JOB_PAY = 25;
 export const ECONOMY_PAY_INTERVAL_MS = 10 * 60 * 1000;
 export const ECONOMY_MIN_LEO = 10;
 export const ECONOMY_ROBBERY_RESERVE_MS = 5 * 60 * 1000;
@@ -99,8 +99,8 @@ export const ECONOMY_DEPARTMENTS = Object.freeze([
     name: 'Florida Highway Patrol',
     short: 'FHP',
     guildId: '1513609541483499790',
-    weeklyGrant: 500_000,
-    shiftPay: 200,
+    weeklyGrant: 250_000,
+    shiftPay: 100,
     emoji: '<:FHP_Logo:1514421266776461314>',
     melonlyDepartmentId: '7470614371899543552',
   },
@@ -109,8 +109,8 @@ export const ECONOMY_DEPARTMENTS = Object.freeze([
     name: 'Pinellas County Sheriff\'s Office',
     short: 'PCSO',
     guildId: '1514100977920245760',
-    weeklyGrant: 500_000,
-    shiftPay: 200,
+    weeklyGrant: 250_000,
+    shiftPay: 100,
     emoji: '<:slogo:1546245229420744804>',
     melonlyDepartmentId: '7470323914464301056',
   },
@@ -119,8 +119,8 @@ export const ECONOMY_DEPARTMENTS = Object.freeze([
     name: 'Pinellas County 911 Center',
     short: '911 Center',
     guildId: '1515101455525085337',
-    weeklyGrant: 100_000,
-    shiftPay: 100,
+    weeklyGrant: 50_000,
+    shiftPay: 50,
     emoji: '<:dispatch:1522721479370870825>',
     melonlyDepartmentId: '7471402738098638848',
   },
@@ -129,8 +129,8 @@ export const ECONOMY_DEPARTMENTS = Object.freeze([
     name: 'Clearwater Fire & Rescue',
     short: 'CFR',
     guildId: '1514804886292795544',
-    weeklyGrant: 200_000,
-    shiftPay: 100,
+    weeklyGrant: 100_000,
+    shiftPay: 50,
     emoji: '<:CFD:1514806304621989978>',
     melonlyDepartmentId: '7471029576076890112',
   },
@@ -139,8 +139,8 @@ export const ECONOMY_DEPARTMENTS = Object.freeze([
     name: 'Belleair Police Department',
     short: 'BPD',
     guildId: '1526890993327280240',
-    weeklyGrant: 200_000,
-    shiftPay: 100,
+    weeklyGrant: 100_000,
+    shiftPay: 50,
     emoji: '<:bpd_logo:1535160817606074378>',
     melonlyDepartmentId: '7492084093606170624',
   },
@@ -150,8 +150,7 @@ export const ECONOMY_ROBBERIES = Object.freeze([
   {
     id: 'bank',
     name: 'Bank Heist',
-    min: 6_500,
-    max: 10_000,
+    payout: 6_500,
     sceneMs: 2 * 60_000,
     survivalMs: 15 * 60_000,
     cooldownMs: 20 * 60_000,
@@ -161,8 +160,7 @@ export const ECONOMY_ROBBERIES = Object.freeze([
   {
     id: 'jewelry',
     name: 'Jewelry Store Robbery',
-    min: 3_000,
-    max: 5_000,
+    payout: 3_000,
     sceneMs: 60_000,
     survivalMs: 10 * 60_000,
     cooldownMs: 15 * 60_000,
@@ -172,8 +170,7 @@ export const ECONOMY_ROBBERIES = Object.freeze([
   {
     id: 'house',
     name: 'House Robbery',
-    min: 1_500,
-    max: 3_500,
+    payout: 1_500,
     sceneMs: 60_000,
     survivalMs: 8 * 60_000,
     cooldownMs: 12 * 60_000,
@@ -183,8 +180,7 @@ export const ECONOMY_ROBBERIES = Object.freeze([
   {
     id: 'atm',
     name: 'ATM Robbery',
-    min: 700,
-    max: 2_000,
+    payout: 700,
     sceneMs: 0,
     survivalMs: 7 * 60_000 + 30_000,
     cooldownMs: 10 * 60_000,
@@ -194,8 +190,7 @@ export const ECONOMY_ROBBERIES = Object.freeze([
   {
     id: 'register',
     name: 'Cash Register Robbery',
-    min: 300,
-    max: 1_000,
+    payout: 300,
     sceneMs: 0,
     survivalMs: 5 * 60_000,
     cooldownMs: 8 * 60_000,

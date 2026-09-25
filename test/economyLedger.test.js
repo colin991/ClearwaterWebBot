@@ -19,11 +19,12 @@ import {
   beginRobbery,
   robberyStatus,
   spendDepartmentFunds,
+  stopMissingJobSessions,
   transferCash,
   trySteal,
   withdrawBank,
 } from '../utils/economyLedger.js';
-import { ECONOMY_STARTER_GRANT, ECONOMY_DEATH_FEE, ECONOMY_DEPARTMENTS, departmentByGuildId, isPaidCivilianJob, matchRobberyKindFromText } from '../utils/economyConfig.js';
+import { ECONOMY_STARTER_GRANT, ECONOMY_DEATH_FEE, ECONOMY_DEPARTMENTS, ECONOMY_JOB_PAY, ECONOMY_ROBBERIES, departmentByGuildId, isPaidCivilianJob, matchRobberyKindFromText } from '../utils/economyConfig.js';
 
 test('starter grant is once per user and writes STARTER_GRANT', () => {
   const store = emptyEconomyStore();
@@ -40,10 +41,10 @@ test('deposit and withdraw keep cash and bank separate', () => {
   const store = emptyEconomyStore();
   grantStarter(store, 'u1');
   depositCash(store, 'u1', 400);
-  assert.equal(store.users.u1.cash, 600);
+  assert.equal(store.users.u1.cash, ECONOMY_STARTER_GRANT - 400);
   assert.equal(store.users.u1.bank, 400);
   withdrawBank(store, 'u1', 100);
-  assert.equal(store.users.u1.cash, 700);
+  assert.equal(store.users.u1.cash, ECONOMY_STARTER_GRANT - 300);
   assert.equal(store.users.u1.bank, 300);
 });
 
@@ -52,10 +53,10 @@ test('transfers take a 5% tax for the server treasury', () => {
   grantStarter(store, 'a');
   grantStarter(store, 'b');
   const result = transferCash(store, 'a', 'b', 250, { note: 'test' });
-  assert.equal(store.users.a.cash, 750);
+  assert.equal(store.users.a.cash, ECONOMY_STARTER_GRANT - 250);
   assert.equal(result.taxAmount, 12);
   assert.equal(result.received, 238);
-  assert.equal(store.users.b.cash, 1238);
+  assert.equal(store.users.b.cash, ECONOMY_STARTER_GRANT + 238);
   assert.equal(store.server.balance, 12);
   assert.equal(result.outgoing.referenceId, result.incoming.referenceId);
   assert.equal(result.tax.referenceId, result.incoming.referenceId);
@@ -72,8 +73,8 @@ test('refunding a taxed send returns the tax from the server treasury', () => {
   grantStarter(store, 'b');
   const result = transferCash(store, 'a', 'b', 250, { note: 'test' });
   const refunded = refundTransaction(store, result.referenceId, { adminId: 'staff', reason: 'test refund' });
-  assert.equal(store.users.a.cash, 1000);
-  assert.equal(store.users.b.cash, 1000);
+  assert.equal(store.users.a.cash, ECONOMY_STARTER_GRANT);
+  assert.equal(store.users.b.cash, ECONOMY_STARTER_GRANT);
   assert.equal(store.server.balance, 0);
   assert.equal(refunded.tx.type, 'REFUND');
 });
@@ -93,6 +94,7 @@ test('death fee can go negative and is charged once per fingerprint', () => {
 test('citation fines take cash then bank, can go negative, and credit the server once', () => {
   const store = emptyEconomyStore();
   grantStarter(store, 'u1');
+  store.users.u1.cash = 1000;
   depositCash(store, 'u1', 400);
   const first = applyCitationFine(store, 'u1', 900, { recordId: 'cad-1', note: 'speeding' });
   assert.equal(first.charged, true);
@@ -114,6 +116,7 @@ test('steal only takes cash and can fail server-side', () => {
   const store = emptyEconomyStore();
   grantStarter(store, 'thief');
   grantStarter(store, 'victim');
+  store.users.victim.cash = 1000;
   depositCash(store, 'victim', 800);
   const fail = trySteal(store, 'thief', 'victim', {
     distance: 4,
@@ -133,7 +136,7 @@ test('steal only takes cash and can fail server-side', () => {
   });
   assert.equal(win.success, true);
   assert.equal(store.users.victim.bank, 800);
-  assert.equal(store.users.victim.cash + store.users.thief.cash, 1200);
+  assert.equal(store.users.victim.cash + store.users.thief.cash, ECONOMY_STARTER_GRANT + 200);
 });
 
 test('civilian job pay waits a full interval on the same job, not unemployed Civilian', () => {
@@ -144,7 +147,7 @@ test('civilian job pay waits a full interval on the same job, not unemployed Civ
   assert.equal(payJobInterval(store, 'u1', { now: t0 + 9 * 60_000, team: 'Civilian', job: 'Bank' }).paid, false);
   const paid = payJobInterval(store, 'u1', { now: t0 + 10 * 60_000, team: 'Civilian', job: 'Bank' });
   assert.equal(paid.paid, true);
-  assert.equal(paid.amount, 50);
+  assert.equal(paid.amount, ECONOMY_JOB_PAY);
   assert.equal(payJobInterval(store, 'u1', { now: t0 + 10 * 60_000, team: 'Civilian' }).paid, false);
   assert.equal(store.jobs.u1, undefined);
 });
@@ -153,24 +156,24 @@ test('department weekly grants run once per week and payroll comes from treasury
   const store = emptyEconomyStore();
   const granted = grantWeeklyDepartmentFunds(store, { now: Date.parse('2026-09-25T12:00:00Z') });
   assert.equal(granted.length, 5);
-  assert.equal(store.departments.fhp.balance, 500_000);
+  assert.equal(store.departments.fhp.balance, 250_000);
   grantWeeklyDepartmentFunds(store, { now: Date.parse('2026-09-25T18:00:00Z') });
-  assert.equal(store.departments.fhp.balance, 500_000);
+  assert.equal(store.departments.fhp.balance, 250_000);
   const armed = payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 's1', elapsedMs: 20 * 60_000 });
   assert.equal(armed.paid, false);
   assert.equal(armed.reason, 'armed');
   assert.equal(store.users.cop, undefined);
   const pay = payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 's1', elapsedMs: 30 * 60_000 });
   assert.equal(pay.paid, true);
-  assert.equal(pay.amount, 200);
-  assert.equal(store.departments.fhp.balance, 499_800);
-  assert.equal(store.users.cop.cash, 200);
+  assert.equal(pay.amount, 100);
+  assert.equal(store.departments.fhp.balance, 249_900);
+  assert.equal(store.users.cop.cash, 100);
   const duplicate = payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 'other', elapsedMs: 30 * 60_000 });
   assert.equal(duplicate.paid, false);
   store.departments.fhp.balance = 50;
   const broke = payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 's1', elapsedMs: 40 * 60_000 });
   assert.equal(broke.reason, 'insufficient');
-  assert.equal(store.users.cop.cash, 200);
+  assert.equal(store.users.cop.cash, 100);
 });
 
 test('department and player transaction lists keep payroll as one row', () => {
@@ -195,7 +198,7 @@ test('department funds can send to a person or the server with a note', () => {
     note: 'equipment reimbursement',
     authorizedBy: 'boss',
   });
-  assert.equal(store.departments.fhp.balance, 499_000);
+  assert.equal(store.departments.fhp.balance, 249_000);
   assert.equal(store.users.u1.cash, 1000);
   assert.equal(person.tx.note, 'equipment reimbursement');
   assert.equal(person.creditTx.amount, 1000);
@@ -206,7 +209,7 @@ test('department funds can send to a person or the server with a note', () => {
     toServer: true,
     note: 'city event support',
   });
-  assert.equal(store.departments.pcso.balance, 497_500);
+  assert.equal(store.departments.pcso.balance, 247_500);
   assert.equal(store.server.balance, 2500);
   assert.equal(serverPay.tx.toServer, true);
   const serverRows = recentTransactions(store, { server: true, limit: 5 });
@@ -283,6 +286,28 @@ test('player parser keeps Job separate from Civilian team', async () => {
   assert.equal(unemployed.job, '');
   const bank = parseErlcPlayer({ Player: 'Alex:1', Team: 'Civilian', Job: 'Bank' });
   assert.equal(bank.job, 'Bank');
+  const structured = parseErlcPlayer({ Player: 'Alex:1', Team: 'Civilian', CurrentJob: { Name: 'Delivery Driver' } });
+  assert.equal(structured.job, 'Delivery Driver');
+});
+
+test('leaving the live roster stops a civilian job timer', () => {
+  const store = emptyEconomyStore();
+  payJobInterval(store, 'working', { team: 'Civilian', job: 'Bank' });
+  payJobInterval(store, 'present', { team: 'Civilian', job: 'Delivery' });
+  assert.equal(stopMissingJobSessions(store, new Set(['present'])), 1);
+  assert.equal(store.jobs.working, undefined);
+  assert.equal(store.jobs.present.team, 'Delivery');
+});
+
+test('robberies use the exact configured payouts', () => {
+  assert.deepEqual(Object.fromEntries(ECONOMY_ROBBERIES.map((entry) => [entry.id, entry.payout])), {
+    bank: 6500,
+    jewelry: 3000,
+    house: 1500,
+    atm: 700,
+    register: 300,
+  });
+  assert.equal(ECONOMY_ROBBERIES.some((entry) => 'min' in entry || 'max' in entry), false);
 });
 
 test('department Discord IDs map to the configured treasuries', () => {
