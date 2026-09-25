@@ -49,6 +49,7 @@ import {
 } from './economyLedger.js';
 import { withEconomy } from './economyStore.js';
 import { memberIsStaff } from './prefixHelpers.js';
+import { v2Card } from './v2Message.js';
 
 const pendingSends = new Map();
 
@@ -258,10 +259,19 @@ function rosterPlayers(snapshot) {
   });
 }
 
+export function sanitizeGamePm(message) {
+  return String(message || '')
+    .replace(/\$/g, '')
+    .replace(/<@!?(\d+)>/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160);
+}
+
 export async function pmEconomyPlayer(client, username, message) {
   const key = client?.config?.erlcServerKey;
   const who = String(username || '').trim().split(/\s+/)[0];
-  const body = String(message || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+  const body = sanitizeGamePm(message);
   if (!key || !who || !body) {
     logger.warn(`Economy in-game PM skipped (user=${who || 'none'}): ${body}`);
     return false;
@@ -273,6 +283,42 @@ export async function pmEconomyPlayer(client, username, message) {
     logger.warn(`Economy in-game PM failed for ${who}: ${error?.message || error}`);
     return false;
   }
+}
+
+export async function dmEconomyUser(client, discordId, { title, description }) {
+  const id = String(discordId || '').trim();
+  if (!id || !client?.users?.fetch) return false;
+  try {
+    const user = await client.users.fetch(id);
+    await user.send(v2Card({
+      title: title || 'Clearwater Economy',
+      description,
+    }));
+    return true;
+  } catch (error) {
+    logger.warn(`Economy Discord DM failed for ${id}: ${error?.message || error}`);
+    return false;
+  }
+}
+
+async function notifyStealPlayers({
+  client,
+  thiefName,
+  victimName,
+  thiefDiscord,
+  victimDiscord,
+  thiefGame,
+  victimGame,
+  thiefDm,
+  victimDm,
+}) {
+  const tasks = [
+    pmEconomyPlayer(client, thiefName, thiefGame),
+  ];
+  if (victimGame && victimName) tasks.push(pmEconomyPlayer(client, victimName, victimGame));
+  if (thiefDiscord && thiefDm) tasks.push(dmEconomyUser(client, thiefDiscord, thiefDm));
+  if (victimDiscord && victimDm) tasks.push(dmEconomyUser(client, victimDiscord, victimDm));
+  await Promise.allSettled(tasks);
 }
 
 export async function handleStealCommand({ player, snapshot, client }) {
@@ -333,11 +379,43 @@ export async function handleStealCommand({ player, snapshot, client }) {
     return { success: false, reason: 'rejected', message };
   }
   if (result.success) {
-    await pmEconomyPlayer(client, thiefLive.username, `You successfully stole ${formatMoney(result.amount)} from ${closest.username}.`);
-    await pmEconomyPlayer(client, closest.username, `${thiefLive.username} stole ${formatMoney(result.amount)} from you.`);
-    await postEconomyLog(client, 'Steal success', `<@${thiefDiscord}> stole ${formatMoney(result.amount)} from <@${victimDiscord}> · \`${result.referenceId}\``);
+    const amount = formatMoney(result.amount);
+    await notifyStealPlayers({
+      client,
+      thiefName: thiefLive.username,
+      victimName: closest.username,
+      thiefDiscord,
+      victimDiscord,
+      thiefGame: `You successfully stole ${amount} from ${closest.username}.`,
+      victimGame: `${thiefLive.username} stole ${amount} from you.`,
+      thiefDm: {
+        title: 'Steal successful',
+        description: `You stole **${amount}** cash from **${closest.username}**.\nTransaction \`${result.referenceId}\``,
+      },
+      victimDm: {
+        title: 'You were stolen from',
+        description: `**${thiefLive.username}** stole **${amount}** cash from you.\nTransaction \`${result.referenceId}\``,
+      },
+    });
+    await postEconomyLog(client, 'Steal success', `<@${thiefDiscord}> stole ${amount} from <@${victimDiscord}> · \`${result.referenceId}\``);
   } else {
-    await pmEconomyPlayer(client, thiefLive.username, 'Your steal attempt failed.');
+    await notifyStealPlayers({
+      client,
+      thiefName: thiefLive.username,
+      victimName: closest.username,
+      thiefDiscord,
+      victimDiscord,
+      thiefGame: 'Your steal attempt failed.',
+      victimGame: `${thiefLive.username} tried to steal from you but failed.`,
+      thiefDm: {
+        title: 'Steal failed',
+        description: `Your steal attempt against **${closest.username}** failed. No cash was taken.`,
+      },
+      victimDm: {
+        title: 'Steal attempt failed',
+        description: `**${thiefLive.username}** tried to steal from you and failed. Your cash is unchanged.`,
+      },
+    });
     await postEconomyLog(client, 'Steal failed', `<@${thiefDiscord}> failed to steal from <@${victimDiscord}>`);
   }
   return result;

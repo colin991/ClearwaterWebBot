@@ -167,3 +167,8 @@ test('department Discord IDs map to the configured treasuries', () => {
   assert.equal(departmentByGuildId('1514804886292795544').id, 'cfr');
   assert.equal(departmentByGuildId('1526890993327280240').id, 'bpd');
 });
+
+test('in-game steal PMs strip dollar signs that ER:LC censors', async () => {
+  const { sanitizeGamePm } = await import('../utils/economyService.js');
+  assert.equal(sanitizeGamePm('You successfully stole $1,250 from Alex.'), 'You successfully stole 1,250 from Alex.');
+});

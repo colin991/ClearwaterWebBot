@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-25-steal-discord-dm",
+      "title": "Discord DM both players after a steal",
+      "summary": ";steal now Discord DMs the thief and the victim on success or failure. In-game PMs also drop the dollar sign so ER:LC does not censor the message into hashes.",
+      "createdAt": "2026-09-25T03:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-25-steal-pm",
       "title": "Make ;steal actually notify you in-game",
       "summary": ";steal now watches ER:LC command logs as well as webhooks, and it always sends an in-game PM for success, failure, or why the steal could not run.",
