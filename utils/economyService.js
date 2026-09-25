@@ -3,9 +3,9 @@ import {
   CLEARWATER_GUILD_ID,
 } from './staffRanks.js';
 import { logger } from './logger.js';
-import { executeErlcCommand, fetchErlcServer, isCivilianTeam, parseErlcKill, parseErlcPlayer } from './erlc.js';
+import { executeErlcCommand, fetchErlcServer, isCivilianTeam, parseErlcCommandLog, parseErlcKill, parseErlcPlayer } from './erlc.js';
 import { discordIdsByRobloxId, getIdentityCache } from './identityStore.js';
-import { playerStudDistance } from './erlcSceneCommands.js';
+import { isStealCommandText, playerStudDistance } from './erlcSceneCommands.js';
 import { fetchPinellasDepartmentShifts, isActiveMelonlyShift, shiftCreatedMs } from './melonly.js';
 import {
   ECONOMY_DEATH_FEE,
@@ -244,18 +244,58 @@ export async function economyBlocksNewPriority(client) {
   return withEconomy((store) => economyBlocksPriority(store));
 }
 
+function rosterPlayers(snapshot) {
+  return (snapshot?.Players || snapshot?.players || []).map((entry) => {
+    const mapped = parseErlcPlayer(entry);
+    if (entry?.username == null) return mapped;
+    return {
+      ...mapped,
+      username: entry.username || mapped.username,
+      robloxId: entry.robloxId || mapped.robloxId,
+      team: entry.team || mapped.team,
+      location: entry.location || mapped.location,
+    };
+  });
+}
+
+export async function pmEconomyPlayer(client, username, message) {
+  const key = client?.config?.erlcServerKey;
+  const who = String(username || '').trim().split(/\s+/)[0];
+  const body = String(message || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+  if (!key || !who || !body) {
+    logger.warn(`Economy in-game PM skipped (user=${who || 'none'}): ${body}`);
+    return false;
+  }
+  try {
+    await executeErlcCommand(key, `:pm ${who} ${body}`);
+    return true;
+  } catch (error) {
+    logger.warn(`Economy in-game PM failed for ${who}: ${error?.message || error}`);
+    return false;
+  }
+}
+
 export async function handleStealCommand({ player, snapshot, client }) {
-  const players = (snapshot?.Players || snapshot?.players || []).map((entry) => (
-    entry?.username != null ? entry : parseErlcPlayer(entry)
-  ));
+  const players = rosterPlayers(snapshot);
   const thiefLive = players.find((entry) => String(entry.robloxId) === String(player?.robloxId || ''))
     || players.find((entry) => String(entry.username || '').toLowerCase() === String(player?.username || '').toLowerCase());
-  if (!thiefLive) throw new Error('You must be in-game to use ;steal.');
+  const thiefName = thiefLive?.username || player?.username || '';
+  if (!thiefLive) {
+    const message = 'You must be in the Roblox server to use ;steal.';
+    await pmEconomyPlayer(client, thiefName, message);
+    return { success: false, reason: 'not-in-game', message };
+  }
+  if (!isCivilianTeam(thiefLive.team)) {
+    const message = 'You must be on Civilian to use ;steal.';
+    await pmEconomyPlayer(client, thiefLive.username, message);
+    return { success: false, reason: 'not-civilian', message };
+  }
   let closest = null;
   let closestDist = Infinity;
   for (const other of players) {
     if (other === thiefLive) continue;
-    if (String(other.robloxId) === String(thiefLive.robloxId)) continue;
+    if (String(other.robloxId) && String(other.robloxId) === String(thiefLive.robloxId)) continue;
+    if (!isCivilianTeam(other.team)) continue;
     const dist = playerStudDistance(thiefLive, other);
     if (dist == null || dist > ECONOMY_STEAL_DISTANCE) continue;
     if (dist < closestDist) {
@@ -263,30 +303,88 @@ export async function handleStealCommand({ player, snapshot, client }) {
       closestDist = dist;
     }
   }
-  if (!closest) throw new Error('No civilian is within 10 studs.');
+  if (!closest) {
+    const message = 'No civilian is within 10 studs.';
+    await pmEconomyPlayer(client, thiefLive.username, message);
+    return { success: false, reason: 'no-target', message };
+  }
   const thiefDiscord = await discordForRoblox(thiefLive.robloxId) || (await identityMatch(thiefLive.username));
   const victimDiscord = await discordForRoblox(closest.robloxId) || (await identityMatch(closest.username));
-  if (!thiefDiscord) throw new Error('Your Roblox account is not linked to Discord.');
-  if (!victimDiscord) throw new Error('That player is not linked to Discord.');
-  const result = await withEconomy((store) => trySteal(store, thiefDiscord, victimDiscord, {
-    distance: closestDist,
-    thiefTeam: thiefLive.team,
-    victimTeam: closest.team,
-  }));
-  const key = client?.config?.erlcServerKey;
+  if (!thiefDiscord) {
+    const message = 'Your Roblox account is not linked to Discord.';
+    await pmEconomyPlayer(client, thiefLive.username, message);
+    return { success: false, reason: 'unlinked', message };
+  }
+  if (!victimDiscord) {
+    const message = 'That player is not linked to Discord.';
+    await pmEconomyPlayer(client, thiefLive.username, message);
+    return { success: false, reason: 'victim-unlinked', message };
+  }
+  let result;
+  try {
+    result = await withEconomy((store) => trySteal(store, thiefDiscord, victimDiscord, {
+      distance: closestDist,
+      thiefTeam: thiefLive.team,
+      victimTeam: closest.team,
+    }));
+  } catch (error) {
+    const message = String(error?.message || 'Your steal attempt failed.');
+    await pmEconomyPlayer(client, thiefLive.username, message);
+    return { success: false, reason: 'rejected', message };
+  }
   if (result.success) {
-    if (key) {
-      await executeErlcCommand(key, `:pm ${thiefLive.username} You successfully stole ${formatMoney(result.amount)} from ${closest.username}.`).catch(() => {});
-      await executeErlcCommand(key, `:pm ${closest.username} ${thiefLive.username} stole ${formatMoney(result.amount)} from you.`).catch(() => {});
-    }
+    await pmEconomyPlayer(client, thiefLive.username, `You successfully stole ${formatMoney(result.amount)} from ${closest.username}.`);
+    await pmEconomyPlayer(client, closest.username, `${thiefLive.username} stole ${formatMoney(result.amount)} from you.`);
     await postEconomyLog(client, 'Steal success', `<@${thiefDiscord}> stole ${formatMoney(result.amount)} from <@${victimDiscord}> · \`${result.referenceId}\``);
   } else {
-    if (key) {
-      await executeErlcCommand(key, `:pm ${thiefLive.username} Your steal attempt failed.`).catch(() => {});
-    }
+    await pmEconomyPlayer(client, thiefLive.username, 'Your steal attempt failed.');
     await postEconomyLog(client, 'Steal failed', `<@${thiefDiscord}> failed to steal from <@${victimDiscord}>`);
   }
   return result;
+}
+
+const stealLogSeen = new Set();
+let stealLogsPrimed = false;
+
+export async function scanStealCommandLogs(client) {
+  if (!client?.config?.erlcServerKey) return { scanned: 0 };
+  const server = await fetchErlcServer(client.config.erlcServerKey, { timeoutMs: 4_000 }).catch(() => null);
+  const logs = (server?.CommandLogs || server?.commandLogs || []).map((entry) => (
+    entry?.command != null || entry?.username != null ? entry : parseErlcCommandLog(entry)
+  ));
+  if (!stealLogsPrimed) {
+    for (const entry of logs) stealLogSeen.add(`${entry.at || 0}:${entry.username || ''}:${entry.command || ''}`);
+    stealLogsPrimed = true;
+    return { scanned: logs.length, primed: true };
+  }
+  let handled = 0;
+  for (const entry of logs) {
+    if (!isStealCommandText(entry.command)) continue;
+    const id = `${entry.at || 0}:${entry.username || ''}:${entry.command || ''}`;
+    if (stealLogSeen.has(id)) continue;
+    stealLogSeen.add(id);
+    try {
+      await handleStealCommand({
+        player: { username: entry.username, robloxId: entry.robloxId },
+        snapshot: server,
+        client,
+      });
+      handled += 1;
+    } catch (error) {
+      logger.info(`Economy ;steal from command logs: ${error?.message || error}`);
+    }
+  }
+  if (stealLogSeen.size > 400) {
+    const keep = [...stealLogSeen].slice(-200);
+    stealLogSeen.clear();
+    for (const id of keep) stealLogSeen.add(id);
+  }
+  return { scanned: logs.length, handled };
+}
+
+export function resetStealLogScannerForTests() {
+  stealLogSeen.clear();
+  stealLogsPrimed = false;
 }
 
 async function identityMatch(username) {
@@ -488,6 +586,12 @@ export function startEconomy(client) {
     });
   }, 20_000);
   tick.unref?.();
+  const stealTick = setInterval(() => {
+    void scanStealCommandLogs(client).catch((error) => {
+      logger.warn(`Economy steal scan failed: ${error?.message || error}`);
+    });
+  }, 5_000);
+  stealTick.unref?.();
   setTimeout(() => {
     const guild = client?.guilds?.cache?.get(CLEARWATER_GUILD_ID);
     if (guild) {
@@ -499,7 +603,13 @@ export function startEconomy(client) {
   void tickEconomy(client).catch((error) => {
     logger.warn(`Economy first tick failed: ${error?.message || error}`);
   });
-  return () => clearInterval(tick);
+  void scanStealCommandLogs(client).catch((error) => {
+    logger.warn(`Economy steal scan failed: ${error?.message || error}`);
+  });
+  return () => {
+    clearInterval(tick);
+    clearInterval(stealTick);
+  };
 }
 
 export { departmentByGuildId, formatMoney, ensureEconomyUser, recentTransactions, findTransaction };

@@ -5,6 +5,7 @@ import {
   extractWebhookCommandText,
   extractWebhookPlayer,
   handleErlcSceneEvent,
+  isStealCommandText,
   logIncomingErlcWebhook,
   parseCustomCommand,
   parseNumberedVoiceName,
@@ -44,6 +45,10 @@ test('parses in-game scene commands and ignores other chat', () => {
   assert.equal(parseCustomCommand(';team').kind, 'team');
   assert.equal(parseCustomCommand(';ping'), null);
   assert.equal(parseCustomCommand(':ss'), null);
+  assert.equal(isStealCommandText(';steal'), true);
+  assert.equal(isStealCommandText('steal'), true);
+  assert.equal(isStealCommandText('; STEAL now'), true);
+  assert.equal(parseCustomCommand(';steal'), null);
 });
 
 test('numbered VC names match Name + number and do not confuse Scene with Mod Scene', () => {
@@ -139,6 +144,23 @@ test('incoming ER:LC command webhooks post to the action log even when unparsed'
   assert.equal(result.reason, 'not_scene_command');
   assert.match(sent[0], /FAIL — /);
   assert.match(sent[0], /not a recognized/);
+});
+
+test(';steal is handled as economy steal instead of an unknown scene command', async () => {
+  const sent = [];
+  const client = {
+    config: {},
+    channels: {
+      cache: { get: () => ({ isTextBased: () => true, send: async (payload) => { sent.push(payload.content); } }) },
+      fetch: async () => ({ isTextBased: () => true, send: async (payload) => { sent.push(payload.content); } }),
+    },
+  };
+  const result = await handleErlcSceneEvent(
+    { Type: 'Command', Player: 'Colin:99', Message: ';steal' },
+    { client, config: {}, snapshot: async () => ({ Players: [] }) },
+  );
+  assert.equal(result.reason, 'steal_rejected');
+  assert.match(String(result.error || ''), /in-game|Roblox|steal/i);
 });
 
 test('handleErlcSceneEvent moves a linked member into an empty Civilian VC', async () => {

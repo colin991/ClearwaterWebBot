@@ -1,5 +1,5 @@
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
-import { fetchErlcServer, parseErlcPlayer, executeErlcCommand } from './erlc.js';
+import { fetchErlcServer, parseErlcPlayer } from './erlc.js';
 import { discordIdsByRobloxId } from './identityStore.js';
 import { resolveZoneDiscordMember } from './erlcZoneVoice.js';
 import { markBotVoiceMove } from './botVoiceMoves.js';
@@ -19,6 +19,7 @@ export const SCENE_COMMAND_LOG_CHANNEL_ID = VC_ACTION_LOG_CHANNEL_ID;
 
 export const SCENE_COMMAND_FAILURE_REASONS = Object.freeze({
   unknown_command: 'not a known ;ss ;ts ;scene ;fc ;civ ;team command',
+  steal: 'in-game steal processed',
   steal_rejected: 'steal command rejected',
   missing_player: 'webhook had no player',
   duplicate: 'duplicate of the same command from the last 4 seconds',
@@ -169,6 +170,10 @@ export function extractWebhookEventType(payload) {
   ]);
 }
 
+export function isStealCommandText(text) {
+  return /^[:;]?\s*steal\b/i.test(String(text || '').trim());
+}
+
 export function parseCustomCommand(text) {
   const cleaned = String(text || '').trim();
   if (!cleaned) return null;
@@ -183,6 +188,7 @@ export function isCustomCommandEvent(payload) {
   const type = extractWebhookEventType(payload);
   if (/custom\s*command/i.test(type) || /^commands?$/i.test(type)) return true;
   const text = extractWebhookCommandText(payload);
+  if (isStealCommandText(text)) return true;
   if (text.startsWith(';')) return true;
   if (parseCustomCommand(text)) return true;
   const commandField = firstString(mappings(payload), ['Command', 'command']);
@@ -497,6 +503,33 @@ export async function handleErlcSceneEvent(payload, {
   identities,
 } = {}) {
   const parsed = resolveSceneCommand(payload);
+  const stealText = extractWebhookCommandText(payload);
+  if ((!parsed || !parsed.command) && isStealCommandText(stealText || parsed?.text)) {
+    const player = parsed?.player || extractWebhookPlayer(payload);
+    let result;
+    try {
+      result = await runStealCommand(payload, {
+        client, config, snapshot, player, text: stealText || parsed?.text,
+      });
+    } catch (error) {
+      result = {
+        handled: false,
+        reason: 'steal_rejected',
+        error: error?.message || String(error),
+        player,
+      };
+    }
+    await logSceneCommandResult(client, {
+      handled: result.handled,
+      reason: result.reason,
+      commandName: 'steal',
+      rawText: stealText || parsed?.text,
+      player: result.player || player,
+      error: result.error,
+      payloadHint: result.handled ? '' : payloadKeyHint(payload),
+    });
+    return result;
+  }
   if (!parsed) {
     if (!looksLikeEmergencyCallEvent(payload)) {
       await logSceneCommandResult(client, {
@@ -539,6 +572,37 @@ export async function handleErlcSceneEvent(payload, {
   return result;
 }
 
+async function runStealCommand(payload, { client, config, snapshot, player, text }) {
+  const server = snapshot
+    ? await snapshot()
+    : (config.erlcServerKey ? await fetchErlcServer(config.erlcServerKey) : null);
+  const { handleStealCommand } = await import('./economyService.js');
+  try {
+    const result = await handleStealCommand({
+      player,
+      snapshot: server,
+      client,
+      rawText: text,
+    });
+    return {
+      handled: true,
+      reason: result?.success ? 'steal' : 'steal_rejected',
+      player,
+      error: result?.success ? '' : (result?.message || result?.reason || ''),
+    };
+  } catch (error) {
+    const message = String(error?.message || 'Your steal attempt failed.');
+    const { pmEconomyPlayer } = await import('./economyService.js');
+    await pmEconomyPlayer(client, player?.username, message);
+    return {
+      handled: false,
+      reason: 'steal_rejected',
+      player,
+      error: message,
+    };
+  }
+}
+
 async function executeErlcSceneCommand(payload, parsed, {
   client,
   config,
@@ -548,30 +612,10 @@ async function executeErlcSceneCommand(payload, parsed, {
   identities,
 }) {
   if (!parsed.command) {
-    if (/^;?steal\b/i.test(String(parsed.text || ''))) {
-      try {
-        const server = snapshot
-          ? await snapshot()
-          : (config.erlcServerKey ? await fetchErlcServer(config.erlcServerKey) : null);
-        const { handleStealCommand } = await import('./economyService.js');
-        await handleStealCommand({
-          player: parsed.player,
-          snapshot: server,
-          client,
-        });
-        return { handled: true, reason: 'steal', player: parsed.player };
-      } catch (error) {
-        const message = String(error?.message || 'Your steal attempt failed.');
-        if (config.erlcServerKey && parsed.player?.username) {
-          await executeErlcCommand(config.erlcServerKey, `:pm ${parsed.player.username} ${message}`).catch(() => {});
-        }
-        return {
-          handled: false,
-          reason: 'steal_rejected',
-          player: parsed.player,
-          error: message,
-        };
-      }
+    if (isStealCommandText(parsed.text)) {
+      return runStealCommand(payload, {
+        client, config, snapshot, player: parsed.player, text: parsed.text,
+      });
     }
     return { handled: false, reason: 'unknown_command', player: parsed.player };
   }
