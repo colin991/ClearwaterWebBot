@@ -2,7 +2,7 @@
 
 export const ECONOMY_STARTER_GRANT = 500;
 export const ECONOMY_DEATH_FEE = 500;
-export const ECONOMY_JOB_PAY = 25;
+export const ECONOMY_JOB_PAY = 20;
 export const ECONOMY_PAY_INTERVAL_MS = 10 * 60 * 1000;
 export const ECONOMY_MIN_LEO = 10;
 export const ECONOMY_ROBBERY_RESERVE_MS = 5 * 60 * 1000;
@@ -17,57 +17,9 @@ export const ECONOMY_TRANSFER_TAX_PERCENT = 5;
 export const ECONOMY_TX_RECENT = 12;
 export const ECONOMY_TX_KEEP = 4_000;
 export const ECONOMY_SCENE_RADIUS = 45;
-export const ECONOMY_CIVILIAN_JOBS = Object.freeze([
-  'bank',
-  'teller',
-  'cashier',
-  'delivery',
-  'pizza',
-  'mail',
-  'postal',
-  'taxi',
-  'bus',
-  'garbage',
-  'trash',
-  'mechanic',
-  'tow',
-  'trucker',
-  'ice cream',
-  'grocery',
-  'farmer',
-  'lumber',
-  'miner',
-  'factory',
-  'janitor',
-  'security',
-]);
-
-function jobLabel(value) {
-  return String(value || '').replace(/[_-]+/g, ' ').trim();
-}
-
-function isEmergencyJobLabel(value) {
-  return /\b(police|sheriff|fire|dot|leo|ems|paramedic|trooper|deputy|corrections|dispatch)\b/i.test(jobLabel(value));
-}
-
-function isBareCivilianLabel(value) {
-  return !value || /^(civilian(\s+team)?|civ|none|n\/a|unemployed|off duty)$/i.test(value);
-}
-
-function haystackHasCivilianJob(haystack) {
-  return ECONOMY_CIVILIAN_JOBS.some((name) => new RegExp(`\\b${name.replace(/\s+/g, '\\s+')}\\b`, 'i').test(haystack));
-}
-
-/** True for a real civilian job (bank, delivery, taxi, …), not unemployed Civilian team. */
-export function isPaidCivilianJob(team, job = '') {
-  if (isEmergencyJobLabel(team) || isEmergencyJobLabel(job)) return false;
-  const teamLabel = jobLabel(team);
-  const extra = jobLabel(job);
-  const haystack = `${teamLabel} ${extra}`.trim();
-  if (!haystack) return false;
-  if (haystackHasCivilianJob(haystack)) return true;
-  const onCivilianTeam = /civilian/i.test(teamLabel) || isBareCivilianLabel(teamLabel);
-  return Boolean(onCivilianTeam && extra && !isBareCivilianLabel(extra) && !/^civilian(\s+team)?$/i.test(extra));
+/** The public API exposes Civilian team status, but not the player's in-game civilian job. */
+export function isPaidCivilianJob(team) {
+  return /^civilian(?:\s+team)?$/i.test(String(team || '').trim());
 }
 
 export const ECONOMY_PANEL_CHANNEL_ID = '1545267006360649728';

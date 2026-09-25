@@ -179,3 +179,23 @@ test('waits 10 minutes before the next spin', async () => {
   assert.equal(commands.length, 2);
   assert.equal(commands[1], ':weather clear');
 });
+
+test('administrator clear lock persists and blocks automatic weather until it expires', async () => {
+  const f = weatherFixture({
+    players: [{ username: 'Alpha' }],
+    time: 1_000,
+    random: () => 0.70,
+    stored: { currentWeather: 'rain', nextSpinAt: 1 },
+  });
+  const lock = await f.service.lockClear(30, 'admin');
+  assert.equal(lock.until, 1_000 + 30 * 60_000);
+  assert.deepEqual(f.commands, [':weather clear']);
+  assert.equal(f.service.state.clearLockedBy, 'admin');
+  f.setTime(lock.until - 1);
+  await f.service.tick();
+  assert.deepEqual(f.commands, [':weather clear']);
+  f.setTime(lock.until);
+  await f.service.tick();
+  assert.deepEqual(f.commands, [':weather clear', ':weather rain']);
+  assert.equal(f.service.state.clearLockedUntil, 0);
+});

@@ -236,8 +236,7 @@ export async function jobViewFor(discordId, players = []) {
     grantStarter(store, discordId, { robloxId: identity?.robloxId || live?.robloxId });
     const session = store.jobs[discordId];
     const team = live?.team || session?.team || 'Off duty';
-    const jobName = live?.job || (isPaidCivilianJob(team) ? team : '');
-    const eligible = isPaidCivilianJob(live?.team || team, live?.job || '');
+    const eligible = Boolean(live && isPaidCivilianJob(live.team));
     const started = session?.startedAt || 0;
     const elapsed = eligible && started ? Date.now() - started : 0;
     const nextIn = eligible && started
@@ -245,9 +244,7 @@ export async function jobViewFor(discordId, players = []) {
       : ECONOMY_PAY_INTERVAL_MS;
     const label = !live
       ? (session?.team || 'Off duty')
-      : (eligible
-        ? (jobName || team)
-        : (/^civilian$/i.test(String(team)) ? 'Unemployed (Civilian)' : team));
+      : (eligible ? 'Civilian' : team);
     return {
       team: label,
       civilian: eligible,
@@ -610,7 +607,7 @@ export async function tickEconomy(client) {
     presentEconomyIds.add(String(discordId));
     await withEconomy((store) => {
       grantStarter(store, discordId, { robloxId: player.robloxId });
-      if (isPaidCivilianJob(player.team, player.job)) {
+      if (isPaidCivilianJob(player.team)) {
         const paid = payJobInterval(store, discordId, {
           team: player.team,
           job: player.job,

@@ -395,7 +395,7 @@ export function payJobInterval(store, discordId, { now = Date.now(), team = '', 
     delete store.jobs[discordId];
     return { paid: false, reason: 'left-job' };
   }
-  const jobKey = String(job || team);
+  const jobKey = 'Civilian';
   let session = store.jobs[discordId];
   if (!session || session.team !== jobKey) {
     store.jobs[discordId] = {

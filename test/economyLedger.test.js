@@ -139,16 +139,15 @@ test('steal only takes cash and can fail server-side', () => {
   assert.equal(store.users.victim.cash + store.users.thief.cash, ECONOMY_STARTER_GRANT + 200);
 });
 
-test('civilian job pay waits a full interval on the same job, not unemployed Civilian', () => {
+test('Civilian team pay waits a full interval and stops on another team', () => {
   const store = emptyEconomyStore();
   const t0 = 1_000_000;
-  assert.equal(payJobInterval(store, 'u1', { now: t0, team: 'Civilian' }).reason, 'left-job');
-  assert.equal(payJobInterval(store, 'u1', { now: t0, team: 'Civilian', job: 'Bank' }).paid, false);
-  assert.equal(payJobInterval(store, 'u1', { now: t0 + 9 * 60_000, team: 'Civilian', job: 'Bank' }).paid, false);
-  const paid = payJobInterval(store, 'u1', { now: t0 + 10 * 60_000, team: 'Civilian', job: 'Bank' });
+  assert.equal(payJobInterval(store, 'u1', { now: t0, team: 'Civilian' }).reason, 'started');
+  assert.equal(payJobInterval(store, 'u1', { now: t0 + 9 * 60_000, team: 'Civilian' }).paid, false);
+  const paid = payJobInterval(store, 'u1', { now: t0 + 10 * 60_000, team: 'Civilian' });
   assert.equal(paid.paid, true);
   assert.equal(paid.amount, ECONOMY_JOB_PAY);
-  assert.equal(payJobInterval(store, 'u1', { now: t0 + 10 * 60_000, team: 'Civilian' }).paid, false);
+  assert.equal(payJobInterval(store, 'u1', { now: t0 + 10 * 60_000, team: 'Police' }).paid, false);
   assert.equal(store.jobs.u1, undefined);
 });
 
@@ -268,13 +267,13 @@ test('in-game call text maps to robbery kinds', () => {
   assert.equal(matchRobberyKindFromText('Bank teller'), '');
 });
 
-test('unemployed Civilian is not a paid job', () => {
-  assert.equal(isPaidCivilianJob('Civilian'), false);
-  assert.equal(isPaidCivilianJob('Civilian', ''), false);
-  assert.equal(isPaidCivilianJob('Civilian', 'Civilian'), false);
+test('all Civilian players are pay eligible regardless of an unavailable job title', () => {
+  assert.equal(isPaidCivilianJob('Civilian'), true);
+  assert.equal(isPaidCivilianJob('Civilian', ''), true);
+  assert.equal(isPaidCivilianJob('Civilian', 'Civilian'), true);
   assert.equal(isPaidCivilianJob('Civilian', 'Bank'), true);
   assert.equal(isPaidCivilianJob('Civilian', 'Delivery Driver'), true);
-  assert.equal(isPaidCivilianJob('Bank'), true);
+  assert.equal(isPaidCivilianJob('Bank'), false);
   assert.equal(isPaidCivilianJob('Police'), false);
   assert.equal(isPaidCivilianJob('FHP'), false);
 });
@@ -296,7 +295,7 @@ test('leaving the live roster stops a civilian job timer', () => {
   payJobInterval(store, 'present', { team: 'Civilian', job: 'Delivery' });
   assert.equal(stopMissingJobSessions(store, new Set(['present'])), 1);
   assert.equal(store.jobs.working, undefined);
-  assert.equal(store.jobs.present.team, 'Delivery');
+  assert.equal(store.jobs.present.team, 'Civilian');
 });
 
 test('robberies use the exact configured payouts', () => {

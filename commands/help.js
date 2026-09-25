@@ -13,6 +13,7 @@ export default {
         '`/ping` - check the bot response time and latency',
         '`/server` - show Clearwater server information',
         '`/briefing` - Discord Administrator only: start a server-wide LEO briefing',
+        '`/clear weather` - Discord Administrator only: lock in-game weather to Clear for a set time',
         '`/request-priority` - request a 30 minute in-game priority; anyone can approve, deny, or add time',
         '`/priority active` - see who currently has the in-game priority',
         '`/help` - show this command list',

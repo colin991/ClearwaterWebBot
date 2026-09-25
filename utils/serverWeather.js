@@ -56,6 +56,8 @@ function normalizeStore(stored) {
     nextSpinAt: Number(stored?.nextSpinAt) || 0,
     lastSpinAt: Number(stored?.lastSpinAt) || 0,
     protectedOnline: Boolean(stored?.protectedOnline),
+    clearLockedUntil: Number(stored?.clearLockedUntil) || 0,
+    clearLockedBy: String(stored?.clearLockedBy || ''),
   };
 }
 
@@ -114,9 +116,21 @@ export function createServerWeatherService({
 
   async function cycle() {
     await ensure();
+    const time = now();
+    if (state.clearLockedUntil > time) {
+      if (state.currentWeather !== 'clear') {
+        await applyWeather('clear', { reason: 'manual-clear-lock' });
+      }
+      return state;
+    }
+    if (state.clearLockedUntil) {
+      state.clearLockedUntil = 0;
+      state.clearLockedBy = '';
+      state.nextSpinAt = time;
+      await persist();
+    }
     const { players = [] } = await snapshot();
     const online = weatherProtectedIsOnline(players);
-    const time = now();
     const wasOnline = state.protectedOnline;
     state.protectedOnline = online;
 
@@ -161,6 +175,17 @@ export function createServerWeatherService({
       if (!running) running = cycle().catch(onError).finally(() => { running = null; });
       return running;
     },
+    async lockClear(minutes, actorId = '') {
+      await ensure();
+      const duration = Math.trunc(Number(minutes) || 0);
+      if (duration <= 0) throw new Error('Time must be greater than 0 minutes.');
+      const time = now();
+      state.clearLockedUntil = time + duration * 60_000;
+      state.clearLockedBy = String(actorId || '');
+      state.nextSpinAt = state.clearLockedUntil;
+      await applyWeather('clear', { reason: 'manual-clear-lock' });
+      return { until: state.clearLockedUntil, minutes: duration };
+    },
   };
 }
 
@@ -201,7 +226,9 @@ export function weatherLogPayload(event) {
   const changed = event?.changed ? 'changed' : 'unchanged';
   const command = event?.command || weatherCommand(event?.weather);
   let description;
-  if (event?.action === 'forced-clear') {
+  if (event?.action === 'manual-clear-lock') {
+    description = 'An administrator locked the server weather to **Clear**.';
+  } else if (event?.action === 'forced-clear') {
     description = `Forced **Clear** because **${WEATHER_PROTECTED_USERNAME}** is in-game.`;
   } else if (event?.action === 'skipped') {
     description = `Skipped the wheel because **${WEATHER_PROTECTED_USERNAME}** is in-game. Weather stays **${weather}**.`;

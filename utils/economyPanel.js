@@ -515,7 +515,7 @@ function morePanel() {
       `**Starter grant:** ${formatMoney(ECONOMY_STARTER_GRANT)} once per Discord user. Leaving and rejoining does not pay again.`,
       `**Death fee:** ${formatMoney(ECONOMY_DEATH_FEE)} from Cash when you actually die. Balances can go negative.`,
       `**Steal:** \`;steal\` on Civilian, closest civilian within ${ECONOMY_STEAL_DISTANCE} studs, ${ECONOMY_STEAL_SUCCESS_CHANCE}% chance. Only Cash can be stolen.`,
-      `**Civilian jobs:** ${formatMoney(ECONOMY_JOB_PAY)} every ${Math.round(ECONOMY_PAY_INTERVAL_MS / 60000)} minutes while you stay on an actual job such as bank, not while unemployed on Civilian.`,
+      `**Civilian team pay:** ${formatMoney(ECONOMY_JOB_PAY)} every ${Math.round(ECONOMY_PAY_INTERVAL_MS / 60000)} minutes while you remain in-game on Civilian.`,
       '**Bank:** Deposit Cash to protect it from steals. Withdraw to spend or send.',
       `**Send tax:** ${ECONOMY_TRANSFER_TAX_PERCENT}% of every player-to-player send goes to the server treasury. The recipient gets the rest.`,
     ].join('\n')));
@@ -526,16 +526,16 @@ function jobDetailPanel(job, title) {
   const container = new ContainerBuilder().clearAccentColor()
     .addTextDisplayComponents(new TextDisplayBuilder().setContent([
       `## ${title}`,
-      `**Current Job:** ${job.team || 'Off duty'}`,
+      `**Current Team:** ${job.team || 'Off duty'}`,
       `**In game:** ${job.inGame ? 'Yes' : 'No'}`,
       `**Pay Rate:** ${formatMoney(job.rate)} / ${Math.round(ECONOMY_PAY_INTERVAL_MS / 60000)} minutes`,
       `**Current Shift Time:** ${job.elapsed ? formatRemain(job.elapsed) : '—'}`,
-      `**Time Until Next Paycheck:** ${job.civilian ? formatRemain(job.nextIn) : 'Not on an eligible job'}`,
+      `**Time Until Next Paycheck:** ${job.civilian ? formatRemain(job.nextIn) : 'Not on Civilian'}`,
       `**Money Earned This Session:** ${formatMoney(job.sessionEarned || 0)}`,
       '',
       job.civilian
-        ? 'Changing teams or leaving the job resets that job timer. Reconnecting does not duplicate pay.'
-        : 'Unemployed Civilian does not pay. Clock into a civilian job such as bank to start the 10-minute paycheck timer.',
+        ? 'Changing teams or leaving the server stops and resets the Civilian timer. Reconnecting does not duplicate pay.'
+        : 'Join the Civilian team to start the 10-minute paycheck timer.',
     ].join('\n')));
   return v2(container, { ephemeral: true });
 }
@@ -550,21 +550,20 @@ function jobsInfoPanel(kind) {
     ].join('\n'),
     public: [
       '## Public Jobs',
-      `Civilian / public ER:LC jobs (bank, delivery, taxi, and other working jobs) pay **${formatMoney(ECONOMY_JOB_PAY)} every 10 complete minutes** while you stay on that job.`,
-      'Just being on the Civilian team does not pay. You have to be on an actual job.',
+      `The Civilian team pays **${formatMoney(ECONOMY_JOB_PAY)} every 10 complete minutes** while you remain in-game on Civilian.`,
       'Pay goes to **Cash**.',
     ].join('\n'),
     payouts: [
       '## Payout Information',
-      `- Civilian job (bank, delivery, taxi, etc.): ${formatMoney(ECONOMY_JOB_PAY)} / 10 minutes into Cash`,
+      `- Civilian team: ${formatMoney(ECONOMY_JOB_PAY)} / 10 minutes into Cash`,
       '- Department Melonly shifts: paid from that department treasury at the department rate',
       '- Robberies: the exact listed Cash payout after all survival requirements are completed',
       `- Death fee: ${formatMoney(ECONOMY_DEATH_FEE)} from Cash`,
     ].join('\n'),
     how: [
       '## How Jobs Work',
-      'The bot checks your live ER:LC job. Unemployed civilians are not paid. Eligible civilian jobs are tracked server-side.',
-      'Every complete 10-minute interval on the same job pays once. Switching teams starts a new unpaid timer.',
+      'The ER:LC API exposes the live team, not civilian job titles, so all players on Civilian use the same pay rate.',
+      'Every complete 10-minute interval on Civilian pays once. Switching teams or leaving starts a new unpaid timer.',
       'Department payroll uses Melonly shift start/end, not the civilian job timer.',
     ].join('\n'),
   };
