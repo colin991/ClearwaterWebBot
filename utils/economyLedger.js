@@ -14,6 +14,7 @@ import {
   ECONOMY_TRANSFER_COOLDOWN_MS,
   ECONOMY_TX,
   ECONOMY_TX_KEEP,
+  isPaidCivilianJob,
   departmentById,
   economyWeekKey,
   robberyById,
@@ -316,17 +317,18 @@ export function trySteal(store, thiefId, victimId, {
   return { success: true, amount, thief, victim, tx: loot, referenceId };
 }
 
-export function payJobInterval(store, discordId, { now = Date.now(), team = '', robloxId = '' } = {}) {
+export function payJobInterval(store, discordId, { now = Date.now(), team = '', job = '', robloxId = '' } = {}) {
   const user = ensureEconomyUser(store, discordId, { robloxId, now });
   if (user.frozen) return { paid: false, reason: 'frozen' };
-  if (!/civilian/i.test(team)) {
+  if (!isPaidCivilianJob(team, job)) {
     delete store.jobs[discordId];
     return { paid: false, reason: 'left-job' };
   }
+  const jobKey = String(job || team);
   let session = store.jobs[discordId];
-  if (!session || session.team !== String(team)) {
+  if (!session || session.team !== jobKey) {
     store.jobs[discordId] = {
-      team: String(team),
+      team: jobKey,
       startedAt: now,
       paidIntervals: 0,
       sessionEarned: 0,

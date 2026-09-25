@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-25-civ-job-pay",
+      "title": "Pay only actual civilian jobs, not unemployed Civilian",
+      "summary": "The $50 / 10 minute civilian paycheck now requires a real job on the Civilian team (bank, delivery, taxi, and similar). Just being on Civilian unemployed no longer starts a job timer or pays.",
+      "createdAt": "2026-09-25T03:12:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-25-steal-dm-plain",
       "title": "Deliver steal results as normal Discord DMs",
       "summary": ";steal Discord DMs now use a normal private message instead of a components card, and they are sent before the in-game PM so both the thief and victim actually receive them.",

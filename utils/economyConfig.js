@@ -13,6 +13,58 @@ export const ECONOMY_TRANSFER_COOLDOWN_MS = 8_000;
 export const ECONOMY_TX_RECENT = 12;
 export const ECONOMY_TX_KEEP = 4_000;
 export const ECONOMY_SCENE_RADIUS = 45;
+export const ECONOMY_CIVILIAN_JOBS = Object.freeze([
+  'bank',
+  'teller',
+  'cashier',
+  'delivery',
+  'pizza',
+  'mail',
+  'postal',
+  'taxi',
+  'bus',
+  'garbage',
+  'trash',
+  'mechanic',
+  'tow',
+  'trucker',
+  'ice cream',
+  'grocery',
+  'farmer',
+  'lumber',
+  'miner',
+  'factory',
+  'janitor',
+  'security',
+]);
+
+function jobLabel(value) {
+  return String(value || '').replace(/[_-]+/g, ' ').trim();
+}
+
+function isEmergencyJobLabel(value) {
+  return /\b(police|sheriff|fire|dot|leo|ems|paramedic|trooper|deputy|corrections|dispatch)\b/i.test(jobLabel(value));
+}
+
+function isBareCivilianLabel(value) {
+  return !value || /^(civilian(\s+team)?|civ|none|n\/a|unemployed|off duty)$/i.test(value);
+}
+
+function haystackHasCivilianJob(haystack) {
+  return ECONOMY_CIVILIAN_JOBS.some((name) => new RegExp(`\\b${name.replace(/\s+/g, '\\s+')}\\b`, 'i').test(haystack));
+}
+
+/** True for a real civilian job (bank, delivery, taxi, …), not unemployed Civilian team. */
+export function isPaidCivilianJob(team, job = '') {
+  if (isEmergencyJobLabel(team) || isEmergencyJobLabel(job)) return false;
+  const teamLabel = jobLabel(team);
+  const extra = jobLabel(job);
+  const haystack = `${teamLabel} ${extra}`.trim();
+  if (!haystack) return false;
+  if (haystackHasCivilianJob(haystack)) return true;
+  const onCivilianTeam = /civilian/i.test(teamLabel) || isBareCivilianLabel(teamLabel);
+  return Boolean(onCivilianTeam && extra && !isBareCivilianLabel(extra) && !/^civilian(\s+team)?$/i.test(extra));
+}
 
 export const ECONOMY_PANEL_CHANNEL_ID = '1545267006360649728';
 export const ECONOMY_LOG_CHANNEL_ID = '1549178818814812211';

@@ -19,7 +19,7 @@ import {
   trySteal,
   withdrawBank,
 } from '../utils/economyLedger.js';
-import { ECONOMY_STARTER_GRANT, ECONOMY_DEATH_FEE, departmentByGuildId } from '../utils/economyConfig.js';
+import { ECONOMY_STARTER_GRANT, ECONOMY_DEATH_FEE, departmentByGuildId, isPaidCivilianJob } from '../utils/economyConfig.js';
 
 test('starter grant is once per user and writes STARTER_GRANT', () => {
   const store = emptyEconomyStore();
@@ -92,16 +92,16 @@ test('steal only takes cash and can fail server-side', () => {
   assert.equal(store.users.victim.cash + store.users.thief.cash, 1200);
 });
 
-test('civilian job pay waits a full interval on the same team', () => {
+test('civilian job pay waits a full interval on the same job, not unemployed Civilian', () => {
   const store = emptyEconomyStore();
   const t0 = 1_000_000;
-  assert.equal(payJobInterval(store, 'u1', { now: t0, team: 'Civilian' }).paid, false);
-  assert.equal(payJobInterval(store, 'u1', { now: t0 + 9 * 60_000, team: 'Civilian' }).paid, false);
-  const paid = payJobInterval(store, 'u1', { now: t0 + 10 * 60_000, team: 'Civilian' });
+  assert.equal(payJobInterval(store, 'u1', { now: t0, team: 'Civilian' }).reason, 'left-job');
+  assert.equal(payJobInterval(store, 'u1', { now: t0, team: 'Civilian', job: 'Bank' }).paid, false);
+  assert.equal(payJobInterval(store, 'u1', { now: t0 + 9 * 60_000, team: 'Civilian', job: 'Bank' }).paid, false);
+  const paid = payJobInterval(store, 'u1', { now: t0 + 10 * 60_000, team: 'Civilian', job: 'Bank' });
   assert.equal(paid.paid, true);
   assert.equal(paid.amount, 50);
   assert.equal(payJobInterval(store, 'u1', { now: t0 + 10 * 60_000, team: 'Civilian' }).paid, false);
-  payJobInterval(store, 'u1', { now: t0 + 11 * 60_000, team: 'Police' });
   assert.equal(store.jobs.u1, undefined);
 });
 
@@ -158,6 +158,26 @@ test('robberies block priorities while reserved/active and pay once', () => {
   assert.equal(second.paid, false);
   assert.equal(store.users.u1.cash, 2000);
   failRobbery(store, 'cancelled');
+});
+
+test('unemployed Civilian is not a paid job', () => {
+  assert.equal(isPaidCivilianJob('Civilian'), false);
+  assert.equal(isPaidCivilianJob('Civilian', ''), false);
+  assert.equal(isPaidCivilianJob('Civilian', 'Civilian'), false);
+  assert.equal(isPaidCivilianJob('Civilian', 'Bank'), true);
+  assert.equal(isPaidCivilianJob('Civilian', 'Delivery Driver'), true);
+  assert.equal(isPaidCivilianJob('Bank'), true);
+  assert.equal(isPaidCivilianJob('Police'), false);
+  assert.equal(isPaidCivilianJob('FHP'), false);
+});
+
+test('player parser keeps Job separate from Civilian team', async () => {
+  const { parseErlcPlayer } = await import('../utils/erlc.js');
+  const unemployed = parseErlcPlayer({ Player: 'Alex:1', Team: 'Civilian' });
+  assert.equal(unemployed.team, 'Civilian');
+  assert.equal(unemployed.job, '');
+  const bank = parseErlcPlayer({ Player: 'Alex:1', Team: 'Civilian', Job: 'Bank' });
+  assert.equal(bank.job, 'Bank');
 });
 
 test('department Discord IDs map to the configured treasuries', () => {

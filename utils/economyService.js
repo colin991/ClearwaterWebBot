@@ -15,6 +15,7 @@ import {
   ECONOMY_MIN_LEO,
   ECONOMY_PAY_INTERVAL_MS,
   ECONOMY_STEAL_DISTANCE,
+  isPaidCivilianJob,
   departmentByGuildId,
   formatMoney,
   robberyById,
@@ -160,7 +161,7 @@ export async function robberyPanelState(client) {
   const server = client?.config?.erlcServerKey
     ? await fetchErlcServer(client.config.erlcServerKey, { timeoutMs: 2_500 }).catch(() => null)
     : null;
-  const players = (server?.Players || []).map((entry) => (entry?.username != null ? entry : parseErlcPlayer(entry)));
+  const players = (server?.Players || []).map(asEconomyPlayer);
   const leo = leoCountFromPlayers(players);
   const priority = client?.priorityRequest?.request;
   const priorityBlocked = ['pending', 'active'].includes(String(priority?.status || ''));
@@ -192,7 +193,7 @@ export async function beginReservedRobbery(client, user) {
   const server = client?.config?.erlcServerKey
     ? await fetchErlcServer(client.config.erlcServerKey).catch(() => null)
     : null;
-  const players = (server?.Players || []).map((entry) => (entry?.username != null ? entry : parseErlcPlayer(entry)));
+  const players = (server?.Players || []).map(asEconomyPlayer);
   const live = players.find((player) => String(player.robloxId) === String(identity?.robloxId || ''))
     || players.find((player) => String(player.username || '').toLowerCase() === String(identity?.robloxUsername || '').toLowerCase());
   if (!live) throw new Error('You must be in the Roblox server to begin the robbery.');
@@ -222,19 +223,25 @@ export async function jobViewFor(discordId, players = []) {
     grantStarter(store, discordId, { robloxId: identity?.robloxId || live?.robloxId });
     const session = store.jobs[discordId];
     const team = live?.team || session?.team || 'Off duty';
-    const civilian = isCivilianTeam(team);
+    const jobName = live?.job || (isPaidCivilianJob(team) ? team : '');
+    const eligible = isPaidCivilianJob(live?.team || team, live?.job || '');
     const started = session?.startedAt || 0;
-    const elapsed = started ? Date.now() - started : 0;
-    const nextIn = civilian && started
+    const elapsed = eligible && started ? Date.now() - started : 0;
+    const nextIn = eligible && started
       ? Math.max(0, ECONOMY_PAY_INTERVAL_MS - (elapsed % ECONOMY_PAY_INTERVAL_MS))
       : ECONOMY_PAY_INTERVAL_MS;
+    const label = !live
+      ? (session?.team || 'Off duty')
+      : (eligible
+        ? (jobName || team)
+        : (/^civilian$/i.test(String(team)) ? 'Unemployed (Civilian)' : team));
     return {
-      team,
-      civilian,
-      rate: ECONOMY_JOB_PAY,
+      team: label,
+      civilian: eligible,
+      rate: eligible ? ECONOMY_JOB_PAY : 0,
       elapsed,
       nextIn,
-      sessionEarned: session?.sessionEarned || 0,
+      sessionEarned: eligible ? (session?.sessionEarned || 0) : 0,
       inGame: Boolean(live),
     };
   });
@@ -244,18 +251,21 @@ export async function economyBlocksNewPriority(client) {
   return withEconomy((store) => economyBlocksPriority(store));
 }
 
+function asEconomyPlayer(entry) {
+  const mapped = parseErlcPlayer(entry);
+  if (entry?.username == null) return mapped;
+  return {
+    ...mapped,
+    username: entry.username || mapped.username,
+    robloxId: entry.robloxId || mapped.robloxId,
+    team: entry.team || mapped.team,
+    job: entry.job || mapped.job,
+    location: entry.location || mapped.location,
+  };
+}
+
 function rosterPlayers(snapshot) {
-  return (snapshot?.Players || snapshot?.players || []).map((entry) => {
-    const mapped = parseErlcPlayer(entry);
-    if (entry?.username == null) return mapped;
-    return {
-      ...mapped,
-      username: entry.username || mapped.username,
-      robloxId: entry.robloxId || mapped.robloxId,
-      team: entry.team || mapped.team,
-      location: entry.location || mapped.location,
-    };
-  });
+  return (snapshot?.Players || snapshot?.players || []).map(asEconomyPlayer);
 }
 
 export function sanitizeGamePm(message) {
@@ -504,7 +514,7 @@ export async function tickEconomy(client) {
   const server = client?.config?.erlcServerKey
     ? await fetchErlcServer(client.config.erlcServerKey, { timeoutMs: 4_000 }).catch(() => null)
     : null;
-  const players = (server?.Players || []).map((entry) => (entry?.username != null ? entry : parseErlcPlayer(entry)));
+  const players = (server?.Players || []).map(asEconomyPlayer);
   const kills = (server?.KillLogs || []).map((entry) => (entry?.robloxId != null ? entry : parseErlcKill(entry)));
   const identities = await discordIdsByRobloxId().catch(() => new Map());
 
@@ -518,8 +528,12 @@ export async function tickEconomy(client) {
     if (!discordId) continue;
     await withEconomy((store) => {
       grantStarter(store, discordId, { robloxId: player.robloxId });
-      if (isCivilianTeam(player.team)) {
-        const paid = payJobInterval(store, discordId, { team: player.team, robloxId: player.robloxId });
+      if (isPaidCivilianJob(player.team, player.job)) {
+        const paid = payJobInterval(store, discordId, {
+          team: player.team,
+          job: player.job,
+          robloxId: player.robloxId,
+        });
         if (paid.paid) {
           void postEconomyLog(client, 'Job paycheck', `<@${discordId}> ${formatMoney(paid.amount)} · \`${paid.tx.id}\``);
         }
@@ -661,7 +675,7 @@ export async function getOverview(discordId, client) {
   const server = client?.config?.erlcServerKey
     ? await fetchErlcServer(client.config.erlcServerKey, { timeoutMs: 2_500 }).catch(() => null)
     : null;
-  const players = (server?.Players || []).map((entry) => (entry?.username != null ? entry : parseErlcPlayer(entry)));
+  const players = (server?.Players || []).map(asEconomyPlayer);
   const job = await jobViewFor(discordId, players);
   const robbery = await robberyPanelState(client);
   const priority = client?.priorityRequest?.request;

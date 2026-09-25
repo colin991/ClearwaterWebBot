@@ -495,7 +495,7 @@ function morePanel() {
       `**Starter grant:** ${formatMoney(ECONOMY_STARTER_GRANT)} once per Discord user. Leaving and rejoining does not pay again.`,
       `**Death fee:** ${formatMoney(ECONOMY_DEATH_FEE)} from Cash when you actually die. Balances can go negative.`,
       `**Steal:** \`;steal\` on Civilian, closest civilian within ${ECONOMY_STEAL_DISTANCE} studs, ${ECONOMY_STEAL_SUCCESS_CHANCE}% chance. Only Cash can be stolen.`,
-      `**Civilian jobs:** ${formatMoney(ECONOMY_JOB_PAY)} every ${Math.round(ECONOMY_PAY_INTERVAL_MS / 60000)} minutes while you stay on an eligible civilian job.`,
+      `**Civilian jobs:** ${formatMoney(ECONOMY_JOB_PAY)} every ${Math.round(ECONOMY_PAY_INTERVAL_MS / 60000)} minutes while you stay on an actual job such as bank, not while unemployed on Civilian.`,
       '**Bank:** Deposit Cash to protect it from steals. Withdraw to spend or send.',
     ].join('\n')));
   return v2(container, { ephemeral: true });
@@ -512,7 +512,9 @@ function jobDetailPanel(job, title) {
       `**Time Until Next Paycheck:** ${job.civilian ? formatRemain(job.nextIn) : 'Not on an eligible job'}`,
       `**Money Earned This Session:** ${formatMoney(job.sessionEarned || 0)}`,
       '',
-      'Changing teams or leaving the job resets that job timer. Reconnecting does not duplicate pay.',
+      job.civilian
+        ? 'Changing teams or leaving the job resets that job timer. Reconnecting does not duplicate pay.'
+        : 'Unemployed Civilian does not pay. Clock into a civilian job such as bank to start the 10-minute paycheck timer.',
     ].join('\n')));
   return v2(container, { ephemeral: true });
 }
@@ -527,19 +529,20 @@ function jobsInfoPanel(kind) {
     ].join('\n'),
     public: [
       '## Public Jobs',
-      'Civilian / public ER:LC jobs pay **$50 every 10 complete minutes** while you remain on that eligible team.',
+      'Civilian / public ER:LC jobs (bank, delivery, taxi, and other working jobs) pay **$50 every 10 complete minutes** while you stay on that job.',
+      'Just being on the Civilian team does not pay. You have to be on an actual job.',
       'Pay goes to **Cash**.',
     ].join('\n'),
     payouts: [
       '## Payout Information',
-      `- Civilian job: ${formatMoney(ECONOMY_JOB_PAY)} / 10 minutes into Cash`,
+      `- Civilian job (bank, delivery, taxi, etc.): ${formatMoney(ECONOMY_JOB_PAY)} / 10 minutes into Cash`,
       '- Department Melonly shifts: paid from that department treasury at the department rate',
       '- Robberies: random Cash payout between the listed minimum and maximum after survival',
       `- Death fee: ${formatMoney(ECONOMY_DEATH_FEE)} from Cash`,
     ].join('\n'),
     how: [
       '## How Jobs Work',
-      'The bot checks your live ER:LC team. Eligible civilian time is tracked server-side.',
+      'The bot checks your live ER:LC job. Unemployed civilians are not paid. Eligible civilian jobs are tracked server-side.',
       'Every complete 10-minute interval on the same job pays once. Switching teams starts a new unpaid timer.',
       'Department payroll uses Melonly shift start/end, not the civilian job timer.',
     ].join('\n'),
@@ -579,7 +582,11 @@ async function livePlayers(client) {
   const server = client?.config?.erlcServerKey
     ? await fetchErlcServer(client.config.erlcServerKey, { timeoutMs: 2_500 }).catch(() => null)
     : null;
-  return (server?.Players || []).map((entry) => (entry?.username != null ? entry : parseErlcPlayer(entry)));
+  return (server?.Players || []).map((entry) => {
+    const mapped = parseErlcPlayer(entry);
+    if (entry?.username == null) return mapped;
+    return { ...mapped, username: entry.username || mapped.username, job: entry.job || mapped.job };
+  });
 }
 
 export async function handleEconomyInteraction(interaction) {

@@ -423,6 +423,15 @@ export function parseErlcPlayer(player) {
     displayName: String(player?.PlayerDisplayName || player?.DisplayName || player?.displayName || '').trim(),
     robloxId: separator >= 0 ? raw.slice(separator + 1) : String(player?.PlayerId || player?.id || ''),
     team: player?.Team || player?.team || 'Civilian',
+    job: String(
+      player?.Job
+      || player?.job
+      || player?.Occupation
+      || player?.occupation
+      || player?.CurrentJob
+      || player?.currentJob
+      || '',
+    ).trim(),
     callsign: player?.Callsign || player?.callsign || '',
     speed: firstFinite(player?.Speed, player?.speed, player?.VehicleSpeed, player?.vehicleSpeed, loc.Speed, loc.speed),
     location: {
