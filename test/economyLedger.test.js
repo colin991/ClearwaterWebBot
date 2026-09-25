@@ -19,7 +19,7 @@ import {
   trySteal,
   withdrawBank,
 } from '../utils/economyLedger.js';
-import { ECONOMY_STARTER_GRANT, ECONOMY_DEATH_FEE, departmentByGuildId, isPaidCivilianJob } from '../utils/economyConfig.js';
+import { ECONOMY_STARTER_GRANT, ECONOMY_DEATH_FEE, ECONOMY_DEPARTMENTS, departmentByGuildId, isPaidCivilianJob } from '../utils/economyConfig.js';
 
 test('starter grant is once per user and writes STARTER_GRANT', () => {
   const store = emptyEconomyStore();
@@ -186,6 +186,16 @@ test('department Discord IDs map to the configured treasuries', () => {
   assert.equal(departmentByGuildId('1515101455525085337').id, 'dispatch');
   assert.equal(departmentByGuildId('1514804886292795544').id, 'cfr');
   assert.equal(departmentByGuildId('1526890993327280240').id, 'bpd');
+});
+
+test('every department treasury pulls Melonly shifts from its own department', () => {
+  const ids = Object.fromEntries(ECONOMY_DEPARTMENTS.map((dept) => [dept.id, dept.melonlyDepartmentId]));
+  assert.equal(ids.fhp, '7470614371899543552');
+  assert.equal(ids.pcso, '7470323914464301056');
+  assert.equal(ids.dispatch, '7471402738098638848');
+  assert.equal(ids.cfr, '7471029576076890112');
+  assert.equal(ids.bpd, '7492084093606170624');
+  assert.equal(ECONOMY_DEPARTMENTS.every((dept) => Boolean(dept.melonlyDepartmentId)), true);
 });
 
 test('in-game steal PMs strip dollar signs that ER:LC censors', async () => {

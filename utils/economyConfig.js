@@ -96,7 +96,7 @@ export const ECONOMY_DEPARTMENTS = Object.freeze([
     weeklyGrant: 500_000,
     shiftPay: 200,
     emoji: '<:FHP_Logo:1514421266776461314>',
-    melonlyDepartmentId: '',
+    melonlyDepartmentId: '7470614371899543552',
   },
   {
     id: 'pcso',
@@ -116,7 +116,7 @@ export const ECONOMY_DEPARTMENTS = Object.freeze([
     weeklyGrant: 100_000,
     shiftPay: 100,
     emoji: '<:dispatch:1522721479370870825>',
-    melonlyDepartmentId: '',
+    melonlyDepartmentId: '7471402738098638848',
   },
   {
     id: 'cfr',
@@ -126,7 +126,7 @@ export const ECONOMY_DEPARTMENTS = Object.freeze([
     weeklyGrant: 200_000,
     shiftPay: 100,
     emoji: '<:CFD:1514806304621989978>',
-    melonlyDepartmentId: '',
+    melonlyDepartmentId: '7471029576076890112',
   },
   {
     id: 'bpd',
@@ -136,7 +136,7 @@ export const ECONOMY_DEPARTMENTS = Object.freeze([
     weeklyGrant: 200_000,
     shiftPay: 100,
     emoji: '<:bpd_logo:1535160817606074378>',
-    melonlyDepartmentId: '',
+    melonlyDepartmentId: '7492084093606170624',
   },
 ]);
 

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-25-dept-melonly-ids",
+      "title": "Pay FHP, CFD, 911, and BPD from their Melonly shifts",
+      "summary": "Department payroll now reads Melonly shifts for FHP, Clearwater Fire, Pinellas County 911, and Belleair PD as well as PCSO, so those treasuries are charged $200 or $100 every 10 minutes while members are on shift.",
+      "createdAt": "2026-09-25T03:32:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-25-civ-job-pay",
       "title": "Pay only actual civilian jobs, not unemployed Civilian",
       "summary": "The $50 / 10 minute civilian paycheck now requires a real job on the Civilian team (bank, delivery, taxi, and similar). Just being on Civilian unemployed no longer starts a job timer or pays.",
