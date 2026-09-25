@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   applyDeathFee,
   completeRobberyIfReady,
+  confirmRobbery,
   depositCash,
   economyBlocksPriority,
   emptyEconomyStore,
@@ -21,7 +22,7 @@ import {
   trySteal,
   withdrawBank,
 } from '../utils/economyLedger.js';
-import { ECONOMY_STARTER_GRANT, ECONOMY_DEATH_FEE, ECONOMY_DEPARTMENTS, departmentByGuildId, isPaidCivilianJob } from '../utils/economyConfig.js';
+import { ECONOMY_STARTER_GRANT, ECONOMY_DEATH_FEE, ECONOMY_DEPARTMENTS, departmentByGuildId, isPaidCivilianJob, matchRobberyKindFromText } from '../utils/economyConfig.js';
 
 test('starter grant is once per user and writes STARTER_GRANT', () => {
   const store = emptyEconomyStore();
@@ -191,22 +192,56 @@ test('department funds can send to a person or the server with a note', () => {
   assert.equal(serverRows[0].note, 'city event support');
 });
 
-test('robberies block priorities while reserved/active and pay once', () => {
+test('robberies wait for confirmation, then a payout hold, and pay once', () => {
   const store = emptyEconomyStore();
   const blocked = robberyStatus(store, { leoCount: 3 });
   assert.equal(blocked.reasons.bank, 'NOT ENOUGH LEO');
   reserveRobbery(store, 'house', 'u1', { leoCount: 12 });
   assert.equal(economyBlocksPriority(store), true);
   beginRobbery(store, 'u1', { x: 0, z: 0 });
+  assert.equal(store.robbery.status, 'reserved');
+  assert.equal(store.robbery.preparing, true);
+  const t0 = 1_000_000;
+  const confirmed = confirmRobbery(store, 'u1', { now: t0 });
+  assert.equal(confirmed.confirmed, true);
   assert.equal(store.robbery.status, 'active');
   store.robbery.sceneComplete = true;
-  store.robbery.endsAt = Date.now() - 1;
-  const first = completeRobberyIfReady(store, 'u1', { payout: 2000 });
-  const second = completeRobberyIfReady(store, 'u1', { payout: 2000 });
+  assert.equal(completeRobberyIfReady(store, 'u1', { now: t0 }).paid, false);
+  const held = completeRobberyIfReady(store, 'u1', { now: t0 + 8 * 60_000 });
+  assert.equal(held.held, true);
+  assert.equal(held.paid, false);
+  assert.equal(store.robbery.status, 'holding');
+  assert.equal(completeRobberyIfReady(store, 'u1', { now: t0 + 8 * 60_000 + 60_000 }).paid, false);
+  const first = completeRobberyIfReady(store, 'u1', { now: t0 + 8 * 60_000 + 5 * 60_000, payout: 2000 });
+  const second = completeRobberyIfReady(store, 'u1', { now: t0 + 8 * 60_000 + 5 * 60_000, payout: 2000 });
   assert.equal(first.paid, true);
   assert.equal(second.paid, false);
   assert.equal(store.users.u1.cash, 2000);
   failRobbery(store, 'cancelled');
+});
+
+test('dying during the payout hold cancels the money', () => {
+  const store = emptyEconomyStore();
+  reserveRobbery(store, 'atm', 'u1', { leoCount: 12 });
+  const t0 = 5_000_000;
+  confirmRobbery(store, 'u1', { now: t0 });
+  store.robbery.sceneComplete = true;
+  completeRobberyIfReady(store, 'u1', { now: t0 + 8 * 60_000 });
+  assert.equal(store.robbery.status, 'holding');
+  failRobbery(store, 'died', { now: t0 + 8 * 60_000 + 30_000 });
+  assert.equal(store.robbery.status, 'idle');
+  assert.equal(store.users.u1, undefined);
+});
+
+test('in-game call text maps to robbery kinds', () => {
+  assert.equal(matchRobberyKindFromText('Bank Robbery'), 'bank');
+  assert.equal(matchRobberyKindFromText('bank heist in progress'), 'bank');
+  assert.equal(matchRobberyKindFromText('Jewelry Store Robbery'), 'jewelry');
+  assert.equal(matchRobberyKindFromText('ATM robbery'), 'atm');
+  assert.equal(matchRobberyKindFromText('Cash Register Robbery'), 'register');
+  assert.equal(matchRobberyKindFromText('House robbery'), 'house');
+  assert.equal(matchRobberyKindFromText('Civilian'), '');
+  assert.equal(matchRobberyKindFromText('Bank teller'), '');
 });
 
 test('unemployed Civilian is not a paid job', () => {

@@ -4,7 +4,9 @@ import {
   ECONOMY_DEPARTMENTS,
   ECONOMY_JOB_PAY,
   ECONOMY_PAY_INTERVAL_MS,
+  ECONOMY_PAYOUT_HOLD_MS,
   ECONOMY_ROBBERIES,
+  ECONOMY_ROBBERY_PREPARE_MS,
   ECONOMY_ROBBERY_RESERVE_MS,
   ECONOMY_SCENE_RADIUS,
   ECONOMY_STARTER_GRANT,
@@ -401,8 +403,9 @@ export function robberyStatus(store, { now = Date.now(), leoCount = 0, priorityB
     const cooldownUntil = Number(store.robberyCooldowns[robbery.id] || 0);
     let reason = '';
     if (priorityBlocked) reason = 'ACTIVE PRIORITY';
-    else if (live.status === 'reserved') reason = 'ROBBERY PENDING';
+    else if (live.status === 'reserved' || live.status === 'preparing') reason = 'ROBBERY PENDING';
     else if (live.status === 'active') reason = 'ROBBERY ACTIVE';
+    else if (live.status === 'holding') reason = 'PAYOUT HOLD';
     else if (cooldownUntil > now) reason = 'COOLDOWN';
     else if (leoCount < (robbery.minLeo || ECONOMY_MIN_LEO)) reason = 'NOT ENOUGH LEO';
     reasons[robbery.id] = reason;
@@ -423,11 +426,14 @@ export function reserveRobbery(store, robberyId, discordId, { now = Date.now(), 
     reservedUntil: now + ECONOMY_ROBBERY_RESERVE_MS,
     startedAt: 0,
     paid: false,
+    preparing: false,
+    holdStarted: false,
+    payoutAmount: 0,
   };
   return store.robbery;
 }
 
-export function beginRobbery(store, discordId, origin, { now = Date.now() } = {}) {
+export function markRobberyPreparing(store, discordId, origin, { now = Date.now(), robloxId = '' } = {}) {
   const session = store.robbery;
   if (session?.status !== 'reserved') throw new Error('No robbery is reserved.');
   if (String(session.reservedBy) !== String(discordId)) throw new Error('Someone else reserved this robbery.');
@@ -435,43 +441,92 @@ export function beginRobbery(store, discordId, origin, { now = Date.now() } = {}
     store.robbery = { status: 'idle' };
     throw new Error('The robbery reservation expired.');
   }
+  session.preparing = true;
+  session.origin = origin || session.origin || null;
+  session.reservedUntil = Math.max(Number(session.reservedUntil || 0), now + ECONOMY_ROBBERY_PREPARE_MS);
+  if (robloxId) session.robloxId = String(robloxId);
+  return session;
+}
+
+/** @deprecated Use markRobberyPreparing, then confirmRobbery after the in-game robbery. */
+export function beginRobbery(store, discordId, origin, extras = {}) {
+  return markRobberyPreparing(store, discordId, origin, extras);
+}
+
+export function confirmRobbery(store, discordId, { now = Date.now(), callKey = '', robloxId = '' } = {}) {
+  const session = store.robbery;
+  if (session?.status === 'active' || session?.status === 'holding') {
+    return { confirmed: false, reason: 'already', session };
+  }
+  if (session?.status !== 'reserved') return { confirmed: false, reason: 'not-reserved' };
+  if (String(session.reservedBy) !== String(discordId)) return { confirmed: false, reason: 'not-owner' };
+  if (now >= Number(session.reservedUntil || 0)) {
+    store.robbery = { status: 'idle' };
+    return { confirmed: false, reason: 'expired' };
+  }
   const robbery = robberyById(session.kind);
+  if (!robbery) return { confirmed: false, reason: 'unknown' };
+  const amount = session.payoutAmount > 0 ? money(session.payoutAmount) : randomInt(robbery.min, robbery.max + 1);
   session.status = 'active';
+  session.preparing = false;
   session.startedAt = now;
+  session.confirmedAt = now;
+  session.confirmedCallKey = String(callKey || '');
   session.sceneUntil = now + (robbery.sceneMs || 0);
   session.endsAt = now + (robbery.survivalMs || 0);
-  session.origin = origin || null;
   session.sceneComplete = !robbery.sceneMs;
   session.paid = false;
-  return session;
+  session.holdStarted = false;
+  session.holdUntil = 0;
+  session.payoutAmount = amount;
+  session.absentSince = 0;
+  if (robloxId) session.robloxId = String(robloxId);
+  return { confirmed: true, session, robbery, amount };
 }
 
 export function failRobbery(store, reason, { now = Date.now() } = {}) {
   const session = store.robbery;
-  if (!session || (session.status !== 'active' && session.status !== 'reserved')) return session;
+  if (!session || !['active', 'holding', 'reserved', 'preparing'].includes(session.status)) return session;
   const kind = session.kind;
-  store.robbery = { status: 'idle', lastFail: { kind, reason, at: now } };
+  store.robbery = { status: 'idle', lastFail: { kind, reason, at: now, userId: session.reservedBy } };
   const robbery = robberyById(kind);
   if (robbery) store.robberyCooldowns[kind] = now + robbery.cooldownMs;
   return store.robbery;
 }
 
+export function startRobberyHold(store, discordId, { now = Date.now() } = {}) {
+  const session = store.robbery;
+  if (session?.status === 'holding') return { held: false, reason: 'already', session };
+  if (session?.status !== 'active' || session.paid) return { held: false };
+  if (String(session.reservedBy) !== String(discordId)) return { held: false };
+  if (!session.sceneComplete) return { held: false, reason: 'scene' };
+  if (now < Number(session.endsAt || 0)) return { held: false, reason: 'survival' };
+  session.status = 'holding';
+  session.holdStarted = true;
+  session.holdUntil = now + ECONOMY_PAYOUT_HOLD_MS;
+  return { held: true, session, holdUntil: session.holdUntil };
+}
+
 export function completeRobberyIfReady(store, discordId, { now = Date.now(), payout = null } = {}) {
   const session = store.robbery;
-  if (session?.status !== 'active' || session.paid) return { paid: false };
+  if (session?.paid) return { paid: false };
+  if (session?.status === 'active') {
+    const hold = startRobberyHold(store, discordId, { now });
+    if (hold.held) return { paid: false, held: true, session: hold.session };
+    return { paid: false, reason: hold.reason || 'survival' };
+  }
+  if (session?.status !== 'holding') return { paid: false };
   if (String(session.reservedBy) !== String(discordId)) return { paid: false };
-  if (!session.sceneComplete) return { paid: false, reason: 'scene' };
-  if (now < Number(session.endsAt || 0)) return { paid: false, reason: 'survival' };
+  if (now < Number(session.holdUntil || 0)) return { paid: false, reason: 'hold' };
   const robbery = robberyById(session.kind);
-  const amount = payout == null ? randomInt(robbery.min, robbery.max + 1) : money(payout);
+  const amount = payout == null ? money(session.payoutAmount) || randomInt(robbery.min, robbery.max + 1) : money(payout);
   const user = ensureEconomyUser(store, discordId, { now });
   user.cash += amount;
   user.totalEarned += amount;
   touch(user, now);
   session.paid = true;
-  session.status = 'idle';
   store.robberyCooldowns[robbery.id] = now + robbery.cooldownMs;
-  store.robbery = { status: 'idle', lastSuccess: { kind: robbery.id, amount, at: now } };
+  store.robbery = { status: 'idle', lastSuccess: { kind: robbery.id, amount, at: now, userId: discordId } };
   return {
     paid: true,
     amount,
@@ -483,6 +538,7 @@ export function completeRobberyIfReady(store, discordId, { now = Date.now(), pay
       note: robbery.name,
       cashAfter: user.cash,
       bankAfter: user.bank,
+      referenceId: `robbery:${robbery.id}:${session.confirmedAt || session.startedAt || now}`,
     }, now),
   };
 }
@@ -506,7 +562,7 @@ export function economyBlocksPriority(store, now = Date.now()) {
   const session = store?.robbery;
   if (!session) return false;
   if (session.status === 'reserved' && now < Number(session.reservedUntil || 0)) return true;
-  return session.status === 'active';
+  return session.status === 'active' || session.status === 'holding';
 }
 
 export function grantWeeklyDepartmentFunds(store, { now = Date.now() } = {}) {

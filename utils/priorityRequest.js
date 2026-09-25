@@ -362,6 +362,18 @@ function pendingPayload(request) {
 }
 
 function activePayload(request) {
+  if (request?.source === 'robbery') {
+    const label = String(request.details || 'Robbery').toUpperCase();
+    return v2Message({
+      title: `ACTIVE PRIORITY — ${label}`,
+      body: `A ${String(request.details || 'robbery').toLowerCase()} is currently in progress. The priority timer has started.\n\n${detailsBody(request)}`,
+      buttons: [
+        [{ type: 2, style: 2, label: 'Void', custom_id: `${PREFIX}void:${request.id}` }],
+        [{ type: 2, style: 3, label: 'Started', custom_id: `${PREFIX}started:${request.id}`, disabled: true }],
+      ],
+      allowedMentions: { parse: [], users: uniqueMentionUsers(request.requesterId, request.approvedBy, request.participantDiscordIds) },
+    });
+  }
   return v2Message({
     title: 'Priority Request — Active',
     body: `This priority was **approved** and the in-game timer is running.\n\n${detailsBody(request)}`,
@@ -1150,6 +1162,54 @@ export function createPriorityRequestService({
       if (!request) return;
       request.staffCardStatus = request.status;
       await persist();
+    },
+
+    async startRobberyPriority({
+      userId,
+      username = '',
+      robloxId = '',
+      details = 'Robbery',
+      seconds = PRIORITY_REQUEST_SECONDS,
+    } = {}) {
+      const current = await ensure();
+      if (hasBlockingPriority(current.request)) {
+        logger.warn('Robbery priority skipped because another priority is pending or active.');
+        return null;
+      }
+      const sec = Math.max(60, Math.min(PRIORITY_REQUEST_SECONDS, Math.ceil(Number(seconds) || PRIORITY_REQUEST_SECONDS)));
+      const label = clip(details, PRIORITY_TYPE_MAX);
+      const request = {
+        id: newId(),
+        status: 'active',
+        source: 'robbery',
+        requesterId: String(userId || ''),
+        requesterRobloxId: String(robloxId || ''),
+        requesterUsername: String(username || ''),
+        participantsText: username ? `**${username}**` : `<@${userId}>`,
+        participants: [{ username: String(username || ''), robloxId: String(robloxId || '') }],
+        participantDiscordIds: uniqueMentionUsers(userId),
+        vehicles: [],
+        background: `${label} confirmed in-game. The robbery survival timer is running.`,
+        details: label,
+        submittedAt: now(),
+        startedAt: now(),
+        endsAt: now() + sec * 1000,
+        staffChannelId: PRIORITY_REQUEST_CHANNEL,
+        deadParticipants: [],
+        warnedPriorityKills: [],
+        approvedBy: null,
+      };
+      const posted = await postStaff(activePayload(request));
+      request.staffMessageId = posted?.id || null;
+      request.staffCardStatus = posted?.id ? 'active' : null;
+      current.request = request;
+      await persist();
+      const voice = announceStart
+        ? Promise.resolve().then(() => announceStart(request)).catch(onError)
+        : Promise.resolve();
+      const game = send(`:prty ${sec}`).catch(onError);
+      await Promise.all([game, voice]);
+      return request;
     },
 
     tick() {

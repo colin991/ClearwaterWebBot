@@ -6,6 +6,9 @@ export const ECONOMY_JOB_PAY = 50;
 export const ECONOMY_PAY_INTERVAL_MS = 10 * 60 * 1000;
 export const ECONOMY_MIN_LEO = 10;
 export const ECONOMY_ROBBERY_RESERVE_MS = 5 * 60 * 1000;
+export const ECONOMY_ROBBERY_PREPARE_MS = 30 * 60 * 1000;
+export const ECONOMY_PAYOUT_HOLD_MS = 5 * 60 * 1000;
+export const ECONOMY_ROBBERY_ABSENT_MS = 45_000;
 export const ECONOMY_STEAL_SUCCESS_CHANCE = 50;
 export const ECONOMY_STEAL_DISTANCE = 10;
 export const ECONOMY_STEAL_COOLDOWN_MS = 45_000;
@@ -210,6 +213,48 @@ export function departmentByGuildId(guildId) {
 
 export function robberyById(id) {
   return ECONOMY_ROBBERIES.find((entry) => entry.id === String(id || '')) || null;
+}
+
+/** Map an ER:LC 911/call description to a configured robbery kind. */
+export function matchRobberyKindFromText(text) {
+  const lower = String(text || '').toLowerCase();
+  if (!lower.trim()) return '';
+  if (/\bbank\b/.test(lower) && /\b(rob|heist|robbery)\b/.test(lower)) return 'bank';
+  if (/jewel/.test(lower) && /\b(rob|heist|robbery)\b/.test(lower)) return 'jewelry';
+  if (/\batm\b/.test(lower) && /\b(rob|heist|robbery)\b/.test(lower)) return 'atm';
+  if ((/\bcash\s*register\b/.test(lower) || (/\bregister\b/.test(lower) && /\b(rob|heist|robbery)\b/.test(lower)))) return 'register';
+  if (/\b(house|home|residential)\b/.test(lower) && /\b(rob|heist|robbery)\b/.test(lower)) return 'house';
+  return '';
+}
+
+export function robberyPriorityLabel(kind) {
+  const robbery = robberyById(kind);
+  if (!robbery) return 'Robbery';
+  if (kind === 'bank') return 'Bank Robbery';
+  if (kind === 'jewelry') return 'Jewelry Robbery';
+  if (kind === 'atm') return 'ATM Robbery';
+  if (kind === 'register') return 'Cash Register Robbery';
+  if (kind === 'house') return 'House Robbery';
+  return robbery.name;
+}
+
+export function robberyFailReasonText(reason) {
+  switch (String(reason || '')) {
+    case 'died':
+      return 'You died before completing the robbery.';
+    case 'left-server':
+      return 'You left the server before completing the robbery.';
+    case 'jailed':
+      return 'You were arrested or sent to jail.';
+    case 'left-scene':
+      return 'You left the robbery scene too early.';
+    case 'player-cancel':
+      return 'The robbery was cancelled.';
+    case 'reservation-expired':
+      return 'The robbery setup expired before it was committed.';
+    default:
+      return 'The robbery was unsuccessful.';
+  }
 }
 
 export function formatMoney(amount) {

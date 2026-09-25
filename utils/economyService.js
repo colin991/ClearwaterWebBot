@@ -4,6 +4,7 @@ import {
 } from './staffRanks.js';
 import { logger } from './logger.js';
 import { executeErlcCommand, fetchErlcServer, isCivilianTeam, parseErlcCommandLog, parseErlcKill, parseErlcPlayer } from './erlc.js';
+import { parseErlcEmergencyCall } from './erlcCallRadio.js';
 import { discordIdsByRobloxId, getIdentityCache } from './identityStore.js';
 import { isStealCommandText, playerStudDistance } from './erlcSceneCommands.js';
 import { fetchPinellasDepartmentShifts, isActiveMelonlyShift, shiftCreatedMs } from './melonly.js';
@@ -14,18 +15,23 @@ import {
   ECONOMY_JOB_PAY,
   ECONOMY_MIN_LEO,
   ECONOMY_PAY_INTERVAL_MS,
+  ECONOMY_PAYOUT_HOLD_MS,
+  ECONOMY_ROBBERY_ABSENT_MS,
   ECONOMY_STEAL_DISTANCE,
   isPaidCivilianJob,
   departmentByGuildId,
   formatMoney,
+  matchRobberyKindFromText,
   robberyById,
+  robberyFailReasonText,
+  robberyPriorityLabel,
 } from './economyConfig.js';
 import {
   adminAdjustDepartment,
   adminAdjustUser,
   applyDeathFee,
-  beginRobbery,
   completeRobberyIfReady,
+  confirmRobbery,
   depositCash,
   economyBlocksPriority,
   ensureEconomyUser,
@@ -36,6 +42,7 @@ import {
   grantStarter,
   grantWeeklyDepartmentFunds,
   refundTransaction,
+  markRobberyPreparing,
   payDepartmentShift,
   payJobInterval,
   recentTransactions,
@@ -197,16 +204,12 @@ export async function beginReservedRobbery(client, user) {
   const players = (server?.Players || []).map(asEconomyPlayer);
   const live = players.find((player) => String(player.robloxId) === String(identity?.robloxId || ''))
     || players.find((player) => String(player.username || '').toLowerCase() === String(identity?.robloxUsername || '').toLowerCase());
-  if (!live) throw new Error('You must be in the Roblox server to begin the robbery.');
-  const session = await withEconomy((store) => beginRobbery(store, user.id, live.location || null));
+  if (!live) throw new Error('You must be in the Roblox server to begin setting up the robbery.');
+  const session = await withEconomy((store) => markRobberyPreparing(store, user.id, live.location || null, {
+    robloxId: live.robloxId || identity?.robloxId || '',
+  }));
   const robbery = robberyById(session.kind);
-  if (client.config?.erlcServerKey && robbery) {
-    const seconds = Math.max(60, Math.ceil((robbery.survivalMs || 0) / 1000));
-    await executeErlcCommand(client.config.erlcServerKey, `:prty ${seconds}`).catch((error) => {
-      logger.warn(`Economy robbery :prty failed: ${error?.message || error}`);
-    });
-  }
-  await postEconomyLog(client, 'Robbery started', `<@${user.id}> started **${robbery?.name}**`);
+  await postEconomyLog(client, 'Robbery preparing', `<@${user.id}> is setting up **${robbery?.name}**. Priority starts when the robbery is committed.`);
   return session;
 }
 
@@ -511,12 +514,79 @@ async function identityMatch(username) {
   return hit?.discordId || '';
 }
 
+function survivalPhrase(ms) {
+  const minutes = Math.max(1, Math.round(Number(ms || 0) / 60000));
+  return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+}
+
+function listEmergencyCalls(server) {
+  const raw = server?.EmergencyCalls || server?.emergencyCalls || server?.Calls || server?.calls || [];
+  return (Array.isArray(raw) ? raw : []).map((entry) => parseErlcEmergencyCall(entry));
+}
+
+function listCommandLogs(server) {
+  const raw = server?.CommandLogs || server?.commandLogs || [];
+  return (Array.isArray(raw) ? raw : []).map((entry) => (entry?.command != null ? entry : parseErlcCommandLog(entry)));
+}
+
+function findSessionPlayer(session, players, owner) {
+  const robloxId = String(session?.robloxId || owner?.robloxId || '');
+  return (Array.isArray(players) ? players : []).find((player) => robloxId && String(player.robloxId) === robloxId)
+    || (Array.isArray(players) ? players : []).find((player) => (
+      String(player.username || '').toLowerCase() === String(owner?.robloxUsername || session?.username || '').toLowerCase()
+      && String(player.username || '')
+    ));
+}
+
+function callMatchesReservedRobbery(call, session, live) {
+  const kind = matchRobberyKindFromText(call?.description);
+  if (!kind || kind !== session?.kind) return false;
+  const callerId = String(call.callerId || '');
+  const callerName = String(call.callerName || '').toLowerCase();
+  if (live && callerId && String(live.robloxId) === callerId) return true;
+  if (live && callerName && String(live.username || '').toLowerCase() === callerName) return true;
+  if (session.robloxId && callerId && String(session.robloxId) === callerId) return true;
+  if (!callerId && !callerName && live) return true;
+  return false;
+}
+
+function commandJailsRobber(logs, live, since) {
+  const name = String(live?.username || '').trim();
+  if (!name) return false;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return (Array.isArray(logs) ? logs : []).some((log) => {
+    if (Number(log.at || 0) && Number(log.at) < Number(since || 0)) return false;
+    const command = String(log.command || '');
+    if (!/:(jail|arrest)\b/i.test(command) && !/;jail\b/i.test(command)) return false;
+    return new RegExp(`\\b${escaped}\\b`, 'i').test(command);
+  });
+}
+
+async function startRobberyPriorityForSession(client, session, live) {
+  const robbery = robberyById(session.kind);
+  const label = robberyPriorityLabel(session.kind);
+  const seconds = Math.max(60, Math.ceil(((robbery?.survivalMs || 0) + ECONOMY_PAYOUT_HOLD_MS) / 1000));
+  try {
+    await client?.priorityRequest?.startRobberyPriority?.({
+      userId: session.reservedBy,
+      username: live?.username || '',
+      robloxId: live?.robloxId || session.robloxId || '',
+      details: label,
+      seconds,
+    });
+  } catch (error) {
+    logger.warn(`Robbery priority start failed: ${error?.message || error}`);
+  }
+}
+
 export async function tickEconomy(client) {
   const server = client?.config?.erlcServerKey
     ? await fetchErlcServer(client.config.erlcServerKey, { timeoutMs: 4_000 }).catch(() => null)
     : null;
   const players = (server?.Players || []).map(asEconomyPlayer);
   const kills = (server?.KillLogs || []).map((entry) => (entry?.robloxId != null ? entry : parseErlcKill(entry)));
+  const calls = listEmergencyCalls(server);
+  const logs = listCommandLogs(server);
   const identities = await discordIdsByRobloxId().catch(() => new Map());
 
   const weekly = await withEconomy((store) => grantWeeklyDepartmentFunds(store));
@@ -559,28 +629,61 @@ export async function tickEconomy(client) {
     const session = store.robbery;
     if (!session || session.status === 'idle') return events;
     const now = Date.now();
+    if (!session.robloxId && identities?.entries) {
+      for (const [robloxId, discordId] of identities.entries()) {
+        if (String(discordId) === String(session.reservedBy)) {
+          session.robloxId = String(robloxId);
+          break;
+        }
+      }
+    }
+    const owner = store.users[session.reservedBy];
+    const live = findSessionPlayer(session, players, owner);
+
     if (session.status === 'reserved' && now >= Number(session.reservedUntil || 0)) {
       failRobbery(store, 'reservation-expired', { now });
-      events.push({ type: 'fail', reason: 'reservation-expired' });
+      events.push({ type: 'fail', reason: 'reservation-expired', userId: session.reservedBy });
       return events;
     }
-    if (session.status !== 'active') return events;
-    const owner = store.users[session.reservedBy];
-    const live = players.find((player) => String(player.robloxId) === String(owner?.robloxId || ''));
+
+    if (session.status === 'reserved') {
+      const match = calls.find((call) => callMatchesReservedRobbery(call, session, live));
+      if (match) {
+        const confirmed = confirmRobbery(store, session.reservedBy, {
+          now,
+          callKey: `${match.callNumber || match.description}:${match.callerId || ''}`,
+          robloxId: live?.robloxId || session.robloxId || owner?.robloxId || '',
+        });
+        if (confirmed.confirmed) {
+          events.push({ type: 'confirm', userId: session.reservedBy, session: confirmed.session, live });
+        }
+      }
+      return events;
+    }
+
+    if (session.status !== 'active' && session.status !== 'holding') return events;
+
     if (!live) {
-      failRobbery(store, 'left-server', { now });
-      events.push({ type: 'fail', reason: 'left-server', userId: session.reservedBy });
+      session.absentSince = Number(session.absentSince || 0) || now;
+      if (now - session.absentSince >= ECONOMY_ROBBERY_ABSENT_MS) {
+        failRobbery(store, 'left-server', { now });
+        events.push({ type: 'fail', reason: 'left-server', userId: session.reservedBy });
+      }
       return events;
     }
-    if (/jail|inmate|custody/i.test(String(live.team || ''))) {
+    session.absentSince = 0;
+
+    if (/jail|inmate|custody|arrest/i.test(String(live.team || '')) || commandJailsRobber(logs, live, session.startedAt)) {
       failRobbery(store, 'jailed', { now });
       events.push({ type: 'fail', reason: 'jailed', userId: session.reservedBy });
       return events;
     }
-    updateRobberyScene(store, live.location, { now });
-    if (store.robbery?.status !== 'active') {
-      events.push({ type: 'fail', reason: 'left-scene', userId: session.reservedBy });
-      return events;
+    if (session.status === 'active') {
+      updateRobberyScene(store, live.location, { now });
+      if (store.robbery?.status !== 'active' && store.robbery?.status !== 'holding') {
+        events.push({ type: 'fail', reason: 'left-scene', userId: session.reservedBy });
+        return events;
+      }
     }
     const died = kills.some((kill) => String(kill.robloxId) === String(live.robloxId) && Number(kill.at) >= Number(session.startedAt || 0));
     if (died) {
@@ -588,14 +691,60 @@ export async function tickEconomy(client) {
       events.push({ type: 'fail', reason: 'died', userId: session.reservedBy });
       return events;
     }
-    const payout = completeRobberyIfReady(store, session.reservedBy, { now });
-    if (payout.paid) events.push({ type: 'payout', amount: payout.amount, userId: session.reservedBy, tx: payout.tx });
+    const progress = completeRobberyIfReady(store, session.reservedBy, { now });
+    if (progress.held) events.push({ type: 'hold', userId: session.reservedBy, session: progress.session });
+    if (progress.paid) events.push({ type: 'payout', amount: progress.amount, userId: session.reservedBy, tx: progress.tx });
     return events;
   });
   for (const event of robberyEvents) {
-    if (event.type === 'fail') {
+    if (event.type === 'confirm') {
+      const robbery = robberyById(event.session?.kind);
+      const label = robberyPriorityLabel(event.session?.kind);
+      await startRobberyPriorityForSession(client, event.session, event.live);
+      await dmEconomyUser(client, event.userId, {
+        title: 'Robbery Confirmed',
+        description: [
+          `Your ${String(label || 'robbery').toLowerCase()} has been confirmed.`,
+          '',
+          `You must now survive and remain eligible for **${survivalPhrase(robbery?.survivalMs)}** before you can receive the robbery payout.`,
+          '',
+          'Leaving the server, dying, being arrested/jailed, or otherwise failing the robbery will cause you to lose the payout.',
+        ].join('\n'),
+      });
+      await postEconomyLog(client, 'Robbery confirmed', `<@${event.userId}> · **${label}** · survive ${survivalPhrase(robbery?.survivalMs)}`);
+    } else if (event.type === 'hold') {
+      await dmEconomyUser(client, event.userId, {
+        title: 'Robbery Survival Completed',
+        description: [
+          'You completed the required survival time.',
+          '',
+          `Your robbery payout is now being held for an additional **${survivalPhrase(ECONOMY_PAYOUT_HOLD_MS)}**. You must remain eligible during this period.`,
+        ].join('\n'),
+      });
+      await postEconomyLog(client, 'Robbery payout hold', `<@${event.userId}> · ${survivalPhrase(ECONOMY_PAYOUT_HOLD_MS)} remaining`);
+    } else if (event.type === 'fail') {
+      if (event.reason !== 'reservation-expired') {
+        await dmEconomyUser(client, event.userId, {
+          title: 'Robbery Failed',
+          description: [
+            'You failed to complete the robbery and have lost the money from this robbery.',
+            '',
+            `**Reason:** ${robberyFailReasonText(event.reason)}`,
+          ].join('\n'),
+        });
+      }
       await postEconomyLog(client, 'Robbery failed', `${event.reason}${event.userId ? ` · <@${event.userId}>` : ''}`);
     } else if (event.type === 'payout') {
+      await dmEconomyUser(client, event.userId, {
+        title: 'Robbery Successful',
+        description: [
+          'You successfully completed the robbery and survived the payout period.',
+          '',
+          `**Payout:** ${formatMoney(event.amount)}`,
+          '',
+          'The money has been added to your balance.',
+        ].join('\n'),
+      });
       await postEconomyLog(client, 'Robbery completed', `<@${event.userId}> ${formatMoney(event.amount)} · \`${event.tx?.id}\``);
     }
   }

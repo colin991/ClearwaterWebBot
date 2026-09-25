@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-25-robbery-priority-hold",
+      "title": "Start robbery priorities only after the crime, then hold payout 5 minutes",
+      "summary": "Reserving or setting up a robbery no longer starts the priority timer. When the in-game robbery is actually committed, the bot confirms it, starts a Bank Robbery (or matching) priority, DMs the robber, and runs the survival timer. Completing survival starts a 5-minute payout hold. Dying, leaving, or going to jail during survival or the hold cancels the money. Only after the hold does Cash get paid, once.",
+      "createdAt": "2026-09-25T13:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-25-funds-send-note",
       "title": "Let departments send funds to a person or the server with a note",
       "summary": "-funds send now pays a Discord user or the server treasury from the department Discord, and a note is required on every send.",

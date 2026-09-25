@@ -237,8 +237,11 @@ function robberyHeadline(state) {
   let extra = '';
   if (state?.priorityBlocked) status = 'DISABLED';
   if (session.status === 'reserved' && now < Number(session.reservedUntil || 0)) {
-    status = 'RESERVED';
+    status = session.preparing ? 'PREPARING' : 'RESERVED';
     extra = ` **${formatRemain(session.reservedUntil - now)} REMAINING**`;
+  } else if (session.status === 'holding') {
+    status = 'PAYOUT HOLD';
+    extra = session.holdUntil ? ` · ${formatRemain(session.holdUntil - now)} remaining` : '';
   } else if (session.status === 'active') {
     status = 'ACTIVE';
     extra = session.endsAt ? ` · survive ${formatRemain(session.endsAt - now)}` : '';
@@ -263,11 +266,11 @@ export function buildRobberyPanel(state = null, { userId = '' } = {}) {
     .addSeparatorComponents(divider())
     .addTextDisplayComponents(new TextDisplayBuilder().setContent([
       '# <:moneybag1:1545436887404122205> Robbery System',
-      '<:DownArrow:1518386518387851425> Select a robbery below to begin. You must successfully survive the required time before receiving your payout.',
+      '<:DownArrow:1518386518387851425> Reserve a robbery to set up. The priority and survival timer start only after the in-game robbery is committed. After survival there is a 5-minute payout hold before money is paid.',
       '',
       robberyHeadline(state),
       '',
-      '> **Important:** If you are killed, arrested, respawn, disconnect, or leave the server while participating in an active robbery, your payout will be forfeited.',
+      '> **Important:** Setting up a robbery does not start the priority. The priority and survival timer start only after the in-game robbery is actually committed. If you are killed, arrested, jailed, disconnect, or leave during survival or the 5-minute payout hold, you get no payout.',
     ].join('\n')));
 
   for (const robbery of ECONOMY_ROBBERIES) {
@@ -289,7 +292,7 @@ export function buildRobberyPanel(state = null, { userId = '' } = {}) {
         `##  ${robbery.name}`,
         `**Payout:** \`${formatMoney(robbery.min)} - ${formatMoney(robbery.max)}\``,
         `**Scene Requirement:** ${scene}`,
-        `**Survival Requirement:** **${formatRemain(robbery.survivalMs)}**`,
+        `**Survival Requirement:** **${formatRemain(robbery.survivalMs)}** plus a **5:00** payout hold`,
       ].join('\n'), label, buttonId, ButtonStyle.Secondary, { disabled }));
   }
 
@@ -306,7 +309,7 @@ export function buildRobberyPanel(state = null, { userId = '' } = {}) {
       '### <:DownArrow:1518386518387851425> Robbery Guidelines',
       '- Only begin a robbery when you are ready to actively roleplay it.',
       '- Do not intentionally reset, respawn, or disconnect to avoid law enforcement.',
-      '- Payouts are only awarded after the full survival requirement is completed.',
+      '- Payouts are only awarded after the full survival requirement **and** the extra 5-minute hold.',
       '- Starting another robbery while one is already active may result in the new robbery being voided.',
       '- All Clearwater Roleplay rules remain in effect during robberies.',
       '-# GTA Driving in max **105** mph even in pursuits',
@@ -733,7 +736,7 @@ export async function handleEconomyInteraction(interaction) {
   if (id === ECO_IDS.robberyBegin) {
     const session = await beginReservedRobbery(client, interaction.user);
     await interaction.reply({
-      content: `Robbery started. Survive until <t:${Math.floor(session.endsAt / 1000)}:t>. Failed robberies pay $0.`,
+      content: 'You are marked as preparing. Nothing starts on the priority yet. Commit the in-game robbery (for example the bank actually being robbed) to confirm it, start the priority, and begin the survival timer.',
       flags: MessageFlags.Ephemeral,
     });
     return true;
@@ -750,7 +753,7 @@ export async function handleEconomyInteraction(interaction) {
     if (session.status === 'reserved' && String(session.reservedBy) === interaction.user.id && session.kind === robberyId) {
       const started = await beginReservedRobbery(client, interaction.user);
       await interaction.reply({
-        content: `Robbery started. Survive until <t:${Math.floor(started.endsAt / 1000)}:t>.`,
+        content: 'You are marked as preparing. The priority starts when the in-game robbery is actually committed.',
         flags: MessageFlags.Ephemeral,
       });
       return true;
