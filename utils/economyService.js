@@ -15,7 +15,6 @@ import {
   ECONOMY_JOB_PAY,
   ECONOMY_MIN_LEO,
   ECONOMY_PAY_INTERVAL_MS,
-  ECONOMY_PAYOUT_HOLD_MS,
   ECONOMY_ROBBERY_ABSENT_MS,
   ECONOMY_STARTER_GRANT,
   ECONOMY_STEAL_DISTANCE,
@@ -571,7 +570,7 @@ function commandJailsRobber(logs, live, since) {
 async function startRobberyPriorityForSession(client, session, live) {
   const robbery = robberyById(session.kind);
   const label = robberyPriorityLabel(session.kind);
-  const seconds = Math.max(60, Math.ceil(((robbery?.survivalMs || 0) + ECONOMY_PAYOUT_HOLD_MS) / 1000));
+  const seconds = Math.max(60, Math.ceil((robbery?.survivalMs || 0) / 1000));
   try {
     await client?.priorityRequest?.startRobberyPriority?.({
       userId: session.reservedBy,
@@ -703,7 +702,6 @@ export async function tickEconomy(client) {
       return events;
     }
     const progress = completeRobberyIfReady(store, session.reservedBy, { now });
-    if (progress.held) events.push({ type: 'hold', userId: session.reservedBy, session: progress.session });
     if (progress.paid) events.push({ type: 'payout', amount: progress.amount, userId: session.reservedBy, tx: progress.tx });
     return events;
   });
@@ -723,16 +721,6 @@ export async function tickEconomy(client) {
         ].join('\n'),
       });
       await postEconomyLog(client, 'Robbery confirmed', `<@${event.userId}> · **${label}** · survive ${survivalPhrase(robbery?.survivalMs)}`);
-    } else if (event.type === 'hold') {
-      await dmEconomyUser(client, event.userId, {
-        title: 'Robbery Survival Completed',
-        description: [
-          'You completed the required survival time.',
-          '',
-          `Your robbery payout is now being held for an additional **${survivalPhrase(ECONOMY_PAYOUT_HOLD_MS)}**. You must remain eligible during this period.`,
-        ].join('\n'),
-      });
-      await postEconomyLog(client, 'Robbery payout hold', `<@${event.userId}> · ${survivalPhrase(ECONOMY_PAYOUT_HOLD_MS)} remaining`);
     } else if (event.type === 'fail') {
       if (event.reason !== 'reservation-expired') {
         await dmEconomyUser(client, event.userId, {

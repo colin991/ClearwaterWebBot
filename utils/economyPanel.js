@@ -240,7 +240,7 @@ function robberyHeadline(state) {
     status = session.preparing ? 'PREPARING' : 'RESERVED';
     extra = ` **${formatRemain(session.reservedUntil - now)} REMAINING**`;
   } else if (session.status === 'holding') {
-    status = 'PAYOUT HOLD';
+    status = 'FINAL SURVIVAL PERIOD';
     extra = session.holdUntil ? ` · ${formatRemain(session.holdUntil - now)} remaining` : '';
   } else if (session.status === 'active') {
     status = 'ACTIVE';
@@ -266,11 +266,11 @@ export function buildRobberyPanel(state = null, { userId = '' } = {}) {
     .addSeparatorComponents(divider())
     .addTextDisplayComponents(new TextDisplayBuilder().setContent([
       '# <:moneybag1:1545436887404122205> Robbery System',
-      '<:DownArrow:1518386518387851425> Reserve a robbery to set up. The priority and survival timer start only after the in-game robbery is committed. After survival there is a 5-minute payout hold before money is paid.',
+      '<:DownArrow:1518386518387851425> Reserve a robbery to set up. The priority and survival timer start only after the in-game robbery is committed. Payment is issued when the full timer ends.',
       '',
       robberyHeadline(state),
       '',
-      '> **Important:** Setting up a robbery does not start the priority. The priority and survival timer start only after the in-game robbery is actually committed. If you are killed, arrested, jailed, disconnect, or leave during survival or the 5-minute payout hold, you get no payout.',
+      '> **Important:** Setting up a robbery does not start the priority. The timer starts only after the in-game robbery is actually committed. If you are killed, arrested, jailed, disconnect, or leave before it ends, you get no payout.',
     ].join('\n')));
 
   for (const robbery of ECONOMY_ROBBERIES) {
@@ -292,7 +292,7 @@ export function buildRobberyPanel(state = null, { userId = '' } = {}) {
         `##  ${robbery.name}`,
         `**Payout:** \`${formatMoney(robbery.payout)}\``,
         `**Scene Requirement:** ${scene}`,
-        `**Survival Requirement:** **${formatRemain(robbery.survivalMs)}** plus a **5:00** payout hold`,
+        `**Survival Requirement:** **${formatRemain(robbery.survivalMs)}**; paid immediately at the end`,
       ].join('\n'), label, buttonId, ButtonStyle.Secondary, { disabled }));
   }
 

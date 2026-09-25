@@ -4,7 +4,6 @@ import {
   ECONOMY_DEPARTMENTS,
   ECONOMY_JOB_PAY,
   ECONOMY_PAY_INTERVAL_MS,
-  ECONOMY_PAYOUT_HOLD_MS,
   ECONOMY_ROBBERIES,
   ECONOMY_ROBBERY_PREPARE_MS,
   ECONOMY_ROBBERY_RESERVE_MS,
@@ -550,30 +549,16 @@ export function failRobbery(store, reason, { now = Date.now() } = {}) {
   return store.robbery;
 }
 
-export function startRobberyHold(store, discordId, { now = Date.now() } = {}) {
-  const session = store.robbery;
-  if (session?.status === 'holding') return { held: false, reason: 'already', session };
-  if (session?.status !== 'active' || session.paid) return { held: false };
-  if (String(session.reservedBy) !== String(discordId)) return { held: false };
-  if (!session.sceneComplete) return { held: false, reason: 'scene' };
-  if (now < Number(session.endsAt || 0)) return { held: false, reason: 'survival' };
-  session.status = 'holding';
-  session.holdStarted = true;
-  session.holdUntil = now + ECONOMY_PAYOUT_HOLD_MS;
-  return { held: true, session, holdUntil: session.holdUntil };
-}
-
 export function completeRobberyIfReady(store, discordId, { now = Date.now(), payout = null } = {}) {
   const session = store.robbery;
   if (session?.paid) return { paid: false };
-  if (session?.status === 'active') {
-    const hold = startRobberyHold(store, discordId, { now });
-    if (hold.held) return { paid: false, held: true, session: hold.session };
-    return { paid: false, reason: hold.reason || 'survival' };
-  }
-  if (session?.status !== 'holding') return { paid: false };
+  if (!['active', 'holding'].includes(session?.status)) return { paid: false };
   if (String(session.reservedBy) !== String(discordId)) return { paid: false };
-  if (now < Number(session.holdUntil || 0)) return { paid: false, reason: 'hold' };
+  if (!session.sceneComplete) return { paid: false, reason: 'scene' };
+  const payoutAt = session.status === 'holding'
+    ? Number(session.holdUntil || session.endsAt || 0)
+    : Number(session.endsAt || 0);
+  if (now < payoutAt) return { paid: false, reason: 'survival' };
   const robbery = robberyById(session.kind);
   const amount = payout == null ? money(session.payoutAmount) || money(robbery.payout) : money(payout);
   const user = ensureEconomyUser(store, discordId, { now });

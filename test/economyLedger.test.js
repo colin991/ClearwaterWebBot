@@ -215,7 +215,7 @@ test('department funds can send to a person or the server with a note', () => {
   assert.equal(serverRows[0].note, 'city event support');
 });
 
-test('robberies wait for confirmation, then a payout hold, and pay once', () => {
+test('robberies pay once at the end of the combined survival timer', () => {
   const store = emptyEconomyStore();
   const blocked = robberyStatus(store, { leoCount: 3 });
   assert.equal(blocked.reasons.bank, 'NOT ENOUGH LEO');
@@ -230,28 +230,25 @@ test('robberies wait for confirmation, then a payout hold, and pay once', () => 
   assert.equal(store.robbery.status, 'active');
   store.robbery.sceneComplete = true;
   assert.equal(completeRobberyIfReady(store, 'u1', { now: t0 }).paid, false);
-  const held = completeRobberyIfReady(store, 'u1', { now: t0 + 8 * 60_000 });
-  assert.equal(held.held, true);
-  assert.equal(held.paid, false);
-  assert.equal(store.robbery.status, 'holding');
-  assert.equal(completeRobberyIfReady(store, 'u1', { now: t0 + 8 * 60_000 + 60_000 }).paid, false);
-  const first = completeRobberyIfReady(store, 'u1', { now: t0 + 8 * 60_000 + 5 * 60_000, payout: 2000 });
-  const second = completeRobberyIfReady(store, 'u1', { now: t0 + 8 * 60_000 + 5 * 60_000, payout: 2000 });
+  assert.equal(completeRobberyIfReady(store, 'u1', { now: t0 + 12 * 60_000 }).paid, false);
+  assert.equal(store.robbery.status, 'active');
+  const first = completeRobberyIfReady(store, 'u1', { now: t0 + 13 * 60_000, payout: 2000 });
+  const second = completeRobberyIfReady(store, 'u1', { now: t0 + 13 * 60_000, payout: 2000 });
   assert.equal(first.paid, true);
   assert.equal(second.paid, false);
   assert.equal(store.users.u1.cash, 2000);
   failRobbery(store, 'cancelled');
 });
 
-test('dying during the payout hold cancels the money', () => {
+test('dying during the final five minutes cancels the money', () => {
   const store = emptyEconomyStore();
   reserveRobbery(store, 'atm', 'u1', { leoCount: 12 });
   const t0 = 5_000_000;
   confirmRobbery(store, 'u1', { now: t0 });
   store.robbery.sceneComplete = true;
-  completeRobberyIfReady(store, 'u1', { now: t0 + 8 * 60_000 });
-  assert.equal(store.robbery.status, 'holding');
-  failRobbery(store, 'died', { now: t0 + 8 * 60_000 + 30_000 });
+  assert.equal(completeRobberyIfReady(store, 'u1', { now: t0 + 10 * 60_000 }).paid, false);
+  assert.equal(store.robbery.status, 'active');
+  failRobbery(store, 'died', { now: t0 + 10 * 60_000 + 30_000 });
   assert.equal(store.robbery.status, 'idle');
   assert.equal(store.users.u1, undefined);
 });
@@ -307,6 +304,13 @@ test('robberies use the exact configured payouts', () => {
     register: 300,
   });
   assert.equal(ECONOMY_ROBBERIES.some((entry) => 'min' in entry || 'max' in entry), false);
+  assert.deepEqual(Object.fromEntries(ECONOMY_ROBBERIES.map((entry) => [entry.id, entry.survivalMs / 60_000])), {
+    bank: 20,
+    jewelry: 15,
+    house: 13,
+    atm: 12.5,
+    register: 10,
+  });
 });
 
 test('department Discord IDs map to the configured treasuries', () => {

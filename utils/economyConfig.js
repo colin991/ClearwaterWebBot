@@ -7,7 +7,6 @@ export const ECONOMY_PAY_INTERVAL_MS = 10 * 60 * 1000;
 export const ECONOMY_MIN_LEO = 10;
 export const ECONOMY_ROBBERY_RESERVE_MS = 5 * 60 * 1000;
 export const ECONOMY_ROBBERY_PREPARE_MS = 30 * 60 * 1000;
-export const ECONOMY_PAYOUT_HOLD_MS = 5 * 60 * 1000;
 export const ECONOMY_ROBBERY_ABSENT_MS = 45_000;
 export const ECONOMY_STEAL_SUCCESS_CHANCE = 50;
 export const ECONOMY_STEAL_DISTANCE = 10;
@@ -104,7 +103,7 @@ export const ECONOMY_ROBBERIES = Object.freeze([
     name: 'Bank Heist',
     payout: 6_500,
     sceneMs: 2 * 60_000,
-    survivalMs: 15 * 60_000,
+    survivalMs: 20 * 60_000,
     cooldownMs: 20 * 60_000,
     minLeo: ECONOMY_MIN_LEO,
     callKinds: ['bank'],
@@ -114,7 +113,7 @@ export const ECONOMY_ROBBERIES = Object.freeze([
     name: 'Jewelry Store Robbery',
     payout: 3_000,
     sceneMs: 60_000,
-    survivalMs: 10 * 60_000,
+    survivalMs: 15 * 60_000,
     cooldownMs: 15 * 60_000,
     minLeo: ECONOMY_MIN_LEO,
     callKinds: ['jewelry'],
@@ -124,7 +123,7 @@ export const ECONOMY_ROBBERIES = Object.freeze([
     name: 'House Robbery',
     payout: 1_500,
     sceneMs: 60_000,
-    survivalMs: 8 * 60_000,
+    survivalMs: 13 * 60_000,
     cooldownMs: 12 * 60_000,
     minLeo: ECONOMY_MIN_LEO,
     callKinds: ['leo_server', 'house'],
@@ -134,7 +133,7 @@ export const ECONOMY_ROBBERIES = Object.freeze([
     name: 'ATM Robbery',
     payout: 700,
     sceneMs: 0,
-    survivalMs: 7 * 60_000 + 30_000,
+    survivalMs: 12 * 60_000 + 30_000,
     cooldownMs: 10 * 60_000,
     minLeo: ECONOMY_MIN_LEO,
     callKinds: ['atm'],
@@ -144,7 +143,7 @@ export const ECONOMY_ROBBERIES = Object.freeze([
     name: 'Cash Register Robbery',
     payout: 300,
     sceneMs: 0,
-    survivalMs: 5 * 60_000,
+    survivalMs: 10 * 60_000,
     cooldownMs: 8 * 60_000,
     minLeo: ECONOMY_MIN_LEO,
     callKinds: ['leo_server', 'register', 'cash'],
