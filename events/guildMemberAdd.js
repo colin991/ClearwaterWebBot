@@ -6,6 +6,8 @@ import { sendPinellasWelcome } from '../utils/pinellasServer.js';
 import { sendBelleairWelcome } from '../utils/belleairServer.js';
 import { handleSoundboardMemberAdd } from '../utils/soundboardAccess.js';
 import { logger } from '../utils/logger.js';
+import { ensureStarterAccount, postEconomyLog } from '../utils/economyService.js';
+import { formatMoney } from '../utils/economyConfig.js';
 
 export default {
   name: Events.GuildMemberAdd,
@@ -38,6 +40,17 @@ export default {
     }
 
     if (member.guild.id !== CLEARWATER_GUILD_ID) return;
+
+    try {
+      if (!member.user?.bot) {
+        const starter = await ensureStarterAccount(member.id);
+        if (starter.granted) {
+          await postEconomyLog(client || member.client, 'Starter grant', `<@${member.id}> received ${formatMoney(starter.tx.amount)} · \`${starter.tx.id}\``);
+        }
+      }
+    } catch (error) {
+      logger.warn(`Economy starter grant on join failed: ${error?.message || error}`);
+    }
 
     const store = await readInternetStore();
     const existingUser = store.users[member.id];

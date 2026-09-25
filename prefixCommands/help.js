@@ -39,8 +39,9 @@ const GROUPS = [
       `\`-nick\` — Nickname · **${RANK_FLOOR.administrator}+**`,
       '`-callsign [@member]` — PCSO roster callsign · **Administrator**',
       `\`-bans\` — Timed ban cases · **${RANK_FLOOR.supervisor}+**`,
-      '`-funds` — Roblox group funds, last 7 payouts, and last 7 sales · **Administrator**',
+      '`-funds` — Department treasury in FHP/PCSO/911/CFR/BPD Discords; Roblox group funds in Clearwater · **Administrator** for Roblox funds',
       '`-eco` — Post the Clearwater Economy panel · **Administrator**',
+      '`-ecoadmin` — Search, adjust, freeze, refund, and cancel robberies · **Administrator**',
     ],
   },
 ];

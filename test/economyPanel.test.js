@@ -63,11 +63,15 @@ test('economy sub-panels match the robbery, jobs, and department layouts', () =>
   assert.equal(Boolean(buildRobberyPanel().flags & MessageFlags.Ephemeral), true);
 });
 
-test('economy buttons open the matching panel or a coming-soon card', async () => {
+test('economy buttons open robberies, jobs, departments, and send', async () => {
   const replies = [];
   const click = (customId) => handleEconomyInteraction({
     isButton: () => true,
+    isUserSelectMenu: () => false,
+    isModalSubmit: () => false,
     customId,
+    user: { id: 'tester' },
+    client: {},
     reply: async (payload) => { replies.push(payload); },
   });
 
@@ -78,6 +82,6 @@ test('economy buttons open the matching panel or a coming-soon card', async () =
   assert.equal(await click(ECO_IDS.departments), true);
   assert.match(textOf(replies.at(-1)), /Department Funds/);
   assert.equal(await click(ECO_IDS.send), true);
-  assert.match(textOf(replies.at(-1)), /not wired up yet/);
+  assert.match(textOf(replies.at(-1)), /Send Money/);
   assert.equal(await click('market:other'), false);
 });

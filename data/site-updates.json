@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-25-economy-v2",
+      "title": "Launch Clearwater Economy accounts, robberies, and department payroll",
+      "summary": "The existing Clearwater Economy panel now uses saved Cash and Bank balances, a one-time $1,000 starter grant, Send/Wallet/Transactions, civilian job pay, robberies with LEO and priority checks, ;steal, death fees, and department treasuries with Melonly shift payroll and -funds in each department Discord.",
+      "createdAt": "2026-09-25T02:40:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-25-dept-cmd-guild",
       "title": "Keep PCSO commands quiet outside the PCSO Discord",
       "summary": "PCSO commands such as -cr, -callsign, and /infract no longer reply in Clearwater or Belleair. They only run in the Pinellas County Sheriff's Office server. BPD-only commands will work the same way in the Belleair Discord.",

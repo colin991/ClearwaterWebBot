@@ -1,0 +1,149 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  applyDeathFee,
+  completeRobberyIfReady,
+  depositCash,
+  economyBlocksPriority,
+  emptyEconomyStore,
+  failRobbery,
+  grantStarter,
+  grantWeeklyDepartmentFunds,
+  payDepartmentShift,
+  payJobInterval,
+  reserveRobbery,
+  beginRobbery,
+  robberyStatus,
+  transferCash,
+  trySteal,
+  withdrawBank,
+} from '../utils/economyLedger.js';
+import { ECONOMY_STARTER_GRANT, ECONOMY_DEATH_FEE, departmentByGuildId } from '../utils/economyConfig.js';
+
+test('starter grant is once per user and writes STARTER_GRANT', () => {
+  const store = emptyEconomyStore();
+  const first = grantStarter(store, 'u1');
+  const second = grantStarter(store, 'u1');
+  assert.equal(first.granted, true);
+  assert.equal(first.user.cash, ECONOMY_STARTER_GRANT);
+  assert.equal(first.tx.type, 'STARTER_GRANT');
+  assert.equal(second.granted, false);
+  assert.equal(store.users.u1.cash, ECONOMY_STARTER_GRANT);
+});
+
+test('deposit and withdraw keep cash and bank separate', () => {
+  const store = emptyEconomyStore();
+  grantStarter(store, 'u1');
+  depositCash(store, 'u1', 400);
+  assert.equal(store.users.u1.cash, 600);
+  assert.equal(store.users.u1.bank, 400);
+  withdrawBank(store, 'u1', 100);
+  assert.equal(store.users.u1.cash, 700);
+  assert.equal(store.users.u1.bank, 300);
+});
+
+test('transfers move cash only and cannot overspend', () => {
+  const store = emptyEconomyStore();
+  grantStarter(store, 'a');
+  grantStarter(store, 'b');
+  const result = transferCash(store, 'a', 'b', 250, { note: 'test' });
+  assert.equal(store.users.a.cash, 750);
+  assert.equal(store.users.b.cash, 1250);
+  assert.equal(result.outgoing.referenceId, result.incoming.referenceId);
+  assert.throws(() => transferCash(store, 'a', 'b', 99999), /do not have/);
+});
+
+test('death fee can go negative and is charged once per fingerprint', () => {
+  const store = emptyEconomyStore();
+  grantStarter(store, 'u1');
+  store.users.u1.cash = 200;
+  const first = applyDeathFee(store, 'u1', 'kill-1');
+  const second = applyDeathFee(store, 'u1', 'kill-1');
+  assert.equal(first.charged, true);
+  assert.equal(second.charged, false);
+  assert.equal(store.users.u1.cash, 200 - ECONOMY_DEATH_FEE);
+  assert.equal(first.tx.type, 'DEATH_FEE');
+});
+
+test('steal only takes cash and can fail server-side', () => {
+  const store = emptyEconomyStore();
+  grantStarter(store, 'thief');
+  grantStarter(store, 'victim');
+  depositCash(store, 'victim', 800);
+  const fail = trySteal(store, 'thief', 'victim', {
+    distance: 4,
+    thiefTeam: 'Civilian',
+    victimTeam: 'Civilian',
+    roll: 90,
+  });
+  assert.equal(fail.success, false);
+  assert.equal(store.users.victim.bank, 800);
+  store.steals = {};
+  const win = trySteal(store, 'thief', 'victim', {
+    now: Date.now() + 60_000,
+    distance: 4,
+    thiefTeam: 'Civilian',
+    victimTeam: 'Civilian',
+    roll: 10,
+  });
+  assert.equal(win.success, true);
+  assert.equal(store.users.victim.bank, 800);
+  assert.equal(store.users.victim.cash + store.users.thief.cash, 1200);
+});
+
+test('civilian job pay waits a full interval on the same team', () => {
+  const store = emptyEconomyStore();
+  const t0 = 1_000_000;
+  assert.equal(payJobInterval(store, 'u1', { now: t0, team: 'Civilian' }).paid, false);
+  assert.equal(payJobInterval(store, 'u1', { now: t0 + 9 * 60_000, team: 'Civilian' }).paid, false);
+  const paid = payJobInterval(store, 'u1', { now: t0 + 10 * 60_000, team: 'Civilian' });
+  assert.equal(paid.paid, true);
+  assert.equal(paid.amount, 50);
+  assert.equal(payJobInterval(store, 'u1', { now: t0 + 10 * 60_000, team: 'Civilian' }).paid, false);
+  payJobInterval(store, 'u1', { now: t0 + 11 * 60_000, team: 'Police' });
+  assert.equal(store.jobs.u1, undefined);
+});
+
+test('department weekly grants run once per week and payroll comes from treasury', () => {
+  const store = emptyEconomyStore();
+  const granted = grantWeeklyDepartmentFunds(store, { now: Date.parse('2026-09-25T12:00:00Z') });
+  assert.equal(granted.length, 5);
+  assert.equal(store.departments.fhp.balance, 500_000);
+  grantWeeklyDepartmentFunds(store, { now: Date.parse('2026-09-25T18:00:00Z') });
+  assert.equal(store.departments.fhp.balance, 500_000);
+  const pay = payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 's1', elapsedMs: 20 * 60_000 });
+  assert.equal(pay.paid, true);
+  assert.equal(pay.amount, 400);
+  assert.equal(store.departments.fhp.balance, 499_600);
+  assert.equal(store.users.cop.cash, 400);
+  store.departments.fhp.balance = 50;
+  const broke = payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 's2', elapsedMs: 10 * 60_000 });
+  assert.equal(broke.reason, 'insufficient');
+  assert.equal(store.users.cop.cash, 400);
+});
+
+test('robberies block priorities while reserved/active and pay once', () => {
+  const store = emptyEconomyStore();
+  const blocked = robberyStatus(store, { leoCount: 3 });
+  assert.equal(blocked.reasons.bank, 'NOT ENOUGH LEO');
+  reserveRobbery(store, 'house', 'u1', { leoCount: 12 });
+  assert.equal(economyBlocksPriority(store), true);
+  beginRobbery(store, 'u1', { x: 0, z: 0 });
+  assert.equal(store.robbery.status, 'active');
+  store.robbery.sceneComplete = true;
+  store.robbery.endsAt = Date.now() - 1;
+  const first = completeRobberyIfReady(store, 'u1', { payout: 2000 });
+  const second = completeRobberyIfReady(store, 'u1', { payout: 2000 });
+  assert.equal(first.paid, true);
+  assert.equal(second.paid, false);
+  assert.equal(store.users.u1.cash, 2000);
+  failRobbery(store, 'cancelled');
+});
+
+test('department Discord IDs map to the configured treasuries', () => {
+  assert.equal(departmentByGuildId('1513609541483499790').id, 'fhp');
+  assert.equal(departmentByGuildId('1514100977920245760').id, 'pcso');
+  assert.equal(departmentByGuildId('1515101455525085337').id, 'dispatch');
+  assert.equal(departmentByGuildId('1514804886292795544').id, 'cfr');
+  assert.equal(departmentByGuildId('1526890993327280240').id, 'bpd');
+});

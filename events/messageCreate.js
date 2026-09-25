@@ -51,8 +51,6 @@ export default {
       logger.error('Automatic reply failed', error);
     }
 
-    if (shouldIgnoreGuildCommands(message.guildId)) return;
-
     const settings = await getOwnerConfig();
     const prefix = settings.prefix || '-';
     const commandPrefix = message.content.startsWith(prefix)
@@ -62,6 +60,7 @@ export default {
 
     const { name, args } = parseArgs(message.content, commandPrefix);
     if (!name) return;
+    if (shouldIgnoreGuildCommands(message.guildId) && name !== 'funds') return;
 
     const command = client.prefixCommands?.get(name);
     if (!command) return;

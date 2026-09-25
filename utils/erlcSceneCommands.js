@@ -1,5 +1,5 @@
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
-import { fetchErlcServer, parseErlcPlayer } from './erlc.js';
+import { fetchErlcServer, parseErlcPlayer, executeErlcCommand } from './erlc.js';
 import { discordIdsByRobloxId } from './identityStore.js';
 import { resolveZoneDiscordMember } from './erlcZoneVoice.js';
 import { markBotVoiceMove } from './botVoiceMoves.js';
@@ -19,6 +19,7 @@ export const SCENE_COMMAND_LOG_CHANNEL_ID = VC_ACTION_LOG_CHANNEL_ID;
 
 export const SCENE_COMMAND_FAILURE_REASONS = Object.freeze({
   unknown_command: 'not a known ;ss ;ts ;scene ;fc ;civ ;team command',
+  steal_rejected: 'steal command rejected',
   missing_player: 'webhook had no player',
   duplicate: 'duplicate of the same command from the last 4 seconds',
   missing_guild: 'bot is missing DISCORD_GUILD_ID',
@@ -547,6 +548,31 @@ async function executeErlcSceneCommand(payload, parsed, {
   identities,
 }) {
   if (!parsed.command) {
+    if (/^;?steal\b/i.test(String(parsed.text || ''))) {
+      try {
+        const server = snapshot
+          ? await snapshot()
+          : (config.erlcServerKey ? await fetchErlcServer(config.erlcServerKey) : null);
+        const { handleStealCommand } = await import('./economyService.js');
+        await handleStealCommand({
+          player: parsed.player,
+          snapshot: server,
+          client,
+        });
+        return { handled: true, reason: 'steal', player: parsed.player };
+      } catch (error) {
+        const message = String(error?.message || 'Your steal attempt failed.');
+        if (config.erlcServerKey && parsed.player?.username) {
+          await executeErlcCommand(config.erlcServerKey, `:pm ${parsed.player.username} ${message}`).catch(() => {});
+        }
+        return {
+          handled: false,
+          reason: 'steal_rejected',
+          player: parsed.player,
+          error: message,
+        };
+      }
+    }
     return { handled: false, reason: 'unknown_command', player: parsed.player };
   }
 

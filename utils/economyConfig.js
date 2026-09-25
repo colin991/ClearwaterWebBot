@@ -1,0 +1,196 @@
+/** Central Clearwater Economy V2 configuration. */
+
+export const ECONOMY_STARTER_GRANT = 1_000;
+export const ECONOMY_DEATH_FEE = 500;
+export const ECONOMY_JOB_PAY = 50;
+export const ECONOMY_PAY_INTERVAL_MS = 10 * 60 * 1000;
+export const ECONOMY_MIN_LEO = 10;
+export const ECONOMY_ROBBERY_RESERVE_MS = 5 * 60 * 1000;
+export const ECONOMY_STEAL_SUCCESS_CHANCE = 50;
+export const ECONOMY_STEAL_DISTANCE = 10;
+export const ECONOMY_STEAL_COOLDOWN_MS = 45_000;
+export const ECONOMY_TRANSFER_COOLDOWN_MS = 8_000;
+export const ECONOMY_TX_RECENT = 12;
+export const ECONOMY_TX_KEEP = 4_000;
+export const ECONOMY_SCENE_RADIUS = 45;
+
+export const ECONOMY_PANEL_CHANNEL_ID = '1545267006360649728';
+export const ECONOMY_LOG_CHANNEL_ID = '1549178818814812211';
+
+export const ECONOMY_TX = Object.freeze({
+  STARTER_GRANT: 'STARTER_GRANT',
+  TRANSFER: 'TRANSFER',
+  JOB_PAYCHECK: 'JOB_PAYCHECK',
+  DEPARTMENT_SHIFT_PAY: 'DEPARTMENT_SHIFT_PAY',
+  ROBBERY_PAYOUT: 'ROBBERY_PAYOUT',
+  DEATH_FEE: 'DEATH_FEE',
+  STEAL: 'STEAL',
+  BANK_DEPOSIT: 'BANK_DEPOSIT',
+  BANK_WITHDRAWAL: 'BANK_WITHDRAWAL',
+  DEPARTMENT_WEEKLY_GRANT: 'DEPARTMENT_WEEKLY_GRANT',
+  DEPARTMENT_PAYROLL: 'DEPARTMENT_PAYROLL',
+  DEPARTMENT_TRANSFER: 'DEPARTMENT_TRANSFER',
+  DEPARTMENT_PURCHASE: 'DEPARTMENT_PURCHASE',
+  ADMIN_ADJUSTMENT: 'ADMIN_ADJUSTMENT',
+  REFUND: 'REFUND',
+});
+
+export const ECONOMY_DEPARTMENTS = Object.freeze([
+  {
+    id: 'fhp',
+    name: 'Florida Highway Patrol',
+    short: 'FHP',
+    guildId: '1513609541483499790',
+    weeklyGrant: 500_000,
+    shiftPay: 200,
+    emoji: '<:FHP_Logo:1514421266776461314>',
+    melonlyDepartmentId: '',
+  },
+  {
+    id: 'pcso',
+    name: 'Pinellas County Sheriff\'s Office',
+    short: 'PCSO',
+    guildId: '1514100977920245760',
+    weeklyGrant: 500_000,
+    shiftPay: 200,
+    emoji: '<:slogo:1546245229420744804>',
+    melonlyDepartmentId: '7470323914464301056',
+  },
+  {
+    id: 'dispatch',
+    name: 'Pinellas County 911 Center',
+    short: '911 Center',
+    guildId: '1515101455525085337',
+    weeklyGrant: 100_000,
+    shiftPay: 100,
+    emoji: '<:dispatch:1522721479370870825>',
+    melonlyDepartmentId: '',
+  },
+  {
+    id: 'cfr',
+    name: 'Clearwater Fire & Rescue',
+    short: 'CFR',
+    guildId: '1514804886292795544',
+    weeklyGrant: 200_000,
+    shiftPay: 100,
+    emoji: '<:CFD:1514806304621989978>',
+    melonlyDepartmentId: '',
+  },
+  {
+    id: 'bpd',
+    name: 'Belleair Police Department',
+    short: 'BPD',
+    guildId: '1526890993327280240',
+    weeklyGrant: 200_000,
+    shiftPay: 100,
+    emoji: '<:bpd_logo:1535160817606074378>',
+    melonlyDepartmentId: '',
+  },
+]);
+
+export const ECONOMY_ROBBERIES = Object.freeze([
+  {
+    id: 'bank',
+    name: 'Bank Heist',
+    min: 6_500,
+    max: 10_000,
+    sceneMs: 2 * 60_000,
+    survivalMs: 15 * 60_000,
+    cooldownMs: 20 * 60_000,
+    minLeo: ECONOMY_MIN_LEO,
+    callKinds: ['bank'],
+  },
+  {
+    id: 'jewelry',
+    name: 'Jewelry Store Robbery',
+    min: 3_000,
+    max: 5_000,
+    sceneMs: 60_000,
+    survivalMs: 10 * 60_000,
+    cooldownMs: 15 * 60_000,
+    minLeo: ECONOMY_MIN_LEO,
+    callKinds: ['jewelry'],
+  },
+  {
+    id: 'house',
+    name: 'House Robbery',
+    min: 1_500,
+    max: 3_500,
+    sceneMs: 60_000,
+    survivalMs: 8 * 60_000,
+    cooldownMs: 12 * 60_000,
+    minLeo: ECONOMY_MIN_LEO,
+    callKinds: ['leo_server', 'house'],
+  },
+  {
+    id: 'atm',
+    name: 'ATM Robbery',
+    min: 700,
+    max: 2_000,
+    sceneMs: 0,
+    survivalMs: 7 * 60_000 + 30_000,
+    cooldownMs: 10 * 60_000,
+    minLeo: ECONOMY_MIN_LEO,
+    callKinds: ['atm'],
+  },
+  {
+    id: 'register',
+    name: 'Cash Register Robbery',
+    min: 300,
+    max: 1_000,
+    sceneMs: 0,
+    survivalMs: 5 * 60_000,
+    cooldownMs: 8 * 60_000,
+    minLeo: ECONOMY_MIN_LEO,
+    callKinds: ['leo_server', 'register', 'cash'],
+  },
+]);
+
+export function departmentById(id) {
+  return ECONOMY_DEPARTMENTS.find((entry) => entry.id === String(id || '')) || null;
+}
+
+export function departmentByGuildId(guildId) {
+  return ECONOMY_DEPARTMENTS.find((entry) => entry.guildId === String(guildId || '')) || null;
+}
+
+export function robberyById(id) {
+  return ECONOMY_ROBBERIES.find((entry) => entry.id === String(id || '')) || null;
+}
+
+export function formatMoney(amount) {
+  const value = Math.trunc(Number(amount) || 0);
+  const sign = value < 0 ? '-' : '';
+  return `${sign}$${Math.abs(value).toLocaleString('en-US')}`;
+}
+
+export function parseMoney(value) {
+  const cleaned = String(value || '').replace(/[$,\s]/g, '');
+  if (!/^[+-]?\d+$/.test(cleaned)) return NaN;
+  return Number(cleaned);
+}
+
+export function formatRemain(ms) {
+  const total = Math.max(0, Math.ceil(Number(ms || 0) / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+export function economyWeekKey(at = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(at);
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const utc = Date.UTC(Number(map.year), Number(map.month) - 1, Number(map.day));
+  const date = new Date(utc);
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const weekYear = date.getUTCFullYear();
+  const yearStart = Date.UTC(weekYear, 0, 1);
+  const week = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  return `${weekYear}-W${String(week).padStart(2, '0')}`;
+}

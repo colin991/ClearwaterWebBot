@@ -967,6 +967,10 @@ export function createPriorityRequestService({
 
   return {
     async openForm(interaction, { players, vehicles, commandLogs } = {}) {
+      const { economyBlocksNewPriority } = await import('./economyService.js');
+      if (await economyBlocksNewPriority(interaction.client)) {
+        throw new Error('A robbery is reserved or active. Wait until it finishes before submitting a priority.');
+      }
       const current = await ensure();
       if (hasBlockingPriority(current.request)) {
         const status = current.request.status === 'active' ? 'already running' : 'already pending';
@@ -993,6 +997,10 @@ export function createPriorityRequestService({
     },
 
     async submitRequest({ user, selectedPlayers, selectedVehicles, background, details, commandLogs }) {
+      const { economyBlocksNewPriority } = await import('./economyService.js');
+      if (await economyBlocksNewPriority()) {
+        throw new Error('A robbery is reserved or active. Wait until it finishes before submitting a priority.');
+      }
       const current = await ensure();
       if (hasBlockingPriority(current.request)) {
         throw new Error('A priority request is already pending or running.');
