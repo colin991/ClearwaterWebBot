@@ -116,7 +116,7 @@ const client = new Client({
     GatewayIntentBits.GuildModeration,
     GatewayIntentBits.MessageContent,
   ],
-  partials: [Partials.Channel, Partials.Message],
+  partials: [Partials.Channel, Partials.Message, Partials.User],
   allowedMentions: { parse: [], repliedUser: false },
 });
 

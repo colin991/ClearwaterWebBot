@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-25-steal-dm-plain",
+      "title": "Deliver steal results as normal Discord DMs",
+      "summary": ";steal Discord DMs now use a normal private message instead of a components card, and they are sent before the in-game PM so both the thief and victim actually receive them.",
+      "createdAt": "2026-09-25T03:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-25-steal-discord-dm",
       "title": "Discord DM both players after a steal",
       "summary": ";steal now Discord DMs the thief and the victim on success or failure. In-game PMs also drop the dollar sign so ER:LC does not censor the message into hashes.",

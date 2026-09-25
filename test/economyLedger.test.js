@@ -169,6 +169,19 @@ test('department Discord IDs map to the configured treasuries', () => {
 });
 
 test('in-game steal PMs strip dollar signs that ER:LC censors', async () => {
-  const { sanitizeGamePm } = await import('../utils/economyService.js');
+  const { sanitizeGamePm, dmEconomyUser } = await import('../utils/economyService.js');
   assert.equal(sanitizeGamePm('You successfully stole $1,250 from Alex.'), 'You successfully stole 1,250 from Alex.');
+  const sent = [];
+  const ok = await dmEconomyUser({
+    guilds: { cache: { get: () => null }, fetch: async () => null },
+    users: {
+      fetch: async (id) => ({
+        id,
+        createDM: async () => ({ send: async (payload) => { sent.push(payload); } }),
+      }),
+    },
+  }, '123', { title: 'Steal successful', description: 'You stole **$50** cash.' });
+  assert.equal(ok, true);
+  assert.match(sent[0].content, /Steal successful/);
+  assert.match(sent[0].content, /\$50/);
 });

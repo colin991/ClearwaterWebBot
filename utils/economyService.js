@@ -49,7 +49,6 @@ import {
 } from './economyLedger.js';
 import { withEconomy } from './economyStore.js';
 import { memberIsStaff } from './prefixHelpers.js';
-import { v2Card } from './v2Message.js';
 
 const pendingSends = new Map();
 
@@ -285,20 +284,52 @@ export async function pmEconomyPlayer(client, username, message) {
   }
 }
 
-export async function dmEconomyUser(client, discordId, { title, description }) {
+export async function dmEconomyUser(client, discordId, { title, description } = {}) {
   const id = String(discordId || '').trim();
-  if (!id || !client?.users?.fetch) return false;
+  if (!id) return false;
+  const content = [
+    title ? `**${title}**` : '**Clearwater Economy**',
+    String(description || '').trim(),
+  ].filter(Boolean).join('\n').slice(0, 1900);
+  const payload = { content, allowedMentions: { parse: [] } };
+
+  const trySend = async (target, label) => {
+    if (!target) return false;
+    try {
+      if (typeof target.createDM === 'function') {
+        const dm = await target.createDM();
+        if (typeof dm?.send === 'function') {
+          await dm.send(payload);
+          return true;
+        }
+      }
+      if (typeof target.send === 'function') {
+        await target.send(payload);
+        return true;
+      }
+    } catch (error) {
+      logger.warn(`Economy Discord DM via ${label} failed for ${id}: ${error?.message || error}`);
+    }
+    return false;
+  };
+
   try {
-    const user = await client.users.fetch(id);
-    await user.send(v2Card({
-      title: title || 'Clearwater Economy',
-      description,
-    }));
-    return true;
+    const guild = client?.guilds?.cache?.get(CLEARWATER_GUILD_ID)
+      || (typeof client?.guilds?.fetch === 'function'
+        ? await client.guilds.fetch(CLEARWATER_GUILD_ID).catch(() => null)
+        : null);
+    if (guild?.members?.fetch) {
+      const member = await guild.members.fetch(id).catch(() => null);
+      if (await trySend(member, 'member')) return true;
+    }
+    const user = typeof client?.users?.fetch === 'function'
+      ? await client.users.fetch(id)
+      : null;
+    if (await trySend(user, 'user')) return true;
   } catch (error) {
     logger.warn(`Economy Discord DM failed for ${id}: ${error?.message || error}`);
-    return false;
   }
+  return false;
 }
 
 async function notifyStealPlayers({
@@ -312,13 +343,10 @@ async function notifyStealPlayers({
   thiefDm,
   victimDm,
 }) {
-  const tasks = [
-    pmEconomyPlayer(client, thiefName, thiefGame),
-  ];
-  if (victimGame && victimName) tasks.push(pmEconomyPlayer(client, victimName, victimGame));
-  if (thiefDiscord && thiefDm) tasks.push(dmEconomyUser(client, thiefDiscord, thiefDm));
-  if (victimDiscord && victimDm) tasks.push(dmEconomyUser(client, victimDiscord, victimDm));
-  await Promise.allSettled(tasks);
+  if (thiefDiscord && thiefDm) await dmEconomyUser(client, thiefDiscord, thiefDm);
+  if (victimDiscord && victimDm) await dmEconomyUser(client, victimDiscord, victimDm);
+  await pmEconomyPlayer(client, thiefName, thiefGame);
+  if (victimGame && victimName) await pmEconomyPlayer(client, victimName, victimGame);
 }
 
 export async function handleStealCommand({ player, snapshot, client }) {
