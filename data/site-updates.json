@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-25-funds-send-note",
+      "title": "Let departments send funds to a person or the server with a note",
+      "summary": "-funds send now pays a Discord user or the server treasury from the department Discord, and a note is required on every send.",
+      "createdAt": "2026-09-25T12:55:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-25-send-tax",
       "title": "Take 5% tax on player-to-player sends",
       "summary": "Sending cash to another player now takes a 5% tax from the amount and credits it to the server treasury. The recipient gets the remaining 95%. Sends under $20 have no tax because 5% rounds down to $0.",

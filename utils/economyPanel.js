@@ -588,7 +588,7 @@ function departmentDetailPanel(dept, view, { manager = false } = {}) {
       fail,
       '',
       manager
-        ? 'Department administrators can spend funds with `-funds spend @user <amount> <reason>` in this department Discord.'
+        ? 'Department administrators can send treasury money in this department Discord with `-funds send @user <amount> <note>` or `-funds send server <amount> <note>`.'
         : 'Only department administrators can spend or manage these funds.',
       '',
       `## Recent Transactions\n${lines.length ? lines.join('\n\n') : 'No transactions yet.'}`,

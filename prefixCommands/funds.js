@@ -10,6 +10,7 @@ import {
   ECONOMY_PAY_INTERVAL_MS,
   departmentByGuildId,
   formatMoney,
+  parseMoney,
 } from '../utils/economyConfig.js';
 import {
   canManageDepartmentFunds,
@@ -17,6 +18,8 @@ import {
   getDepartmentView,
   postEconomyLog,
 } from '../utils/economyService.js';
+
+const SEND_USAGE = 'Usage: `-funds send @user <amount> <note>` or `-funds send server <amount> <note>`';
 
 function fundsCard(dept, view) {
   const row = view.row || {};
@@ -34,10 +37,21 @@ function fundsCard(dept, view) {
       `**Employee Payroll:** ${formatMoney(dept.shiftPay)} / ${Math.round(ECONOMY_PAY_INTERVAL_MS / 60000)} minutes`,
       fail,
       '',
+      'Send from this treasury with a required note:',
+      '`-funds send @user <amount> <note>`',
+      '`-funds send server <amount> <note>`',
+      '',
       '## Recent Transactions',
       lines.length ? lines.join('\n') : 'No transactions yet.',
     ].join('\n'),
   };
+}
+
+function parseFundsDestination(arg) {
+  const raw = String(arg || '').trim();
+  if (/^(server|city|treasury)$/i.test(raw)) return { toServer: true };
+  const toId = snowflakeFrom(raw);
+  return toId ? { toId } : null;
 }
 
 export default {
@@ -52,24 +66,30 @@ export default {
         if (!canManageDepartmentFunds(message.member, message.guildId)) {
           throw new Error('Only department administrators can spend department funds.');
         }
-        const toId = snowflakeFrom(args[1]);
-        const amount = Number(String(args[2] || '').replace(/[$,]/g, ''));
+        const dest = parseFundsDestination(args[1]);
+        const amount = parseMoney(args[2]);
         const note = args.slice(3).join(' ').trim();
-        if (!toId || !Number.isFinite(amount) || amount <= 0 || !note) {
-          throw new Error('Usage: `-funds spend @user <amount> <reason>`');
+        if (!dest || !Number.isFinite(amount) || amount <= 0 || !note) {
+          throw new Error(SEND_USAGE);
         }
-        const tx = await departmentSpend(dept.id, amount, {
-          toId,
+        const result = await departmentSpend(dept.id, amount, {
+          ...dest,
           note,
           authorizedBy: message.author.id,
         });
-        await postEconomyLog(client || message.client, 'Department spending', `${dept.short} ${formatMoney(amount)} → <@${toId}> · ${note} · \`${tx.id}\``);
+        const tx = result.tx;
+        const target = result.toServer ? 'the server treasury' : `<@${result.toId}>`;
+        await postEconomyLog(
+          client || message.client,
+          'Department spending',
+          `${dept.short} ${formatMoney(amount)} → ${target} · ${note} · \`${tx.id}\``,
+        );
         await message.reply(v2Card({
           title: `${dept.short} funds sent`,
           description: [
-            `**Amount:** ${formatMoney(-tx.amount)}`,
-            `**Recipient:** <@${toId}>`,
-            `**Reason:** ${note}`,
+            `**Amount:** ${formatMoney(result.value)}`,
+            `**Recipient:** ${target}`,
+            `**Note:** ${note}`,
             `**Authorized By:** <@${message.author.id}>`,
             `**Transaction:** \`${tx.id}\``,
           ].join('\n'),

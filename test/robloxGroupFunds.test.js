@@ -201,3 +201,28 @@ test('-funds requires Administrator and rejects cookies typed in Discord', async
     /Do not paste/,
   );
 });
+
+test('-funds send in a department Discord requires a person or server and a note', async () => {
+  const member = {
+    guild: { id: '1513609541483499790' },
+    permissions: { has: (bit) => bit === PermissionFlagsBits.Administrator },
+  };
+  await assert.rejects(
+    () => fundsCommand.execute({
+      guildId: '1513609541483499790',
+      member,
+      author: { id: 'boss' },
+      reply: async () => {},
+    }, ['send', 'server', '500']),
+    /Usage/,
+  );
+  await assert.rejects(
+    () => fundsCommand.execute({
+      guildId: '1513609541483499790',
+      member,
+      author: { id: 'boss' },
+      reply: async () => {},
+    }, ['send', '500', 'missing target note']),
+    /Usage/,
+  );
+});

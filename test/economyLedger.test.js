@@ -12,13 +12,14 @@ import {
   payDepartmentShift,
   payJobInterval,
   recentTransactions,
+  refundTransaction,
   reserveRobbery,
   beginRobbery,
   robberyStatus,
+  spendDepartmentFunds,
   transferCash,
   trySteal,
   withdrawBank,
-  refundTransaction,
 } from '../utils/economyLedger.js';
 import { ECONOMY_STARTER_GRANT, ECONOMY_DEATH_FEE, ECONOMY_DEPARTMENTS, departmentByGuildId, isPaidCivilianJob } from '../utils/economyConfig.js';
 
@@ -161,6 +162,33 @@ test('department and player transaction lists keep payroll as one row', () => {
   assert.equal(deptRows.filter((tx) => tx.type === 'DEPARTMENT_PAYROLL').length, 1);
   assert.equal(userRows.filter((tx) => tx.type === 'DEPARTMENT_PAYROLL').length, 0);
   assert.equal(userRows.filter((tx) => tx.type === 'DEPARTMENT_SHIFT_PAY').length, 1);
+});
+
+test('department funds can send to a person or the server with a note', () => {
+  const store = emptyEconomyStore();
+  grantWeeklyDepartmentFunds(store, { now: Date.parse('2026-09-25T12:00:00Z') });
+  assert.throws(() => spendDepartmentFunds(store, 'fhp', 100, { toId: 'u1' }), /note/);
+  const person = spendDepartmentFunds(store, 'fhp', 1000, {
+    toId: 'u1',
+    note: 'equipment reimbursement',
+    authorizedBy: 'boss',
+  });
+  assert.equal(store.departments.fhp.balance, 499_000);
+  assert.equal(store.users.u1.cash, 1000);
+  assert.equal(person.tx.note, 'equipment reimbursement');
+  assert.equal(person.creditTx.amount, 1000);
+  const userRows = recentTransactions(store, { userId: 'u1', limit: 10 });
+  assert.equal(userRows.some((tx) => tx.amount === 1000 && tx.note === 'equipment reimbursement'), true);
+  assert.equal(userRows.some((tx) => tx.amount < 0), false);
+  const serverPay = spendDepartmentFunds(store, 'pcso', 2500, {
+    toServer: true,
+    note: 'city event support',
+  });
+  assert.equal(store.departments.pcso.balance, 497_500);
+  assert.equal(store.server.balance, 2500);
+  assert.equal(serverPay.tx.toServer, true);
+  const serverRows = recentTransactions(store, { server: true, limit: 5 });
+  assert.equal(serverRows[0].note, 'city event support');
 });
 
 test('robberies block priorities while reserved/active and pay once', () => {

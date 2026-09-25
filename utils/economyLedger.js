@@ -115,6 +115,7 @@ function pushTx(store, tx, now) {
     bankAfter: tx.bankAfter ?? null,
     deptAfter: tx.deptAfter ?? null,
     serverAfter: tx.serverAfter ?? null,
+    toServer: Boolean(tx.toServer),
     createdAt: nowIso(now),
   };
   store.transactions[id] = record;
@@ -626,14 +627,25 @@ export function spendDepartmentFunds(store, deptId, amount, {
   now = Date.now(),
   toId = '',
   toDept = '',
+  toServer = false,
   note = '',
   authorizedBy = '',
   type = ECONOMY_TX.DEPARTMENT_TRANSFER,
 } = {}) {
   const dept = departmentById(deptId);
   if (!dept) throw new Error('Unknown department.');
+  const reason = String(note || '').trim();
+  if (!reason) throw new Error('Add a note for this send.');
   const value = money(amount);
   if (value <= 0) throw new Error('Enter an amount greater than $0.');
+  const recipientId = String(toId || '').trim();
+  const otherDept = String(toDept || '').trim();
+  if (!recipientId && !otherDept && !toServer) {
+    throw new Error('Send department funds to a person or the server.');
+  }
+  if (otherDept && otherDept !== dept.id && !store.departments[otherDept]) {
+    throw new Error('Unknown department.');
+  }
   const row = store.departments[dept.id];
   if (row.balance < value) throw new Error('The department does not have enough funds.');
   const week = economyWeekKey(new Date(now));
@@ -644,25 +656,47 @@ export function spendDepartmentFunds(store, deptId, amount, {
   }
   row.balance -= value;
   row.spentThisWeek += value;
-  if (toId) {
-    const user = ensureEconomyUser(store, toId, { now });
+  let user = null;
+  if (recipientId) {
+    user = ensureEconomyUser(store, recipientId, { now });
+    requireUnfrozen(user);
     user.cash += value;
     user.totalEarned += value;
     touch(user, now);
   }
-  if (toDept && toDept !== dept.id) {
-    store.departments[toDept].balance += value;
+  if (otherDept && otherDept !== dept.id) {
+    store.departments[otherDept].balance += value;
   }
-  return pushTx(store, {
+  const server = ensureServerTreasury(store);
+  if (toServer) server.balance += value;
+  const referenceId = newTxId();
+  const tx = pushTx(store, {
     type,
     amount: -value,
     fromDept: dept.id,
-    toId,
-    toDept,
-    note,
+    toId: recipientId,
+    toDept: otherDept,
+    toServer: Boolean(toServer),
+    note: reason,
     authorizedBy,
+    referenceId,
     deptAfter: row.balance,
+    serverAfter: toServer ? server.balance : null,
   }, now);
+  const creditTx = recipientId
+    ? pushTx(store, {
+      type,
+      amount: value,
+      fromDept: dept.id,
+      toId: recipientId,
+      note: reason,
+      authorizedBy,
+      referenceId,
+      cashAfter: user.cash,
+      bankAfter: user.bank,
+    }, now)
+    : null;
+  return { tx, creditTx, value, toServer: Boolean(toServer), toId: recipientId, user };
 }
 
 export function adminAdjustUser(store, discordId, { cashDelta = 0, bankDelta = 0, setCash, setBank, reason, adminId, now = Date.now() } = {}) {
@@ -758,7 +792,8 @@ export function recentTransactions(store, { userId = '', deptId = '', server = f
     if (userId && tx.fromId !== userId && tx.toId !== userId) continue;
     if (userId && tx.type === ECONOMY_TX.DEPARTMENT_PAYROLL) continue;
     if (userId && tx.type === ECONOMY_TX.TRANSFER_TAX) continue;
-    if (server && tx.type !== ECONOMY_TX.TRANSFER_TAX) continue;
+    if (userId && tx.fromDept && tx.amount < 0) continue;
+    if (server && tx.type !== ECONOMY_TX.TRANSFER_TAX && !tx.toServer) continue;
     if (deptId && tx.fromDept !== deptId && tx.toDept !== deptId) continue;
     if (deptId && tx.type === ECONOMY_TX.DEPARTMENT_SHIFT_PAY) continue;
     out.push(tx);
