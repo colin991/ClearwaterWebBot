@@ -27,10 +27,12 @@ import {
   ECONOMY_STARTER_GRANT,
   ECONOMY_STEAL_DISTANCE,
   ECONOMY_STEAL_SUCCESS_CHANCE,
+  ECONOMY_TRANSFER_TAX_PERCENT,
   departmentById,
   formatMoney,
   formatRemain,
   parseMoney,
+  transferTaxAmount,
 } from './economyConfig.js';
 import {
   beginReservedRobbery,
@@ -154,7 +156,7 @@ function txLine(tx) {
   const when = tx.createdAt ? `<t:${Math.floor(new Date(tx.createdAt).getTime() / 1000)}:R>` : '';
   const after = tx.cashAfter != null
     ? ` · cash ${formatMoney(tx.cashAfter)} / bank ${formatMoney(tx.bankAfter)}`
-    : (tx.deptAfter != null ? ` · treasury ${formatMoney(tx.deptAfter)}` : '');
+    : (tx.deptAfter != null ? ` · treasury ${formatMoney(tx.deptAfter)}` : (tx.serverAfter != null ? ` · server ${formatMoney(tx.serverAfter)}` : ''));
   return `\`${tx.id}\` **${tx.type}** ${formatMoney(tx.amount)} ${when}${tx.note ? `\n${tx.note}` : ''}${after}`;
 }
 
@@ -369,7 +371,12 @@ function departmentFundsText(dept, row) {
 }
 
 export function buildDepartmentFundsPanel(views = null) {
-  const depts = Array.isArray(views) && views.length ? views : ECONOMY_DEPARTMENTS.map((dept) => ({ ...dept, row: { balance: 0, spentThisWeek: 0, payrollThisWeek: 0 } }));
+  const payload = Array.isArray(views)
+    ? { departments: views, server: { balance: 0, transactions: [] } }
+    : (views && typeof views === 'object' && Array.isArray(views.departments)
+      ? views
+      : { departments: ECONOMY_DEPARTMENTS.map((dept) => ({ ...dept, row: { balance: 0, spentThisWeek: 0, payrollThisWeek: 0 } })), server: { balance: 0, transactions: [] } });
+  const depts = payload.departments;
   const container = new ContainerBuilder().clearAccentColor()
     .addMediaGalleryComponents(banner())
     .addSeparatorComponents(divider())
@@ -378,6 +385,12 @@ export function buildDepartmentFundsPanel(views = null) {
       'Manage and monitor department finances throughout Clearwater Roleplay.',
       '',
       'View each department\'s available balance, pending funds, and spending activity for the current week.',
+    ].join('\n')))
+    .addSeparatorComponents(divider({ large: true }))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent([
+      '## Server Treasury',
+      `<:DownArrow:1518386518387851425> **Available Funds:** \`${formatMoney(payload.server?.balance || 0)}\``,
+      `<:DownArrow:1518386518387851425> **Source:** ${ECONOMY_TRANSFER_TAX_PERCENT}% tax on player-to-player sends`,
     ].join('\n')))
     .addSeparatorComponents(divider({ large: true }))
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(
@@ -446,7 +459,7 @@ function walletPanel(view, overview = null) {
 function sendPicker() {
   const container = new ContainerBuilder().clearAccentColor()
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-      '## Send Money\nSelect the Discord user who should receive cash from your wallet. Bank funds are not sent.',
+      '## Send Money\nSelect the Discord user who should receive cash from your wallet. Bank funds are not sent. A 5% tax is taken from the amount and returned to the server treasury.',
     ))
     .addActionRowComponents(new ActionRowBuilder().addComponents(
       new UserSelectMenuBuilder()
@@ -459,11 +472,15 @@ function sendPicker() {
 }
 
 function sendReview(pending) {
+  const tax = transferTaxAmount(pending.amount);
+  const received = pending.amount - tax;
   const container = new ContainerBuilder().clearAccentColor()
     .addTextDisplayComponents(new TextDisplayBuilder().setContent([
       '## Review Transfer',
       `**Recipient:** <@${pending.toId}>`,
       `**Amount:** ${formatMoney(pending.amount)} (from Cash)`,
+      `**Send tax (${ECONOMY_TRANSFER_TAX_PERCENT}%):** ${formatMoney(tax)} to the server treasury`,
+      `**Recipient receives:** ${formatMoney(received)}`,
       `**Note:** ${pending.note || 'None'}`,
       '',
       'Confirm to complete this transfer. This cannot be undone except by staff refund.',
@@ -497,6 +514,7 @@ function morePanel() {
       `**Steal:** \`;steal\` on Civilian, closest civilian within ${ECONOMY_STEAL_DISTANCE} studs, ${ECONOMY_STEAL_SUCCESS_CHANCE}% chance. Only Cash can be stolen.`,
       `**Civilian jobs:** ${formatMoney(ECONOMY_JOB_PAY)} every ${Math.round(ECONOMY_PAY_INTERVAL_MS / 60000)} minutes while you stay on an actual job such as bank, not while unemployed on Civilian.`,
       '**Bank:** Deposit Cash to protect it from steals. Withdraw to spend or send.',
+      `**Send tax:** ${ECONOMY_TRANSFER_TAX_PERCENT}% of every player-to-player send goes to the server treasury. The recipient gets the rest.`,
     ].join('\n')));
   return v2(container, { ephemeral: true });
 }
@@ -671,9 +689,11 @@ export async function handleEconomyInteraction(interaction) {
       return true;
     }
     const result = await handleTransfer(interaction.user.id, pending.toId, pending.amount, pending.note);
+    const tax = result.taxAmount || 0;
     await interaction.reply({
       content: [
         `Sent ${formatMoney(pending.amount)} to <@${pending.toId}>.`,
+        tax ? `Server tax (${ECONOMY_TRANSFER_TAX_PERCENT}%): ${formatMoney(tax)}. They received ${formatMoney(result.received)}.` : `They received ${formatMoney(result.received ?? pending.amount)}.`,
         `Note: ${pending.note || 'None'}`,
         `Transaction: \`${result.outgoing.id}\` · Ref \`${result.referenceId}\``,
         `<t:${Math.floor(Date.now() / 1000)}:F>`,
@@ -775,7 +795,11 @@ export async function handleEconomyInteraction(interaction) {
   }
   if (id === ECO_IDS.deptAll) {
     const views = await getAllDepartmentsView();
-    const rows = views.flatMap((dept) => dept.transactions || []).slice(0, 15);
+    const depts = Array.isArray(views) ? views : (views.departments || []);
+    const rows = [
+      ...(views.server?.transactions || []),
+      ...depts.flatMap((dept) => dept.transactions || []),
+    ].slice(0, 15);
     await interaction.reply(transactionsPanel(rows, 'Department Transactions'));
     return true;
   }

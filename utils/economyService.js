@@ -29,6 +29,7 @@ import {
   depositCash,
   economyBlocksPriority,
   ensureEconomyUser,
+  ensureServerTreasury,
   failRobbery,
   findTransaction,
   findUserByRobloxId,
@@ -691,11 +692,18 @@ export async function getOverview(discordId, client) {
 export async function getAllDepartmentsView() {
   return withEconomy((store) => {
     grantWeeklyDepartmentFunds(store);
-    return ECONOMY_DEPARTMENTS.map((dept) => ({
-      ...dept,
-      row: store.departments[dept.id],
-      transactions: recentTransactions(store, { deptId: dept.id, limit: 8 }),
-    }));
+    const server = ensureServerTreasury(store);
+    return {
+      server: {
+        balance: server.balance,
+        transactions: recentTransactions(store, { server: true, limit: 8 }),
+      },
+      departments: ECONOMY_DEPARTMENTS.map((dept) => ({
+        ...dept,
+        row: store.departments[dept.id],
+        transactions: recentTransactions(store, { deptId: dept.id, limit: 8 }),
+      })),
+    };
   });
 }
 

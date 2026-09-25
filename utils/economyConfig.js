@@ -10,6 +10,7 @@ export const ECONOMY_STEAL_SUCCESS_CHANCE = 50;
 export const ECONOMY_STEAL_DISTANCE = 10;
 export const ECONOMY_STEAL_COOLDOWN_MS = 45_000;
 export const ECONOMY_TRANSFER_COOLDOWN_MS = 8_000;
+export const ECONOMY_TRANSFER_TAX_PERCENT = 5;
 export const ECONOMY_TX_RECENT = 12;
 export const ECONOMY_TX_KEEP = 4_000;
 export const ECONOMY_SCENE_RADIUS = 45;
@@ -72,6 +73,7 @@ export const ECONOMY_LOG_CHANNEL_ID = '1549178818814812211';
 export const ECONOMY_TX = Object.freeze({
   STARTER_GRANT: 'STARTER_GRANT',
   TRANSFER: 'TRANSFER',
+  TRANSFER_TAX: 'TRANSFER_TAX',
   JOB_PAYCHECK: 'JOB_PAYCHECK',
   DEPARTMENT_SHIFT_PAY: 'DEPARTMENT_SHIFT_PAY',
   ROBBERY_PAYOUT: 'ROBBERY_PAYOUT',
@@ -214,6 +216,12 @@ export function formatMoney(amount) {
   const value = Math.trunc(Number(amount) || 0);
   const sign = value < 0 ? '-' : '';
   return `${sign}$${Math.abs(value).toLocaleString('en-US')}`;
+}
+
+export function transferTaxAmount(amount) {
+  const value = Math.trunc(Number(amount) || 0);
+  if (value <= 0) return 0;
+  return Math.trunc((value * ECONOMY_TRANSFER_TAX_PERCENT) / 100);
 }
 
 export function parseMoney(value) {

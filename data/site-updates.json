@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-25-send-tax",
+      "title": "Take 5% tax on player-to-player sends",
+      "summary": "Sending cash to another player now takes a 5% tax from the amount and credits it to the server treasury. The recipient gets the remaining 95%. Sends under $20 have no tax because 5% rounds down to $0.",
+      "createdAt": "2026-09-25T03:40:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-25-dept-melonly-ids",
       "title": "Pay FHP, CFD, 911, and BPD from their Melonly shifts",
       "summary": "Department payroll now reads Melonly shifts for FHP, Clearwater Fire, Pinellas County 911, and Belleair PD as well as PCSO, so those treasuries are charged $200 or $100 every 10 minutes while members are on shift.",

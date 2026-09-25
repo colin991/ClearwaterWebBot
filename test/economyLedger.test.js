@@ -18,6 +18,7 @@ import {
   transferCash,
   trySteal,
   withdrawBank,
+  refundTransaction,
 } from '../utils/economyLedger.js';
 import { ECONOMY_STARTER_GRANT, ECONOMY_DEATH_FEE, ECONOMY_DEPARTMENTS, departmentByGuildId, isPaidCivilianJob } from '../utils/economyConfig.js';
 
@@ -43,15 +44,35 @@ test('deposit and withdraw keep cash and bank separate', () => {
   assert.equal(store.users.u1.bank, 300);
 });
 
-test('transfers move cash only and cannot overspend', () => {
+test('transfers take a 5% tax for the server treasury', () => {
   const store = emptyEconomyStore();
   grantStarter(store, 'a');
   grantStarter(store, 'b');
   const result = transferCash(store, 'a', 'b', 250, { note: 'test' });
   assert.equal(store.users.a.cash, 750);
-  assert.equal(store.users.b.cash, 1250);
+  assert.equal(result.taxAmount, 12);
+  assert.equal(result.received, 238);
+  assert.equal(store.users.b.cash, 1238);
+  assert.equal(store.server.balance, 12);
   assert.equal(result.outgoing.referenceId, result.incoming.referenceId);
+  assert.equal(result.tax.referenceId, result.incoming.referenceId);
   assert.throws(() => transferCash(store, 'a', 'b', 99999), /do not have/);
+  const later = Date.now() + 10_000;
+  const small = transferCash(store, 'a', 'b', 19, { now: later });
+  assert.equal(small.taxAmount, 0);
+  assert.equal(small.received, 19);
+});
+
+test('refunding a taxed send returns the tax from the server treasury', () => {
+  const store = emptyEconomyStore();
+  grantStarter(store, 'a');
+  grantStarter(store, 'b');
+  const result = transferCash(store, 'a', 'b', 250, { note: 'test' });
+  const refunded = refundTransaction(store, result.referenceId, { adminId: 'staff', reason: 'test refund' });
+  assert.equal(store.users.a.cash, 1000);
+  assert.equal(store.users.b.cash, 1000);
+  assert.equal(store.server.balance, 0);
+  assert.equal(refunded.tx.type, 'REFUND');
 });
 
 test('death fee can go negative and is charged once per fingerprint', () => {

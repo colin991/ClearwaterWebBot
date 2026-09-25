@@ -22,6 +22,9 @@ function normalize(raw) {
   base.deaths = data.deaths && typeof data.deaths === 'object' ? data.deaths : {};
   base.audit = Array.isArray(data.audit) ? data.audit : [];
   base.starterSweepAt = data.starterSweepAt || null;
+  base.server = {
+    balance: Number(data.server?.balance) || 0,
+  };
   for (const dept of ECONOMY_DEPARTMENTS) {
     base.departments[dept.id] = {
       ...base.departments[dept.id],

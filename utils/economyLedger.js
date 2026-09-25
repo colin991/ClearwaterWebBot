@@ -18,6 +18,7 @@ import {
   departmentById,
   economyWeekKey,
   robberyById,
+  transferTaxAmount,
 } from './economyConfig.js';
 
 export function emptyEconomyStore() {
@@ -46,7 +47,14 @@ export function emptyEconomyStore() {
     deaths: {},
     audit: [],
     starterSweepAt: null,
+    server: { balance: 0 },
   };
+}
+
+export function ensureServerTreasury(store) {
+  if (!store.server || typeof store.server !== 'object') store.server = { balance: 0 };
+  store.server.balance = money(store.server.balance);
+  return store.server;
 }
 
 export function newTxId() {
@@ -106,6 +114,7 @@ function pushTx(store, tx, now) {
     cashAfter: tx.cashAfter ?? null,
     bankAfter: tx.bankAfter ?? null,
     deptAfter: tx.deptAfter ?? null,
+    serverAfter: tx.serverAfter ?? null,
     createdAt: nowIso(now),
   };
   store.transactions[id] = record;
@@ -211,8 +220,12 @@ export function transferCash(store, fromId, toId, amount, {
   sender.totalSpent += value;
   sender.lastTransferAt = now;
   sender.lastTransferFingerprint = fingerprint || '';
-  recipient.cash += value;
-  recipient.totalEarned += value;
+  const tax = transferTaxAmount(value);
+  const received = value - tax;
+  recipient.cash += received;
+  recipient.totalEarned += received;
+  const server = ensureServerTreasury(store);
+  if (tax > 0) server.balance += tax;
   touch(sender, now);
   touch(recipient, now);
   const referenceId = newTxId();
@@ -228,7 +241,7 @@ export function transferCash(store, fromId, toId, amount, {
   }, now);
   const incoming = pushTx(store, {
     type: ECONOMY_TX.TRANSFER,
-    amount: value,
+    amount: received,
     fromId: sender.discordId,
     toId: recipient.discordId,
     note,
@@ -236,7 +249,18 @@ export function transferCash(store, fromId, toId, amount, {
     cashAfter: recipient.cash,
     bankAfter: recipient.bank,
   }, now);
-  return { sender, recipient, outgoing: out, incoming, referenceId };
+  const taxTx = tax > 0
+    ? pushTx(store, {
+      type: ECONOMY_TX.TRANSFER_TAX,
+      amount: tax,
+      fromId: sender.discordId,
+      toId: recipient.discordId,
+      note: `${tax} send tax (5%)`,
+      referenceId,
+      serverAfter: server.balance,
+    }, now)
+    : null;
+  return { sender, recipient, outgoing: out, incoming, tax: taxTx, taxAmount: tax, received, referenceId };
 }
 
 export function applyDeathFee(store, discordId, fingerprint, { now = Date.now(), robloxId = '' } = {}) {
@@ -725,7 +749,7 @@ export function setFrozen(store, discordId, frozen, { adminId, reason, now = Dat
   return user;
 }
 
-export function recentTransactions(store, { userId = '', deptId = '', limit = 12 } = {}) {
+export function recentTransactions(store, { userId = '', deptId = '', server = false, limit = 12 } = {}) {
   const ids = store.transactionOrder || [];
   const out = [];
   for (const id of ids) {
@@ -733,6 +757,8 @@ export function recentTransactions(store, { userId = '', deptId = '', limit = 12
     if (!tx) continue;
     if (userId && tx.fromId !== userId && tx.toId !== userId) continue;
     if (userId && tx.type === ECONOMY_TX.DEPARTMENT_PAYROLL) continue;
+    if (userId && tx.type === ECONOMY_TX.TRANSFER_TAX) continue;
+    if (server && tx.type !== ECONOMY_TX.TRANSFER_TAX) continue;
     if (deptId && tx.fromDept !== deptId && tx.toDept !== deptId) continue;
     if (deptId && tx.type === ECONOMY_TX.DEPARTMENT_SHIFT_PAY) continue;
     out.push(tx);
@@ -757,6 +783,52 @@ export function refundTransaction(store, txId, { adminId = '', reason = '', now 
   if (!tx) throw new Error('Unknown transaction.');
   const group = Object.values(store.transactions).filter((entry) => entry.referenceId === tx.referenceId);
   if (group.some((entry) => entry.refunded)) throw new Error('That transaction was already refunded.');
+  const outgoing = group.find((entry) => entry.type === ECONOMY_TX.TRANSFER && entry.amount < 0);
+  const incoming = group.find((entry) => entry.type === ECONOMY_TX.TRANSFER && entry.amount > 0);
+  const taxTx = group.find((entry) => entry.type === ECONOMY_TX.TRANSFER_TAX);
+  if (outgoing && incoming) {
+    const sent = Math.abs(money(outgoing.amount));
+    const received = money(incoming.amount);
+    const tax = taxTx ? money(taxTx.amount) : Math.max(0, sent - received);
+    const recipient = ensureEconomyUser(store, incoming.toId, { now });
+    requireUnfrozen(recipient);
+    if (recipient.cash >= received) recipient.cash -= received;
+    else {
+      const rest = received - recipient.cash;
+      recipient.cash = 0;
+      recipient.bank -= rest;
+    }
+    recipient.totalSpent += received;
+    const sender = ensureEconomyUser(store, outgoing.fromId, { now });
+    sender.cash += sent;
+    sender.totalEarned += sent;
+    const server = ensureServerTreasury(store);
+    if (tax > 0) server.balance -= tax;
+    touch(sender, now);
+    touch(recipient, now);
+    for (const entry of group) entry.refunded = true;
+    const refund = pushTx(store, {
+      type: ECONOMY_TX.REFUND,
+      amount: sent,
+      fromId: incoming.toId,
+      toId: outgoing.fromId,
+      note: reason || `Refund of ${tx.id}`,
+      authorizedBy: adminId,
+      referenceId: tx.referenceId,
+      serverAfter: server.balance,
+    }, now);
+    store.audit.unshift({
+      id: refund.id,
+      adminId,
+      action: 'refund',
+      targetId: outgoing.fromId,
+      amount: sent,
+      reason: reason || '',
+      createdAt: nowIso(now),
+      transactionId: refund.id,
+    });
+    return { tx: refund, original: tx };
+  }
   const positive = group.find((entry) => entry.amount > 0) || tx;
   const amount = Math.abs(money(positive.amount));
   if (amount <= 0) throw new Error('That transaction has no amount to refund.');
