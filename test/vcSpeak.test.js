@@ -63,6 +63,12 @@ test('speech clips get a playback window longer than the mp3 itself', () => {
   assert.equal(isEarlyVoiceIdle(window.estimatedMs, window.estimatedMs), false);
 });
 
+test('bundled audio files rely on the real player completion instead of a bitrate guess', () => {
+  const window = voiceClipPlaybackWindow(null, { byteLength: 0, idleTimeoutMs: 20_000 });
+  assert.equal(window.estimatedMs, 0);
+  assert.equal(window.minPlayMs, 0);
+});
+
 test('waitForVoiceClipEnd ignores an idle that happens mid-clip', async () => {
   let time = 0;
   const player = {

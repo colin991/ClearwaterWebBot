@@ -332,10 +332,13 @@ function createClipResource(filePath, volume) {
 
 async function playClipOnPlayer(player, audio, { volume, idleTimeoutMs, minPlayMs, directory }) {
   const clip = await writeClipFile(audio, directory);
-  const window = voiceClipPlaybackWindow(clip.buffer || audio, {
+  // Generated speech buffers use a known bitrate and need protection from a
+  // premature Idle event. Bundled MP3 files may use a different bitrate, so
+  // trust the player's real Idle event instead of overestimating their length.
+  const window = voiceClipPlaybackWindow(clip.buffer, {
     idleTimeoutMs,
     minPlayMs,
-    byteLength: clip.byteLength,
+    byteLength: clip.buffer ? clip.byteLength : 0,
   });
   player.play(createClipResource(clip.filePath, volume));
   await entersState(player, AudioPlayerStatus.Playing, 8_000);
