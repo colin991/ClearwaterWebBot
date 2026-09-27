@@ -4,12 +4,23 @@ import test from 'node:test';
 import {
   activityForPinellasRoster,
   assignPinellasCallsign,
+  isOpenPinellasCallsignRow,
   parsePinellasRosterRows,
   planPinellasCallsignRepairs,
   resolvePinellasRosterMemberStatus,
   summarizePinellasPunishments,
 } from '../utils/pinellasRoster.js';
 import { isActiveMelonlyLoa, shiftLastActivityMs } from '../utils/melonly.js';
+
+test('blank callsign assignment is open even when its manual notes cell is filled', () => {
+  assert.equal(isOpenPinellasCallsignRow({
+    rank: 'Chief Deputy',
+    callsign: '1004',
+    roleplayName: '',
+    discordId: '',
+    notes: 'Office of the Sheriff Divisions',
+  }, 'Chief Deputy'), true);
+});
 
 test('roster status values follow sheet dropdown choices', () => {
   const now = Date.now();
@@ -113,6 +124,10 @@ test('rank change selects an open callsign row and carries manual notes', async 
 
   try {
     const client = {
+      channels: {
+        cache: new Map(),
+        fetch: async () => null,
+      },
       config: {
         googleServiceAccountEmail: 'sheet-bot@example.iam.gserviceaccount.com',
         googlePrivateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }),
@@ -132,10 +147,10 @@ test('rank change selects an open callsign row and carries manual notes', async 
     assert.equal(result.moved, true);
 
     const updates = new Map(batchBody.data.map((entry) => [entry.range, entry.values[0][0]]));
-    assert.equal(updates.get("'PCSO I Main Database'!M12"), 'Manual appointment');
-    assert.equal(updates.get("'PCSO I Main Database'!M11"), '');
-    assert.equal(updates.get("'PCSO I Main Database'!I12"), 'Alex Morgan');
-    assert.equal(updates.get("'PCSO I Main Database'!K12"), member.id);
+    assert.equal(updates.get("'PCSO I Main Database'!L12"), 'Manual appointment');
+    assert.equal(updates.get("'PCSO I Main Database'!L11"), '');
+    assert.equal(updates.get("'PCSO I Main Database'!H12"), 'Alex Morgan');
+    assert.equal(updates.get("'PCSO I Main Database'!J12"), member.id);
     assert.equal([...updates.keys()].some((range) => /![EG]\d+$/.test(range)), false);
   } finally {
     global.fetch = originalFetch;

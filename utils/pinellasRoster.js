@@ -488,6 +488,14 @@ function cleanRoleplayName(value) {
   return name;
 }
 
+/** A roster slot is open when it has a callsign but no assigned name or Discord member. */
+export function isOpenPinellasCallsignRow(row, rankName) {
+  return rankKey(row?.rank) === rankKey(rankName)
+    && Boolean(row?.callsign)
+    && !row?.roleplayName
+    && !row?.discordId;
+}
+
 export async function assignPinellasCallsign(client, member, roleplayName) {
   assertRosterConfigured(client);
   if (String(member?.guild?.id) !== PINELLAS_GUILD_ID) {
@@ -506,13 +514,7 @@ export async function assignPinellasCallsign(client, member, roleplayName) {
       && current.callsign;
     const target = sameRank
       ? current
-      : state.rows.find((row) => (
-        rankKey(row.rank) === rankKey(rank.name)
-        && row.callsign
-        && !row.roleplayName
-        && !row.discordId
-        && !row.notes
-      ));
+      : state.rows.find((row) => isOpenPinellasCallsignRow(row, rank.name));
 
     if (!target) {
       throw new Error(`No open **${rank.name}** callsign row is available in the roster.`);

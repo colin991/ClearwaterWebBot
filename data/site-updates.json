@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-27-pcso-open-callsign-notes",
+      "title": "Recognize open PCSO callsigns with roster notes",
+      "summary": "The callsign panel now treats a roster row as open when its callsign exists and its name and Discord ID are blank, even when the Appointment or Notes cell contains text. Existing manual notes on the open row are preserved.",
+      "createdAt": "2026-09-27T16:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-27-new-erlc-location-map",
       "title": "Use the new ER:LC map and remove jail voice moves",
       "summary": "The shift panel now displays each on-duty deputy's live in-game location and uses the supplied 2048-pixel ER:LC map for Deputy Lookup and all bot-generated location maps. The automatic jail-area voice-channel move service has been removed.",
