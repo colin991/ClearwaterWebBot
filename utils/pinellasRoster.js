@@ -532,11 +532,9 @@ export async function assignPinellasCallsign(client, member, roleplayName) {
     ];
 
     if (current && current.rowNumber !== target.rowNumber) {
-      if (current.notes) updates.push({ range: rosterCell('L', target.rowNumber), value: current.notes });
       updates.push(
         { range: rosterCell('H', current.rowNumber), value: '' },
         { range: rosterCell('J', current.rowNumber), value: '' },
-        { range: rosterCell('L', current.rowNumber), value: '' },
         { range: rosterCell('N', current.rowNumber), value: 'N/A' },
         { range: rosterCell('P', current.rowNumber), value: 'Clean Record' },
       );
@@ -900,7 +898,7 @@ export async function handlePinellasCallsignInteraction(interaction, client) {
           `**Rank:** ${result.rank}`,
           `**Activity:** ${result.activity}`,
           `**Punishments:** ${result.punishment}`,
-          `-# Roster row ${result.rowNumber}${result.moved ? ' Â· previous manual notes were carried to the new rank row' : ''}`,
+          `-# Roster row ${result.rowNumber}`,
         ].join('\n'))
         .setColor(0x3ba55d),
     ],

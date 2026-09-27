@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-27-pcso-rank-notes",
+      "title": "Keep PCSO roster notes with their rank slots",
+      "summary": "Promoting or moving a deputy to another callsign no longer copies their former rank's Appointment or Notes value to the new rank or clears it from the old rank. Notes remain attached to their existing roster row.",
+      "createdAt": "2026-09-27T16:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-27-scene-cmd-any-guild",
       "title": "Make ;ts work from Discord and any department voice server",
       "summary": ";ss, ;ts, ;scene, ;fc, ;civ, and ;team now find you in Clearwater or Pinellas voice, match names like TS 1, and still move you if every numbered channel already has people. Typing ;ts in Discord does the same move. Join a voice channel first.",

@@ -88,7 +88,7 @@ test('suspension and LOA take priority over inactivity', () => {
   const incomplete = rosterState({ complete: false });
   assert.equal(resolvePinellasRosterMemberStatus(incomplete, discordId, 'Active').activity, 'Active');
 });
-test('rank change selects an open callsign row and carries manual notes', async () => {
+test('rank change selects an open callsign row without moving rank notes', async () => {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
   const originalFetch = global.fetch;
   let batchBody = null;
@@ -112,7 +112,7 @@ test('rank change selects an open callsign row and carries manual notes', async 
       return new Response(JSON.stringify({
         values: [
           ['Master Deputy', null, '1201', null, 'Old Name', null, '123456789012345678', null, 'Manual appointment', null, 'Active', null, 'Clean Record'],
-          ['Deputy Second Class', null, '1300', null, '', null, '', null, '', null, 'N/A', null, 'Clean Record'],
+          ['Deputy Second Class', null, '1300', null, '', null, '', null, 'Deputy appointment', null, 'N/A', null, 'Clean Record'],
         ],
       }), {
         status: 200,
@@ -147,8 +147,8 @@ test('rank change selects an open callsign row and carries manual notes', async 
     assert.equal(result.moved, true);
 
     const updates = new Map(batchBody.data.map((entry) => [entry.range, entry.values[0][0]]));
-    assert.equal(updates.get("'PCSO I Main Database'!L12"), 'Manual appointment');
-    assert.equal(updates.get("'PCSO I Main Database'!L11"), '');
+    assert.equal(updates.has("'PCSO I Main Database'!L12"), false);
+    assert.equal(updates.has("'PCSO I Main Database'!L11"), false);
     assert.equal(updates.get("'PCSO I Main Database'!H12"), 'Alex Morgan');
     assert.equal(updates.get("'PCSO I Main Database'!J12"), member.id);
     assert.equal([...updates.keys()].some((range) => /![EG]\d+$/.test(range)), false);
