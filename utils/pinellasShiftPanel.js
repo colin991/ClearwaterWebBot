@@ -46,6 +46,7 @@ import {
 
 export const PINELLAS_SHIFT_PANEL_CHANNEL_ID = '1546298062568165396';
 export const PINELLAS_ON_DUTY_ROLE_ID = '1514462780575715418';
+export const PINELLAS_ALL_DISTRICTS_ROLE_ID = '1514324563456950413';
 /** Guild used for “Voice Chat” lookup on the deputy card (Clearwater main). */
 export const PINELLAS_SHIFT_VC_GUILD_ID = '1514026810348671026';
 export const PINELLAS_SHIFT_REFRESH_MS = 30_000;
@@ -91,6 +92,7 @@ export const PINELLAS_DISTRICTS = Object.freeze([
   Object.freeze({ id: '2', name: 'District 2 East', shortName: 'D2 East' }),
   Object.freeze({ id: '3', name: 'District 3 West', shortName: 'D3 West' }),
 ]);
+const ALL_DISTRICTS = Object.freeze({ id: 'all', name: 'All Districts', shortName: 'All Districts' });
 
 /** @type {ReturnType<typeof setInterval> | null} */
 let refreshTimer = null;
@@ -239,6 +241,7 @@ function isWatchCommanderEligible(deputy) {
 }
 
 function districtById(id) {
+  if (String(id) === ALL_DISTRICTS.id) return ALL_DISTRICTS;
   return PINELLAS_DISTRICTS.find((district) => district.id === String(id)) || null;
 }
 
@@ -708,6 +711,7 @@ export async function collectOnDutyDeputies(client, {
       roleplayName,
       rankName: rank?.name || 'Deputy',
       rank,
+      hasAllDistrictsRole: Boolean(pinellasMember?.roles?.cache?.has(PINELLAS_ALL_DISTRICTS_ROLE_ID)),
       isSupervisor: isSupervisorRank(rank),
       shift,
       startedMs: shift ? startedMs : null,
@@ -845,8 +849,19 @@ async function syncDistrictAssignments(client, snapshot, store, { notify = true 
   for (const deputy of sortDeputiesByRank(snapshot.deputies || [])) {
     const key = shiftAssignmentKey(deputy);
     const current = assignments[deputy.discordId];
-    if (current && current.shiftKey === key && districtById(current.districtId)) continue;
-    const district = chooseBalancedPinellasDistrict(deputy, snapshot.deputies || [], assignments);
+    const needsAllDistricts = deputy.hasAllDistrictsRole;
+    const assignmentMatchesAccess = needsAllDistricts
+      ? current?.districtId === ALL_DISTRICTS.id
+      : current?.districtId !== ALL_DISTRICTS.id;
+    if (
+      current
+      && current.shiftKey === key
+      && districtById(current.districtId)
+      && assignmentMatchesAccess
+    ) continue;
+    const district = needsAllDistricts
+      ? ALL_DISTRICTS
+      : chooseBalancedPinellasDistrict(deputy, snapshot.deputies || [], assignments);
     assignments[deputy.discordId] = {
       discordId: deputy.discordId,
       shiftKey: key,
@@ -1134,7 +1149,9 @@ async function buildLookupPayload(deputy, {
 
 function districtRosterText(snapshot, district) {
   const deputies = sortDeputiesByRank(
-    (snapshot.deputies || []).filter((deputy) => deputy.districtId === district.id),
+    (snapshot.deputies || []).filter((deputy) => (
+      deputy.districtId === district.id || deputy.districtId === ALL_DISTRICTS.id
+    )),
   );
   const watchCommander = deputies.find(isWatchCommanderEligible) || null;
   const lines = deputies.length
@@ -1189,7 +1206,7 @@ async function buildDistrictsPayload(snapshot, requesterId, { includeFiles = tru
         .setCustomId(PINELLAS_SHIFT_DISTRICT_REQUEST_ID)
         .setStyle(ButtonStyle.Primary)
         .setLabel('Request New District')
-        .setDisabled(!requester),
+        .setDisabled(!requester || requester.hasAllDistrictsRole),
     ),
   );
 
@@ -1463,6 +1480,14 @@ export async function handlePinellasShiftPanelInteraction(interaction) {
     const deputy = snapshot.deputies.find((entry) => entry.discordId === interaction.user.id);
     if (!deputy) {
       await interaction.editReply({ content: 'You must be on an active PCSO Melonly shift to request a district.' });
+      return true;
+    }
+
+    if (deputy.hasAllDistrictsRole) {
+      await interaction.editReply({
+        content: `Your <@&${PINELLAS_ALL_DISTRICTS_ROLE_ID}> role assigns you to **All Districts** for the entire shift.`,
+        allowedMentions: { parse: [] },
+      });
       return true;
     }
 

@@ -59,3 +59,18 @@ test('manual district moves reject a difference greater than two', () => {
   assert.equal(canMovePinellasDistrict(deputies[4], '1', deputies, assignments), false);
   assert.equal(canMovePinellasDistrict(deputies[0], '3', deputies, assignments), true);
 });
+
+test('all-district personnel do not affect balanced district counts', () => {
+  const deputies = [
+    deputy('all-districts', 'Captain'),
+    deputy('north', 'Captain'),
+    deputy('east', 'Captain'),
+    deputy('next', 'Captain'),
+  ];
+  const assignments = {
+    'all-districts': { districtId: 'all' },
+    north: { districtId: '1' },
+    east: { districtId: '2' },
+  };
+  assert.equal(chooseBalancedPinellasDistrict(deputies[3], deputies, assignments).id, '3');
+});
