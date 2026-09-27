@@ -17,7 +17,12 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
-import { fetchErlcServer, libertyMapPoint, parseErlcPlayer } from './erlc.js';
+import {
+  executeErlcCommand,
+  fetchErlcServer,
+  libertyMapPoint,
+  parseErlcPlayer,
+} from './erlc.js';
 import { getIdentityCache } from './identityStore.js';
 import { renderLibertyLocationMap } from './libertyMapImage.js';
 import { logger } from './logger.js';
@@ -41,11 +46,15 @@ import {
 
 export const PINELLAS_SHIFT_PANEL_CHANNEL_ID = '1546298062568165396';
 export const PINELLAS_ON_DUTY_ROLE_ID = '1514462780575715418';
+export const PINELLAS_ALL_DISTRICTS_ROLE_ID = '1514324563456950413';
 /** Guild used for “Voice Chat” lookup on the deputy card (Clearwater main). */
 export const PINELLAS_SHIFT_VC_GUILD_ID = '1514026810348671026';
 export const PINELLAS_SHIFT_REFRESH_MS = 30_000;
 
 export const PINELLAS_SHIFT_LOOKUP_ID = 'pcs:shift:lookup';
+export const PINELLAS_SHIFT_DISTRICTS_ID = 'pcs:shift:districts';
+export const PINELLAS_SHIFT_DISTRICT_REQUEST_ID = 'pcs:shift:district-request';
+export const PINELLAS_SHIFT_DISTRICT_MOVE_PREFIX = 'pcs:shift:district-move:';
 
 export const PINELLAS_SHIFT_REPORT_CHANNELS = Object.freeze({
   ois: '1514667548468314242',
@@ -63,6 +72,7 @@ const STORE_PATH = path.join(ROOT, 'data', 'pinellas-shift-panel.json');
 const MEMBER_MAP_PATH = path.join(ROOT, 'data', 'pinellas-melonly-members-v2.json');
 const BANNER_PATH = path.join(ROOT, 'assets', 'pcso-shift-banner.webp');
 const FOOTER_PATH = path.join(ROOT, 'assets', 'pcso-shift-footer.webp');
+const DISTRICT_MAP_PATH = path.join(ROOT, 'assets', 'pcso-district-map.png');
 const SLOGO_EMOJI = '<:slogo:1546245229420744804>';
 const ATIME_EMOJI = '<:atime:1546336942785044490>';
 const SHEET_EMOJI = '<:sheet:1546293540827701329>';
@@ -75,6 +85,14 @@ const discordMemberCache = new Map();
 let lastSnapshot = null;
 
 const CORPORAL_INDEX = PINELLAS_RANKS.findIndex((rank) => rank.name === 'Corporal');
+const LIEUTENANT_INDEX = PINELLAS_RANKS.findIndex((rank) => rank.name === 'Lieutenant');
+
+export const PINELLAS_DISTRICTS = Object.freeze([
+  Object.freeze({ id: '1', name: 'District 1 North', shortName: 'D1 North' }),
+  Object.freeze({ id: '2', name: 'District 2 East', shortName: 'D2 East' }),
+  Object.freeze({ id: '3', name: 'District 3 West', shortName: 'D3 West' }),
+]);
+const ALL_DISTRICTS = Object.freeze({ id: 'all', name: 'All Districts', shortName: 'All Districts' });
 
 /** @type {ReturnType<typeof setInterval> | null} */
 let refreshTimer = null;
@@ -206,6 +224,68 @@ function isSupervisorRank(rank) {
   return CORPORAL_INDEX < 0 ? false : index <= CORPORAL_INDEX;
 }
 
+function rankIndexForDeputy(deputy) {
+  const index = PINELLAS_RANKS.findIndex((entry) => entry.roleId === deputy?.rank?.roleId);
+  return index < 0 ? PINELLAS_RANKS.length : index;
+}
+
+function districtRankGroup(deputy) {
+  const index = rankIndexForDeputy(deputy);
+  if (LIEUTENANT_INDEX >= 0 && index <= LIEUTENANT_INDEX) return 'command';
+  if (CORPORAL_INDEX >= 0 && index <= CORPORAL_INDEX) return 'supervisor';
+  return 'deputy';
+}
+
+function isWatchCommanderEligible(deputy) {
+  return LIEUTENANT_INDEX >= 0 && rankIndexForDeputy(deputy) <= LIEUTENANT_INDEX;
+}
+
+function districtById(id) {
+  if (String(id) === ALL_DISTRICTS.id) return ALL_DISTRICTS;
+  return PINELLAS_DISTRICTS.find((district) => district.id === String(id)) || null;
+}
+
+function shiftAssignmentKey(deputy) {
+  const shiftId = String(deputy?.shift?.id || deputy?.shift?._id || '').trim();
+  if (shiftId) return shiftId;
+  return `${deputy?.memberId || deputy?.discordId}:${Number(deputy?.startedMs) || 0}`;
+}
+
+function districtCounts(deputies, assignments, { rankGroup = null } = {}) {
+  const counts = Object.fromEntries(PINELLAS_DISTRICTS.map((district) => [district.id, 0]));
+  for (const deputy of deputies) {
+    if (rankGroup && districtRankGroup(deputy) !== rankGroup) continue;
+    const assignment = assignments[deputy.discordId];
+    if (assignment && Object.hasOwn(counts, assignment.districtId)) counts[assignment.districtId] += 1;
+  }
+  return counts;
+}
+
+/** Choose the least-filled district for this deputy's rank group, then overall. */
+export function chooseBalancedPinellasDistrict(deputy, deputies, assignments) {
+  const groupCounts = districtCounts(deputies, assignments, { rankGroup: districtRankGroup(deputy) });
+  const totalCounts = districtCounts(deputies, assignments);
+  return [...PINELLAS_DISTRICTS].sort((left, right) => (
+    groupCounts[left.id] - groupCounts[right.id]
+    || totalCounts[left.id] - totalCounts[right.id]
+    || Number(left.id) - Number(right.id)
+  ))[0];
+}
+
+/** Manual moves may not leave total or same-rank-group counts more than two apart. */
+export function canMovePinellasDistrict(deputy, targetId, deputies, assignments) {
+  const target = districtById(targetId);
+  const current = assignments[deputy?.discordId];
+  if (!target || !current || current.districtId === target.id) return false;
+  const simulated = {
+    ...assignments,
+    [deputy.discordId]: { ...current, districtId: target.id },
+  };
+  const balanced = (counts) => Math.max(...Object.values(counts)) - Math.min(...Object.values(counts)) <= 2;
+  return balanced(districtCounts(deputies, simulated))
+    && balanced(districtCounts(deputies, simulated, { rankGroup: districtRankGroup(deputy) }));
+}
+
 async function readStore() {
   try {
     const store = JSON.parse(await readFile(STORE_PATH, 'utf8'));
@@ -214,6 +294,9 @@ async function readStore() {
       messageId: store.messageId || null,
       guildId: store.guildId || PINELLAS_GUILD_ID,
       updatedAt: store.updatedAt || null,
+      districtAssignments: store.districtAssignments && typeof store.districtAssignments === 'object'
+        ? store.districtAssignments
+        : {},
     };
   } catch {
     return {
@@ -221,6 +304,7 @@ async function readStore() {
       messageId: null,
       guildId: PINELLAS_GUILD_ID,
       updatedAt: null,
+      districtAssignments: {},
     };
   }
 }
@@ -621,11 +705,13 @@ export async function collectOnDutyDeputies(client, {
       discordId,
       memberId,
       robloxId,
+      robloxUsername: player?.username || null,
       callsign,
       callsignCandidates,
       roleplayName,
       rankName: rank?.name || 'Deputy',
       rank,
+      hasAllDistrictsRole: Boolean(pinellasMember?.roles?.cache?.has(PINELLAS_ALL_DISTRICTS_ROLE_ID)),
       isSupervisor: isSupervisorRank(rank),
       shift,
       startedMs: shift ? startedMs : null,
@@ -698,11 +784,116 @@ export async function collectOnDutyDeputies(client, {
   return snapshot;
 }
 
+function sortDeputiesByRank(deputies) {
+  return [...deputies].sort((left, right) => (
+    rankIndexForDeputy(left) - rankIndexForDeputy(right)
+    || String(left.callsign || '').localeCompare(String(right.callsign || ''), undefined, { numeric: true })
+    || String(left.roleplayName || '').localeCompare(String(right.roleplayName || ''))
+  ));
+}
+
+function applyDistrictAssignments(snapshot, assignments) {
+  for (const deputy of snapshot.deputies || []) {
+    const assignment = assignments[deputy.discordId];
+    deputy.districtId = assignment?.districtId || null;
+    deputy.district = districtById(deputy.districtId);
+  }
+  return snapshot;
+}
+
+async function notifyDistrictAssignment(client, deputy, district, { changed = false } = {}) {
+  const heading = changed ? 'Your patrol district has changed.' : 'Your patrol district has been assigned.';
+  try {
+    const user = await client.users.fetch(deputy.discordId).catch(() => null);
+    if (user) {
+      const map = await loadAttachment(DISTRICT_MAP_PATH, 'pcso-district-map.png');
+      await user.send({
+        content: [
+          `# ${SLOGO_EMOJI} ${district.name}`,
+          heading,
+          `You are assigned to **${district.name}** for your current PCSO shift.`,
+          'Use the **Districts** button on the shift panel to view district staffing or request a balanced reassignment.',
+        ].join('\n'),
+        files: map ? [map] : [],
+      });
+    }
+  } catch (error) {
+    logger.warn(`Pinellas districts: could not DM ${deputy.discordId} (${error?.message || error})`);
+  }
+
+  if (!config.erlcServerKey || !deputy.robloxUsername) return;
+  try {
+    await executeErlcCommand(
+      config.erlcServerKey,
+      `:pm ${deputy.robloxUsername} PCSO: You are assigned to ${district.name} for this shift.`,
+    );
+  } catch (error) {
+    logger.warn(`Pinellas districts: could not PM ${deputy.robloxUsername} (${error?.message || error})`);
+  }
+}
+
+async function syncDistrictAssignments(client, snapshot, store, { notify = true } = {}) {
+  const assignments = store.districtAssignments && typeof store.districtAssignments === 'object'
+    ? store.districtAssignments
+    : {};
+  const activeIds = new Set((snapshot.deputies || []).map((deputy) => deputy.discordId));
+  let changed = false;
+
+  for (const discordId of Object.keys(assignments)) {
+    if (activeIds.has(discordId)) continue;
+    delete assignments[discordId];
+    changed = true;
+  }
+
+  const newlyAssigned = [];
+  for (const deputy of sortDeputiesByRank(snapshot.deputies || [])) {
+    const key = shiftAssignmentKey(deputy);
+    const current = assignments[deputy.discordId];
+    const needsAllDistricts = deputy.hasAllDistrictsRole;
+    const assignmentMatchesAccess = needsAllDistricts
+      ? current?.districtId === ALL_DISTRICTS.id
+      : current?.districtId !== ALL_DISTRICTS.id;
+    if (
+      current
+      && current.shiftKey === key
+      && districtById(current.districtId)
+      && assignmentMatchesAccess
+    ) continue;
+    const district = needsAllDistricts
+      ? ALL_DISTRICTS
+      : chooseBalancedPinellasDistrict(deputy, snapshot.deputies || [], assignments);
+    assignments[deputy.discordId] = {
+      discordId: deputy.discordId,
+      shiftKey: key,
+      districtId: district.id,
+      rankGroup: districtRankGroup(deputy),
+      assignedAt: new Date().toISOString(),
+      notifiedAt: null,
+    };
+    newlyAssigned.push({ deputy, district });
+    changed = true;
+  }
+
+  store.districtAssignments = assignments;
+  applyDistrictAssignments(snapshot, assignments);
+
+  if (notify && newlyAssigned.length) {
+    // Persist first so a process restart cannot create duplicate assignments or messages.
+    const notifiedAt = new Date().toISOString();
+    for (const { deputy } of newlyAssigned) assignments[deputy.discordId].notifiedAt = notifiedAt;
+    await writeStore(store);
+    for (const item of newlyAssigned) await notifyDistrictAssignment(client, item.deputy, item.district);
+  }
+
+  return { changed, newlyAssigned };
+}
+
 function onDutyLines(deputies) {
   if (!deputies.length) return '- Nobody is currently on shift.';
   return deputies.map((entry) => (
     `- ${entry.callsign}, ${entry.roleplayName}, ${entry.rankName}`
-    + `  | <@${entry.discordId}> | ${formatShiftDuration(entry.thisShiftMs)}`
+    + `  | <@${entry.discordId}> | ${entry.district?.shortName || 'District pending'}`
+    + ` | ${formatShiftDuration(entry.thisShiftMs)}`
   )).join('\n');
 }
 
@@ -784,6 +975,10 @@ async function buildShiftPanelPayload(snapshot, { includeFiles = true } = {}) {
     )
     .addActionRowComponents(
       new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(PINELLAS_SHIFT_DISTRICTS_ID)
+          .setStyle(ButtonStyle.Primary)
+          .setLabel('Districts'),
         new ButtonBuilder()
           .setCustomId('pcs:shift:count:on')
           .setStyle(ButtonStyle.Secondary)
@@ -912,6 +1107,7 @@ async function buildLookupPayload(deputy, {
         `**Callsign:** ${deputy.callsign}`,
         `**Roleplay Name:** ${deputy.roleplayName}`,
         `**Rank:** ${deputy.rankName}`,
+        `**District:** ${deputy.district?.name || 'Not assigned'}`,
         '',
         `**Shift Time:** ${formatShiftDuration(deputy.thisShiftMs)}`,
         `**Total Time:** ${formatShiftDuration(deputy.totalWaveMs)}`,
@@ -949,6 +1145,103 @@ async function buildLookupPayload(deputy, {
   };
   if (includeFiles && files.length) payload.files = files;
   return payload;
+}
+
+function districtRosterText(snapshot, district) {
+  const deputies = sortDeputiesByRank(
+    (snapshot.deputies || []).filter((deputy) => (
+      deputy.districtId === district.id || deputy.districtId === ALL_DISTRICTS.id
+    )),
+  );
+  const watchCommander = deputies.find(isWatchCommanderEligible) || null;
+  const lines = deputies.length
+    ? deputies.map((deputy) => (
+      `- **${deputy.rankName}** — ${deputy.callsign}, ${deputy.roleplayName} (<@${deputy.discordId}>)`
+    ))
+    : ['- Nobody assigned'];
+  return [
+    `## ${district.name}`,
+    `**Watch Commander:** ${watchCommander
+      ? `<@${watchCommander.discordId}> — ${watchCommander.rankName}`
+      : 'No Watch Commander'}`,
+    ...lines,
+  ].join('\n');
+}
+
+async function buildDistrictsPayload(snapshot, requesterId, { includeFiles = true } = {}) {
+  const files = [];
+  const map = includeFiles
+    ? await loadAttachment(DISTRICT_MAP_PATH, 'pcso-district-map.png')
+    : null;
+  if (map) files.push(map);
+
+  const container = new ContainerBuilder().clearAccentColor();
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent([
+      `# ${SLOGO_EMOJI} PCSO Patrol Districts`,
+      'Active personnel are sorted from highest to lowest rank. Watch Commander requires Lieutenant or higher.',
+    ].join('\n')),
+  );
+  if (map || !includeFiles) {
+    container.addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(
+        new MediaGalleryItemBuilder().setURL('attachment://pcso-district-map.png'),
+      ),
+    );
+  }
+  for (const district of PINELLAS_DISTRICTS) {
+    container
+      .addSeparatorComponents(
+        new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+      )
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(districtRosterText(snapshot, district).slice(0, 4000)),
+      );
+  }
+
+  const requester = (snapshot.deputies || []).find((deputy) => deputy.discordId === requesterId);
+  container.addActionRowComponents(
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(PINELLAS_SHIFT_DISTRICT_REQUEST_ID)
+        .setStyle(ButtonStyle.Primary)
+        .setLabel('Request New District')
+        .setDisabled(!requester || requester.hasAllDistrictsRole),
+    ),
+  );
+
+  const payload = {
+    components: [container],
+    flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+    allowedMentions: {
+      parse: [],
+      users: (snapshot.deputies || []).map((deputy) => deputy.discordId),
+    },
+  };
+  if (files.length) payload.files = files;
+  return payload;
+}
+
+function buildDistrictRequestPayload(deputy, assignments, snapshot) {
+  const current = districtById(assignments[deputy.discordId]?.districtId);
+  const buttons = PINELLAS_DISTRICTS.map((district) => (
+    new ButtonBuilder()
+      .setCustomId(`${PINELLAS_SHIFT_DISTRICT_MOVE_PREFIX}${district.id}`)
+      .setStyle(district.id === current?.id ? ButtonStyle.Secondary : ButtonStyle.Primary)
+      .setLabel(district.name)
+      .setDisabled(
+        district.id === current?.id
+        || !canMovePinellasDistrict(deputy, district.id, snapshot.deputies || [], assignments)
+      )
+  ));
+  return {
+    content: [
+      `You are currently assigned to **${current?.name || 'an unknown district'}**.`,
+      'Choose an available district below. A choice is disabled when it would make district staffing more than two people out of balance.',
+    ].join('\n'),
+    components: [new ActionRowBuilder().addComponents(...buttons)],
+    flags: MessageFlags.Ephemeral,
+  };
 }
 
 /**
@@ -1037,11 +1330,13 @@ export async function refreshPinellasShiftPanel(client, { forceResend = false } 
     }
   }
 
+  const store = await readStore();
+  await syncDistrictAssignments(client, snapshot, store, { notify: true });
+
   await syncPinellasOnDutyRoles(client, snapshot).catch((error) => {
     logger.warn(`Pinellas on-duty role sync failed: ${error?.message || error}`);
   });
 
-  const store = await readStore();
   const payload = await buildShiftPanelPayload(snapshot, { includeFiles: true });
 
   const channel = await client.channels.fetch(store.channelId || PINELLAS_SHIFT_PANEL_CHANNEL_ID).catch(() => null);
@@ -1133,34 +1428,105 @@ export function startPinellasShiftPanel(client) {
 
 export async function handlePinellasShiftPanelInteraction(interaction) {
   const id = String(interaction.customId || '');
-  if (id !== PINELLAS_SHIFT_LOOKUP_ID) return false;
-  if (!interaction.isStringSelectMenu()) return false;
+  const isLookup = id === PINELLAS_SHIFT_LOOKUP_ID && interaction.isStringSelectMenu();
+  const isDistricts = id === PINELLAS_SHIFT_DISTRICTS_ID && interaction.isButton();
+  const isDistrictRequest = id === PINELLAS_SHIFT_DISTRICT_REQUEST_ID && interaction.isButton();
+  const isDistrictMove = id.startsWith(PINELLAS_SHIFT_DISTRICT_MOVE_PREFIX) && interaction.isButton();
+  if (!isLookup && !isDistricts && !isDistrictRequest && !isDistrictMove) return false;
 
-  const discordId = interaction.values?.[0];
-  if (!discordId || discordId === 'none') {
-    await interaction.reply({
-      content: 'Nobody is currently on duty.',
-      flags: MessageFlags.Ephemeral,
-    });
+  if (isLookup) {
+    const discordId = interaction.values?.[0];
+    if (!discordId || discordId === 'none') {
+      await interaction.reply({
+        content: 'Nobody is currently on duty.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return true;
+    }
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      const snapshot = await collectOnDutyDeputies(interaction.client);
+      const store = await readStore();
+      await syncDistrictAssignments(interaction.client, snapshot, store, { notify: false });
+      const deputy = snapshot.deputies.find((entry) => entry.discordId === discordId);
+      if (!deputy) {
+        await interaction.editReply({ content: 'That deputy is no longer on shift.' });
+        return true;
+      }
+      const liveDeputy = await enrichDeputyLiveLocation(deputy);
+      const payload = await buildLookupPayload(liveDeputy);
+      await interaction.editReply(payload);
+    } catch (error) {
+      logger.error('Pinellas shift lookup failed', error);
+      await interaction.editReply({
+        content: String(error?.message || 'Could not load shift information.').slice(0, 1800),
+      }).catch(() => {});
+    }
     return true;
   }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
   try {
     const snapshot = await collectOnDutyDeputies(interaction.client);
-    const deputy = snapshot.deputies.find((entry) => entry.discordId === discordId);
-    if (!deputy) {
-      await interaction.editReply({ content: 'That deputy is no longer on shift.' });
+    const store = await readStore();
+    const sync = await syncDistrictAssignments(interaction.client, snapshot, store, { notify: true });
+    if (sync.changed) await writeStore(store);
+
+    if (isDistricts) {
+      await interaction.editReply(await buildDistrictsPayload(snapshot, interaction.user.id));
       return true;
     }
-    const liveDeputy = await enrichDeputyLiveLocation(deputy);
-    const payload = await buildLookupPayload(liveDeputy);
-    await interaction.editReply(payload);
-  } catch (error) {
-    logger.error('Pinellas shift lookup failed', error);
+
+    const deputy = snapshot.deputies.find((entry) => entry.discordId === interaction.user.id);
+    if (!deputy) {
+      await interaction.editReply({ content: 'You must be on an active PCSO Melonly shift to request a district.' });
+      return true;
+    }
+
+    if (deputy.hasAllDistrictsRole) {
+      await interaction.editReply({
+        content: `Your <@&${PINELLAS_ALL_DISTRICTS_ROLE_ID}> role assigns you to **All Districts** for the entire shift.`,
+        allowedMentions: { parse: [] },
+      });
+      return true;
+    }
+
+    if (isDistrictRequest) {
+      await interaction.editReply(buildDistrictRequestPayload(deputy, store.districtAssignments, snapshot));
+      return true;
+    }
+
+    const targetId = id.slice(PINELLAS_SHIFT_DISTRICT_MOVE_PREFIX.length);
+    const target = districtById(targetId);
+    const assignment = store.districtAssignments[deputy.discordId];
+    if (!target || !assignment) {
+      await interaction.editReply({ content: 'That district request is no longer available.' });
+      return true;
+    }
+    if (!canMovePinellasDistrict(deputy, target.id, snapshot.deputies, store.districtAssignments)) {
+      await interaction.editReply({
+        content: `You cannot move to **${target.name}** because it would make district staffing more than two people out of balance.`,
+      });
+      return true;
+    }
+
+    assignment.districtId = target.id;
+    assignment.assignedAt = new Date().toISOString();
+    assignment.notifiedAt = assignment.assignedAt;
+    assignment.changedBy = deputy.discordId;
+    applyDistrictAssignments(snapshot, store.districtAssignments);
+    await writeStore(store);
+    await notifyDistrictAssignment(interaction.client, deputy, target, { changed: true });
     await interaction.editReply({
-      content: String(error?.message || 'Could not load shift information.').slice(0, 1800),
+      content: `Your patrol assignment is now **${target.name}**. The bot also sends the updated map by DM and an in-game PM when your ER:LC player is matched.`,
+    });
+    void refreshPinellasShiftPanel(interaction.client).catch((error) => {
+      logger.warn(`Pinellas districts: panel refresh after reassignment failed (${error?.message || error})`);
+    });
+  } catch (error) {
+    logger.error('Pinellas district interaction failed', error);
+    await interaction.editReply({
+      content: String(error?.message || 'Could not update the district assignment.').slice(0, 1800),
     }).catch(() => {});
   }
   return true;

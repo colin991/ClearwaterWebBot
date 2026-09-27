@@ -2,6 +2,20 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-27-pcso-all-districts-role",
+      "title": "Give designated PCSO personnel access to every district",
+      "summary": "PCSO members with role 1514324563456950413 are assigned to All Districts when their Melonly shift starts. They appear in every district roster without affecting balanced staffing counts and still receive the district map by Discord DM and their assignment through an in-game PM.",
+      "createdAt": "2026-09-27T16:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-27-pcso-patrol-districts",
+      "title": "Assign balanced patrol districts on PCSO shifts",
+      "summary": "PCSO personnel now receive a balanced District 1 North, District 2 East, or District 3 West assignment when their Melonly shift starts. The bot sends the district map by Discord DM and the assignment in game, adds a Districts roster to the shift panel, identifies the highest Lieutenant-or-higher member as Watch Commander, and allows reassignment only while staffing remains balanced.",
+      "createdAt": "2026-09-27T15:45:30.011Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-25-cad-ticket-fine",
       "title": "Deduct Melonly CAD ticket fines from the cited player's account",
       "summary": "When a LEO files a citation or ticket in Melonly CAD, the bot takes that ticket amount from the cited player's economy account (cash first, then bank, then negative cash if needed) and credits the server treasury. The same CAD record is never billed twice. The player is DMed when Discord can be matched.",
