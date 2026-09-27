@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-27-new-erlc-location-map",
+      "title": "Use the new ER:LC map and remove jail voice moves",
+      "summary": "The shift panel now displays each on-duty deputy's live in-game location and uses the supplied 2048-pixel ER:LC map for Deputy Lookup and all bot-generated location maps. The automatic jail-area voice-channel move service has been removed.",
+      "createdAt": "2026-09-27T15:56:36.981Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-27-pcso-all-districts-watch-command",
       "title": "Exclude All Districts personnel from Watch Commander",
       "summary": "PCSO members with the All Districts role keep their countywide assignment, map DM, in-game PM, and placement in every district roster, but they are no longer selected as Watch Commander.",

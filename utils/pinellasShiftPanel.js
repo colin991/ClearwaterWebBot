@@ -895,6 +895,7 @@ function onDutyLines(deputies) {
   return deputies.map((entry) => (
     `- ${entry.callsign}, ${entry.roleplayName}, ${entry.rankName}`
     + `  | <@${entry.discordId}> | ${entry.district?.shortName || 'District pending'}`
+    + ` | ${entry.locationLabel}`
     + ` | ${formatShiftDuration(entry.thisShiftMs)}`
   )).join('\n');
 }

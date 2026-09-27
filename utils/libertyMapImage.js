@@ -11,12 +11,12 @@ import { logger } from './logger.js';
 const execFileAsync = promisify(execFile);
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const LIBERTY_MAP_PATH = path.join(ROOT, 'assets', 'liberty-county-map.jpg');
+export const LIBERTY_MAP_PATH = path.join(ROOT, 'assets', 'liberty-county-map.png');
 export const LIBERTY_MAP_PIN_PATH = path.join(ROOT, 'assets', 'liberty-map-pin.png');
 
-const MAP_SIZE = 1536;
+const MAP_SIZE = 2048;
 /** Smaller crop = tighter zoom around the deputy's pin. */
-const CROP_SIZE = 320;
+const CROP_SIZE = 427;
 const OUTPUT_SIZE = 768;
 const PIN_DISPLAY = 56;
 /** Tip of the pin graphic (bottom point), relative to the scaled pin image. */

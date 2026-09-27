@@ -13,7 +13,6 @@ import { ensureNoticeChannel } from '../utils/noticeChannel.js';
 import { ensureInternetPanel } from '../utils/discordInternetPanel.js';
 import { ensureInternetAutomodQueue } from '../utils/discordInternetModeration.js';
 import { startSecondaryServerGate } from '../utils/secondaryServerGate.js';
-import { startErlcZoneVoice } from '../utils/erlcZoneVoice.js';
 import { startDispatchChannelStatus } from '../utils/dispatchChannelStatus.js';
 import { startCorrectionsChannelStatus } from '../utils/correctionsChannelStatus.js';
 import { startFrequencyChangeGreeting } from '../utils/frequencyChangeGreeting.js';
@@ -83,9 +82,6 @@ export default {
       if (!client.stopPoliceCarCheck) client.stopPoliceCarCheck = startPoliceCarCheck(client);
       if (!client.stopServerWeather) client.stopServerWeather = startServerWeather(client);
       if (!client.stopModCallVoice) client.stopModCallVoice = startModCallVoice(client);
-      if (!client.stopErlcZoneVoice) {
-        client.stopErlcZoneVoice = startErlcZoneVoice(client, client.config);
-      }
     };
     void startGameServices();
 
