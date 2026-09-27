@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-27-shift-lookup-send",
+      "title": "Open Deputy Lookup from the posted shift list, not Melonly",
+      "summary": "Deputy Lookup now always sends the deputy card using the on-shift list already on the panel. Melonly is only polled every 30 seconds to update that list. Clicking a deputy no longer waits on Melonly or shows a rate-limit / try-again message.",
+      "createdAt": "2026-09-27T17:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-27-shift-lookup-ratelimit",
       "title": "Keep Deputy Lookup working when Melonly is rate limited",
       "summary": "Opening Deputy Lookup or Districts on the Pinellas shift panel no longer calls Melonly again. Those buttons use the on-shift list already on the panel and only refresh the in-game map from ER:LC. If Melonly is cooling down, the bot serves the last cached shift list instead of an ephemeral “rate limited — try again in ~42s” error.",

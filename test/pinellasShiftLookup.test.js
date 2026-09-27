@@ -2,20 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   PINELLAS_SHIFT_LOOKUP_ID,
+  deputyForLookup,
   handlePinellasShiftPanelInteraction,
-  isMelonlyBusyError,
   loadShiftPanelSnapshot,
-  pinellasShiftPanelBusyText,
   seedPinellasShiftSnapshot,
 } from '../utils/pinellasShiftPanel.js';
 
-test('Melonly 429 messages are treated as busy, not shown raw to deputies', () => {
-  assert.equal(isMelonlyBusyError({ status: 429, message: 'Melonly rate limited — try again in ~42s.' }), true);
-  assert.match(pinellasShiftPanelBusyText(), /on-shift list on the panel/i);
-  assert.equal(isMelonlyBusyError(new Error('map render failed')), false);
-});
-
-test('Deputy Lookup uses the last posted snapshot instead of calling Melonly', async () => {
+test('Deputy Lookup always sends the card from the posted 30s list', async () => {
   seedPinellasShiftSnapshot({
     deputies: [{
       discordId: '1000',
@@ -47,7 +40,26 @@ test('Deputy Lookup uses the last posted snapshot instead of calling Melonly', a
   assert.equal(ok, true);
   assert.equal(replies.length, 1);
   assert.ok(replies[0].components);
-  assert.doesNotMatch(JSON.stringify(replies[0]), /rate limited/i);
+  assert.doesNotMatch(JSON.stringify(replies[0]), /busy right now|rate limited/i);
+});
+
+test('Deputy Lookup still sends a card if that deputy is missing from the cached list', async () => {
+  seedPinellasShiftSnapshot({ deputies: [] });
+  const replies = [];
+  const interaction = {
+    customId: PINELLAS_SHIFT_LOOKUP_ID,
+    isStringSelectMenu: () => true,
+    values: ['555'],
+    client: {
+      guilds: { cache: { get: () => null }, fetch: async () => null },
+    },
+    deferReply: async () => {},
+    editReply: async (payload) => { replies.push(payload); },
+  };
+  await handlePinellasShiftPanelInteraction(interaction);
+  assert.ok(replies[0].components);
+  assert.doesNotMatch(JSON.stringify(replies[0]), /busy right now|try again/i);
+  assert.equal(deputyForLookup({ deputies: [] }, '555').discordId, '555');
 });
 
 test('loadShiftPanelSnapshot keeps the posted list when a refresh is not requested', async () => {
