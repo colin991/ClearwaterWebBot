@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-27-scene-cmd-any-guild",
+      "title": "Make ;ts work from Discord and any department voice server",
+      "summary": ";ss, ;ts, ;scene, ;fc, ;civ, and ;team now find you in Clearwater or Pinellas voice, match names like TS 1, and still move you if every numbered channel already has people. Typing ;ts in Discord does the same move. Join a voice channel first.",
+      "createdAt": "2026-09-27T20:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-27-scene-cmd-logs",
       "title": "Run ;ts and other scene commands from ER:LC command logs too",
       "summary": "In-game ;ss, ;ts, ;scene, ;fc, ;civ, and ;team now also run from the ER:LC command log every few seconds, not only from the events webhook. :ts works the same as ;ts. You still need to already be in a Discord voice channel.",

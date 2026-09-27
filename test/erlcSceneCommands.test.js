@@ -10,6 +10,7 @@ import {
   parseCustomCommand,
   parseNumberedVoiceName,
   pickEmptyNumberedVoiceChannel,
+  pickLowestNumberedVoiceChannel,
   playerStudDistance,
   playersWithinStuds,
   majorityMatchingVoiceChannel,
@@ -23,6 +24,9 @@ import {
   teamVoiceChannelId,
   TEAM_VOICE_CHANNEL_IDS,
 } from '../utils/erlcSceneCommands.js';
+import { PINELLAS_GUILD_ID } from '../utils/pinellasServer.js';
+import { CLEARWATER_GUILD_ID } from '../utils/staffRanks.js';
+import scenePrefix from '../prefixCommands/scene.js';
 
 function voice(id, name, humans = []) {
   const members = new Map(humans.map((member) => [member.id, member]));
@@ -62,6 +66,17 @@ test('numbered VC names match Name + number and do not confuse Scene with Mod Sc
   assert.equal(parseNumberedVoiceName('Scene 3', 'Scene'), 3);
   assert.equal(parseNumberedVoiceName('Mod Scene 3', 'Scene'), null);
   assert.equal(parseNumberedVoiceName('Frequency Change 1', 'Frequency Change'), 1);
+  assert.equal(parseNumberedVoiceName('Traffic Stop 1', 'Traffic Stop'), 1);
+  assert.equal(parseNumberedVoiceName('TS 1', 'Traffic Stop'), 1);
+  assert.equal(parseNumberedVoiceName('ts-2', 'Traffic Stop'), 2);
+  assert.equal(parseNumberedVoiceName('FC 3', 'Frequency Change'), 3);
+});
+
+test('occupied numbered VCs still pick the lowest matching channel', () => {
+  const occupiedOne = voice('ts1', 'TS 1', [{ id: '1', user: { bot: false } }]);
+  const occupiedTwo = voice('ts2', 'Traffic Stop 2', [{ id: '2', user: { bot: false } }]);
+  assert.equal(pickEmptyNumberedVoiceChannel([occupiedOne, occupiedTwo], 'Traffic Stop'), null);
+  assert.equal(pickLowestNumberedVoiceChannel([occupiedTwo, occupiedOne], 'Traffic Stop').id, 'ts1');
 });
 
 test('picks the lowest empty numbered VC and treats bots as empty', () => {
@@ -577,4 +592,183 @@ test('scene command log scan primes then handles a new ;ts', async () => {
   });
   assert.equal(result.handled, 1);
   assert.equal(user.movedTo, 'ts1');
+});
+
+test(';ts moves a member already in Pinellas voice, not only Clearwater', async () => {
+  const dest = voice('pts1', 'TS 1');
+  const lobby = voice('plobby', 'Lobby');
+  const user = {
+    id: 'discord1',
+    user: { bot: false, tag: 'colin' },
+    voice: {
+      channelId: 'plobby',
+      channel: lobby,
+      setChannel: async (channel) => { user.voice.channelId = channel.id; user.movedTo = channel.id; },
+    },
+  };
+  dest.members = new Map();
+  const pinellas = {
+    id: PINELLAS_GUILD_ID,
+    members: {
+      me: { permissions: { has: () => true } },
+      cache: { get: (id) => (id === 'discord1' ? user : null), size: 1, values: () => [user].values() },
+      fetch: async (id) => (id === 'discord1' ? user : null),
+      fetchMe: async () => ({ permissions: { has: () => true } }),
+    },
+    channels: {
+      cache: {
+        size: 10,
+        get: (id) => (id === dest.id ? dest : id === lobby.id ? lobby : null),
+        values: () => [lobby, dest].values(),
+      },
+      fetch: async () => {},
+    },
+  };
+  const clearwater = {
+    id: CLEARWATER_GUILD_ID,
+    members: {
+      me: { permissions: { has: () => true } },
+      cache: { get: () => null, size: 0, values: () => [].values() },
+      fetch: async () => null,
+      fetchMe: async () => ({ permissions: { has: () => true } }),
+    },
+    channels: {
+      cache: { size: 10, get: () => null, values: () => [].values() },
+      fetch: async () => {},
+    },
+  };
+  user.guild = pinellas;
+  const guilds = new Map([
+    [CLEARWATER_GUILD_ID, clearwater],
+    [PINELLAS_GUILD_ID, pinellas],
+  ]);
+  const client = {
+    guilds: {
+      cache: {
+        get: (id) => guilds.get(String(id)) || null,
+        values: () => guilds.values(),
+      },
+      fetch: async (id) => guilds.get(String(id)) || null,
+    },
+  };
+  const result = await handleErlcSceneEvent(
+    { Type: 'Command', Player: 'Colin:99', Command: ';ts' },
+    {
+      client,
+      config: { guildId: CLEARWATER_GUILD_ID },
+      now: 200_000,
+      identities: new Map([['99', 'discord1']]),
+      snapshot: async () => ({ Players: [{ username: 'Colin', robloxId: '99', team: 'Sheriff' }] }),
+    },
+  );
+  assert.equal(result.handled, true);
+  assert.equal(user.movedTo, 'pts1');
+});
+
+test(';ts still moves when every Traffic Stop VC already has people', async () => {
+  const dest = voice('ts1', 'Traffic Stop 1', [{ id: 'other', user: { bot: false } }]);
+  const current = voice('lobby', 'Lobby');
+  const user = {
+    id: 'discord1',
+    user: { bot: false, tag: 'colin' },
+    voice: {
+      channelId: 'lobby',
+      channel: current,
+      setChannel: async (channel) => { user.voice.channelId = channel.id; user.movedTo = channel.id; },
+    },
+  };
+  const client = {
+    guilds: {
+      cache: {
+        get: () => ({
+          id: 'guild',
+          members: {
+            me: { permissions: { has: () => true } },
+            cache: { get: (id) => (id === 'discord1' ? user : null), size: 2, values: () => [user].values() },
+            fetch: async (id) => (id === 'discord1' ? user : null),
+            fetchMe: async () => ({ permissions: { has: () => true } }),
+          },
+          channels: {
+            cache: {
+              size: 10,
+              get: (id) => (id === dest.id ? dest : id === current.id ? current : null),
+              values: () => [current, dest].values(),
+            },
+            fetch: async () => {},
+          },
+        }),
+      },
+      fetch: async () => client.guilds.cache.get(),
+    },
+  };
+  const result = await handleErlcSceneEvent(
+    { Type: 'Command', Player: 'Colin:99', Command: ';ts' },
+    {
+      client,
+      config: { guildId: 'guild' },
+      now: 210_000,
+      identities: new Map([['99', 'discord1']]),
+      snapshot: async () => ({ Players: [{ username: 'Colin', robloxId: '99' }] }),
+    },
+  );
+  assert.equal(result.handled, true);
+  assert.equal(user.movedTo, 'ts1');
+});
+
+test('Discord ;ts prefix command moves the author without a Roblox webhook', async () => {
+  const dest = voice('ts1', 'Traffic Stop 1');
+  const current = voice('lobby', 'Lobby');
+  const user = {
+    id: 'discord1',
+    user: { bot: false, tag: 'colin', username: 'colin' },
+    displayName: 'Colin',
+    voice: {
+      channelId: 'lobby',
+      channel: current,
+      setChannel: async (channel) => { user.voice.channelId = channel.id; user.movedTo = channel.id; },
+    },
+  };
+  const guild = {
+    id: 'guild',
+    members: {
+      me: { permissions: { has: () => true } },
+      cache: { get: (id) => (id === 'discord1' ? user : null), size: 1, values: () => [user].values() },
+      fetch: async (id) => (id === 'discord1' ? user : null),
+      fetchMe: async () => ({ permissions: { has: () => true } }),
+    },
+    channels: {
+      cache: {
+        size: 10,
+        get: (id) => (id === dest.id ? dest : id === current.id ? current : null),
+        values: () => [current, dest].values(),
+      },
+      fetch: async () => {},
+    },
+  };
+  user.guild = guild;
+  dest.members = new Map();
+  const replies = [];
+  const client = {
+    config: { guildId: 'guild' },
+    guilds: {
+      cache: { get: () => guild, values: () => [guild].values() },
+      fetch: async () => guild,
+    },
+  };
+  assert.equal(scenePrefix.name, 'ts');
+  assert.deepEqual(scenePrefix.aliases, ['ss', 'scene', 'fc', 'civ', 'team']);
+  await scenePrefix.execute(
+    {
+      content: ';ts',
+      member: user,
+      author: { id: 'discord1' },
+      guild,
+      channel: { isTextBased: () => true },
+      reply: async (text) => { replies.push(text); },
+    },
+    [],
+    client,
+  );
+  assert.equal(user.movedTo, 'ts1');
+  assert.match(replies[0], /Moved you to #Traffic Stop 1/);
 });

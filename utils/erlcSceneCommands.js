@@ -5,6 +5,8 @@ import { resolveZoneDiscordMember } from './erlcZoneVoice.js';
 import { markBotVoiceMove } from './botVoiceMoves.js';
 import { logger } from './logger.js';
 import { postProximityLog, proximityStyleContent, VC_ACTION_LOG_CHANNEL_ID } from './vcActionLog.js';
+import { PINELLAS_GUILD_ID } from './pinellasServer.js';
+import { CLEARWATER_GUILD_ID } from './staffRanks.js';
 
 export const SCENE_COMMANDS = Object.freeze({
   ss: { kind: 'numbered', baseName: 'Mod Scene' },
@@ -231,14 +233,28 @@ function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+export const SCENE_VC_NAME_ALIASES = Object.freeze({
+  'Traffic Stop': ['traffic\\s*stop', 't\\s*stop', 'ts'],
+  'Mod Scene': ['mod\\s*scene'],
+  Scene: ['scene'],
+  'Frequency Change': ['frequency\\s*change', 'freq(?:uency)?\\s*change', 'fc'],
+  Civilian: ['civilian', 'civ'],
+});
+
 export function numberedVoiceNamePattern(baseName) {
-  const escaped = escapeRegExp(baseName).replace(/\s+/g, '\\s+');
-  return new RegExp(`^${escaped}\\s+(\\d+)$`, 'i');
+  const aliases = SCENE_VC_NAME_ALIASES[baseName] || [escapeRegExp(baseName).replace(/\\s+/g, '\\s+')];
+  const body = aliases.join('|');
+  return new RegExp(`^(?:${body})(?:\\s*[-#:]\\s*|\\s+)(\\d+)$`, 'i');
 }
 
 export function parseNumberedVoiceName(channelName, baseName) {
-  const match = String(channelName || '').trim().match(numberedVoiceNamePattern(baseName));
-  return match ? Number(match[1]) : null;
+  const trimmed = String(channelName || '').trim();
+  const match = trimmed.match(numberedVoiceNamePattern(baseName));
+  if (match) {
+    if (baseName === 'Scene' && /^mod\s*scene/i.test(trimmed)) return null;
+    return Number(match[1]);
+  }
+  return null;
 }
 
 function memberList(channel) {
@@ -270,6 +286,19 @@ export function pickEmptyNumberedVoiceChannel(channels, baseName, { exceptMember
   }
   empty.sort((left, right) => left.number - right.number);
   return empty[0]?.channel || null;
+}
+
+export function pickLowestNumberedVoiceChannel(channels, baseName) {
+  const found = [];
+  for (const channel of Array.isArray(channels) ? channels : []) {
+    const type = channel?.type;
+    if (type !== ChannelType.GuildVoice && type !== 2) continue;
+    const number = parseNumberedVoiceName(channel.name, baseName);
+    if (!Number.isInteger(number)) continue;
+    found.push({ channel, number });
+  }
+  found.sort((left, right) => left.number - right.number);
+  return found[0]?.channel || null;
 }
 
 function channelById(channels, id) {
@@ -313,12 +342,60 @@ function alreadyInMatchingEmpty(channel, baseName, memberId) {
 }
 
 function commandKey(player, commandName) {
-  return `${player.robloxId || player.username || '?'}|${commandName}`;
+  return `${player?.robloxId || player?.username || player?.discordId || '?'}|${commandName}`;
+}
+
+async function guildsToSearch(client, config) {
+  const preferred = [config?.guildId, CLEARWATER_GUILD_ID, PINELLAS_GUILD_ID]
+    .map((id) => String(id || '').trim())
+    .filter(Boolean);
+  const list = [];
+  const seen = new Set();
+  for (const id of preferred) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const guild = client?.guilds?.cache?.get(id) || await client?.guilds?.fetch?.(id).catch(() => null);
+    if (guild) list.push(guild);
+  }
+  for (const guild of client?.guilds?.cache?.values?.() || []) {
+    if (seen.has(guild.id)) continue;
+    seen.add(guild.id);
+    list.push(guild);
+  }
+  return list;
+}
+
+export async function findVoicedDiscordMember(client, discordId, config = {}) {
+  const id = String(discordId || '').trim();
+  if (!id || !client?.guilds) return null;
+  for (const guild of await guildsToSearch(client, config)) {
+    const member = guild.members.cache.get(id)
+      || await guild.members.fetch(id).catch(() => null);
+    if (member?.voice?.channelId) return { guild, member };
+  }
+  return null;
+}
+
+async function resolveVoicedSceneMember(client, config, player, identityMap) {
+  const linkedId = player?.robloxId ? identityMap.get(String(player.robloxId)) : '';
+  if (linkedId) {
+    const voiced = await findVoicedDiscordMember(client, linkedId, config);
+    if (voiced) return voiced;
+  }
+  for (const guild of await guildsToSearch(client, config)) {
+    const resolved = await resolveZoneDiscordMember(guild, player, identityMap);
+    if (resolved.member?.voice?.channelId) return { guild, member: resolved.member };
+  }
+  for (const guild of await guildsToSearch(client, config)) {
+    const resolved = await resolveZoneDiscordMember(guild, player, identityMap);
+    if (resolved.member) return { guild, member: resolved.member };
+  }
+  return null;
 }
 
 function wasRecentCommand(key, now) {
   const last = recentCommands.get(key);
-  return Boolean(last && now - last < DEDUP_MS);
+  return Boolean(last && now >= last && now - last < DEDUP_MS);
 }
 
 function markRecentCommand(key, now) {
@@ -610,7 +687,8 @@ async function executeErlcSceneCommand(payload, parsed, {
   now = Date.now(),
   snapshot,
   identities,
-}) {
+  voiceOverride = null,
+} = {}) {
   if (!parsed.command) {
     if (isStealCommandText(parsed.text)) {
       return runStealCommand(payload, {
@@ -621,25 +699,17 @@ async function executeErlcSceneCommand(payload, parsed, {
   }
 
   const { command, player: webhookPlayer } = parsed;
-  if (!webhookPlayer.username && !webhookPlayer.robloxId) {
+  if (!voiceOverride && !webhookPlayer.username && !webhookPlayer.robloxId) {
     logger.warn(`ER:LC ;${command.name} ignored: webhook had no player.`);
     return { handled: false, reason: 'missing_player', player: webhookPlayer };
   }
 
-  if (wasRecentCommand(commandKey(webhookPlayer, command.name), now)) {
+  if (wasRecentCommand(commandKey(webhookPlayer, command.name), now)
+    || (voiceOverride?.id && wasRecentCommand(commandKey({ discordId: voiceOverride.id }, command.name), now))) {
     return { handled: false, reason: 'duplicate', player: webhookPlayer };
   }
 
-  const guildId = config.guildId;
-  if (!guildId || !client?.guilds) return { handled: false, reason: 'missing_guild', player: webhookPlayer };
-  const guild = client.guilds.cache.get(guildId) || await client.guilds.fetch(guildId).catch(() => null);
-  if (!guild) return { handled: false, reason: 'guild_unavailable', player: webhookPlayer };
-
-  const me = guild.members.me || await guild.members.fetchMe().catch(() => null);
-  if (!me?.permissions?.has(PermissionFlagsBits.MoveMembers)) {
-    logger.warn(`ER:LC ;${command.name}: bot is missing Move Members.`);
-    return { handled: false, reason: 'missing_move_members', player: webhookPlayer };
-  }
+  if (!client?.guilds) return { handled: false, reason: 'missing_guild', player: webhookPlayer };
 
   let rosterPlayer = null;
   let rosterPlayers = [];
@@ -666,29 +736,41 @@ async function executeErlcSceneCommand(payload, parsed, {
   const player = {
     username: rosterPlayer?.username || webhookPlayer.username,
     robloxId: rosterPlayer?.robloxId || webhookPlayer.robloxId,
+    discordId: voiceOverride?.id || '',
     team: rosterPlayer?.team || firstString(mappings(payload), ['Team', 'team']),
   };
 
   const identityMap = identities || await discordIdsByRobloxId();
-  const resolved = await resolveZoneDiscordMember(guild, player, identityMap);
-  const member = resolved.member;
+  const voiced = voiceOverride
+    ? { guild: voiceOverride.guild, member: voiceOverride }
+    : await resolveVoicedSceneMember(client, config, player, identityMap);
+  const guild = voiced?.guild;
+  const member = voiced?.member;
   if (!member) {
     logger.info(`ER:LC ;${command.name}: no Discord member for ${player.username || player.robloxId}.`);
     return { handled: false, reason: 'unlinked', player };
   }
+  if (!guild) return { handled: false, reason: 'guild_unavailable', player };
   if (!member.voice?.channelId) {
     logger.info(`ER:LC ;${command.name}: <@${member.id}> is not in a Discord VC.`);
     return { handled: false, reason: 'not_in_voice', player };
+  }
+
+  const me = guild.members.me || await guild.members.fetchMe().catch(() => null);
+  if (!me?.permissions?.has(PermissionFlagsBits.MoveMembers)) {
+    logger.warn(`ER:LC ;${command.name}: bot is missing Move Members.`);
+    return { handled: false, reason: 'missing_move_members', player };
   }
 
   const nearbyMembers = [];
   if (command.kind === 'numbered' && rosterPlayer) {
     for (const nearby of playersWithinStuds(rosterPlayer, rosterPlayers)) {
       try {
-        const nearbyMember = (await resolveZoneDiscordMember(guild, nearby, identityMap)).member;
-        if (!nearbyMember?.voice?.channelId) continue;
-        if (nearbyMember.id === member.id) continue;
-        nearbyMembers.push(nearbyMember);
+        const nearbyVoiced = await resolveVoicedSceneMember(client, config, nearby, identityMap);
+        if (!nearbyVoiced?.member?.voice?.channelId) continue;
+        if (nearbyVoiced.member.id === member.id) continue;
+        if (String(nearbyVoiced.guild?.id || '') !== String(guild?.id || '')) continue;
+        nearbyMembers.push(nearbyVoiced.member);
       } catch (error) {
         logger.warn(
           `ER:LC ;${command.name}: could not resolve nearby ${nearby.username || nearby.robloxId}: ${error?.message || error}`,
@@ -725,7 +807,8 @@ async function executeErlcSceneCommand(payload, parsed, {
         sittingEmpty,
         channel: clustered
           || sittingEmpty
-          || pickEmptyNumberedVoiceChannel(list, command.baseName, { exceptMemberId: member.id }),
+          || pickEmptyNumberedVoiceChannel(list, command.baseName, { exceptMemberId: member.id })
+          || pickLowestNumberedVoiceChannel(list, command.baseName),
       };
     };
     let picked = pickDestination(channels);
@@ -780,6 +863,7 @@ async function executeErlcSceneCommand(payload, parsed, {
   }
 
   markRecentCommand(commandKey(player, command.name), now);
+  if (member?.id) markRecentCommand(commandKey({ discordId: member.id }, command.name), now);
   logger.info(
     `ER:LC ;${command.name}: ${originReason} ${member.user?.tag || member.id} (${player.username}) `
     + `into #${destination.name} (${destination.id})`
@@ -794,6 +878,62 @@ async function executeErlcSceneCommand(payload, parsed, {
     nearbyMoved,
     player,
   };
+}
+
+function robloxIdForDiscord(identityMap, discordId) {
+  const want = String(discordId || '');
+  if (!want || !identityMap) return '';
+  for (const [robloxId, linked] of identityMap) {
+    if (String(linked) === want) return String(robloxId);
+  }
+  return '';
+}
+
+export async function runDiscordSceneCommand({
+  client,
+  member,
+  commandName,
+  now = Date.now(),
+  snapshot,
+  identities,
+} = {}) {
+  const name = String(commandName || '').replace(/^[-:;]+/, '').trim().split(/\s+/)[0]?.toLowerCase() || '';
+  const spec = SCENE_COMMANDS[name];
+  if (!spec) return { handled: false, reason: 'unknown_command', player: {} };
+  if (!member?.id || !client?.guilds) return { handled: false, reason: 'missing_guild', player: {} };
+
+  let voiced = member.voice?.channelId && member.guild
+    ? { guild: member.guild, member }
+    : await findVoicedDiscordMember(client, member.id, client.config || {});
+  if (!voiced?.member?.voice?.channelId) {
+    return {
+      handled: false,
+      reason: 'not_in_voice',
+      player: { username: member.displayName || member.user?.username || '', discordId: member.id },
+    };
+  }
+
+  const identityMap = identities || await discordIdsByRobloxId().catch(() => new Map());
+  const robloxId = robloxIdForDiscord(identityMap, member.id);
+  const player = {
+    username: member.displayName || member.user?.username || '',
+    robloxId,
+    discordId: member.id,
+  };
+  const override = voiced.member.guild ? voiced.member : { ...voiced.member, guild: voiced.guild };
+
+  return executeErlcSceneCommand(
+    { Type: 'Command', Player: robloxId ? `${player.username}:${robloxId}` : player.username, Command: `;${name}` },
+    { command: { name, ...spec }, player, text: `;${name}` },
+    {
+      client,
+      config: client.config || {},
+      now,
+      snapshot,
+      identities: identityMap,
+      voiceOverride: override,
+    },
+  );
 }
 
 const sceneLogSeen = new Set();
