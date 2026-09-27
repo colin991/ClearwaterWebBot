@@ -2580,6 +2580,13 @@
       "summary": "Added a signature-verified event receiver with a durable bot inbox and forwarding retries to Melonly, allowing both integrations to share the game webhook.",
       "createdAt": "2026-09-23T01:22:50.586026Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-26-voice-update-countdown",
+      "title": "Voice-channel update countdown command",
+      "summary": "Administrators can use /update with an Eastern time to place a live countdown in their current voice channel status. The status updates every 10 seconds, changes to Update OUT when finished, and active timers recover after a bot restart.",
+      "createdAt": "2026-09-27T00:17:29.078Z",
+      "updatedBy": "colin991"
     }
   ]
 }
