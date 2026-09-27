@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-27-pcso-all-districts-watch-command",
+      "title": "Exclude All Districts personnel from Watch Commander",
+      "summary": "PCSO members with the All Districts role keep their countywide assignment, map DM, in-game PM, and placement in every district roster, but they are no longer selected as Watch Commander.",
+      "createdAt": "2026-09-27T16:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-27-pcso-all-districts-role",
       "title": "Give designated PCSO personnel access to every district",
       "summary": "PCSO members with role 1514324563456950413 are assigned to All Districts when their Melonly shift starts. They appear in every district roster without affecting balanced staffing counts and still receive the district map by Discord DM and their assignment through an in-game PM.",

@@ -236,8 +236,10 @@ function districtRankGroup(deputy) {
   return 'deputy';
 }
 
-function isWatchCommanderEligible(deputy) {
-  return LIEUTENANT_INDEX >= 0 && rankIndexForDeputy(deputy) <= LIEUTENANT_INDEX;
+export function isPinellasWatchCommanderEligible(deputy) {
+  return !deputy?.hasAllDistrictsRole
+    && LIEUTENANT_INDEX >= 0
+    && rankIndexForDeputy(deputy) <= LIEUTENANT_INDEX;
 }
 
 function districtById(id) {
@@ -1153,7 +1155,7 @@ function districtRosterText(snapshot, district) {
       deputy.districtId === district.id || deputy.districtId === ALL_DISTRICTS.id
     )),
   );
-  const watchCommander = deputies.find(isWatchCommanderEligible) || null;
+  const watchCommander = deputies.find(isPinellasWatchCommanderEligible) || null;
   const lines = deputies.length
     ? deputies.map((deputy) => (
       `- **${deputy.rankName}** — ${deputy.callsign}, ${deputy.roleplayName} (<@${deputy.discordId}>)`

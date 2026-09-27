@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   canMovePinellasDistrict,
   chooseBalancedPinellasDistrict,
+  isPinellasWatchCommanderEligible,
 } from '../utils/pinellasShiftPanel.js';
 import { getPinellasRankByName } from '../utils/pinellasPromote.js';
 
@@ -73,4 +74,11 @@ test('all-district personnel do not affect balanced district counts', () => {
     east: { districtId: '2' },
   };
   assert.equal(chooseBalancedPinellasDistrict(deputies[3], deputies, assignments).id, '3');
+});
+
+test('all-district role is never eligible for Watch Commander', () => {
+  const captain = deputy('captain', 'Captain');
+  assert.equal(isPinellasWatchCommanderEligible(captain), true);
+  captain.hasAllDistrictsRole = true;
+  assert.equal(isPinellasWatchCommanderEligible(captain), false);
 });
