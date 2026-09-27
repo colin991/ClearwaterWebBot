@@ -26,6 +26,7 @@ import { startErlcSceneCommands } from '../utils/erlcSceneCommands.js';
 import { startErlcCallRadio } from '../utils/erlcCallRadio.js';
 import { fetchErlcServer } from '../utils/erlc.js';
 import { startOpenTicketPermissionSync } from '../utils/pinellasSupport.js';
+import { startUpdateCountdown } from '../utils/updateCountdown.js';
 
 export default {
   name: Events.ClientReady,
@@ -39,6 +40,7 @@ export default {
     }
     logger.info(`Logged in as ${client.user.tag}.`);
     startOpenTicketPermissionSync(client);
+    if (!client.stopUpdateCountdown) client.stopUpdateCountdown = startUpdateCountdown(client);
 
     setTimeout(() => {
       void ensurePinellasServerProfile(client).catch((error) => {
