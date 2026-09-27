@@ -780,6 +780,14 @@ export async function collectOnDutyDeputies(client, {
     + `linked=${memberDiscordCache.size}`,
   );
 
+  if (!deputies.length && lastSnapshot?.deputies?.length) {
+    logger.warn(
+      `Pinellas shift panel: empty Melonly pull (active=${activeShifts.length} unresolved=${unresolved}) `
+      + `— keeping last snapshot of ${lastSnapshot.deputies.length}`,
+    );
+    return tickSnapshotShiftTimes(lastSnapshot);
+  }
+
   const snapshot = {
     deputies,
     activeShiftCount: activeShifts.length,
@@ -826,15 +834,15 @@ function tickSnapshotShiftTimes(snapshot) {
   return snapshot;
 }
 
-/** Posted on-shift list only — never calls Melonly. */
+/** Posted on-shift list only — never calls Melonly. Prefer a populated last pull. */
 export async function getPostedShiftSnapshot() {
-  if (lastSnapshot) return lastSnapshot;
   const store = await readStore();
-  if (store.snapshot) {
-    lastSnapshot = store.snapshot;
-    applyDistrictAssignments(lastSnapshot, store.districtAssignments);
-  }
-  return lastSnapshot || { deputies: [] };
+  const memory = lastSnapshot?.deputies?.length ? lastSnapshot : null;
+  const stored = store.snapshot?.deputies?.length ? store.snapshot : null;
+  const snapshot = memory || stored || lastSnapshot || { deputies: [] };
+  if (snapshot.deputies?.length) lastSnapshot = snapshot;
+  applyDistrictAssignments(snapshot, store.districtAssignments);
+  return snapshot;
 }
 
 export function isMelonlyBusyError(error) {
@@ -872,11 +880,12 @@ function sortDeputiesByRank(deputies) {
   ));
 }
 
-function applyDistrictAssignments(snapshot, assignments) {
+export function applyDistrictAssignments(snapshot, assignments) {
+  const map = assignments && typeof assignments === 'object' ? assignments : {};
   for (const deputy of snapshot.deputies || []) {
-    const assignment = assignments[deputy.discordId];
-    deputy.districtId = assignment?.districtId || null;
-    deputy.district = districtById(deputy.districtId);
+    const assignedId = map[deputy.discordId]?.districtId || deputy.districtId || null;
+    deputy.districtId = assignedId;
+    deputy.district = districtById(assignedId);
   }
   return snapshot;
 }
@@ -916,9 +925,14 @@ async function syncDistrictAssignments(client, snapshot, store, { notify = true 
   const assignments = store.districtAssignments && typeof store.districtAssignments === 'object'
     ? store.districtAssignments
     : {};
-  const activeIds = new Set((snapshot.deputies || []).map((deputy) => deputy.discordId));
-  let changed = false;
+  const deputies = snapshot.deputies || [];
+  // An empty pull must not wipe the last district roster.
+  if (!deputies.length) {
+    return { changed: false, newlyAssigned: [] };
+  }
 
+  let changed = false;
+  const activeIds = new Set(deputies.map((deputy) => deputy.discordId));
   for (const discordId of Object.keys(assignments)) {
     if (activeIds.has(discordId)) continue;
     delete assignments[discordId];
@@ -926,22 +940,35 @@ async function syncDistrictAssignments(client, snapshot, store, { notify = true 
   }
 
   const newlyAssigned = [];
-  for (const deputy of sortDeputiesByRank(snapshot.deputies || [])) {
+  for (const deputy of sortDeputiesByRank(deputies)) {
     const key = shiftAssignmentKey(deputy);
     const current = assignments[deputy.discordId];
+    const restoredId = current?.districtId || deputy.districtId;
     const needsAllDistricts = deputy.hasAllDistrictsRole;
     const assignmentMatchesAccess = needsAllDistricts
-      ? current?.districtId === ALL_DISTRICTS.id
-      : current?.districtId !== ALL_DISTRICTS.id;
+      ? restoredId === ALL_DISTRICTS.id
+      : restoredId && restoredId !== ALL_DISTRICTS.id;
     if (
       current
       && current.shiftKey === key
       && districtById(current.districtId)
       && assignmentMatchesAccess
     ) continue;
+    if (restoredId && districtById(restoredId) && assignmentMatchesAccess) {
+      assignments[deputy.discordId] = {
+        discordId: deputy.discordId,
+        shiftKey: key,
+        districtId: restoredId,
+        rankGroup: districtRankGroup(deputy),
+        assignedAt: current?.assignedAt || new Date().toISOString(),
+        notifiedAt: current?.notifiedAt || new Date().toISOString(),
+      };
+      changed = true;
+      continue;
+    }
     const district = needsAllDistricts
       ? ALL_DISTRICTS
-      : chooseBalancedPinellasDistrict(deputy, snapshot.deputies || [], assignments);
+      : chooseBalancedPinellasDistrict(deputy, deputies, assignments);
     assignments[deputy.discordId] = {
       discordId: deputy.discordId,
       shiftKey: key,
@@ -1447,8 +1474,8 @@ export async function refreshPinellasShiftPanel(client, { forceResend = false } 
   store.channelId = channel.id;
   store.guildId = channel.guildId || PINELLAS_GUILD_ID;
   store.updatedAt = new Date().toISOString();
-  store.snapshot = snapshot;
-  lastSnapshot = snapshot;
+  store.snapshot = snapshot.deputies?.length ? snapshot : (store.snapshot || snapshot);
+  lastSnapshot = store.snapshot;
   await writeStore(store);
   return { message, snapshot };
 }

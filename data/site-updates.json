@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-27-districts-keep-last",
+      "title": "Keep the last district roster when Melonly returns nobody",
+      "summary": "The Districts button now shows the last successful on-shift pull instead of wiping everyone to Nobody assigned. An empty Melonly poll no longer clears saved district assignments.",
+      "createdAt": "2026-09-27T17:15:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-27-shift-lookup-send",
       "title": "Open Deputy Lookup from the posted shift list, not Melonly",
       "summary": "Deputy Lookup now always sends the deputy card using the on-shift list already on the panel. Melonly is only polled every 30 seconds to update that list. Clicking a deputy no longer waits on Melonly or shows a rate-limit / try-again message.",
