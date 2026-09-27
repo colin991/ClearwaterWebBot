@@ -20,7 +20,8 @@ key or Melonly API key is needed for webhook signature verification.
    (`https://erlc-wh.melon.ly/`, which is where `https://melon.ly/events` redirects).
 4. In-game `;` commands drag the player to an empty numbered Discord VC:
    `;ss` Mod Scene, `;ts` Traffic Stop, `;scene` Scene, `;fc` Frequency Change,
-   `;civ` Civilian. Anyone else in-game within 50 studs who is already in a
+   `;civ` Civilian. These also run from ER:LC command logs (`:ts` counts as `;ts`)
+   if the events webhook is delayed. Anyone else in-game within 50 studs who is already in a
    Discord VC is dragged into that same channel. If most of that group is
    already in a matching numbered VC, keep that channel and only move people
    who are not in it yet. `;team` moves Fire / Police-Sheriff / DOT to their

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-27-scene-cmd-logs",
+      "title": "Run ;ts and other scene commands from ER:LC command logs too",
+      "summary": "In-game ;ss, ;ts, ;scene, ;fc, ;civ, and ;team now also run from the ER:LC command log every few seconds, not only from the events webhook. :ts works the same as ;ts. You still need to already be in a Discord voice channel.",
+      "createdAt": "2026-09-27T18:40:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-27-districts-keep-last",
       "title": "Keep the last district roster when Melonly returns nobody",
       "summary": "The Districts button now shows the last successful on-shift pull instead of wiping everyone to Nobody assigned. An empty Melonly poll no longer clears saved district assignments.",

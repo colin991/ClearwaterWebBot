@@ -13,7 +13,10 @@ import {
   playerStudDistance,
   playersWithinStuds,
   majorityMatchingVoiceChannel,
+  resetSceneLogScannerForTests,
   resolveSceneCommand,
+  scanSceneCommandLogs,
+  commandLogToScenePayload,
   sceneCommandLogBody,
   SCENE_COMMAND_LOG_CHANNEL_ID,
   SCENE_NEARBY_STUDS,
@@ -44,7 +47,9 @@ test('parses in-game scene commands and ignores other chat', () => {
   assert.equal(parseCustomCommand(';civ').baseName, 'Civilian');
   assert.equal(parseCustomCommand(';team').kind, 'team');
   assert.equal(parseCustomCommand(';ping'), null);
-  assert.equal(parseCustomCommand(':ss'), null);
+  assert.equal(parseCustomCommand(':ts').name, 'ts');
+  assert.equal(parseCustomCommand(':ss').name, 'ss');
+  assert.equal(parseCustomCommand(':heal all'), null);
   assert.equal(isStealCommandText(';steal'), true);
   assert.equal(isStealCommandText('steal'), true);
   assert.equal(isStealCommandText('; STEAL now'), true);
@@ -497,4 +502,79 @@ test(';civ keeps the existing scene VC and only drags people who are missing', a
   assert.equal(commander.movedTo, undefined);
   assert.equal(already.movedTo, undefined);
   assert.equal(missing.movedTo, 'c4');
+});
+
+test('command logs for ;ts and :ts are scene commands, not staff chat', () => {
+  assert.equal(resolveSceneCommand(commandLogToScenePayload({
+    username: 'Colin',
+    robloxId: '99',
+    command: ';ts',
+  })).command.name, 'ts');
+  assert.equal(resolveSceneCommand(commandLogToScenePayload({
+    username: 'Colin',
+    robloxId: '99',
+    command: ':ts',
+  })).command.name, 'ts');
+  assert.equal(resolveSceneCommand(commandLogToScenePayload({
+    username: 'Colin',
+    robloxId: '99',
+    command: ':heal all',
+  })).command, null);
+});
+
+test('scene command log scan primes then handles a new ;ts', async () => {
+  resetSceneLogScannerForTests();
+  const dest = voice('ts1', 'Traffic Stop 1');
+  const current = voice('lobby', 'Lobby', []);
+  const user = {
+    id: 'discord1',
+    user: { bot: false, tag: 'colin' },
+    voice: {
+      channelId: 'lobby',
+      channel: current,
+      setChannel: async (channel) => { user.voice.channelId = channel.id; user.movedTo = channel.id; },
+    },
+  };
+  dest.members = new Map();
+  const client = {
+    config: { guildId: 'guild', erlcServerKey: 'key' },
+    guilds: {
+      cache: {
+        get: () => ({
+          members: {
+            me: { permissions: { has: () => true } },
+            cache: { get: (id) => (id === 'discord1' ? user : null), size: 2, values: () => [user].values() },
+            fetch: async (id) => (id === 'discord1' ? user : null),
+            fetchMe: async () => ({ permissions: { has: () => true } }),
+          },
+          channels: {
+            cache: {
+              size: 10,
+              get: (id) => (id === dest.id ? dest : id === current.id ? current : null),
+              values: () => [current, dest].values(),
+            },
+            fetch: async () => {},
+          },
+        }),
+      },
+      fetch: async () => client.guilds.cache.get(),
+    },
+    channels: {
+      cache: { get: () => ({ isTextBased: () => true, send: async () => {} }) },
+      fetch: async () => ({ isTextBased: () => true, send: async () => {} }),
+    },
+  };
+  const logs = [{ at: 1, username: 'Old', robloxId: '1', command: ';ts' }];
+  const primed = await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }) });
+  assert.equal(primed.primed, true);
+  logs.push({ at: 2, username: 'Colin', robloxId: '99', command: ':ts' });
+  const result = await scanSceneCommandLogs(client, {
+    snapshot: async () => ({
+      CommandLogs: logs,
+      Players: [{ username: 'Colin', robloxId: '99', team: 'Sheriff' }],
+    }),
+    identities: new Map([['99', 'discord1']]),
+  });
+  assert.equal(result.handled, 1);
+  assert.equal(user.movedTo, 'ts1');
 });

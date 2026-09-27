@@ -1,5 +1,5 @@
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
-import { fetchErlcServer, parseErlcPlayer } from './erlc.js';
+import { fetchErlcServer, parseErlcPlayer, parseErlcCommandLog } from './erlc.js';
 import { discordIdsByRobloxId } from './identityStore.js';
 import { resolveZoneDiscordMember } from './erlcZoneVoice.js';
 import { markBotVoiceMove } from './botVoiceMoves.js';
@@ -177,7 +177,7 @@ export function isStealCommandText(text) {
 export function parseCustomCommand(text) {
   const cleaned = String(text || '').trim();
   if (!cleaned) return null;
-  const name = cleaned.replace(/^;+/, '').trim().split(/\s+/)[0]?.toLowerCase() || '';
+  const name = cleaned.replace(/^[:;]+/, '').trim().split(/\s+/)[0]?.toLowerCase() || '';
   const spec = SCENE_COMMANDS[name];
   if (!spec) return null;
   return { name, ...spec, raw: cleaned };
@@ -796,6 +796,67 @@ async function executeErlcSceneCommand(payload, parsed, {
   };
 }
 
+const sceneLogSeen = new Set();
+let sceneLogsPrimed = false;
+
+export function commandLogToScenePayload(entry) {
+  const command = String(entry?.command || '').trim();
+  const username = String(entry?.username || '').trim();
+  const robloxId = String(entry?.robloxId || '').trim();
+  const player = robloxId ? `${username || 'Player'}:${robloxId}` : username;
+  return {
+    Type: 'Command',
+    Player: player,
+    Command: command,
+    Message: command,
+  };
+}
+
+export async function scanSceneCommandLogs(client, { snapshot, identities } = {}) {
+  if (!snapshot && !client?.config?.erlcServerKey) return { scanned: 0 };
+  const server = snapshot
+    ? await snapshot()
+    : await fetchErlcServer(client.config.erlcServerKey, { timeoutMs: 4_000 }).catch(() => null);
+  const logs = (server?.CommandLogs || server?.commandLogs || []).map((entry) => (
+    entry?.command != null || entry?.username != null ? entry : parseErlcCommandLog(entry)
+  ));
+  if (!sceneLogsPrimed) {
+    for (const entry of logs) sceneLogSeen.add(`${entry.at || 0}:${entry.username || ''}:${entry.command || ''}`);
+    sceneLogsPrimed = true;
+    return { scanned: logs.length, primed: true };
+  }
+  let handled = 0;
+  for (const entry of logs) {
+    if (isStealCommandText(entry.command)) continue;
+    if (!parseCustomCommand(entry.command)) continue;
+    const id = `${entry.at || 0}:${entry.username || ''}:${entry.command || ''}`;
+    if (sceneLogSeen.has(id)) continue;
+    sceneLogSeen.add(id);
+    try {
+      const result = await handleErlcSceneEvent(commandLogToScenePayload(entry), {
+        client,
+        config: client?.config || {},
+        snapshot: async () => server,
+        identities,
+      });
+      if (result?.handled) handled += 1;
+    } catch (error) {
+      logger.warn(`ER:LC ; command from logs failed: ${error?.message || error}`);
+    }
+  }
+  if (sceneLogSeen.size > 400) {
+    const keep = [...sceneLogSeen].slice(-200);
+    sceneLogSeen.clear();
+    for (const id of keep) sceneLogSeen.add(id);
+  }
+  return { scanned: logs.length, handled };
+}
+
+export function resetSceneLogScannerForTests() {
+  sceneLogSeen.clear();
+  sceneLogsPrimed = false;
+}
+
 export function startErlcSceneCommands(client) {
   const listener = (payload, eventId) => {
     void (async () => {
@@ -818,6 +879,18 @@ export function startErlcSceneCommands(client) {
     });
   };
   client.on('erlcEvent', listener);
+  const timer = setInterval(() => {
+    void scanSceneCommandLogs(client).catch((error) => {
+      logger.warn(`ER:LC scene command log scan failed: ${error?.message || error}`);
+    });
+  }, 5_000);
+  timer.unref?.();
+  void scanSceneCommandLogs(client).catch((error) => {
+    logger.warn(`ER:LC scene command log scan failed: ${error?.message || error}`);
+  });
   logger.info('ER:LC in-game scene commands armed (;ss ;ts ;scene ;fc ;civ ;team).');
-  return () => client.off('erlcEvent', listener);
+  return () => {
+    client.off('erlcEvent', listener);
+    clearInterval(timer);
+  };
 }
