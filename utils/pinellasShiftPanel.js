@@ -619,7 +619,7 @@ export async function collectOnDutyDeputies(client, {
   const recentShifts = await fetchPinellasDepartmentShifts(
     apiKey,
     PINELLAS_MELONLY_DEPARTMENT_ID,
-    { cacheTtlMs: 25_000, maxPages: 3 },
+    { cacheTtlMs: 55_000, maxPages: 3 },
   );
   const activeShifts = recentShifts.filter(isActiveMelonlyShift);
 
@@ -784,6 +784,36 @@ export async function collectOnDutyDeputies(client, {
   };
   lastSnapshot = snapshot;
   return snapshot;
+}
+
+export function seedPinellasShiftSnapshot(snapshot) {
+  lastSnapshot = snapshot;
+}
+
+export function isMelonlyBusyError(error) {
+  return Boolean(
+    error?.status === 429
+    || error?.rateLimited
+    || /rate limited/i.test(String(error?.message || '')),
+  );
+}
+
+export function pinellasShiftPanelBusyText() {
+  return 'Melonly is busy right now. The on-shift list on the panel is still current — try again in a minute.';
+}
+
+/** Prefer the last posted panel so Deputy Lookup / Districts do not hit Melonly. */
+export async function loadShiftPanelSnapshot(client, { refresh = false } = {}) {
+  if (!refresh && lastSnapshot) return lastSnapshot;
+  try {
+    return await collectOnDutyDeputies(client);
+  } catch (error) {
+    if (isMelonlyBusyError(error) && lastSnapshot) {
+      logger.warn(`Pinellas shift panel: Melonly busy — using last snapshot (${error?.message || error})`);
+      return lastSnapshot;
+    }
+    throw error;
+  }
 }
 
 function sortDeputiesByRank(deputies) {
@@ -1448,9 +1478,9 @@ export async function handlePinellasShiftPanelInteraction(interaction) {
     }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
-      const snapshot = await collectOnDutyDeputies(interaction.client);
+      const snapshot = await loadShiftPanelSnapshot(interaction.client);
       const store = await readStore();
-      await syncDistrictAssignments(interaction.client, snapshot, store, { notify: false });
+      applyDistrictAssignments(snapshot, store.districtAssignments);
       const deputy = snapshot.deputies.find((entry) => entry.discordId === discordId);
       if (!deputy) {
         await interaction.editReply({ content: 'That deputy is no longer on shift.' });
@@ -1462,7 +1492,7 @@ export async function handlePinellasShiftPanelInteraction(interaction) {
     } catch (error) {
       logger.error('Pinellas shift lookup failed', error);
       await interaction.editReply({
-        content: String(error?.message || 'Could not load shift information.').slice(0, 1800),
+        content: (isMelonlyBusyError(error) ? pinellasShiftPanelBusyText() : String(error?.message || 'Could not load shift information.')).slice(0, 1800),
       }).catch(() => {});
     }
     return true;
@@ -1470,7 +1500,7 @@ export async function handlePinellasShiftPanelInteraction(interaction) {
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   try {
-    const snapshot = await collectOnDutyDeputies(interaction.client);
+    const snapshot = await loadShiftPanelSnapshot(interaction.client);
     const store = await readStore();
     const sync = await syncDistrictAssignments(interaction.client, snapshot, store, { notify: true });
     if (sync.changed) await writeStore(store);
@@ -1529,7 +1559,7 @@ export async function handlePinellasShiftPanelInteraction(interaction) {
   } catch (error) {
     logger.error('Pinellas district interaction failed', error);
     await interaction.editReply({
-      content: String(error?.message || 'Could not update the district assignment.').slice(0, 1800),
+      content: (isMelonlyBusyError(error) ? pinellasShiftPanelBusyText() : String(error?.message || 'Could not update the district assignment.')).slice(0, 1800),
     }).catch(() => {});
   }
   return true;
