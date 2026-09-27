@@ -288,10 +288,22 @@ export function canMovePinellasDistrict(deputy, targetId, deputies, assignments)
     && balanced(districtCounts(deputies, simulated, { rankGroup: districtRankGroup(deputy) }));
 }
 
+function emptyShiftStore() {
+  return {
+    channelId: PINELLAS_SHIFT_PANEL_CHANNEL_ID,
+    messageId: null,
+    guildId: PINELLAS_GUILD_ID,
+    updatedAt: null,
+    districtAssignments: {},
+    snapshot: null,
+  };
+}
+
 async function readStore() {
   try {
     const store = JSON.parse(await readFile(STORE_PATH, 'utf8'));
     return {
+      ...emptyShiftStore(),
       channelId: store.channelId || PINELLAS_SHIFT_PANEL_CHANNEL_ID,
       messageId: store.messageId || null,
       guildId: store.guildId || PINELLAS_GUILD_ID,
@@ -299,15 +311,10 @@ async function readStore() {
       districtAssignments: store.districtAssignments && typeof store.districtAssignments === 'object'
         ? store.districtAssignments
         : {},
+      snapshot: store.snapshot && Array.isArray(store.snapshot.deputies) ? store.snapshot : null,
     };
   } catch {
-    return {
-      channelId: PINELLAS_SHIFT_PANEL_CHANNEL_ID,
-      messageId: null,
-      guildId: PINELLAS_GUILD_ID,
-      updatedAt: null,
-      districtAssignments: {},
-    };
+    return emptyShiftStore();
   }
 }
 
@@ -619,7 +626,7 @@ export async function collectOnDutyDeputies(client, {
   const recentShifts = await fetchPinellasDepartmentShifts(
     apiKey,
     PINELLAS_MELONLY_DEPARTMENT_ID,
-    { cacheTtlMs: 25_000, maxPages: 3 },
+    { cacheTtlMs: 55_000, maxPages: 3 },
   );
   const activeShifts = recentShifts.filter(isActiveMelonlyShift);
 
@@ -773,6 +780,14 @@ export async function collectOnDutyDeputies(client, {
     + `linked=${memberDiscordCache.size}`,
   );
 
+  if (!deputies.length && lastSnapshot?.deputies?.length) {
+    logger.warn(
+      `Pinellas shift panel: empty Melonly pull (active=${activeShifts.length} unresolved=${unresolved}) `
+      + `— keeping last snapshot of ${lastSnapshot.deputies.length}`,
+    );
+    return tickSnapshotShiftTimes(lastSnapshot);
+  }
+
   const snapshot = {
     deputies,
     activeShiftCount: activeShifts.length,
@@ -786,6 +801,77 @@ export async function collectOnDutyDeputies(client, {
   return snapshot;
 }
 
+export function seedPinellasShiftSnapshot(snapshot) {
+  lastSnapshot = snapshot;
+}
+
+export function deputyForLookup(snapshot, discordId) {
+  const id = String(discordId || '').trim();
+  const found = (snapshot?.deputies || []).find((entry) => entry.discordId === id);
+  if (found) return found;
+  return {
+    discordId: id,
+    callsign: '—',
+    roleplayName: 'On duty',
+    rankName: 'Deputy',
+    thisShiftMs: 0,
+    totalWaveMs: 0,
+    locationLabel: 'Not in game',
+    voiceLabel: 'Not in VC',
+    mapLeft: null,
+    mapTop: null,
+  };
+}
+
+function tickSnapshotShiftTimes(snapshot) {
+  if (!snapshot?.deputies) return snapshot;
+  const nowMs = Date.now();
+  for (const deputy of snapshot.deputies) {
+    if (Number.isFinite(deputy.startedMs) && deputy.startedMs > 0) {
+      deputy.thisShiftMs = Math.max(0, nowMs - deputy.startedMs);
+    }
+  }
+  return snapshot;
+}
+
+/** Posted on-shift list only — never calls Melonly. Prefer a populated last pull. */
+export async function getPostedShiftSnapshot() {
+  const store = await readStore();
+  const memory = lastSnapshot?.deputies?.length ? lastSnapshot : null;
+  const stored = store.snapshot?.deputies?.length ? store.snapshot : null;
+  const snapshot = memory || stored || lastSnapshot || { deputies: [] };
+  if (snapshot.deputies?.length) lastSnapshot = snapshot;
+  applyDistrictAssignments(snapshot, store.districtAssignments);
+  return snapshot;
+}
+
+export function isMelonlyBusyError(error) {
+  return Boolean(
+    error?.status === 429
+    || error?.rateLimited
+    || /rate limited/i.test(String(error?.message || '')),
+  );
+}
+
+export function pinellasShiftPanelBusyText() {
+  return 'Melonly is busy right now. The on-shift list on the panel is still current — try again in a minute.';
+}
+
+/** Background / admin refresh only. Buttons must use getPostedShiftSnapshot(). */
+export async function loadShiftPanelSnapshot(client, { refresh = false } = {}) {
+  if (!refresh) return getPostedShiftSnapshot();
+  try {
+    return await collectOnDutyDeputies(client);
+  } catch (error) {
+    const posted = await getPostedShiftSnapshot();
+    if (isMelonlyBusyError(error) && posted.deputies?.length) {
+      logger.warn(`Pinellas shift panel: Melonly busy — using last snapshot (${error?.message || error})`);
+      return posted;
+    }
+    throw error;
+  }
+}
+
 function sortDeputiesByRank(deputies) {
   return [...deputies].sort((left, right) => (
     rankIndexForDeputy(left) - rankIndexForDeputy(right)
@@ -794,11 +880,12 @@ function sortDeputiesByRank(deputies) {
   ));
 }
 
-function applyDistrictAssignments(snapshot, assignments) {
+export function applyDistrictAssignments(snapshot, assignments) {
+  const map = assignments && typeof assignments === 'object' ? assignments : {};
   for (const deputy of snapshot.deputies || []) {
-    const assignment = assignments[deputy.discordId];
-    deputy.districtId = assignment?.districtId || null;
-    deputy.district = districtById(deputy.districtId);
+    const assignedId = map[deputy.discordId]?.districtId || deputy.districtId || null;
+    deputy.districtId = assignedId;
+    deputy.district = districtById(assignedId);
   }
   return snapshot;
 }
@@ -838,9 +925,14 @@ async function syncDistrictAssignments(client, snapshot, store, { notify = true 
   const assignments = store.districtAssignments && typeof store.districtAssignments === 'object'
     ? store.districtAssignments
     : {};
-  const activeIds = new Set((snapshot.deputies || []).map((deputy) => deputy.discordId));
-  let changed = false;
+  const deputies = snapshot.deputies || [];
+  // An empty pull must not wipe the last district roster.
+  if (!deputies.length) {
+    return { changed: false, newlyAssigned: [] };
+  }
 
+  let changed = false;
+  const activeIds = new Set(deputies.map((deputy) => deputy.discordId));
   for (const discordId of Object.keys(assignments)) {
     if (activeIds.has(discordId)) continue;
     delete assignments[discordId];
@@ -848,22 +940,35 @@ async function syncDistrictAssignments(client, snapshot, store, { notify = true 
   }
 
   const newlyAssigned = [];
-  for (const deputy of sortDeputiesByRank(snapshot.deputies || [])) {
+  for (const deputy of sortDeputiesByRank(deputies)) {
     const key = shiftAssignmentKey(deputy);
     const current = assignments[deputy.discordId];
+    const restoredId = current?.districtId || deputy.districtId;
     const needsAllDistricts = deputy.hasAllDistrictsRole;
     const assignmentMatchesAccess = needsAllDistricts
-      ? current?.districtId === ALL_DISTRICTS.id
-      : current?.districtId !== ALL_DISTRICTS.id;
+      ? restoredId === ALL_DISTRICTS.id
+      : restoredId && restoredId !== ALL_DISTRICTS.id;
     if (
       current
       && current.shiftKey === key
       && districtById(current.districtId)
       && assignmentMatchesAccess
     ) continue;
+    if (restoredId && districtById(restoredId) && assignmentMatchesAccess) {
+      assignments[deputy.discordId] = {
+        discordId: deputy.discordId,
+        shiftKey: key,
+        districtId: restoredId,
+        rankGroup: districtRankGroup(deputy),
+        assignedAt: current?.assignedAt || new Date().toISOString(),
+        notifiedAt: current?.notifiedAt || new Date().toISOString(),
+      };
+      changed = true;
+      continue;
+    }
     const district = needsAllDistricts
       ? ALL_DISTRICTS
-      : chooseBalancedPinellasDistrict(deputy, snapshot.deputies || [], assignments);
+      : chooseBalancedPinellasDistrict(deputy, deputies, assignments);
     assignments[deputy.discordId] = {
       discordId: deputy.discordId,
       shiftKey: key,
@@ -1319,17 +1424,18 @@ export async function refreshPinellasShiftPanel(client, { forceResend = false } 
   try {
     snapshot = await collectOnDutyDeputies(client);
   } catch (error) {
-    if (error?.status === 429 || error?.rateLimited || isMelonlyRateLimited()) {
-      if (lastSnapshot) {
-        logger.warn(`Pinellas shift panel: Melonly 429 — reusing last snapshot (${error?.message || error})`);
-        snapshot = lastSnapshot;
+    snapshot = tickSnapshotShiftTimes(await getPostedShiftSnapshot());
+    if (error?.status === 429 || error?.rateLimited || isMelonlyRateLimited() || isMelonlyBusyError(error)) {
+      if (snapshot.deputies?.length) {
+        logger.warn(`Pinellas shift panel: Melonly 429 — keeping posted list (${error?.message || error})`);
       } else {
-        throw new Error(
-          'Melonly is rate limiting the main API right now. Wait a minute and try `-shiftpanel` again.',
-        );
+        logger.warn(`Pinellas shift panel: Melonly busy and no posted list yet (${error?.message || error})`);
+        return null;
       }
-    } else {
+    } else if (!snapshot.deputies?.length) {
       throw error;
+    } else {
+      logger.warn(`Pinellas shift panel: refresh failed — keeping posted list (${error?.message || error})`);
     }
   }
 
@@ -1368,6 +1474,8 @@ export async function refreshPinellasShiftPanel(client, { forceResend = false } 
   store.channelId = channel.id;
   store.guildId = channel.guildId || PINELLAS_GUILD_ID;
   store.updatedAt = new Date().toISOString();
+  store.snapshot = snapshot.deputies?.length ? snapshot : (store.snapshot || snapshot);
+  lastSnapshot = store.snapshot;
   await writeStore(store);
   return { message, snapshot };
 }
@@ -1399,6 +1507,8 @@ export async function postPinellasShiftPanel(client, { issuer } = {}) {
 
 export function startPinellasShiftPanel(client) {
   if (refreshTimer) return () => {};
+
+  void getPostedShiftSnapshot().catch(() => {});
 
   const tick = async () => {
     if (refreshInFlight) return;
@@ -1448,21 +1558,16 @@ export async function handlePinellasShiftPanelInteraction(interaction) {
     }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
-      const snapshot = await collectOnDutyDeputies(interaction.client);
+      const snapshot = await getPostedShiftSnapshot();
       const store = await readStore();
-      await syncDistrictAssignments(interaction.client, snapshot, store, { notify: false });
-      const deputy = snapshot.deputies.find((entry) => entry.discordId === discordId);
-      if (!deputy) {
-        await interaction.editReply({ content: 'That deputy is no longer on shift.' });
-        return true;
-      }
+      applyDistrictAssignments(snapshot, store.districtAssignments);
+      const deputy = deputyForLookup(snapshot, discordId);
       const liveDeputy = await enrichDeputyLiveLocation(deputy);
-      const payload = await buildLookupPayload(liveDeputy);
-      await interaction.editReply(payload);
+      await interaction.editReply(await buildLookupPayload(liveDeputy));
     } catch (error) {
       logger.error('Pinellas shift lookup failed', error);
       await interaction.editReply({
-        content: String(error?.message || 'Could not load shift information.').slice(0, 1800),
+        content: 'Could not open that deputy card. The on-shift list still updates every 30 seconds.',
       }).catch(() => {});
     }
     return true;
@@ -1470,7 +1575,7 @@ export async function handlePinellasShiftPanelInteraction(interaction) {
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   try {
-    const snapshot = await collectOnDutyDeputies(interaction.client);
+    const snapshot = await getPostedShiftSnapshot();
     const store = await readStore();
     const sync = await syncDistrictAssignments(interaction.client, snapshot, store, { notify: true });
     if (sync.changed) await writeStore(store);

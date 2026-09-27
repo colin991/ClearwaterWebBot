@@ -56,12 +56,11 @@ export async function melonlyFetch(apiKey, path, {
   }
 
   const cacheKey = `${createHash('sha256').update(key).digest('hex')}:${method}:${url.toString()}`;
-  if (method === 'GET' && cacheTtlMs > 0) {
-    const hit = responseCache.get(cacheKey);
-    if (hit && hit.expiresAt > Date.now()) return hit.value;
-  }
+  const cached = method === 'GET' ? responseCache.get(cacheKey) : null;
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
 
   if (isMelonlyRateLimited()) {
+    if (cached) return cached.value;
     const waitSec = Math.ceil((rateLimitedUntil - Date.now()) / 1000);
     const error = new Error(`Melonly rate limited — try again in ~${waitSec}s.`);
     error.status = 429;
@@ -104,6 +103,10 @@ export async function melonlyFetch(apiKey, path, {
       ? retryAfterHeader
       : (Number.isFinite(resetHeader) && resetHeader > 0 ? Math.min(resetHeader, 3600) : 60);
     rateLimitedUntil = Date.now() + (retrySec * 1000);
+    if (cached) {
+      logger.warn(`Melonly 429 on ${url.pathname} — serving cached response for ~${retrySec}s.`);
+      return cached.value;
+    }
     const detail = formatMelonlyErrorDetail(json, text, response.statusText);
     const error = new Error(`Melonly rate limited (${detail}). Wait ~${retrySec}s.`);
     error.status = 429;

@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  PINELLAS_SHIFT_DISTRICTS_ID,
+  applyDistrictAssignments,
   canMovePinellasDistrict,
   chooseBalancedPinellasDistrict,
+  handlePinellasShiftPanelInteraction,
   isPinellasWatchCommanderEligible,
+  seedPinellasShiftSnapshot,
 } from '../utils/pinellasShiftPanel.js';
 import { getPinellasRankByName } from '../utils/pinellasPromote.js';
 
@@ -81,4 +85,54 @@ test('all-district role is never eligible for Watch Commander', () => {
   assert.equal(isPinellasWatchCommanderEligible(captain), true);
   captain.hasAllDistrictsRole = true;
   assert.equal(isPinellasWatchCommanderEligible(captain), false);
+});
+
+test('last-pull district ids survive an empty assignment map', () => {
+  const snapshot = {
+    deputies: [
+      { discordId: '1', districtId: '1' },
+      { discordId: '2', districtId: '2' },
+    ],
+  };
+  applyDistrictAssignments(snapshot, {});
+  assert.equal(snapshot.deputies[0].districtId, '1');
+  assert.equal(snapshot.deputies[1].district?.id, '2');
+});
+
+test('Districts card uses the last pull instead of Nobody assigned', async () => {
+  seedPinellasShiftSnapshot({
+    deputies: [
+      {
+        discordId: '111',
+        callsign: '101',
+        roleplayName: 'Colin',
+        rankName: 'Lieutenant',
+        rank: getPinellasRankByName('Lieutenant'),
+        districtId: '2',
+      },
+      {
+        discordId: '222',
+        callsign: '1111',
+        roleplayName: 'Connor Reese',
+        rankName: 'Lieutenant',
+        rank: getPinellasRankByName('Lieutenant'),
+        districtId: '3',
+      },
+    ],
+  });
+  const replies = [];
+  await handlePinellasShiftPanelInteraction({
+    customId: PINELLAS_SHIFT_DISTRICTS_ID,
+    isButton: () => true,
+    isStringSelectMenu: () => false,
+    user: { id: '111' },
+    client: { users: { fetch: async () => null } },
+    deferReply: async () => {},
+    editReply: async (payload) => { replies.push(payload); },
+  });
+  const text = JSON.stringify(replies[0]);
+  assert.match(text, /Colin/);
+  assert.match(text, /Connor Reese/);
+  assert.match(text, /District 2 East/);
+  assert.match(text, /District 3 West/);
 });

@@ -2,6 +2,41 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-27-scene-cmd-any-guild",
+      "title": "Make ;ts work from Discord and any department voice server",
+      "summary": ";ss, ;ts, ;scene, ;fc, ;civ, and ;team now find you in Clearwater or Pinellas voice, match names like TS 1, and still move you if every numbered channel already has people. Typing ;ts in Discord does the same move. Join a voice channel first.",
+      "createdAt": "2026-09-27T20:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-27-scene-cmd-logs",
+      "title": "Run ;ts and other scene commands from ER:LC command logs too",
+      "summary": "In-game ;ss, ;ts, ;scene, ;fc, ;civ, and ;team now also run from the ER:LC command log every few seconds, not only from the events webhook. :ts works the same as ;ts. You still need to already be in a Discord voice channel.",
+      "createdAt": "2026-09-27T18:40:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-27-districts-keep-last",
+      "title": "Keep the last district roster when Melonly returns nobody",
+      "summary": "The Districts button now shows the last successful on-shift pull instead of wiping everyone to Nobody assigned. An empty Melonly poll no longer clears saved district assignments.",
+      "createdAt": "2026-09-27T17:15:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-27-shift-lookup-send",
+      "title": "Open Deputy Lookup from the posted shift list, not Melonly",
+      "summary": "Deputy Lookup now always sends the deputy card using the on-shift list already on the panel. Melonly is only polled every 30 seconds to update that list. Clicking a deputy no longer waits on Melonly or shows a rate-limit / try-again message.",
+      "createdAt": "2026-09-27T17:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-27-shift-lookup-ratelimit",
+      "title": "Keep Deputy Lookup working when Melonly is rate limited",
+      "summary": "Opening Deputy Lookup or Districts on the Pinellas shift panel no longer calls Melonly again. Those buttons use the on-shift list already on the panel and only refresh the in-game map from ER:LC. If Melonly is cooling down, the bot serves the last cached shift list instead of an ephemeral “rate limited — try again in ~42s” error.",
+      "createdAt": "2026-09-27T16:45:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-27-pcso-open-callsign-notes",
       "title": "Recognize open PCSO callsigns with roster notes",
       "summary": "The callsign panel now treats a roster row as open when its callsign exists and its name and Discord ID are blank, even when the Appointment or Notes cell contains text. Existing manual notes on the open row are preserved.",

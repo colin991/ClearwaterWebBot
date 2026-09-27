@@ -21,3 +21,25 @@ test('fresh cache works during rate limiting, but never crosses API credentials'
     assert.equal(calls, 2);
   } finally { globalThis.fetch = original; }
 });
+
+test('expired GET cache is still served while Melonly is cooling down', async () => {
+  const { melonlyFetch } = await import('../utils/melonly.js?stale-during-429');
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return calls === 1
+      ? new Response(JSON.stringify({ members: ['stale'] }), { status: 200 })
+      : new Response('{}', { status: 429, headers: { 'retry-after': '42' } });
+  };
+  try {
+    const cached = await melonlyFetch('test-key-a', '/server/members', { cacheTtlMs: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await assert.rejects(
+      melonlyFetch('test-key-a', '/server/shifts', { cacheTtlMs: 1 }),
+      (error) => error.status === 429 && error.retryAfter === 42,
+    );
+    assert.deepEqual(await melonlyFetch('test-key-a', '/server/members', { cacheTtlMs: 1 }), cached);
+    assert.equal(calls, 2);
+  } finally { globalThis.fetch = original; }
+});
