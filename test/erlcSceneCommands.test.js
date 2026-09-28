@@ -285,21 +285,21 @@ test(';team does not drag civilians and does drag fire to the fire VC', async ()
   assert.equal(moved.nearbyMoved, 0);
 });
 
-test('60-stud nearby includes the edge and skips farther or missing coords', () => {
+test('50-stud nearby includes the edge and skips farther or missing coords', () => {
   const origin = { username: 'Colin', robloxId: '1', location: { x: 100, z: 100 } };
   const close = { username: 'Close', robloxId: '2', location: { x: 130, z: 140 } };
-  const edge = { username: 'Edge', robloxId: '3', location: { x: 160, z: 100 } };
-  const far = { username: 'Far', robloxId: '4', location: { x: 161, z: 100 } };
+  const edge = { username: 'Edge', robloxId: '3', location: { x: 150, z: 100 } };
+  const far = { username: 'Far', robloxId: '4', location: { x: 151, z: 100 } };
   const lost = { username: 'Lost', robloxId: '5', location: {} };
   assert.equal(playerStudDistance(origin, close), 50);
-  assert.equal(SCENE_NEARBY_STUDS, 60);
+  assert.equal(SCENE_NEARBY_STUDS, 50);
   assert.deepEqual(
     playersWithinStuds(origin, [origin, close, edge, far, lost]).map((player) => player.username),
     ['Close', 'Edge'],
   );
 });
 
-test(';civ also drags in-game players within 60 studs into the same VC', async () => {
+test(';civ also drags in-game players within 50 studs into the same VC', async () => {
   const dest = voice('civ2', 'Civilian 2');
   const lobby = voice('lobby', 'Lobby');
   const other = voice('other', 'Other');
@@ -779,7 +779,7 @@ test('Discord ;ts prefix command moves the author without a Roblox webhook', asy
   assert.match(replies[0], /Moved you to #Traffic Stop 1/);
 });
 
-test(';ts drags everyone already in your Discord VC even if they are far in-game', async () => {
+test(';ts does not drag Discord VC mates who are far in-game', async () => {
   const dest = voice('ts1', 'Traffic Stop 1');
   const lobby = voice('lobby', 'Lobby');
   function voiceUser(id) {
@@ -842,7 +842,7 @@ test(';ts drags everyone already in your Discord VC even if they are far in-game
     },
   );
   assert.equal(result.handled, true);
-  assert.equal(result.nearbyMoved, 1);
+  assert.equal(result.nearbyMoved, 0);
   assert.equal(commander.movedTo, 'ts1');
-  assert.equal(mate.movedTo, 'ts1');
+  assert.equal(mate.movedTo, undefined);
 });

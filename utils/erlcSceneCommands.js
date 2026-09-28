@@ -46,7 +46,7 @@ export const TEAM_VOICE_CHANNEL_IDS = Object.freeze({
   dot: '1514130037052407932',
 });
 
-export const SCENE_NEARBY_STUDS = 60;
+export const SCENE_NEARBY_STUDS = 50;
 
 const DEDUP_MS = 4_000;
 const recentCommands = new Map();
@@ -849,14 +849,6 @@ async function executeErlcSceneCommand(payload, parsed, {
         );
       }
     }
-  }
-
-  const originChannelId = voiceChannelIdOf(member, guild);
-  const originChannel = member.voice?.channel
-    || guild.channels?.cache?.get?.(originChannelId)
-    || await guild.channels?.fetch?.(originChannelId).catch(() => null);
-  for (const other of humanVoiceMembers(originChannel, member.id)) {
-    rememberNearby({ guild: other.guild || guild, member: other, player: null });
   }
 
   const nearbyMembers = nearbyEntries.map((entry) => entry.member);

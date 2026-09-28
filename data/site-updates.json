@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-28-scene-nearby-50",
+      "title": "Only drag people within 50 studs for scene commands",
+      "summary": ";ts, ;scene, ;ss, ;fc, ;civ, and ;team no longer move everyone already in your Discord voice channel. They only pull people who are within 50 studs of you in-game. People in Pinellas or Clearwater still get moved in the server they are in. Join a voice channel first.",
+      "createdAt": "2026-09-28T21:53:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-28-scene-drag-everyone",
       "title": "Drag the whole traffic stop / scene, not just the person who typed the command",
       "summary": ";ts, ;scene, ;ss, ;fc, ;civ, and ;team now pull everyone already in your Discord voice channel plus anyone within 60 studs in-game. People in Pinellas or Clearwater still get moved in the server they are in. ;seen and ;traffic count as ;scene and ;ts. Join a voice channel first.",
