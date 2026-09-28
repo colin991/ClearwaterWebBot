@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-28-sheriff-limit-30",
+      "title": "Raise the Sheriff team cap to 30",
+      "summary": "Sheriff team balance now allows 30 players. The 30th join is allowed; extras over that are still wanted or rotated with the 10-minute leave warning.",
+      "createdAt": "2026-09-28T20:55:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-27-erlc-webhook-millisecond-time",
       "title": "Accept updated ER:LC webhook timestamps",
       "summary": "The signed ER:LC event receiver now accepts both seconds and millisecond Unix timestamps while preserving the same signature and five-minute replay protections, allowing the game's updated validation probe to connect.",

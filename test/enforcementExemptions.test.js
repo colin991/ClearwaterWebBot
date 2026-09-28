@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ENFORCEMENT_EXEMPT_ROLE, hasEnforcementExemption, isVcExempt } from '../utils/enforcementExemptions.js';
 import { createVcChecks } from '../utils/vcChecks.js';
-import { createSheriffBalance } from '../utils/sheriffBalance.js';
+import { createSheriffBalance, SHERIFF_LIMIT } from '../utils/sheriffBalance.js';
 import { enforceSecondaryGateMember, SECONDARY_GATE_GUILD_ID, SECONDARY_GATE_MAIN_GUILD_ID } from '../utils/secondaryServerGate.js';
 import { resetVcWhitelistForTests } from '../utils/vcWhitelist.js';
 
@@ -39,11 +39,11 @@ test('VC exemption releases tracked jail and sends no reminders', async () => {
   await service.tick(); await service.tick();
   assert.deepEqual(calls, [':unjail Coleddev13']);
 });
-test('exempt Sheriff arrival can exceed 27 without enforcement', async () => {
-  let players = Array.from({ length: 27 }, (_, i) => ({ robloxId: String(i), username: 'Player' + i, team: 'Sheriff' }));
+test('exempt Sheriff arrival can exceed the Sheriff cap without enforcement', async () => {
+  let players = Array.from({ length: SHERIFF_LIMIT }, (_, i) => ({ robloxId: String(i), username: 'Player' + i, team: 'Sheriff' }));
   const calls = [];
   const service = createSheriffBalance({ snapshot: async () => players, send: async c => calls.push(c) });
-  await service.tick(); players.push({ robloxId: '28', username: 'ExemptUser', team: 'Sheriff', enforcementExempt: true });
+  await service.tick(); players.push({ robloxId: String(SHERIFF_LIMIT + 1), username: 'ExemptUser', team: 'Sheriff', enforcementExempt: true });
   await service.tick(); assert.deepEqual(calls, []);
 });
 test('server gate accepts exemption role alone from main server REST lookup', async () => {
