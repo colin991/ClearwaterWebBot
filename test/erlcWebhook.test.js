@@ -34,6 +34,21 @@ test('valid signatures preserve original UTF-8 bytes; tampering and stale replay
   assert.throws(() => verifyErlcEvent(raw, headers, { publicKey, now: (Number(timestamp) + 301) * 1000 }), /timestamp/);
 });
 
+test('valid millisecond webhook timestamps are accepted without changing signed bytes', () => {
+  const millisecondTimestamp = String(Date.now());
+  const millisecondHeaders = {
+    'x-signature-timestamp': millisecondTimestamp,
+    'x-signature-ed25519': sign(
+      null,
+      Buffer.concat([Buffer.from(millisecondTimestamp), raw]),
+      privateKey,
+    ).toString('hex'),
+  };
+  const verified = verifyErlcEvent(raw, millisecondHeaders, { publicKey });
+  assert.equal(verified.timestamp, millisecondTimestamp);
+  assert.deepEqual(Buffer.from(verified.raw, 'base64'), raw);
+});
+
 test('oversized events stop before verification or forwarding', async () => {
   await assert.rejects(readEventBytes(Readable.from([Buffer.alloc(MAX_EVENT_BYTES + 1)])), error => error.status === 413);
 });

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-27-erlc-webhook-millisecond-time",
+      "title": "Accept updated ER:LC webhook timestamps",
+      "summary": "The signed ER:LC event receiver now accepts both seconds and millisecond Unix timestamps while preserving the same signature and five-minute replay protections, allowing the game's updated validation probe to connect.",
+      "createdAt": "2026-09-28T02:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-27-pcso-rank-notes",
       "title": "Keep PCSO roster notes with their rank slots",
       "summary": "Promoting or moving a deputy to another callsign no longer copies their former rank's Appointment or Notes value to the new rank or clears it from the old rank. Notes remain attached to their existing roster row.",
