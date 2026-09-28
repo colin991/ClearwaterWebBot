@@ -285,21 +285,21 @@ test(';team does not drag civilians and does drag fire to the fire VC', async ()
   assert.equal(moved.nearbyMoved, 0);
 });
 
-test('200-stud nearby includes the edge and skips farther or missing coords', () => {
+test('60-stud nearby includes the edge and skips farther or missing coords', () => {
   const origin = { username: 'Colin', robloxId: '1', location: { x: 100, z: 100 } };
   const close = { username: 'Close', robloxId: '2', location: { x: 130, z: 140 } };
-  const edge = { username: 'Edge', robloxId: '3', location: { x: 300, z: 100 } };
-  const far = { username: 'Far', robloxId: '4', location: { x: 301, z: 100 } };
+  const edge = { username: 'Edge', robloxId: '3', location: { x: 160, z: 100 } };
+  const far = { username: 'Far', robloxId: '4', location: { x: 161, z: 100 } };
   const lost = { username: 'Lost', robloxId: '5', location: {} };
   assert.equal(playerStudDistance(origin, close), 50);
-  assert.equal(SCENE_NEARBY_STUDS, 200);
+  assert.equal(SCENE_NEARBY_STUDS, 60);
   assert.deepEqual(
     playersWithinStuds(origin, [origin, close, edge, far, lost]).map((player) => player.username),
     ['Close', 'Edge'],
   );
 });
 
-test(';civ also drags in-game players within 200 studs into the same VC', async () => {
+test(';civ also drags in-game players within 60 studs into the same VC', async () => {
   const dest = voice('civ2', 'Civilian 2');
   const lobby = voice('lobby', 'Lobby');
   const other = voice('other', 'Other');

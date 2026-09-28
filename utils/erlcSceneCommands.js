@@ -46,7 +46,7 @@ export const TEAM_VOICE_CHANNEL_IDS = Object.freeze({
   dot: '1514130037052407932',
 });
 
-export const SCENE_NEARBY_STUDS = 200;
+export const SCENE_NEARBY_STUDS = 60;
 
 const DEDUP_MS = 4_000;
 const recentCommands = new Map();
