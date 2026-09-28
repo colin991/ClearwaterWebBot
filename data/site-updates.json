@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-28-scene-drag-everyone",
+      "title": "Drag the whole traffic stop / scene, not just the person who typed the command",
+      "summary": ";ts, ;scene, ;ss, ;fc, ;civ, and ;team now pull everyone already in your Discord voice channel plus anyone within 200 studs in-game. People in Pinellas or Clearwater still get moved in the server they are in. ;seen and ;traffic count as ;scene and ;ts. Join a voice channel first.",
+      "createdAt": "2026-09-28T21:45:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-28-erlc-official-maps",
       "title": "Use the new official ER:LC map images",
       "summary": "Deputy Lookup, police-report pins, and Internet drop locations now use the official Liberty County maps from api.erlc.gg (5355px, with postals). The bot caches the current seasonal postal map and falls back to the bundled copy if the API is down.",
