@@ -39,7 +39,7 @@ export const CREDIT_STORE_PACKS = Object.freeze([
 import { AUTOMOD_HOLD_MESSAGE, AutomodHoldError, scanInternetContent } from './internetAutomod.js';
 import { JsonStoreCorruptError, readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
-import { libertyMapPoint } from './erlc.js';
+import { libertyPlayerMapPoint } from './erlc.js';
 import { allowRate, RateLimitError } from './rateLimit.js';
 import { mergeInternetBadges, sanitizeInternetBadges, withSiteBadges, dailyCreditTierForRoles } from './staffRanks.js';
 import { activePresenceWindowMs, listActiveInternetPresence } from './internetPresence.js';
@@ -2147,12 +2147,10 @@ function sanitizeDropLocation(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const x = Number(raw.x);
   const z = Number(raw.z);
-  // Always recompute pin placement from world coords. Live ER:LC payloads use
-  // northwest-origin studs; centre-origin only when a negative axis appears.
   let left = Number(raw.left);
   let top = Number(raw.top);
   if (Number.isFinite(x) && Number.isFinite(z)) {
-    const pin = libertyMapPoint(x, z);
+    const pin = libertyPlayerMapPoint({ x, z, postal: raw.postal });
     if (pin) {
       left = pin.left;
       top = pin.top;

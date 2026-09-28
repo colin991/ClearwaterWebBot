@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-28-shift-map-postal-pin",
+      "title": "Put Shift Information map pins where the deputy actually is",
+      "summary": "The PCSO Shift Information map, Internet drop locations, and the live player map now place the pin on the deputy's in-game postal on the official ER:LC map instead of guessing from raw coordinates. The bot also learns the exact coordinate scale from live player positions and uses it once it matches the reported postals.",
+      "createdAt": "2026-09-28T22:12:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-28-scene-nearby-50",
       "title": "Only drag people within 50 studs for scene commands",
       "summary": ";ts, ;scene, ;ss, ;fc, ;civ, and ;team no longer move everyone already in your Discord voice channel. They only pull people who are within 50 studs of you in-game. People in Pinellas or Clearwater still get moved in the server they are in. Join a voice channel first.",

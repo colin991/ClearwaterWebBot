@@ -1,5 +1,6 @@
 import { attachPlayerAvatars, robloxAvatarProxyPath } from '../lib/roblox-avatars.js';
 import { logger } from './logger.js';
+import { libertyLocationPin, recordLibertyCalibration } from './libertyMapCalibration.js';
 
 /** PRC POST /command is 1 request per 5 seconds per server-key. GETs use the IP/global bucket. */
 export const ERLC_MIN_INTERVAL_MS = 5_000;
@@ -361,7 +362,13 @@ export async function fetchErlcServer(serverKey, options = {}) {
   const timeoutMs = Number(options.timeoutMs);
   if (Number.isFinite(timeoutMs) && timeoutMs > 0) pending.catch(() => {});
   try {
-    return await withTimeout(pending, timeoutMs);
+    const server = await withTimeout(pending, timeoutMs);
+    try {
+      recordLibertyCalibration(server?.Players || server?.players || []);
+    } catch (error) {
+      logger.warn(`Liberty map calibration skipped (${error?.message || error})`);
+    }
+    return server;
   } catch (error) {
     if (error?.code === 'ERLC_TIMEOUT' && bundleCache.value) return bundleCache.value;
     throw error;
@@ -558,6 +565,11 @@ export function libertyMapPoint(x, z) {
   };
 }
 
+/** Display pin for a player: anchored to the reported postal on the official map. */
+export function libertyPlayerMapPoint(location = {}) {
+  return libertyLocationPin(location, libertyMapPoint);
+}
+
 export function dropLocationNameCandidates(...values) {
   const names = new Set();
   for (const value of values) {
@@ -587,7 +599,7 @@ export async function findPlayerDropLocation({ serverKey, robloxId, username, us
   if (!Number.isFinite(player.location?.x) || !Number.isFinite(player.location?.z)) {
     throw new Error('Your in-game location is not available yet. Move a little in ER:LC and try again.');
   }
-  const pin = libertyMapPoint(player.location.x, player.location.z);
+  const pin = libertyPlayerMapPoint(player.location);
   if (!pin) throw new Error('Could not place your location on the Liberty County map.');
   const label = [player.location.building, player.location.street].filter(Boolean).join(' ')
     || (player.location.postal ? `Postal ${player.location.postal}` : 'Liberty County');
@@ -610,7 +622,7 @@ export function playersOnLibertyMap(players = []) {
   return (Array.isArray(players) ? players : [])
     .map((player) => {
       const entry = player?.location ? player : parseErlcPlayer(player);
-      const pin = libertyMapPoint(entry.location?.x, entry.location?.z);
+      const pin = libertyPlayerMapPoint(entry.location || {});
       if (!pin) return null;
       const label = [entry.location.building, entry.location.street].filter(Boolean).join(' ')
         || (entry.location.postal ? `Postal ${entry.location.postal}` : 'Liberty County');

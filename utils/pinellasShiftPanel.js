@@ -20,7 +20,7 @@ import { config } from '../config.js';
 import {
   executeErlcCommand,
   fetchErlcServer,
-  libertyMapPoint,
+  libertyPlayerMapPoint,
   parseErlcPlayer,
 } from './erlc.js';
 import { getIdentityCache } from './identityStore.js';
@@ -599,8 +599,7 @@ function findErlcPlayerForDeputy({
 
 function locationMapPin(player) {
   if (!player?.location) return null;
-  if (!Number.isFinite(player.location.x) || !Number.isFinite(player.location.z)) return null;
-  return libertyMapPoint(player.location.x, player.location.z);
+  return libertyPlayerMapPoint(player.location);
 }
 
 /**

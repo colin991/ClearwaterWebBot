@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import ffmpegPath from 'ffmpeg-static';
 import sharp from 'sharp';
-import { libertyMapPoint } from './erlc.js';
+import { libertyPlayerMapPoint } from './erlc.js';
 import { ensureOfficialErlcMapFile, LIBERTY_MAP_PIXELS } from './erlcMaps.js';
 import { logger } from './logger.js';
 
@@ -33,7 +33,7 @@ async function resolveMapFile() {
 
 /**
  * Render a zoomed Liberty County map with a pin at the player's in-game location.
- * @param {{ x?: number, z?: number, left?: number, top?: number }} location
+ * @param {{ x?: number, z?: number, postal?: string, left?: number, top?: number }} location
  * @returns {Promise<Buffer|null>}
  */
 export async function renderLibertyLocationMap(location = {}) {
@@ -44,7 +44,7 @@ export async function renderLibertyLocationMap(location = {}) {
 
   const pin = Number.isFinite(location.left) && Number.isFinite(location.top)
     ? { left: location.left, top: location.top }
-    : libertyMapPoint(location.x, location.z);
+    : libertyPlayerMapPoint(location);
   if (!pin) return null;
 
   const mapPath = await resolveMapFile();
