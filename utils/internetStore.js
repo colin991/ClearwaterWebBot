@@ -39,6 +39,7 @@ export const CREDIT_STORE_PACKS = Object.freeze([
 import { AUTOMOD_HOLD_MESSAGE, AutomodHoldError, scanInternetContent } from './internetAutomod.js';
 import { JsonStoreCorruptError, readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
+import { libertyMapPoint } from './erlc.js';
 import { allowRate, RateLimitError } from './rateLimit.js';
 import { mergeInternetBadges, sanitizeInternetBadges, withSiteBadges, dailyCreditTierForRoles } from './staffRanks.js';
 import { activePresenceWindowMs, listActiveInternetPresence } from './internetPresence.js';
@@ -2151,9 +2152,11 @@ function sanitizeDropLocation(raw) {
   let left = Number(raw.left);
   let top = Number(raw.top);
   if (Number.isFinite(x) && Number.isFinite(z)) {
-    const centreOrigin = x < 0 || z < 0;
-    left = centreOrigin ? 0.5 + (x / 3120) : x / 3120;
-    top = centreOrigin ? 0.5 + (z / 3120) : z / 3120;
+    const pin = libertyMapPoint(x, z);
+    if (pin) {
+      left = pin.left;
+      top = pin.top;
+    }
   }
   if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
   return {

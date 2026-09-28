@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-28-erlc-official-maps",
+      "title": "Use the new official ER:LC map images",
+      "summary": "Deputy Lookup, police-report pins, and Internet drop locations now use the official Liberty County maps from api.erlc.gg (5355px, with postals). The bot caches the current seasonal postal map and falls back to the bundled copy if the API is down.",
+      "createdAt": "2026-09-28T21:25:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-28-sheriff-limit-30",
       "title": "Raise the Sheriff team cap to 30",
       "summary": "Sheriff team balance now allows 30 players. The 30th join is allowed; extras over that are still wanted or rotated with the 10-minute leave warning.",
