@@ -50,7 +50,7 @@ import {
   requiredInternetForumTags,
 } from './discordInternetFeed.js';
 import { queueInternetAutomodReview } from './discordInternetModeration.js';
-import { internetActor, mutateDiscordInternetStore } from './discordInternetStore.js';
+import { ensureDiscordInternetAccount, internetActor, mutateDiscordInternetStore } from './discordInternetStore.js';
 import { logger } from './logger.js';
 import { v2Container, v2Message } from './v2Message.js';
 
@@ -467,10 +467,6 @@ function accountSwitchRow(accounts, activeId) {
   );
 }
 
-async function showCreateAccountModal(interaction) {
-  await interaction.showModal(buildAccountModal({ displayName: '', username: '', bio: '' }));
-}
-
 async function saveAccount(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const avatarUrl = await readUploadedImage(interaction, 'avatar_file');
@@ -484,12 +480,6 @@ async function saveAccount(interaction) {
   await interaction.editReply({
     content: `Your Clearwater Internet account is ready. You now post as **${profile.displayName}** (@${profile.username}).`,
   });
-}
-
-async function requireInternetAccount(interaction) {
-  const actor = internetActor(interaction);
-  await mutateDiscordInternetStore(store => ensureDefaultInternetAccount(store, actor));
-  return true;
 }
 
 async function showSettings(interaction) {
@@ -911,32 +901,44 @@ export async function handleDiscordInternetInteraction(interaction, client) {
     || id === POST_MODAL_ID;
   if (!handled) return false;
 
+  // Modals cannot be deferred, so open them before touching the store (Discord's 3s limit).
+  const modal = id === INTERNET_PANEL_POST_CUSTOM_ID ? buildPostModal()
+    : id === INTERNET_PANEL_ACCOUNT_CUSTOM_ID ? buildAccountModal({ displayName: '', username: '', bio: '' })
+      : id === INTERNET_AVATAR_BUTTON_ID ? buildAvatarModal()
+        : id.startsWith(INTERNET_POST_COMMENT_PREFIX) ? buildCommentModal(id.slice(INTERNET_POST_COMMENT_PREFIX.length))
+          : null;
+  if (modal) {
+    try {
+      await interaction.showModal(modal);
+    } catch (error) {
+      await respondWithError(interaction, error);
+      return true;
+    }
+    await ensureDiscordInternetAccount(internetActor(interaction)).catch((error) => {
+      logger.warn(`Internet default account check failed (${error?.message || error})`);
+    });
+    return true;
+  }
+
   try {
-    await mutateDiscordInternetStore(store => ensureDefaultInternetAccount(store, internetActor(interaction)));
-    if (id === INTERNET_PANEL_ACCOUNT_CUSTOM_ID) await showCreateAccountModal(interaction);
-    else if (id === INTERNET_PANEL_PROFILE_CUSTOM_ID) {
+    await ensureDiscordInternetAccount(internetActor(interaction));
+    if (id === INTERNET_PANEL_PROFILE_CUSTOM_ID) {
       const store = await readInternetStore();
       const active = activeInternetAccount(store, internetActor(interaction));
       await showProfile(interaction, active?.id || interaction.user.id);
     }
     else if (id === INTERNET_PANEL_SWITCH_CUSTOM_ID) await showSwitchAccounts(interaction);
     else if (id === INTERNET_SWITCH_SELECT_ID) await saveSwitchedAccount(interaction);
-    else if (id === INTERNET_PANEL_POST_CUSTOM_ID) {
-      await requireInternetAccount(interaction);
-      await interaction.showModal(buildPostModal());
-    }
     else if (id === INTERNET_PANEL_SETTINGS_CUSTOM_ID) await showSettings(interaction);
     else if (id === INTERNET_PANEL_HELP_CUSTOM_ID) await showHelp(interaction);
     else if (id === SETTINGS_EDIT_CUSTOM_ID) await showEditSettingsModal(interaction);
     else if (id === SETTINGS_DMS_CUSTOM_ID) await toggleDmSettings(interaction);
     else if (id === SETTINGS_MODAL_ID) await saveSettings(interaction);
     else if (id === ACCOUNT_MODAL_ID) await saveAccount(interaction);
-    else if (id === INTERNET_AVATAR_BUTTON_ID) await interaction.showModal(buildAvatarModal());
     else if (id === INTERNET_AVATAR_MODAL_ID) await saveAvatar(interaction);
     else if (id === POST_MODAL_ID) await publishPost(interaction, client);
     else if (id.startsWith(INTERNET_POST_LIKE_PREFIX)) await toggleLike(interaction, client, id.slice(INTERNET_POST_LIKE_PREFIX.length));
     else if (id.startsWith(INTERNET_POST_REPOST_PREFIX)) await toggleRepost(interaction, client, id.slice(INTERNET_POST_REPOST_PREFIX.length));
-    else if (id.startsWith(INTERNET_POST_COMMENT_PREFIX)) await interaction.showModal(buildCommentModal(id.slice(INTERNET_POST_COMMENT_PREFIX.length)));
     else if (id.startsWith(INTERNET_POST_BOOKMARK_PREFIX)) await toggleBookmark(interaction, client, id.slice(INTERNET_POST_BOOKMARK_PREFIX.length));
     else if (id.startsWith(INTERNET_POST_MORE_PREFIX)) await showPostMore(interaction, id.slice(INTERNET_POST_MORE_PREFIX.length));
     else if (id.startsWith(INTERNET_POST_FOLLOW_PREFIX)) await toggleFollow(interaction, id.slice(INTERNET_POST_FOLLOW_PREFIX.length));
