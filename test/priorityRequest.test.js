@@ -720,6 +720,46 @@ test('void button rewrites the card before in-game commands finish', async () =>
   await finished;
 });
 
+test('anyone can click Void on an active priority', async () => {
+  const stored = {
+    request: { id: 'p1', status: 'active', requesterId: 'u1', startedAt: 1, endsAt: 9e12, staffMessageId: 'm' },
+  };
+  const svc = createPriorityRequestService({
+    now: () => 2,
+    load: async () => stored,
+    save: async (value) => { stored.request = value.request; },
+    send: async () => {},
+    snapshot: async () => ({}),
+    postStaff: async () => ({ id: 'm' }),
+    editStaff: async () => {},
+    dmUser: async () => {},
+    onError: () => {},
+  });
+  const edits = [];
+  const followUps = [];
+  const interaction = {
+    customId: 'prq:void:p1',
+    user: { id: 'civilian' },
+    member: { permissions: { has: () => false }, roles: { cache: { has: () => false } } },
+    guild: { members: { fetch: async () => interaction.member } },
+    isChatInputCommand: () => false,
+    isButton: () => true,
+    isModalSubmit: () => false,
+    deferred: false,
+    replied: false,
+    async deferUpdate() { interaction.deferred = true; },
+    async editReply(payload) { edits.push(payload); },
+    async followUp(payload) { followUps.push(payload); },
+    async reply() {},
+    client: { priorityRequest: svc },
+  };
+  await handlePriorityRequest(interaction);
+  assert.equal(followUps.length, 0);
+  assert.equal(stored.request.status, 'voided');
+  assert.equal(stored.request.voidedBy, 'civilian');
+  assert.match(JSON.stringify(edits[0]), /Priority Request — Voided/);
+});
+
 test('void runs prty 0 then a 10 minute peace timer and DMs the requester', async () => {
   const f = serviceFixture({
     id: 'p1', status: 'active', requesterId: 'u1', startedAt: 1, endsAt: 9e12, staffMessageId: 'm',

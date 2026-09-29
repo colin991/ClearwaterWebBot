@@ -1293,11 +1293,6 @@ export async function handlePriorityRequest(interaction) {
     return true;
   }
 
-  const requireStaff = async () => {
-    const member = interaction.member || (interaction.guild ? await interaction.guild.members.fetch(interaction.user.id) : null);
-    if (!memberIsStaff(member)) throw new Error('Only Clearwater staff can do that.');
-  };
-
   const requireExtraTimeApprover = async () => {
     let member = interaction.member;
     if (interaction.guild) {
@@ -1421,7 +1416,6 @@ export async function handlePriorityRequest(interaction) {
     if (clicked) {
       const { action, requestId, extraMinutes } = clicked;
       await interaction.deferUpdate();
-      if (action === 'void') await requireStaff();
       if (action === 'timeok' || action === 'timeno') await requireExtraTimeApprover();
       const immediate = { skipStaffRefresh: true, waitForInGame: false, waitForDm: false };
       let payload;

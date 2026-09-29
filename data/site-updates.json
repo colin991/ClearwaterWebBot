@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-29-priority-void-anyone",
+      "title": "Anyone can void a running priority",
+      "summary": "The Void button on an active priority request card no longer requires Clearwater staff. Anyone who can see the card can void it, matching Approve and Deny.",
+      "createdAt": "2026-09-29T21:55:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-29-request-priority-respond",
       "title": "Stop /request-priority from saying the application did not respond",
       "summary": "If the server checks behind /request-priority are slow, the bot now answers right away with an Open Priority Form button instead of letting Discord time out. Press it to open the form once the checks finish.",
