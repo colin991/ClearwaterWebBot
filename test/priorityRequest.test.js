@@ -1033,3 +1033,47 @@ test('a civilian outside the priority is PM’d and DMed after a kill', async ()
   assert.equal(f.commands.length, 1);
   assert.equal(f.dms.length, 1);
 });
+
+test('request-priority opens the form when checks finish inside the 3s window', async () => {
+  const modal = await buildPriorityModalWithinBudget(
+    { createdTimestamp: Date.now() },
+    async () => ({ modal: true }),
+  );
+  assert.deepEqual(modal, { modal: true });
+  assert.ok(PRIORITY_FORM_BUDGET_MS < 3_000);
+});
+
+test('slow request-priority checks fall back instead of timing the command out', async () => {
+  const startedAt = Date.now();
+  let finished = false;
+  const modal = await buildPriorityModalWithinBudget(
+    { createdTimestamp: startedAt },
+    () => new Promise((resolve) => setTimeout(() => { finished = true; resolve({ modal: true }); }, 200)),
+    { budgetMs: 30 },
+  );
+  assert.equal(modal, null);
+  assert.ok(Date.now() - startedAt < 150);
+  assert.equal(finished, false);
+
+  const late = await buildPriorityModalWithinBudget(
+    { createdTimestamp: Date.now() - 5_000 },
+    async () => ({ modal: true }),
+    { budgetMs: 30 },
+  );
+  assert.equal(late, null);
+});
+
+test('slow-check fallback offers an Open Priority Form button', () => {
+  const json = JSON.stringify(priorityOpenFormPayload());
+  assert.match(json, /Open Priority Form/);
+  assert.match(json, new RegExp(PRIORITY_OPEN_FORM_ID));
+});
+
+test('checks that fail inside the window still report their error', async () => {
+  await assert.rejects(
+    buildPriorityModalWithinBudget({ createdTimestamp: Date.now() }, async () => {
+      throw new Error('A priority request is already pending.');
+    }),
+    /already pending/,
+  );
+});
