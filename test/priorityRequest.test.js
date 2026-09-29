@@ -1057,7 +1057,7 @@ test('slow request-priority checks fall back instead of timing the command out',
 
   const late = await buildPriorityModalWithinBudget(
     { createdTimestamp: Date.now() - 5_000 },
-    async () => ({ modal: true }),
+    () => new Promise((resolve) => setTimeout(() => resolve({ modal: true }), 20)),
     { budgetMs: 30 },
   );
   assert.equal(late, null);
