@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-29-internet-send-post-fast",
+      "title": "Fix Send Post timing out on the Clearwater Internet panel",
+      "summary": "Send Post, Create Account, Reply, and profile picture now open their forms right away instead of showing “didn't respond in time”. The bot also stops rewriting the whole Internet save file on every panel click when nothing changed.",
+      "createdAt": "2026-09-29T02:25:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-28-shift-map-postal-pin",
       "title": "Put Shift Information map pins where the deputy actually is",
       "summary": "The PCSO Shift Information map, Internet drop locations, and the live player map now place the pin on the deputy's in-game postal on the official ER:LC map instead of guessing from raw coordinates. The bot also learns the exact coordinate scale from live player positions and uses it once it matches the reported postals.",
