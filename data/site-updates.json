@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-29-voice-no-glitch",
+      "title": "Smoother bot voice in Discord calls",
+      "summary": "The bot now prepares each spoken clip as finished Discord audio before it starts talking, so busy moments on the bot no longer make its voice stutter or cut out.",
+      "createdAt": "2026-09-29T22:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-29-priority-void-anyone",
       "title": "Anyone can void a running priority",
       "summary": "The Void button on an active priority request card no longer requires Clearwater staff. Anyone who can see the card can void it, matching Approve and Deny.",
