@@ -621,7 +621,7 @@ export function buildTicketCloseRequestPayload(ownerId) {
   };
 }
 
-async function closePinellasSupportTicket(channel, { client, user, ownerId, reason }) {
+export async function closePinellasSupportTicket(channel, { client, user, ownerId, reason }) {
   let transcript = null;
   try {
     transcript = await archiveAndDmTicketTranscript(client, channel, {

@@ -20,7 +20,6 @@
         <a href="/patrol-operations">Patrol Operations</a>
         <a href="/active-calls">Active Calls</a>
         <a href="/ride-along">Patrol Ride Along Program</a>
-        <a href="/jail">Jail Information</a>
       </div>
     </div>
     <div class="pcso-drop">
@@ -30,7 +29,6 @@
         <a href="/special-response">Special Response Team</a>
         <a href="/traffic-enforcement">Traffic Enforcement Unit</a>
         <a href="/criminal-investigations">Criminal Investigations Division</a>
-        <a href="/detention">Detention and Court Services</a>
         <a href="/field-training">Field Training Operations</a>
       </div>
     </div>

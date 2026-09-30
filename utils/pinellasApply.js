@@ -103,9 +103,10 @@ async function readStore() {
       applications: Array.isArray(store.applications) ? store.applications : [],
       denials: store.denials && typeof store.denials === 'object' ? store.denials : {},
       sessions: store.sessions && typeof store.sessions === 'object' ? store.sessions : {},
+      securityEvents: Array.isArray(store.securityEvents) ? store.securityEvents : [],
     };
   } catch {
-    return { applications: [], denials: {}, sessions: {} };
+    return { applications: [], denials: {}, sessions: {}, securityEvents: [] };
   }
 }
 
@@ -355,7 +356,7 @@ async function beginApplicationSession(user) {
   return applicationId;
 }
 
-async function submitApplication(client, user, session) {
+async function submitApplication(client, user, session, violations = []) {
   const store = await readStore();
   const answers = PINELLAS_APPLY_QUESTIONS.map((question, index) => ({
     key: question.key,
@@ -369,6 +370,7 @@ async function submitApplication(client, user, session) {
     username: user.username,
     status: 'pending',
     answers,
+    violations: Array.isArray(violations) ? violations.slice(-20) : [],
     createdAt: new Date().toISOString(),
   };
   store.applications = [application, ...(store.applications || [])].slice(0, 500);
@@ -386,7 +388,10 @@ async function submitApplication(client, user, session) {
     `<@&${PINELLAS_APPLY_REVIEW_PING_ROLE_ID}> — new entry application ready for review.`,
     `Applicant: <@${user.id}> (\`${user.id}\` / **${user.username}**)`,
     `Application ID: \`${application.id}\``,
-  ].join('\n');
+    application.violations.length
+      ? `⚠️ Website test alerts: **${application.violations.length}** (included in transcript)`
+      : null,
+  ].filter(Boolean).join('\n');
 
   const answersText = answers.map((entry, index) => (
     `**${index + 1}.** ${entry.prompt.replace(/^\*\*\d+\.\*\*\s*/, '')}\n${entry.answer}`
@@ -398,6 +403,8 @@ async function submitApplication(client, user, session) {
     `Application ID: ${application.id}`,
     `Applicant: ${user.username} (${user.id})`,
     `Submitted: ${application.createdAt}`,
+    `Website test alerts: ${application.violations.length || 0}`,
+    ...application.violations.map((entry) => `- ${entry.type || 'activity'} at ${entry.createdAt || 'unknown time'}`),
     '',
     answers.map((entry, index) => (
       `${index + 1}. ${entry.prompt.replace(/^\*\*\d+\.\*\*\s*/, '')}\n${entry.answer}`
@@ -462,12 +469,24 @@ async function submitApplication(client, user, session) {
   ));
 }
 
-export async function getPinellasApplicationStatus(userId) {
+async function applicantIsDepartmentMember(client, userId) {
+  if (!client) return false;
+  const guild = client.guilds.cache.get(PINELLAS_GUILD_ID)
+    || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
+  const member = guild ? await guild.members.fetch(String(userId)).catch(() => null) : null;
+  return Boolean(
+    memberHasRole(member, PINELLAS_EMPLOYEE_WELCOME_ROLE_ID)
+    || memberHasRole(member, PINELLAS_APPLY_APPROVED_ROLE_ID),
+  );
+}
+
+export async function getPinellasApplicationStatus(userId, { client } = {}) {
   const id = String(userId || '').trim();
   const store = await readStore();
   const applications = (store.applications || []).filter((entry) => entry.userId === id);
   const latest = applications[0] || null;
   const deniedUntil = Number(store.denials?.[id] || 0);
+  const alreadyMember = await applicantIsDepartmentMember(client, id);
   return {
     latest: latest
       ? {
@@ -478,7 +497,8 @@ export async function getPinellasApplicationStatus(userId) {
       }
       : null,
     pending: applications.some((entry) => entry.status === 'pending'),
-    canApply: !(deniedUntil > Date.now()) && !applications.some((entry) => entry.status === 'pending'),
+    alreadyMember,
+    canApply: !alreadyMember && !(deniedUntil > Date.now()) && !applications.some((entry) => entry.status === 'pending'),
     deniedUntil: deniedUntil > Date.now() ? new Date(deniedUntil).toISOString() : null,
     questions: PINELLAS_APPLY_QUESTIONS.map((question, index) => ({
       key: question.key,
@@ -491,7 +511,10 @@ export async function getPinellasApplicationStatus(userId) {
   };
 }
 
-export async function submitWebsiteApplication(client, user, rawAnswers = {}) {
+export async function submitWebsiteApplication(client, user, rawAnswers = {}, rawViolations = []) {
+  if (await applicantIsDepartmentMember(client, user.id)) {
+    throw new Error('You are already in the Pinellas County Sheriff’s Office and cannot apply again.');
+  }
   const store = await readStore();
   const deniedUntil = Number(store.denials?.[user.id] || 0);
   if (deniedUntil > Date.now()) {
@@ -519,8 +542,52 @@ export async function submitWebsiteApplication(client, user, rawAnswers = {}) {
     answers,
     updatedAt: Date.now(),
   };
-  await submitApplication(client, user, session);
-  return getPinellasApplicationStatus(user.id);
+  const recentServerEvents = (store.securityEvents || []).filter((entry) => (
+    String(entry.userId) === String(user.id)
+    && Date.now() - Date.parse(entry.createdAt) < 2 * 60 * 60 * 1000
+  ));
+  const violations = [...recentServerEvents, ...(Array.isArray(rawViolations) ? rawViolations : [])]
+    .map((entry) => {
+      const time = Date.parse(entry?.createdAt);
+      return {
+        type: ['tab-hidden', 'copy', 'cut', 'paste'].includes(entry?.type) ? entry.type : 'activity',
+        createdAt: new Date(Number.isFinite(time) ? time : Date.now()).toISOString(),
+      };
+    })
+    .filter((entry, index, list) => list.findIndex((candidate) => (
+      candidate.type === entry.type && candidate.createdAt === entry.createdAt
+    )) === index)
+    .slice(-20);
+  await submitApplication(client, user, session, violations);
+  return getPinellasApplicationStatus(user.id, { client });
+}
+
+export async function reportWebsiteApplicationViolation(client, user, rawViolation) {
+  const type = ['tab-hidden', 'copy', 'cut', 'paste'].includes(rawViolation?.type)
+    ? rawViolation.type
+    : 'activity';
+  const event = {
+    userId: String(user.id),
+    username: String(user.username || 'user').slice(0, 80),
+    type,
+    createdAt: new Date().toISOString(),
+  };
+  const store = await readStore();
+  const duplicate = (store.securityEvents || []).find((previous) => (
+    previous.userId === event.userId
+    && Date.now() - Date.parse(previous.createdAt) < 5_000
+  ));
+  if (duplicate) return duplicate;
+  store.securityEvents = [event, ...(store.securityEvents || [])].slice(0, 500);
+  await writeStore(store);
+  const reviewChannel = await client.channels.fetch(PINELLAS_APPLY_REVIEW_CHANNEL_ID).catch(() => null);
+  if (reviewChannel?.isTextBased?.()) {
+    await reviewChannel.send({
+      content: `⚠️ Website application alert: <@${user.id}> (\`${user.id}\`) triggered **${type}**.`,
+      allowedMentions: { parse: [], users: [user.id] },
+    }).catch(() => {});
+  }
+  return event;
 }
 
 export async function handlePinellasApplyInteraction(interaction) {

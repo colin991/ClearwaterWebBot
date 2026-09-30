@@ -8,6 +8,7 @@ import {
   findOpenSupportChannelsForOwner,
   ticketOwnerId,
   ticketTypeFromTopic,
+  closePinellasSupportTicket,
 } from './pinellasSupport.js';
 
 const STORE_PATH = join(fileURLToPath(new URL('.', import.meta.url)), '..', 'data', 'pcso-web-tickets.json');
@@ -212,9 +213,11 @@ function mappedMessage(message, ticket, discordId) {
   return {
     id: message.id,
     fromWeb: fromUser,
+    authorId: String(fromUser ? discordId : (message.author?.id || '')),
     author: fromUser
       ? (message.author?.username || ticket.username || 'You')
       : (message.member?.displayName || message.author?.username || 'Staff'),
+    avatarUrl: message.author?.displayAvatarURL?.({ extension: 'png', size: 128 }) || null,
     content,
     createdAt: new Date(message.createdTimestamp).toISOString(),
   };
@@ -321,6 +324,7 @@ async function collectTicketsForUser(client, discordId) {
       live = findOpenSupportChannelsForOwner(guild, ownerId);
     }
     for (const channel of live) {
+      if (store.channels[channel.id]?.closedAt) continue;
       const record = await registerWebTicketForChannel(channel, {
         ownerId,
         type: ticketTypeFromTopic(channel),
@@ -512,4 +516,19 @@ export async function postWebTicketReply(client, { user, content, stored = null,
     allowedMentions: { parse: [], users: mentionedDiscordUserIds(text) },
   });
   return { ok: true, channelId: ticket.channelId || channel.id };
+}
+
+export async function closeWebTicket(client, { user, channelId }) {
+  const wanted = String(channelId || '');
+  if (!/^\d{16,22}$/.test(wanted)) throw new Error('Select an open ticket first.');
+  const tickets = await collectTicketsForUser(client, user.id);
+  const selected = tickets.find((ticket) => ticket.channelId === wanted && ticket.open);
+  if (!selected?.channel?.isTextBased?.()) throw new Error('That ticket is no longer open.');
+  await closePinellasSupportTicket(selected.channel, {
+    client,
+    user,
+    ownerId: user.id,
+    reason: 'Ticket closed by the owner from the PCSO website.',
+  });
+  return { ok: true, channelId: wanted };
 }

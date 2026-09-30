@@ -3,8 +3,8 @@ import {
   PINELLAS_SUPPORT_OPTIONS,
   websiteTicketFields,
 } from './pinellasSupport.js';
-import { listWebTicketMessages, openWebTicket, postWebTicketReply } from './pcsoWebTickets.js';
-import { getPinellasApplicationStatus, submitWebsiteApplication } from './pinellasApply.js';
+import { closeWebTicket, listWebTicketMessages, openWebTicket, postWebTicketReply } from './pcsoWebTickets.js';
+import { getPinellasApplicationStatus, reportWebsiteApplicationViolation, submitWebsiteApplication } from './pinellasApply.js';
 import { listPcsoSiteFormsForUser } from './pcsoSiteForms.js';
 import { fetchPcsoAssignedMelonlyCalls } from './melonly.js';
 import { PINELLAS_MELONLY_DEPARTMENT_ID } from './pinellasShiftPanel.js';
@@ -74,16 +74,24 @@ export async function handlePcsoPortal(client, body = {}) {
       await postWebTicketReply(client, { user, content: body.content, channelId: body.channelId });
       return { ok: true, ...(await listWebTicketMessages(client, user.id, body.channelId)) };
     }
+    if (action === 'close') {
+      await closeWebTicket(client, { user, channelId: body.channelId });
+      return { ok: true, ...(await listWebTicketMessages(client, user.id)) };
+    }
   }
 
   if (kind === 'application') {
     if (action === 'status' || action === 'list') {
-      return { ok: true, ...(await getPinellasApplicationStatus(user.id)) };
+      return { ok: true, ...(await getPinellasApplicationStatus(user.id, { client })) };
     }
     if (action === 'submit') {
       const discordUser = await client.users.fetch(user.id);
-      const status = await submitWebsiteApplication(client, discordUser, body.answers || {});
+      const status = await submitWebsiteApplication(client, discordUser, body.answers || {}, body.violations || []);
       return { ok: true, ...status, submitted: true };
+    }
+    if (action === 'violation') {
+      await reportWebsiteApplicationViolation(client, user, body.violation);
+      return { ok: true };
     }
   }
 

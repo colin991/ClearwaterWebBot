@@ -1649,6 +1649,44 @@ body.home-stage {
 .pcso-careers-apply:hover { background: #45484f; }
 .pcso-mini-event { padding: 12px 0; border-bottom: 1px solid #2c2e34; }
 .pcso-mini-event h3 { margin: 0 0 6px; font-size: 18px; }
+.pcso-contact-tabs { display:flex; gap:8px; margin:24px 0; border-bottom:1px solid #30333a; }
+.pcso-contact-tabs button { border:0; border-bottom:3px solid transparent; background:transparent; color:#9da2aa; padding:14px 20px; font:inherit; font-weight:800; cursor:pointer; }
+.pcso-contact-tabs button[aria-selected="true"] { color:#fff; border-bottom-color:var(--pcso-red); }
+.pcso-ticket-layout { display:grid; grid-template-columns:minmax(260px,.72fr) minmax(0,1.4fr); gap:20px; align-items:start; }
+.pcso-ticket-create,.pcso-ticket-thread { margin-top:0; }
+.pcso-ticket-heading { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:18px; }
+.pcso-ticket-heading h2,.pcso-ticket-heading .pcso-eyebrow { margin-bottom:0; }
+.pcso-ticket-close { border:1px solid #9b3840; background:transparent; color:#f0b6bb; padding:9px 13px; font:inherit; font-weight:750; cursor:pointer; }
+.pcso-ticket-close:hover { background:#8f2630; color:#fff; }
+.pcso-ticket-tabs { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); }
+.pcso-ticket-tabs button { text-align:left; border-radius:7px; }
+.pcso-ticket-tabs button strong,.pcso-ticket-tabs button small { display:block; }
+.pcso-ticket-tabs button small { margin-top:4px; color:#9297a0; }
+.pcso-ticket-log { padding:12px; background:#0d0e11; border:1px solid #292c32; border-radius:10px; }
+.pcso-ticket-log article { border-radius:10px; }
+.pcso-ticket-log .from-web { margin-left:8%; background:#22252b; }
+.pcso-ticket-log .from-staff { margin-right:8%; }
+.pcso-ticket-author { display:grid; grid-template-columns:38px 1fr auto; gap:10px; align-items:center; }
+.pcso-ticket-author img,.pcso-ticket-avatar { width:38px; height:38px; border-radius:50%; object-fit:cover; }
+.pcso-ticket-avatar { display:grid; place-items:center; background:#343842; color:#fff; font-weight:800; }
+.pcso-ticket-author strong,.pcso-ticket-author span { display:block; }
+.pcso-ticket-author span { color:#969ba4; font-size:12px; margin-top:2px; }
+.pcso-ticket-author time { margin:0; text-align:right; }
+.pcso-ticket-log article>p { margin:12px 0 0; line-height:1.55; }
+.pcso-button-muted { border:1px solid #4a4e57; color:#e8eaee; background:#22242a; }
+.pcso-application-progress { display:flex; justify-content:space-between; margin:22px 0 16px; color:#c7cad0; font-weight:800; }
+.pcso-application-progress::after { content:""; position:absolute; }
+.pcso-application-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
+.pcso-application-alert { max-width:500px; border:1px solid #565b64; border-top:4px solid var(--pcso-red); background:#15161a; color:#fff; padding:28px; box-shadow:0 24px 70px rgba(0,0,0,.65); }
+.pcso-application-alert::backdrop { background:rgba(0,0,0,.72); backdrop-filter:blur(3px); }
+.pcso-application-alert h2 { margin-top:0; }
+
+@keyframes pcso-soft-enter { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+.pcso-home main>* { animation:pcso-soft-enter .32s ease-out both; }
+.pcso-home :where(a,button,input,textarea,select,.pcso-page-card,.pcso-mini-event) { transition:color .16s ease,background-color .16s ease,border-color .16s ease,box-shadow .16s ease,transform .16s ease,opacity .16s ease; }
+.pcso-home :where(.pcso-button,.pcso-contact-tabs button,.pcso-ticket-tabs button):active { transform:translateY(1px) scale(.995); }
+@media (max-width:800px) { .pcso-ticket-layout { grid-template-columns:1fr; } .pcso-ticket-log .from-web,.pcso-ticket-log .from-staff { margin-left:0; margin-right:0; } }
+@media (prefers-reduced-motion:reduce) { .pcso-home main>* { animation:none; } .pcso-home * { scroll-behavior:auto!important; transition-duration:.01ms!important; } }
 .employee-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

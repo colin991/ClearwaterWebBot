@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#6b7078" />
 <title>Careers | Pinellas County Sheriff's Office</title>
 <link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
-<link rel="stylesheet" href="styles.css?v=20260917-login" />
+<link rel="stylesheet" href="styles.css?v=20260929-portal" />
 <script>document.documentElement.classList.add('js');</script>
 </head>
 <body class="pcso-home">
@@ -35,11 +35,22 @@
 
   <form class="pcso-page-card pcso-form" data-apply-form hidden>
     <h2>Entry application</h2>
-    <p>These are the same questions used in the Discord application. Writing answers need at least two sentences. Do not use AI.</p>
+    <p>This application is completed one question at a time. Leaving the tab or copying and pasting is recorded for the reviewer.</p>
+    <div class="pcso-application-progress"><span data-apply-progress>Question 1</span><span data-apply-progress-count></span></div>
     <div data-apply-questions></div>
     <p class="pcso-form-status" data-apply-form-status role="status"></p>
-    <button class="pcso-button pcso-button-red" type="submit">Submit application</button>
+    <div class="pcso-application-actions">
+      <button class="pcso-button pcso-button-muted" type="button" data-apply-previous hidden>Previous</button>
+      <button class="pcso-button pcso-button-red" type="button" data-apply-next>Next question</button>
+      <button class="pcso-button pcso-button-red" type="submit" data-apply-submit hidden>Submit application</button>
+    </div>
   </form>
+
+  <dialog class="pcso-application-alert" data-application-alert>
+    <h2>Application activity recorded</h2>
+    <p data-application-alert-copy>You have tabbed out. Your reviewer has been notified.</p>
+    <button class="pcso-button pcso-button-red" type="button" data-application-alert-close>Continue application</button>
+  </dialog>
 
   <div class="pcso-page-card" id="events">
     <h2>Events</h2>
@@ -52,7 +63,7 @@
     <ul class="pcso-prose-list">
       <li>Department role and access after approval</li>
       <li>Field training and a ride-along (R/A) with patrol staff</li>
-      <li>Shift opportunities across patrol, traffic, investigations, and detention</li>
+      <li>Shift opportunities across patrol, traffic, and investigations</li>
       <li>A structured command team and official CAD reporting</li>
     </ul>
   </div>
@@ -78,6 +89,6 @@
 </main>
 <footer class="pcso-footer"><div class="pcso-wrap pcso-footer-grid"><a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a><p>Professionalism · Integrity · Service<br /><small>© 2026 Pinellas County Sheriff's Office Roleplay</small></p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord →</a></div></footer>
 <script src="pcso-nav.js?v=20260917-login"></script>
-<script src="pcso-careers.js?v=20260917-login"></script>
+<script src="pcso-careers.js?v=20260929-portal"></script>
 </body>
 </html>
