@@ -20,7 +20,11 @@ function newId(prefix) {
 }
 
 export function normalizePcsoSiteContent(input = {}) {
-  const news = Array.isArray(input.news) ? input.news : [];
+  const now = Date.now();
+  const news = (Array.isArray(input.news) ? input.news : []).filter((item) => {
+    const expires = Date.parse(item?.expiresAt || '');
+    return !Number.isFinite(expires) || expires > now;
+  });
   const events = Array.isArray(input.events) ? input.events : [];
   const star = Array.isArray(input.star) ? input.star : [];
   return {
@@ -32,6 +36,8 @@ export function normalizePcsoSiteContent(input = {}) {
       imageUrl: cleanText(item?.imageUrl, 800),
       linkUrl: cleanText(item?.linkUrl, 500),
       publishedAt: cleanText(item?.publishedAt, 40) || new Date().toISOString(),
+      expiresAt: cleanText(item?.expiresAt, 40),
+      discordMessageId: cleanText(item?.discordMessageId, 32),
     })).slice(0, 100),
     events: events.map((item) => ({
       id: cleanText(item?.id, 64) || newId('event'),
@@ -112,4 +118,12 @@ export async function deletePcsoContentItem(kind, id) {
   const key = kind === 'event' ? 'events' : (kind === 'star' ? 'star' : 'news');
   content[key] = content[key].filter((item) => item.id !== String(id));
   return savePcsoSiteContent(content);
+}
+
+export async function deletePcsoNewsByDiscordMessage(messageId) {
+  const content = await getPcsoSiteContent();
+  const before = content.news.length;
+  content.news = content.news.filter((item) => item.discordMessageId !== String(messageId));
+  if (content.news.length === before) return { removed: false, content };
+  return { removed: true, content: await savePcsoSiteContent(content) };
 }

@@ -326,6 +326,50 @@ async function mapChannelMessages(channel, ticket, discordId) {
     .filter((entry) => entry.content);
 }
 
+async function hydrateMessageAvatars(client, messages, discordId) {
+  const missing = messages.filter((message) => !message.avatarUrl);
+  if (!missing.length) return messages;
+  const guild = await ensureGuild(client).catch(() => null);
+  let membersLoaded = false;
+  const findMember = async (message) => {
+    const id = String(message.fromWeb ? discordId : (message.authorId || ''));
+    if (/^\d{16,22}$/.test(id)) {
+      const cachedMember = guild?.members?.cache?.get(id);
+      const fetchedMember = !cachedMember && guild?.members?.fetch
+        ? await guild.members.fetch(id).catch(() => null)
+        : null;
+      const member = cachedMember || fetchedMember;
+      if (member) return member;
+      const user = await client.users.fetch(id).catch(() => null);
+      if (user) return user;
+    }
+    if (message.author === client.user?.username || message.author === client.user?.displayName) {
+      return client.user;
+    }
+    const wanted = String(message.author || '').toLowerCase();
+    let member = guild?.members?.cache?.find((entry) => (
+      entry.displayName?.toLowerCase() === wanted
+      || entry.user?.username?.toLowerCase() === wanted
+    ));
+    if (!member && guild && !membersLoaded) {
+      membersLoaded = true;
+      await guild.members.fetch().catch(() => null);
+      member = guild.members.cache.find((entry) => (
+        entry.displayName?.toLowerCase() === wanted
+        || entry.user?.username?.toLowerCase() === wanted
+      ));
+    }
+    return member || null;
+  };
+  for (const message of missing) {
+    const profile = await findMember(message);
+    message.avatarUrl = profile?.displayAvatarURL?.({ extension: 'png', size: 128 })
+      || profile?.user?.displayAvatarURL?.({ extension: 'png', size: 128 })
+      || null;
+  }
+  return messages;
+}
+
 async function collectTicketsForUser(client, discordId) {
   const store = await readStore();
   const ownerId = String(discordId);
@@ -430,6 +474,7 @@ export async function listWebTicketMessages(client, discordId, channelId = '') {
         createdAt: selected.closedAt || new Date().toISOString(),
       }];
   }
+  await hydrateMessageAvatars(client, messages, discordId);
 
   return {
     open: Boolean(selected.open),

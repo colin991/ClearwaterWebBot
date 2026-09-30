@@ -8,6 +8,13 @@ import { postPcsoSiteForm } from './pcsoSiteFormDiscord.js';
 import { savePcsoSiteForm } from './pcsoSiteForms.js';
 import { handlePcsoPortal } from './pcsoSitePortal.js';
 import { handleEmployeeAction, postPcsoErlcApi } from './pcsoEmployee.js';
+import {
+  addPcsoEventItem,
+  addPcsoNewsItem,
+  addPcsoStarItem,
+  deletePcsoContentItem,
+  getPcsoSiteContent,
+} from './pcsoSiteContent.js';
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -157,6 +164,32 @@ export function startBotApiServer(client, {
           const status = error?.status || 400;
           return sendJson(response, status, { error: error?.message || 'Portal request failed.' });
         }
+      }
+
+      if (url.pathname === '/api/pcso/content') {
+        if (request.method === 'GET') {
+          return sendJson(response, 200, { ok: true, ...(await getPcsoSiteContent()) });
+        }
+        if (!['POST', 'DELETE'].includes(request.method || '')) {
+          return sendJson(response, 405, { error: 'Method not allowed' });
+        }
+        const raw = await readBinaryBody(request, 80_000);
+        let payload;
+        try {
+          payload = JSON.parse(raw.toString('utf8') || '{}');
+        } catch {
+          return sendJson(response, 400, { error: 'Invalid JSON.' });
+        }
+        if (request.method === 'DELETE') {
+          const kind = payload.kind === 'event' ? 'event' : (payload.kind === 'star' ? 'star' : 'news');
+          return sendJson(response, 200, { ok: true, ...(await deletePcsoContentItem(kind, payload.id)) });
+        }
+        const content = payload.kind === 'event'
+          ? await addPcsoEventItem(payload)
+          : payload.kind === 'star'
+            ? await addPcsoStarItem(payload)
+            : await addPcsoNewsItem(payload);
+        return sendJson(response, 200, { ok: true, ...content });
       }
 
       return sendJson(response, 404, { error: 'Not found' });

@@ -4,6 +4,8 @@ export const PCSO_STATIC_PAGES = [
     title: 'Sheriff Noah Richards',
     eyebrow: 'About',
     lead: 'Leadership of the Pinellas County Sheriff’s Office.',
+    image: 'assets/pcso-sheriff-noah-richards.png',
+    imageAlt: 'Sheriff Noah Richards in uniform in front of the Florida and United States flags',
     body: [
       'Sheriff Noah Richards leads the Pinellas County Sheriff’s Office with a focus on professionalism, accountability, and service to the community.',
       'The Office of the Sheriff sets department standards for patrol, investigations, detention, and public information so every member of PCSO represents one county and one standard.',
@@ -129,6 +131,9 @@ export const PCSO_STATIC_PAGES = [
 
 export function pcsoSectionHtml(page) {
   const paragraphs = page.body.map((text) => `<p>${text}</p>`).join('');
+  const image = page.image
+    ? `<figure class="pcso-profile-photo"><img src="${page.image}" alt="${page.imageAlt || ''}" /></figure>`
+    : '';
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -138,7 +143,7 @@ export function pcsoSectionHtml(page) {
 <meta name="theme-color" content="#6b7078" />
 <title>${page.title} | Pinellas County Sheriff's Office</title>
 <link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
-<link rel="stylesheet" href="styles.css?v=20260917-login" />
+<link rel="stylesheet" href="styles.css?v=20260930-pcso-refresh" />
 <script>document.documentElement.classList.add('js');</script>
 </head>
 <body class="pcso-home">
@@ -153,7 +158,7 @@ export function pcsoSectionHtml(page) {
 <p class="pcso-eyebrow">${page.eyebrow}</p>
 <h1>${page.title}</h1>
 <p class="pcso-page-lead">${page.lead}</p>
-<div class="pcso-page-card pcso-prose">${paragraphs}${page.extra || ''}</div>
+<div class="pcso-page-card pcso-prose${page.image ? ' pcso-profile-layout' : ''}">${image}<div>${paragraphs}${page.extra || ''}</div></div>
 </div></main>
 <footer class="pcso-footer"><div class="pcso-wrap pcso-footer-grid"><a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a><p>Professionalism · Integrity · Service<br /><small>© 2026 Pinellas County Sheriff's Office Roleplay</small></p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord →</a></div></footer>
 <script src="pcso-nav.js?v=20260917-login"></script>

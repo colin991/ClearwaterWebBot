@@ -9,6 +9,7 @@ import { handlePinellasApplyDm } from '../utils/pinellasApply.js';
 import { handleAutoReply } from '../utils/autoReplies.js';
 import { commandAllowedInGuild } from '../utils/commandGuilds.js';
 import { shouldIgnoreGuildCommands } from '../utils/floridaServer.js';
+import { syncPcsoNewsImageMessage } from '../utils/pcsoDiscordNews.js';
 
 export default {
   name: Events.MessageCreate,
@@ -22,6 +23,12 @@ export default {
 
 
     if (!message.inGuild()) return;
+
+    try {
+      await syncPcsoNewsImageMessage(message);
+    } catch (error) {
+      logger.error('PCSO Discord news image sync failed', error);
+    }
 
     try {
       const locked = await handleLockedPostMessage(message, client);

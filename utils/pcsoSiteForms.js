@@ -162,6 +162,13 @@ export async function getPcsoSiteForm(id) {
   return (store.entries || []).find((entry) => entry.id === String(id)) || null;
 }
 
+export async function listPendingPcsoPublicRecords() {
+  const store = await readJsonFile(STORE_PATH, { entries: [] });
+  return (store.entries || []).filter((entry) => (
+    entry.kind === 'public-records' && (entry.status || 'pending') === 'pending'
+  )).slice(0, 100);
+}
+
 export async function updatePcsoSiteForm(id, patch) {
   const store = await readJsonFile(STORE_PATH, { entries: [] });
   const entries = Array.isArray(store.entries) ? store.entries : [];

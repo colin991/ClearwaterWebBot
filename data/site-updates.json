@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-30-pcso-admin-applications-news-refresh",
+      "title": "Refresh PCSO admin, applications, profiles, and news",
+      "summary": "The admin panel now has a redesigned command dashboard with separate personnel, public records, news and events, and Inside the Star views. Administrators can approve or deny public records requests and notify the requester by Discord DM. Ticket history resolves saved Discord profiles, applications remain hidden for department members and show one question at a time, the Careers banner and Sheriff headshot use the supplied images, and images posted in the configured Discord news channel appear for four days and disappear when deleted.",
+      "createdAt": "2026-09-30T21:40:27.702Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-29-pcso-home-service-layout-fix",
       "title": "Fix PCSO homepage service cards",
       "summary": "The How can we help cards now keep every icon consistently sized and left-aligned with its title and text. The homepage quick-link grid also uses the correct five-column layout after Jail Information was removed.",

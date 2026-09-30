@@ -12,10 +12,59 @@ const starListEl = document.querySelector('[data-star-list]');
 const newsForm = document.querySelector('[data-news-form]');
 const eventForm = document.querySelector('[data-event-form]');
 const starForm = document.querySelector('[data-star-form]');
+const recordsEl = document.querySelector('[data-admin-records]');
+const recordsCountEl = document.querySelector('[data-records-count]');
 
 let people = [];
 let weekStart = null;
 let weekEnd = null;
+
+function activateAdminView(view) {
+  document.querySelectorAll('[data-admin-view]').forEach((button) => {
+    button.setAttribute('aria-selected', String(button.dataset.adminView === view));
+  });
+  document.querySelectorAll('[data-admin-section]').forEach((section) => {
+    section.hidden = section.dataset.adminSection !== view;
+  });
+}
+
+document.querySelectorAll('[data-admin-view]').forEach((button) => {
+  button.addEventListener('click', () => activateAdminView(button.dataset.adminView));
+});
+
+async function portal(action, extra = {}) {
+  const response = await fetch('/api/pcso/portal', {
+    method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'admin-records', action, ...extra }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'Public records could not be updated.');
+  return payload;
+}
+
+function renderRecords(records = []) {
+  if (recordsCountEl) recordsCountEl.textContent = String(records.length);
+  if (!recordsEl) return;
+  if (!records.length) {
+    recordsEl.innerHTML = '<div class="admin-empty-state"><strong>All caught up</strong><span>There are no pending public records requests.</span></div>';
+    return;
+  }
+  recordsEl.innerHTML = records.map((record) => `
+    <article class="admin-record-card" data-record-id="${escapeHtml(record.id)}">
+      <div class="admin-record-meta"><span>${escapeHtml(record.fields?.subjectType === 'case' ? 'Case number' : 'Deputy')}</span><time>${escapeHtml(new Date(record.createdAt).toLocaleString())}</time></div>
+      <h3>${escapeHtml(record.fields?.subject || 'Untitled request')}</h3>
+      <p>${escapeHtml(record.fields?.details || 'No extra details were provided.')}</p>
+      <small>Requested by ${escapeHtml(record.requester?.username || record.requester?.discordId || 'Unknown')}</small>
+      <label>Report or access key<textarea data-record-report maxlength="1500" placeholder="Required when approving"></textarea></label>
+      <div class="admin-record-actions"><button type="button" data-record-decision="approve">Approve &amp; DM</button><button type="button" class="is-danger" data-record-decision="deny">Deny</button></div>
+    </article>
+  `).join('');
+}
+
+async function loadRecords() {
+  const payload = await portal('list');
+  renderRecords(payload.records || []);
+}
 
 const MAX_CONTENT_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_CONTENT_MEDIA_BYTES = 20 * 1024 * 1024;
@@ -297,11 +346,15 @@ async function boot() {
       loadContent().catch((error) => {
         statusEl.textContent = error.message || 'News and events could not be loaded.';
       }),
+      loadRecords().catch((error) => {
+        if (recordsEl) recordsEl.innerHTML = `<p class="admin-status">${escapeHtml(error.message)}</p>`;
+      }),
     ]);
 
     if (statusEl.textContent === 'Loading admin tools…') {
-      statusEl.textContent = 'Signed in. Manage weekly PDFs, news/events, and Inside the Star below.';
+      statusEl.textContent = 'Dashboard ready.';
     }
+    activateAdminView('personnel');
   } catch {
     statusEl.textContent = 'Admin panel could not be loaded right now.';
   }
@@ -376,6 +429,27 @@ starForm?.addEventListener('submit', async (event) => {
 });
 
 document.addEventListener('click', async (event) => {
+  const reviewButton = event.target.closest('[data-record-decision]');
+  if (reviewButton) {
+    const card = reviewButton.closest('[data-record-id]');
+    const decision = reviewButton.dataset.recordDecision;
+    const report = card?.querySelector('[data-record-report]')?.value || '';
+    if (decision === 'approve' && !report.trim()) {
+      statusEl.textContent = 'Enter the report or access key before approving.';
+      return;
+    }
+    reviewButton.disabled = true;
+    statusEl.textContent = decision === 'approve' ? 'Approving and sending the DM…' : 'Denying and sending the DM…';
+    try {
+      const payload = await portal('review', { formId: card.dataset.recordId, decision, report });
+      renderRecords(payload.records || []);
+      statusEl.textContent = decision === 'approve' ? 'Request approved and sent.' : 'Request denied and requester notified.';
+    } catch (error) {
+      statusEl.textContent = error.message;
+      reviewButton.disabled = false;
+    }
+    return;
+  }
   const button = event.target.closest('[data-delete-id]');
   if (!button) return;
   try {

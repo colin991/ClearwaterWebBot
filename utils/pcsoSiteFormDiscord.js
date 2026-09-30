@@ -14,6 +14,7 @@ import { renderLibertyLocationMap } from './libertyMapImage.js';
 import { logger } from './logger.js';
 import {
   getPcsoSiteForm,
+  listPendingPcsoPublicRecords,
   pcsoFormChannelId,
   publicSiteUrl,
   updatePcsoSiteForm,
@@ -121,6 +122,52 @@ async function dmRequester(client, discordId, content) {
   const user = await client.users.fetch(discordId).catch(() => null);
   if (!user) throw new Error('Could not DM the requester.');
   await user.send({ content: content.slice(0, 1800) });
+}
+
+export async function listPublicRecordsForAdmin() {
+  return listPendingPcsoPublicRecords();
+}
+
+export async function reviewPublicRecordFromWebsite(client, {
+  formId,
+  decision,
+  report = '',
+  reviewerId,
+}) {
+  const record = await getPcsoSiteForm(formId);
+  if (!record?.requester?.discordId || record.kind !== 'public-records') {
+    throw new Error('That public records request could not be found.');
+  }
+  if ((record.status || 'pending') !== 'pending') throw new Error('That request was already reviewed.');
+  let updated;
+  if (decision === 'deny') {
+    await dmRequester(
+      client,
+      record.requester.discordId,
+      `Your PCSO public records request was denied. You can file a complaint here: ${publicSiteUrl()}/complaint`,
+    );
+    updated = await updatePcsoSiteForm(formId, { status: 'denied', decidedBy: reviewerId });
+  } else {
+    const text = String(report || '').trim();
+    if (!text) throw new Error('Enter the report or key to send before approving.');
+    await dmRequester(
+      client,
+      record.requester.discordId,
+      `Your PCSO public records request was accepted.\n\n${text}`.slice(0, 1800),
+    );
+    updated = await updatePcsoSiteForm(formId, { status: 'accepted', decidedBy: reviewerId });
+  }
+  const channel = record.channelId ? await client.channels.fetch(record.channelId).catch(() => null) : null;
+  const message = channel?.isTextBased?.() && record.messageId
+    ? await channel.messages.fetch(record.messageId).catch(() => null)
+    : null;
+  if (message?.editable) {
+    await message.edit({
+      content: `${decision === 'deny' ? 'Denied' : 'Accepted'} by <@${reviewerId}> from the admin panel.`,
+      components: [],
+    }).catch(() => {});
+  }
+  return updated;
 }
 
 export async function handlePcsoSiteFormInteraction(interaction) {

@@ -8,6 +8,9 @@ import { getPinellasApplicationStatus, reportWebsiteApplicationViolation, submit
 import { listPcsoSiteFormsForUser } from './pcsoSiteForms.js';
 import { fetchPcsoAssignedMelonlyCalls } from './melonly.js';
 import { PINELLAS_MELONLY_DEPARTMENT_ID } from './pinellasShiftPanel.js';
+import { PermissionFlagsBits } from 'discord.js';
+import { PINELLAS_GUILD_ID, memberHasPinellasInfractionAccess } from './pinellasServer.js';
+import { listPublicRecordsForAdmin, reviewPublicRecordFromWebsite } from './pcsoSiteFormDiscord.js';
 
 function sessionUser(payload = {}) {
   const id = String(payload.id || payload.discordId || '').trim();
@@ -97,6 +100,32 @@ export async function handlePcsoPortal(client, body = {}) {
 
   if (kind === 'records') {
     return { ok: true, records: await listPcsoSiteFormsForUser(user.id) };
+  }
+
+  if (kind === 'admin-records') {
+    const guild = client.guilds.cache.get(PINELLAS_GUILD_ID)
+      || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
+    const member = guild ? await guild.members.fetch(user.id).catch(() => null) : null;
+    const allowed = memberHasPinellasInfractionAccess(member)
+      || member?.permissions?.has?.(PermissionFlagsBits.ManageRoles)
+      || member?.permissions?.has?.(PermissionFlagsBits.Administrator);
+    if (!allowed) {
+      const error = new Error('Admin permission is required to review public records requests.');
+      error.status = 403;
+      throw error;
+    }
+    if (action === 'list') {
+      return { ok: true, records: await listPublicRecordsForAdmin() };
+    }
+    if (action === 'review') {
+      await reviewPublicRecordFromWebsite(client, {
+        formId: body.formId,
+        decision: body.decision === 'deny' ? 'deny' : 'approve',
+        report: body.report,
+        reviewerId: user.id,
+      });
+      return { ok: true, records: await listPublicRecordsForAdmin() };
+    }
   }
 
   const error = new Error('Unknown portal request.');

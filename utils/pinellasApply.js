@@ -486,7 +486,8 @@ export async function getPinellasApplicationStatus(userId, { client } = {}) {
   const applications = (store.applications || []).filter((entry) => entry.userId === id);
   const latest = applications[0] || null;
   const deniedUntil = Number(store.denials?.[id] || 0);
-  const alreadyMember = await applicantIsDepartmentMember(client, id);
+  const alreadyMember = await applicantIsDepartmentMember(client, id)
+    || applications.some((entry) => entry.status === 'approved');
   return {
     latest: latest
       ? {
@@ -512,7 +513,8 @@ export async function getPinellasApplicationStatus(userId, { client } = {}) {
 }
 
 export async function submitWebsiteApplication(client, user, rawAnswers = {}, rawViolations = []) {
-  if (await applicantIsDepartmentMember(client, user.id)) {
+  const existingStatus = await getPinellasApplicationStatus(user.id, { client });
+  if (existingStatus.alreadyMember) {
     throw new Error('You are already in the Pinellas County Sheriff’s Office and cannot apply again.');
   }
   const store = await readStore();
