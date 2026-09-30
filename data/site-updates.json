@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-29-pcso-home-service-layout-fix",
+      "title": "Fix PCSO homepage service cards",
+      "summary": "The How can we help cards now keep every icon consistently sized and left-aligned with its title and text. The homepage quick-link grid also uses the correct five-column layout after Jail Information was removed.",
+      "createdAt": "2026-09-30T03:27:38.816Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-29-pcso-ticket-profile-close-fix",
       "title": "Fix PCSO ticket profiles and website closing",
       "summary": "Ticket conversations now resolve Discord member, user, bot, and default avatars reliably. Closing a ticket from the website immediately marks it closed, hides the reply controls, preserves the transcript, and shows any close error instead of silently leaving the page open.",

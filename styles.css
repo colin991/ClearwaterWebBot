@@ -835,7 +835,7 @@ body.home-stage {
 }
 .pcso-quick-links-inner {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px 18px;
   align-items: start;
   justify-items: center;
@@ -1687,6 +1687,19 @@ body.home-stage {
 .pcso-home :where(.pcso-button,.pcso-contact-tabs button,.pcso-ticket-tabs button):active { transform:translateY(1px) scale(.995); }
 @media (max-width:800px) { .pcso-ticket-layout { grid-template-columns:1fr; } .pcso-ticket-log .from-web,.pcso-ticket-log .from-staff { margin-left:0; margin-right:0; } }
 @media (prefers-reduced-motion:reduce) { .pcso-home main>* { animation:none; } .pcso-home * { scroll-behavior:auto!important; transition-duration:.01ms!important; } }
+
+/* Keep homepage service-card icons aligned with their left-aligned content. */
+.pcso-services .pcso-icon {
+  width: 40px;
+  height: 40px;
+  justify-content: flex-start;
+}
+.pcso-services .pcso-icon svg,
+.pcso-services .pcso-icon img {
+  width: 32px;
+  height: 32px;
+}
+.pcso-services .pcso-card h3 { margin-top: 16px; }
 .employee-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
