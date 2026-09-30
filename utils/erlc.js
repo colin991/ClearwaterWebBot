@@ -1,5 +1,6 @@
 import { attachPlayerAvatars, robloxAvatarProxyPath } from '../lib/roblox-avatars.js';
 import { logger } from './logger.js';
+import { libertyLocationPin, recordLibertyCalibration } from './libertyMapCalibration.js';
 
 /** PRC POST /command is 1 request per 5 seconds per server-key. GETs use the IP/global bucket. */
 export const ERLC_MIN_INTERVAL_MS = 5_000;
@@ -361,7 +362,13 @@ export async function fetchErlcServer(serverKey, options = {}) {
   const timeoutMs = Number(options.timeoutMs);
   if (Number.isFinite(timeoutMs) && timeoutMs > 0) pending.catch(() => {});
   try {
-    return await withTimeout(pending, timeoutMs);
+    const server = await withTimeout(pending, timeoutMs);
+    try {
+      recordLibertyCalibration(server?.Players || server?.players || []);
+    } catch (error) {
+      logger.warn(`Liberty map calibration skipped (${error?.message || error})`);
+    }
+    return server;
   } catch (error) {
     if (error?.code === 'ERLC_TIMEOUT' && bundleCache.value) return bundleCache.value;
     throw error;
@@ -525,15 +532,17 @@ export function parseErlcCommandLog(entry) {
   };
 }
 
-// Official map images are 3121Â² and cover the in-game 3120Â² stud plane.
-// Live /v2/server player payloads use northwest-origin studs (0..3120):
-// +X east/right, +Z south/down. Docs also describe a centre-origin variant
-// (negative values allowed); support both so pins never fall off the map.
+// Official map images from https://api.erlc.gg/maps currently ship at 5355×5355
+// and cover the in-game 3120² stud plane. Live /v2/server player payloads use
+// northwest-origin studs (0..3120): +X east/right, +Z south/down. Docs also
+// describe a centre-origin variant (negative values allowed); support both so
+// pins never fall off the map.
 
 /** True for DOT / Fire / Police / Sheriff teams — excluded from jail roster + zone drag. */
 export function isEmergencyServiceTeam(team) {
   return /\b(dot|fire|police|sheriff)\b/i.test(String(team || '').replace(/[_-]+/g, ' '));
 }
+export { LIBERTY_MAP_PIXELS } from './erlcMaps.js';
 export const LIBERTY_WORLD = 3120;
 
 function clamp01(value) {
@@ -554,6 +563,11 @@ export function libertyMapPoint(x, z) {
     left: Number(clamp01(left).toFixed(5)),
     top: Number(clamp01(top).toFixed(5)),
   };
+}
+
+/** Display pin for a player: anchored to the reported postal on the official map. */
+export function libertyPlayerMapPoint(location = {}) {
+  return libertyLocationPin(location, libertyMapPoint);
 }
 
 export function dropLocationNameCandidates(...values) {
@@ -585,7 +599,7 @@ export async function findPlayerDropLocation({ serverKey, robloxId, username, us
   if (!Number.isFinite(player.location?.x) || !Number.isFinite(player.location?.z)) {
     throw new Error('Your in-game location is not available yet. Move a little in ER:LC and try again.');
   }
-  const pin = libertyMapPoint(player.location.x, player.location.z);
+  const pin = libertyPlayerMapPoint(player.location);
   if (!pin) throw new Error('Could not place your location on the Liberty County map.');
   const label = [player.location.building, player.location.street].filter(Boolean).join(' ')
     || (player.location.postal ? `Postal ${player.location.postal}` : 'Liberty County');
@@ -608,7 +622,7 @@ export function playersOnLibertyMap(players = []) {
   return (Array.isArray(players) ? players : [])
     .map((player) => {
       const entry = player?.location ? player : parseErlcPlayer(player);
-      const pin = libertyMapPoint(entry.location?.x, entry.location?.z);
+      const pin = libertyPlayerMapPoint(entry.location || {});
       if (!pin) return null;
       const label = [entry.location.building, entry.location.street].filter(Boolean).join(' ')
         || (entry.location.postal ? `Postal ${entry.location.postal}` : 'Liberty County');

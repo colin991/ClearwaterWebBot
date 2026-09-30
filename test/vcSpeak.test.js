@@ -7,10 +7,55 @@ import {
   estimateMp3DurationMs,
   isEarlyVoiceIdle,
   promiseWithTimeout,
+  opusTranscodeArgs,
   toNodeAudioBuffer,
+  transcodeClipToOggOpus,
   voiceClipPlaybackWindow,
   waitForVoiceClipEnd,
 } from '../utils/vcSpeak.js';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { StreamType, createAudioResource } from '@discordjs/voice';
+
+test('speech is pre-encoded to 48 kHz stereo Ogg Opus with the volume baked in', () => {
+  const args = opusTranscodeArgs('in.mp3', 'out.ogg', 1.5);
+  assert.deepEqual(args.slice(args.indexOf('-af'), args.indexOf('-af') + 2), ['-af', 'volume=1.5']);
+  assert.ok(args.includes('libopus'));
+  assert.equal(args[args.indexOf('-ar') + 1], '48000');
+  assert.equal(args[args.indexOf('-ac') + 1], '2');
+  assert.equal(args.at(-1), 'out.ogg');
+  assert.equal(opusTranscodeArgs('a', 'b', 9)[opusTranscodeArgs('a', 'b', 9).indexOf('-af') + 1], 'volume=2');
+});
+
+test('a bundled mp3 encodes to Ogg Opus that the Discord player can read as packets', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'cw-opus-test-'));
+  try {
+    const out = await transcodeClipToOggOpus(new URL('../assets/priority-beep.mp3', import.meta.url).pathname, directory, 1);
+    assert.equal((await readFile(out)).subarray(0, 4).toString(), 'OggS');
+    const resource = createAudioResource(out, { inputType: StreamType.OggOpus });
+    const packet = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('no Opus packet')), 5_000);
+      resource.playStream.once('readable', () => { clearTimeout(timer); resolve(resource.playStream.read()); });
+    });
+    assert.ok(Buffer.isBuffer(packet) && packet.length > 0);
+    resource.playStream.destroy();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('a failed ffmpeg encode rejects so playback can fall back', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'cw-opus-test-'));
+  try {
+    await assert.rejects(
+      transcodeClipToOggOpus(join(directory, 'missing.mp3'), directory, 1),
+      /ffmpeg Opus encode exited/,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test('TTS audio from Edge-style bytes is treated as an mp3 buffer', () => {
   const raw = Uint8Array.from([1, 2, 3, 4]);

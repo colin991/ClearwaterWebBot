@@ -33,8 +33,8 @@ export default {
     if (!command) return;
 
     let member = message.member;
-    if (!member?.voice) {
-      member = await message.guild?.members.fetch(message.author.id).catch(() => member);
+    if (!member?.voice?.channelId) {
+      member = await message.guild?.members.fetch(message.author.id).catch(() => member) || member;
     }
 
     const result = await runDiscordSceneCommand({

@@ -11,6 +11,10 @@ import {
   endedPayload,
   extraTimeResolvedPayload,
   handlePriorityRequest,
+  buildPriorityModalWithinBudget,
+  priorityOpenFormPayload,
+  PRIORITY_FORM_BUDGET_MS,
+  PRIORITY_OPEN_FORM_ID,
   hasBlockingPriority,
   PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID,
   PRIORITY_BEEP_PATH,
@@ -716,6 +720,46 @@ test('void button rewrites the card before in-game commands finish', async () =>
   await finished;
 });
 
+test('anyone can click Void on an active priority', async () => {
+  const stored = {
+    request: { id: 'p1', status: 'active', requesterId: 'u1', startedAt: 1, endsAt: 9e12, staffMessageId: 'm' },
+  };
+  const svc = createPriorityRequestService({
+    now: () => 2,
+    load: async () => stored,
+    save: async (value) => { stored.request = value.request; },
+    send: async () => {},
+    snapshot: async () => ({}),
+    postStaff: async () => ({ id: 'm' }),
+    editStaff: async () => {},
+    dmUser: async () => {},
+    onError: () => {},
+  });
+  const edits = [];
+  const followUps = [];
+  const interaction = {
+    customId: 'prq:void:p1',
+    user: { id: 'civilian' },
+    member: { permissions: { has: () => false }, roles: { cache: { has: () => false } } },
+    guild: { members: { fetch: async () => interaction.member } },
+    isChatInputCommand: () => false,
+    isButton: () => true,
+    isModalSubmit: () => false,
+    deferred: false,
+    replied: false,
+    async deferUpdate() { interaction.deferred = true; },
+    async editReply(payload) { edits.push(payload); },
+    async followUp(payload) { followUps.push(payload); },
+    async reply() {},
+    client: { priorityRequest: svc },
+  };
+  await handlePriorityRequest(interaction);
+  assert.equal(followUps.length, 0);
+  assert.equal(stored.request.status, 'voided');
+  assert.equal(stored.request.voidedBy, 'civilian');
+  assert.match(JSON.stringify(edits[0]), /Priority Request — Voided/);
+});
+
 test('void runs prty 0 then a 10 minute peace timer and DMs the requester', async () => {
   const f = serviceFixture({
     id: 'p1', status: 'active', requesterId: 'u1', startedAt: 1, endsAt: 9e12, staffMessageId: 'm',
@@ -1028,4 +1072,48 @@ test('a civilian outside the priority is PM’d and DMed after a kill', async ()
   await f.svc.tick();
   assert.equal(f.commands.length, 1);
   assert.equal(f.dms.length, 1);
+});
+
+test('request-priority opens the form when checks finish inside the 3s window', async () => {
+  const modal = await buildPriorityModalWithinBudget(
+    { createdTimestamp: Date.now() },
+    async () => ({ modal: true }),
+  );
+  assert.deepEqual(modal, { modal: true });
+  assert.ok(PRIORITY_FORM_BUDGET_MS < 3_000);
+});
+
+test('slow request-priority checks fall back instead of timing the command out', async () => {
+  const startedAt = Date.now();
+  let finished = false;
+  const modal = await buildPriorityModalWithinBudget(
+    { createdTimestamp: startedAt },
+    () => new Promise((resolve) => setTimeout(() => { finished = true; resolve({ modal: true }); }, 200)),
+    { budgetMs: 30 },
+  );
+  assert.equal(modal, null);
+  assert.ok(Date.now() - startedAt < 150);
+  assert.equal(finished, false);
+
+  const late = await buildPriorityModalWithinBudget(
+    { createdTimestamp: Date.now() - 5_000 },
+    () => new Promise((resolve) => setTimeout(() => resolve({ modal: true }), 20)),
+    { budgetMs: 30 },
+  );
+  assert.equal(late, null);
+});
+
+test('slow-check fallback offers an Open Priority Form button', () => {
+  const json = JSON.stringify(priorityOpenFormPayload());
+  assert.match(json, /Open Priority Form/);
+  assert.match(json, new RegExp(PRIORITY_OPEN_FORM_ID));
+});
+
+test('checks that fail inside the window still report their error', async () => {
+  await assert.rejects(
+    buildPriorityModalWithinBudget({ createdTimestamp: Date.now() }, async () => {
+      throw new Error('A priority request is already pending.');
+    }),
+    /already pending/,
+  );
 });

@@ -1,5 +1,5 @@
 import { PermissionFlagsBits } from 'discord.js';
-import { readInternetStore, saveInternetStore } from './internetStore.js';
+import { ensureDefaultInternetAccount, readInternetStore, saveInternetStore } from './internetStore.js';
 
 let storeMutationQueue = Promise.resolve();
 
@@ -9,6 +9,19 @@ export function mutateDiscordInternetStore(task) {
     const result = await task(store);
     await saveInternetStore(store);
     return result;
+  });
+  storeMutationQueue = run.catch(() => {});
+  return run;
+}
+
+/** Ensure the Discord default account exists, writing the store only when that account changed. */
+export function ensureDiscordInternetAccount(actor) {
+  const run = storeMutationQueue.then(async () => {
+    const store = await readInternetStore();
+    const before = JSON.stringify(store.users?.[actor?.id] || null);
+    const user = ensureDefaultInternetAccount(store, actor);
+    if (JSON.stringify(store.users?.[actor?.id] || null) !== before) await saveInternetStore(store);
+    return user;
   });
   storeMutationQueue = run.catch(() => {});
   return run;

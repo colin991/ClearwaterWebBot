@@ -76,7 +76,7 @@ function memberSearchTexts(member) {
 export async function resolveZoneDiscordMember(guild, player, identityMap) {
   const robloxId = String(player?.robloxId || '').trim();
   const username = String(player?.username || '').trim();
-  const linkedId = robloxId ? identityMap.get(robloxId) : null;
+  const linkedId = robloxId ? identityMap.get(robloxId) || identityMap.get(String(robloxId)) : null;
 
   if (linkedId) {
     const member = guild.members.cache.get(linkedId)

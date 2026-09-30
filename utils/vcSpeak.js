@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { spawn } from 'node:child_process';
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -35,6 +36,7 @@ export const EDGE_TTS_TIMEOUT_MS = 45_000;
 export const EDGE_MP3_BITRATE_BPS = 48_000;
 export const VOICE_PLAYBACK_TAIL_MS = 600;
 export const VOICE_CLIP_HARD_STOP_MS = 180_000;
+export const OPUS_TRANSCODE_TIMEOUT_MS = 20_000;
 const OPENAI_TTS_VOICE_SET = new Set(OPENAI_TTS_VOICES);
 const guildVoiceHold = new AsyncLocalStorage();
 const guildVoiceTails = new Map();
@@ -319,9 +321,68 @@ async function writeClipFile(mp3PathOrBuffer, directory) {
   return { filePath, byteLength, buffer: null };
 }
 
+export function clipVolume(volume) {
+  const value = Number(volume);
+  return Math.max(0, Math.min(2, Number.isFinite(value) && value > 0 ? value : 1));
+}
+
+export function opusTranscodeArgs(inputPath, outputPath, volume = 1) {
+  return [
+    '-hide_banner', '-loglevel', 'error', '-y',
+    '-i', inputPath,
+    '-vn',
+    '-af', `volume=${clipVolume(volume)}`,
+    '-ac', '2', '-ar', '48000',
+    '-c:a', 'libopus', '-b:a', '96k', '-frame_duration', '20',
+    '-f', 'ogg', outputPath,
+  ];
+}
+
+/**
+ * Encode the clip to Ogg Opus with native ffmpeg before playback so the
+ * player only forwards finished packets. Encoding live through opusscript on
+ * the bot's busy event loop is what makes speech stutter.
+ */
+export async function transcodeClipToOggOpus(inputPath, directory, volume = 1, {
+  ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg',
+  timeoutMs = OPUS_TRANSCODE_TIMEOUT_MS,
+  run = spawn,
+} = {}) {
+  const outputPath = join(directory, `opus-${Date.now()}-${Math.random().toString(16).slice(2)}.ogg`);
+  await new Promise((resolve, reject) => {
+    const child = run(ffmpegPath, opusTranscodeArgs(inputPath, outputPath, volume), { stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error(`ffmpeg Opus encode timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    child.stderr?.on('data', (chunk) => { stderr = `${stderr}${chunk}`.slice(-500); });
+    child.on('error', (error) => { clearTimeout(timer); reject(error); });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg Opus encode exited ${code}${stderr ? `: ${stderr.trim()}` : ''}`));
+    });
+  });
+  const size = (await stat(outputPath)).size || 0;
+  if (!size) throw new Error('ffmpeg Opus encode produced an empty file.');
+  return outputPath;
+}
+
+async function createPlayableClipResource(filePath, volume, directory) {
+  if (/\.ogg$/i.test(filePath)) return createClipResource(filePath, volume);
+  try {
+    const opusPath = await transcodeClipToOggOpus(filePath, directory, volume);
+    return createAudioResource(opusPath, { inputType: StreamType.OggOpus });
+  } catch (error) {
+    logger.warn('Native Opus encode failed; playing through the live encoder instead', error);
+    return createClipResource(filePath, volume);
+  }
+}
+
 function createClipResource(filePath, volume) {
   const oggOpus = /\.ogg$/i.test(filePath);
-  const useVolume = Math.max(0, Math.min(2, Number(volume) || 1));
+  const useVolume = clipVolume(volume);
   const resource = createAudioResource(filePath, {
     inlineVolume: useVolume !== 1,
     inputType: oggOpus ? StreamType.OggOpus : undefined,
@@ -340,7 +401,7 @@ async function playClipOnPlayer(player, audio, { volume, idleTimeoutMs, minPlayM
     minPlayMs,
     byteLength: clip.buffer ? clip.byteLength : 0,
   });
-  player.play(createClipResource(clip.filePath, volume));
+  player.play(await createPlayableClipResource(clip.filePath, volume, directory));
   await entersState(player, AudioPlayerStatus.Playing, 8_000);
   const result = await waitForVoiceClipEnd(player, {
     minPlayMs: window.minPlayMs,

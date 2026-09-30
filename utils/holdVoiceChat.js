@@ -158,9 +158,7 @@ async function joinAndStartAnnouncement(voiceChannel, adapterCreator, audioPath)
 
     const resource = createAudioResource(createReadStream(audioPath), {
       inputType: StreamType.Arbitrary,
-      inlineVolume: true,
     });
-    resource.volume?.setVolume(1);
 
     player.on('error', (error) => {
       logger.error('Hold VC audio playback error', error);

@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSheriffBalance, postSheriffBalanceLog, SHERIFF_LOG_CHANNEL, safeBalanceError, sheriffRetryDelaySeconds, sheriffPlayersToEnforce, planSheriffEnforcement, resolveSheriffDiscordId, SHERIFF_TENURE_MS, SHERIFF_ROTATE_GRACE_MS, SHERIFF_ROTATE_REMIND_MS, SHERIFF_ROTATE_MESSAGE, SHERIFF_ROTATE_DISCORD_MESSAGE, SHERIFF_ROTATE_WARN_MESSAGE, SHERIFF_ROTATE_WARN_DISCORD_MESSAGE, SHERIFF_ROTATE_REMIND_MESSAGE, SHERIFF_ROTATE_REMIND_DISCORD_MESSAGE } from '../utils/sheriffBalance.js';
+import { createSheriffBalance, postSheriffBalanceLog, SHERIFF_LOG_CHANNEL, safeBalanceError, sheriffRetryDelaySeconds, sheriffPlayersToEnforce, planSheriffEnforcement, resolveSheriffDiscordId, SHERIFF_LIMIT, SHERIFF_TENURE_MS, SHERIFF_ROTATE_GRACE_MS, SHERIFF_ROTATE_REMIND_MS, SHERIFF_ROTATE_MESSAGE, SHERIFF_ROTATE_DISCORD_MESSAGE, SHERIFF_ROTATE_WARN_MESSAGE, SHERIFF_ROTATE_WARN_DISCORD_MESSAGE, SHERIFF_ROTATE_REMIND_MESSAGE, SHERIFF_ROTATE_REMIND_DISCORD_MESSAGE } from '../utils/sheriffBalance.js';
 
 const player = (id, team = 'Sheriff') => ({ username: 'Player' + id, robloxId: String(id), team });
+const FULL = SHERIFF_LIMIT;
+const NEXT = SHERIFF_LIMIT + 1;
+const THIRD = SHERIFF_LIMIT + 2;
 function fixture(count) {
   let players = Array.from({ length: count }, (_, i) => player(i + 1));
   const commands = [], errors = [];
@@ -14,45 +17,45 @@ function fixture(count) {
   });
   return { service, commands, errors, set: p => { players = p; }, get: () => players, fail: () => { fail = true; } };
 }
-test('27th Sheriff allowed; 28th wanted and privately notified once', async () => {
-  const f = fixture(26); await f.service.tick();
-  f.set([...f.get(), player(27)]); await f.service.tick(); assert.deepEqual(f.commands, []);
-  f.set([...f.get(), player(28)]); await f.service.tick();
-  assert.equal(f.commands[0], ':wanted Player28'); assert.match(f.commands[1], /^:pm Player28 .*full/);
+test('30th Sheriff allowed; 31st wanted and privately notified once', async () => {
+  const f = fixture(FULL - 1); await f.service.tick();
+  f.set([...f.get(), player(FULL)]); await f.service.tick(); assert.deepEqual(f.commands, []);
+  f.set([...f.get(), player(NEXT)]); await f.service.tick();
+  assert.equal(f.commands[0], `:wanted Player${NEXT}`); assert.match(f.commands[1], new RegExp(`^:pm Player${NEXT} .*full`));
   await f.service.tick(); assert.equal(f.commands.length, 2);
 });
-test('startup wants current extras over 27, not only later arrivals', async () => {
-  const f = fixture(29); await f.service.tick();
-  assert.deepEqual(f.commands.filter(c => c.startsWith(':wanted')), [':wanted Player28', ':wanted Player29']);
-  f.set([...f.get(), player(30)]); await f.service.tick();
-  assert.equal(f.commands.filter(c => c.startsWith(':wanted')).at(-1), ':wanted Player30');
+test('startup wants current extras over 30, not only later arrivals', async () => {
+  const f = fixture(THIRD); await f.service.tick();
+  assert.deepEqual(f.commands.filter(c => c.startsWith(':wanted')), [`:wanted Player${NEXT}`, `:wanted Player${THIRD}`]);
+  f.set([...f.get(), player(SHERIFF_LIMIT + 3)]); await f.service.tick();
+  assert.equal(f.commands.filter(c => c.startsWith(':wanted')).at(-1), `:wanted Player${SHERIFF_LIMIT + 3}`);
 });
 test('vacancy allows new player; non-Sheriff joins ignored', async () => {
-  const f = fixture(27); await f.service.tick();
-  f.set([...f.get().slice(1), player(28), player(29, 'Police')]); await f.service.tick(); assert.deepEqual(f.commands, []);
+  const f = fixture(FULL); await f.service.tick();
+  f.set([...f.get().slice(1), player(NEXT), player(THIRD + 1, 'Police')]); await f.service.tick(); assert.deepEqual(f.commands, []);
 });
 test('simultaneous arrivals only use remaining slots', async () => {
-  const f = fixture(26); await f.service.tick();
-  f.set([...f.get(), player(27), player(28), player(29)]); await f.service.tick();
-  assert.deepEqual(f.commands.filter(c => c.startsWith(':wanted')), [':wanted Player28', ':wanted Player29']);
+  const f = fixture(FULL - 1); await f.service.tick();
+  f.set([...f.get(), player(FULL), player(NEXT), player(THIRD)]); await f.service.tick();
+  assert.deepEqual(f.commands.filter(c => c.startsWith(':wanted')), [`:wanted Player${NEXT}`, `:wanted Player${THIRD}`]);
 });
 test('a delayed command cancels when team occupancy drops', async () => {
-  let roster = Array.from({ length: 27 }, (_, i) => player(i + 1));
+  let roster = Array.from({ length: FULL }, (_, i) => player(i + 1));
   const commands = [];
   const service = createSheriffBalance({ snapshot: async () => roster, send: async (c, options) => {
     roster = roster.slice(1);
     if (!await options.shouldExecute()) return false;
     commands.push(c);
   } });
-  await service.tick(); roster.push(player(28)); await service.tick(); assert.deepEqual(commands, []);
+  await service.tick(); roster.push(player(NEXT)); await service.tick(); assert.deepEqual(commands, []);
 });
 test('failed lookup issues no commands', async () => {
-  const f = fixture(27); await f.service.tick(); f.fail(); await f.service.tick(); assert.deepEqual(f.commands, []); assert.equal(f.errors.length, 1);
+  const f = fixture(FULL); await f.service.tick(); f.fail(); await f.service.tick(); assert.deepEqual(f.commands, []); assert.equal(f.errors.length, 1);
 });
 
 test('Discord lookup rate limits still enforce from the last Sheriff roster', async () => {
   let time = 0;
-  let players = Array.from({ length: 29 }, (_, i) => player(i + 1));
+  let players = Array.from({ length: THIRD }, (_, i) => player(i + 1));
   let lookups = 0;
   const commands = [];
   const service = createSheriffBalance({
@@ -65,39 +68,39 @@ test('Discord lookup rate limits still enforce from the last Sheriff roster', as
     send: async (c, options) => { if (!await options.shouldExecute()) return false; commands.push(c); },
   });
   await service.tick();
-  assert.equal(commands[0], ':wanted Player28');
+  assert.equal(commands[0], `:wanted Player${NEXT}`);
 });
 
-test('sheriffPlayersToEnforce keeps the first 27 and wants the rest', () => {
-  const sheriffs = Array.from({ length: 32 }, (_, i) => player(i + 1));
+test('sheriffPlayersToEnforce keeps the first 30 and wants the rest', () => {
+  const sheriffs = Array.from({ length: FULL + 5 }, (_, i) => player(i + 1));
   const wanted = sheriffPlayersToEnforce(sheriffs, { previous: null }).map(p => p.username);
-  assert.deepEqual(wanted, ['Player28', 'Player29', 'Player30', 'Player31', 'Player32']);
+  assert.deepEqual(wanted, [`Player${NEXT}`, `Player${THIRD}`, `Player${SHERIFF_LIMIT + 3}`, `Player${FULL + 4}`, `Player${FULL + 5}`]);
 });
 
 test('planSheriffEnforcement rotates the longest 1.5h incumbent instead of wanting the joiner', () => {
-  const sheriffs = Array.from({ length: 28 }, (_, i) => player(i + 1));
-  const previous = new Set(sheriffs.slice(0, 27).map(p => p.robloxId));
+  const sheriffs = Array.from({ length: NEXT }, (_, i) => player(i + 1));
+  const previous = new Set(sheriffs.slice(0, FULL).map(p => p.robloxId));
   const now = SHERIFF_TENURE_MS + 5_000;
-  const joinedAt = Object.fromEntries(sheriffs.slice(0, 27).map(p => [p.robloxId, 4_000]));
+  const joinedAt = Object.fromEntries(sheriffs.slice(0, FULL).map(p => [p.robloxId, 4_000]));
   joinedAt['5'] = 1;
   const actions = planSheriffEnforcement(sheriffs, { previous, joinedAt, now });
   assert.deepEqual(actions.map(a => [a.player.username, a.reason]), [['Player5', 'rotate']]);
 });
 
 test('planSheriffEnforcement wants the joiner when nobody has 1.5 hours', () => {
-  const sheriffs = Array.from({ length: 28 }, (_, i) => player(i + 1));
-  const previous = new Set(sheriffs.slice(0, 27).map(p => p.robloxId));
+  const sheriffs = Array.from({ length: NEXT }, (_, i) => player(i + 1));
+  const previous = new Set(sheriffs.slice(0, FULL).map(p => p.robloxId));
   const now = 60_000;
-  const joinedAt = Object.fromEntries(sheriffs.slice(0, 27).map(p => [p.robloxId, 1]));
+  const joinedAt = Object.fromEntries(sheriffs.slice(0, FULL).map(p => [p.robloxId, 1]));
   const actions = planSheriffEnforcement(sheriffs, { previous, joinedAt, now });
-  assert.deepEqual(actions.map(a => [a.player.username, a.reason]), [['Player28', 'full']]);
+  assert.deepEqual(actions.map(a => [a.player.username, a.reason]), [[`Player${NEXT}`, 'full']]);
 });
 
 test('logs enforcement once and sends embeds to the specified channel without mentions', async () => {
-  let players = Array.from({ length: 27 }, (_, i) => player(i + 1));
+  let players = Array.from({ length: FULL }, (_, i) => player(i + 1));
   const events = [];
   const service = createSheriffBalance({ snapshot: async () => players, send: async () => {}, onLog: e => events.push(e) });
-  await service.tick(); players.push(player(28)); await service.tick(); await service.tick();
+  await service.tick(); players.push(player(NEXT)); await service.tick(); await service.tick();
   assert.equal(events.length, 2);
   assert.match(events[0].action, /Wanted command applied/);
   assert.match(events[1].action, /notice sent/);
@@ -107,18 +110,18 @@ test('logs enforcement once and sends embeds to the specified channel without me
     return { isTextBased: () => true, send: async value => { payload = value; } };
   } } }, events[0]);
   assert.deepEqual(payload.allowedMentions.parse, []);
-  assert.equal(payload.embeds[0].fields[1].value, '28');
+  assert.equal(payload.embeds[0].fields[1].value, String(NEXT));
 });
 
 test('preflight failure is identified accurately and backs off retries', async () => {
-  let players = Array.from({ length: 27 }, (_, i) => player(i + 1));
+  let players = Array.from({ length: FULL }, (_, i) => player(i + 1));
   let time = 0, fail = false, attempts = 0;
   const logs = [];
   const service = createSheriffBalance({ now: () => time,
     snapshot: async () => { if (fail) { fail = false; throw Error('Member lookup timed out'); } return players; },
     send: async (c, options) => { attempts++; fail = true; await options.shouldExecute(); },
     onError: () => {}, onLog: e => logs.push(e) });
-  await service.tick(); players.push(player(28)); await service.tick();
+  await service.tick(); players.push(player(NEXT)); await service.tick();
   assert.match(logs[0].action, /Live roster\/role recheck/);
   assert.equal(logs[0].detail, 'Member lookup timed out');
   time = 59000; await service.tick(); assert.equal(attempts, 1);
@@ -127,7 +130,7 @@ test('preflight failure is identified accurately and backs off retries', async (
 });
 
 test('HTTP 429 retries after the API retry-after instead of 60s', async () => {
-  let players = Array.from({ length: 27 }, (_, i) => player(i + 1));
+  let players = Array.from({ length: FULL }, (_, i) => player(i + 1));
   let time = 0, attempts = 0;
   const logs = [];
   const service = createSheriffBalance({
@@ -144,7 +147,7 @@ test('HTTP 429 retries after the API retry-after instead of 60s', async () => {
     onLog: e => logs.push(e),
   });
   await service.tick();
-  players.push(player(28));
+  players.push(player(NEXT));
   await service.tick();
   assert.match(logs[0].action, /retry in 5s/);
   assert.equal(sheriffRetryDelaySeconds({ status: 429, retryAfter: 5 }, 1), 5);
@@ -157,21 +160,21 @@ test('HTTP 429 retries after the API retry-after instead of 60s', async () => {
 });
 
 test('in-game PM still sends after wanted removes the player from Sheriff', async () => {
-  let players = Array.from({ length: 27 }, (_, i) => player(i + 1));
+  let players = Array.from({ length: FULL }, (_, i) => player(i + 1));
   const commands = [];
   const service = createSheriffBalance({
     snapshot: async () => players,
     send: async (c, options) => {
       if (!await options.shouldExecute()) return false;
       commands.push(c);
-      if (c.startsWith(':wanted')) players = players.map(p => p.username === 'Player28' ? { ...p, team: 'Police' } : p);
+      if (c.startsWith(':wanted')) players = players.map(p => p.username === `Player${NEXT}` ? { ...p, team: 'Police' } : p);
     },
   });
   await service.tick();
-  players.push(player(28, 'Sheriff'));
+  players.push(player(NEXT, 'Sheriff'));
   await service.tick();
-  assert.equal(commands[0], ':wanted Player28');
-  assert.match(commands[1], /^:pm Player28 /);
+  assert.equal(commands[0], `:wanted Player${NEXT}`);
+  assert.match(commands[1], new RegExp(`^:pm Player${NEXT} `));
 });
 
 test('safeBalanceError redacts secrets', () => {
@@ -194,7 +197,7 @@ test('resolveSheriffDiscordId prefers linked Roblox ID and skips ambiguous names
 });
 
 test('wanted extras receive a Discord DM once without repeating wanted', async () => {
-  let players = Array.from({ length: 27 }, (_, i) => player(i + 1));
+  let players = Array.from({ length: FULL }, (_, i) => player(i + 1));
   const commands = [];
   const dms = [];
   const logs = [];
@@ -205,19 +208,19 @@ test('wanted extras receive a Discord DM once without repeating wanted', async (
     onLog: e => logs.push(e),
   });
   await service.tick();
-  players = [...players, player(28)];
+  players = [...players, player(NEXT)];
   await service.tick();
-  assert.deepEqual(dms, ['Player28']);
-  assert.equal(commands[0], ':wanted Player28');
-  assert.match(commands[1], /^:pm Player28 /);
+  assert.deepEqual(dms, [`Player${NEXT}`]);
+  assert.equal(commands[0], `:wanted Player${NEXT}`);
+  assert.match(commands[1], new RegExp(`^:pm Player${NEXT} `));
   assert.match(logs.find(e => e.action.includes('Discord notice')).action, /Discord notice sent/);
   await service.tick();
-  assert.deepEqual(dms, ['Player28']);
-  assert.equal(commands.filter(c => c === ':wanted Player28').length, 1);
+  assert.deepEqual(dms, [`Player${NEXT}`]);
+  assert.equal(commands.filter(c => c === `:wanted Player${NEXT}`).length, 1);
 });
 
 test('Discord DM failure does not retry wanted and still sends the in-game PM', async () => {
-  let players = Array.from({ length: 27 }, (_, i) => player(i + 1));
+  let players = Array.from({ length: FULL }, (_, i) => player(i + 1));
   const commands = [];
   let dmAttempts = 0;
   const logs = [];
@@ -228,18 +231,18 @@ test('Discord DM failure does not retry wanted and still sends the in-game PM', 
     onLog: e => logs.push(e),
   });
   await service.tick();
-  players = [...players, player(28)];
+  players = [...players, player(NEXT)];
   await service.tick();
   await service.tick();
   assert.equal(dmAttempts, 1);
-  assert.equal(commands.filter(c => c === ':wanted Player28').length, 1);
-  assert.match(commands[1], /^:pm Player28 /);
+  assert.equal(commands.filter(c => c === `:wanted Player${NEXT}`).length, 1);
+  assert.match(commands[1], new RegExp(`^:pm Player${NEXT} `));
   assert.match(logs.find(e => e.action.includes('Discord notice')).action, /Discord notice failed/);
 });
 
 test('rotates the longest 1.5h Sheriff after a 10 minute warning and 5 minute reminder', async () => {
   let time = SHERIFF_TENURE_MS + 10_000;
-  let players = Array.from({ length: 27 }, (_, i) => player(i + 1));
+  let players = Array.from({ length: FULL }, (_, i) => player(i + 1));
   const commands = [];
   const dms = [];
   const logs = [];
@@ -254,12 +257,12 @@ test('rotates the longest 1.5h Sheriff after a 10 minute warning and 5 minute re
     onLog: e => logs.push(e),
   });
   await service.tick();
-  players = [...players, player(28)];
+  players = [...players, player(NEXT)];
   await service.tick();
   assert.equal(commands[0], ':pm Player1 ' + SHERIFF_ROTATE_WARN_MESSAGE);
   assert.deepEqual(dms, [{ user: 'Player1', message: SHERIFF_ROTATE_WARN_DISCORD_MESSAGE }]);
   assert.ok(!commands.some(c => c === ':wanted Player1'));
-  assert.ok(!commands.some(c => c.includes('Player28')));
+  assert.ok(!commands.some(c => c.includes(`Player${NEXT}`)));
   assert.match(logs[0].action, /leave in 10 minutes/);
   time += SHERIFF_ROTATE_REMIND_MS;
   await service.tick();
@@ -277,7 +280,7 @@ test('rotates the longest 1.5h Sheriff after a 10 minute warning and 5 minute re
 
 test('one long-timer and two joiners warns the long-timer and wants the extra immediately', async () => {
   let time = SHERIFF_TENURE_MS + 10_000;
-  let players = Array.from({ length: 27 }, (_, i) => player(i + 1));
+  let players = Array.from({ length: FULL }, (_, i) => player(i + 1));
   const commands = [];
   const tenure = Object.fromEntries(players.map(p => [p.robloxId, time - 1_000]));
   tenure['1'] = 1;
@@ -288,19 +291,19 @@ test('one long-timer and two joiners warns the long-timer and wants the extra im
     send: async (c, options) => { if (!await options.shouldExecute()) return false; commands.push(c); },
   });
   await service.tick();
-  players = [...players, player(28), player(29)];
+  players = [...players, player(NEXT), player(THIRD)];
   await service.tick();
-  assert.deepEqual(commands.filter(c => c.startsWith(':wanted')), [':wanted Player29']);
+  assert.deepEqual(commands.filter(c => c.startsWith(':wanted')), [`:wanted Player${THIRD}`]);
   assert.equal(commands[0], ':pm Player1 ' + SHERIFF_ROTATE_WARN_MESSAGE);
-  assert.ok(!commands.some(c => c.includes('Player28') && c.startsWith(':wanted')));
+  assert.ok(!commands.some(c => c.includes(`Player${NEXT}`) && c.startsWith(':wanted')));
   time += SHERIFF_ROTATE_GRACE_MS;
   await service.tick();
-  assert.deepEqual(commands.filter(c => c.startsWith(':wanted')), [':wanted Player29', ':wanted Player1']);
+  assert.deepEqual(commands.filter(c => c.startsWith(':wanted')), [`:wanted Player${THIRD}`, ':wanted Player1']);
 });
 
 test('rotate warning is cancelled if occupancy drops before the 10 minute wanted', async () => {
   let time = SHERIFF_TENURE_MS + 10_000;
-  let players = Array.from({ length: 27 }, (_, i) => player(i + 1));
+  let players = Array.from({ length: FULL }, (_, i) => player(i + 1));
   const commands = [];
   const tenure = Object.fromEntries(players.map(p => [p.robloxId, time - 1_000]));
   tenure['1'] = 1;
@@ -311,10 +314,10 @@ test('rotate warning is cancelled if occupancy drops before the 10 minute wanted
     send: async (c, options) => { if (!await options.shouldExecute()) return false; commands.push(c); },
   });
   await service.tick();
-  players = [...players, player(28)];
+  players = [...players, player(NEXT)];
   await service.tick();
   assert.equal(commands[0], ':pm Player1 ' + SHERIFF_ROTATE_WARN_MESSAGE);
-  players = players.filter(p => p.username !== 'Player28');
+  players = players.filter(p => p.username !== `Player${NEXT}`);
   time += SHERIFF_ROTATE_GRACE_MS;
   await service.tick();
   assert.ok(!commands.some(c => c === ':wanted Player1'));
@@ -322,7 +325,7 @@ test('rotate warning is cancelled if occupancy drops before the 10 minute wanted
 
 test('exempt long-timer is not rotated; the new joiner is wanted', async () => {
   let time = SHERIFF_TENURE_MS + 10_000;
-  let players = Array.from({ length: 27 }, (_, i) => player(i + 1));
+  let players = Array.from({ length: FULL }, (_, i) => player(i + 1));
   players[0] = { ...players[0], enforcementExempt: true };
   const commands = [];
   const tenure = Object.fromEntries(players.map(p => [p.robloxId, time - 1_000]));
@@ -334,8 +337,8 @@ test('exempt long-timer is not rotated; the new joiner is wanted', async () => {
     send: async (c, options) => { if (!await options.shouldExecute()) return false; commands.push(c); },
   });
   await service.tick();
-  players = [...players, player(28)];
+  players = [...players, player(NEXT)];
   await service.tick();
-  assert.equal(commands[0], ':wanted Player28');
+  assert.equal(commands[0], `:wanted Player${NEXT}`);
   assert.ok(!commands.some(c => c === ':wanted Player1'));
 });

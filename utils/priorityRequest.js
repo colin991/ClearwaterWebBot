@@ -1,4 +1,7 @@
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   LabelBuilder,
   MessageFlags,
   ModalBuilder,
@@ -43,7 +46,49 @@ const HEADER = 'https://media.discordapp.net/attachments/1529616984755540088/154
 const FOOTER = 'https://media.discordapp.net/attachments/1529616984755540088/1545833442040619018/clearwater_footer.png?format=webp&quality=lossless';
 
 const PREFIX = 'prq:';
+export const PRIORITY_OPEN_FORM_ID = `${PREFIX}open`;
+/** Discord drops the interaction at 3s and modals cannot be deferred; leave room for the round trip. */
+export const PRIORITY_FORM_BUDGET_MS = 2_300;
 const drafts = new Map();
+
+export function priorityOpenFormPayload() {
+  return {
+    content: 'Checking the server took a moment. Press **Open Priority Form** to continue.',
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(PRIORITY_OPEN_FORM_ID)
+          .setLabel('Open Priority Form')
+          .setStyle(ButtonStyle.Primary),
+      ),
+    ],
+    flags: MessageFlags.Ephemeral,
+  };
+}
+
+/**
+ * Race the pre-form checks against the interaction deadline. Returns the modal
+ * when ready in time, otherwise null (the work keeps running to warm caches).
+ */
+export async function buildPriorityModalWithinBudget(interaction, buildModal, {
+  budgetMs = PRIORITY_FORM_BUDGET_MS,
+  now = Date.now,
+} = {}) {
+  const startedAt = Number(interaction?.createdTimestamp) || now();
+  const remaining = Math.max(0, startedAt + budgetMs - now());
+  const work = Promise.resolve().then(buildModal);
+  let timer;
+  const late = new Promise((resolveLate) => {
+    timer = setTimeout(() => resolveLate(null), remaining);
+  });
+  try {
+    const modal = await Promise.race([work, late]);
+    if (!modal) work.catch(() => {});
+    return modal;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export function parsePriorityButton(customId) {
   const match = String(customId || '').match(/^prq:(approve|deny|void|timeok|timeno):([^:]+)(?::(\d+))?$/);
@@ -1248,11 +1293,6 @@ export async function handlePriorityRequest(interaction) {
     return true;
   }
 
-  const requireStaff = async () => {
-    const member = interaction.member || (interaction.guild ? await interaction.guild.members.fetch(interaction.user.id) : null);
-    if (!memberIsStaff(member)) throw new Error('Only Clearwater staff can do that.');
-  };
-
   const requireExtraTimeApprover = async () => {
     let member = interaction.member;
     if (interaction.guild) {
@@ -1264,7 +1304,7 @@ export async function handlePriorityRequest(interaction) {
   };
 
   try {
-    if (isCommand) {
+    if (isCommand || id === PRIORITY_OPEN_FORM_ID) {
       if (!interaction.inGuild() || interaction.guildId !== interaction.client.config.guildId) {
         await interaction.reply({ content: 'Use `/request-priority` in the Clearwater Discord server.', flags: MessageFlags.Ephemeral });
         return true;
@@ -1276,17 +1316,24 @@ export async function handlePriorityRequest(interaction) {
         });
         return true;
       }
-      const server = await fetchErlcServer(interaction.client.config.erlcServerKey, {
-        timeoutMs: 1_200,
-        vehicles: true,
+      const modal = await buildPriorityModalWithinBudget(interaction, async () => {
+        const server = await fetchErlcServer(interaction.client.config.erlcServerKey, {
+          timeoutMs: 1_200,
+        });
+        const players = (server.Players || []).map(parseErlcPlayer).filter(p => p.username);
+        const vehicles = civilianVehicles((server.Vehicles || []).map(parseErlcVehicle), players);
+        return service.openForm(interaction, {
+          players,
+          vehicles,
+          commandLogs: server.CommandLogs || server.commandLogs || [],
+        });
       });
-      const players = (server.Players || []).map(parseErlcPlayer).filter(p => p.username);
-      const vehicles = civilianVehicles((server.Vehicles || []).map(parseErlcVehicle), players);
-      await interaction.showModal(await service.openForm(interaction, {
-        players,
-        vehicles,
-        commandLogs: server.CommandLogs || server.commandLogs,
-      }));
+      if (modal) await interaction.showModal(modal);
+      else if (interaction.isButton?.()) {
+        const { flags: _ephemeral, ...payload } = priorityOpenFormPayload();
+        await interaction.update(payload);
+      }
+      else await interaction.reply(priorityOpenFormPayload());
       return true;
     }
 
@@ -1369,7 +1416,6 @@ export async function handlePriorityRequest(interaction) {
     if (clicked) {
       const { action, requestId, extraMinutes } = clicked;
       await interaction.deferUpdate();
-      if (action === 'void') await requireStaff();
       if (action === 'timeok' || action === 'timeno') await requireExtraTimeApprover();
       const immediate = { skipStaffRefresh: true, waitForInGame: false, waitForDm: false };
       let payload;
