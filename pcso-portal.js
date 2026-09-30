@@ -50,6 +50,13 @@ function renderMessages(log, payload) {
       : `<span class="pcso-ticket-avatar" aria-hidden="true">${escapeHtml((message.author || '?').slice(0, 1).toUpperCase())}</span>`;
     return `<article class="${message.fromWeb ? 'from-web' : 'from-staff'}"><div class="pcso-ticket-author">${avatar}<div><strong>${escapeHtml(message.author || 'Unknown')}</strong><span>${message.fromWeb ? 'You' : 'PCSO staff'}</span></div><time>${new Date(message.createdAt).toLocaleString()}</time></div><p>${escapeHtml(message.content).replace(/\n/g, '<br />')}</p></article>`;
   }).join('') || '<p>Ticket is open. Send a reply below.</p>';
+  log.querySelectorAll('img').forEach((image) => image.addEventListener('error', () => {
+    const fallback = document.createElement('span');
+    fallback.className = 'pcso-ticket-avatar';
+    fallback.setAttribute('aria-hidden', 'true');
+    fallback.textContent = image.closest('article')?.querySelector('strong')?.textContent?.slice(0, 1).toUpperCase() || '?';
+    image.replaceWith(fallback);
+  }, { once: true }));
   log.scrollTop = log.scrollHeight;
 }
 
@@ -133,9 +140,19 @@ async function boot() {
   });
   document.querySelector('[data-ticket-close]')?.addEventListener('click', async () => {
     if (!selectedChannelId || !window.confirm('Close this ticket? A transcript will be saved.')) return;
-    const result = await portal('ticket', 'close', { channelId: selectedChannelId });
-    selectedChannelId = result.channelId || '';
-    renderMessages(log, result);
+    const button = document.querySelector('[data-ticket-close]');
+    button.disabled = true;
+    button.textContent = 'Closing…';
+    try {
+      const result = await portal('ticket', 'close', { channelId: selectedChannelId });
+      selectedChannelId = result.channelId || '';
+      renderMessages(log, result);
+    } catch (error) {
+      window.alert(error.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Close ticket';
+    }
   });
   window.setInterval(() => { if (!document.hidden) void refreshTickets(); }, 8000);
 }

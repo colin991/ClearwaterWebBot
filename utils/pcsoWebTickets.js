@@ -103,6 +103,20 @@ function supportTitle(type) {
   return PINELLAS_SUPPORT_OPTIONS.find((option) => option.type === type)?.title || 'Support';
 }
 
+function discordMessageAvatar(message) {
+  const rendered = message.member?.displayAvatarURL?.({ extension: 'png', size: 128 })
+    || message.author?.displayAvatarURL?.({ extension: 'png', size: 128 });
+  if (rendered) return rendered;
+  const id = String(message.author?.id || '');
+  const avatar = String(message.author?.avatar || '');
+  if (id && avatar) return `https://cdn.discordapp.com/avatars/${id}/${avatar}.png?size=128`;
+  if (/^\d{16,22}$/.test(id)) {
+    const index = Number((BigInt(id) >> 22n) % 6n);
+    return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
+  }
+  return null;
+}
+
 export function publicTranscriptUrl(url) {
   const value = String(url || '').trim();
   if (!/^https:\/\/[^\s]+$/i.test(value)) return null;
@@ -217,7 +231,7 @@ function mappedMessage(message, ticket, discordId) {
     author: fromUser
       ? (message.author?.username || ticket.username || 'You')
       : (message.member?.displayName || message.author?.username || 'Staff'),
-    avatarUrl: message.author?.displayAvatarURL?.({ extension: 'png', size: 128 }) || null,
+    avatarUrl: discordMessageAvatar(message),
     content,
     createdAt: new Date(message.createdTimestamp).toISOString(),
   };
@@ -528,6 +542,9 @@ export async function closeWebTicket(client, { user, channelId }) {
     client,
     user,
     ownerId: user.id,
+    reason: 'Ticket closed by the owner from the PCSO website.',
+  });
+  await markTicketChannelClosed(selected.channel, {
     reason: 'Ticket closed by the owner from the PCSO website.',
   });
   return { ok: true, channelId: wanted };

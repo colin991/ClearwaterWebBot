@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-09-29-pcso-ticket-profile-close-fix",
+      "title": "Fix PCSO ticket profiles and website closing",
+      "summary": "Ticket conversations now resolve Discord member, user, bot, and default avatars reliably. Closing a ticket from the website immediately marks it closed, hides the reply controls, preserves the transcript, and shows any close error instead of silently leaving the page open.",
+      "createdAt": "2026-09-30T03:24:45.411Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-29-pcso-contact-application-refresh",
       "title": "Refresh PCSO tickets and secure website applications",
       "summary": "Contact now separates Tickets and Public Records, shows Discord identities in redesigned conversations, supports replies and owner closes, and keeps closed ticket history for 30 days. Careers now requires Discord sign-in, blocks existing department members, asks one question at a time, and reports tab switching or copy/paste activity to reviewers. The site also adds subtle motion and removes Jail Information and Detention and Court Services from navigation.",
