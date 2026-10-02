@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#6b7078" />
 <title>Careers | Pinellas County Sheriff's Office</title>
 <link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
-<link rel="stylesheet" href="styles.css?v=20260930-careers-fix" />
+<link rel="stylesheet" href="styles.css?v=20261001-careers-quiz" />
 <script>document.documentElement.classList.add('js');</script>
 </head>
 <body class="pcso-home">
@@ -27,21 +27,24 @@
     <button class="pcso-careers-apply" type="button" data-apply-now>Apply Now</button>
   </div>
 </section>
-<div class="pcso-page-main"><div class="pcso-wrap">
-  <div class="pcso-page-card" data-apply-status>
+<div class="pcso-page-main pcso-careers-main"><div class="pcso-wrap">
+  <div class="pcso-page-card pcso-careers-status" data-apply-status>
     <p>Sign in with Discord to see whether your application is pending, approved, or denied.</p>
     <p><a class="pcso-button pcso-button-red" href="/signin?next=/careers">Sign in with Discord</a></p>
   </div>
 
-  <form class="pcso-page-card pcso-form" data-apply-form hidden>
-    <h2>Entry application</h2>
-    <p>This application is completed one question at a time. Leaving the tab or copying and pasting is recorded for the reviewer.</p>
+  <form class="pcso-page-card pcso-form pcso-application-quiz" data-apply-form hidden>
+    <header class="pcso-quiz-header">
+      <div><p class="pcso-eyebrow">Entry application</p><h2>PCSO applicant quiz</h2></div>
+      <p>Answer one question at a time. Leaving the tab or copying and pasting is recorded for the reviewer.</p>
+    </header>
     <div class="pcso-application-progress"><span data-apply-progress>Question 1</span><span data-apply-progress-count></span></div>
-    <div data-apply-questions></div>
+    <div class="pcso-application-progress-track" aria-hidden="true"><span data-apply-progress-bar></span></div>
+    <div class="pcso-quiz-stage" data-apply-questions></div>
     <p class="pcso-form-status" data-apply-form-status role="status"></p>
     <div class="pcso-application-actions">
-      <button class="pcso-button pcso-button-muted" type="button" data-apply-previous hidden>Previous</button>
-      <button class="pcso-button pcso-button-red" type="button" data-apply-next>Next question</button>
+      <button class="pcso-button pcso-button-muted" type="button" data-apply-previous hidden>← Back</button>
+      <button class="pcso-button pcso-button-red" type="button" data-apply-next>Next →</button>
       <button class="pcso-button pcso-button-red" type="submit" data-apply-submit hidden>Submit application</button>
     </div>
   </form>
@@ -52,13 +55,14 @@
     <button class="pcso-button pcso-button-red" type="button" data-application-alert-close>Continue application</button>
   </dialog>
 
-  <div class="pcso-page-card" id="events">
+  <div class="pcso-careers-dashboard">
+  <div class="pcso-page-card pcso-careers-panel pcso-careers-events" id="events">
     <h2>Events</h2>
     <div data-careers-events><p class="pcso-events-empty">Loading events…</p></div>
     <p><a class="pcso-text-link" href="/events">View all events →</a></p>
   </div>
 
-  <div class="pcso-page-card" id="benefits">
+  <div class="pcso-page-card pcso-careers-panel" id="benefits">
     <h2>Benefits</h2>
     <ul class="pcso-prose-list">
       <li>Department role and access after approval</li>
@@ -68,7 +72,7 @@
     </ul>
   </div>
 
-  <div class="pcso-page-card" id="resources">
+  <div class="pcso-page-card pcso-careers-panel" id="resources">
     <h2>Resources</h2>
     <ul class="pcso-prose-list">
       <li><a class="pcso-text-link" href="/ride-along">Patrol Ride Along Program</a></li>
@@ -78,17 +82,18 @@
     </ul>
   </div>
 
-  <div class="pcso-page-card" id="faq">
+  <div class="pcso-page-card pcso-careers-panel pcso-careers-faq" id="faq">
     <h2>FAQ</h2>
     <p><strong>Do I apply here or in Discord?</strong> Either works. This page submits the same application for command review.</p>
     <p><strong>Can I have two pending applications?</strong> No. Finish or wait for review before applying again.</p>
     <p><strong>What if I am denied?</strong> You can re-apply after three days. The status card on this page will show denied until then.</p>
     <p><strong>What happens after approval?</strong> Complete training and an R/A with Field Training Operations.</p>
   </div>
+  </div>
 </div></div>
 </main>
 <footer class="pcso-footer"><div class="pcso-wrap pcso-footer-grid"><a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a><p>Professionalism · Integrity · Service<br /><small>© 2026 Pinellas County Sheriff's Office Roleplay</small></p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord →</a></div></footer>
 <script src="pcso-nav.js?v=20260917-login"></script>
-<script src="pcso-careers.js?v=20260929-portal"></script>
+<script src="pcso-careers.js?v=20261001-careers-quiz"></script>
 </body>
 </html>

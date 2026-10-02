@@ -2,6 +2,20 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-01-pcso-careers-quiz-layout",
+      "title": "Refresh Careers application layout",
+      "summary": "The Careers page now uses a cleaner dashboard layout while preserving its existing colors. Applicants answer questions in a focused Quizizz-style card with visual progress, large question numbering, answer choices, and clear Back and Next controls.",
+      "createdAt": "2026-10-01T04:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-09-30-pcso-homepage-news-loader-fix",
+      "title": "Fix homepage news loading",
+      "summary": "The homepage news and events loader now runs from an approved same-site script, allowing Discord photo updates and other published news to display on the homepage.",
+      "createdAt": "2026-09-30T22:03:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-09-30-pcso-admin-applications-news-refresh",
       "title": "Refresh PCSO admin, applications, profiles, and news",
       "summary": "The admin panel now has a redesigned command dashboard with separate personnel, public records, news and events, and Inside the Star views. Administrators can approve or deny public records requests and notify the requester by Discord DM. Ticket history resolves saved Discord profiles, applications remain hidden for department members and show one question at a time, the Careers banner and Sheriff headshot use the supplied images, and images posted in the configured Discord news channel appear for four days and disappear when deleted.",

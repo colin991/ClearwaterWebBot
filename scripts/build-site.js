@@ -14,7 +14,7 @@ const staticFiles = new Set([
   'employee-reports.html', 'employee-command.html',
   'styles.css', 'legal.css', 'signin.css', 'coming-soon.css',
   'script.js', 'signin.js', 'coming-soon.js', 'site-gate.js',
-  'jail.js', 'pcso-forms.js', 'inside-the-star.js', 'pcso-events.js', 'admin.js',
+  'jail.js', 'pcso-forms.js', 'inside-the-star.js', 'pcso-events.js', 'pcso-home.js', 'admin.js',
   'pcso-nav.js', 'pcso-portal.js', 'pcso-careers.js', 'pcso-calls.js', 'pcso-employee.js',
 ]);
 

@@ -4,12 +4,20 @@ function escapeHtml(value) {
   }[character]));
 }
 
+function plainPrompt(value) {
+  return String(value || '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/^\d+\.\s*/, '')
+    .trim();
+}
+
 function promptInput(question) {
   const name = escapeHtml(question.key);
-  if (question.yesNo) return `<select name="${name}" required><option value="">Select</option><option value="Yes">Yes</option><option value="No">No</option></select>`;
-  if (question.scale) return `<input name="${name}" type="number" min="1" max="10" required />`;
-  if (question.writing) return `<textarea name="${name}" maxlength="1800" required></textarea>`;
-  return `<input name="${name}" maxlength="1800" required />`;
+  if (question.yesNo) return `<div class="pcso-quiz-choice-grid pcso-quiz-choice-grid-short"><label><input name="${name}" type="radio" value="Yes" required /><span>Yes</span></label><label><input name="${name}" type="radio" value="No" required /><span>No</span></label></div>`;
+  if (question.scale) return `<div class="pcso-quiz-choice-grid pcso-quiz-scale">${Array.from({ length: 10 }, (_, index) => `<label><input name="${name}" type="radio" value="${index + 1}" required /><span>${index + 1}</span></label>`).join('')}</div><p class="pcso-quiz-scale-copy"><span>Needs improvement</span><span>Excellent</span></p>`;
+  if (question.writing) return `<textarea name="${name}" maxlength="1800" placeholder="Type your answer here…" required></textarea>`;
+  return `<input name="${name}" maxlength="1800" placeholder="Type your answer here…" required />`;
 }
 
 function statusCopy(payload) {
@@ -68,6 +76,8 @@ async function boot() {
     });
     document.querySelector('[data-apply-progress]').textContent = `Question ${currentQuestion + 1}`;
     document.querySelector('[data-apply-progress-count]').textContent = `of ${questions.length}`;
+    const progressBar = document.querySelector('[data-apply-progress-bar]');
+    if (progressBar) progressBar.style.width = `${((currentQuestion + 1) / questions.length) * 100}%`;
     document.querySelector('[data-apply-previous]').hidden = currentQuestion === 0;
     document.querySelector('[data-apply-next]').hidden = currentQuestion === questions.length - 1;
     document.querySelector('[data-apply-submit]').hidden = currentQuestion !== questions.length - 1;
@@ -92,7 +102,7 @@ async function boot() {
     statusCard.innerHTML = `<p><strong>${escapeHtml(statusCopy(payload))}</strong></p>`;
     if (canApply) {
       questionsMount.innerHTML = questions.map((question, index) => (
-        `<label data-question-index="${index}" hidden><span>${index + 1}. ${escapeHtml(question.prompt)}</span>${promptInput(question)}</label>`
+        `<section class="pcso-quiz-question" data-question-index="${index}" hidden><div class="pcso-quiz-question-number">${String(index + 1).padStart(2, '0')}</div><label><span>${escapeHtml(plainPrompt(question.prompt))}</span>${promptInput(question)}</label></section>`
       )).join('');
     }
   } catch (error) {
