@@ -6,8 +6,74 @@ export const MELONLY_API_BASE = 'https://api.melonly.xyz/api/v1';
 
 /** Soft client-side cache so 30s panel refreshes do not spam Melonly. */
 const responseCache = new Map();
+/** Remember 404 probe paths (CAD / character endpoints) so they are not retried every refresh. */
+const missingCache = new Map();
+/** Identical GETs already waiting in the queue share one request. */
+const inflightGets = new Map();
 /** After a 429, pause Melonly calls until this timestamp. */
 let rateLimitedUntil = 0;
+
+const MELONLY_MISSING_TTL_MS = 10 * 60_000;
+const MELONLY_MAX_QUEUE_WAIT_MS = 15_000;
+const MELONLY_MAX_RETRY_AFTER_SEC = 3600;
+const envInterval = Number(process.env.MELONLY_MIN_INTERVAL_MS);
+let melonlyMinIntervalMs = Number.isFinite(envInterval) && envInterval >= 0 ? envInterval : 400;
+let melonlyQueueTail = Promise.resolve();
+let melonlyNextSlotAt = 0;
+let melonlyQueued = 0;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Run one Melonly HTTP call at a time, spaced out and paused through any 429 window. */
+function enqueueMelonly(task) {
+  melonlyQueued += 1;
+  const run = melonlyQueueTail.then(async () => {
+    const wait = Math.max(melonlyNextSlotAt, rateLimitedUntil) - Date.now();
+    if (wait > 0) await sleep(wait);
+    try {
+      return await task();
+    } finally {
+      melonlyNextSlotAt = Date.now() + melonlyMinIntervalMs;
+    }
+  });
+  melonlyQueueTail = run.then(() => {}, () => {}).finally(() => { melonlyQueued -= 1; });
+  return run;
+}
+
+function melonlyRetrySeconds(response, now = Date.now()) {
+  const header = response.headers.get('retry-after');
+  let retry = Number(header);
+  if (header && !Number.isFinite(retry)) retry = Math.max(0, (Date.parse(header) - now) / 1000) || 0;
+  if (retry > 1e9) retry = Math.max(0, retry - now / 1000);
+  let reset = Number(response.headers.get('x-ratelimit-reset')) || 0;
+  if (reset > 1e12) reset = (reset - now) / 1000;
+  else if (reset > 1e9) reset = reset - now / 1000;
+  const exhausted = response.status === 429 || response.headers.get('x-ratelimit-remaining') === '0';
+  const seconds = Math.max(retry || 0, exhausted ? Math.max(0, reset) : 0);
+  if (response.status === 429 && !(seconds > 0)) return 60;
+  return Math.min(MELONLY_MAX_RETRY_AFTER_SEC, Math.ceil(seconds));
+}
+
+export function getMelonlyQueueStatus(now = Date.now()) {
+  return {
+    queued: melonlyQueued,
+    inflightGets: inflightGets.size,
+    rateLimitedMs: Math.max(0, rateLimitedUntil - now),
+    minIntervalMs: melonlyMinIntervalMs,
+  };
+}
+
+export function resetMelonlyQueueForTests({ minIntervalMs = 0 } = {}) {
+  responseCache.clear();
+  missingCache.clear();
+  inflightGets.clear();
+  cadWorkingPaths.clear();
+  rateLimitedUntil = 0;
+  melonlyNextSlotAt = 0;
+  melonlyQueueTail = Promise.resolve();
+  melonlyQueued = 0;
+  melonlyMinIntervalMs = minIntervalMs;
+}
 
 function formatMelonlyErrorDetail(json, text, statusText) {
   const raw = json?.error ?? json?.message ?? null;
@@ -32,6 +98,16 @@ export function isMelonlyRateLimited() {
 
 export function clearMelonlyResponseCache() {
   responseCache.clear();
+  missingCache.clear();
+}
+
+function melonlyRateLimitError(message, retryAfter, body) {
+  const error = new Error(message);
+  error.status = 429;
+  error.rateLimited = true;
+  error.retryAfter = retryAfter;
+  if (body !== undefined) error.body = body;
+  return error;
 }
 
 /**
@@ -56,18 +132,22 @@ export async function melonlyFetch(apiKey, path, {
   }
 
   const cacheKey = `${createHash('sha256').update(key).digest('hex')}:${method}:${url.toString()}`;
-  const cached = method === 'GET' ? responseCache.get(cacheKey) : null;
+  const isGet = method === 'GET';
+  const cached = isGet ? responseCache.get(cacheKey) : null;
   if (cached && cached.expiresAt > Date.now()) return cached.value;
+  const missing = isGet ? missingCache.get(cacheKey) : null;
+  if (missing && missing.expiresAt > Date.now()) throw missing.error;
 
   if (isMelonlyRateLimited()) {
     if (cached) return cached.value;
-    const waitSec = Math.ceil((rateLimitedUntil - Date.now()) / 1000);
-    const error = new Error(`Melonly rate limited — try again in ~${waitSec}s.`);
-    error.status = 429;
-    error.rateLimited = true;
-    error.retryAfter = waitSec;
-    throw error;
+    const waitMs = rateLimitedUntil - Date.now();
+    if (waitMs > MELONLY_MAX_QUEUE_WAIT_MS) {
+      const waitSec = Math.ceil(waitMs / 1000);
+      throw melonlyRateLimitError(`Melonly rate limited — try again in ~${waitSec}s.`, waitSec);
+    }
   }
+
+  if (isGet && inflightGets.has(cacheKey)) return inflightGets.get(cacheKey);
 
   const headers = {
     Authorization: `Bearer ${key}`,
@@ -79,55 +159,72 @@ export async function melonlyFetch(apiKey, path, {
     payload = JSON.stringify(body);
   }
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: payload,
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  const send = async (retried = false) => {
+    const fresh = isGet ? responseCache.get(cacheKey) : null;
+    if (fresh && fresh.expiresAt > Date.now()) return fresh.value;
 
-  const text = await response.text();
-  let json = null;
-  if (text) {
-    try {
-      json = JSON.parse(text);
-    } catch {
-      json = null;
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: payload,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+
+    const text = await response.text();
+    let json = null;
+    if (text) {
+      try {
+        json = JSON.parse(text);
+      } catch {
+        json = null;
+      }
     }
-  }
 
-  const retryAfterHeader = Number(response.headers.get('retry-after'));
-  const resetHeader = Number(response.headers.get('x-ratelimit-reset'));
-  if (response.status === 429) {
-    const retrySec = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
-      ? retryAfterHeader
-      : (Number.isFinite(resetHeader) && resetHeader > 0 ? Math.min(resetHeader, 3600) : 60);
-    rateLimitedUntil = Date.now() + (retrySec * 1000);
-    if (cached) {
-      logger.warn(`Melonly 429 on ${url.pathname} — serving cached response for ~${retrySec}s.`);
-      return cached.value;
+    const retrySec = melonlyRetrySeconds(response);
+    if (retrySec > 0) {
+      rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + (retrySec * 1000));
     }
-    const detail = formatMelonlyErrorDetail(json, text, response.statusText);
-    const error = new Error(`Melonly rate limited (${detail}). Wait ~${retrySec}s.`);
-    error.status = 429;
-    error.rateLimited = true;
-    error.retryAfter = retrySec;
-    error.body = json;
-    throw error;
-  }
 
-  if (!response.ok) {
-    const detail = formatMelonlyErrorDetail(json, text, response.statusText);
-    const error = new Error(`Melonly ${method} ${url.pathname} failed (${response.status}): ${detail}`);
-    error.status = response.status;
-    error.body = json;
-    throw error;
-  }
+    if (response.status === 429) {
+      const stale = isGet ? responseCache.get(cacheKey) : null;
+      if (stale) {
+        logger.warn(`Melonly 429 on ${url.pathname} — serving cached response for ~${retrySec}s.`);
+        return stale.value;
+      }
+      if (!retried && retrySec * 1000 <= MELONLY_MAX_QUEUE_WAIT_MS) {
+        logger.warn(`Melonly 429 on ${url.pathname} — queued retry in ~${retrySec}s.`);
+        await sleep(Math.max(0, rateLimitedUntil - Date.now()));
+        return send(true);
+      }
+      const detail = formatMelonlyErrorDetail(json, text, response.statusText);
+      throw melonlyRateLimitError(`Melonly rate limited (${detail}). Wait ~${retrySec}s.`, retrySec, json);
+    }
 
-  if (method === 'GET' && cacheTtlMs > 0) {
-    responseCache.set(cacheKey, { value: json, expiresAt: Date.now() + cacheTtlMs });
+    if (!response.ok) {
+      const detail = formatMelonlyErrorDetail(json, text, response.statusText);
+      const error = new Error(`Melonly ${method} ${url.pathname} failed (${response.status}): ${detail}`);
+      error.status = response.status;
+      error.body = json;
+      if (isGet && response.status === 404) {
+        missingCache.set(cacheKey, { error, expiresAt: Date.now() + MELONLY_MISSING_TTL_MS });
+      }
+      throw error;
+    }
+
+    if (isGet && cacheTtlMs > 0) {
+      responseCache.set(cacheKey, { value: json, expiresAt: Date.now() + cacheTtlMs });
+    }
+    return json;
+  };
+
+  const request = enqueueMelonly(() => send());
+  if (!isGet) return request;
+  inflightGets.set(cacheKey, request);
+  try {
+    return await request;
+  } finally {
+    if (inflightGets.get(cacheKey) === request) inflightGets.delete(cacheKey);
   }
-  return json;
 }
 
 async function listPages(apiKey, path, {
@@ -411,6 +508,8 @@ export async function fetchMelonlyCadForDiscord() {
   return null;
 }
 
+const cadWorkingPaths = new Map();
+
 const CAD_CALL_PATHS = [
   '/server/cad/calls',
   '/server/cad/calls/active',
@@ -508,6 +607,12 @@ export async function fetchPcsoAssignedMelonlyCalls(apiKey, {
     paths.unshift(`/server/departments/${encodeURIComponent(dept)}/cad/calls`);
     paths.unshift(`/server/departments/${encodeURIComponent(dept)}/calls`);
   }
+  const workingKey = `${createHash('sha256').update(String(apiKey || '')).digest('hex')}:${dept}`;
+  const working = cadWorkingPaths.get(workingKey);
+  if (working && paths.includes(working)) {
+    paths.splice(paths.indexOf(working), 1);
+    paths.unshift(working);
+  }
 
   let lastError = null;
   let rawCalls = [];
@@ -517,6 +622,7 @@ export async function fetchPcsoAssignedMelonlyCalls(apiKey, {
     try {
       const result = await melonlyFetch(apiKey, path, { cacheTtlMs });
       const batch = asCadArray(result);
+      cadWorkingPaths.set(workingKey, path);
       sourcePath = path;
       rawCalls = batch;
       break;

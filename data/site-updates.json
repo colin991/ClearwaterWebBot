@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-02-melonly-request-queue",
+      "title": "Melonly CAD request queue",
+      "summary": "Melonly calls now go through a single queue like the ER:LC one: one request at a time with a short gap, identical lookups share one request, and short rate limits wait and retry instead of failing. During a longer limit the last good data is shown. The CAD lookup remembers which endpoint works and skips missing ones.",
+      "createdAt": "2026-10-02T03:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-02-ingame-refresh",
       "title": "In-game ;refresh",
       "summary": "Typing ;refresh in the ER:LC server now refreshes you in game. Each player can use it once a minute; using it again sooner sends an in-game PM with the seconds left. Every use is logged in the scene command log.",
