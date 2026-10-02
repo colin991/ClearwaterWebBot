@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-02-fire-ops-welcome",
+      "title": "Clearwater Fire & Rescue welcome message",
+      "summary": "New members of the Clearwater Fire & Rescue Discord are welcomed in the welcome channel with a link to apply and a button showing the server's member count.",
+      "createdAt": "2026-10-02T02:45:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-02-fire-ops-profile",
       "title": "Fire Operations bot profile in the Fire & Rescue server",
       "summary": "In the Clearwater Fire & Rescue Discord, the bot now shows as Fire Operations with the Clearwater Fire & Rescue badge, the Engine 45 banner, and an operations description.",

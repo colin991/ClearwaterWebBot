@@ -2,10 +2,17 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { logger } from './logger.js';
 
 /** Clearwater Fire & Rescue Discord server. */
 export const FIRE_OPS_GUILD_ID = '1514804886292795544';
+export const FIRE_OPS_WELCOME_CHANNEL_ID = '1514804888243142772';
+export const FIRE_OPS_APPLY_CHANNEL_URL =
+  'https://discord.com/channels/1514804886292795544/1514804887630643327';
+const WAVE_EMOJI = '<:wave:1517217333234503790>';
+const CFD_EMOJI = '<:CFD:1514806304621989978>';
+const MEMBER_EMOJI = { id: '1517350373671833732', name: 'member' };
 export const FIRE_OPS_NICKNAME = 'Fire Operations';
 export const FIRE_OPS_BIO = '**Clearwater Fire & Rescue** internal utilities and operations manager.';
 
@@ -110,4 +117,42 @@ export async function ensureFireOpsServerProfile(client, { statePath = DEFAULT_S
     }
     return false;
   }
+}
+
+export function fireOpsWelcomePayload(member) {
+  const memberCount = Number(member.guild?.memberCount) || member.guild?.members?.cache?.size || 0;
+  return {
+    content: [
+      `${WAVE_EMOJI} **Welcome** <@${member.id}> to the ${CFD_EMOJI} **Clearwater Fire & Rescue**`,
+      `-# We are always in search of additional personnel, please apply in ${FIRE_OPS_APPLY_CHANNEL_URL}. We hope you enjoy your stay.`,
+    ].join('\n'),
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('fireops:welcome:members')
+          .setEmoji(MEMBER_EMOJI)
+          .setLabel(String(memberCount))
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+      ),
+    ],
+    allowedMentions: { users: [member.id] },
+  };
+}
+
+/** Post the Clearwater Fire & Rescue welcome message when a member joins that server. */
+export async function sendFireOpsWelcome(member) {
+  if (String(member.guild?.id) !== FIRE_OPS_GUILD_ID) return false;
+  if (member.user?.bot) return false;
+
+  const channel = member.guild.channels.cache.get(FIRE_OPS_WELCOME_CHANNEL_ID)
+    || await member.guild.channels.fetch(FIRE_OPS_WELCOME_CHANNEL_ID).catch(() => null);
+  if (!channel?.isTextBased?.()) {
+    logger.warn(`Fire Operations: welcome channel ${FIRE_OPS_WELCOME_CHANNEL_ID} unavailable.`);
+    return false;
+  }
+
+  await channel.send(fireOpsWelcomePayload(member));
+  logger.info(`Fire Operations: welcomed ${member.user?.tag || member.id}.`);
+  return true;
 }

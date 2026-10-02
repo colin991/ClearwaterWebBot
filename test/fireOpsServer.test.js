@@ -7,8 +7,44 @@ import {
   FIRE_OPS_BIO,
   FIRE_OPS_GUILD_ID,
   FIRE_OPS_NICKNAME,
+  FIRE_OPS_WELCOME_CHANNEL_ID,
   ensureFireOpsServerProfile,
+  sendFireOpsWelcome,
 } from '../utils/fireOpsServer.js';
+
+test('Fire & Rescue welcome pings the joiner with the member count button', async () => {
+  const sent = [];
+  const member = {
+    id: '99',
+    user: { bot: false, tag: 'join#0001' },
+    guild: {
+      id: FIRE_OPS_GUILD_ID,
+      memberCount: 422,
+      channels: {
+        cache: {
+          get: (id) => (id === FIRE_OPS_WELCOME_CHANNEL_ID
+            ? { isTextBased: () => true, send: async (payload) => { sent.push(payload); } }
+            : null),
+        },
+      },
+    },
+  };
+  assert.equal(await sendFireOpsWelcome(member), true);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].content, [
+    '<:wave:1517217333234503790> **Welcome** <@99> to the <:CFD:1514806304621989978> **Clearwater Fire & Rescue**',
+    '-# We are always in search of additional personnel, please apply in https://discord.com/channels/1514804886292795544/1514804887630643327. We hope you enjoy your stay.',
+  ].join('\n'));
+  assert.deepEqual(sent[0].allowedMentions.users, ['99']);
+  const button = sent[0].components[0].toJSON().components[0];
+  assert.equal(button.label, '422');
+  assert.equal(button.disabled, true);
+  assert.equal(button.style, 2);
+  assert.equal(button.emoji.id, '1517350373671833732');
+
+  assert.equal(await sendFireOpsWelcome({ ...member, guild: { id: 'other' } }), false);
+  assert.equal(await sendFireOpsWelcome({ ...member, user: { bot: true } }), false);
+});
 
 function fakeClient(me, edits) {
   const guild = {
