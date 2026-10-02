@@ -40,6 +40,14 @@ export const PRIORITY_PENDING_MS = 25 * 60 * 1000;
 export const PRIORITY_MAX_PARTICIPANTS = 4;
 export const PRIORITY_MAX_VEHICLES = 2;
 export const PRIORITY_TYPE_MAX = 25;
+/** Priorities need more than this many players in game. */
+export const PRIORITY_MIN_PLAYERS_EXCLUSIVE = 25;
+
+export function priorityPlayerCountBlockMessage(playerCount) {
+  const count = Number(playerCount);
+  if (!Number.isFinite(count) || count > PRIORITY_MIN_PLAYERS_EXCLUSIVE) return '';
+  return `Priorities need more than **${PRIORITY_MIN_PLAYERS_EXCLUSIVE} players** in game. There ${count === 1 ? 'is' : 'are'} only **${count}** right now.`;
+}
 export const PRIORITY_CIVILIAN_KILL_PM = 'There is an active Priority. Please do not kill anyone.';
 export const PRIORITY_INFO_EMOJI = '<:info:1514347280105209928>';
 const HEADER = 'https://media.discordapp.net/attachments/1529616984755540088/1546535995736858644/clearwater_ban.png?format=webp&quality=lossless';
@@ -1023,7 +1031,9 @@ export function createPriorityRequestService({
   }
 
   return {
-    async openForm(interaction, { players, vehicles, commandLogs } = {}) {
+    async openForm(interaction, { players, vehicles, commandLogs, playerCount } = {}) {
+      const playerBlock = priorityPlayerCountBlockMessage(playerCount);
+      if (playerBlock) throw new Error(playerBlock);
       const { economyBlocksNewPriority } = await import('./economyService.js');
       if (await economyBlocksNewPriority(interaction.client)) {
         throw new Error('A robbery is reserved or active. Wait until it finishes before submitting a priority.');
@@ -1322,9 +1332,11 @@ export async function handlePriorityRequest(interaction) {
         });
         const players = (server.Players || []).map(parseErlcPlayer).filter(p => p.username);
         const vehicles = civilianVehicles((server.Vehicles || []).map(parseErlcVehicle), players);
+        const rawPlayers = server.Players || server.players || [];
         return service.openForm(interaction, {
           players,
           vehicles,
+          playerCount: Number.isInteger(server.CurrentPlayers) ? server.CurrentPlayers : rawPlayers.length,
           commandLogs: server.CommandLogs || server.commandLogs || [],
         });
       });

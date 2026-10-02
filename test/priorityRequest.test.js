@@ -28,6 +28,7 @@ import {
   PRIORITY_MAX_PARTICIPANTS,
   PRIORITY_MAX_VEHICLES,
   PRIORITY_TYPE_MAX,
+  priorityPlayerCountBlockMessage,
   PRIORITY_CIVILIAN_KILL_PM,
   civilianKillersOutsidePriority,
   priorityStartMessageCommand,
@@ -989,6 +990,27 @@ test('a restored pending request still blocks a new one', async () => {
   await assert.rejects(
     () => svc.openForm({ user: { id: 'u1' } }, { players: [{ username: 'A', robloxId: '1' }], vehicles: [] }),
     /already pending/,
+  );
+});
+
+test('priorities need more than 25 players in game', async () => {
+  assert.match(priorityPlayerCountBlockMessage(25), /more than \*\*25 players\*\*.*only \*\*25\*\*/);
+  assert.match(priorityPlayerCountBlockMessage(1), /There is only \*\*1\*\*/);
+  assert.equal(priorityPlayerCountBlockMessage(26), '');
+  assert.equal(priorityPlayerCountBlockMessage(undefined), '');
+  const svc = createPriorityRequestService({
+    now: () => 1,
+    load: async () => ({ request: null }),
+    save: async () => {},
+    send: async () => {},
+    snapshot: async () => ({}),
+    postStaff: async () => ({ id: 'm' }),
+    editStaff: async () => {},
+    dmUser: async () => {},
+  });
+  await assert.rejects(
+    () => svc.openForm({ user: { id: 'u1' } }, { players: [], vehicles: [], playerCount: 20 }),
+    /more than \*\*25 players\*\*/,
   );
 });
 

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-02-priority-min-players",
+      "title": "Priorities need more than 25 players",
+      "summary": "/request-priority now only opens the form when more than 25 players are in the ER:LC server. With 25 or fewer, it says how many players are in game right now.",
+      "createdAt": "2026-10-02T03:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-02-melonly-request-queue",
       "title": "Melonly CAD request queue",
       "summary": "Melonly calls now go through a single queue like the ER:LC one: one request at a time with a short gap, identical lookups share one request, and short rate limits wait and retry instead of failing. During a longer limit the last good data is shown. The CAD lookup remembers which endpoint works and skips missing ones.",
