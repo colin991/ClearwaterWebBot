@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-02-pcso-reapply-wait-enforced",
+      "title": "Enforce the three-day wait after a denied application",
+      "summary": "A denied applicant now always waits three days from the review before applying again, even if the stored cooldown was missing. The Careers page and the application result page both show a live countdown until reapplication opens.",
+      "createdAt": "2026-10-02T02:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-01-pcso-live-role-refresh",
       "title": "Refresh Careers eligibility from Discord",
       "summary": "Careers eligibility now uses current PCSO Discord roles instead of old approved application history. The page forces a fresh Discord member lookup and rechecks eligibility every 15 seconds so role additions and removals appear without reloading.",

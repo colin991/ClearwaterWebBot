@@ -97,6 +97,22 @@ function newId() {
   return randomBytes(6).toString('hex');
 }
 
+/**
+ * When a denied applicant may apply again. The stored cooldown can be missing
+ * (older denials, or a concurrent store write that dropped it), so the most
+ * recent denial's review time always enforces the three-day wait too.
+ */
+export function pinellasReapplyAt(store, userId) {
+  const id = String(userId || '');
+  const stored = Number(store?.denials?.[id] || 0);
+  const latestDenial = (store?.applications || [])
+    .filter((entry) => entry?.userId === id && entry.status === 'denied')
+    .map((entry) => Date.parse(entry.reviewedAt || entry.createdAt || ''))
+    .filter(Number.isFinite)
+    .reduce((latest, time) => Math.max(latest, time), 0);
+  return Math.max(stored, latestDenial ? latestDenial + DENY_COOLDOWN_MS : 0);
+}
+
 async function readStore() {
   try {
     const store = JSON.parse(await readFile(STORE_PATH, 'utf8'));
@@ -326,7 +342,7 @@ export async function postPinellasApplyPanel(client) {
 
 async function beginApplicationSession(user) {
   const store = await readStore();
-  const deniedUntil = Number(store.denials?.[user.id] || 0);
+  const deniedUntil = pinellasReapplyAt(store, user.id);
   if (deniedUntil > Date.now()) {
     const when = Math.floor(deniedUntil / 1000);
     throw new Error(`You can re-apply after <t:${when}:R> (<t:${when}:f>).`);
@@ -488,7 +504,7 @@ export async function getPinellasApplicationStatus(userId, { client } = {}) {
   const store = await readStore();
   const applications = (store.applications || []).filter((entry) => entry.userId === id);
   const latest = applications[0] || null;
-  const deniedUntil = Number(store.denials?.[id] || 0);
+  const deniedUntil = pinellasReapplyAt(store, id);
   const alreadyMember = await applicantIsDepartmentMember(client, id);
   return {
     latest: latest
@@ -523,7 +539,7 @@ export async function submitWebsiteApplication(client, user, rawAnswers = {}, ra
     throw new Error('You are already in the Pinellas County Sheriff’s Office and cannot apply again.');
   }
   const store = await readStore();
-  const deniedUntil = Number(store.denials?.[user.id] || 0);
+  const deniedUntil = pinellasReapplyAt(store, user.id);
   if (deniedUntil > Date.now()) {
     throw new Error('You cannot re-apply until the denial cooldown ends.');
   }

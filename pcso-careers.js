@@ -27,9 +27,23 @@ function statusCopy(payload) {
   if (payload.latest.status === 'approved' && payload.canApply) return 'Your current Discord roles do not show PCSO membership. You can submit a new application.';
   if (payload.latest.status === 'approved') return 'Your application was approved. Complete training and your R/A.';
   if (payload.latest.status === 'denied') return payload.deniedUntil
-    ? `Your application was denied. You can re-apply after ${new Date(payload.deniedUntil).toLocaleString()}.`
-    : 'Your application was denied.';
+    ? 'Your application was denied. You must wait three days before applying again.'
+    : 'Your application was denied. Your three-day waiting period has ended.';
   return `Application status: ${payload.latest.status}.`;
+}
+
+function formatCountdown(milliseconds) {
+  const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return `${days}d ${hours}h ${minutes}m ${seconds % 60}s`;
+}
+
+function reapplyCountdownMarkup(deniedUntil) {
+  const deadline = Date.parse(deniedUntil || '');
+  if (!Number.isFinite(deadline) || deadline <= Date.now()) return '';
+  return `<div class="pcso-result-countdown" data-reapply-countdown data-deadline="${deadline}"><span>You can reapply in</span><strong>${formatCountdown(deadline - Date.now())}</strong><small>${escapeHtml(new Date(deadline).toLocaleString())}</small></div>`;
 }
 
 async function portal(action, extra = {}) {
@@ -73,7 +87,8 @@ async function boot() {
   function renderApplicationStatus(payload) {
     questions = payload.questions || questions;
     canApply = Boolean(payload.canApply);
-    statusCard.innerHTML = `<p><strong>${escapeHtml(statusCopy(payload))}</strong></p>`;
+    const countdown = payload.latest?.status === 'denied' ? reapplyCountdownMarkup(payload.deniedUntil) : '';
+    statusCard.innerHTML = `<p><strong>${escapeHtml(statusCopy(payload))}</strong></p>${countdown}`;
     if (canApply && !questionsMount.children.length) {
       questionsMount.innerHTML = questions.map((question, index) => (
         `<section class="pcso-quiz-question" data-question-index="${index}" hidden><div class="pcso-quiz-question-number">${String(index + 1).padStart(2, '0')}</div><label><span>${escapeHtml(plainPrompt(question.prompt))}</span>${promptInput(question)}</label></section>`
@@ -120,6 +135,17 @@ async function boot() {
     window.setInterval(() => {
       void refreshApplicationStatus().catch(() => {});
     }, 15_000);
+    window.setInterval(() => {
+      const countdown = statusCard.querySelector('[data-reapply-countdown]');
+      if (!countdown) return;
+      const remaining = Number(countdown.dataset.deadline) - Date.now();
+      if (remaining <= 0) {
+        countdown.remove();
+        void refreshApplicationStatus().catch(() => {});
+        return;
+      }
+      countdown.querySelector('strong').textContent = formatCountdown(remaining);
+    }, 1_000);
   } catch (error) {
     statusCard.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
   }
