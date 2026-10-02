@@ -1,6 +1,30 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pinellasReapplyAt } from '../utils/pinellasApply.js';
+import { PINELLAS_APPLY_APPROVED_ROLE_ID, getPinellasApplicationStatus, pinellasReapplyAt } from '../utils/pinellasApply.js';
+import { PINELLAS_GUILD_ID } from '../utils/pinellasServer.js';
+
+function fakeClient(roleIds) {
+  const guild = {
+    id: PINELLAS_GUILD_ID,
+    roles: { cache: new Map([[PINELLAS_APPLY_APPROVED_ROLE_ID, { name: 'Probationary Deputy' }]]) },
+    members: { fetch: async () => ({ roles: { cache: new Set(roleIds) } }) },
+  };
+  return { guilds: { cache: new Map([[PINELLAS_GUILD_ID, guild]]), fetch: async () => guild } };
+}
+
+test('a user with no PCSO roles can apply', async () => {
+  const status = await getPinellasApplicationStatus('123456789012345678', { client: fakeClient(['unverified']) });
+  assert.equal(status.alreadyMember, false);
+  assert.equal(status.memberRole, null);
+  assert.equal(status.canApply, true);
+});
+
+test('a PCSO member is told which role blocks a new application', async () => {
+  const status = await getPinellasApplicationStatus('123456789012345678', { client: fakeClient([PINELLAS_APPLY_APPROVED_ROLE_ID]) });
+  assert.equal(status.alreadyMember, true);
+  assert.equal(status.canApply, false);
+  assert.deepEqual(status.memberRole, { id: PINELLAS_APPLY_APPROVED_ROLE_ID, name: 'Probationary Deputy' });
+});
 
 const DAY = 24 * 60 * 60 * 1000;
 

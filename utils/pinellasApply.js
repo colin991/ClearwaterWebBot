@@ -486,17 +486,21 @@ async function submitApplication(client, user, session, violations = []) {
   ));
 }
 
-async function applicantIsDepartmentMember(client, userId) {
-  if (!client) return false;
+/** The PCSO Discord role that makes this user a department member, or null. */
+async function applicantDepartmentRole(client, userId) {
+  if (!client) return null;
   const guild = client.guilds.cache.get(PINELLAS_GUILD_ID)
     || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
   const member = guild
     ? await guild.members.fetch({ user: String(userId), force: true }).catch(() => null)
     : null;
-  return Boolean(
-    memberHasRole(member, PINELLAS_EMPLOYEE_WELCOME_ROLE_ID)
-    || memberHasRole(member, PINELLAS_APPLY_APPROVED_ROLE_ID),
-  );
+  const roleId = [PINELLAS_EMPLOYEE_WELCOME_ROLE_ID, PINELLAS_APPLY_APPROVED_ROLE_ID]
+    .find((id) => memberHasRole(member, id));
+  if (!roleId) return null;
+  return {
+    id: roleId,
+    name: String(guild.roles?.cache?.get(roleId)?.name || 'PCSO member').slice(0, 80),
+  };
 }
 
 export async function getPinellasApplicationStatus(userId, { client } = {}) {
@@ -505,8 +509,10 @@ export async function getPinellasApplicationStatus(userId, { client } = {}) {
   const applications = (store.applications || []).filter((entry) => entry.userId === id);
   const latest = applications[0] || null;
   const deniedUntil = pinellasReapplyAt(store, id);
-  const alreadyMember = await applicantIsDepartmentMember(client, id);
+  const memberRole = await applicantDepartmentRole(client, id);
+  const alreadyMember = Boolean(memberRole);
   return {
+    memberRole,
     latest: latest
       ? {
         id: latest.id,

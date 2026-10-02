@@ -21,7 +21,12 @@ function promptInput(question) {
 }
 
 function statusCopy(payload) {
-  if (payload?.alreadyMember) return 'You are already in the Pinellas County Sheriff’s Office and cannot submit another application.';
+  if (payload?.alreadyMember) {
+    const role = payload.memberRole?.name;
+    return role
+      ? `You are already in the Pinellas County Sheriff’s Office (your PCSO Discord has the ${role} role) and cannot submit another application.`
+      : 'You are already in the Pinellas County Sheriff’s Office and cannot submit another application.';
+  }
   if (!payload?.latest) return 'No application on file. Click Apply Now to start.';
   if (payload.latest.status === 'pending') return 'Your application is pending command review.';
   if (payload.latest.status === 'approved' && payload.canApply) return 'Your current Discord roles do not show PCSO membership. You can submit a new application.';

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-02-pcso-member-role-reason",
+      "title": "Show which PCSO role blocks a new application",
+      "summary": "When Careers says you are already in PCSO, it now names the PCSO Discord role that caused it. Users without a PCSO role can apply even if an older application was approved.",
+      "createdAt": "2026-10-02T02:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-02-pcso-reapply-wait-enforced",
       "title": "Enforce the three-day wait after a denied application",
       "summary": "A denied applicant now always waits three days from the review before applying again, even if the stored cooldown was missing. The Careers page and the application result page both show a live countdown until reapplication opens.",
