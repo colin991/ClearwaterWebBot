@@ -474,7 +474,9 @@ async function applicantIsDepartmentMember(client, userId) {
   if (!client) return false;
   const guild = client.guilds.cache.get(PINELLAS_GUILD_ID)
     || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
-  const member = guild ? await guild.members.fetch(String(userId)).catch(() => null) : null;
+  const member = guild
+    ? await guild.members.fetch({ user: String(userId), force: true }).catch(() => null)
+    : null;
   return Boolean(
     memberHasRole(member, PINELLAS_EMPLOYEE_WELCOME_ROLE_ID)
     || memberHasRole(member, PINELLAS_APPLY_APPROVED_ROLE_ID),
@@ -487,8 +489,7 @@ export async function getPinellasApplicationStatus(userId, { client } = {}) {
   const applications = (store.applications || []).filter((entry) => entry.userId === id);
   const latest = applications[0] || null;
   const deniedUntil = Number(store.denials?.[id] || 0);
-  const alreadyMember = await applicantIsDepartmentMember(client, id)
-    || applications.some((entry) => entry.status === 'approved');
+  const alreadyMember = await applicantIsDepartmentMember(client, id);
   return {
     latest: latest
       ? {

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-01-pcso-live-role-refresh",
+      "title": "Refresh Careers eligibility from Discord",
+      "summary": "Careers eligibility now uses current PCSO Discord roles instead of old approved application history. The page forces a fresh Discord member lookup and rechecks eligibility every 15 seconds so role additions and removals appear without reloading.",
+      "createdAt": "2026-10-01T22:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-01-pcso-reapplication-countdown",
       "title": "Add denied-application countdown",
       "summary": "Denied application results now show a live countdown until the three-day waiting period ends. When reapplication becomes available, the result page provides an Apply Again action and signed-in users receive a bottom-left website notification.",

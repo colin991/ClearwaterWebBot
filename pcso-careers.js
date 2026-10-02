@@ -24,6 +24,7 @@ function statusCopy(payload) {
   if (payload?.alreadyMember) return 'You are already in the Pinellas County Sheriff’s Office and cannot submit another application.';
   if (!payload?.latest) return 'No application on file. Click Apply Now to start.';
   if (payload.latest.status === 'pending') return 'Your application is pending command review.';
+  if (payload.latest.status === 'approved' && payload.canApply) return 'Your current Discord roles do not show PCSO membership. You can submit a new application.';
   if (payload.latest.status === 'approved') return 'Your application was approved. Complete training and your R/A.';
   if (payload.latest.status === 'denied') return payload.deniedUntil
     ? `Your application was denied. You can re-apply after ${new Date(payload.deniedUntil).toLocaleString()}.`
@@ -69,6 +70,24 @@ async function boot() {
   let testActive = false;
   const violations = [];
 
+  function renderApplicationStatus(payload) {
+    questions = payload.questions || questions;
+    canApply = Boolean(payload.canApply);
+    statusCard.innerHTML = `<p><strong>${escapeHtml(statusCopy(payload))}</strong></p>`;
+    if (canApply && !questionsMount.children.length) {
+      questionsMount.innerHTML = questions.map((question, index) => (
+        `<section class="pcso-quiz-question" data-question-index="${index}" hidden><div class="pcso-quiz-question-number">${String(index + 1).padStart(2, '0')}</div><label><span>${escapeHtml(plainPrompt(question.prompt))}</span>${promptInput(question)}</label></section>`
+      )).join('');
+    }
+    if (!canApply && !testActive) form.hidden = true;
+  }
+
+  async function refreshApplicationStatus() {
+    if (!authenticated || testActive) return;
+    const payload = await portal('status');
+    renderApplicationStatus(payload);
+  }
+
   function showQuestion(index) {
     currentQuestion = Math.max(0, Math.min(index, questions.length - 1));
     questionsMount.querySelectorAll('[data-question-index]').forEach((element) => {
@@ -97,14 +116,10 @@ async function boot() {
     authenticated = Boolean(session.authenticated);
     if (!authenticated) return;
     const payload = await portal('status');
-    questions = payload.questions || [];
-    canApply = Boolean(payload.canApply);
-    statusCard.innerHTML = `<p><strong>${escapeHtml(statusCopy(payload))}</strong></p>`;
-    if (canApply) {
-      questionsMount.innerHTML = questions.map((question, index) => (
-        `<section class="pcso-quiz-question" data-question-index="${index}" hidden><div class="pcso-quiz-question-number">${String(index + 1).padStart(2, '0')}</div><label><span>${escapeHtml(plainPrompt(question.prompt))}</span>${promptInput(question)}</label></section>`
-      )).join('');
-    }
+    renderApplicationStatus(payload);
+    window.setInterval(() => {
+      void refreshApplicationStatus().catch(() => {});
+    }, 15_000);
   } catch (error) {
     statusCard.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
   }
