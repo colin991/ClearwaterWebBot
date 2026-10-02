@@ -1,3 +1,3 @@
-import { hydrateNewsAndEventsSection } from './pcso-events.js?v=20260913-content-images';
+import { hydrateNewsAndEventsSection } from './pcso-events.js?v=20261002-press-release';
 
 hydrateNewsAndEventsSection();

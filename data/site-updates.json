@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-02-pcso-press-release-photos",
+      "title": "Press Release photos stay visible and open in a pop-up",
+      "summary": "Photos posted to the PCSO news channel now show up as Press Release cards. The bot renews expired Discord image links so the photo keeps loading, and clicking the photo or the » button opens it full size in a pop-up. The News and Events pages load their lists again too.",
+      "createdAt": "2026-10-02T02:15:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-02-pcso-member-role-reason",
       "title": "Show which PCSO role blocks a new application",
       "summary": "When Careers says you are already in PCSO, it now names the PCSO Discord role that caused it. Users without a PCSO role can apply even if an older application was approved.",

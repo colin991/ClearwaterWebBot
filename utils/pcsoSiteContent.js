@@ -30,7 +30,7 @@ export function normalizePcsoSiteContent(input = {}) {
   return {
     news: news.map((item) => ({
       id: cleanText(item?.id, 64) || newId('news'),
-      title: cleanText(item?.title, 160) || 'Untitled news',
+      title: item?.discordMessageId ? 'Press Release' : (cleanText(item?.title, 160) || 'Untitled news'),
       summary: cleanText(item?.summary || item?.excerpt, 400),
       body: cleanText(item?.body, 4000),
       imageUrl: cleanText(item?.imageUrl, 800),
@@ -118,6 +118,18 @@ export async function deletePcsoContentItem(kind, id) {
   const key = kind === 'event' ? 'events' : (kind === 'star' ? 'star' : 'news');
   content[key] = content[key].filter((item) => item.id !== String(id));
   return savePcsoSiteContent(content);
+}
+
+export async function updatePcsoNewsImageUrls(replacements) {
+  const content = await getPcsoSiteContent();
+  let changed = false;
+  content.news = content.news.map((item) => {
+    const next = replacements.get(item.imageUrl);
+    if (!next || next === item.imageUrl) return item;
+    changed = true;
+    return { ...item, imageUrl: next };
+  });
+  return changed ? savePcsoSiteContent(content) : content;
 }
 
 export async function deletePcsoNewsByDiscordMessage(messageId) {

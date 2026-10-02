@@ -36,6 +36,38 @@ export function formatEventWhen(event) {
   return `${datePart} ${startTime} - ${endTime}`;
 }
 
+function newsImageData(item) {
+  return `data-news-image="${escapeHtml(item.imageUrl)}" data-news-image-title="${escapeHtml(item.title || 'News photo')}"`;
+}
+
+function newsImageButton(item, className) {
+  return `<button type="button" class="${className} pcso-news-image-button" style="background-image:url('${escapeHtml(item.imageUrl)}')" ${newsImageData(item)} aria-label="View ${escapeHtml(item.title || 'news')} photo"></button>`;
+}
+
+function newsLightbox() {
+  let dialog = document.querySelector('[data-news-lightbox]');
+  if (dialog) return dialog;
+  dialog = document.createElement('dialog');
+  dialog.className = 'pcso-lightbox';
+  dialog.setAttribute('data-news-lightbox', '');
+  dialog.innerHTML = '<button type="button" class="pcso-lightbox-close" aria-label="Close photo">×</button><figure><img alt="" /><figcaption></figcaption></figure>';
+  dialog.querySelector('.pcso-lightbox-close').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+  document.body.append(dialog);
+  return dialog;
+}
+
+export function openNewsImage(url, title = '') {
+  const dialog = newsLightbox();
+  const image = dialog.querySelector('img');
+  image.src = url;
+  image.alt = title || 'News photo';
+  dialog.querySelector('figcaption').textContent = title;
+  if (!dialog.open) dialog.showModal();
+}
+
 function truncate(text, max = 96) {
   const value = String(text || '').trim();
   if (value.length <= max) return value;
@@ -72,16 +104,20 @@ export function renderNewsCarouselHtml(news, { limit = 12 } = {}) {
 
   const cards = list.map((item) => {
     const href = item.linkUrl || '/news';
+    const title = item.title || 'Untitled news';
     const image = item.imageUrl
-      ? `<div class="pcso-news-card-image" style="background-image:url('${escapeHtml(item.imageUrl)}')"></div>`
+      ? newsImageButton(item, 'pcso-news-card-image')
       : '<div class="pcso-news-card-image pcso-news-card-image-fallback" aria-hidden="true"></div>';
+    const more = item.imageUrl && (item.discordMessageId || !item.linkUrl)
+      ? `<button type="button" class="pcso-news-card-more" ${newsImageData(item)} aria-label="View ${escapeHtml(title)} photo">»</button>`
+      : `<a class="pcso-news-card-more" href="${escapeHtml(href)}" aria-label="Read ${escapeHtml(title)}">»</a>`;
     return `
       <article class="pcso-news-card">
         ${image}
         <div class="pcso-news-card-body">
-          <h3>${escapeHtml(truncate(item.title || 'Untitled news', 72))}</h3>
+          <h3>${escapeHtml(truncate(title, 72))}</h3>
           <p>${escapeHtml(truncate(item.summary || item.body || 'No summary available.', 140))}</p>
-          <a class="pcso-news-card-more" href="${escapeHtml(href)}" aria-label="Read ${escapeHtml(item.title || 'news item')}">»</a>
+          ${more}
         </div>
       </article>
     `;
@@ -110,9 +146,7 @@ export function renderNewsDirectoryHtml(news, { query = '' } = {}) {
 
   return `<div class="pcso-news-directory">${list.map((item) => {
     const href = item.linkUrl || '#';
-    const image = item.imageUrl
-      ? `<div class="pcso-news-row-image" style="background-image:url('${escapeHtml(item.imageUrl)}')" role="img" aria-label=""></div>`
-      : '';
+    const image = item.imageUrl ? newsImageButton(item, 'pcso-news-row-image') : '';
     return `
       <article class="pcso-news-row${item.imageUrl ? ' pcso-news-row-has-image' : ''}">
         ${image}
@@ -120,7 +154,7 @@ export function renderNewsDirectoryHtml(news, { query = '' } = {}) {
           <h2>${escapeHtml(item.title || 'Untitled news')}</h2>
           ${item.publishedAt ? `<p class="pcso-news-row-date">${escapeHtml(new Date(item.publishedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }))}</p>` : ''}
           <p class="pcso-news-row-summary">${escapeHtml(item.summary || item.body || '')}</p>
-          ${item.linkUrl ? `<p><a class="pcso-text-link" href="${escapeHtml(href)}">Read more →</a></p>` : ''}
+          ${item.linkUrl && !item.discordMessageId ? `<p><a class="pcso-text-link" href="${escapeHtml(href)}">Read more →</a></p>` : ''}
         </div>
       </article>
     `;
@@ -197,7 +231,14 @@ export async function hydrateUpcomingEventsPanel() {
 }
 
 if (typeof window !== 'undefined') {
+  document.addEventListener('click', (event) => {
+    const trigger = event.target.closest?.('[data-news-image]');
+    if (!trigger) return;
+    event.preventDefault();
+    openNewsImage(trigger.dataset.newsImage, trigger.dataset.newsImageTitle);
+  });
   window.PcsoEvents = {
+    openNewsImage,
     fetchPcsoContent,
     formatEventWhen,
     renderUpcomingEventsHtml,

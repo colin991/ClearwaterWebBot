@@ -7,6 +7,7 @@ import { logger } from './logger.js';
 import { postPcsoSiteForm } from './pcsoSiteFormDiscord.js';
 import { savePcsoSiteForm } from './pcsoSiteForms.js';
 import { handlePcsoPortal } from './pcsoSitePortal.js';
+import { refreshPcsoNewsImages } from './pcsoDiscordNews.js';
 import { handleEmployeeAction, postPcsoErlcApi } from './pcsoEmployee.js';
 import {
   addPcsoEventItem,
@@ -168,7 +169,8 @@ export function startBotApiServer(client, {
 
       if (url.pathname === '/api/pcso/content') {
         if (request.method === 'GET') {
-          return sendJson(response, 200, { ok: true, ...(await getPcsoSiteContent()) });
+          const content = await refreshPcsoNewsImages(client, await getPcsoSiteContent());
+          return sendJson(response, 200, { ok: true, ...content });
         }
         if (!['POST', 'DELETE'].includes(request.method || '')) {
           return sendJson(response, 405, { error: 'Method not allowed' });
