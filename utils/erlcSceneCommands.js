@@ -22,7 +22,7 @@ export const SCENE_COMMAND_LOG_CHANNEL_ID = VC_ACTION_LOG_CHANNEL_ID;
 export const SCENE_COMMAND_FAILURE_REASONS = Object.freeze({
   unknown_command: 'not a known ;ss ;ts ;scene ;fc ;civ ;team ;refresh command',
   steal: 'in-game steal processed',
-  refresh_cooldown: 'refreshed less than 30 seconds ago',
+  refresh_cooldown: 'refreshed less than 1 minute ago (sent a cooldown PM)',
   refresh_failed: 'ER:LC rejected the :refresh command',
   missing_server_key: 'bot is missing the ER:LC server key',
   steal_rejected: 'steal command rejected',
@@ -184,8 +184,20 @@ export function isRefreshCommandText(text) {
   return /^;\s*refresh\b/i.test(String(text || '').trim());
 }
 
-export const REFRESH_COOLDOWN_MS = 30_000;
+export const REFRESH_COOLDOWN_MS = 60_000;
+/**
+ * The same ;refresh can arrive from both the webhook and the command-log scan
+ * a few seconds apart; repeats inside this window are treated as that echo.
+ */
+export const REFRESH_ECHO_MS = 10_000;
+const REFRESH_COOLDOWN_PM_MS = 10_000;
 const recentRefreshes = new Map();
+const recentRefreshPms = new Map();
+
+export function refreshCooldownMessage(remainingMs) {
+  const seconds = Math.max(1, Math.ceil(remainingMs / 1000));
+  return `;refresh is on cooldown. You can use it again in ${seconds} second${seconds === 1 ? '' : 's'}.`;
+}
 
 export async function runRefreshCommand({
   config = {},
@@ -199,12 +211,28 @@ export async function runRefreshCommand({
   }
   const key = username.toLowerCase();
   if (recentRefreshes.has(key) && now - recentRefreshes.get(key) < REFRESH_COOLDOWN_MS) {
+    const elapsed = now - recentRefreshes.get(key);
+    if (elapsed < REFRESH_ECHO_MS) return { handled: false, reason: 'duplicate', player };
+    const lastPm = recentRefreshPms.get(key);
+    if (config.erlcServerKey && (lastPm == null || now - lastPm >= REFRESH_COOLDOWN_PM_MS)) {
+      recentRefreshPms.set(key, now);
+      await executeCommand(
+        config.erlcServerKey,
+        `:pm ${username} ${refreshCooldownMessage(REFRESH_COOLDOWN_MS - elapsed)}`,
+      ).catch((error) => {
+        logger.warn(`;refresh cooldown PM to ${username} failed: ${error?.message || error}`);
+      });
+    }
     return { handled: false, reason: 'refresh_cooldown', player };
   }
   if (!config.erlcServerKey) return { handled: false, reason: 'missing_server_key', player };
+  recentRefreshPms.delete(key);
   recentRefreshes.set(key, now);
   for (const [name, at] of recentRefreshes) {
-    if (now - at > REFRESH_COOLDOWN_MS) recentRefreshes.delete(name);
+    if (now - at > REFRESH_COOLDOWN_MS) {
+      recentRefreshes.delete(name);
+      recentRefreshPms.delete(name);
+    }
   }
   try {
     await executeCommand(config.erlcServerKey, `:refresh ${username}`);
@@ -1125,6 +1153,7 @@ export async function scanSceneCommandLogs(client, { snapshot, identities, execu
 export function resetSceneLogScannerForTests() {
   sceneLogSeen.clear();
   recentRefreshes.clear();
+  recentRefreshPms.clear();
   sceneLogsPrimed = false;
 }
 

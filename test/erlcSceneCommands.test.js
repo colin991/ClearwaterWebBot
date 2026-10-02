@@ -8,6 +8,7 @@ import {
   isRefreshCommandText,
   isStealCommandText,
   logIncomingErlcWebhook,
+  refreshCooldownMessage,
   runRefreshCommand,
   parseCustomCommand,
   parseNumberedVoiceName,
@@ -849,7 +850,7 @@ test(';ts does not drag Discord VC mates who are far in-game', async () => {
   assert.equal(mate.movedTo, undefined);
 });
 
-test(';refresh runs :refresh on the player who typed it, once per 30 seconds', async () => {
+test(';refresh runs :refresh once per minute and PMs the cooldown', async () => {
   resetSceneLogScannerForTests();
   const sent = [];
   const executeCommand = async (key, command) => { sent.push({ key, command }); };
@@ -860,13 +861,31 @@ test(';refresh runs :refresh on the player who typed it, once per 30 seconds', a
   assert.equal(first.handled, true);
   assert.deepEqual(sent, [{ key: 'k', command: ':refresh Colin_991' }]);
 
-  const again = await handleErlcSceneEvent(payload, { client, now: 20_000, executeCommand });
-  assert.equal(again.reason, 'refresh_cooldown');
+  const echo = await handleErlcSceneEvent(payload, { client, now: 6_000, executeCommand });
+  assert.equal(echo.reason, 'duplicate');
   assert.equal(sent.length, 1);
 
-  const later = await handleErlcSceneEvent(payload, { client, now: 32_000, executeCommand });
-  assert.equal(later.handled, true);
+  const again = await handleErlcSceneEvent(payload, { client, now: 16_000, executeCommand });
+  assert.equal(again.reason, 'refresh_cooldown');
+  assert.deepEqual(sent[1], {
+    key: 'k',
+    command: ':pm Colin_991 ;refresh is on cooldown. You can use it again in 45 seconds.',
+  });
+
+  await handleErlcSceneEvent(payload, { client, now: 20_000, executeCommand });
   assert.equal(sent.length, 2);
+  await handleErlcSceneEvent(payload, { client, now: 26_000, executeCommand });
+  assert.equal(sent.length, 3);
+  assert.match(sent[2].command, /again in 35 seconds\.$/);
+
+  const later = await handleErlcSceneEvent(payload, { client, now: 61_000, executeCommand });
+  assert.equal(later.handled, true);
+  assert.equal(sent.at(-1).command, ':refresh Colin_991');
+});
+
+test('the cooldown PM wording handles one second left', () => {
+  assert.equal(refreshCooldownMessage(400), ';refresh is on cooldown. You can use it again in 1 second.');
+  assert.equal(refreshCooldownMessage(59_100), ';refresh is on cooldown. You can use it again in 60 seconds.');
 });
 
 test(';refresh from the command logs refreshes that player', async () => {
