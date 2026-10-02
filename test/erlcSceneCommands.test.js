@@ -917,3 +917,33 @@ test(':refresh is left to ER:LC and a failed refresh can be retried', async () =
   const bad = await runRefreshCommand({ config: { erlcServerKey: 'k' }, player: { username: 'a b;:kick all' }, now: 3 });
   assert.equal(bad.handled, false);
 });
+
+test('a webhook "refresh" with only a Roblox id refreshes that player by username', async () => {
+  resetSceneLogScannerForTests();
+  const sent = [];
+  const executeCommand = async (key, command) => { sent.push(command); };
+  const client = { config: { erlcServerKey: 'k' } };
+  const payload = {
+    event: 'CustomCommand',
+    timestamp: 1790722140,
+    origin: '3781384058',
+    data: { command: 'refresh', argument: '' },
+  };
+  const snapshot = async () => ({ Players: [{ Player: 'Colin_991:3781384058', Team: 'Sheriff' }] });
+  const result = await handleErlcSceneEvent(payload, { client, now: 100_000, snapshot, executeCommand });
+  assert.equal(result.handled, true);
+  assert.deepEqual(sent, [':refresh Colin_991']);
+
+  const fromLogs = await runRefreshCommand({
+    config: client.config,
+    player: { username: 'Colin_991', robloxId: '3781384058' },
+    now: 104_000,
+    executeCommand,
+  });
+  assert.equal(fromLogs.reason, 'duplicate');
+  assert.equal(sent.length, 1);
+
+  const offline = await handleErlcSceneEvent({ ...payload, origin: '1' }, { client, now: 200_000, snapshot, executeCommand });
+  assert.equal(offline.reason, 'missing_player');
+  assert.equal(sent.length, 1);
+});

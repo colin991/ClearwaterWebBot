@@ -199,17 +199,41 @@ export function refreshCooldownMessage(remainingMs) {
   return `;refresh is on cooldown. You can use it again in ${seconds} second${seconds === 1 ? '' : 's'}.`;
 }
 
+const ROBLOX_USERNAME = /^[A-Za-z0-9_]{3,20}$/;
+
+async function refreshTargetPlayer(player, { config, snapshot }) {
+  const username = String(player?.username || '').trim().split(/\s+/)[0];
+  const robloxId = String(player?.robloxId || '').trim();
+  if (ROBLOX_USERNAME.test(username) || !robloxId) return { username, robloxId };
+  try {
+    const server = snapshot
+      ? await snapshot()
+      : (config.erlcServerKey ? await fetchErlcServer(config.erlcServerKey, { timeoutMs: 4_000 }) : null);
+    const roster = (server?.Players || server?.players || []).map((entry) => (
+      entry?.username != null ? entry : parseErlcPlayer(entry)
+    ));
+    const match = findRosterPlayer(roster, { robloxId });
+    return { username: String(match?.username || ''), robloxId };
+  } catch (error) {
+    logger.warn(`;refresh: player list unavailable for ${robloxId} (${error?.message || error})`);
+    return { username: '', robloxId };
+  }
+}
+
 export async function runRefreshCommand({
   config = {},
   player = {},
   now = Date.now(),
+  snapshot,
   executeCommand = executeErlcCommand,
 } = {}) {
-  const username = String(player?.username || '').trim().split(/\s+/)[0];
-  if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) {
+  const target = await refreshTargetPlayer(player, { config, snapshot });
+  const username = target.username;
+  if (!ROBLOX_USERNAME.test(username)) {
     return { handled: false, reason: 'missing_player', player };
   }
-  const key = username.toLowerCase();
+  player = { ...player, username, robloxId: target.robloxId || player?.robloxId || '' };
+  const key = target.robloxId || username.toLowerCase();
   if (recentRefreshes.has(key) && now - recentRefreshes.get(key) < REFRESH_COOLDOWN_MS) {
     const elapsed = now - recentRefreshes.get(key);
     if (elapsed < REFRESH_ECHO_MS) return { handled: false, reason: 'duplicate', player };
@@ -706,10 +730,10 @@ export async function handleErlcSceneEvent(payload, {
 } = {}) {
   const parsed = resolveSceneCommand(payload);
   const stealText = extractWebhookCommandText(payload);
-  if (isRefreshCommandText(stealText)) {
+  if (isRefreshCommandText(stealText) || (parsed && /^\s*refresh\b/i.test(stealText))) {
     const player = parsed?.player || extractWebhookPlayer(payload);
     const result = await runRefreshCommand({
-      config, player, now, ...(executeCommand ? { executeCommand } : {}),
+      config, player, now, snapshot, ...(executeCommand ? { executeCommand } : {}),
     });
     await logSceneCommandResult(client, {
       handled: result.handled,
