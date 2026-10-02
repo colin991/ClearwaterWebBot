@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-02-ingame-refresh",
+      "title": "In-game ;refresh",
+      "summary": "Typing ;refresh in the ER:LC server now refreshes you in game. Each player can use it once every 30 seconds, and every use is logged in the scene command log.",
+      "createdAt": "2026-10-02T02:55:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-02-fire-ops-welcome",
       "title": "Clearwater Fire & Rescue welcome message",
       "summary": "New members of the Clearwater Fire & Rescue Discord are welcomed in the welcome channel with a link to apply and a button showing the server's member count.",

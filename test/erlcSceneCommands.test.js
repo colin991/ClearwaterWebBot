@@ -5,8 +5,10 @@ import {
   extractWebhookCommandText,
   extractWebhookPlayer,
   handleErlcSceneEvent,
+  isRefreshCommandText,
   isStealCommandText,
   logIncomingErlcWebhook,
+  runRefreshCommand,
   parseCustomCommand,
   parseNumberedVoiceName,
   pickEmptyNumberedVoiceChannel,
@@ -845,4 +847,54 @@ test(';ts does not drag Discord VC mates who are far in-game', async () => {
   assert.equal(result.nearbyMoved, 0);
   assert.equal(commander.movedTo, 'ts1');
   assert.equal(mate.movedTo, undefined);
+});
+
+test(';refresh runs :refresh on the player who typed it, once per 30 seconds', async () => {
+  resetSceneLogScannerForTests();
+  const sent = [];
+  const executeCommand = async (key, command) => { sent.push({ key, command }); };
+  const client = { config: { erlcServerKey: 'k' } };
+  const payload = { Type: 'Command', Player: 'Colin_991:99', Command: ';refresh' };
+
+  const first = await handleErlcSceneEvent(payload, { client, now: 1_000, executeCommand });
+  assert.equal(first.handled, true);
+  assert.deepEqual(sent, [{ key: 'k', command: ':refresh Colin_991' }]);
+
+  const again = await handleErlcSceneEvent(payload, { client, now: 20_000, executeCommand });
+  assert.equal(again.reason, 'refresh_cooldown');
+  assert.equal(sent.length, 1);
+
+  const later = await handleErlcSceneEvent(payload, { client, now: 32_000, executeCommand });
+  assert.equal(later.handled, true);
+  assert.equal(sent.length, 2);
+});
+
+test(';refresh from the command logs refreshes that player', async () => {
+  resetSceneLogScannerForTests();
+  const sent = [];
+  const executeCommand = async (key, command) => { sent.push(command); };
+  const client = { config: { erlcServerKey: 'k' } };
+  const logs = [{ at: 1, username: 'Old', robloxId: '1', command: ';refresh' }];
+  await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }), executeCommand });
+  assert.equal(sent.length, 0);
+  logs.push({ at: 2, username: 'Colin', robloxId: '99', command: ';refresh' });
+  const result = await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }), executeCommand });
+  assert.equal(result.handled, 1);
+  assert.deepEqual(sent, [':refresh Colin']);
+});
+
+test(':refresh is left to ER:LC and a failed refresh can be retried', async () => {
+  resetSceneLogScannerForTests();
+  assert.equal(isRefreshCommandText(':refresh'), false);
+  assert.equal(isRefreshCommandText(';refresh'), true);
+  assert.equal(isRefreshCommandText(';REFRESH please'), true);
+  let calls = 0;
+  const failing = async () => { calls += 1; throw new Error('429'); };
+  const failed = await runRefreshCommand({ config: { erlcServerKey: 'k' }, player: { username: 'Colin' }, now: 1, executeCommand: failing });
+  assert.equal(failed.reason, 'refresh_failed');
+  const retried = await runRefreshCommand({ config: { erlcServerKey: 'k' }, player: { username: 'Colin' }, now: 2, executeCommand: async () => {} });
+  assert.equal(retried.handled, true);
+  assert.equal(calls, 1);
+  const bad = await runRefreshCommand({ config: { erlcServerKey: 'k' }, player: { username: 'a b;:kick all' }, now: 3 });
+  assert.equal(bad.handled, false);
 });

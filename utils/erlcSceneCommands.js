@@ -1,5 +1,5 @@
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
-import { fetchErlcServer, parseErlcPlayer, parseErlcCommandLog } from './erlc.js';
+import { executeErlcCommand, fetchErlcServer, parseErlcPlayer, parseErlcCommandLog } from './erlc.js';
 import { discordIdsByRobloxId } from './identityStore.js';
 import { resolveZoneDiscordMember } from './erlcZoneVoice.js';
 import { markBotVoiceMove } from './botVoiceMoves.js';
@@ -20,8 +20,11 @@ export const SCENE_COMMANDS = Object.freeze({
 export const SCENE_COMMAND_LOG_CHANNEL_ID = VC_ACTION_LOG_CHANNEL_ID;
 
 export const SCENE_COMMAND_FAILURE_REASONS = Object.freeze({
-  unknown_command: 'not a known ;ss ;ts ;scene ;fc ;civ ;team command',
+  unknown_command: 'not a known ;ss ;ts ;scene ;fc ;civ ;team ;refresh command',
   steal: 'in-game steal processed',
+  refresh_cooldown: 'refreshed less than 30 seconds ago',
+  refresh_failed: 'ER:LC rejected the :refresh command',
+  missing_server_key: 'bot is missing the ER:LC server key',
   steal_rejected: 'steal command rejected',
   missing_player: 'webhook had no player',
   duplicate: 'duplicate of the same command from the last 4 seconds',
@@ -174,6 +177,42 @@ export function extractWebhookEventType(payload) {
 
 export function isStealCommandText(text) {
   return /^[:;]?\s*steal\b/i.test(String(text || '').trim());
+}
+
+/** `;refresh` only: `:refresh` is ER:LC's own moderator command. */
+export function isRefreshCommandText(text) {
+  return /^;\s*refresh\b/i.test(String(text || '').trim());
+}
+
+export const REFRESH_COOLDOWN_MS = 30_000;
+const recentRefreshes = new Map();
+
+export async function runRefreshCommand({
+  config = {},
+  player = {},
+  now = Date.now(),
+  executeCommand = executeErlcCommand,
+} = {}) {
+  const username = String(player?.username || '').trim().split(/\s+/)[0];
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) {
+    return { handled: false, reason: 'missing_player', player };
+  }
+  const key = username.toLowerCase();
+  if (recentRefreshes.has(key) && now - recentRefreshes.get(key) < REFRESH_COOLDOWN_MS) {
+    return { handled: false, reason: 'refresh_cooldown', player };
+  }
+  if (!config.erlcServerKey) return { handled: false, reason: 'missing_server_key', player };
+  recentRefreshes.set(key, now);
+  for (const [name, at] of recentRefreshes) {
+    if (now - at > REFRESH_COOLDOWN_MS) recentRefreshes.delete(name);
+  }
+  try {
+    await executeCommand(config.erlcServerKey, `:refresh ${username}`);
+    return { handled: true, reason: 'refreshed', player: { ...player, username } };
+  } catch (error) {
+    recentRefreshes.delete(key);
+    return { handled: false, reason: 'refresh_failed', error: error?.message || String(error), player };
+  }
 }
 
 export const SCENE_COMMAND_ALIASES = Object.freeze({
@@ -553,6 +592,7 @@ export function sceneCommandLogBody({
     const detail = [payloadHint].map((part) => String(part || '').trim()).filter(Boolean).join(' · ');
     return `RECV — ${cmd} ${who}${detail ? ` · ${detail}` : ''}`;
   }
+  if (handled && commandName === 'refresh') return `OK — ;refresh ${who} refreshed in game`;
   if (handled) {
     const extra = nearbyMoved ? ` · dragged ${nearbyMoved} nearby` : '';
     return `OK — ${cmd} ${who} ${reason || 'moved'} into #${channelName || 'unknown'}${extra}`;
@@ -634,9 +674,25 @@ export async function handleErlcSceneEvent(payload, {
   now = Date.now(),
   snapshot,
   identities,
+  executeCommand,
 } = {}) {
   const parsed = resolveSceneCommand(payload);
   const stealText = extractWebhookCommandText(payload);
+  if (isRefreshCommandText(stealText)) {
+    const player = parsed?.player || extractWebhookPlayer(payload);
+    const result = await runRefreshCommand({
+      config, player, now, ...(executeCommand ? { executeCommand } : {}),
+    });
+    await logSceneCommandResult(client, {
+      handled: result.handled,
+      reason: result.reason,
+      commandName: 'refresh',
+      rawText: stealText,
+      player: result.player || player,
+      error: result.error,
+    });
+    return result;
+  }
   if ((!parsed || !parsed.command) && isStealCommandText(stealText || parsed?.text)) {
     const player = parsed?.player || extractWebhookPlayer(payload);
     let result;
@@ -1025,7 +1081,7 @@ export function commandLogToScenePayload(entry) {
   };
 }
 
-export async function scanSceneCommandLogs(client, { snapshot, identities } = {}) {
+export async function scanSceneCommandLogs(client, { snapshot, identities, executeCommand } = {}) {
   if (!snapshot && !client?.config?.erlcServerKey) return { scanned: 0 };
   const server = snapshot
     ? await snapshot()
@@ -1041,7 +1097,7 @@ export async function scanSceneCommandLogs(client, { snapshot, identities } = {}
   let handled = 0;
   for (const entry of logs) {
     if (isStealCommandText(entry.command)) continue;
-    if (!parseCustomCommand(entry.command)) continue;
+    if (!parseCustomCommand(entry.command) && !isRefreshCommandText(entry.command)) continue;
     const id = `${entry.at || 0}:${entry.username || ''}:${entry.command || ''}`;
     if (sceneLogSeen.has(id)) continue;
     sceneLogSeen.add(id);
@@ -1051,6 +1107,7 @@ export async function scanSceneCommandLogs(client, { snapshot, identities } = {}
         config: client?.config || {},
         snapshot: async () => server,
         identities,
+        executeCommand,
       });
       if (result?.handled) handled += 1;
     } catch (error) {
@@ -1067,6 +1124,7 @@ export async function scanSceneCommandLogs(client, { snapshot, identities } = {}
 
 export function resetSceneLogScannerForTests() {
   sceneLogSeen.clear();
+  recentRefreshes.clear();
   sceneLogsPrimed = false;
 }
 
@@ -1101,7 +1159,7 @@ export function startErlcSceneCommands(client) {
   void scanSceneCommandLogs(client).catch((error) => {
     logger.warn(`ER:LC scene command log scan failed: ${error?.message || error}`);
   });
-  logger.info('ER:LC in-game scene commands armed (;ss ;ts ;scene ;fc ;civ ;team).');
+  logger.info('ER:LC in-game scene commands armed (;ss ;ts ;scene ;fc ;civ ;team ;refresh).');
   return () => {
     client.off('erlcEvent', listener);
     clearInterval(timer);
