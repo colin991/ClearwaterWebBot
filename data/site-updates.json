@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-01-pcso-reapplication-countdown",
+      "title": "Add denied-application countdown",
+      "summary": "Denied application results now show a live countdown until the three-day waiting period ends. When reapplication becomes available, the result page provides an Apply Again action and signed-in users receive a bottom-left website notification.",
+      "createdAt": "2026-10-01T22:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-01-pcso-application-result-reveal",
       "title": "Add private application result reveal",
       "summary": "Reviewed applicants now receive a Discord DM directing them to the website. Signed-in applicants see a bottom-left review notice and can open a dedicated page where the accepted or denied result remains concealed until they click to reveal it.",

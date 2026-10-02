@@ -502,6 +502,9 @@ export async function getPinellasApplicationStatus(userId, { client } = {}) {
     alreadyMember,
     canApply: !alreadyMember && !(deniedUntil > Date.now()) && !applications.some((entry) => entry.status === 'pending'),
     deniedUntil: deniedUntil > Date.now() ? new Date(deniedUntil).toISOString() : null,
+    reapplyAt: latest?.status === 'denied' && deniedUntil
+      ? new Date(deniedUntil).toISOString()
+      : null,
     questions: PINELLAS_APPLY_QUESTIONS.map((question, index) => ({
       key: question.key,
       index,

@@ -115,6 +115,23 @@ async function showApplicationResultNotice() {
     const payload = await response.json().catch(() => ({}));
     const application = payload.latest;
     if (!response.ok || !application || !['approved', 'denied'].includes(application.status)) return;
+    const reapplyReady = application.status === 'denied'
+      && payload.canApply
+      && payload.reapplyAt
+      && Date.parse(payload.reapplyAt) <= Date.now();
+    const reapplyNoticeKey = `pcso-application-reapply-${application.id}`;
+    if (reapplyReady && localStorage.getItem(reapplyNoticeKey) !== 'dismissed') {
+      const notice = document.createElement('aside');
+      notice.className = 'pcso-result-notice';
+      notice.setAttribute('role', 'status');
+      notice.innerHTML = '<span>Applications</span><strong>You can now reapply to PCSO.</strong><a href="/careers">Start a new application →</a><button type="button" aria-label="Dismiss reapplication notice">×</button>';
+      notice.querySelector('button').addEventListener('click', () => {
+        localStorage.setItem(reapplyNoticeKey, 'dismissed');
+        notice.remove();
+      });
+      document.body.append(notice);
+      return;
+    }
     if (localStorage.getItem(`pcso-application-result-${application.id}`) === 'revealed') return;
     const notice = document.createElement('aside');
     notice.className = 'pcso-result-notice';

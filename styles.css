@@ -1808,6 +1808,10 @@ body.home-stage {
 .pcso-result-outcome p { margin:0; line-height:1.55; }
 .pcso-result-outcome>p:first-child { margin-bottom:10px; color:#aeb2ba; font-size:11px; font-weight:850; letter-spacing:.15em; text-transform:uppercase; }
 .pcso-result-outcome h2 { margin:0 0 12px; color:#fff; font-size:30px; }
+.pcso-result-countdown { display:grid; gap:7px; margin:24px 0; padding:20px; border:1px solid #3c3f46; background:#17181c; }
+.pcso-result-countdown span { color:#9da1aa; font-size:11px; font-weight:850; letter-spacing:.13em; text-transform:uppercase; }
+.pcso-result-countdown strong { color:#fff; font-size:clamp(25px,5vw,38px); font-variant-numeric:tabular-nums; letter-spacing:.03em; }
+.pcso-result-countdown small { color:#8d929b; }
 @keyframes pcso-result-enter { from { opacity:0; transform:translate(-12px,12px); } to { opacity:1; transform:none; } }
 @keyframes pcso-result-reveal { from { opacity:0; transform:scale(.97); } to { opacity:1; transform:none; } }
 @media (max-width:600px) { .pcso-result-notice { left:14px; bottom:14px; width:calc(100vw - 28px); } .pcso-result-shell { padding:36px 22px; } }
