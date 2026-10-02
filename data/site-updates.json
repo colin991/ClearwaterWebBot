@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-01-pcso-application-result-reveal",
+      "title": "Add private application result reveal",
+      "summary": "Reviewed applicants now receive a Discord DM directing them to the website. Signed-in applicants see a bottom-left review notice and can open a dedicated page where the accepted or denied result remains concealed until they click to reveal it.",
+      "createdAt": "2026-10-01T21:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-01-pcso-careers-quiz-layout",
       "title": "Refresh Careers application layout",
       "summary": "The Careers page now uses a cleaner dashboard layout while preserving its existing colors. Applicants answer questions in a focused Quizizz-style card with visual progress, large question numbering, answer choices, and clear Back and Next controls.",

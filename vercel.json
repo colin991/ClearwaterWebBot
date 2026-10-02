@@ -67,6 +67,10 @@
       "destination": "/careers.html"
     },
     {
+      "source": "/application-result",
+      "destination": "/application-result.html"
+    },
+    {
       "source": "/active-calls",
       "destination": "/active-calls.html"
     },

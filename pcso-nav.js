@@ -99,8 +99,33 @@
   });
 
   refreshPcsoLoginButton();
+  showApplicationResultNotice();
   document.dispatchEvent(new Event('pcso-nav-ready'));
 })();
+
+async function showApplicationResultNotice() {
+  if (location.pathname.replace(/\.html$/, '') === '/application-result') return;
+  try {
+    const session = await fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' }).then((response) => response.json());
+    if (!session.authenticated) return;
+    const response = await fetch('/api/pcso/portal', {
+      method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'application', action: 'status' }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    const application = payload.latest;
+    if (!response.ok || !application || !['approved', 'denied'].includes(application.status)) return;
+    if (localStorage.getItem(`pcso-application-result-${application.id}`) === 'revealed') return;
+    const notice = document.createElement('aside');
+    notice.className = 'pcso-result-notice';
+    notice.setAttribute('role', 'status');
+    notice.innerHTML = '<span>Application update</span><strong>Your application has been reviewed.</strong><a href="/application-result">Click to reveal result →</a><button type="button" aria-label="Dismiss application notice">×</button>';
+    notice.querySelector('button').addEventListener('click', () => notice.remove());
+    document.body.append(notice);
+  } catch {
+    // Do not interrupt public pages when application status is unavailable.
+  }
+}
 
 async function refreshPcsoLoginButton() {
   const loginLinks = document.querySelectorAll('[data-pcso-login]');

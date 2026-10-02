@@ -22,6 +22,7 @@ import {
   PINELLAS_GUILD_ID,
 } from './pinellasServer.js';
 import { logger } from './logger.js';
+import { publicSiteUrl } from './pcsoSiteForms.js';
 
 export const PINELLAS_APPLY_CHANNEL_ID = '1514443793607295058';
 export const PINELLAS_APPLY_REVIEW_CHANNEL_ID = '1546250122713767966';
@@ -672,11 +673,11 @@ export async function handlePinellasApplyInteraction(interaction) {
       }
       if (user) {
         await user.send(dmCard(
-          'Application Approved',
+          'Application Reviewed',
           [
-            'Congratulations — your Pinellas County Sheriff\'s Office entry application was **approved**.',
+            'Command staff has finished reviewing your Pinellas County Sheriff\'s Office entry application.',
             '',
-            'You have been given your department role. Complete your **training** and **R/A** as directed by command staff.',
+            `Sign in and reveal your result on the website: ${publicSiteUrl()}/application-result`,
             '',
             `-# Reviewed by ${interaction.user.tag}`,
           ].join('\n'),
@@ -686,13 +687,12 @@ export async function handlePinellasApplyInteraction(interaction) {
       store.denials = store.denials || {};
       store.denials[application.userId] = Date.now() + DENY_COOLDOWN_MS;
       if (user) {
-        const until = Math.floor(store.denials[application.userId] / 1000);
         await user.send(dmCard(
-          'Application Denied',
+          'Application Reviewed',
           [
-            'Your Pinellas County Sheriff\'s Office entry application was **denied**.',
+            'Command staff has finished reviewing your Pinellas County Sheriff\'s Office entry application.',
             '',
-            `You may re-apply after **3 days** (<t:${until}:R>).`,
+            `Sign in and reveal your result on the website: ${publicSiteUrl()}/application-result`,
             '',
             `-# Reviewed by ${interaction.user.tag}`,
           ].join('\n'),
