@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-02-fire-ops-profile",
+      "title": "Fire Operations bot profile in the Fire & Rescue server",
+      "summary": "In the Clearwater Fire & Rescue Discord, the bot now shows as Fire Operations with the Clearwater Fire & Rescue badge, the Engine 45 banner, and an operations description.",
+      "createdAt": "2026-10-02T02:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-02-pcso-press-release-photos",
       "title": "Press Release photos stay visible and open in a pop-up",
       "summary": "Photos posted to the PCSO news channel now show up as Press Release cards. The bot renews expired Discord image links so the photo keeps loading, and clicking the photo or the » button opens it full size in a pop-up. The News and Events pages load their lists again too.",

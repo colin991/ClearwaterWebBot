@@ -19,6 +19,7 @@ import { startFrequencyChangeGreeting } from '../utils/frequencyChangeGreeting.j
 import { startSoundboardAccess } from '../utils/soundboardAccess.js';
 import { ensurePinellasServerProfile } from '../utils/pinellasServer.js';
 import { ensureBelleairServerProfile } from '../utils/belleairServer.js';
+import { ensureFireOpsServerProfile } from '../utils/fireOpsServer.js';
 import { clearFloridaServerProfile } from '../utils/floridaServer.js';
 import { startBotApiServer } from '../utils/botApiServer.js';
 import { startErlcSceneCommands } from '../utils/erlcSceneCommands.js';
@@ -52,6 +53,12 @@ export default {
         logger.error('Belleair server profile setup failed', error);
       });
     }, 2000);
+
+    setTimeout(() => {
+      void ensureFireOpsServerProfile(client).catch((error) => {
+        logger.error('Fire Operations server profile setup failed', error);
+      });
+    }, 3000);
 
     setTimeout(() => {
       void clearFloridaServerProfile(client).catch((error) => {
