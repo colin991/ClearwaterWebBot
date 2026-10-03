@@ -162,9 +162,12 @@ export async function handlePcsoPortal(client, body = {}) {
 
   if (kind === 'ride-along') {
     const service = rideAlongServiceForClient(client);
+    if (action === 'notices') return { ok: true, ...(await service.notices(user.id)) };
+    if (action === 'notice-seen') return { ok: true, ...(await service.markNoticeSeen(user.id, body.noticeId)) };
     if (action === 'request') await service.request(user, body.fields || {});
     else if (action === 'delay') await service.requestDelay(user, body.id, body.fields || {});
     else if (action === 'end') await service.end(user.id, body.id);
+    else if (action === 'review') await service.review(user, body.id, body.fields || {});
     else if (action !== 'list') {
       const error = new Error('Unknown ride along request.');
       error.status = 400;

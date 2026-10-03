@@ -95,7 +95,7 @@ const RIDE_STATUS = {
 };
 
 function rideRequested(item) {
-  return item.requestedLabel || `${rideWhen(item.requestedStartAt)} – ${rideWhen(item.requestedEndAt)}`;
+  return item.requestedLabel || rideWhen(item.requestedStartAt);
 }
 
 function placeSelect(places, selected) {
@@ -122,7 +122,7 @@ function renderRideAlongs(payload = {}) {
     <article class="admin-record-card" data-ride-id="${escapeHtml(item.id)}">
       <div class="admin-record-meta"><span>Requested</span><time>${escapeHtml(rideWhen(item.createdAt))}</time></div>
       <h3>${escapeHtml(`${item.firstName} ${item.lastName}`)}</h3>
-      <p>Timeframe: ${escapeHtml(rideRequested(item))}</p>
+      <p>Requested start: ${escapeHtml(rideRequested(item))}</p>
       ${rideRider(item)}
       <label>Start time<input type="datetime-local" data-ride-time value="${escapeHtml(localInputValue(item.requestedStartAt))}" /></label>
       <label>Meeting place${placeSelect(places)}</label>
@@ -162,10 +162,25 @@ function renderRideAlongs(payload = {}) {
     <tbody>${history.map((item) => `<tr><td>${escapeHtml(rideWhen(item.scheduledAt || item.requestedStartAt))}</td><td>${escapeHtml(`${item.firstName} ${item.lastName}`)}</td><td>${escapeHtml(item.requesterUsername || item.requesterId)}</td><td>${escapeHtml(RIDE_STATUS[item.status] || item.status)}${item.endedReason ? `<div class="pcso-call-meta">${escapeHtml(item.endedReason)}</div>` : ''}</td></tr>`).join('')}</tbody>
   </table></div>` : '<p class="admin-status">No past ride alongs yet.</p>';
 
+  const reviews = payload.reviews || [];
+  const average = reviews.length ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length : 0;
+  const starText = (rating) => `${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}`;
+  const reviewsHtml = reviews.length ? `
+    <p class="admin-status">Average rating <strong>${average.toFixed(1)} / 5</strong> from ${reviews.length} review${reviews.length === 1 ? '' : 's'}.</p>
+    ${grid(reviews, (review) => `
+    <article class="admin-record-card admin-ride-review">
+      <div class="admin-record-meta"><span aria-label="${review.rating} out of 5 stars">${starText(review.rating)}</span><time>${escapeHtml(rideWhen(review.at))}</time></div>
+      <h3>${escapeHtml(review.roleplayName)}</h3>
+      <p>Ride along ${escapeHtml(rideWhen(review.scheduledAt))}${review.meetingPlace ? ` at ${escapeHtml(review.meetingPlace)}` : ''}</p>
+      ${review.feedback ? `<blockquote>${escapeHtml(review.feedback)}</blockquote>` : '<p class="admin-status">No written feedback.</p>'}
+      <small>${escapeHtml(review.requesterUsername || review.requesterId)}${review.claimedBy ? ` · Supervisor ${escapeHtml(review.claimedBy)}` : ''}</small>
+    </article>`, '')}` : '<p class="admin-status">No reviews yet. Riders can leave one after their ride along ends.</p>';
+
   rideEl.innerHTML = [
     group('Pending requests', pendingHtml),
     group('Delay requests', delayHtml),
     group('Upcoming', upcomingHtml),
+    group('Reviews &amp; feedback', reviewsHtml),
     group('No show log', noShowHtml),
     group('History', historyHtml),
   ].join('');
@@ -562,8 +577,8 @@ document.addEventListener('click', async (event) => {
     try {
       renderRideAlongs(await ridePortal(action, extra));
       statusEl.textContent = {
-        approve: 'Ride along approved. The requester was DMed.',
-        deny: 'Ride along denied. The requester was DMed.',
+        approve: 'Ride along approved. The requester was DMed and notified on the website.',
+        deny: 'Ride along denied. The requester was DMed and notified on the website.',
         'delay-approve': 'Delay approved. The requester was DMed.',
         'delay-deny': 'Delay denied. The requester was DMed.',
         cancel: 'Ride along cancelled.',

@@ -99,13 +99,96 @@
 
   refreshPcsoLoginButton();
   showApplicationResultNotice();
+  showRideAlongNotices();
   document.dispatchEvent(new Event('pcso-nav-ready'));
 })();
+
+function pcsoSession() {
+  pcsoSession.promise ||= fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' })
+    .then((response) => response.json())
+    .catch(() => ({}));
+  return pcsoSession.promise;
+}
+
+function pcsoNoticeStack() {
+  let stack = document.querySelector('.pcso-notice-stack');
+  if (!stack) {
+    stack = document.createElement('div');
+    stack.className = 'pcso-notice-stack';
+    document.body.append(stack);
+  }
+  return stack;
+}
+
+function pcsoPortalPost(body, options = {}) {
+  return fetch('/api/pcso/portal', {
+    method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body), ...options,
+  });
+}
+
+async function showRideAlongNotices() {
+  try {
+    const session = await pcsoSession();
+    if (!session.authenticated) return;
+    const response = await pcsoPortalPost({ kind: 'ride-along', action: 'notices' });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !Array.isArray(payload.notices)) return;
+    const onRidePage = location.pathname.replace(/\.html$/, '') === '/ride-along';
+    for (const item of payload.notices) {
+      const notice = document.createElement('aside');
+      notice.className = `pcso-result-notice is-${item.kind === 'approved' || item.kind === 'review' ? item.kind : 'denied'}`;
+      notice.setAttribute('role', 'status');
+      const label = document.createElement('span');
+      label.textContent = 'Ride along';
+      const title = document.createElement('strong');
+      title.textContent = item.title || 'Your ride along was updated.';
+      notice.append(label, title);
+      const details = [];
+      if (item.scheduledAt) {
+        details.push(new Date(item.scheduledAt).toLocaleString([], {
+          weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+        }));
+      }
+      if (item.meetingPlace) details.push(`Meet at ${item.meetingPlace}`);
+      if (item.text) details.push(item.text);
+      if (details.length) {
+        const text = document.createElement('p');
+        text.textContent = details.join(' · ');
+        notice.append(text);
+      }
+      const markSeen = () => pcsoPortalPost({ kind: 'ride-along', action: 'notice-seen', noticeId: item.id }, { keepalive: true }).catch(() => {});
+      const link = document.createElement('a');
+      link.href = '/ride-along#ride-requests';
+      link.textContent = item.kind === 'review' ? 'Leave a review →' : (onRidePage ? 'Got it' : 'View your ride along →');
+      link.addEventListener('click', (event) => {
+        markSeen();
+        if (onRidePage) {
+          event.preventDefault();
+          notice.remove();
+          document.getElementById('ride-requests')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.setAttribute('aria-label', 'Dismiss ride along notice');
+      close.textContent = '×';
+      close.addEventListener('click', () => {
+        markSeen();
+        notice.remove();
+      });
+      notice.append(link, close);
+      pcsoNoticeStack().append(notice);
+    }
+  } catch {
+    // Ride along notices are optional on public pages.
+  }
+}
 
 async function showApplicationResultNotice() {
   if (location.pathname.replace(/\.html$/, '') === '/application-result') return;
   try {
-    const session = await fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' }).then((response) => response.json());
+    const session = await pcsoSession();
     if (!session.authenticated) return;
     const response = await fetch('/api/pcso/portal', {
       method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
@@ -147,12 +230,12 @@ async function refreshPcsoLoginButton() {
   const loginLinks = document.querySelectorAll('[data-pcso-login]');
   if (!loginLinks.length) return;
   try {
-    const response = await fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' });
-    const payload = await response.json().catch(() => ({}));
+    const payload = await pcsoSession();
     if (!payload?.authenticated) return;
+    const nav = document.getElementById('pcso-navigation');
     for (const link of loginLinks) {
       if (payload.user?.admin) {
-        const careersLink = nav.querySelector('.pcso-careers-btn');
+        const careersLink = nav?.querySelector('.pcso-careers-btn');
         if (careersLink && !nav.querySelector('[data-pcso-employee-link]')) {
           careersLink.insertAdjacentHTML('beforebegin', '<a href="/employee" data-pcso-employee-link>Employee</a>');
         }

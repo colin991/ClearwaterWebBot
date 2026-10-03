@@ -52,7 +52,7 @@ export const PCSO_STATIC_PAGES = [
     lead: 'See patrol from the passenger seat before you apply.',
     body: [
       'The Patrol Ride Along Program lets community members and applicants observe a shift with a PCSO supervisor.',
-      'Sign in with Discord and request a timeframe that works for you. Once PCSO approves it, you get a Discord DM with the start time and meeting spot, a check-in 1 hour before, and the supervisor details once someone claims it. Each ride along lasts 40 minutes.',
+      'Sign in with Discord and pick a start time that works for you. Once PCSO approves it, you get a notice here and a Discord DM with the start time and meeting spot, a check-in 1 hour before, and the supervisor details once someone claims it. Each ride along lasts 40 minutes, and afterwards you can leave a review.',
     ],
     extra: `<div class="pcso-ride" data-ride-along>
   <section class="pcso-ride-section" aria-labelledby="ride-upcoming-heading">
@@ -65,25 +65,35 @@ export const PCSO_STATIC_PAGES = [
     <p><a class="pcso-button pcso-button-red" href="/signin?next=/ride-along">Sign in with Discord</a></p>
   </section>
   <section class="pcso-ride-section" data-ride-signed-in hidden>
-    <h2>Your requests</h2>
+    <h2 id="ride-requests">Your requests</h2>
     <div class="pcso-ride-list" data-ride-mine><p class="pcso-ride-empty">You have not requested a ride along yet.</p></div>
-    <h2>Request a ride along</h2>
-    <form class="pcso-form" data-ride-form>
-      <label>Roleplay Name (First Name)<input name="firstName" required maxlength="40" autocomplete="off" /></label>
-      <label>Roleplay Name (Last Name)<input name="lastName" required maxlength="40" autocomplete="off" /></label>
-      <label>Roleplay Date of Birth<input type="date" name="dob" required /></label>
-      <fieldset class="pcso-ride-timeframe">
-        <legend>Timeframe</legend>
-        <label>Date<input type="date" name="date" required /></label>
-        <label>From<input type="time" name="startTime" required step="900" /></label>
-        <label>To<input type="time" name="endTime" required step="900" /></label>
+    <h2 data-ride-form-heading>Request a ride along</h2>
+    <p class="pcso-ride-open-note" data-ride-open-note hidden>You already have an open ride along request. End it above if you want to pick a different time.</p>
+    <form class="pcso-form pcso-ride-form" data-ride-form>
+      <fieldset class="pcso-ride-group">
+        <legend><span>1</span>Your roleplay character</legend>
+        <div class="pcso-ride-row">
+          <label>First name<input name="firstName" required maxlength="40" autocomplete="off" placeholder="John" /></label>
+          <label>Last name<input name="lastName" required maxlength="40" autocomplete="off" placeholder="Doe" /></label>
+        </div>
+        <label class="pcso-ride-half">Date of birth<input type="date" name="dob" required /></label>
       </fieldset>
-      <p class="pcso-form-status" data-form-status role="status"></p>
-      <button class="pcso-button pcso-button-red" type="submit">Request ride along</button>
+      <fieldset class="pcso-ride-group">
+        <legend><span>2</span>When do you want to start?</legend>
+        <div class="pcso-ride-row">
+          <label>Date<input type="date" name="date" required data-ride-min-date /></label>
+          <label>Start time<input type="time" name="startTime" required step="900" /></label>
+        </div>
+        <p class="pcso-ride-summary" data-ride-summary aria-live="polite">Ride alongs last 40 minutes. Pick a start at least 1 hour from now.</p>
+      </fieldset>
+      <div class="pcso-ride-submit">
+        <button class="pcso-button pcso-button-red" type="submit">Request ride along</button>
+        <p class="pcso-form-status" data-form-status role="status"></p>
+      </div>
     </form>
   </section>
 </div>`,
-    scripts: ['pcso-ride-along.js?v=20261003-ride-along'],
+    scripts: ['pcso-ride-along.js?v=20261003-ride-reviews'],
   },
   {
     slug: 'patrol-staff',
@@ -172,7 +182,7 @@ export function pcsoSectionHtml(page) {
 <meta name="theme-color" content="#6b7078" />
 <title>${page.title} | Pinellas County Sheriff's Office</title>
 <link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
-<link rel="stylesheet" href="styles.css?v=20261003-ride-along" />
+<link rel="stylesheet" href="styles.css?v=20261003-ride-notices" />
 <script>document.documentElement.classList.add('js');</script>
 </head>
 <body class="pcso-home">
@@ -190,7 +200,7 @@ export function pcsoSectionHtml(page) {
 <div class="pcso-page-card pcso-prose${page.image ? ' pcso-profile-layout' : ''}">${image}<div>${paragraphs}${page.extra || ''}</div></div>
 </div></main>
 <footer class="pcso-footer"><div class="pcso-wrap pcso-footer-grid"><a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a><p>Professionalism · Integrity · Service<br /><small>© 2026 Pinellas County Sheriff's Office Roleplay</small></p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord →</a></div></footer>
-<script src="pcso-nav.js?v=20261003-admin-employee-nav"></script>
+<script src="pcso-nav.js?v=20261003-ride-notices"></script>
 ${(page.scripts || []).map((src) => `<script src="${src}"></script>`).join('\n')}
 </body>
 </html>

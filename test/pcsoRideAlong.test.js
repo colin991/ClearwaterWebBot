@@ -42,8 +42,7 @@ async function approvedRide(h, offset = 3 * HOUR) {
   await h.service.request(user, {
     firstName: 'John', lastName: 'Doe', dob: '1995-04-02',
     startAt: new Date(h.clock.t + offset).toISOString(),
-    endAt: new Date(h.clock.t + offset + 2 * HOUR).toISOString(),
-    label: 'Oct 13, 5:00 PM – 7:00 PM',
+    label: 'Tue, Oct 13, 3:00 PM',
   });
   const id = h.data().requests[0].id;
   await h.service.approve('admin1', id, { scheduledAt: h.clock.t + offset, meetingPlace: "Sheriff's Station" });
@@ -57,13 +56,56 @@ test('ride along requests need a name, DOB, and a future timeframe', () => {
   assert.throws(() => validateRideAlongRequest({
     firstName: 'J', lastName: 'D', dob: '1990-01-01', startAt: now + 10 * MIN, endAt: now + HOUR,
   }, now), /1 hour/);
-  assert.throws(() => validateRideAlongRequest({
-    firstName: 'J', lastName: 'D', dob: '1990-01-01', startAt: now + 3 * HOUR, endAt: now + 2 * HOUR,
-  }, now), /end time/);
+  assert.throws(() => validateRideAlongRequest({ firstName: 'J', lastName: 'D', dob: '1990-01-01' }, now), /start time/);
   const ok = validateRideAlongRequest({
-    firstName: 'J', lastName: 'D', dob: '1990-01-01', startAt: now + 3 * HOUR, endAt: now + 5 * HOUR,
+    firstName: 'J', lastName: 'D', dob: '1990-01-01', startAt: now + 3 * HOUR, endAt: now + 9 * HOUR,
   }, now);
-  assert.equal(ok.timeframe.endAt - ok.timeframe.startAt, 2 * HOUR);
+  assert.equal(ok.timeframe.endAt - ok.timeframe.startAt, RIDE_ALONG_DURATION_MS);
+});
+
+test('approve and deny leave a website notice that clears once seen', async () => {
+  const h = harness();
+  await approvedRide(h);
+  let { notices } = await h.service.notices('rider1');
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].kind, 'approved');
+  assert.equal(notices[0].meetingPlace, "Sheriff's Station");
+  assert.equal((await h.service.markNoticeSeen('rider1', notices[0].id)).notices.length, 0);
+  assert.equal((await h.service.notices('someone-else')).notices.length, 0);
+
+  const h2 = harness();
+  await h2.service.request(user, { firstName: 'A', lastName: 'B', dob: '1990-01-01', startAt: h2.clock.t + 2 * HOUR });
+  await h2.service.deny('admin1', h2.data().requests[0].id, 'No supervisors that day');
+  ({ notices } = await h2.service.listForUser('rider1'));
+  assert.equal(notices[0].kind, 'denied');
+  assert.equal(notices[0].text, 'No supervisors that day');
+});
+
+test('riders can review a finished ride along once and admins see it', async () => {
+  const h = harness();
+  const id = await approvedRide(h);
+  await assert.rejects(h.service.review(user, id, { rating: 5 }), /once your ride along is finished/);
+  h.clock.t += 2 * HOUR + 45 * MIN;
+  await h.service.tick();
+  await h.service.claim('sup1', id);
+  h.clock.t += 15 * MIN;
+  await h.service.tick();
+  await h.service.start('sup1', id);
+  h.clock.t += 41 * MIN;
+  await h.service.tick();
+  const { notices, mine } = await h.service.listForUser('rider1');
+  assert.ok(notices.some((notice) => notice.kind === 'review'));
+  assert.equal(mine[0].canReview, true);
+  await assert.rejects(h.service.review(user, id, { rating: 9 }), /1 to 5/);
+  await assert.rejects(h.service.review({ id: 'other' }, id, { rating: 4 }), /your own/);
+  await h.service.review(user, id, { rating: 4, feedback: '  Great deputy, very professional.  ' });
+  await assert.rejects(h.service.review(user, id, { rating: 5 }), /already left a review/);
+  const view = await h.service.adminView();
+  assert.equal(view.reviews.length, 1);
+  assert.equal(view.reviews[0].rating, 4);
+  assert.equal(view.reviews[0].feedback, 'Great deputy, very professional.');
+  assert.equal(view.reviews[0].claimedBy, 'sup1');
+  assert.ok(!(await h.service.notices('rider1')).notices.some((notice) => notice.kind === 'review'));
 });
 
 test('full ride along flow: approve, check-in, supervisor claim, start, rules', async () => {

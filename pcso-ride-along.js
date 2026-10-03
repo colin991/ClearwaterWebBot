@@ -7,6 +7,10 @@
   const signedInEl = root.querySelector('[data-ride-signed-in]');
   const form = root.querySelector('[data-ride-form]');
   const formStatus = form?.querySelector('[data-form-status]');
+  const summaryEl = form?.querySelector('[data-ride-summary]');
+  const openNoteEl = root.querySelector('[data-ride-open-note]');
+  const DURATION_MS = 40 * 60_000;
+  const SUMMARY_DEFAULT = summaryEl?.textContent || '';
 
   const STATUS_LABELS = {
     pending: 'Waiting for approval',
@@ -19,6 +23,7 @@
     no_show: 'No show',
     unclaimed: 'No supervisor available',
   };
+  const OPEN_STATUSES = new Set(['pending', 'approved', 'claimed', 'started']);
 
   const escapeHtml = (value) => String(value ?? '')
     .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
@@ -28,20 +33,47 @@
   });
   const timeOnly = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
 
-  function windowLabel(startMs, endMs) {
+  function windowLabel(startMs, endMs = Number(startMs) + DURATION_MS) {
     return `${dateTime(startMs)} – ${timeOnly(endMs)}`;
   }
 
-  function readTimeframe(data) {
+  function localDate(ms) {
+    const date = new Date(ms);
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+
+  function readStart(data) {
     const date = String(data.get('date') || '');
     const start = String(data.get('startTime') || '');
-    const end = String(data.get('endTime') || '');
-    if (!date || !start || !end) throw new Error('Pick a date, a start time, and an end time.');
+    if (!date || !start) return null;
     const startAt = new Date(`${date}T${start}`);
-    const endAt = new Date(`${date}T${end}`);
-    if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) throw new Error('Pick a valid date and time.');
-    if (endAt <= startAt) throw new Error('The end time must be after the start time.');
-    return { startAt: startAt.toISOString(), endAt: endAt.toISOString(), label: windowLabel(startAt.getTime(), endAt.getTime()) };
+    return Number.isNaN(startAt.getTime()) ? null : startAt;
+  }
+
+  function readTimeframe(data) {
+    const startAt = readStart(data);
+    if (!startAt) throw new Error('Pick a date and a start time.');
+    if (startAt.getTime() < Date.now() + 60 * 60_000) throw new Error('Pick a start time at least 1 hour from now.');
+    return { startAt: startAt.toISOString(), label: windowLabel(startAt.getTime()) };
+  }
+
+  function setMinDates(scope) {
+    const today = localDate(Date.now());
+    const max = localDate(Date.now() + 60 * 24 * 60 * 60_000);
+    scope.querySelectorAll('input[name="date"]').forEach((input) => {
+      input.min = today;
+      input.max = max;
+    });
+  }
+
+  function updateSummary() {
+    if (!summaryEl || !form) return;
+    const startAt = readStart(new FormData(form));
+    summaryEl.classList.toggle('is-set', Boolean(startAt));
+    summaryEl.textContent = startAt
+      ? `Your ride along: ${windowLabel(startAt.getTime())} (40 minutes)`
+      : SUMMARY_DEFAULT;
   }
 
   async function portal(action, extra = {}) {
@@ -74,6 +106,29 @@
     return ['pending', 'approved', 'claimed'].includes(item.status);
   }
 
+  const stars = (rating) => `<span class="pcso-ride-stars-read" aria-label="${rating} out of 5 stars">${'★'.repeat(rating)}<span>${'★'.repeat(5 - rating)}</span></span>`;
+
+  function reviewHtml(item) {
+    if (item.review) {
+      return `
+        <div class="pcso-ride-review-done">
+          <p><strong>Your review</strong> ${stars(item.review.rating)}</p>
+          ${item.review.feedback ? `<p>${escapeHtml(item.review.feedback)}</p>` : ''}
+        </div>`;
+    }
+    if (!item.canReview) return '';
+    const inputs = [5, 4, 3, 2, 1].map((value) => `
+      <input type="radio" id="ride-star-${escapeHtml(item.id)}-${value}" name="rating" value="${value}" required />
+      <label for="ride-star-${escapeHtml(item.id)}-${value}" title="${value} star${value === 1 ? '' : 's'}"><span class="sr-only">${value} star${value === 1 ? '' : 's'}</span>★</label>`).join('');
+    return `
+      <form class="pcso-form pcso-ride-review" data-ride-review>
+        <p class="pcso-ride-review-title"><strong>How was your ride along?</strong> Your review goes to PCSO command staff.</p>
+        <fieldset class="pcso-ride-stars"><legend class="sr-only">Rating</legend>${inputs}</fieldset>
+        <label>Feedback<textarea name="feedback" maxlength="1500" placeholder="What went well? What could the deputy do better?"></textarea></label>
+        <button type="submit" class="pcso-button pcso-button-red">Send review</button>
+      </form>`;
+  }
+
   function renderMine(list = []) {
     if (!mineEl) return;
     if (!list.length) {
@@ -83,38 +138,44 @@
     mineEl.innerHTML = list.map((item) => {
       const when = item.scheduledAt
         ? `${windowLabel(item.scheduledAt, item.endAt)} · ${item.meetingPlace}`
-        : `Requested: ${item.requestedLabel || windowLabel(item.requestedStartAt, item.requestedEndAt)}`;
+        : `Requested start: ${windowLabel(item.requestedStartAt)}`;
       const delay = item.delayRequest?.status === 'pending'
-        ? `<p class="pcso-ride-note">Delay requested to ${escapeHtml(item.delayRequest.label || windowLabel(item.delayRequest.requestedStartAt, item.delayRequest.requestedEndAt))}. Waiting for approval.</p>`
+        ? `<p class="pcso-ride-note">Delay requested to ${escapeHtml(windowLabel(item.delayRequest.requestedStartAt))}. Waiting for approval.</p>`
         : '';
+      const reason = item.endedReason ? `<p class="pcso-ride-note">${escapeHtml(item.endedReason)}</p>` : '';
       const actions = canChange(item) ? `
         <div class="pcso-ride-actions">
-          <button type="button" class="pcso-button pcso-button-muted" data-ride-delay-toggle>Delay</button>
+          <button type="button" class="pcso-button pcso-button-muted" data-ride-delay-toggle>${item.status === 'pending' ? 'Change time' : 'Delay'}</button>
           <button type="button" class="pcso-button pcso-button-red" data-ride-end>End ride along</button>
         </div>
         <form class="pcso-form pcso-ride-delay" data-ride-delay hidden>
-          <fieldset class="pcso-ride-timeframe">
-            <legend>New timeframe</legend>
-            <label>Date<input type="date" name="date" required /></label>
-            <label>From<input type="time" name="startTime" required step="900" /></label>
-            <label>To<input type="time" name="endTime" required step="900" /></label>
-          </fieldset>
-          <button type="submit" class="pcso-button pcso-button-red">${item.status === 'pending' ? 'Change timeframe' : 'Request delay'}</button>
+          <div class="pcso-ride-row">
+            <label>New date<input type="date" name="date" required /></label>
+            <label>New start time<input type="time" name="startTime" required step="900" /></label>
+          </div>
+          <button type="submit" class="pcso-button pcso-button-red">${item.status === 'pending' ? 'Change time' : 'Request delay'}</button>
         </form>` : '';
       return `
-        <article class="pcso-ride-card pcso-ride-mine" data-ride-id="${escapeHtml(item.id)}">
+        <article class="pcso-ride-card pcso-ride-mine pcso-ride-${escapeHtml(item.status)}" data-ride-id="${escapeHtml(item.id)}">
           <div><strong>${escapeHtml(`${item.firstName} ${item.lastName}`)}</strong><em>${escapeHtml(STATUS_LABELS[item.status] || item.status)}</em></div>
           <p>${escapeHtml(when)}</p>
           ${delay}
+          ${reason}
           ${actions}
+          ${reviewHtml(item)}
           <p class="pcso-form-status" data-ride-status role="status"></p>
         </article>`;
     }).join('');
+    setMinDates(mineEl);
   }
 
   function render(payload) {
+    const mine = payload.mine || [];
     renderUpcoming(payload.upcoming || []);
-    renderMine(payload.mine || []);
+    renderMine(mine);
+    const hasOpen = mine.some((item) => OPEN_STATUSES.has(item.status));
+    if (form) form.hidden = hasOpen;
+    if (openNoteEl) openNoteEl.hidden = !hasOpen;
   }
 
   async function load() {
@@ -127,6 +188,12 @@
     } catch (error) {
       if (upcomingEl) upcomingEl.innerHTML = `<p class="pcso-ride-empty">${escapeHtml(error.message)}</p>`;
     }
+  }
+
+  if (form) {
+    setMinDates(form);
+    form.addEventListener('input', updateSummary);
+    form.addEventListener('change', updateSummary);
   }
 
   form?.addEventListener('submit', async (event) => {
@@ -146,7 +213,9 @@
         },
       }));
       form.reset();
-      formStatus.textContent = 'Request sent. You will get a Discord DM once PCSO reviews it.';
+      updateSummary();
+      formStatus.textContent = '';
+      if (openNoteEl) openNoteEl.textContent = 'Request sent. You will get a notice here and a Discord DM once PCSO reviews it.';
     } catch (error) {
       formStatus.textContent = error.message;
     } finally {
@@ -176,16 +245,31 @@
 
   mineEl?.addEventListener('submit', async (event) => {
     const delayForm = event.target.closest('[data-ride-delay]');
-    if (!delayForm) return;
+    const reviewForm = event.target.closest('[data-ride-review]');
+    if (!delayForm && !reviewForm) return;
     event.preventDefault();
-    const card = delayForm.closest('[data-ride-id]');
+    const card = event.target.closest('[data-ride-id]');
     const status = card.querySelector('[data-ride-status]');
+    const submit = event.target.querySelector('button[type="submit"]');
     try {
-      const fields = readTimeframe(new FormData(delayForm));
+      if (submit) submit.disabled = true;
       status.textContent = 'Sending…';
-      render(await portal('delay', { id: card.dataset.rideId, fields }));
+      if (delayForm) {
+        render(await portal('delay', { id: card.dataset.rideId, fields: readTimeframe(new FormData(delayForm)) }));
+      } else {
+        const data = new FormData(reviewForm);
+        if (!data.get('rating')) throw new Error('Pick a star rating first.');
+        render(await portal('review', {
+          id: card.dataset.rideId,
+          fields: { rating: Number(data.get('rating')), feedback: data.get('feedback') },
+        }));
+        mineEl.querySelector(`[data-ride-id="${CSS.escape(card.dataset.rideId)}"] [data-ride-status]`)
+          ?.replaceChildren('Thanks! Your review was sent to PCSO.');
+        document.querySelectorAll('.pcso-result-notice.is-review').forEach((notice) => notice.remove());
+      }
     } catch (error) {
       status.textContent = error.message;
+      if (submit) submit.disabled = false;
     }
   });
 

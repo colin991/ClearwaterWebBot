@@ -29,8 +29,6 @@ const PREFIX = 'pra:';
 const ACTIVE_STATUSES = new Set(['pending', 'approved', 'claimed', 'started']);
 const SCHEDULED_STATUSES = new Set(['approved', 'claimed']);
 const MAX_REQUEST_AHEAD_MS = 60 * 24 * 60 * 60_000;
-const MAX_WINDOW_MS = 12 * 60 * 60_000;
-
 let storeQueue = Promise.resolve();
 
 function emptyStore() {
@@ -77,13 +75,30 @@ const discordTime = (ms, style = 'F') => `<t:${unix(ms)}:${style}>`;
 
 export function validateRideAlongTimeframe(fields = {}, now = Date.now()) {
   const startAt = timeMs(fields.startAt);
-  const endAt = timeMs(fields.endAt);
-  if (!Number.isFinite(startAt) || !Number.isFinite(endAt)) throw new Error('Pick a date, a start time, and an end time.');
-  if (endAt <= startAt) throw new Error('The end time must be after the start time.');
-  if (endAt - startAt > MAX_WINDOW_MS) throw new Error('Keep the timeframe to 12 hours or less.');
-  if (startAt < now + 60 * 60_000) throw new Error('Pick a timeframe that starts at least 1 hour from now.');
-  if (startAt > now + MAX_REQUEST_AHEAD_MS) throw new Error('Pick a timeframe within the next 60 days.');
-  return { startAt, endAt, label: clean(fields.label, 120) };
+  if (!Number.isFinite(startAt)) throw new Error('Pick a date and a start time.');
+  if (startAt < now + 60 * 60_000) throw new Error('Pick a start time at least 1 hour from now.');
+  if (startAt > now + MAX_REQUEST_AHEAD_MS) throw new Error('Pick a start time within the next 60 days.');
+  return { startAt, endAt: startAt + RIDE_ALONG_DURATION_MS, label: clean(fields.label, 120) };
+}
+
+export const RIDE_ALONG_REVIEW_MAX = 1500;
+
+export function validateRideAlongReview(fields = {}) {
+  const rating = Number(fields.rating);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw new Error('Pick a rating from 1 to 5 stars.');
+  const feedback = String(fields.feedback ?? '').replace(/\r\n/g, '\n').trim().slice(0, RIDE_ALONG_REVIEW_MAX);
+  return { rating, feedback };
+}
+
+function addNotice(record, notice, at) {
+  const entry = { id: `n_${at.toString(36)}_${randomBytes(2).toString('hex')}`, at, ...notice };
+  record.notices = [...(record.notices || []).filter((item) => !item.seenAt), entry].slice(-5);
+  return entry;
+}
+
+function canReview(record, now) {
+  if (record.review) return false;
+  return record.status === 'completed' || (record.status === 'started' && now >= rideAlongEndAt(record));
 }
 
 export function validateRideAlongRequest(fields = {}, now = Date.now()) {
@@ -103,7 +118,7 @@ function formatDob(dob) {
   return year && month && day ? `${month}/${day}/${year}` : String(dob || 'Unknown');
 }
 
-export function publicRideAlong(record) {
+export function publicRideAlong(record, now = Date.now()) {
   return {
     id: record.id,
     status: record.status,
@@ -118,8 +133,40 @@ export function publicRideAlong(record) {
     meetingPlace: record.meetingPlace || '',
     claimed: Boolean(record.claimedBy),
     delayRequest: record.delayRequest || null,
+    endedReason: ['denied', 'cancelled', 'unclaimed'].includes(record.status) ? record.endedReason || '' : '',
+    review: record.review ? { rating: record.review.rating, feedback: record.review.feedback, at: record.review.at } : null,
+    canReview: canReview(record, now),
     createdAt: record.createdAt,
   };
+}
+
+export function unseenRideAlongNotices(store, userId) {
+  return store.requests
+    .filter((record) => record.requesterId === String(userId))
+    .flatMap((record) => (record.notices || [])
+      .filter((notice) => !notice.seenAt)
+      .map((notice) => ({ ...notice, rideAlongId: record.id })))
+    .sort((left, right) => right.at - left.at)
+    .slice(0, 3);
+}
+
+export function rideAlongReviews(store) {
+  return store.requests
+    .filter((record) => record.review)
+    .sort((left, right) => right.review.at - left.review.at)
+    .slice(0, 100)
+    .map((record) => ({
+      id: record.id,
+      requesterId: record.requesterId,
+      requesterUsername: record.requesterUsername,
+      roleplayName: rideAlongRoleplayName(record),
+      scheduledAt: record.scheduledAt,
+      meetingPlace: record.meetingPlace,
+      claimedBy: record.claimedBy || null,
+      rating: record.review.rating,
+      feedback: record.review.feedback,
+      at: record.review.at,
+    }));
 }
 
 export function upcomingRideAlongs(store, now = Date.now()) {
@@ -154,9 +201,9 @@ export function rideAlongNoShowSummary(store) {
   return [...byRequester.values()].sort((left, right) => right.count - left.count || right.lastAt - left.lastAt);
 }
 
-function adminRideAlong(record, noShows) {
+function adminRideAlong(record, noShows, now) {
   return {
-    ...publicRideAlong(record),
+    ...publicRideAlong(record, now),
     requesterId: record.requesterId,
     requesterUsername: record.requesterUsername,
     claimedBy: record.claimedBy || null,
@@ -170,7 +217,7 @@ function adminRideAlong(record, noShows) {
 export function adminRideAlongView(store, now = Date.now()) {
   const summary = rideAlongNoShowSummary(store);
   const noShows = new Map(summary.map((entry) => [entry.requesterId, entry.count]));
-  const view = (record) => adminRideAlong(record, noShows);
+  const view = (record) => adminRideAlong(record, noShows, now);
   const sorted = [...store.requests].sort((left, right) => (
     (left.scheduledAt || left.requestedStartAt) - (right.scheduledAt || right.requestedStartAt)
   ));
@@ -184,6 +231,7 @@ export function adminRideAlongView(store, now = Date.now()) {
       .slice(0, 50)
       .map(view),
     noShows: summary,
+    reviews: rideAlongReviews(store),
     meetingPlaces: RIDE_ALONG_MEETING_PLACES,
   };
 }
@@ -349,10 +397,45 @@ export function createRideAlongService({
           .filter((record) => record.requesterId === String(userId))
           .sort((left, right) => (right.createdAt || 0) - (left.createdAt || 0))
           .slice(0, 20)
-          .map(publicRideAlong),
+          .map((record) => publicRideAlong(record, t)),
         upcoming: upcomingRideAlongs(data, t),
+        notices: unseenRideAlongNotices(data, userId),
         meetingPlaces: RIDE_ALONG_MEETING_PLACES,
       };
+    },
+
+    async notices(userId) {
+      return { notices: unseenRideAlongNotices(await read(), userId) };
+    },
+
+    async markNoticeSeen(userId, noticeId) {
+      return withStore(async (data) => {
+        for (const record of data.requests) {
+          if (record.requesterId !== String(userId)) continue;
+          const notice = (record.notices || []).find((item) => item.id === String(noticeId || ''));
+          if (notice) notice.seenAt = now();
+        }
+        return { notices: unseenRideAlongNotices(data, userId) };
+      });
+    },
+
+    async review(user, id, fields) {
+      const parsed = validateRideAlongReview(fields);
+      return withStore(async (data) => {
+        const entry = find(data, id);
+        if (entry.requesterId !== String(user.id)) throw new Error('You can only review your own ride along.');
+        if (entry.review) throw new Error('You already left a review for this ride along.');
+        if (!canReview(entry, now())) throw new Error('You can leave a review once your ride along is finished.');
+        if (entry.status === 'started') {
+          entry.status = 'completed';
+          entry.endedAt = rideAlongEndAt(entry);
+        }
+        entry.review = { ...parsed, at: now() };
+        for (const notice of entry.notices || []) {
+          if (notice.kind === 'review' && !notice.seenAt) notice.seenAt = now();
+        }
+        return publicRideAlong(entry, now());
+      });
     },
 
     async request(user, fields) {
@@ -376,7 +459,7 @@ export function createRideAlongService({
         };
         data.requests.unshift(record);
         data.requests = data.requests.slice(0, 1000);
-        return publicRideAlong(record);
+        return publicRideAlong(record, now());
       });
     },
 
@@ -389,7 +472,7 @@ export function createRideAlongService({
           record.requestedStartAt = timeframe.startAt;
           record.requestedEndAt = timeframe.endAt;
           record.requestedLabel = timeframe.label;
-          return publicRideAlong(record);
+          return publicRideAlong(record, now());
         }
         if (!SCHEDULED_STATUSES.has(record.status)) throw new Error('This ride along can no longer be delayed.');
         record.delayRequest = {
@@ -399,7 +482,7 @@ export function createRideAlongService({
           label: timeframe.label,
           requestedAt: now(),
         };
-        return publicRideAlong(record);
+        return publicRideAlong(record, now());
       });
     },
 
@@ -417,7 +500,7 @@ export function createRideAlongService({
       await closeSupervisorMessages(record, () => supervisorClosedPayload(record, 'This ride along was ended by the requester.'));
       if (record.claimedBy) await safeDm(record.claimedBy, { content: `The Ride Along with **${rideAlongRoleplayName(record)}** at ${discordTime(record.scheduledAt)} was ended by the requester.` });
       if (!byRequester) await safeDm(record.requesterId, { content: `Your Ride Along request was ended. ${reason}` });
-      return publicRideAlong(record);
+      return publicRideAlong(record, now());
     },
 
     async approve(reviewerId, id, { scheduledAt, meetingPlace }) {
@@ -433,6 +516,7 @@ export function createRideAlongService({
         entry.approvedBy = String(reviewerId);
         entry.approvedAt = now();
         resetSchedule(entry);
+        addNotice(entry, { kind: 'approved', title: 'Your ride along was approved.', scheduledAt: at, meetingPlace }, now());
         return { ...entry };
       });
       await safeDm(record.requesterId, {
@@ -449,6 +533,7 @@ export function createRideAlongService({
         entry.deniedBy = String(reviewerId);
         entry.endedAt = now();
         entry.endedReason = clean(reason, 300);
+        addNotice(entry, { kind: 'denied', title: 'Your ride along request was denied.', text: entry.endedReason }, now());
         return { ...entry };
       });
       await safeDm(record.requesterId, {
@@ -471,6 +556,9 @@ export function createRideAlongService({
           entry.scheduledAt = at;
           if (meetingPlace) entry.meetingPlace = meetingPlace;
           resetSchedule(entry);
+          addNotice(entry, { kind: 'approved', title: 'Your ride along delay was approved.', scheduledAt: at, meetingPlace: entry.meetingPlace }, now());
+        } else {
+          addNotice(entry, { kind: 'denied', title: 'Your ride along delay was denied.', text: 'It is still set for the original time.', scheduledAt: entry.scheduledAt, meetingPlace: entry.meetingPlace }, now());
         }
         return { record: { ...entry }, previous: before };
       });
@@ -563,6 +651,7 @@ export function createRideAlongService({
               if (entry.status === 'started') {
                 entry.status = 'completed';
                 entry.endedAt = rideAlongEndAt(entry);
+                if (!entry.review) addNotice(entry, { kind: 'review', title: 'How was your ride along?', text: 'Leave a rating and feedback for PCSO.' }, t);
               }
             });
             continue;
@@ -602,6 +691,7 @@ export function createRideAlongService({
               entry.status = 'unclaimed';
               entry.endedAt = t;
               entry.endedReason = 'No on-duty supervisor claimed it.';
+              addNotice(entry, { kind: 'denied', title: 'No supervisor was available for your ride along.', text: 'You can request a new one.' }, t);
               return { ...entry };
             });
             if (released) {
