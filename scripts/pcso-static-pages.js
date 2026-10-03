@@ -102,7 +102,7 @@ export const PCSO_STATIC_PAGES = [
     </form>
   </section>
 </div>`,
-    scripts: ['pcso-ride-along.js?v=20261003-ride-waiver'],
+    scripts: ['pcso-ride-along.js?v=20261003-ride-supervisor'],
   },
   {
     slug: 'patrol-staff',

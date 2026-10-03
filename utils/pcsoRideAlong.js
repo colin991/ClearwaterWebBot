@@ -140,6 +140,7 @@ export function publicRideAlong(record, now = Date.now()) {
     endAt: record.scheduledAt ? rideAlongEndAt(record) : null,
     meetingPlace: record.meetingPlace || '',
     claimed: Boolean(record.claimedBy),
+    supervisorName: record.claimedBy ? record.claimedByName || 'Assigned' : '',
     delayRequest: record.delayRequest || null,
     endedReason: ['denied', 'cancelled', 'unclaimed'].includes(record.status) ? record.endedReason || '' : '',
     review: record.review ? { rating: record.review.rating, feedback: record.review.feedback, at: record.review.at } : null,
@@ -193,6 +194,7 @@ export function rideAlongReviews(store) {
       scheduledAt: record.scheduledAt,
       meetingPlace: record.meetingPlace,
       claimedBy: record.claimedBy || null,
+      claimedByName: record.claimedByName || '',
       rating: record.review.rating,
       feedback: record.review.feedback,
       at: record.review.at,
@@ -237,6 +239,7 @@ function adminRideAlong(record, noShows, now) {
     requesterId: record.requesterId,
     requesterUsername: record.requesterUsername,
     claimedBy: record.claimedBy || null,
+    claimedByName: record.claimedByName || '',
     noShowCount: noShows.get(record.requesterId) || 0,
     noShowAt: record.noShowAt || null,
     endedAt: record.endedAt || null,
@@ -321,9 +324,28 @@ export function claimerDetailsPayload(record) {
   };
 }
 
+export function rideAlongSupervisorLine(record) {
+  if (!record?.claimedBy) return null;
+  const name = record.claimedByName ? `${record.claimedByName} ` : '';
+  return `**Supervisor:** ${name}(<@${record.claimedBy}>)`;
+}
+
+export function formatSupervisorName(profile = {}) {
+  const roleplayName = profile.roleplayName && profile.roleplayName !== '—' ? profile.roleplayName : '';
+  const name = [profile.rankName, roleplayName || profile.displayName].filter(Boolean).join(' ');
+  const callsign = profile.callsign && profile.callsign !== '—' ? ` · ${profile.callsign}` : '';
+  return clean(`${name}${name ? callsign : ''}`, 120);
+}
+
 export function riderClaimedPayload(record) {
   return {
-    content: ['**A supervisor has claimed your Ride Along.**', '', ...rideAlongDetailLines(record)].join('\n'),
+    content: [
+      '**A supervisor has claimed your Ride Along.**',
+      '',
+      rideAlongSupervisorLine(record),
+      ...rideAlongDetailLines(record),
+    ].filter(Boolean).join('\n'),
+    allowedMentions: { parse: [] },
   };
 }
 
@@ -372,6 +394,7 @@ export function createRideAlongService({
   editMessage = async () => {},
   onDutySupervisors = async () => [],
   userName = async () => '',
+  supervisorProfile = async () => null,
   renderWaiverPdf = async (record, options) => (await import('./pcsoRideAlongWaiverPdf.js')).renderRideAlongWaiverPdf(record, options),
 } = {}) {
   async function withStore(mutate) {
@@ -417,7 +440,7 @@ export function createRideAlongService({
     }
     let pdf = null;
     try {
-      const claimerName = await userName(record.claimedBy).catch(() => '');
+      const claimerName = record.claimedByName || await userName(record.claimedBy).catch(() => '');
       pdf = await renderWaiverPdf(record, { claimerName });
     } catch (error) {
       logger.warn(`Ride along waiver PDF for ${record.id} failed: ${error?.message || error}`);
@@ -425,7 +448,11 @@ export function createRideAlongService({
     const files = pdf ? [new AttachmentBuilder(pdf, { name: waiverFilename(record) })] : [];
     const signed = `signed by **${record.waiver.signature}** ${discordTime(record.waiver.signedAt, 'f')}`;
     const riderSent = await safeDm(record.requesterId, {
-      content: `Your Ride Along has started. Here is your signed liability waiver (${signed}).`,
+      content: [
+        `Your Ride Along has started. Here is your signed liability waiver (${signed}).`,
+        rideAlongSupervisorLine(record),
+      ].filter(Boolean).join('\n'),
+      allowedMentions: { parse: [] },
       files,
     });
     const claimerSent = await safeDm(record.claimedBy, {
@@ -539,7 +566,7 @@ export function createRideAlongService({
     async waiverPdf(id) {
       const record = find(await read(), id);
       if (!record.waiver?.signedAt) throw new Error('No liability waiver was signed for this ride along.');
-      const claimerName = record.claimedBy ? await userName(record.claimedBy).catch(() => '') : '';
+      const claimerName = record.claimedBy ? record.claimedByName || await userName(record.claimedBy).catch(() => '') : '';
       const pdf = await renderWaiverPdf(record, { claimerName });
       return { filename: waiverFilename(record), pdf };
     },
@@ -658,6 +685,7 @@ export function createRideAlongService({
     },
 
     async claim(userId, id) {
+      const profile = await supervisorProfile(String(userId)).catch(() => null);
       const record = await withStore(async (data) => {
         const entry = find(data, id);
         if (entry.claimedBy) {
@@ -669,6 +697,7 @@ export function createRideAlongService({
         }
         entry.status = 'claimed';
         entry.claimedBy = String(userId);
+        entry.claimedByName = profile ? formatSupervisorName(profile) : '';
         entry.claimedAt = now();
         return { ...entry };
       });
@@ -835,6 +864,21 @@ export function rideAlongServiceForClient(client) {
       const channel = await client.channels.fetch(ref.channelId).catch(() => null);
       const message = channel?.isTextBased?.() ? await channel.messages.fetch(ref.messageId).catch(() => null) : null;
       if (message) await message.edit(payload);
+    },
+    supervisorProfile: async (userId) => {
+      const { getPostedShiftSnapshot } = await import('./pinellasShiftPanel.js');
+      const snapshot = await getPostedShiftSnapshot().catch(() => null);
+      const deputy = (snapshot?.deputies || []).find((entry) => entry.discordId === String(userId));
+      const { PINELLAS_GUILD_ID } = await import('./pinellasServer.js');
+      const guild = client.guilds.cache.get(PINELLAS_GUILD_ID) || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
+      const member = guild ? await guild.members.fetch(String(userId)).catch(() => null) : null;
+      const { getHighestPinellasRank } = await import('./pinellasPromote.js');
+      return {
+        rankName: getHighestPinellasRank(member)?.name || deputy?.rankName || '',
+        roleplayName: deputy?.roleplayName || '',
+        callsign: deputy?.callsign || '',
+        displayName: member?.displayName || member?.user?.globalName || member?.user?.username || '',
+      };
     },
     userName: async (userId) => {
       const user = await client.users.fetch(String(userId));

@@ -34,6 +34,7 @@ function harness(start = Date.parse('2026-10-13T12:00:00Z')) {
     editMessage: async (ref, payload) => { edits.push({ ref, payload }); },
     onDutySupervisors: async () => [{ discordId: 'sup1' }, { discordId: 'sup2' }],
     userName: async (id) => `name-${id}`,
+    supervisorProfile: async (id) => ({ rankName: 'Sergeant', roleplayName: `Miller ${id}`, callsign: '1S-02' }),
     renderWaiverPdf: async (record, options) => Buffer.from(`PDF ${record.waiver.signature} ${options.claimerName}`),
   });
   return { service, clock, dms, edits, data: () => data };
@@ -92,7 +93,7 @@ test('the signed waiver is DMed to the rider and claimer at start and logged for
     assert.match(dm.payload.content, /liability waiver/);
     assert.equal(dm.payload.files.length, 1);
     assert.equal(dm.payload.files[0].name, 'ride-along-waiver-John-Doe.pdf');
-    assert.equal(String(dm.payload.files[0].attachment), 'PDF John Doe name-sup1');
+    assert.equal(String(dm.payload.files[0].attachment), 'PDF John Doe Sergeant Miller sup1 · 1S-02');
   }
   const view = await h.service.adminView();
   assert.equal(view.waivers.length, 1);
@@ -190,6 +191,8 @@ test('full ride along flow: approve, check-in, supervisor claim, start, rules', 
   assert.match(claimer.payload.content, /End Time/);
   const rider = h.dms.find((dm) => dm.userId === 'rider1' && /claimed your Ride Along/.test(dm.payload.content));
   assert.match(rider.payload.content, /Meeting Spot:\*\* Sheriff's Station/);
+  assert.match(rider.payload.content, /\*\*Supervisor:\*\* Sergeant Miller sup2 · 1S-02 \(<@sup2>\)/);
+  assert.equal((await h.service.listForUser('rider1')).mine[0].supervisorName, 'Sergeant Miller sup2 · 1S-02');
   assert.doesNotMatch(rider.payload.content, /DOB/);
 
   h.clock.t += 15 * MIN;
@@ -344,4 +347,10 @@ test('live Discord check needs the on-duty role and a Corporal or higher rank', 
   assert.equal(isOnDutyCorporalOrAbove(member(PINELLAS_ON_DUTY_ROLE_ID, lowerRole)), false);
   assert.equal(isOnDutyCorporalOrAbove(member(corporalRole)), false);
   assert.equal(isOnDutyCorporalOrAbove(null), false);
+});
+
+test('supervisor names skip blank shift fields', async () => {
+  const { formatSupervisorName } = await import('../utils/pcsoRideAlong.js');
+  assert.equal(formatSupervisorName({ rankName: 'Corporal', roleplayName: '—', callsign: '—', displayName: 'Andre' }), 'Corporal Andre');
+  assert.equal(formatSupervisorName({}), '');
 });

@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-03-ride-along-supervisor-name",
+      "title": "Ride along DMs show who your supervisor is",
+      "summary": "When a supervisor claims a ride along, the rider's DM now lists the supervisor with their rank, name, callsign, and a Discord mention. The supervisor also shows on the rider's request card on the website, in the start DM, on the signed waiver PDF, and in the admin panel.",
+      "createdAt": "2026-10-03T17:15:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-03-ride-along-onduty-corporal",
       "title": "Ride along claim alerts only go to on-duty Corporals and above",
       "summary": "The 15-minute ride along claim DM now only goes to deputies who are on an active PCSO shift right now. Each person is double-checked live in Discord for the on-duty role and a rank of Corporal or higher. If the on-shift list is more than 5 minutes old and cannot be refreshed, nobody is DMed instead of using an old list.",

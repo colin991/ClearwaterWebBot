@@ -147,7 +147,7 @@ function renderRideAlongs(payload = {}) {
       <h3>${escapeHtml(`${item.firstName} ${item.lastName}`)}</h3>
       <p>${escapeHtml(rideWhen(item.scheduledAt))} – ${escapeHtml(new Date(item.endAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}</p>
       ${rideRider(item)}
-      ${item.claimedBy ? `<small>Claimed by ${escapeHtml(item.claimedBy)}</small>` : ''}
+      ${item.claimedBy ? `<small>Claimed by ${escapeHtml(item.claimedByName || item.claimedBy)}${item.claimedByName ? ` (${escapeHtml(item.claimedBy)})` : ''}</small>` : ''}
       ${item.status === 'started' ? '' : '<div class="admin-record-actions"><button type="button" class="is-danger" data-ride-action="cancel">Cancel ride along</button></div>'}
     </article>`, 'Nothing is scheduled.');
 
@@ -174,7 +174,7 @@ function renderRideAlongs(payload = {}) {
       <h3>${escapeHtml(review.roleplayName)}</h3>
       <p>Ride along ${escapeHtml(rideWhen(review.scheduledAt))}${review.meetingPlace ? ` at ${escapeHtml(review.meetingPlace)}` : ''}</p>
       ${review.feedback ? `<blockquote>${escapeHtml(review.feedback)}</blockquote>` : '<p class="admin-status">No written feedback.</p>'}
-      <small>${escapeHtml(review.requesterUsername || review.requesterId)}${review.claimedBy ? ` · Supervisor ${escapeHtml(review.claimedBy)}` : ''}</small>
+      <small>${escapeHtml(review.requesterUsername || review.requesterId)}${review.claimedBy ? ` · Supervisor ${escapeHtml(review.claimedByName || review.claimedBy)}` : ''}</small>
     </article>`, '')}` : '<p class="admin-status">No reviews yet. Riders can leave one after their ride along ends.</p>';
 
   const waivers = payload.waivers || [];

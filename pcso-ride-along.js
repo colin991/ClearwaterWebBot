@@ -182,6 +182,7 @@
         <article class="pcso-ride-card pcso-ride-mine pcso-ride-${escapeHtml(item.status)}" data-ride-id="${escapeHtml(item.id)}" data-ride-name="${escapeHtml(`${item.firstName} ${item.lastName}`)}">
           <div><strong>${escapeHtml(`${item.firstName} ${item.lastName}`)}</strong><em>${escapeHtml(STATUS_LABELS[item.status] || item.status)}</em></div>
           <p>${escapeHtml(when)}</p>
+          ${item.supervisorName ? `<p class="pcso-ride-note"><strong>Supervisor:</strong> ${escapeHtml(item.supervisorName)}</p>` : ''}
           ${delay}
           ${waiver}
           ${reason}
