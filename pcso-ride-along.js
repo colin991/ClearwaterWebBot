@@ -24,6 +24,19 @@
     unclaimed: 'No supervisor available',
   };
   const OPEN_STATUSES = new Set(['pending', 'approved', 'claimed', 'started']);
+  const waiverHtml = root.querySelector('.pcso-ride-waiver')?.innerHTML || '';
+  const normalizeName = (value) => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+  function readWaiver(data, firstName, lastName) {
+    if (!data.get('waiverAgree')) throw new Error('Read and agree to the liability waiver.');
+    const signature = String(data.get('waiverSignature') || '').trim();
+    if (!signature) throw new Error('Type your roleplay name to sign the liability waiver.');
+    const expected = `${firstName || ''} ${lastName || ''}`.trim();
+    if (expected && normalizeName(signature) !== normalizeName(expected)) {
+      throw new Error(`Sign the waiver with your roleplay name exactly: ${expected}.`);
+    }
+    return { waiverAgree: true, waiverSignature: signature };
+  }
 
   const escapeHtml = (value) => String(value ?? '')
     .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
@@ -142,6 +155,16 @@
       const delay = item.delayRequest?.status === 'pending'
         ? `<p class="pcso-ride-note">Delay requested to ${escapeHtml(windowLabel(item.delayRequest.requestedStartAt))}. Waiting for approval.</p>`
         : '';
+      const waiver = item.waiverSigned
+        ? `<p class="pcso-ride-note pcso-ride-waiver-ok">Liability waiver signed ${escapeHtml(dateTime(item.waiverSignedAt))}.</p>`
+        : (canChange(item) ? `
+        <form class="pcso-form pcso-ride-sign" data-ride-sign>
+          <p class="pcso-ride-review-title"><strong>Sign the liability waiver</strong> Your supervisor needs it before the ride along starts.</p>
+          <div class="pcso-ride-waiver" tabindex="0" role="region" aria-label="Liability waiver">${waiverHtml}</div>
+          <label class="pcso-ride-check"><input type="checkbox" name="waiverAgree" required /> I have read and agree to the waiver.</label>
+          <label>Signature (type ${escapeHtml(`${item.firstName} ${item.lastName}`)})<input name="waiverSignature" required maxlength="90" autocomplete="off" class="pcso-ride-signature" /></label>
+          <button type="submit" class="pcso-button pcso-button-red">Sign waiver</button>
+        </form>` : '');
       const reason = item.endedReason ? `<p class="pcso-ride-note">${escapeHtml(item.endedReason)}</p>` : '';
       const actions = canChange(item) ? `
         <div class="pcso-ride-actions">
@@ -156,10 +179,11 @@
           <button type="submit" class="pcso-button pcso-button-red">${item.status === 'pending' ? 'Change time' : 'Request delay'}</button>
         </form>` : '';
       return `
-        <article class="pcso-ride-card pcso-ride-mine pcso-ride-${escapeHtml(item.status)}" data-ride-id="${escapeHtml(item.id)}">
+        <article class="pcso-ride-card pcso-ride-mine pcso-ride-${escapeHtml(item.status)}" data-ride-id="${escapeHtml(item.id)}" data-ride-name="${escapeHtml(`${item.firstName} ${item.lastName}`)}">
           <div><strong>${escapeHtml(`${item.firstName} ${item.lastName}`)}</strong><em>${escapeHtml(STATUS_LABELS[item.status] || item.status)}</em></div>
           <p>${escapeHtml(when)}</p>
           ${delay}
+          ${waiver}
           ${reason}
           ${actions}
           ${reviewHtml(item)}
@@ -202,6 +226,7 @@
     const data = new FormData(form);
     try {
       const timeframe = readTimeframe(data);
+      const waiver = readWaiver(data, data.get('firstName'), data.get('lastName'));
       if (button) button.disabled = true;
       formStatus.textContent = 'Sending your request…';
       render(await portal('request', {
@@ -210,6 +235,7 @@
           lastName: data.get('lastName'),
           dob: data.get('dob'),
           ...timeframe,
+          ...waiver,
         },
       }));
       form.reset();
@@ -246,7 +272,8 @@
   mineEl?.addEventListener('submit', async (event) => {
     const delayForm = event.target.closest('[data-ride-delay]');
     const reviewForm = event.target.closest('[data-ride-review]');
-    if (!delayForm && !reviewForm) return;
+    const signForm = event.target.closest('[data-ride-sign]');
+    if (!delayForm && !reviewForm && !signForm) return;
     event.preventDefault();
     const card = event.target.closest('[data-ride-id]');
     const status = card.querySelector('[data-ride-status]');
@@ -256,6 +283,9 @@
       status.textContent = 'Sending…';
       if (delayForm) {
         render(await portal('delay', { id: card.dataset.rideId, fields: readTimeframe(new FormData(delayForm)) }));
+      } else if (signForm) {
+        const [firstName, ...rest] = String(card.dataset.rideName || '').split(' ');
+        render(await portal('sign-waiver', { id: card.dataset.rideId, fields: readWaiver(new FormData(signForm), firstName, rest.join(' ')) }));
       } else {
         const data = new FormData(reviewForm);
         if (!data.get('rating')) throw new Error('Pick a star rating first.');

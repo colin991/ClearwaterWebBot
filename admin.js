@@ -104,7 +104,8 @@ function placeSelect(places, selected) {
 
 function rideRider(item) {
   const noShows = item.noShowCount ? ` · <strong>${item.noShowCount} no show${item.noShowCount === 1 ? '' : 's'}</strong>` : '';
-  return `<small>${escapeHtml(item.requesterUsername || item.requesterId)} · DOB ${escapeHtml(item.dob || '—')}${noShows}</small>`;
+  const waiver = item.waiverSigned ? ' · Waiver signed' : ' · <strong>No waiver</strong>';
+  return `<small>${escapeHtml(item.requesterUsername || item.requesterId)} · DOB ${escapeHtml(item.dob || '—')}${waiver}${noShows}</small>`;
 }
 
 function renderRideAlongs(payload = {}) {
@@ -176,11 +177,18 @@ function renderRideAlongs(payload = {}) {
       <small>${escapeHtml(review.requesterUsername || review.requesterId)}${review.claimedBy ? ` · Supervisor ${escapeHtml(review.claimedBy)}` : ''}</small>
     </article>`, '')}` : '<p class="admin-status">No reviews yet. Riders can leave one after their ride along ends.</p>';
 
+  const waivers = payload.waivers || [];
+  const waiverHtml = waivers.length ? `<div class="admin-table-wrap"><table class="admin-table">
+    <thead><tr><th>Signed</th><th>Signature</th><th>Requester</th><th>Ride along</th><th>Sent at start</th><th></th></tr></thead>
+    <tbody>${waivers.map((waiver) => `<tr data-ride-id="${escapeHtml(waiver.id)}"><td>${escapeHtml(rideWhen(waiver.signedAt))}</td><td><em>${escapeHtml(waiver.signature)}</em><div class="pcso-call-meta">${escapeHtml(waiver.roleplayName)}</div></td><td>${escapeHtml(waiver.requesterUsername || '')}<div class="pcso-call-meta">${escapeHtml(waiver.requesterId)}</div></td><td>${escapeHtml(rideWhen(waiver.scheduledAt))}<div class="pcso-call-meta">${escapeHtml(RIDE_STATUS[waiver.status] || waiver.status)}</div></td><td>${waiver.sentAt ? escapeHtml(rideWhen(waiver.sentAt)) : 'Not started'}</td><td><button type="button" data-ride-waiver>Download PDF</button></td></tr>`).join('')}</tbody>
+  </table></div>` : '<p class="admin-status">No signed waivers yet.</p>';
+
   rideEl.innerHTML = [
     group('Pending requests', pendingHtml),
     group('Delay requests', delayHtml),
     group('Upcoming', upcomingHtml),
     group('Reviews &amp; feedback', reviewsHtml),
+    group('Liability waivers', waiverHtml),
     group('No show log', noShowHtml),
     group('History', historyHtml),
   ].join('');
@@ -556,6 +564,30 @@ starForm?.addEventListener('submit', async (event) => {
 });
 
 document.addEventListener('click', async (event) => {
+  const waiverButton = event.target.closest('[data-ride-waiver]');
+  if (waiverButton) {
+    const id = waiverButton.closest('[data-ride-id]')?.dataset.rideId;
+    waiverButton.disabled = true;
+    statusEl.textContent = 'Preparing the waiver PDF…';
+    try {
+      const { filename, pdf } = await ridePortal('waiver-pdf', { id });
+      const bytes = Uint8Array.from(atob(pdf), (char) => char.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename || 'ride-along-waiver.pdf';
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      statusEl.textContent = 'Waiver downloaded.';
+    } catch (error) {
+      statusEl.textContent = error.message;
+    } finally {
+      waiverButton.disabled = false;
+    }
+    return;
+  }
   const rideButton = event.target.closest('[data-ride-action]');
   if (rideButton) {
     const card = rideButton.closest('[data-ride-id]');

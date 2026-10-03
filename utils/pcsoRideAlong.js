@@ -2,12 +2,14 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
   ActionRowBuilder,
+  AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
   MessageFlags,
 } from 'discord.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
+import { validateRideAlongWaiver } from './pcsoRideAlongWaiver.js';
 
 const STORE_PATH = join(process.cwd(), 'data', 'pcso-ride-alongs.json');
 
@@ -110,7 +112,13 @@ export function validateRideAlongRequest(fields = {}, now = Date.now()) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dob) || !Number.isFinite(Date.parse(dob))) {
     throw new Error('Enter your roleplay date of birth.');
   }
-  return { firstName, lastName, dob, timeframe: validateRideAlongTimeframe(fields, now) };
+  return {
+    firstName,
+    lastName,
+    dob,
+    timeframe: validateRideAlongTimeframe(fields, now),
+    waiver: validateRideAlongWaiver(fields, { firstName, lastName }),
+  };
 }
 
 function formatDob(dob) {
@@ -136,8 +144,30 @@ export function publicRideAlong(record, now = Date.now()) {
     endedReason: ['denied', 'cancelled', 'unclaimed'].includes(record.status) ? record.endedReason || '' : '',
     review: record.review ? { rating: record.review.rating, feedback: record.review.feedback, at: record.review.at } : null,
     canReview: canReview(record, now),
+    waiverSigned: Boolean(record.waiver?.signedAt),
+    waiverSignedAt: record.waiver?.signedAt || null,
     createdAt: record.createdAt,
   };
+}
+
+export function rideAlongWaiverLog(store) {
+  return store.requests
+    .filter((record) => record.waiver?.signedAt)
+    .sort((left, right) => right.waiver.signedAt - left.waiver.signedAt)
+    .slice(0, 100)
+    .map((record) => ({
+      id: record.id,
+      roleplayName: rideAlongRoleplayName(record),
+      requesterId: record.requesterId,
+      requesterUsername: record.requesterUsername,
+      signature: record.waiver.signature,
+      version: record.waiver.version,
+      signedAt: record.waiver.signedAt,
+      scheduledAt: record.scheduledAt || record.requestedStartAt || null,
+      status: record.status,
+      claimedBy: record.claimedBy || null,
+      sentAt: record.waiver.sentAt || null,
+    }));
 }
 
 export function unseenRideAlongNotices(store, userId) {
@@ -232,6 +262,7 @@ export function adminRideAlongView(store, now = Date.now()) {
       .map(view),
     noShows: summary,
     reviews: rideAlongReviews(store),
+    waivers: rideAlongWaiverLog(store),
     meetingPlaces: RIDE_ALONG_MEETING_PLACES,
   };
 }
@@ -340,6 +371,8 @@ export function createRideAlongService({
   dmUser = async () => null,
   editMessage = async () => {},
   onDutySupervisors = async () => [],
+  userName = async () => '',
+  renderWaiverPdf = async (record, options) => (await import('./pcsoRideAlongWaiverPdf.js')).renderRideAlongWaiverPdf(record, options),
 } = {}) {
   async function withStore(mutate) {
     const run = storeQueue.then(async () => {
@@ -375,6 +408,34 @@ export function createRideAlongService({
     for (const ref of record.supervisorMessages || []) {
       await editMessage(ref, payloadFor(ref)).catch(() => {});
     }
+  }
+
+  async function sendWaiver(record) {
+    if (!record.waiver?.signedAt) {
+      await safeDm(record.claimedBy, { content: `**${rideAlongRoleplayName(record)}** has not signed the ride along liability waiver on the website.` });
+      return;
+    }
+    let pdf = null;
+    try {
+      const claimerName = await userName(record.claimedBy).catch(() => '');
+      pdf = await renderWaiverPdf(record, { claimerName });
+    } catch (error) {
+      logger.warn(`Ride along waiver PDF for ${record.id} failed: ${error?.message || error}`);
+    }
+    const files = pdf ? [new AttachmentBuilder(pdf, { name: waiverFilename(record) })] : [];
+    const signed = `signed by **${record.waiver.signature}** ${discordTime(record.waiver.signedAt, 'f')}`;
+    const riderSent = await safeDm(record.requesterId, {
+      content: `Your Ride Along has started. Here is your signed liability waiver (${signed}).`,
+      files,
+    });
+    const claimerSent = await safeDm(record.claimedBy, {
+      content: `Signed liability waiver for **${rideAlongRoleplayName(record)}** (${signed}).`,
+      files,
+    });
+    await withStore(async (data) => {
+      const entry = find(data, record.id);
+      entry.waiver = { ...entry.waiver, sentAt: now(), sentToRider: Boolean(riderSent), sentToClaimer: Boolean(claimerSent) };
+    });
   }
 
   function resetSchedule(record) {
@@ -455,12 +516,32 @@ export function createRideAlongService({
           requestedStartAt: parsed.timeframe.startAt,
           requestedEndAt: parsed.timeframe.endAt,
           requestedLabel: parsed.timeframe.label,
+          waiver: { ...parsed.waiver, signedAt: now() },
           createdAt: now(),
         };
         data.requests.unshift(record);
         data.requests = data.requests.slice(0, 1000);
         return publicRideAlong(record, now());
       });
+    },
+
+    async signWaiver(user, id, fields) {
+      return withStore(async (data) => {
+        const record = find(data, id);
+        if (record.requesterId !== String(user.id)) throw new Error('You can only sign the waiver for your own ride along.');
+        if (record.waiver?.signedAt) throw new Error('The liability waiver is already signed.');
+        if (!ACTIVE_STATUSES.has(record.status) || record.status === 'started') throw new Error('This ride along can no longer be changed.');
+        record.waiver = { ...validateRideAlongWaiver(fields, record), signedAt: now() };
+        return publicRideAlong(record, now());
+      });
+    },
+
+    async waiverPdf(id) {
+      const record = find(await read(), id);
+      if (!record.waiver?.signedAt) throw new Error('No liability waiver was signed for this ride along.');
+      const claimerName = record.claimedBy ? await userName(record.claimedBy).catch(() => '') : '';
+      const pdf = await renderWaiverPdf(record, { claimerName });
+      return { filename: waiverFilename(record), pdf };
     },
 
     async requestDelay(user, id, fields) {
@@ -610,7 +691,7 @@ export function createRideAlongService({
     },
 
     async start(userId, id) {
-      return withStore(async (data) => {
+      const record = await withStore(async (data) => {
         const entry = find(data, id);
         if (entry.claimedBy !== String(userId)) throw new Error('Only the supervisor who claimed this ride along can start it.');
         if (entry.status !== 'claimed') throw new Error('This ride along is no longer waiting to start.');
@@ -618,6 +699,8 @@ export function createRideAlongService({
         entry.startedAt = now();
         return { ...entry };
       });
+      await sendWaiver(record);
+      return record;
     },
 
     async noShow(userId, id) {
@@ -712,18 +795,27 @@ export function createRideAlongService({
 let defaultService = null;
 let tickTimer = null;
 
+export function waiverFilename(record) {
+  const name = `${record.firstName || ''}-${record.lastName || ''}`.replace(/[^a-z0-9-]+/gi, '').slice(0, 40) || 'rider';
+  return `ride-along-waiver-${name}.pdf`;
+}
+
 export function rideAlongServiceForClient(client) {
   if (defaultService) return defaultService;
   defaultService = createRideAlongService({
     dmUser: async (userId, payload) => {
       const user = await client.users.fetch(String(userId));
-      const message = await user.send({ allowedMentions: { parse: [] }, ...payload });
+      const message = await user.send({ allowedMentions: { parse: [] }, ...payload, files: payload.files?.length ? payload.files : undefined });
       return { channelId: message.channelId, messageId: message.id };
     },
     editMessage: async (ref, payload) => {
       const channel = await client.channels.fetch(ref.channelId).catch(() => null);
       const message = channel?.isTextBased?.() ? await channel.messages.fetch(ref.messageId).catch(() => null) : null;
       if (message) await message.edit(payload);
+    },
+    userName: async (userId) => {
+      const user = await client.users.fetch(String(userId));
+      return user.globalName || user.username || '';
     },
     onDutySupervisors: async () => {
       const { getPostedShiftSnapshot } = await import('./pinellasShiftPanel.js');

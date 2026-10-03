@@ -32,6 +32,8 @@ function harness(start = Date.parse('2026-10-13T12:00:00Z')) {
     },
     editMessage: async (ref, payload) => { edits.push({ ref, payload }); },
     onDutySupervisors: async () => [{ discordId: 'sup1' }, { discordId: 'sup2' }],
+    userName: async (id) => `name-${id}`,
+    renderWaiverPdf: async (record, options) => Buffer.from(`PDF ${record.waiver.signature} ${options.claimerName}`),
   });
   return { service, clock, dms, edits, data: () => data };
 }
@@ -40,7 +42,7 @@ const user = { id: 'rider1', username: 'rider' };
 
 async function approvedRide(h, offset = 3 * HOUR) {
   await h.service.request(user, {
-    firstName: 'John', lastName: 'Doe', dob: '1995-04-02',
+    firstName: 'John', lastName: 'Doe', dob: '1995-04-02', waiverAgree: true, waiverSignature: 'John Doe',
     startAt: new Date(h.clock.t + offset).toISOString(),
     label: 'Tue, Oct 13, 3:00 PM',
   });
@@ -59,8 +61,55 @@ test('ride along requests need a name, DOB, and a future timeframe', () => {
   assert.throws(() => validateRideAlongRequest({ firstName: 'J', lastName: 'D', dob: '1990-01-01' }, now), /start time/);
   const ok = validateRideAlongRequest({
     firstName: 'J', lastName: 'D', dob: '1990-01-01', startAt: now + 3 * HOUR, endAt: now + 9 * HOUR,
+    waiverAgree: true, waiverSignature: ' j  d ',
   }, now);
   assert.equal(ok.timeframe.endAt - ok.timeframe.startAt, RIDE_ALONG_DURATION_MS);
+});
+
+test('ride along requests need a signed liability waiver matching the roleplay name', () => {
+  const now = Date.parse('2026-10-13T12:00:00Z');
+  const base = { firstName: 'John', lastName: 'Doe', dob: '1990-01-01', startAt: now + 3 * HOUR };
+  assert.throws(() => validateRideAlongRequest({ ...base, waiverSignature: 'John Doe' }, now), /agree to the liability waiver/);
+  assert.throws(() => validateRideAlongRequest({ ...base, waiverAgree: true }, now), /Type your roleplay name/);
+  assert.throws(() => validateRideAlongRequest({ ...base, waiverAgree: true, waiverSignature: 'Jane Roe' }, now), /exactly: John Doe/);
+  assert.equal(validateRideAlongRequest({ ...base, waiverAgree: true, waiverSignature: 'john doe' }, now).waiver.signature, 'john doe');
+});
+
+test('the signed waiver is DMed to the rider and claimer at start and logged for admins', async () => {
+  const h = harness();
+  const id = await approvedRide(h);
+  h.clock.t += 2 * HOUR + 45 * MIN;
+  await h.service.tick();
+  await h.service.claim('sup1', id);
+  h.clock.t += 15 * MIN;
+  await h.service.tick();
+  const before = h.dms.length;
+  await h.service.start('sup1', id);
+  const sent = h.dms.slice(before);
+  assert.deepEqual(sent.map((dm) => dm.userId), ['rider1', 'sup1']);
+  for (const dm of sent) {
+    assert.match(dm.payload.content, /liability waiver/);
+    assert.equal(dm.payload.files.length, 1);
+    assert.equal(dm.payload.files[0].name, 'ride-along-waiver-John-Doe.pdf');
+    assert.equal(String(dm.payload.files[0].attachment), 'PDF John Doe name-sup1');
+  }
+  const view = await h.service.adminView();
+  assert.equal(view.waivers.length, 1);
+  assert.equal(view.waivers[0].signature, 'John Doe');
+  assert.ok(view.waivers[0].sentAt);
+  assert.equal((await h.service.waiverPdf(id)).filename, 'ride-along-waiver-John-Doe.pdf');
+});
+
+test('older requests without a waiver can sign it from the website', async () => {
+  const h = harness();
+  const id = await approvedRide(h);
+  const stored = h.data();
+  delete stored.requests[0].waiver;
+  assert.equal((await h.service.listForUser('rider1')).mine[0].waiverSigned, false);
+  await assert.rejects(h.service.signWaiver({ id: 'x' }, id, { waiverAgree: true, waiverSignature: 'John Doe' }), /your own/);
+  const signed = await h.service.signWaiver(user, id, { waiverAgree: true, waiverSignature: 'John Doe' });
+  assert.equal(signed.waiverSigned, true);
+  await assert.rejects(h.service.signWaiver(user, id, { waiverAgree: true, waiverSignature: 'John Doe' }), /already signed/);
 });
 
 test('approve and deny leave a website notice that clears once seen', async () => {
@@ -74,7 +123,7 @@ test('approve and deny leave a website notice that clears once seen', async () =
   assert.equal((await h.service.notices('someone-else')).notices.length, 0);
 
   const h2 = harness();
-  await h2.service.request(user, { firstName: 'A', lastName: 'B', dob: '1990-01-01', startAt: h2.clock.t + 2 * HOUR });
+  await h2.service.request(user, { firstName: 'A', lastName: 'B', dob: '1990-01-01', waiverAgree: true, waiverSignature: 'A B', startAt: h2.clock.t + 2 * HOUR });
   await h2.service.deny('admin1', h2.data().requests[0].id, 'No supervisors that day');
   ({ notices } = await h2.service.listForUser('rider1'));
   assert.equal(notices[0].kind, 'denied');
@@ -218,7 +267,7 @@ test('only one open ride along request per person', async () => {
   const h = harness();
   await approvedRide(h);
   await assert.rejects(h.service.request(user, {
-    firstName: 'A', lastName: 'B', dob: '1990-01-01', startAt: h.clock.t + 5 * HOUR, endAt: h.clock.t + 6 * HOUR,
+    firstName: 'A', lastName: 'B', dob: '1990-01-01', waiverAgree: true, waiverSignature: 'A B', startAt: h.clock.t + 5 * HOUR, endAt: h.clock.t + 6 * HOUR,
   }), /already have a ride along/);
 });
 
@@ -227,7 +276,7 @@ test('ride along buttons parse and approve rejects unknown meeting places', asyn
   assert.equal(parseRideAlongButton('pra:steal:ra_abc'), null);
   const h = harness();
   await h.service.request(user, {
-    firstName: 'A', lastName: 'B', dob: '1990-01-01', startAt: h.clock.t + 2 * HOUR, endAt: h.clock.t + 3 * HOUR,
+    firstName: 'A', lastName: 'B', dob: '1990-01-01', waiverAgree: true, waiverSignature: 'A B', startAt: h.clock.t + 2 * HOUR, endAt: h.clock.t + 3 * HOUR,
   });
   await assert.rejects(h.service.approve('admin', h.data().requests[0].id, { scheduledAt: h.clock.t + HOUR, meetingPlace: 'Beach' }), /meeting place/);
 });

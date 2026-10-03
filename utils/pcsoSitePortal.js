@@ -219,6 +219,7 @@ export async function handlePcsoPortal(client, body = {}) {
     else if (action === 'delay') await service.requestDelay(user, body.id, body.fields || {});
     else if (action === 'end') await service.end(user.id, body.id);
     else if (action === 'review') await service.review(user, body.id, body.fields || {});
+    else if (action === 'sign-waiver') await service.signWaiver(user, body.id, body.fields || {});
     else if (action !== 'list') {
       const error = new Error('Unknown ride along request.');
       error.status = 400;
@@ -230,6 +231,10 @@ export async function handlePcsoPortal(client, body = {}) {
   if (kind === 'admin-ride-along') {
     await requirePcsoAdmin(client, user.id, 'Admin permission is required to review ride alongs.');
     const service = rideAlongServiceForClient(client);
+    if (action === 'waiver-pdf') {
+      const { filename, pdf } = await service.waiverPdf(body.id);
+      return { ok: true, filename, pdf: pdf.toString('base64') };
+    }
     if (action === 'approve') {
       await service.approve(user.id, body.id, { scheduledAt: body.scheduledAt, meetingPlace: body.meetingPlace });
     } else if (action === 'deny') {

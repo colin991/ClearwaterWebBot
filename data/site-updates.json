@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-03-ride-along-waiver",
+      "title": "Ride along liability waiver",
+      "summary": "Requesting a ride along now includes a Patrol Ride Along Release of Liability and Agreement that riders read, agree to, and sign by typing their roleplay name. Older open requests can sign it from their request card. When the supervisor presses Start, the signed waiver is DMed as a PDF to both the rider and the supervisor. Every signed waiver is logged in the admin panel's Ride alongs tab, where admins can download the PDF.",
+      "createdAt": "2026-10-03T16:35:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-03-complaint-map-pin",
       "title": "Complaints: mark where it happened on the ER:LC map",
       "summary": "The File a Complaint form now asks you to click the ER:LC Liberty County map to mark where it happened, with an optional landmark note. The Office of Professional Compliance ticket lists the nearest postal and includes a zoomed map image with the pin.",

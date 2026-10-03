@@ -1,3 +1,5 @@
+import { rideAlongWaiverHtml } from '../utils/pcsoRideAlongWaiver.js';
+
 export const PCSO_STATIC_PAGES = [
   {
     slug: 'sheriff',
@@ -52,7 +54,7 @@ export const PCSO_STATIC_PAGES = [
     lead: 'See patrol from the passenger seat before you apply.',
     body: [
       'The Patrol Ride Along Program lets community members and applicants observe a shift with a PCSO supervisor.',
-      'Sign in with Discord and pick a start time that works for you. Once PCSO approves it, you get a notice here and a Discord DM with the start time and meeting spot, a check-in 1 hour before, and the supervisor details once someone claims it. Each ride along lasts 40 minutes, and afterwards you can leave a review.',
+      'Sign in with Discord, pick a start time that works for you, and sign the liability waiver. Once PCSO approves it, you get a notice here and a Discord DM with the start time and meeting spot, a check-in 1 hour before, and the supervisor details once someone claims it. Each ride along lasts 40 minutes, and afterwards you can leave a review.',
     ],
     extra: `<div class="pcso-ride" data-ride-along>
   <section class="pcso-ride-section" aria-labelledby="ride-upcoming-heading">
@@ -86,6 +88,13 @@ export const PCSO_STATIC_PAGES = [
         </div>
         <p class="pcso-ride-summary" data-ride-summary aria-live="polite">Ride alongs last 40 minutes. Pick a start at least 1 hour from now.</p>
       </fieldset>
+      <fieldset class="pcso-ride-group">
+        <legend><span>3</span>Liability waiver</legend>
+        <div class="pcso-ride-waiver" tabindex="0" role="region" aria-label="Liability waiver">${rideAlongWaiverHtml()}</div>
+        <label class="pcso-ride-check"><input type="checkbox" name="waiverAgree" required /> I have read and agree to the Patrol Ride Along Release of Liability and Agreement.</label>
+        <label>Signature (type your roleplay first and last name)<input name="waiverSignature" required maxlength="90" autocomplete="off" class="pcso-ride-signature" placeholder="John Doe" /></label>
+        <p class="pcso-form-hint">A signed copy is sent to you and your supervisor when the ride along starts.</p>
+      </fieldset>
       <div class="pcso-ride-submit">
         <button class="pcso-button pcso-button-red" type="submit">Request ride along</button>
         <p class="pcso-form-status" data-form-status role="status"></p>
@@ -93,7 +102,7 @@ export const PCSO_STATIC_PAGES = [
     </form>
   </section>
 </div>`,
-    scripts: ['pcso-ride-along.js?v=20261003-ride-reviews'],
+    scripts: ['pcso-ride-along.js?v=20261003-ride-waiver'],
   },
   {
     slug: 'patrol-staff',
@@ -182,7 +191,7 @@ export function pcsoSectionHtml(page) {
 <meta name="theme-color" content="#6b7078" />
 <title>${page.title} | Pinellas County Sheriff's Office</title>
 <link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
-<link rel="stylesheet" href="styles.css?v=20261003-ride-notices" />
+<link rel="stylesheet" href="styles.css?v=20261003-ride-waiver" />
 <script>document.documentElement.classList.add('js');</script>
 </head>
 <body class="pcso-home">
