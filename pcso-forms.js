@@ -60,14 +60,18 @@ function bindMapPicker() {
   });
 }
 
-async function revealPublicRecordsForm() {
-  const signin = document.querySelector('[data-records-signin]');
-  const wrap = document.querySelector('[data-records-form-wrap]');
-  if (!signin || !wrap) return;
+async function revealSignedInForms() {
+  const gates = [
+    ['[data-records-signin]', '[data-records-form-wrap]'],
+    ['[data-complaint-signin]', '[data-complaint-form-wrap]'],
+  ].map(([signin, wrap]) => [document.querySelector(signin), document.querySelector(wrap)])
+    .filter(([signin, wrap]) => signin && wrap);
+  if (!gates.length) return;
   try {
     const response = await fetch('/api/auth/me', { cache: 'no-store' });
     const session = await response.json().catch(() => ({}));
-    if (session.authenticated) {
+    if (!session.authenticated) return;
+    for (const [signin, wrap] of gates) {
       signin.hidden = true;
       wrap.hidden = false;
     }
@@ -90,17 +94,54 @@ bindForm(document.querySelector('[data-police-report]'), 'police-report', (form)
 bindForm(document.querySelector('[data-crime-stoppers]'), 'crime-stoppers', (form) => ({
   tip: new FormData(form).get('tip'),
 }));
-bindForm(document.querySelector('[data-complaint]'), 'complaint', (form) => {
-  const data = new FormData(form);
-  return {
-    trooperName: data.get('trooperName'),
-    badgeNumber: data.get('badgeNumber'),
-    location: data.get('location'),
-    reason: data.get('reason'),
-    description: data.get('description'),
-    witnesses: data.get('witnesses'),
-  };
-});
+function bindComplaintForm(form) {
+  if (!form) return;
+  const status = form.querySelector('[data-form-status]');
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const button = form.querySelector('button[type="submit"]');
+    if (button) button.disabled = true;
+    if (status) status.textContent = 'Opening your complaint ticket…';
+    const data = new FormData(form);
+    try {
+      const response = await fetch('/api/pcso/portal', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'complaint',
+          action: 'submit',
+          fields: {
+            trooperName: data.get('trooperName'),
+            badgeNumber: data.get('badgeNumber'),
+            location: data.get('location'),
+            reason: data.get('reason'),
+            description: data.get('description'),
+            witnesses: data.get('witnesses'),
+          },
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.status === 401) throw new Error('Sign in with Discord first.');
+      if (!response.ok) throw new Error(payload.error || 'The complaint ticket could not be opened.');
+      form.reset();
+      if (status) {
+        status.textContent = `${payload.message || 'Your complaint ticket was opened.'} `;
+        const link = document.createElement('a');
+        link.className = 'pcso-text-link';
+        link.href = '/contact';
+        link.textContent = 'Follow it on Contact →';
+        status.append(link);
+      }
+    } catch (error) {
+      if (status) status.textContent = error.message || 'Could not open the complaint ticket.';
+    } finally {
+      if (button) button.disabled = false;
+    }
+  });
+}
+
+bindComplaintForm(document.querySelector('[data-complaint]'));
 bindForm(document.querySelector('[data-public-records]'), 'public-records', (form) => {
   const data = new FormData(form);
   return {
@@ -109,4 +150,4 @@ bindForm(document.querySelector('[data-public-records]'), 'public-records', (for
     details: data.get('details'),
   };
 });
-void revealPublicRecordsForm();
+void revealSignedInForms();
