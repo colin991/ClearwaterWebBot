@@ -800,6 +800,29 @@ export function waiverFilename(record) {
   return `ride-along-waiver-${name}.pdf`;
 }
 
+/** On-shift lists older than this are not trusted for ride along alerts. */
+export const RIDE_ALONG_SHIFT_MAX_AGE_MS = 5 * 60_000;
+
+export function rideAlongShiftIsFresh(snapshot, now = Date.now()) {
+  const fetchedAt = Date.parse(snapshot?.fetchedAt || '');
+  return Number.isFinite(fetchedAt) && now - fetchedAt <= RIDE_ALONG_SHIFT_MAX_AGE_MS;
+}
+
+/** Deputies on an active shift who are still on duty and Corporal+ in Discord right now. */
+export async function eligibleRideAlongSupervisors(snapshot, { memberFor, isEligible, now = Date.now() } = {}) {
+  if (!rideAlongShiftIsFresh(snapshot, now)) return [];
+  const seen = new Set();
+  const eligible = [];
+  for (const deputy of snapshot?.deputies || []) {
+    const discordId = String(deputy?.discordId || '');
+    if (!deputy?.shift || !/^\d{16,22}$/.test(discordId) || seen.has(discordId)) continue;
+    seen.add(discordId);
+    const member = await memberFor(discordId).catch(() => null);
+    if (member && isEligible(member)) eligible.push(deputy);
+  }
+  return eligible;
+}
+
 export function rideAlongServiceForClient(client) {
   if (defaultService) return defaultService;
   defaultService = createRideAlongService({
@@ -818,9 +841,25 @@ export function rideAlongServiceForClient(client) {
       return user.globalName || user.username || '';
     },
     onDutySupervisors: async () => {
-      const { getPostedShiftSnapshot } = await import('./pinellasShiftPanel.js');
-      const snapshot = await getPostedShiftSnapshot();
-      return (snapshot?.deputies || []).filter((deputy) => deputy.isSupervisor && deputy.discordId);
+      const { getPostedShiftSnapshot, isOnDutyCorporalOrAbove, loadShiftPanelSnapshot } = await import('./pinellasShiftPanel.js');
+      const { PINELLAS_GUILD_ID } = await import('./pinellasServer.js');
+      let snapshot = await getPostedShiftSnapshot();
+      if (!rideAlongShiftIsFresh(snapshot)) {
+        snapshot = await loadShiftPanelSnapshot(client, { refresh: true }).catch((error) => {
+          logger.warn(`Ride along: on-shift refresh failed (${error?.message || error})`);
+          return snapshot;
+        });
+      }
+      if (!rideAlongShiftIsFresh(snapshot)) {
+        logger.warn('Ride along: on-shift list is stale, so no supervisors were alerted.');
+        return [];
+      }
+      const guild = client.guilds.cache.get(PINELLAS_GUILD_ID) || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
+      if (!guild) return [];
+      return eligibleRideAlongSupervisors(snapshot, {
+        memberFor: (discordId) => guild.members.fetch(discordId),
+        isEligible: isOnDutyCorporalOrAbove,
+      });
     },
   });
   return defaultService;

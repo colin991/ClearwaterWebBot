@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-03-ride-along-onduty-corporal",
+      "title": "Ride along claim alerts only go to on-duty Corporals and above",
+      "summary": "The 15-minute ride along claim DM now only goes to deputies who are on an active PCSO shift right now. Each person is double-checked live in Discord for the on-duty role and a rank of Corporal or higher. If the on-shift list is more than 5 minutes old and cannot be refreshed, nobody is DMed instead of using an old list.",
+      "createdAt": "2026-10-03T17:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-03-ride-along-waiver",
       "title": "Ride along liability waiver",
       "summary": "Requesting a ride along now includes a Patrol Ride Along Release of Liability and Agreement that riders read, agree to, and sign by typing their roleplay name. Older open requests can sign it from their request card. When the supervisor presses Start, the signed waiver is DMed as a PDF to both the rider and the supervisor. Every signed waiver is logged in the admin panel's Ride alongs tab, where admins can download the PDF.",

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createRideAlongService,
+  eligibleRideAlongSupervisors,
   parseRideAlongButton,
   RIDE_ALONG_DURATION_MS,
   RIDE_ALONG_RULES,
@@ -296,4 +297,51 @@ test('website complaints become an Office of Professional Compliance ticket inqu
   assert.throws(() => formatWebsiteComplaint({ ...fields, mapTop: 2 }), /Click the map/);
   assert.throws(() => formatWebsiteComplaint({ trooperName: 'x', mapLeft: 0.5, mapTop: 0.5 }), /Badge number/);
   assert.deepEqual(complaintMapPoint({ mapLeft: '0.5', mapTop: '0.25' }), { left: 0.5, top: 0.25 });
+});
+
+test('ride along alerts only go to on-shift deputies who are on duty and Corporal or higher', async () => {
+  const now = Date.parse('2026-10-13T12:00:00Z');
+  const deputy = (discordId, shift = { id: discordId }) => ({ discordId, shift });
+  const members = {
+    '100000000000000001': { onDuty: true, corporal: true },
+    '100000000000000002': { onDuty: true, corporal: false },
+    '100000000000000003': { onDuty: false, corporal: true },
+    '100000000000000004': { onDuty: true, corporal: true },
+  };
+  const options = {
+    now,
+    memberFor: async (id) => members[id] || null,
+    isEligible: (member) => member.onDuty && member.corporal,
+  };
+  const snapshot = {
+    fetchedAt: new Date(now - 60_000).toISOString(),
+    deputies: [
+      deputy('100000000000000001'),
+      deputy('100000000000000002'),
+      deputy('100000000000000003'),
+      deputy('100000000000000004', null),
+      deputy('100000000000000001'),
+      deputy('100000000000000009'),
+    ],
+  };
+  const picked = await eligibleRideAlongSupervisors(snapshot, options);
+  assert.deepEqual(picked.map((entry) => entry.discordId), ['100000000000000001']);
+  const stale = { ...snapshot, fetchedAt: new Date(now - 6 * 60_000).toISOString() };
+  assert.deepEqual(await eligibleRideAlongSupervisors(stale, options), []);
+  assert.deepEqual(await eligibleRideAlongSupervisors({ deputies: snapshot.deputies }, options), []);
+});
+
+test('live Discord check needs the on-duty role and a Corporal or higher rank', async () => {
+  const { isOnDutyCorporalOrAbove, PINELLAS_ON_DUTY_ROLE_ID } = await import('../utils/pinellasShiftPanel.js');
+  const { PINELLAS_RANKS } = await import('../utils/pinellasPromote.js');
+  const corporal = PINELLAS_RANKS.findIndex((rank) => rank.name === 'Corporal');
+  const member = (...roleIds) => ({ roles: { cache: new Set(roleIds) } });
+  const corporalRole = PINELLAS_RANKS[corporal].roleId;
+  const higherRole = PINELLAS_RANKS[0].roleId;
+  const lowerRole = PINELLAS_RANKS[corporal + 1].roleId;
+  assert.equal(isOnDutyCorporalOrAbove(member(PINELLAS_ON_DUTY_ROLE_ID, corporalRole)), true);
+  assert.equal(isOnDutyCorporalOrAbove(member(PINELLAS_ON_DUTY_ROLE_ID, higherRole)), true);
+  assert.equal(isOnDutyCorporalOrAbove(member(PINELLAS_ON_DUTY_ROLE_ID, lowerRole)), false);
+  assert.equal(isOnDutyCorporalOrAbove(member(corporalRole)), false);
+  assert.equal(isOnDutyCorporalOrAbove(null), false);
 });

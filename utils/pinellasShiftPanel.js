@@ -224,6 +224,12 @@ function isSupervisorRank(rank) {
   return CORPORAL_INDEX < 0 ? false : index <= CORPORAL_INDEX;
 }
 
+/** Live check: has the on-duty role right now and holds Corporal or a higher rank. */
+export function isOnDutyCorporalOrAbove(member) {
+  if (!member?.roles?.cache?.has?.(PINELLAS_ON_DUTY_ROLE_ID)) return false;
+  return isSupervisorRank(getHighestPinellasRank(member));
+}
+
 function rankIndexForDeputy(deputy) {
   const index = PINELLAS_RANKS.findIndex((entry) => entry.roleId === deputy?.rank?.roleId);
   return index < 0 ? PINELLAS_RANKS.length : index;
