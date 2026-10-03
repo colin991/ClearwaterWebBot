@@ -22,7 +22,7 @@ export function pcsoFormChannelId(kind) {
 }
 
 export function publicSiteUrl() {
-  return String(process.env.PUBLIC_SITE_URL || 'https://cwrpvc.lol').replace(/\/$/, '');
+  return String(process.env.PCSO_SITE_URL || 'https://www.cwpcso.com').replace(/\/$/, '');
 }
 
 function clean(value, max) {
