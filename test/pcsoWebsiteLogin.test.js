@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createSessionToken, readSessionToken, sessionIsWebsiteSignedIn } from '../lib/discord-auth.js';
+import { createSessionToken, readSessionToken, safeNextPath, sessionIsWebsiteSignedIn } from '../lib/discord-auth.js';
 
 const secret = 'test-session-secret-value-32chars!!';
 
@@ -43,4 +43,11 @@ test('session cookie stays under the browser 4 KB limit for members with many ro
   assert.deepEqual(session.guildRoles, user.guildRoles);
   assert.deepEqual(session.pinellasRoles, user.pinellasRoles);
   assert.equal(session.pinellasMember, true);
+});
+
+test('signing in from PCSO info pages returns you to that page', () => {
+  assert.equal(safeNextPath('/ride-along'), '/ride-along');
+  assert.equal(safeNextPath('/sheriff?x=1'), '/sheriff');
+  assert.equal(safeNextPath('//evil.example/ride-along'), '/');
+  assert.equal(safeNextPath('/not-a-page'), '/');
 });

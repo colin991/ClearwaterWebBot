@@ -23,8 +23,11 @@ function safeNextPath(value = '') {
   if (path === '/employee-command.html') return '/employee/command';
   const allowed = new Set([
     '/', '/internet', '/admin', '/news', '/events', '/public-records', '/complaint',
-    '/police-report', '/contact', '/careers', '/jail', '/active-calls',
+    '/police-report', '/contact', '/careers', '/application-result', '/jail', '/active-calls',
     '/employee', '/employee/training', '/employee/department', '/employee/reports', '/employee/command',
+    '/crime-stoppers', '/inside-the-star', '/impound', '/sheriff', '/missions-values', '/public-notices',
+    '/patrol-operations', '/ride-along', '/patrol-staff', '/public-information', '/special-response',
+    '/traffic-enforcement', '/criminal-investigations', '/detention', '/field-training',
   ]);
   if (allowed.has(path)) return path;
   if (/^\/internet\/(post|member|sponsored)\/[A-Za-z0-9._-]{1,120}$/.test(path)) return path;

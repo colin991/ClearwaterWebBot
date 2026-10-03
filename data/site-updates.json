@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-03-signin-return-pages",
+      "title": "Sign in returns you to the PCSO page you came from",
+      "summary": "Signing in from the Patrol Ride Along Program, Sheriff, Patrol Operations, Crime Stoppers, or any other PCSO info page now brings you back to that page instead of the home page.",
+      "createdAt": "2026-10-03T16:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-03-ride-along-reviews",
       "title": "Ride along form redesign, notices, and reviews",
       "summary": "The ride along request form was redesigned with a cleaner two-step layout. Riders now pick only a date and start time, and the page shows the 40-minute window automatically. When PCSO approves or denies a request (or a delay), the rider sees a notice on any PCSO page, not just a Discord DM. After the ride along ends, riders can leave a 1–5 star rating and written feedback, which shows under Reviews & feedback in the admin panel's Ride alongs tab with an average rating. This also fixes the nav Log In button not switching to Admin for admins.",
