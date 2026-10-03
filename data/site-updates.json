@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-03-complaint-map-pin",
+      "title": "Complaints: mark where it happened on the ER:LC map",
+      "summary": "The File a Complaint form now asks you to click the ER:LC Liberty County map to mark where it happened, with an optional landmark note. The Office of Professional Compliance ticket lists the nearest postal and includes a zoomed map image with the pin.",
+      "createdAt": "2026-10-03T16:25:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-03-signin-return-pages",
       "title": "Sign in returns you to the PCSO page you came from",
       "summary": "Signing in from the Patrol Ride Along Program, Sheriff, Patrol Operations, Crime Stoppers, or any other PCSO info page now brings you back to that page instead of the home page.",

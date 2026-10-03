@@ -8,7 +8,7 @@ import {
   rulesPayload,
   validateRideAlongRequest,
 } from '../utils/pcsoRideAlong.js';
-import { formatWebsiteComplaint } from '../utils/pcsoSitePortal.js';
+import { complaintMapPoint, formatWebsiteComplaint } from '../utils/pcsoSitePortal.js';
 
 const HOUR = 60 * 60_000;
 const MIN = 60_000;
@@ -233,12 +233,18 @@ test('ride along buttons parse and approve rejects unknown meeting places', asyn
 });
 
 test('website complaints become an Office of Professional Compliance ticket inquiry', () => {
-  const text = formatWebsiteComplaint({
+  const fields = {
     trooperName: 'Dep. Smith', badgeNumber: '1A-12', location: 'Gas station', reason: 'Rude',
-    description: 'Was rude during a stop.', witnesses: '',
-  });
+    description: 'Was rude during a stop.', witnesses: '', mapLeft: 0.2814, mapTop: 0.811,
+  };
+  const text = formatWebsiteComplaint(fields);
   assert.match(text, /Trooper’s name\nDep\. Smith/);
   assert.match(text, /Badge number\n1A-12/);
+  assert.match(text, /Where it happened in-game\nMarked on the map near postal 201 \(map below\)\.\nLandmark: Gas station/);
   assert.match(text, /Witnesses\nNone listed/);
-  assert.throws(() => formatWebsiteComplaint({ trooperName: 'x' }), /Badge number/);
+  assert.match(formatWebsiteComplaint({ ...fields, location: '' }), /in-game\nMarked on the map near postal 201 \(map below\)\.\n\nReason/);
+  assert.throws(() => formatWebsiteComplaint({ ...fields, mapLeft: '' }), /Click the map/);
+  assert.throws(() => formatWebsiteComplaint({ ...fields, mapTop: 2 }), /Click the map/);
+  assert.throws(() => formatWebsiteComplaint({ trooperName: 'x', mapLeft: 0.5, mapTop: 0.5 }), /Badge number/);
+  assert.deepEqual(complaintMapPoint({ mapLeft: '0.5', mapTop: '0.25' }), { left: 0.5, top: 0.25 });
 });

@@ -56,7 +56,7 @@ function bindMapPicker() {
       pin.style.left = `${left * 100}%`;
       pin.style.top = `${top * 100}%`;
     }
-    if (hint) hint.textContent = 'Location marked. Submit when the report is ready.';
+    if (hint) hint.textContent = 'Location marked. Click again to move the pin.';
   });
 }
 
@@ -101,8 +101,14 @@ function bindComplaintForm(form) {
     event.preventDefault();
     const button = form.querySelector('button[type="submit"]');
     if (button) button.disabled = true;
-    if (status) status.textContent = 'Opening your complaint ticket…';
     const data = new FormData(form);
+    if (!data.get('mapLeft') || !data.get('mapTop')) {
+      if (status) status.textContent = 'Click the map to mark where it happened.';
+      if (button) button.disabled = false;
+      form.querySelector('[data-map-picker]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    if (status) status.textContent = 'Opening your complaint ticket…';
     try {
       const response = await fetch('/api/pcso/portal', {
         method: 'POST',
@@ -115,6 +121,8 @@ function bindComplaintForm(form) {
             trooperName: data.get('trooperName'),
             badgeNumber: data.get('badgeNumber'),
             location: data.get('location'),
+            mapLeft: Number(data.get('mapLeft')),
+            mapTop: Number(data.get('mapTop')),
             reason: data.get('reason'),
             description: data.get('description'),
             witnesses: data.get('witnesses'),
@@ -125,6 +133,10 @@ function bindComplaintForm(form) {
       if (response.status === 401) throw new Error('Sign in with Discord first.');
       if (!response.ok) throw new Error(payload.error || 'The complaint ticket could not be opened.');
       form.reset();
+      const pin = form.querySelector('[data-map-pin]');
+      if (pin) pin.hidden = true;
+      const hint = form.querySelector('[data-map-hint]');
+      if (hint) hint.textContent = 'Click the map to mark where it happened.';
       if (status) {
         status.textContent = `${payload.message || 'Your complaint ticket was opened.'} `;
         const link = document.createElement('a');

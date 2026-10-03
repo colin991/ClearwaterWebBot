@@ -214,3 +214,14 @@ export function resetLibertyCalibrationForTests(next = []) {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = null;
 }
+
+/** Closest postal label to a map point picked as image fractions. */
+export function nearestLibertyPostal({ left, top } = {}) {
+  if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
+  let best = null;
+  for (const [postal, point] of Object.entries(LIBERTY_POSTAL_POINTS)) {
+    const distance = Math.hypot(point.left - left, point.top - top);
+    if (!best || distance < best.distance) best = { postal, distance };
+  }
+  return best;
+}

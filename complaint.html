@@ -30,7 +30,17 @@
 <form class="pcso-form" data-complaint>
   <label>Trooper’s name<input name="trooperName" required maxlength="80" /></label>
   <label>Badge number<input name="badgeNumber" required maxlength="40" /></label>
-  <label>Where it happened in-game<input name="location" required maxlength="160" /></label>
+  <div>
+    <p class="pcso-form-label">Where it happened in-game</p>
+    <p class="pcso-form-hint" data-map-hint>Click the map to mark where it happened.</p>
+    <div class="pcso-map-picker" data-map-picker>
+      <img src="assets/liberty-county-map.jpg?v=20260928-erlc-maps" alt="ER:LC Liberty County map. Click to mark where it happened." width="2048" height="2048" />
+      <img class="pcso-map-pin" data-map-pin src="assets/liberty-map-pin.png" alt="" hidden />
+    </div>
+    <input type="hidden" name="mapLeft" />
+    <input type="hidden" name="mapTop" />
+  </div>
+  <label>Nearby landmark or street (optional)<input name="location" maxlength="160" placeholder="Gas station by the highway, Main St…" /></label>
   <label>Reason<input name="reason" required maxlength="160" /></label>
   <label>Description<textarea name="description" required minlength="8" maxlength="2000"></textarea></label>
   <label>Witnesses (optional)<textarea name="witnesses" maxlength="400" placeholder="Names or Roblox usernames"></textarea></label>

@@ -12,6 +12,9 @@ import { PermissionFlagsBits } from 'discord.js';
 import { PINELLAS_GUILD_ID, memberHasPinellasInfractionAccess } from './pinellasServer.js';
 import { listPublicRecordsForAdmin, reviewPublicRecordFromWebsite } from './pcsoSiteFormDiscord.js';
 import { rideAlongServiceForClient } from './pcsoRideAlong.js';
+import { renderLibertyLocationMap } from './libertyMapImage.js';
+import { nearestLibertyPostal } from './libertyMapCalibration.js';
+import { logger } from './logger.js';
 
 async function requirePcsoAdmin(client, userId, message) {
   const guild = client.guilds.cache.get(PINELLAS_GUILD_ID)
@@ -30,21 +33,63 @@ async function requirePcsoAdmin(client, userId, message) {
 const COMPLAINT_FIELDS = Object.freeze([
   ['trooperName', 'Trooper’s name', 80, true],
   ['badgeNumber', 'Badge number', 40, true],
-  ['location', 'Where it happened in-game', 160, true],
+  ['location', 'Where it happened in-game', 160, false],
   ['reason', 'Reason', 160, true],
   ['description', 'Description', 2000, true],
   ['witnesses', 'Witnesses', 400, false],
 ]);
 
+/** Postal labels farther than this from the pin are not worth naming. */
+const COMPLAINT_POSTAL_RANGE = 0.06;
+
+export function complaintMapPoint(fields = {}) {
+  const left = Number(fields.mapLeft);
+  const top = Number(fields.mapTop);
+  if (fields.mapLeft == null || fields.mapTop == null || fields.mapLeft === '' || fields.mapTop === ''
+    || !Number.isFinite(left) || !Number.isFinite(top) || left < 0 || left > 1 || top < 0 || top > 1) {
+    throw new Error('Click the map to mark where it happened.');
+  }
+  return { left, top };
+}
+
+function complaintLocationText(point, landmark) {
+  const nearest = nearestLibertyPostal(point);
+  const lines = [nearest && nearest.distance <= COMPLAINT_POSTAL_RANGE
+    ? `Marked on the map near postal ${nearest.postal} (map below).`
+    : 'Marked on the map (map below).'];
+  if (landmark) lines.push(`Landmark: ${landmark}`);
+  return lines.join('\n');
+}
+
 export function formatWebsiteComplaint(fields = {}) {
+  const point = complaintMapPoint(fields);
   const lines = ['Personnel complaint filed on the website.'];
   for (const [key, label, max, required] of COMPLAINT_FIELDS) {
     const value = String(fields[key] ?? '').replace(/\r\n/g, '\n').trim().slice(0, max);
     if (required && !value) throw new Error(`Enter: ${label}`);
     if (key === 'description' && value.length < 8) throw new Error('Describe what happened.');
+    if (key === 'location') {
+      lines.push(`${label}\n${complaintLocationText(point, value)}`);
+      continue;
+    }
     lines.push(`${label}\n${value || 'None listed'}`);
   }
   return lines.join('\n\n');
+}
+
+async function postComplaintMap(client, channelId, point) {
+  const png = await renderLibertyLocationMap(point);
+  if (!png) return;
+  const channel = await client.channels.fetch(channelId).catch(() => null);
+  if (!channel?.isTextBased?.()) return;
+  const nearest = nearestLibertyPostal(point);
+  const near = nearest && nearest.distance <= COMPLAINT_POSTAL_RANGE ? ` (near postal ${nearest.postal})` : '';
+  const { AttachmentBuilder } = await import('discord.js');
+  await channel.send({
+    content: `**Where it happened in-game**${near}`,
+    files: [new AttachmentBuilder(png, { name: 'complaint-location.png' })],
+    allowedMentions: { parse: [] },
+  });
 }
 
 function sessionUser(payload = {}) {
@@ -150,7 +195,13 @@ export async function handlePcsoPortal(client, body = {}) {
 
   if (kind === 'complaint' && action === 'submit') {
     const inquiry = formatWebsiteComplaint(body.fields || {});
+    const point = complaintMapPoint(body.fields || {});
     const opened = await openWebTicket(client, { user, type: 'compliance', inquiry });
+    try {
+      await postComplaintMap(client, opened.channelId, point);
+    } catch (error) {
+      logger.warn(`Complaint map for ${opened.channelId} failed: ${error?.message || error}`);
+    }
     return {
       ok: true,
       ...opened,
