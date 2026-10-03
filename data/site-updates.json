@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-03-login-cookie-size",
+      "title": "Fix Discord login not sticking",
+      "summary": "Members with a lot of Discord roles were never staying signed in, because the login cookie grew past the browser's 4 KB limit and was silently thrown away. The session is now packed and compressed so it stays well under the limit, and it still lasts 7 days, including after closing the browser.",
+      "createdAt": "2026-10-03T15:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-03-ride-along-requests",
       "title": "Patrol Ride Along requests",
       "summary": "Signed-in members can request a ride along on the Patrol Ride Along Program page with their roleplay name, date of birth, and a date and time window. Admins approve it in the admin panel with the start time and meeting spot (Sheriff's Station, Police Station, or City Hall). The rider gets a check-in DM 1 hour before. Fifteen minutes before, every on-duty supervisor and above is DMed a Claim button, and the first claim strikes out the others. The claimer gets a start prompt with Start and No Show buttons, plus the ride-along rules. Riders can delay (with admin approval) or end their ride along on the website. No-shows are logged in the admin panel.",
