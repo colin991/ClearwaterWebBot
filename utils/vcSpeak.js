@@ -190,6 +190,22 @@ function escapeSsml(text) {
     .replace(/'/g, '&apos;');
 }
 
+/**
+ * Remove chat markup and symbol noise before it reaches a speech provider.
+ * A message must contain at least one letter or number to be pronounceable.
+ */
+export function sanitizeSpeechText(value) {
+  const text = String(value ?? '')
+    .replace(/<a?:([\w-]+):\d+>/g, ' $1 ')
+    .replace(/<[@#&]!?(\d+)>/g, ' ')
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/[#*_~`>|\\]+/g, ' ')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return /[\p{L}\p{N}]/u.test(text) ? text : '';
+}
+
 function isOpenAiVoice(voice) {
   return OPENAI_TTS_VOICE_SET.has(String(voice || '').trim().toLowerCase());
 }
@@ -240,25 +256,27 @@ async function synthesizeEdgeMp3(text, voice, prosody = {}) {
 
 /** OpenAI TTS for named voices such as onyx; otherwise free Microsoft Edge TTS. */
 export async function synthesizeSpeechMp3(text, voice = SAY_VOICE, prosody = {}) {
+  const sanitizedText = sanitizeSpeechText(text);
+  if (!sanitizedText) throw new Error('Speech text contains no pronounceable content.');
   const chosen = String(voice || SAY_VOICE).trim() || SAY_VOICE;
   const rate = prosody.rate ?? SAY_VOICE_RATE;
   if (isOpenAiVoice(chosen)) {
     try {
       return await promiseWithTimeout(
-        synthesizeOpenAiMp3(text, chosen, rate),
+        synthesizeOpenAiMp3(sanitizedText, chosen, rate),
         OPENAI_TTS_TIMEOUT_MS,
         'OpenAI TTS',
       );
     } catch (error) {
       logger.warn(`OpenAI voice ${chosen} failed; using Edge ${SAY_VOICE} instead`, error);
       return promiseWithTimeout(
-        synthesizeEdgeMp3(text, SAY_VOICE, { rate, pitch: '+0Hz', volume: 100 }),
+        synthesizeEdgeMp3(sanitizedText, SAY_VOICE, { rate, pitch: '+0Hz', volume: 100 }),
         EDGE_TTS_TIMEOUT_MS,
         'Edge TTS',
       );
     }
   }
-  return promiseWithTimeout(synthesizeEdgeMp3(text, chosen, { ...prosody, rate }), EDGE_TTS_TIMEOUT_MS, 'Edge TTS');
+  return promiseWithTimeout(synthesizeEdgeMp3(sanitizedText, chosen, { ...prosody, rate }), EDGE_TTS_TIMEOUT_MS, 'Edge TTS');
 }
 
 /**

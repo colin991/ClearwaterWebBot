@@ -7,6 +7,8 @@ import {
   estimateMp3DurationMs,
   isEarlyVoiceIdle,
   promiseWithTimeout,
+  sanitizeSpeechText,
+  synthesizeSpeechMp3,
   opusTranscodeArgs,
   toNodeAudioBuffer,
   transcodeClipToOggOpus,
@@ -63,6 +65,14 @@ test('TTS audio from Edge-style bytes is treated as an mp3 buffer', () => {
   assert.equal(Buffer.isBuffer(converted), true);
   assert.deepEqual([...converted], [1, 2, 3, 4]);
   assert.equal(toNodeAudioBuffer(Buffer.from('abc')).toString(), 'abc');
+});
+
+test('speech sanitizer rejects symbol-only announcements before TTS', async () => {
+  assert.equal(sanitizeSpeechText('########'), '');
+  assert.equal(sanitizeSpeechText(' # # # '), '');
+  assert.equal(sanitizeSpeechText('Unit #12 responding'), 'Unit 12 responding');
+  assert.equal(sanitizeSpeechText('**RTO:** clear'), 'RTO: clear');
+  await assert.rejects(synthesizeSpeechMp3('########'), /no pronounceable content/);
 });
 
 test('guild voice jobs wait until the current speak session finishes', async () => {
