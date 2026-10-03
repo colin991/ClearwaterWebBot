@@ -15,6 +15,7 @@ import { handlePinellasSupportInteraction } from '../utils/pinellasSupport.js';
 import { handleMarketInteraction } from '../utils/market.js';
 import { handleEconomyInteraction } from '../utils/economyPanel.js';
 import { handlePcsoSiteFormInteraction } from '../utils/pcsoSiteFormDiscord.js';
+import { handleRideAlongInteraction } from '../utils/pcsoRideAlong.js';
 import { commandAllowedInGuild } from '../utils/commandGuilds.js';
 import { shouldIgnoreGuildCommands } from '../utils/floridaServer.js';
 
@@ -114,6 +115,12 @@ export default {
       if (await handlePinellasShiftPanelInteraction(interaction)) return;
     } catch (error) {
       logger.error('Pinellas shift panel interaction failed', error);
+    }
+
+    try {
+      if (await handleRideAlongInteraction(interaction)) return;
+    } catch (error) {
+      logger.error('Ride along interaction failed', error);
     }
 
     try {

@@ -27,6 +27,7 @@ import { startErlcCallRadio } from '../utils/erlcCallRadio.js';
 import { fetchErlcServer } from '../utils/erlc.js';
 import { startOpenTicketPermissionSync } from '../utils/pinellasSupport.js';
 import { startUpdateCountdown } from '../utils/updateCountdown.js';
+import { startRideAlongScheduler } from '../utils/pcsoRideAlong.js';
 
 export default {
   name: Events.ClientReady,
@@ -40,6 +41,7 @@ export default {
     }
     logger.info(`Logged in as ${client.user.tag}.`);
     startOpenTicketPermissionSync(client);
+    startRideAlongScheduler(client);
     if (!client.stopUpdateCountdown) client.stopUpdateCountdown = startUpdateCountdown(client);
 
     setTimeout(() => {

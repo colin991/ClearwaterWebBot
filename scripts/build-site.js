@@ -15,7 +15,7 @@ const staticFiles = new Set([
   'styles.css', 'legal.css', 'signin.css', 'coming-soon.css',
   'script.js', 'signin.js', 'coming-soon.js', 'site-gate.js',
   'jail.js', 'pcso-forms.js', 'inside-the-star.js', 'pcso-events.js', 'pcso-home.js', 'pcso-news-page.js', 'pcso-events-page.js', 'admin.js',
-  'pcso-nav.js', 'pcso-portal.js', 'pcso-careers.js', 'application-result.js', 'pcso-calls.js', 'pcso-employee.js',
+  'pcso-nav.js', 'pcso-portal.js', 'pcso-ride-along.js', 'pcso-careers.js', 'application-result.js', 'pcso-calls.js', 'pcso-employee.js',
 ]);
 
 rmSync(output, { recursive: true, force: true });

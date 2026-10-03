@@ -2,6 +2,20 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-03-ride-along-requests",
+      "title": "Patrol Ride Along requests",
+      "summary": "Signed-in members can request a ride along on the Patrol Ride Along Program page with their roleplay name, date of birth, and a date and time window. Admins approve it in the admin panel with the start time and meeting spot (Sheriff's Station, Police Station, or City Hall). The rider gets a check-in DM 1 hour before. Fifteen minutes before, every on-duty supervisor and above is DMed a Claim button, and the first claim strikes out the others. The claimer gets a start prompt with Start and No Show buttons, plus the ride-along rules. Riders can delay (with admin approval) or end their ride along on the website. No-shows are logged in the admin panel.",
+      "createdAt": "2026-10-03T15:40:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-03-complaint-ticket",
+      "title": "Complaints open a Discord ticket",
+      "summary": "File a Complaint now requires signing in with Discord and opens an Office of Professional Compliance ticket in the PCSO Discord with every answer from the form. You can follow it from Contact.",
+      "createdAt": "2026-10-03T15:39:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-03-member-resources-icon",
       "title": "White Member resources icon",
       "summary": "The homepage Member resources card now uses a crisp white people icon instead of the gray emoji.",

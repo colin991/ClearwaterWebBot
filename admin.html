@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex,nofollow" />
 <title>Admin Panel | Pinellas County Sheriff's Office</title>
 <link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
-<link rel="stylesheet" href="styles.css?v=20260930-admin-refresh" />
+<link rel="stylesheet" href="styles.css?v=20261003-ride-along" />
 <style>
   .admin-toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:18px; }
   .admin-toolbar input { min-width:min(100%,280px); padding:10px 12px; border:1px solid #d0d5db; border-radius:4px; background:#fff; color:#1d2b38; }
@@ -52,6 +52,7 @@
 <nav class="admin-panel-tabs" aria-label="Admin tools">
   <button type="button" aria-selected="true" data-admin-view="personnel">Personnel</button>
   <button type="button" aria-selected="false" data-admin-view="records">Public records <span data-records-count>0</span></button>
+  <button type="button" aria-selected="false" data-admin-view="ride-along">Ride alongs <span data-ride-count>0</span></button>
   <button type="button" aria-selected="false" data-admin-view="content">News &amp; events</button>
   <button type="button" aria-selected="false" data-admin-view="star">Inside the Star</button>
 </nav>
@@ -82,6 +83,11 @@
 <section class="admin-panel-section" data-admin-section="records" hidden>
   <div class="admin-section-heading"><div><p class="pcso-eyebrow">Requests</p><h2>Pending public records</h2></div><p>Approve with a report or key, or deny and notify the requester by Discord DM.</p></div>
   <div class="admin-records-grid" data-admin-records><p class="admin-status">Loading requests…</p></div>
+</section>
+
+<section class="admin-panel-section" data-admin-section="ride-along" hidden>
+  <div class="admin-section-heading"><div><p class="pcso-eyebrow">Patrol Ride Along Program</p><h2>Ride along requests</h2></div><p>Approve with a start time and meeting place. On-duty supervisors are DMed 15 minutes before it starts, and the requester gets a check-in 1 hour before.</p></div>
+  <div data-admin-ride><p class="admin-status">Loading ride alongs…</p></div>
 </section>
 
 <div class="admin-content-grid admin-section-gap admin-panel-section" data-admin-content data-admin-section="content" hidden>
@@ -136,6 +142,6 @@
 <p style="margin-top:28px"><a class="pcso-text-link" href="/">← Back to home</a></p>
 </div></main>
 <script src="assets/vercel-blob-client.js?v=20260913-content-images"></script>
-<script src="admin.js?v=20260930-admin-refresh"></script>
+<script src="admin.js?v=20261003-ride-along"></script>
 </body>
 </html>

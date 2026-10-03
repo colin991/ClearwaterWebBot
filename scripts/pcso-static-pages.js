@@ -51,10 +51,39 @@ export const PCSO_STATIC_PAGES = [
     eyebrow: 'Law Enforcement',
     lead: 'See patrol from the passenger seat before you apply.',
     body: [
-      'The Patrol Ride Along Program lets community members and applicants observe a shift with a PCSO deputy.',
-      'Ride-alongs are scheduled through staff. After an application is approved, recruits complete training and an R/A as directed by command.',
-      'Open a ticket under Contact or speak with patrol staff in Discord to request a ride-along slot.',
+      'The Patrol Ride Along Program lets community members and applicants observe a shift with a PCSO supervisor.',
+      'Sign in with Discord and request a timeframe that works for you. Once PCSO approves it, you get a Discord DM with the start time and meeting spot, a check-in 1 hour before, and the supervisor details once someone claims it. Each ride along lasts 40 minutes.',
     ],
+    extra: `<div class="pcso-ride" data-ride-along>
+  <section class="pcso-ride-section" aria-labelledby="ride-upcoming-heading">
+    <h2 id="ride-upcoming-heading">Upcoming ride alongs</h2>
+    <div class="pcso-ride-list" data-ride-upcoming><p class="pcso-ride-empty">Sign in to see upcoming ride alongs.</p></div>
+  </section>
+  <section class="pcso-ride-section" data-ride-signin>
+    <h2>Request a ride along</h2>
+    <p>You must be signed in with Discord to request a ride along.</p>
+    <p><a class="pcso-button pcso-button-red" href="/signin?next=/ride-along">Sign in with Discord</a></p>
+  </section>
+  <section class="pcso-ride-section" data-ride-signed-in hidden>
+    <h2>Your requests</h2>
+    <div class="pcso-ride-list" data-ride-mine><p class="pcso-ride-empty">You have not requested a ride along yet.</p></div>
+    <h2>Request a ride along</h2>
+    <form class="pcso-form" data-ride-form>
+      <label>Roleplay Name (First Name)<input name="firstName" required maxlength="40" autocomplete="off" /></label>
+      <label>Roleplay Name (Last Name)<input name="lastName" required maxlength="40" autocomplete="off" /></label>
+      <label>Roleplay Date of Birth<input type="date" name="dob" required /></label>
+      <fieldset class="pcso-ride-timeframe">
+        <legend>Timeframe</legend>
+        <label>Date<input type="date" name="date" required /></label>
+        <label>From<input type="time" name="startTime" required step="900" /></label>
+        <label>To<input type="time" name="endTime" required step="900" /></label>
+      </fieldset>
+      <p class="pcso-form-status" data-form-status role="status"></p>
+      <button class="pcso-button pcso-button-red" type="submit">Request ride along</button>
+    </form>
+  </section>
+</div>`,
+    scripts: ['pcso-ride-along.js?v=20261003-ride-along'],
   },
   {
     slug: 'patrol-staff',
@@ -143,7 +172,7 @@ export function pcsoSectionHtml(page) {
 <meta name="theme-color" content="#6b7078" />
 <title>${page.title} | Pinellas County Sheriff's Office</title>
 <link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
-<link rel="stylesheet" href="styles.css?v=20260930-pcso-refresh" />
+<link rel="stylesheet" href="styles.css?v=20261003-ride-along" />
 <script>document.documentElement.classList.add('js');</script>
 </head>
 <body class="pcso-home">
@@ -162,6 +191,7 @@ export function pcsoSectionHtml(page) {
 </div></main>
 <footer class="pcso-footer"><div class="pcso-wrap pcso-footer-grid"><a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a><p>Professionalism · Integrity · Service<br /><small>© 2026 Pinellas County Sheriff's Office Roleplay</small></p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord →</a></div></footer>
 <script src="pcso-nav.js?v=20261003-admin-employee-nav"></script>
+${(page.scripts || []).map((src) => `<script src="${src}"></script>`).join('\n')}
 </body>
 </html>
 `;

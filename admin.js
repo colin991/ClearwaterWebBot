@@ -14,6 +14,8 @@ const eventForm = document.querySelector('[data-event-form]');
 const starForm = document.querySelector('[data-star-form]');
 const recordsEl = document.querySelector('[data-admin-records]');
 const recordsCountEl = document.querySelector('[data-records-count]');
+const rideEl = document.querySelector('[data-admin-ride]');
+const rideCountEl = document.querySelector('[data-ride-count]');
 
 let people = [];
 let weekStart = null;
@@ -64,6 +66,113 @@ function renderRecords(records = []) {
 async function loadRecords() {
   const payload = await portal('list');
   renderRecords(payload.records || []);
+}
+
+async function ridePortal(action, extra = {}) {
+  const response = await fetch('/api/pcso/portal', {
+    method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'admin-ride-along', action, ...extra }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'Ride alongs could not be updated.');
+  return payload;
+}
+
+const rideWhen = (ms) => (ms ? new Date(ms).toLocaleString([], {
+  weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+}) : '—');
+
+function localInputValue(ms) {
+  if (!ms) return '';
+  const date = new Date(ms);
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+const RIDE_STATUS = {
+  pending: 'Pending', approved: 'Approved', claimed: 'Claimed', started: 'In progress', completed: 'Completed',
+  denied: 'Denied', cancelled: 'Ended', no_show: 'No show', unclaimed: 'Unclaimed',
+};
+
+function rideRequested(item) {
+  return item.requestedLabel || `${rideWhen(item.requestedStartAt)} – ${rideWhen(item.requestedEndAt)}`;
+}
+
+function placeSelect(places, selected) {
+  return `<select data-ride-place>${places.map((place) => `<option${place === selected ? ' selected' : ''}>${escapeHtml(place)}</option>`).join('')}</select>`;
+}
+
+function rideRider(item) {
+  const noShows = item.noShowCount ? ` · <strong>${item.noShowCount} no show${item.noShowCount === 1 ? '' : 's'}</strong>` : '';
+  return `<small>${escapeHtml(item.requesterUsername || item.requesterId)} · DOB ${escapeHtml(item.dob || '—')}${noShows}</small>`;
+}
+
+function renderRideAlongs(payload = {}) {
+  const places = payload.meetingPlaces || [];
+  const pending = payload.pending || [];
+  const delays = payload.delays || [];
+  if (rideCountEl) rideCountEl.textContent = String(pending.length + delays.length);
+  if (!rideEl) return;
+  const group = (title, body) => `<div class="admin-ride-group"><h3>${title}</h3>${body}</div>`;
+  const grid = (items, card, empty) => (items.length
+    ? `<div class="admin-records-grid">${items.map(card).join('')}</div>`
+    : `<p class="admin-status">${empty}</p>`);
+
+  const pendingHtml = grid(pending, (item) => `
+    <article class="admin-record-card" data-ride-id="${escapeHtml(item.id)}">
+      <div class="admin-record-meta"><span>Requested</span><time>${escapeHtml(rideWhen(item.createdAt))}</time></div>
+      <h3>${escapeHtml(`${item.firstName} ${item.lastName}`)}</h3>
+      <p>Timeframe: ${escapeHtml(rideRequested(item))}</p>
+      ${rideRider(item)}
+      <label>Start time<input type="datetime-local" data-ride-time value="${escapeHtml(localInputValue(item.requestedStartAt))}" /></label>
+      <label>Meeting place${placeSelect(places)}</label>
+      <div class="admin-record-actions"><button type="button" data-ride-action="approve">Approve</button><button type="button" class="is-danger" data-ride-action="deny">Deny</button></div>
+    </article>`, 'No ride along requests are waiting.');
+
+  const delayHtml = grid(delays, (item) => `
+    <article class="admin-record-card" data-ride-id="${escapeHtml(item.id)}">
+      <div class="admin-record-meta"><span>Delay request</span><time>${escapeHtml(rideWhen(item.delayRequest?.requestedAt))}</time></div>
+      <h3>${escapeHtml(`${item.firstName} ${item.lastName}`)}</h3>
+      <p>Currently ${escapeHtml(rideWhen(item.scheduledAt))} at ${escapeHtml(item.meetingPlace)}.<br />Wants: ${escapeHtml(item.delayRequest?.label || rideWhen(item.delayRequest?.requestedStartAt))}</p>
+      ${rideRider(item)}
+      <label>New start time<input type="datetime-local" data-ride-time value="${escapeHtml(localInputValue(item.delayRequest?.requestedStartAt))}" /></label>
+      <label>Meeting place${placeSelect(places, item.meetingPlace)}</label>
+      <div class="admin-record-actions"><button type="button" data-ride-action="delay-approve">Approve delay</button><button type="button" class="is-danger" data-ride-action="delay-deny">Deny delay</button></div>
+    </article>`, 'No delay requests.');
+
+  const upcomingHtml = grid(payload.upcoming || [], (item) => `
+    <article class="admin-record-card" data-ride-id="${escapeHtml(item.id)}">
+      <div class="admin-record-meta"><span>${escapeHtml(RIDE_STATUS[item.status] || item.status)}</span><time>${escapeHtml(item.meetingPlace)}</time></div>
+      <h3>${escapeHtml(`${item.firstName} ${item.lastName}`)}</h3>
+      <p>${escapeHtml(rideWhen(item.scheduledAt))} – ${escapeHtml(new Date(item.endAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}</p>
+      ${rideRider(item)}
+      ${item.claimedBy ? `<small>Claimed by ${escapeHtml(item.claimedBy)}</small>` : ''}
+      ${item.status === 'started' ? '' : '<div class="admin-record-actions"><button type="button" class="is-danger" data-ride-action="cancel">Cancel ride along</button></div>'}
+    </article>`, 'Nothing is scheduled.');
+
+  const noShows = payload.noShows || [];
+  const noShowHtml = noShows.length ? `<div class="admin-table-wrap"><table class="admin-table admin-noshow-table">
+    <thead><tr><th>Requester</th><th>Roleplay name</th><th>No shows</th><th>Last no show</th></tr></thead>
+    <tbody>${noShows.map((entry) => `<tr><td>${escapeHtml(entry.requesterUsername || '')}<div class="pcso-call-meta">${escapeHtml(entry.requesterId)}</div></td><td>${escapeHtml(entry.roleplayName)}</td><td>${entry.count}</td><td>${escapeHtml(rideWhen(entry.lastAt))}</td></tr>`).join('')}</tbody>
+  </table></div>` : '<p class="admin-status">No no-shows recorded.</p>';
+
+  const history = payload.history || [];
+  const historyHtml = history.length ? `<div class="admin-table-wrap"><table class="admin-table">
+    <thead><tr><th>When</th><th>Roleplay name</th><th>Requester</th><th>Status</th></tr></thead>
+    <tbody>${history.map((item) => `<tr><td>${escapeHtml(rideWhen(item.scheduledAt || item.requestedStartAt))}</td><td>${escapeHtml(`${item.firstName} ${item.lastName}`)}</td><td>${escapeHtml(item.requesterUsername || item.requesterId)}</td><td>${escapeHtml(RIDE_STATUS[item.status] || item.status)}${item.endedReason ? `<div class="pcso-call-meta">${escapeHtml(item.endedReason)}</div>` : ''}</td></tr>`).join('')}</tbody>
+  </table></div>` : '<p class="admin-status">No past ride alongs yet.</p>';
+
+  rideEl.innerHTML = [
+    group('Pending requests', pendingHtml),
+    group('Delay requests', delayHtml),
+    group('Upcoming', upcomingHtml),
+    group('No show log', noShowHtml),
+    group('History', historyHtml),
+  ].join('');
+}
+
+async function loadRideAlongs() {
+  renderRideAlongs(await ridePortal('list'));
 }
 
 const MAX_CONTENT_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -349,6 +458,9 @@ async function boot() {
       loadRecords().catch((error) => {
         if (recordsEl) recordsEl.innerHTML = `<p class="admin-status">${escapeHtml(error.message)}</p>`;
       }),
+      loadRideAlongs().catch((error) => {
+        if (rideEl) rideEl.innerHTML = `<p class="admin-status">${escapeHtml(error.message)}</p>`;
+      }),
     ]);
 
     if (statusEl.textContent === 'Loading admin tools…') {
@@ -429,6 +541,39 @@ starForm?.addEventListener('submit', async (event) => {
 });
 
 document.addEventListener('click', async (event) => {
+  const rideButton = event.target.closest('[data-ride-action]');
+  if (rideButton) {
+    const card = rideButton.closest('[data-ride-id]');
+    const action = rideButton.dataset.rideAction;
+    const extra = { id: card.dataset.rideId };
+    if (action === 'approve' || action === 'delay-approve') {
+      const value = card.querySelector('[data-ride-time]')?.value || '';
+      if (!value) {
+        statusEl.textContent = 'Pick the start time first.';
+        return;
+      }
+      extra.scheduledAt = new Date(value).toISOString();
+      extra.meetingPlace = card.querySelector('[data-ride-place]')?.value || '';
+    }
+    if (action === 'deny') extra.reason = window.prompt('Reason for denying (optional):') || '';
+    if (action === 'cancel' && !window.confirm('Cancel this ride along? The requester and any supervisor will be DMed.')) return;
+    rideButton.disabled = true;
+    statusEl.textContent = 'Updating ride along…';
+    try {
+      renderRideAlongs(await ridePortal(action, extra));
+      statusEl.textContent = {
+        approve: 'Ride along approved. The requester was DMed.',
+        deny: 'Ride along denied. The requester was DMed.',
+        'delay-approve': 'Delay approved. The requester was DMed.',
+        'delay-deny': 'Delay denied. The requester was DMed.',
+        cancel: 'Ride along cancelled.',
+      }[action] || 'Ride along updated.';
+    } catch (error) {
+      statusEl.textContent = error.message;
+      rideButton.disabled = false;
+    }
+    return;
+  }
   const reviewButton = event.target.closest('[data-record-decision]');
   if (reviewButton) {
     const card = reviewButton.closest('[data-record-id]');

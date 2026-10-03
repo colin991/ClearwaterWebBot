@@ -1886,3 +1886,24 @@ button.pcso-news-card-more { padding:0; cursor:zoom-in; font-family:inherit; lin
 .pcso-lightbox figcaption:empty { display:none; }
 .pcso-lightbox-close { position:absolute; top:-14px; right:-14px; width:34px; height:34px; border-radius:50%; border:1px solid #555961; background:#34363b; color:#fff; font-size:20px; line-height:1; cursor:pointer; }
 .pcso-lightbox-close:hover { background:#45484f; }
+
+.pcso-ride { display:grid; gap:30px; margin-top:26px; }
+.pcso-ride-section h2 { margin:0 0 14px; font-size:22px; color:#f1f2f4; }
+.pcso-ride-section h2 + .pcso-form, .pcso-ride-list + h2 { margin-top:26px; }
+.pcso-ride-list { display:grid; gap:12px; }
+.pcso-ride-card { display:grid; gap:8px; padding:16px 18px; border:1px solid #2c2e34; border-left:3px solid #777c85; background:#0f1013; }
+.pcso-ride-card > div { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px 16px; }
+.pcso-ride-card strong { color:#f1f2f4; }
+.pcso-ride-card span, .pcso-ride-card p { color:#a4a8b0; margin:0; }
+.pcso-ride-card em { font-style:normal; font-size:12px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#d4d7dc; }
+.pcso-ride-empty { color:#92969f; margin:0; }
+.pcso-ride-note { font-size:14px; }
+.pcso-ride-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.pcso-ride-actions .pcso-button { padding:9px 14px; font-size:13px; }
+.pcso-ride-timeframe { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:0; padding:14px; border:1px solid #2c2e34; }
+.pcso-ride-timeframe legend { padding:0 6px; color:#d8dae0; font-size:13px; font-weight:800; }
+.pcso-ride-delay { margin-top:6px; }
+.admin-ride-group + .admin-ride-group { margin-top:26px; }
+.admin-ride-group h3 { margin:0 0 12px; color:#f1f2f4; }
+.admin-record-card select, .admin-record-card input { width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #34373e; background:#0d0e11; color:#f0f1f3; font:inherit; }
+.admin-noshow-table td, .admin-noshow-table th { white-space:nowrap; }
