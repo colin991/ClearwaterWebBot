@@ -1759,6 +1759,7 @@ body.home-stage {
 }
 .pcso-services .pcso-card h3 { margin-top: 16px; }
 .pcso-services .pcso-icon-emoji { font-size: 28px; line-height: 1; filter: grayscale(1); }
+.pcso-services .pcso-icon-members { color: #fff; }
 
 /* PCSO command dashboard */
 .pcso-admin-page { background:radial-gradient(circle at 80% 0,rgba(80,86,98,.16),transparent 34%),#090a0c!important; }
