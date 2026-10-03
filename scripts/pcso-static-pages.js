@@ -161,7 +161,7 @@ export function pcsoSectionHtml(page) {
 <div class="pcso-page-card pcso-prose${page.image ? ' pcso-profile-layout' : ''}">${image}<div>${paragraphs}${page.extra || ''}</div></div>
 </div></main>
 <footer class="pcso-footer"><div class="pcso-wrap pcso-footer-grid"><a class="pcso-brand" href="/"><img src="assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a><p>Professionalism · Integrity · Service<br /><small>© 2026 Pinellas County Sheriff's Office Roleplay</small></p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord →</a></div></footer>
-<script src="pcso-nav.js?v=20261001-reapply-notice"></script>
+<script src="pcso-nav.js?v=20261003-admin-employee-nav"></script>
 </body>
 </html>
 `;

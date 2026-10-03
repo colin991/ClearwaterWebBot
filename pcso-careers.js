@@ -29,11 +29,8 @@ function statusCopy(payload) {
   }
   if (!payload?.latest) return 'No application on file. Click Apply Now to start.';
   if (payload.latest.status === 'pending') return 'Your application is pending command review.';
-  if (payload.latest.status === 'approved' && payload.canApply) return 'Your current Discord roles do not show PCSO membership. You can submit a new application.';
-  if (payload.latest.status === 'approved') return 'Your application was approved. Complete training and your R/A.';
-  if (payload.latest.status === 'denied') return payload.deniedUntil
-    ? 'Your application was denied. You must wait three days before applying again.'
-    : 'Your application was denied. Your three-day waiting period has ended.';
+  if (payload.latest.status === 'approved' && payload.latest.onboardingCompletedAt && payload.canApply) return 'Your current Discord roles do not show PCSO membership. You can submit a new application.';
+  if (['approved', 'denied'].includes(payload.latest.status)) return 'Your application has been reviewed. Open Application Results to reveal your decision.';
   return `Application status: ${payload.latest.status}.`;
 }
 
@@ -93,7 +90,10 @@ async function boot() {
     questions = payload.questions || questions;
     canApply = Boolean(payload.canApply);
     const countdown = payload.latest?.status === 'denied' ? reapplyCountdownMarkup(payload.deniedUntil) : '';
-    statusCard.innerHTML = `<p><strong>${escapeHtml(statusCopy(payload))}</strong></p>${countdown}`;
+    const resultLink = ['approved', 'denied'].includes(payload.latest?.status)
+      ? '<p><a class="pcso-button pcso-button-muted" href="/application-result">View application result</a></p>'
+      : '';
+    statusCard.innerHTML = `<p><strong>${escapeHtml(statusCopy(payload))}</strong></p>${resultLink}${countdown}`;
     if (canApply && !questionsMount.children.length) {
       questionsMount.innerHTML = questions.map((question, index) => (
         `<section class="pcso-quiz-question" data-question-index="${index}" hidden><div class="pcso-quiz-question-number">${String(index + 1).padStart(2, '0')}</div><label><span>${escapeHtml(plainPrompt(question.prompt))}</span>${promptInput(question)}</label></section>`

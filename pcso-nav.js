@@ -40,7 +40,6 @@
         <a href="/public-records">Records request form</a>
       </div>
     </div>
-    <a href="/employee">Employee</a>
     <a class="pcso-careers-btn" href="/careers">Careers</a>
     <a class="pcso-button pcso-button-red" href="/signin?next=${next}" data-pcso-login>Log In</a>
   `;
@@ -153,6 +152,10 @@ async function refreshPcsoLoginButton() {
     if (!payload?.authenticated) return;
     for (const link of loginLinks) {
       if (payload.user?.admin) {
+        const careersLink = nav.querySelector('.pcso-careers-btn');
+        if (careersLink && !nav.querySelector('[data-pcso-employee-link]')) {
+          careersLink.insertAdjacentHTML('beforebegin', '<a href="/employee" data-pcso-employee-link>Employee</a>');
+        }
         link.textContent = 'Admin';
         link.setAttribute('href', '/admin');
       } else {

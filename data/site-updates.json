@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-03-pcso-website-onboarding",
+      "title": "Move accepted-applicant onboarding to the website",
+      "summary": "The Employee navigation tab is now shown only to website administrators. Discord application buttons direct applicants to Careers, accepted applicants must privately reveal their result and watch the full supplied introduction video without seeking before Done grants their department role, and staff approval no longer grants that role early.",
+      "createdAt": "2026-10-03T15:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-02-priority-min-players",
       "title": "Priorities need more than 25 players",
       "summary": "/request-priority now only opens the form when more than 25 players are in the ER:LC server. With 25 or fewer, it says how many players are in game right now.",

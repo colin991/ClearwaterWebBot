@@ -4,7 +4,7 @@ import {
   websiteTicketFields,
 } from './pinellasSupport.js';
 import { closeWebTicket, listWebTicketMessages, openWebTicket, postWebTicketReply } from './pcsoWebTickets.js';
-import { getPinellasApplicationStatus, reportWebsiteApplicationViolation, submitWebsiteApplication } from './pinellasApply.js';
+import { completeWebsiteApplicationOnboarding, getPinellasApplicationStatus, reportWebsiteApplicationViolation, revealWebsiteApplicationResult, startWebsiteApplicationOnboarding, submitWebsiteApplication } from './pinellasApply.js';
 import { listPcsoSiteFormsForUser } from './pcsoSiteForms.js';
 import { fetchPcsoAssignedMelonlyCalls } from './melonly.js';
 import { PINELLAS_MELONLY_DEPARTMENT_ID } from './pinellasShiftPanel.js';
@@ -91,6 +91,17 @@ export async function handlePcsoPortal(client, body = {}) {
       const discordUser = await client.users.fetch(user.id);
       const status = await submitWebsiteApplication(client, discordUser, body.answers || {}, body.violations || []);
       return { ok: true, ...status, submitted: true };
+    }
+    if (action === 'reveal') {
+      await revealWebsiteApplicationResult(user.id);
+      return { ok: true, ...(await getPinellasApplicationStatus(user.id, { client })) };
+    }
+    if (action === 'onboarding-start') {
+      await startWebsiteApplicationOnboarding(user.id, body.durationSeconds);
+      return { ok: true };
+    }
+    if (action === 'onboarding-complete') {
+      return { ok: true, ...(await completeWebsiteApplicationOnboarding(client, user.id)) };
     }
     if (action === 'violation') {
       await reportWebsiteApplicationViolation(client, user, body.violation);

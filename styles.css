@@ -1812,6 +1812,9 @@ body.home-stage {
 .pcso-result-countdown span { color:#9da1aa; font-size:11px; font-weight:850; letter-spacing:.13em; text-transform:uppercase; }
 .pcso-result-countdown strong { color:#fff; font-size:clamp(25px,5vw,38px); font-variant-numeric:tabular-nums; letter-spacing:.03em; }
 .pcso-result-countdown small { color:#8d929b; }
+.pcso-onboarding-video { display:block; width:100%; max-height:480px; margin:24px 0 16px; border:1px solid #454951; background:#000; }
+.pcso-onboarding-status { color:#b7bbc2; }
+.pcso-onboarding-status strong { color:#fff; }
 @keyframes pcso-result-enter { from { opacity:0; transform:translate(-12px,12px); } to { opacity:1; transform:none; } }
 @keyframes pcso-result-reveal { from { opacity:0; transform:scale(.97); } to { opacity:1; transform:none; } }
 @media (max-width:600px) { .pcso-result-notice { left:14px; bottom:14px; width:calc(100vw - 28px); } .pcso-result-shell { padding:36px 22px; } }

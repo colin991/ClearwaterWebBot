@@ -44,6 +44,7 @@ const SAVE_EMOJI = '<:Save:1517217415098798280>';
 const ARROW_EMOJI = { id: '1517217487165460591', name: 'rightarrow' };
 
 const DENY_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000;
+const WEBSITE_ONBOARDING_VIDEO_SECONDS = 317;
 const ANSWER_TIMEOUT_MS = 20 * 60 * 1000;
 /** Discord Components V2: total Text Display content across a message must stay under 4000. */
 const V2_DISPLAYABLE_TEXT_BUDGET = 3900;
@@ -511,6 +512,7 @@ export async function getPinellasApplicationStatus(userId, { client } = {}) {
   const deniedUntil = pinellasReapplyAt(store, id);
   const memberRole = await applicantDepartmentRole(client, id);
   const alreadyMember = Boolean(memberRole);
+  const awaitingOnboarding = latest?.status === 'approved' && !latest.onboardingCompletedAt;
   return {
     memberRole,
     latest: latest
@@ -519,11 +521,13 @@ export async function getPinellasApplicationStatus(userId, { client } = {}) {
         status: latest.status,
         createdAt: latest.createdAt,
         reviewedAt: latest.reviewedAt || null,
+        resultRevealedAt: latest.resultRevealedAt || null,
+        onboardingCompletedAt: latest.onboardingCompletedAt || null,
       }
       : null,
     pending: applications.some((entry) => entry.status === 'pending'),
     alreadyMember,
-    canApply: !alreadyMember && !(deniedUntil > Date.now()) && !applications.some((entry) => entry.status === 'pending'),
+    canApply: !alreadyMember && !awaitingOnboarding && !(deniedUntil > Date.now()) && !applications.some((entry) => entry.status === 'pending'),
     deniedUntil: deniedUntil > Date.now() ? new Date(deniedUntil).toISOString() : null,
     reapplyAt: latest?.status === 'denied' && deniedUntil
       ? new Date(deniedUntil).toISOString()
@@ -537,6 +541,54 @@ export async function getPinellasApplicationStatus(userId, { client } = {}) {
       yesNo: Boolean(question.yesNo),
     })),
   };
+}
+
+export async function revealWebsiteApplicationResult(userId) {
+  const store = await readStore();
+  const application = (store.applications || []).find((entry) => entry.userId === String(userId));
+  if (!application || !['approved', 'denied'].includes(application.status)) {
+    throw new Error('Your application has not been reviewed yet.');
+  }
+  application.resultRevealedAt ||= new Date().toISOString();
+  await writeStore(store);
+  return application;
+}
+
+export async function startWebsiteApplicationOnboarding(userId, durationSeconds) {
+  const store = await readStore();
+  const application = (store.applications || []).find((entry) => entry.userId === String(userId));
+  if (!application || application.status !== 'approved' || !application.resultRevealedAt) {
+    throw new Error('Reveal an accepted application result before starting onboarding.');
+  }
+  const duration = Math.max(
+    WEBSITE_ONBOARDING_VIDEO_SECONDS,
+    Math.min(900, Number(durationSeconds) || 0),
+  );
+  application.onboardingStartedAt = new Date().toISOString();
+  application.onboardingAvailableAt = new Date(Date.now() + (duration * 1000) - 1000).toISOString();
+  await writeStore(store);
+  return application;
+}
+
+export async function completeWebsiteApplicationOnboarding(client, userId) {
+  const store = await readStore();
+  const application = (store.applications || []).find((entry) => entry.userId === String(userId));
+  if (!application || application.status !== 'approved' || !application.resultRevealedAt) {
+    throw new Error('Reveal an accepted application result before completing onboarding.');
+  }
+  if (!application.onboardingAvailableAt || Date.parse(application.onboardingAvailableAt) > Date.now()) {
+    throw new Error('Finish watching the introduction video before continuing.');
+  }
+  const guild = client.guilds.cache.get(PINELLAS_GUILD_ID)
+    || await client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
+  const member = guild
+    ? await guild.members.fetch({ user: String(userId), force: true }).catch(() => null)
+    : null;
+  if (!member) throw new Error('Your Discord membership could not be found.');
+  await member.roles.add(PINELLAS_APPLY_APPROVED_ROLE_ID, 'Completed website application onboarding');
+  application.onboardingCompletedAt ||= new Date().toISOString();
+  await writeStore(store);
+  return getPinellasApplicationStatus(userId, { client });
 }
 
 export async function submitWebsiteApplication(client, user, rawAnswers = {}, rawViolations = []) {
@@ -632,22 +684,10 @@ export async function handlePinellasApplyInteraction(interaction) {
   }
 
   if (id === PINELLAS_APPLY_START_ID) {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    try {
-      await beginApplicationSession(interaction.user);
-      await interaction.editReply({
-        content: 'I opened your entry application in DMs. Check your Direct Messages to continue.',
-      });
-    } catch (error) {
-      const message = String(error?.message || error);
-      if (/Cannot send messages to this user|DM/i.test(message)) {
-        await interaction.editReply({
-          content: 'I could not DM you. Please enable **Direct Messages from server members**, then try again.',
-        });
-        return true;
-      }
-      await interaction.editReply({ content: message.slice(0, 1800) });
-    }
+    await interaction.reply({
+      content: `Complete your PCSO entry application on the website: ${publicSiteUrl()}/careers`,
+      flags: MessageFlags.Ephemeral,
+    }).catch(() => null);
     return true;
   }
 
@@ -681,22 +721,9 @@ export async function handlePinellasApplyInteraction(interaction) {
     application.reviewedAt = new Date().toISOString();
     application.reviewedBy = interaction.user.id;
 
-    const guild = interaction.client.guilds.cache.get(PINELLAS_GUILD_ID)
-      || await interaction.client.guilds.fetch(PINELLAS_GUILD_ID).catch(() => null);
-    const member = guild
-      ? await guild.members.fetch(application.userId).catch(() => null)
-      : null;
     const user = await interaction.client.users.fetch(application.userId).catch(() => null);
 
     if (approve) {
-      if (member) {
-        await member.roles.add(
-          PINELLAS_APPLY_APPROVED_ROLE_ID,
-          `Pinellas application approved by ${interaction.user.tag}`,
-        ).catch((error) => {
-          logger.error('Pinellas apply: failed to add approved role', error);
-        });
-      }
       if (user) {
         await user.send(dmCard(
           'Application Reviewed',
@@ -704,6 +731,7 @@ export async function handlePinellasApplyInteraction(interaction) {
             'Command staff has finished reviewing your Pinellas County Sheriff\'s Office entry application.',
             '',
             `Sign in and reveal your result on the website: ${publicSiteUrl()}/application-result`,
+            'If accepted, watch the full introduction and press **Done** there to receive your department role.',
             '',
             `-# Reviewed by ${interaction.user.tag}`,
           ].join('\n'),
@@ -737,7 +765,7 @@ export async function handlePinellasApplyInteraction(interaction) {
           `Reviewed by: <@${interaction.user.id}>`,
           '',
           approve
-            ? 'Role granted and applicant notified.'
+            ? 'Applicant notified. Their role will be granted after they reveal the result and finish the website introduction.'
             : 'Applicant notified. Re-apply allowed after 3 days.',
         ].join('\n')),
       );
