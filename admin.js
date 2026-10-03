@@ -95,7 +95,7 @@ const RIDE_STATUS = {
 };
 
 function rideRequested(item) {
-  return item.requestedLabel || rideWhen(item.requestedStartAt);
+  return rideWhen(item.requestedStartAt);
 }
 
 function placeSelect(places, selected) {
@@ -134,7 +134,7 @@ function renderRideAlongs(payload = {}) {
     <article class="admin-record-card" data-ride-id="${escapeHtml(item.id)}">
       <div class="admin-record-meta"><span>Delay request</span><time>${escapeHtml(rideWhen(item.delayRequest?.requestedAt))}</time></div>
       <h3>${escapeHtml(`${item.firstName} ${item.lastName}`)}</h3>
-      <p>Currently ${escapeHtml(rideWhen(item.scheduledAt))} at ${escapeHtml(item.meetingPlace)}.<br />Wants: ${escapeHtml(item.delayRequest?.label || rideWhen(item.delayRequest?.requestedStartAt))}</p>
+      <p>Currently ${escapeHtml(rideWhen(item.scheduledAt))} at ${escapeHtml(item.meetingPlace)}.<br />Wants: ${escapeHtml(rideWhen(item.delayRequest?.requestedStartAt))}</p>
       ${rideRider(item)}
       <label>New start time<input type="datetime-local" data-ride-time value="${escapeHtml(localInputValue(item.delayRequest?.requestedStartAt))}" /></label>
       <label>Meeting place${placeSelect(places, item.meetingPlace)}</label>

@@ -354,3 +354,29 @@ test('supervisor names skip blank shift fields', async () => {
   assert.equal(formatSupervisorName({ rankName: 'Corporal', roleplayName: '—', callsign: '—', displayName: 'Andre' }), 'Corporal Andre');
   assert.equal(formatSupervisorName({}), '');
 });
+
+test('server rejects bypassed ride along inputs the browser would normally block', async () => {
+  const now = Date.parse('2026-10-13T12:00:00Z');
+  const base = {
+    firstName: 'John', lastName: 'Doe', startAt: now + 3 * HOUR, waiverAgree: true, waiverSignature: 'John Doe',
+  };
+  for (const dob of ['2026-02-30', '1850-01-01', '2030-01-01', '1990-13-01', '1990-1-1']) {
+    assert.throws(() => validateRideAlongRequest({ ...base, dob }, now), /date of birth/, dob);
+  }
+  const parsed = validateRideAlongRequest({ ...base, dob: '1990-01-01', firstName: 'x'.repeat(500), waiverSignature: 'x'.repeat(40) + ' Doe', label: '<b>fake</b>' }, now);
+  assert.equal(parsed.firstName.length, 40);
+  assert.equal(parsed.timeframe.label, '');
+
+  const h = harness();
+  const id = await approvedRide(h);
+  await h.service.end('admin1', id, { reason: 'x'.repeat(5000), byRequester: false });
+  assert.equal(h.data().requests[0].endedReason.length, 300);
+  const h2 = harness();
+  await h2.service.request(user, {
+    firstName: 'A', lastName: 'B', dob: '1990-01-01', waiverAgree: true, waiverSignature: 'A B', startAt: h2.clock.t + 2 * HOUR,
+  });
+  await assert.rejects(
+    h2.service.approve('admin', h2.data().requests[0].id, { scheduledAt: h2.clock.t + 90 * 24 * HOUR, meetingPlace: 'City Hall' }),
+    /60 days/,
+  );
+});

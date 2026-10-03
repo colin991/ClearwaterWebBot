@@ -39,6 +39,11 @@ export function validatePcsoSiteForm(kind, fields = {}, sessionUser = null) {
     throw new Error('Unknown form.');
   }
 
+  if (type === 'complaint') {
+    // Complaints open a signed-in OPC ticket through the portal, never this anonymous endpoint.
+    throw new Error('Sign in on the complaint page to file a complaint.');
+  }
+
   if (type === 'crime-stoppers') {
     const tip = clean(fields.tip, 1500);
     if (tip.length < 8) throw new Error('Enter an anonymous tip.');
@@ -86,30 +91,7 @@ export function validatePcsoSiteForm(kind, fields = {}, sessionUser = null) {
     };
   }
 
-  const name = clean(fields.trooperName, 80);
-  const badge = clean(fields.badgeNumber, 40);
-  const location = clean(fields.location, 160);
-  const reason = clean(fields.reason, 160);
-  const description = clean(fields.description, 2000);
-  if (!name) throw new Error('Enter the trooper’s name.');
-  if (!badge) throw new Error('Enter the badge number.');
-  if (!location) throw new Error('Enter where it happened in-game.');
-  if (!reason) throw new Error('Enter a reason.');
-  if (description.length < 8) throw new Error('Describe what happened.');
-  return {
-    kind: type,
-    fields: {
-      trooperName: name,
-      badgeNumber: badge,
-      location,
-      reason,
-      description,
-      witnesses: clean(fields.witnesses, 400),
-    },
-    requester: sessionUser?.id
-      ? { discordId: String(sessionUser.id), username: clean(sessionUser.username || sessionUser.globalName, 80) }
-      : null,
-  };
+  throw new Error('Unknown form.');
 }
 
 export function createPcsoSiteFormRecord(entry = {}) {

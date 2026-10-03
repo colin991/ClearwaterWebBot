@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-03-server-side-validation",
+      "title": "Server-side checks for complaint and ride along forms",
+      "summary": "Complaints can no longer be sent anonymously through the old forms endpoint, so they always require Discord sign-in and a map pin. Ride along requests now check on the server that the date of birth is a real date that is not in the future, staff cancel and deny reasons are length-limited, approvals must be within 60 days, and the admin panel shows times from the server instead of text sent by the browser.",
+      "createdAt": "2026-10-03T17:45:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-03-ride-along-supervisor-name",
       "title": "Ride along DMs show who your supervisor is",
       "summary": "When a supervisor claims a ride along, the rider's DM now lists the supervisor with their rank, name, callsign, and a Discord mention. The supervisor also shows on the rider's request card on the website, in the start DM, on the signed waiver PDF, and in the admin panel.",

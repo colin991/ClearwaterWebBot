@@ -80,7 +80,7 @@ export function validateRideAlongTimeframe(fields = {}, now = Date.now()) {
   if (!Number.isFinite(startAt)) throw new Error('Pick a date and a start time.');
   if (startAt < now + 60 * 60_000) throw new Error('Pick a start time at least 1 hour from now.');
   if (startAt > now + MAX_REQUEST_AHEAD_MS) throw new Error('Pick a start time within the next 60 days.');
-  return { startAt, endAt: startAt + RIDE_ALONG_DURATION_MS, label: clean(fields.label, 120) };
+  return { startAt, endAt: startAt + RIDE_ALONG_DURATION_MS, label: '' };
 }
 
 export const RIDE_ALONG_REVIEW_MAX = 1500;
@@ -103,15 +103,23 @@ function canReview(record, now) {
   return record.status === 'completed' || (record.status === 'started' && now >= rideAlongEndAt(record));
 }
 
+/** A real calendar date between 1900 and today. */
+export function validRideAlongDob(dob, now = Date.now()) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dob || ''));
+  if (!match) return false;
+  const [year, month, day] = match.slice(1).map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return false;
+  return year >= 1900 && date.getTime() <= now;
+}
+
 export function validateRideAlongRequest(fields = {}, now = Date.now()) {
   const firstName = clean(fields.firstName, 40);
   const lastName = clean(fields.lastName, 40);
   const dob = clean(fields.dob, 20);
   if (!firstName) throw new Error('Enter your roleplay first name.');
   if (!lastName) throw new Error('Enter your roleplay last name.');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dob) || !Number.isFinite(Date.parse(dob))) {
-    throw new Error('Enter your roleplay date of birth.');
-  }
+  if (!validRideAlongDob(dob, now)) throw new Error('Enter your roleplay date of birth.');
   return {
     firstName,
     lastName,
@@ -602,18 +610,19 @@ export function createRideAlongService({
         entry.status = 'cancelled';
         entry.endedAt = now();
         entry.endedBy = String(userId);
-        entry.endedReason = reason;
+        entry.endedReason = clean(reason, 300) || 'Ended.';
         return { ...entry };
       });
       await closeSupervisorMessages(record, () => supervisorClosedPayload(record, 'This ride along was ended by the requester.'));
       if (record.claimedBy) await safeDm(record.claimedBy, { content: `The Ride Along with **${rideAlongRoleplayName(record)}** at ${discordTime(record.scheduledAt)} was ended by the requester.` });
-      if (!byRequester) await safeDm(record.requesterId, { content: `Your Ride Along request was ended. ${reason}` });
+      if (!byRequester) await safeDm(record.requesterId, { content: `Your Ride Along request was ended. ${record.endedReason}` });
       return publicRideAlong(record, now());
     },
 
     async approve(reviewerId, id, { scheduledAt, meetingPlace }) {
       const at = timeMs(scheduledAt);
       if (!Number.isFinite(at) || at <= now()) throw new Error('Pick a start time in the future.');
+      if (at > now() + MAX_REQUEST_AHEAD_MS) throw new Error('Pick a start time within the next 60 days.');
       if (!RIDE_ALONG_MEETING_PLACES.includes(meetingPlace)) throw new Error('Pick a meeting place.');
       const record = await withStore(async (data) => {
         const entry = find(data, id);
@@ -653,6 +662,7 @@ export function createRideAlongService({
     async reviewDelay(reviewerId, id, { approve, scheduledAt, meetingPlace }) {
       const at = approve ? timeMs(scheduledAt) : NaN;
       if (approve && (!Number.isFinite(at) || at <= now())) throw new Error('Pick the new start time.');
+      if (approve && at > now() + MAX_REQUEST_AHEAD_MS) throw new Error('Pick a start time within the next 60 days.');
       if (approve && meetingPlace && !RIDE_ALONG_MEETING_PLACES.includes(meetingPlace)) throw new Error('Pick a meeting place.');
       const { record, previous } = await withStore(async (data) => {
         const entry = find(data, id);

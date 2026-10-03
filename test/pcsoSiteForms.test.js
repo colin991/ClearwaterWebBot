@@ -47,7 +47,7 @@ test('validatePcsoSiteForm accepts anonymous tips and map reports', () => {
   assert.equal(report.fields.mapTop, 0.61);
 });
 
-test('public records require Discord and complaints require trooper fields', () => {
+test('public records require Discord and complaints cannot bypass the signed-in ticket flow', () => {
   assert.throws(
     () => validatePcsoSiteForm('public-records', { subjectType: 'deputy', subject: 'N. Richards' }),
     /Sign in/,
@@ -61,18 +61,11 @@ test('public records require Discord and complaints require trooper fields', () 
   assert.equal(records.requester.discordId, '99');
 
   assert.throws(
-    () => validatePcsoSiteForm('complaint', { trooperName: 'Smith' }),
-    /badge/,
+    () => validatePcsoSiteForm('complaint', {
+      trooperName: 'Smith', badgeNumber: '142', location: 'Bank', reason: 'Force', description: 'Tased without warning',
+    }, { id: '99', username: 'requester' }),
+    /Sign in on the complaint page/,
   );
-  const complaint = validatePcsoSiteForm('complaint', {
-    trooperName: 'Smith',
-    badgeNumber: '142',
-    location: 'Bank of Liberty',
-    reason: 'Use of force',
-    description: 'Trooper tased without warning',
-    witnesses: 'Jordan',
-  });
-  assert.equal(complaint.fields.witnesses, 'Jordan');
 });
 
 test('savePcsoSiteForm still returns a record on a read-only Vercel filesystem', async () => {
