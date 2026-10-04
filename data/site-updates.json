@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-03-compact-floating-search",
+      "title": "Make the floating search button compact",
+      "summary": "The bottom-right website search control is now a smaller circular icon button with cleaner hover and keyboard-focus effects while keeping the same search panel.",
+      "createdAt": "2026-10-03T20:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-03-floating-website-search",
       "title": "Move website search into a floating button",
       "summary": "Website Search was removed from the Resources menu and replaced with a bottom-right search button that opens on hover, click, or keyboard focus and links directly to matching PCSO pages.",

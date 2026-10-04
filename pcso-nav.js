@@ -135,7 +135,7 @@ function mountPcsoFloatingSearch() {
   const widget = document.createElement('aside');
   widget.className = 'pcso-floating-search';
   widget.dataset.pcsoFloatingSearch = '';
-  widget.innerHTML = '<button class="pcso-floating-search-button" type="button" aria-expanded="false" aria-label="Search the PCSO website"><span aria-hidden="true">⌕</span><b>Search</b></button><div class="pcso-floating-search-panel"><label for="pcso-floating-search-input">Search this website</label><input id="pcso-floating-search-input" type="search" placeholder="What are you looking for?" autocomplete="off"><div class="pcso-floating-search-results" role="listbox"></div></div>';
+  widget.innerHTML = '<button class="pcso-floating-search-button" type="button" aria-expanded="false" aria-label="Search the PCSO website"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4.25 4.25"></path></svg><span class="pcso-visually-hidden">Search</span></button><div class="pcso-floating-search-panel"><label for="pcso-floating-search-input">Search this website</label><input id="pcso-floating-search-input" type="search" placeholder="What are you looking for?" autocomplete="off"><div class="pcso-floating-search-results" role="listbox"></div></div>';
   document.body.append(widget);
   const button = widget.querySelector('button');
   const input = widget.querySelector('input');
