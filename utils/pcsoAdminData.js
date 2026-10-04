@@ -12,7 +12,6 @@ import {
 } from './pinellasShiftPanel.js';
 import {
   fetchMelonlyMemberDiscordId,
-  fetchPinellasDepartmentShifts,
   melonlyFetch,
   shiftCreatedMs,
 } from './melonly.js';
@@ -160,11 +159,25 @@ async function resolveDiscordId(apiKey, melonlyUserId, cache) {
 
 async function loadWeeklyShifts(apiKey, { start, end }) {
   if (!apiKey) return [];
-  const shifts = await fetchPinellasDepartmentShifts(apiKey, PINELLAS_MELONLY_DEPARTMENT_ID, {
-    maxPages: 8,
-    cacheTtlMs: 5 * 60 * 1000,
-  });
-  return (shifts || []).filter((shift) => {
+  const shifts = [];
+  let page = 1;
+  let totalPages = 1;
+  const maxPages = 8;
+  const path = `/server/departments/${encodeURIComponent(PINELLAS_MELONLY_DEPARTMENT_ID)}/shifts`;
+  while (page <= totalPages && page <= maxPages) {
+    const result = await melonlyFetch(apiKey, path, {
+      query: { page, limit: 100 },
+      cacheTtlMs: 5 * 60 * 1000,
+    });
+    const batch = Array.isArray(result?.data) ? result.data : (Array.isArray(result) ? result : []);
+    totalPages = Math.max(1, Number(result?.totalPages) || 1);
+    shifts.push(...batch);
+    if (!batch.length) break;
+    const timestamps = batch.map(shiftCreatedMs).filter(Boolean);
+    if (timestamps.length && Math.min(...timestamps) < start) break;
+    page += 1;
+  }
+  return shifts.filter((shift) => {
     if (!isPinellasDepartmentShift(shift)) return false;
     const created = shiftCreatedMs(shift);
     return created && created >= start && created <= end;
@@ -173,33 +186,29 @@ async function loadWeeklyShifts(apiKey, { start, end }) {
 
 async function loadWeeklyReports(apiKey, { start, end }) {
   if (!apiKey) return [];
-  try {
-    const records = [];
-    let page = 1;
-    let totalPages = 1;
-    const maxPages = 15;
-    while (page <= totalPages && page <= maxPages) {
-      const result = await melonlyFetch(apiKey, '/server/cad/records', {
-        query: { page, pageSize: 100, limit: 100, orderBy: 'createdAt', sort: 'desc' },
-        cacheTtlMs: 5 * 60 * 1000,
-      });
-      const batch = Array.isArray(result?.data) ? result.data
-        : (Array.isArray(result?.records) ? result.records
-          : (Array.isArray(result) ? result : []));
-      totalPages = Math.max(1, Number(result?.totalPages) || 1);
-      records.push(...batch);
-      if (!batch.length) break;
-      const timestamps = batch.map(cadRecordCreatedMs).filter(Boolean);
-      if (timestamps.length && Math.min(...timestamps) < start) break;
-      page += 1;
-    }
-    return records.filter((record) => {
-      const ms = cadRecordCreatedMs(record);
-      return ms >= start && ms <= end && isPcsoStaffCadRecord(record);
+  const records = [];
+  let page = 1;
+  let totalPages = 1;
+  const maxPages = 15;
+  while (page <= totalPages && page <= maxPages) {
+    const result = await melonlyFetch(apiKey, '/server/cad/records', {
+      query: { page, pageSize: 100, limit: 100, orderBy: 'createdAt', sort: 'desc' },
+      cacheTtlMs: 5 * 60 * 1000,
     });
-  } catch {
-    return [];
+    const batch = Array.isArray(result?.data) ? result.data
+      : (Array.isArray(result?.records) ? result.records
+        : (Array.isArray(result) ? result : []));
+    totalPages = Math.max(1, Number(result?.totalPages) || 1);
+    records.push(...batch);
+    if (!batch.length) break;
+    const timestamps = batch.map(cadRecordCreatedMs).filter(Boolean);
+    if (timestamps.length && Math.min(...timestamps) < start) break;
+    page += 1;
   }
+  return records.filter((record) => {
+    const ms = cadRecordCreatedMs(record);
+    return ms >= start && ms <= end && isPcsoStaffCadRecord(record);
+  });
 }
 
 let rosterCache = { value: null, expiresAt: 0 };
@@ -249,11 +258,20 @@ export async function buildPcsoAdminRoster({ melonlyApiKey = '', allowStale = tr
 
 async function buildPcsoAdminRosterFresh({ melonlyApiKey = '' } = {}) {
   const window = weekWindow();
-  const [rosterRows, shifts, records] = await Promise.all([
+  const [rosterRows, shiftsResult, recordsResult] = await Promise.all([
     loadRosterRows(),
-    loadWeeklyShifts(melonlyApiKey, window),
-    loadWeeklyReports(melonlyApiKey, window),
+    loadWeeklyShifts(melonlyApiKey, window).then(
+      (value) => ({ value, error: null }),
+      (error) => ({ value: [], error }),
+    ),
+    loadWeeklyReports(melonlyApiKey, window).then(
+      (value) => ({ value, error: null }),
+      (error) => ({ value: [], error }),
+    ),
   ]);
+  const shifts = shiftsResult.value;
+  const records = recordsResult.value;
+  let liveDataUnavailable = Boolean(shiftsResult.error || recordsResult.error);
 
   const byDiscord = new Map();
   for (const row of rosterRows) {
@@ -284,12 +302,18 @@ async function buildPcsoAdminRosterFresh({ melonlyApiKey = '' } = {}) {
   }
 
   for (const record of records) {
-    const discordId = await resolveCadRecordDiscordId(
-      melonlyApiKey,
-      record,
-      discordCache,
-      rosterDiscordIds,
-    );
+    let discordId = null;
+    try {
+      discordId = await resolveCadRecordDiscordId(
+        melonlyApiKey,
+        record,
+        discordCache,
+        rosterDiscordIds,
+      );
+    } catch {
+      liveDataUnavailable = true;
+      continue;
+    }
     if (!discordId || !/^\d{16,22}$/.test(discordId)) continue;
     rosterDiscordIds.add(discordId);
     const person = byDiscord.get(discordId) || emptyPerson({
@@ -325,6 +349,10 @@ async function buildPcsoAdminRosterFresh({ melonlyApiKey = '' } = {}) {
     weekEnd: new Date(window.end).toISOString(),
     rosterConfigured: isGoogleSheetsConfigured(googleSettings()),
     melonlyConfigured: Boolean(melonlyApiKey),
+    partial: liveDataUnavailable,
+    message: liveDataUnavailable
+      ? 'Live shift or report activity is temporarily unavailable. The personnel roster is shown and activity will refresh automatically.'
+      : '',
   };
 }
 

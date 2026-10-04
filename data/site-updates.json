@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-03-admin-personnel-rate-limit-fallback",
+      "title": "Keep personnel available during Melonly limits",
+      "summary": "The admin personnel page now keeps showing available roster data when Melonly temporarily rate limits shift or report activity, and displays a clean refresh notice instead of exposing a raw API error.",
+      "createdAt": "2026-10-03T22:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-03-fix-live-map-player-locations",
       "title": "Fix missing players on the live ER:LC map",
       "summary": "The Live Operations Dashboard now recognizes the updated ER:LC player response envelopes and X/Y/Z location formats, so available players and their callsigns appear on the map again.",

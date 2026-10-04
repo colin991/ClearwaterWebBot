@@ -20,6 +20,7 @@ const rideCountEl = document.querySelector('[data-ride-count]');
 let people = [];
 let weekStart = null;
 let weekEnd = null;
+let personnelNotice = '';
 
 function activateAdminView(view) {
   document.querySelectorAll('[data-admin-view]').forEach((button) => {
@@ -282,7 +283,10 @@ function renderRows(list) {
     wrapEl.hidden = true;
     return;
   }
-  if (rosterStatusEl) rosterStatusEl.hidden = true;
+  if (rosterStatusEl) {
+    rosterStatusEl.hidden = !personnelNotice;
+    rosterStatusEl.textContent = personnelNotice;
+  }
   wrapEl.hidden = false;
   bodyEl.innerHTML = list.map((person) => {
     const callsign = escapeHtml(person.callsign || '—');
@@ -437,13 +441,20 @@ async function loadPersonnel() {
   people = Array.isArray(payload.people) ? payload.people : [];
   weekStart = payload.weekStart || null;
   weekEnd = payload.weekEnd || null;
+  personnelNotice = payload.partial
+    ? (payload.message || 'Some live activity is temporarily unavailable. Showing the personnel data currently available.')
+    : '';
+  if (payload.partial && rosterStatusEl) {
+    rosterStatusEl.hidden = false;
+    rosterStatusEl.textContent = personnelNotice;
+  }
   if (!people.length) {
     if (rosterStatusEl) {
       rosterStatusEl.hidden = false;
       rosterStatusEl.textContent = payload?.message
         || 'No roster, shift, or report rows were available for the last 7 days.';
     }
-    wrapEl.hidden = true;
+    if (wrapEl) wrapEl.hidden = true;
     return;
   }
   applySearch();
