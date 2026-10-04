@@ -154,6 +154,7 @@ export function renderNewsDirectoryHtml(news, { query = '' } = {}) {
           <h2>${escapeHtml(item.title || 'Untitled news')}</h2>
           ${item.publishedAt ? `<p class="pcso-news-row-date">${escapeHtml(new Date(item.publishedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }))}</p>` : ''}
           <p class="pcso-news-row-summary">${escapeHtml(item.summary || item.body || '')}</p>
+          ${item.body && item.body !== item.summary ? `<details class="pcso-news-full"><summary>Read full article</summary><p>${escapeHtml(item.body)}</p></details>` : ''}
           ${item.linkUrl && !item.discordMessageId ? `<p><a class="pcso-text-link" href="${escapeHtml(href)}">Read more →</a></p>` : ''}
         </div>
       </article>

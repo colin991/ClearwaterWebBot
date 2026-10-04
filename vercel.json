@@ -141,6 +141,38 @@
     {
       "source": "/employee/command",
       "destination": "/employee-command.html"
+    },
+    {
+      "source": "/search",
+      "destination": "/search.html"
+    },
+    {
+      "source": "/calendar",
+      "destination": "/calendar.html"
+    },
+    {
+      "source": "/awards",
+      "destination": "/awards.html"
+    },
+    {
+      "source": "/recruitment-progress",
+      "destination": "/recruitment-progress.html"
+    },
+    {
+      "source": "/incident-map",
+      "destination": "/incident-map.html"
+    },
+    {
+      "source": "/policies",
+      "destination": "/policies.html"
+    },
+    {
+      "source": "/operations",
+      "destination": "/operations.html"
+    },
+    {
+      "source": "/deputy-directory",
+      "destination": "/deputy-directory.html"
     }
   ],
   "headers": [

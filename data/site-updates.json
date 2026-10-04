@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-03-pcso-connected-resource-portals",
+      "title": "Add connected PCSO dashboards and resource portals",
+      "summary": "Added website-wide search, a community calendar with downloadable reminders, personal and supervisor employee dashboards, awards and promotions, recruitment progress, categorized full press releases, a privacy-safe incident map, searchable policy summaries, enhanced ride-along access, live operations, and an on-duty deputy directory.",
+      "createdAt": "2026-10-03T19:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-03-rto-speech-sanitizer",
       "title": "Stop symbol-only RTO speech",
       "summary": "Automated voice announcements now sanitize Discord and ER:LC markup, and symbol-only messages such as repeated # characters are rejected before text-to-speech playback.",

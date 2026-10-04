@@ -15,6 +15,57 @@ import { rideAlongServiceForClient } from './pcsoRideAlong.js';
 import { renderLibertyLocationMap } from './libertyMapImage.js';
 import { nearestLibertyPostal } from './libertyMapCalibration.js';
 import { logger } from './logger.js';
+import { fetchErlcServer } from './erlc.js';
+import { getPostedShiftSnapshot, isPinellasWatchCommanderEligible, PINELLAS_DISTRICTS } from './pinellasShiftPanel.js';
+import { weatherDisplayName } from './serverWeather.js';
+
+function publicDeputy(deputy) {
+  return {
+    id: String(deputy.discordId || ''),
+    callsign: String(deputy.callsign || '—'),
+    name: String(deputy.roleplayName || 'Deputy'),
+    rank: String(deputy.rankName || 'Deputy'),
+    districtId: String(deputy.districtId || ''),
+    district: String(deputy.district?.name || 'Not assigned'),
+    onDuty: true,
+    supervisor: Boolean(deputy.isSupervisor),
+    shiftMs: Number(deputy.thisShiftMs) || 0,
+  };
+}
+
+async function operationsSnapshot(client) {
+  const snapshot = await getPostedShiftSnapshot();
+  const source = Array.isArray(snapshot.deputies) ? snapshot.deputies : [];
+  const deputies = source.map(publicDeputy);
+  const districts = PINELLAS_DISTRICTS.map((district) => {
+    const members = source.filter((entry) => entry.districtId === district.id || entry.districtId === 'all');
+    const commander = members.find(isPinellasWatchCommanderEligible);
+    return {
+      id: district.id,
+      name: district.name,
+      count: members.length,
+      watchCommander: commander ? publicDeputy(commander) : null,
+    };
+  });
+  let server = { online: false, players: 0, maxPlayers: null };
+  try {
+    const raw = await fetchErlcServer(client.config?.erlcServerKey);
+    const players = raw?.Players || raw?.players || [];
+    server = {
+      online: true,
+      players: Array.isArray(players) ? players.length : Number(raw?.CurrentPlayers || 0),
+      maxPlayers: Number(raw?.MaxPlayers || raw?.maxPlayers) || null,
+    };
+  } catch { /* The shift snapshot remains useful while ER:LC is unavailable. */ }
+  const weatherState = client.serverWeather?.state || {};
+  return {
+    server,
+    weather: weatherDisplayName(weatherState.currentWeather),
+    deputies,
+    districts,
+    fetchedAt: snapshot.fetchedAt || new Date().toISOString(),
+  };
+}
 
 async function requirePcsoAdmin(client, userId, message) {
   const guild = client.guilds.cache.get(PINELLAS_GUILD_ID)
@@ -136,6 +187,10 @@ export async function handlePcsoPortal(client, body = {}) {
     };
   }
 
+  if (kind === 'operations') {
+    return { ok: true, ...(await operationsSnapshot(client)) };
+  }
+
   if (!user) {
     const error = new Error('Sign in with Discord first.');
     error.status = 401;
@@ -187,6 +242,19 @@ export async function handlePcsoPortal(client, body = {}) {
       await reportWebsiteApplicationViolation(client, user, body.violation);
       return { ok: true };
     }
+  }
+
+  if (kind === 'employee-dashboard') {
+    const operations = await operationsSnapshot(client);
+    const rideAlong = await rideAlongServiceForClient(client).listForUser(user.id);
+    const application = await getPinellasApplicationStatus(user.id, { client });
+    return {
+      ok: true,
+      operations,
+      you: operations.deputies.find((entry) => entry.id === user.id) || null,
+      rideAlong,
+      application,
+    };
   }
 
   if (kind === 'records') {

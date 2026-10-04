@@ -175,6 +175,62 @@ export const PCSO_STATIC_PAGES = [
       'Applicants who are approved must complete training and an R/A. FTO staff document progress and recommend release to patrol.',
     ],
   },
+  {
+    slug: 'search', title: 'Website Search', eyebrow: 'Resources',
+    lead: 'Search PCSO services, staff, news, events, policies, and public resources.',
+    body: ['Enter a word or phrase to search the department website and live public content.'],
+    extra: '<div class="pcso-resource-app" data-resource-page="search"></div>',
+    scripts: ['pcso-resource-pages.js?v=20261003-resource-portal'],
+  },
+  {
+    slug: 'calendar', title: 'Community Events Calendar', eyebrow: 'Community',
+    lead: 'Public events, patrol operations, recruitment sessions, and training dates.',
+    body: ['Browse upcoming department events and add reminders to your calendar.'],
+    extra: '<div class="pcso-resource-app" data-resource-page="calendar"></div>',
+    scripts: ['pcso-resource-pages.js?v=20261003-resource-portal'],
+  },
+  {
+    slug: 'awards', title: 'Awards and Promotions', eyebrow: 'Our People',
+    lead: 'Promotions, commendations, certifications, and employee recognition.',
+    body: ['Recognition posts are collected automatically from current PCSO news.'],
+    extra: '<div class="pcso-resource-app" data-resource-page="awards"></div>',
+    scripts: ['pcso-resource-pages.js?v=20261003-resource-portal'],
+  },
+  {
+    slug: 'recruitment-progress', title: 'Recruitment Progress Tracker', eyebrow: 'Careers',
+    lead: 'Follow your application from submission through orientation and field training.',
+    body: ['Sign in with Discord to see your private recruitment status.'],
+    extra: '<div class="pcso-resource-app" data-resource-page="recruitment"></div>',
+    scripts: ['pcso-resource-pages.js?v=20261003-resource-portal'],
+  },
+  {
+    slug: 'incident-map', title: 'Crime and Incident Map', eyebrow: 'Public Safety',
+    lead: 'A privacy-safe view of current public incidents in Liberty County.',
+    body: ['Only public call information is displayed. Deputy locations and protected details are never shown.'],
+    extra: '<div class="pcso-resource-app" data-resource-page="incidents"></div>',
+    scripts: ['pcso-resource-pages.js?v=20261003-resource-portal'],
+  },
+  {
+    slug: 'policies', title: 'Policies and SOP Library', eyebrow: 'Department',
+    lead: 'Search department guidance by patrol, traffic, investigations, radio, and discipline.',
+    body: ['These summaries support roleplay operations. Command directives and current Discord policy control if they differ.'],
+    extra: '<div class="pcso-resource-app" data-resource-page="policies"></div>',
+    scripts: ['pcso-resource-pages.js?v=20261003-resource-portal'],
+  },
+  {
+    slug: 'operations', title: 'Live Operations Dashboard', eyebrow: 'Operations',
+    lead: 'Server status, weather, staffing, patrol districts, and Watch Commanders.',
+    body: ['Operational information refreshes automatically without exposing private deputy locations.'],
+    extra: '<div class="pcso-resource-app" data-resource-page="operations"></div>',
+    scripts: ['pcso-resource-pages.js?v=20261003-resource-portal'],
+  },
+  {
+    slug: 'deputy-directory', title: 'Deputy Directory', eyebrow: 'Our People',
+    lead: 'Search currently active deputies by callsign, rank, name, and district.',
+    body: ['On-duty status is synchronized with the PCSO shift panel.'],
+    extra: '<div class="pcso-resource-app" data-resource-page="directory"></div>',
+    scripts: ['pcso-resource-pages.js?v=20261003-resource-portal'],
+  },
 ];
 
 export function pcsoSectionHtml(page) {

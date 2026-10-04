@@ -40,6 +40,18 @@
         <a href="/public-records">Records request form</a>
       </div>
     </div>
+    <div class="pcso-drop">
+      <button class="pcso-drop-toggle" type="button" aria-expanded="false">Resources</button>
+      <div class="pcso-drop-menu" role="menu">
+        <a href="/search">Website Search</a>
+        <a href="/calendar">Community Calendar</a>
+        <a href="/operations">Live Operations</a>
+        <a href="/deputy-directory">Deputy Directory</a>
+        <a href="/incident-map">Incident Map</a>
+        <a href="/policies">Policies &amp; SOPs</a>
+        <a href="/awards">Awards &amp; Promotions</a>
+      </div>
+    </div>
     <a class="pcso-careers-btn" href="/careers">Careers</a>
     <a class="pcso-button pcso-button-red" href="/signin?next=${next}" data-pcso-login>Log In</a>
   `;
