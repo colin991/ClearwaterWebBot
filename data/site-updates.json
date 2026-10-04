@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-03-live-erlc-player-map",
+      "title": "Show live players on the Operations map",
+      "summary": "The Live Operations Dashboard now includes the ER:LC Liberty County map with every available in-game player location marked and the player's callsign displayed above the marker.",
+      "createdAt": "2026-10-03T21:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-03-compact-floating-search",
       "title": "Make the floating search button compact",
       "summary": "The bottom-right website search control is now a smaller circular icon button with cleaner hover and keyboard-focus effects while keeping the same search panel.",

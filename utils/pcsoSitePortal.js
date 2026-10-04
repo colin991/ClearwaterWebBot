@@ -15,7 +15,8 @@ import { rideAlongServiceForClient } from './pcsoRideAlong.js';
 import { renderLibertyLocationMap } from './libertyMapImage.js';
 import { nearestLibertyPostal } from './libertyMapCalibration.js';
 import { logger } from './logger.js';
-import { fetchErlcServer } from './erlc.js';
+import { fetchErlcServer, parseErlcPlayer } from './erlc.js';
+import { libertyLocationPin } from './libertyMapCalibration.js';
 import { getPostedShiftSnapshot, isPinellasWatchCommanderEligible, PINELLAS_DISTRICTS } from './pinellasShiftPanel.js';
 import { weatherDisplayName } from './serverWeather.js';
 
@@ -48,9 +49,21 @@ async function operationsSnapshot(client) {
     };
   });
   let server = { online: false, players: 0, maxPlayers: null };
+  let mapPlayers = [];
   try {
     const raw = await fetchErlcServer(client.config?.erlcServerKey);
     const players = raw?.Players || raw?.players || [];
+    mapPlayers = (Array.isArray(players) ? players : []).map(parseErlcPlayer).map((player) => {
+      const pin = libertyLocationPin(player.location);
+      if (!pin) return null;
+      return {
+        callsign: String(player.callsign || player.username || 'Player').slice(0, 32),
+        username: String(player.username || '').slice(0, 40),
+        team: String(player.team || 'Civilian').slice(0, 40),
+        left: pin.left,
+        top: pin.top,
+      };
+    }).filter(Boolean);
     server = {
       online: true,
       players: Array.isArray(players) ? players.length : Number(raw?.CurrentPlayers || 0),
@@ -60,6 +73,7 @@ async function operationsSnapshot(client) {
   const weatherState = client.serverWeather?.state || {};
   return {
     server,
+    mapPlayers,
     weather: weatherDisplayName(weatherState.currentWeather),
     deputies,
     districts,

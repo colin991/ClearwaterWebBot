@@ -1994,6 +1994,20 @@ button.pcso-news-card-more { padding:0; cursor:zoom-in; font-family:inherit; lin
 .pcso-news-full { margin-top:12px; color:#c5c8ce; }
 .pcso-news-full summary { cursor:pointer; color:#fff; font-weight:800; }
 .pcso-news-full p { white-space:pre-wrap; }
+.pcso-operations-map-section { margin:20px 0; padding:18px; border:1px solid #343840; background:#0d0e11; }
+.pcso-operations-map-section h2 { margin:0 0 5px; }
+.pcso-operations-map-section > div:first-child p { margin:0 0 15px; color:#a9adb5; }
+.pcso-operations-map { position:relative; width:100%; overflow:hidden; border:1px solid #454952; background:#050607; }
+.pcso-operations-map > img { display:block; width:100%; height:auto; opacity:.84; }
+.pcso-operations-markers { position:absolute; inset:0; }
+.pcso-operations-player { position:absolute; z-index:2; transform:translate(-50%,-100%); display:flex; flex-direction:column; align-items:center; pointer-events:auto; }
+.pcso-operations-player b { max-width:100px; margin-bottom:3px; padding:2px 5px; overflow:hidden; border:1px solid rgba(255,255,255,.62); border-radius:3px; background:rgba(8,9,11,.9); color:#fff; font-size:clamp(7px,1vw,11px); line-height:1.1; text-overflow:ellipsis; white-space:nowrap; box-shadow:0 2px 6px rgba(0,0,0,.65); }
+.pcso-operations-player i { display:block; width:9px; height:9px; border:2px solid #fff; border-radius:50%; background:#49a9e8; box-shadow:0 0 0 3px rgba(73,169,232,.25); }
+.pcso-operations-player.pcso-team-civilian i { background:#e1b446; box-shadow:0 0 0 3px rgba(225,180,70,.25); }
+.pcso-operations-player[class*="police"] i,.pcso-operations-player[class*="sheriff"] i { background:#4e84e8; }
+.pcso-operations-player[class*="fire"] i { background:#d34d52; }
+.pcso-map-count { margin:10px 0 0; color:#999ea7; font-size:13px; text-align:right; }
+@media(max-width:600px){.pcso-operations-map-section{padding:10px}.pcso-operations-player b{max-width:58px;font-size:7px}.pcso-operations-player i{width:6px;height:6px}}
 .pcso-floating-search { position:fixed; right:22px; bottom:22px; z-index:1200; display:flex; flex-direction:column-reverse; align-items:flex-end; gap:9px; }
 .pcso-floating-search-button { display:grid; place-items:center; width:42px; height:42px; padding:0; border:1px solid #565b64; border-radius:50%; background:linear-gradient(180deg,#383b42,#282b30); color:#fff; box-shadow:0 7px 22px rgba(0,0,0,.45); cursor:pointer; transition:transform .15s,border-color .15s,background .15s; }
 .pcso-floating-search-button:hover,.pcso-floating-search-button:focus-visible { transform:translateY(-2px) scale(1.04); border-color:#9298a2; background:#42464e; outline:0; }
