@@ -1,5 +1,7 @@
 import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { rememberManualIdentity } from '../utils/identityStore.js';
+import { rejectWrongGuild } from '../utils/commandGuilds.js';
+import { DOD_GUILD_ID } from '../utils/dodReports.js';
 
 async function fetchRobloxUser(robloxId) {
   const response = await fetch(`https://users.roblox.com/v1/users/${encodeURIComponent(robloxId)}`, {
@@ -30,8 +32,10 @@ export default {
       .setRequired(true)
       .setMinLength(1)
       .setMaxLength(20)),
+  guildIds: [DOD_GUILD_ID],
 
   async execute(interaction) {
+    if (String(interaction.guildId) !== DOD_GUILD_ID) rejectWrongGuild();
     const target = interaction.options.getUser('discord-user', true);
     const robloxId = interaction.options.getString('roblox-id', true).trim();
     if (target.bot) throw new Error('Bots cannot be linked to Roblox accounts.');

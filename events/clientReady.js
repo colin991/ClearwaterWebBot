@@ -20,6 +20,7 @@ import { startSoundboardAccess } from '../utils/soundboardAccess.js';
 import { ensurePinellasServerProfile } from '../utils/pinellasServer.js';
 import { ensureBelleairServerProfile } from '../utils/belleairServer.js';
 import { ensureFireOpsServerProfile } from '../utils/fireOpsServer.js';
+import { ensureDodServerProfile } from '../utils/dodServer.js';
 import { clearFloridaServerProfile } from '../utils/floridaServer.js';
 import { startBotApiServer } from '../utils/botApiServer.js';
 import { startErlcSceneCommands } from '../utils/erlcSceneCommands.js';
@@ -61,6 +62,12 @@ export default {
         logger.error('Fire Operations server profile setup failed', error);
       });
     }, 3000);
+
+    setTimeout(() => {
+      void ensureDodServerProfile(client).catch((error) => {
+        logger.error('Divisional Hub server profile setup failed', error);
+      });
+    }, 3600);
 
     setTimeout(() => {
       void clearFloridaServerProfile(client).catch((error) => {

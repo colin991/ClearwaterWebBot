@@ -20,6 +20,7 @@ export const DOD_INCIDENT_CHANNEL_ID = '1545195332822900807';
 export const DOD_STAFF_LOG_CHANNEL_ID = '1545210075600257074';
 export const DOD_DEPLOYMENT_CHANNEL_ID = '1545195147703357541';
 export const DOD_MEMBER_ROLE_ID = '1552815019761205320';
+export const DOD_GUILD_ID = '1536695906768781362';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const COUNTER_PATH = path.join(ROOT, 'data', 'dod-report-counters.json');

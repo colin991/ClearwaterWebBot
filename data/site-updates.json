@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-04-divisional-hub-command-scope-profile",
+      "title": "Move Detentions tools to the Divisional Hub",
+      "summary": "The Detentions report, staff, deployment, and manual-link commands now register in Discord server 1536695906768781362. That server also receives the PCSO per-server avatar, banner, and bio with the name PCSO | Divisional Hub.",
+      "createdAt": "2026-10-04T12:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-04-dod-reports-and-manual-links",
       "title": "Add Detentions reports and manual Roblox links",
       "summary": "Added custody-report, incident-report, DOD infraction, DOD promotion, and deployment slash commands with their requested channels and layouts. Administrators can also use /ml to permanently link a Discord member to a verified Roblox ID for bot-wide identity matching.",
