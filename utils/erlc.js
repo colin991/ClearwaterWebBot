@@ -364,7 +364,7 @@ export async function fetchErlcServer(serverKey, options = {}) {
   try {
     const server = await withTimeout(pending, timeoutMs);
     try {
-      recordLibertyCalibration(server?.Players || server?.players || []);
+      recordLibertyCalibration(erlcPlayersFromServer(server));
     } catch (error) {
       logger.warn(`Liberty map calibration skipped (${error?.message || error})`);
     }
@@ -416,15 +416,54 @@ function firstFinite(...values) {
   return null;
 }
 
+function firstObject(...values) {
+  return values.find((value) => value && typeof value === 'object' && !Array.isArray(value)) || {};
+}
+
+function firstArray(...values) {
+  return values.find(Array.isArray) || null;
+}
+
+/** Accept both the legacy flat bundle and the nested v2 response envelope. */
+export function erlcPlayersFromServer(server = {}) {
+  const candidates = [
+    server?.Players, server?.players,
+    server?.Data?.Players, server?.Data?.players,
+    server?.data?.Players, server?.data?.players,
+    server?.Server?.Players, server?.Server?.players,
+    server?.server?.Players, server?.server?.players,
+  ];
+  const collection = candidates.find((value) => Array.isArray(value)
+    || (value && typeof value === 'object'));
+  if (Array.isArray(collection)) return collection;
+  return collection && typeof collection === 'object' ? Object.values(collection) : [];
+}
+
 export function parseErlcPlayer(player) {
   const raw = String(player?.Player || player?.player || '');
   const separator = raw.lastIndexOf(':');
-  const loc = player?.Location && typeof player.Location === 'object' ? player.Location : {};
-  const position = Array.isArray(player?.position)
-    ? player.position
-    : (Array.isArray(loc.position) ? loc.position : null);
-  const x = firstFinite(loc.LocationX, loc.x, player?.x, player?.X, position?.[0]);
-  const z = firstFinite(loc.LocationZ, loc.z, player?.z, player?.Z, position?.[1]);
+  const loc = firstObject(player?.Location, player?.location);
+  const coordinates = firstObject(
+    loc?.Position, loc?.position, loc?.Coordinates, loc?.coordinates,
+    player?.Position, player?.position, player?.Coordinates, player?.coordinates,
+  );
+  const position = firstArray(
+    player?.Position, player?.position, player?.Coordinates, player?.coordinates,
+    player?.Location, player?.location,
+    loc?.Position, loc?.position, loc?.Coordinates, loc?.coordinates,
+  );
+  // Three-value vectors are X/Y/Z. Older two-value vectors are X/Z.
+  const arrayZ = position?.length >= 3 ? position[2] : position?.[1];
+  const x = firstFinite(
+    loc.LocationX, loc.locationX, loc.X, loc.x,
+    coordinates.LocationX, coordinates.locationX, coordinates.X, coordinates.x,
+    player?.LocationX, player?.locationX, player?.x, player?.X, position?.[0],
+  );
+  const z = firstFinite(
+    loc.LocationZ, loc.locationZ, loc.Z, loc.z,
+    coordinates.LocationZ, coordinates.locationZ, coordinates.Z, coordinates.z,
+    player?.LocationZ, player?.locationZ, player?.z, player?.Z, arrayZ,
+  );
   const jobValue = player?.Job
     ?? player?.job
     ?? player?.Occupation
@@ -443,16 +482,18 @@ export function parseErlcPlayer(player) {
     username: separator >= 0 ? raw.slice(0, separator) : raw,
     displayName: String(player?.PlayerDisplayName || player?.DisplayName || player?.displayName || '').trim(),
     robloxId: separator >= 0 ? raw.slice(separator + 1) : String(player?.PlayerId || player?.id || ''),
-    team: player?.Team || player?.team || 'Civilian',
+    team: player?.Team || player?.team || player?.Info?.Team || player?.info?.team || 'Civilian',
     job,
-    callsign: player?.Callsign || player?.callsign || '',
+    callsign: player?.Callsign || player?.callsign || player?.Info?.Callsign || player?.info?.callsign || '',
     speed: firstFinite(player?.Speed, player?.speed, player?.VehicleSpeed, player?.vehicleSpeed, loc.Speed, loc.speed),
     location: {
       x,
       z,
-      postal: String(loc.PostalCode || player?.postal || loc.postal || ''),
-      street: String(loc.StreetName || player?.street || loc.street || ''),
-      building: String(loc.BuildingNumber || player?.building || loc.building || ''),
+      postal: String(loc.PostalCode || loc.postalCode || loc.Postal || loc.postal
+        || coordinates.PostalCode || coordinates.postalCode || coordinates.Postal || coordinates.postal
+        || player?.PostalCode || player?.postalCode || player?.Postal || player?.postal || ''),
+      street: String(loc.StreetName || loc.streetName || player?.StreetName || player?.streetName || player?.street || loc.street || ''),
+      building: String(loc.BuildingNumber || loc.buildingNumber || player?.BuildingNumber || player?.buildingNumber || player?.building || loc.building || ''),
     },
   };
 }

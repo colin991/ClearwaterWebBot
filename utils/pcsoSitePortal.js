@@ -15,7 +15,7 @@ import { rideAlongServiceForClient } from './pcsoRideAlong.js';
 import { renderLibertyLocationMap } from './libertyMapImage.js';
 import { nearestLibertyPostal } from './libertyMapCalibration.js';
 import { logger } from './logger.js';
-import { fetchErlcServer, parseErlcPlayer } from './erlc.js';
+import { erlcPlayersFromServer, fetchErlcServer, parseErlcPlayer } from './erlc.js';
 import { libertyLocationPin } from './libertyMapCalibration.js';
 import { getPostedShiftSnapshot, isPinellasWatchCommanderEligible, PINELLAS_DISTRICTS } from './pinellasShiftPanel.js';
 import { weatherDisplayName } from './serverWeather.js';
@@ -52,8 +52,8 @@ async function operationsSnapshot(client) {
   let mapPlayers = [];
   try {
     const raw = await fetchErlcServer(client.config?.erlcServerKey);
-    const players = raw?.Players || raw?.players || [];
-    mapPlayers = (Array.isArray(players) ? players : []).map(parseErlcPlayer).map((player) => {
+    const players = erlcPlayersFromServer(raw);
+    mapPlayers = players.map(parseErlcPlayer).map((player) => {
       const pin = libertyLocationPin(player.location);
       if (!pin) return null;
       return {

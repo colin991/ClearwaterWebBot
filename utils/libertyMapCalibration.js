@@ -153,10 +153,23 @@ function scheduleSave() {
 export function recordLibertyCalibration(players = [], { persist = true } = {}) {
   let added = 0;
   for (const player of Array.isArray(players) ? players : []) {
-    const loc = player?.Location && typeof player.Location === 'object' ? player.Location : (player?.location || {});
-    const x = Number(loc.LocationX ?? loc.x);
-    const z = Number(loc.LocationZ ?? loc.z);
-    const p = normalizePostal(loc.PostalCode ?? loc.postal);
+    const loc = player?.Location && typeof player.Location === 'object' && !Array.isArray(player.Location)
+      ? player.Location : (player?.location || {});
+    const coordinates = loc?.Position || loc?.position || loc?.Coordinates || loc?.coordinates
+      || player?.Position || player?.position || player?.Coordinates || player?.coordinates || {};
+    const vector = [player?.Position, player?.position, player?.Coordinates, player?.coordinates,
+      player?.Location, player?.location, loc?.Position, loc?.position, loc?.Coordinates, loc?.coordinates]
+      .find(Array.isArray);
+    const x = Number(loc.LocationX ?? loc.locationX ?? loc.X ?? loc.x
+      ?? coordinates.LocationX ?? coordinates.locationX ?? coordinates.X ?? coordinates.x
+      ?? player?.LocationX ?? player?.locationX ?? player?.X ?? player?.x ?? vector?.[0]);
+    const z = Number(loc.LocationZ ?? loc.locationZ ?? loc.Z ?? loc.z
+      ?? coordinates.LocationZ ?? coordinates.locationZ ?? coordinates.Z ?? coordinates.z
+      ?? player?.LocationZ ?? player?.locationZ ?? player?.Z ?? player?.z
+      ?? (vector?.length >= 3 ? vector[2] : vector?.[1]));
+    const p = normalizePostal(loc.PostalCode ?? loc.postalCode ?? loc.Postal ?? loc.postal
+      ?? coordinates.PostalCode ?? coordinates.postalCode ?? coordinates.Postal ?? coordinates.postal
+      ?? player?.PostalCode ?? player?.postalCode ?? player?.Postal ?? player?.postal);
     if (!Number.isFinite(x) || !Number.isFinite(z) || !LIBERTY_POSTAL_POINTS[p]) continue;
     const samePostal = samples.filter((entry) => entry.p === p);
     if (samePostal.some((entry) => Math.abs(entry.x - x) < 1 && Math.abs(entry.z - z) < 1)) continue;
