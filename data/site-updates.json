@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-03-share-shift-panel-live-map-data",
+      "title": "Use the shift panel player map on Live Operations",
+      "summary": "The Live Operations Dashboard now uses the same player-location mapping pipeline as the PCSO shift panel, displays every available player together, and loads the current official postal map from the ER:LC maps API.",
+      "createdAt": "2026-10-03T22:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-03-admin-personnel-rate-limit-fallback",
       "title": "Keep personnel available during Melonly limits",
       "summary": "The admin personnel page now keeps showing available roster data when Melonly temporarily rate limits shift or report activity, and displays a clean refresh notice instead of exposing a raw API error.",

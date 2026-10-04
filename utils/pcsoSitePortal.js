@@ -15,8 +15,8 @@ import { rideAlongServiceForClient } from './pcsoRideAlong.js';
 import { renderLibertyLocationMap } from './libertyMapImage.js';
 import { nearestLibertyPostal } from './libertyMapCalibration.js';
 import { logger } from './logger.js';
-import { erlcPlayersFromServer, fetchErlcServer, parseErlcPlayer } from './erlc.js';
-import { libertyLocationPin } from './libertyMapCalibration.js';
+import { erlcPlayersFromServer, fetchErlcServer, playersOnLibertyMap } from './erlc.js';
+import { fetchErlcMapListing, pickErlcMap } from './erlcMaps.js';
 import { getPostedShiftSnapshot, isPinellasWatchCommanderEligible, PINELLAS_DISTRICTS } from './pinellasShiftPanel.js';
 import { weatherDisplayName } from './serverWeather.js';
 
@@ -32,6 +32,19 @@ function publicDeputy(deputy) {
     supervisor: Boolean(deputy.isSupervisor),
     shiftMs: Number(deputy.thisShiftMs) || 0,
   };
+}
+
+let operationsMapCache = { url: '', expiresAt: 0 };
+
+async function currentOperationsMapUrl() {
+  if (operationsMapCache.url && operationsMapCache.expiresAt > Date.now()) {
+    return operationsMapCache.url;
+  }
+  const maps = await fetchErlcMapListing();
+  const picked = pickErlcMap(maps, { postals: true });
+  if (!picked?.url) throw new Error('The ER:LC map API returned no postal map.');
+  operationsMapCache = { url: picked.url, expiresAt: Date.now() + (6 * 60 * 60 * 1000) };
+  return picked.url;
 }
 
 async function operationsSnapshot(client) {
@@ -50,30 +63,32 @@ async function operationsSnapshot(client) {
   });
   let server = { online: false, players: 0, maxPlayers: null };
   let mapPlayers = [];
+  let mapUrl = 'assets/liberty-county-map.png';
   try {
     const raw = await fetchErlcServer(client.config?.erlcServerKey);
     const players = erlcPlayersFromServer(raw);
-    mapPlayers = players.map(parseErlcPlayer).map((player) => {
-      const pin = libertyLocationPin(player.location);
-      if (!pin) return null;
-      return {
-        callsign: String(player.callsign || player.username || 'Player').slice(0, 32),
-        username: String(player.username || '').slice(0, 40),
-        team: String(player.team || 'Civilian').slice(0, 40),
-        left: pin.left,
-        top: pin.top,
-      };
-    }).filter(Boolean);
+    // Reuse the same location-to-map pipeline as the shift panel and location embeds.
+    mapPlayers = playersOnLibertyMap(players).map((player) => ({
+      callsign: String(player.callsign || player.username || 'Player').slice(0, 32),
+      username: String(player.username || '').slice(0, 40),
+      team: String(player.team || 'Civilian').slice(0, 40),
+      left: player.left,
+      top: player.top,
+    }));
     server = {
       online: true,
       players: Array.isArray(players) ? players.length : Number(raw?.CurrentPlayers || 0),
       maxPlayers: Number(raw?.MaxPlayers || raw?.maxPlayers) || null,
     };
   } catch { /* The shift snapshot remains useful while ER:LC is unavailable. */ }
+  try {
+    mapUrl = await currentOperationsMapUrl();
+  } catch { /* Keep the bundled official map when the public map index is unavailable. */ }
   const weatherState = client.serverWeather?.state || {};
   return {
     server,
     mapPlayers,
+    mapUrl,
     weather: weatherDisplayName(weatherState.currentWeather),
     deputies,
     districts,
