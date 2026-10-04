@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-04-dod-reports-and-manual-links",
+      "title": "Add Detentions reports and manual Roblox links",
+      "summary": "Added custody-report, incident-report, DOD infraction, DOD promotion, and deployment slash commands with their requested channels and layouts. Administrators can also use /ml to permanently link a Discord member to a verified Roblox ID for bot-wide identity matching.",
+      "createdAt": "2026-10-04T12:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-03-share-shift-panel-live-map-data",
       "title": "Use the shift panel player map on Live Operations",
       "summary": "The Live Operations Dashboard now uses the same player-location mapping pipeline as the PCSO shift panel, displays every available player together, and loads the current official postal map from the ER:LC maps API.",

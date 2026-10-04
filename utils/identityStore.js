@@ -42,6 +42,18 @@ function normalizeManualEntry(entry) {
   };
 }
 
+export function upsertManualIdentityList(entries = [], identity = {}) {
+  const normalized = normalizeManualEntry(identity);
+  if (!normalized) throw new Error('Discord user and Roblox ID must both be valid numeric IDs.');
+  return [
+    ...(Array.isArray(entries) ? entries : [])
+      .map(normalizeManualEntry)
+      .filter(Boolean)
+      .filter((entry) => entry.discordId !== normalized.discordId && entry.robloxId !== normalized.robloxId),
+    normalized,
+  ];
+}
+
 async function loadManualIdentities() {
   const raw = await readJsonFile(manualPath, []);
   const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.identities) ? raw.identities : []);
@@ -109,6 +121,15 @@ export async function rememberIdentity(identity) {
   };
   await saveIdentityCache(cache);
   return cache.byDiscord[String(identity.discordId)];
+}
+
+/** Persistent administrator override used before all automatic identity sources. */
+export async function rememberManualIdentity(identity) {
+  const raw = await readJsonFile(manualPath, []);
+  const entries = Array.isArray(raw) ? raw : (Array.isArray(raw?.identities) ? raw.identities : []);
+  const next = upsertManualIdentityList(entries, identity);
+  await writeJsonFile(manualPath, next, { backup: true });
+  return next.find((entry) => entry.discordId === String(identity.discordId));
 }
 
 export async function rememberIdentities(identities) {
