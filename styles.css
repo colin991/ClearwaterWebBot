@@ -1994,5 +1994,18 @@ button.pcso-news-card-more { padding:0; cursor:zoom-in; font-family:inherit; lin
 .pcso-news-full { margin-top:12px; color:#c5c8ce; }
 .pcso-news-full summary { cursor:pointer; color:#fff; font-weight:800; }
 .pcso-news-full p { white-space:pre-wrap; }
+.pcso-floating-search { position:fixed; right:22px; bottom:22px; z-index:1200; display:flex; flex-direction:column-reverse; align-items:flex-end; gap:9px; }
+.pcso-floating-search-button { display:flex; align-items:center; gap:8px; min-height:48px; padding:0 17px; border:1px solid #666b74; border-radius:4px; background:#34373d; color:#fff; box-shadow:0 8px 28px rgba(0,0,0,.42); font:inherit; font-weight:900; cursor:pointer; }
+.pcso-floating-search-button span { font-size:24px; line-height:1; }
+.pcso-floating-search-panel { display:none; width:min(360px,calc(100vw - 32px)); padding:16px; border:1px solid #464a52; border-radius:4px; background:#101115; box-shadow:0 16px 44px rgba(0,0,0,.62); }
+.pcso-floating-search.is-open .pcso-floating-search-panel,.pcso-floating-search:hover .pcso-floating-search-panel,.pcso-floating-search:focus-within .pcso-floating-search-panel { display:block; animation:pcso-search-open .14s ease-out; }
+.pcso-floating-search-panel label { display:block; margin-bottom:8px; color:#f1f2f4; font-size:13px; font-weight:900; text-transform:uppercase; letter-spacing:.06em; }
+.pcso-floating-search-panel input { width:100%; box-sizing:border-box; min-height:44px; padding:0 12px; border:1px solid #3c4048; background:#090a0c; color:#fff; font:inherit; }
+.pcso-floating-search-results { display:grid; gap:3px; max-height:310px; margin-top:10px; overflow:auto; }
+.pcso-floating-search-results a { padding:10px 11px; border-left:2px solid transparent; color:#daddE2; text-decoration:none; font-weight:750; }
+.pcso-floating-search-results a:hover,.pcso-floating-search-results a:focus { border-left-color:#a6abb4; background:#1b1d22; color:#fff; outline:0; }
+.pcso-floating-search-results p { margin:8px; color:#969ba3; }
+@keyframes pcso-search-open { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:none; } }
+@media(max-width:600px){.pcso-floating-search{right:14px;bottom:14px}.pcso-floating-search-button b{display:none}.pcso-floating-search-button{width:48px;padding:0;justify-content:center;border-radius:50%}}
 .admin-record-card select, .admin-record-card input { width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #34373e; background:#0d0e11; color:#f0f1f3; font:inherit; }
 .admin-noshow-table td, .admin-noshow-table th { white-space:nowrap; }

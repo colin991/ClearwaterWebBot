@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-03-floating-website-search",
+      "title": "Move website search into a floating button",
+      "summary": "Website Search was removed from the Resources menu and replaced with a bottom-right search button that opens on hover, click, or keyboard focus and links directly to matching PCSO pages.",
+      "createdAt": "2026-10-03T20:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-03-pcso-connected-resource-portals",
       "title": "Add connected PCSO dashboards and resource portals",
       "summary": "Added website-wide search, a community calendar with downloadable reminders, personal and supervisor employee dashboards, awards and promotions, recruitment progress, categorized full press releases, a privacy-safe incident map, searchable policy summaries, enhanced ride-along access, live operations, and an on-duty deputy directory.",

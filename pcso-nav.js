@@ -43,7 +43,6 @@
     <div class="pcso-drop">
       <button class="pcso-drop-toggle" type="button" aria-expanded="false">Resources</button>
       <div class="pcso-drop-menu" role="menu">
-        <a href="/search">Website Search</a>
         <a href="/calendar">Community Calendar</a>
         <a href="/operations">Live Operations</a>
         <a href="/deputy-directory">Deputy Directory</a>
@@ -110,10 +109,80 @@
   });
 
   refreshPcsoLoginButton();
+  mountPcsoFloatingSearch();
   showApplicationResultNotice();
   showRideAlongNotices();
   document.dispatchEvent(new Event('pcso-nav-ready'));
 })();
+
+function mountPcsoFloatingSearch() {
+  if (document.querySelector('[data-pcso-floating-search]')) return;
+  const links = [
+    ['Live Operations Dashboard', '/operations', 'server weather staffing districts watch commanders'],
+    ['Deputy Directory', '/deputy-directory', 'staff callsign rank division'],
+    ['Community Events Calendar', '/calendar', 'events recruitment training reminders'],
+    ['Awards and Promotions', '/awards', 'commendations certifications recognition'],
+    ['Recruitment Progress', '/recruitment-progress', 'application orientation training ride along'],
+    ['Crime and Incident Map', '/incident-map', 'active calls public safety map'],
+    ['Policies and SOPs', '/policies', 'patrol traffic investigations radio discipline'],
+    ['Ride Along Program', '/ride-along', 'request waiver supervisor reviews'],
+    ['News and Press Releases', '/news', 'news announcements photos'],
+    ['Careers', '/careers', 'apply application deputy'],
+    ['Public Records', '/public-records', 'records request documents'],
+    ['File a Police Report', '/police-report', 'report incident'],
+    ['Contact PCSO', '/contact', 'ticket help complaint'],
+  ];
+  const widget = document.createElement('aside');
+  widget.className = 'pcso-floating-search';
+  widget.dataset.pcsoFloatingSearch = '';
+  widget.innerHTML = '<button class="pcso-floating-search-button" type="button" aria-expanded="false" aria-label="Search the PCSO website"><span aria-hidden="true">⌕</span><b>Search</b></button><div class="pcso-floating-search-panel"><label for="pcso-floating-search-input">Search this website</label><input id="pcso-floating-search-input" type="search" placeholder="What are you looking for?" autocomplete="off"><div class="pcso-floating-search-results" role="listbox"></div></div>';
+  document.body.append(widget);
+  const button = widget.querySelector('button');
+  const input = widget.querySelector('input');
+  const results = widget.querySelector('.pcso-floating-search-results');
+  const open = () => { widget.classList.add('is-open'); button.setAttribute('aria-expanded', 'true'); };
+  const close = () => { widget.classList.remove('is-open'); button.setAttribute('aria-expanded', 'false'); };
+  const paint = () => {
+    const query = input.value.trim().toLowerCase();
+    const matches = links.filter((item) => !query || item.join(' ').toLowerCase().includes(query)).slice(0, 8);
+    results.replaceChildren(...matches.map(([title, href]) => {
+      const link = document.createElement('a');
+      link.href = href;
+      link.textContent = title;
+      link.setAttribute('role', 'option');
+      return link;
+    }));
+    if (!matches.length) {
+      const empty = document.createElement('p');
+      empty.textContent = 'No matching pages.';
+      results.append(empty);
+    }
+  };
+  widget.addEventListener('mouseenter', open);
+  widget.addEventListener('mouseleave', () => { if (!widget.contains(document.activeElement)) close(); });
+  widget.addEventListener('focusin', open);
+  widget.addEventListener('focusout', () => setTimeout(() => { if (!widget.contains(document.activeElement)) close(); }, 0));
+  button.addEventListener('click', () => { if (widget.classList.contains('is-open')) close(); else { open(); input.focus(); } });
+  input.addEventListener('input', paint);
+  input.addEventListener('keydown', (event) => { if (event.key === 'Escape') { close(); button.focus(); } });
+  paint();
+  Promise.allSettled([
+    fetch('/api/pcso/content', { cache: 'no-store' }).then((response) => response.json()),
+    fetch('/api/pcso/portal?kind=operations', { cache: 'no-store' }).then((response) => response.json()),
+  ]).then(([contentResult, operationsResult]) => {
+    if (contentResult.status === 'fulfilled') {
+      const content = contentResult.value || {};
+      for (const item of content.news || []) links.push([item.title || 'News', '/news', `news press release ${item.summary || ''} ${item.body || ''}`]);
+      for (const item of content.events || []) links.push([item.title || 'Event', '/calendar', `event ${item.location || ''} ${item.description || ''}`]);
+    }
+    if (operationsResult.status === 'fulfilled') {
+      for (const deputy of operationsResult.value?.deputies || []) {
+        links.push([`${deputy.callsign} · ${deputy.name}`, '/deputy-directory', `deputy staff ${deputy.rank} ${deputy.district}`]);
+      }
+    }
+    paint();
+  });
+}
 
 function pcsoSession() {
   pcsoSession.promise ||= fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' })
