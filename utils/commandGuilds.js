@@ -37,6 +37,14 @@ export function slashCommandsForGuild(commands, guildId) {
     .map((command) => command.data.toJSON());
 }
 
+/** Every guild that needs its own slash-command registration at startup. */
+export function registrationGuildIds(commands, defaults = []) {
+  return [...new Set([
+    ...(Array.isArray(defaults) ? defaults : [defaults]),
+    ...(Array.isArray(commands) ? commands : []).flatMap(commandGuildIds),
+  ].map(String).filter(Boolean))];
+}
+
 export function rejectWrongGuild() {
   const error = new Error('wrong_guild');
   error.code = 'WRONG_GUILD';

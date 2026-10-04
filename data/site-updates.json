@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-04-register-divisional-hub-commands",
+      "title": "Register DOD commands in the Divisional Hub",
+      "summary": "Fixed slash-command startup registration so the bot now publishes commands to every department guild declared by the command files, including the PCSO Divisional Hub server 1536695906768781362.",
+      "createdAt": "2026-10-04T13:15:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-04-divisional-hub-command-scope-profile",
       "title": "Move Detentions tools to the Divisional Hub",
       "summary": "The Detentions report, staff, deployment, and manual-link commands now register in Discord server 1536695906768781362. That server also receives the PCSO per-server avatar, banner, and bio with the name PCSO | Divisional Hub.",

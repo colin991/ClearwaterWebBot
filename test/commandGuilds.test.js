@@ -4,6 +4,7 @@ import { BELLEAIR_GUILD_ID } from '../utils/belleairServer.js';
 import {
   COMMAND_SCOPE,
   commandAllowedInGuild,
+  registrationGuildIds,
   rejectWrongGuild,
   slashCommandsForGuild,
 } from '../utils/commandGuilds.js';
@@ -12,6 +13,8 @@ import { requestPinellasTicketClose } from '../utils/pinellasSupport.js';
 import cr from '../prefixCommands/cr.js';
 import infract from '../commands/infract.js';
 import ping from '../commands/ping.js';
+import custodyReport from '../commands/custody-report.js';
+import { DOD_GUILD_ID } from '../utils/dodReports.js';
 
 test('PCSO commands are scoped to the Pinellas Discord', () => {
   assert.equal(COMMAND_SCOPE.pcso, PINELLAS_GUILD_ID);
@@ -30,6 +33,11 @@ test('PCSO slash commands are not registered in other guilds', () => {
   assert.deepEqual(main.map((command) => command.name), ['ping']);
   assert.deepEqual(pcso.map((command) => command.name).sort(), ['infract', 'ping']);
   assert.deepEqual(bpd.map((command) => command.name), ['ping']);
+});
+
+test('registration includes every explicitly scoped department guild', () => {
+  const ids = registrationGuildIds([ping, infract, custodyReport], ['main-guild']);
+  assert.deepEqual(ids, ['main-guild', PINELLAS_GUILD_ID, DOD_GUILD_ID]);
 });
 
 test('wrong-guild errors stay silent', () => {

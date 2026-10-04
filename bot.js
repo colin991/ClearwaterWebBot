@@ -8,8 +8,7 @@ import { logger } from './utils/logger.js';
 import { startErlcRoleSync } from './utils/erlcRoleSync.js';
 import { startRobloxGroupSync } from './utils/robloxGroupSync.js';
 import { startDepartmentSalaryJob } from './utils/departmentSalary.js';
-import { slashCommandsForGuild } from './utils/commandGuilds.js';
-import { PINELLAS_GUILD_ID } from './utils/pinellasServer.js';
+import { registrationGuildIds, slashCommandsForGuild } from './utils/commandGuilds.js';
 
 // Keep boot loaders in the entry module so an incomplete host upload cannot
 // fail before the bot has a chance to start.
@@ -92,10 +91,7 @@ async function loadEvents(client) {
 
 async function registerCommands(commandModules, settings) {
   const rest = new REST({ version: '10' }).setToken(settings.token);
-  const guildIds = [...new Set([
-    settings.guildId,
-    PINELLAS_GUILD_ID,
-  ].filter(Boolean))];
+  const guildIds = registrationGuildIds(commandModules, [settings.guildId]);
 
   for (const guildId of guildIds) {
     const body = slashCommandsForGuild(commandModules, guildId);
