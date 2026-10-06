@@ -3028,6 +3028,13 @@
       "summary": "The homepage hero now automatically plays the requested YouTube video without audio and repeats continuously behind the existing homepage content.",
       "createdAt": "2026-10-06T23:37:27.0752203Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-06-homepage-video-policy-fix",
+      "title": "Homepage video playback fix",
+      "summary": "Updated the website security policy to permit the muted YouTube homepage video while continuing to block unapproved external frames.",
+      "createdAt": "2026-10-06T23:45:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
