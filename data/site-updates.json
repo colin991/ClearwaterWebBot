@@ -3021,6 +3021,13 @@
       "summary": "Administrators can use /update with an Eastern time to place a live countdown in their current voice channel status. The status updates every 10 seconds, changes to Update OUT when finished, and active timers recover after a bot restart.",
       "createdAt": "2026-09-27T00:17:29.078Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-06-homepage-video-hero",
+      "title": "Looping homepage video",
+      "summary": "The homepage hero now automatically plays the requested YouTube video without audio and repeats continuously behind the existing homepage content.",
+      "createdAt": "2026-10-06T23:37:27.0752203Z",
+      "updatedBy": "colin991"
     }
   ]
 }
