@@ -3035,6 +3035,13 @@
       "summary": "Updated the website security policy to permit the muted YouTube homepage video while continuing to block unapproved external frames.",
       "createdAt": "2026-10-06T23:45:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-06-local-homepage-video",
+      "title": "Local homepage background video",
+      "summary": "Replaced the external YouTube player with the supplied video file, optimized for the web with its audio removed, automatic playback, and continuous looping.",
+      "createdAt": "2026-10-06T23:55:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

@@ -2029,6 +2029,6 @@ button.pcso-news-card-more { padding:0; cursor:zoom-in; font-family:inherit; lin
 /* Muted, looping homepage hero video. The image remains as a fallback while YouTube loads. */
 .pcso-hero { overflow:hidden; }
 .pcso-hero-video { position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none; background:#111214; }
-.pcso-hero-video iframe { position:absolute; top:50%; left:50%; width:max(100vw, 177.78vh); height:max(56.25vw, 100%); border:0; transform:translate(-50%,-50%); pointer-events:none; }
+.pcso-hero-video video { width:100%; height:100%; object-fit:cover; object-position:center; pointer-events:none; }
 .pcso-hero-shade { z-index:1; }
 .pcso-hero-content { z-index:2; }
