@@ -5,6 +5,7 @@ import {
 } from 'discord.js';
 import {
   PINELLAS_MASS_SHIFT_CHANNEL_ID,
+  massShiftChannelIdForGuild,
   postPinellasMassShift,
 } from '../utils/pinellasMassShift.js';
 import {
@@ -12,11 +13,12 @@ import {
   requirePinellasCommandAccess,
 } from '../utils/pinellasServer.js';
 import { rejectWrongGuild } from '../utils/commandGuilds.js';
+import { FIRE_OPS_GUILD_ID } from '../utils/fireOpsServer.js';
 
 export default {
   data: new SlashCommandBuilder()
     .setName('mass-shift')
-    .setDescription('Post a Pinellas County Sheriff\'s Office mass shift briefing.')
+    .setDescription('Post a mass shift briefing for this department.')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .setDMPermission(false)
     .addStringOption((option) => option
@@ -25,14 +27,15 @@ export default {
       .setRequired(true)
       .setMinLength(2)
       .setMaxLength(200)),
-  guildIds: [PINELLAS_GUILD_ID],
+  guildIds: [PINELLAS_GUILD_ID, FIRE_OPS_GUILD_ID],
 
   async execute(interaction) {
-    if (String(interaction.guildId) !== PINELLAS_GUILD_ID) rejectWrongGuild();
+    const guildId = String(interaction.guildId);
+    if (![PINELLAS_GUILD_ID, FIRE_OPS_GUILD_ID].includes(guildId)) rejectWrongGuild();
 
     const issuerMember = interaction.member
       || await interaction.guild.members.fetch(interaction.user.id);
-    requirePinellasCommandAccess(issuerMember);
+    if (guildId === PINELLAS_GUILD_ID) requirePinellasCommandAccess(issuerMember);
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -45,7 +48,7 @@ export default {
 
     await interaction.editReply({
       content: [
-        `Mass shift briefing posted in <#${PINELLAS_MASS_SHIFT_CHANNEL_ID}>.`,
+        `Mass shift briefing posted in <#${massShiftChannelIdForGuild(guildId) || PINELLAS_MASS_SHIFT_CHANNEL_ID}>.`,
         `**Primary Focus:** ${shift.focus}`,
         `ID: \`${shift.id}\``,
       ].join('\n'),

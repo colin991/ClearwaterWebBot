@@ -20,10 +20,25 @@ import {
   PINELLAS_GUILD_ID,
   requirePinellasCommandAccess,
 } from './pinellasServer.js';
+import { FIRE_OPS_GUILD_ID } from './fireOpsServer.js';
 import { logger } from './logger.js';
 
 export const PINELLAS_MASS_SHIFT_CHANNEL_ID = '1516237998180794388';
+export const FIRE_MASS_SHIFT_CHANNEL_ID = '1514804888742269111';
 export const PINELLAS_MASS_SHIFT_ATTEND_PREFIX = 'pcs:massshift:attend:';
+
+const FIRE_MASS_SHIFT_ROLE_IDS = Object.freeze([
+  '1514804886393458850',
+  '1514804886368288854',
+]);
+const FIRE_MASS_SHIFT_BANNER_URL =
+  'https://media.discordapp.net/attachments/1514804887630643321/1555353721930784778/cwfd_1.png?format=webp&quality=lossless';
+const FIRE_MASS_SHIFT_FOOTER_URL =
+  'https://media.discordapp.net/attachments/1514804887630643321/1555353723134287915/cwfd_footer_1.png?format=webp&quality=lossless';
+const FIRE_MASS_SHIFT_TITLE_EMOJI = '<:CWFR_americanflag:1555738513826259016>';
+const FIRE_MASS_SHIFT_DETAILS_EMOJI = '<:pin:1557159388202934373>';
+const FIRE_MASS_SHIFT_MEMBER_EMOJI = '<:d_member:1548411945437110412>';
+const FIRE_MASS_SHIFT_BUTTON_EMOJI = { id: '1533917555910246511', name: 'waving' };
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const STORE_PATH = path.join(ROOT, 'data', 'pinellas-mass-shifts.json');
@@ -74,7 +89,95 @@ function attendingListText(attendeeIds) {
   ].join('\n');
 }
 
-async function buildMassShiftPayload(shift, { includeFiles = true } = {}) {
+function fireAttendingListText(attendeeIds) {
+  const ids = attendeeIds || [];
+  const lines = ids.map((id) => `- <@${id}>`);
+  return [
+    `# ${FIRE_MASS_SHIFT_MEMBER_EMOJI} Attending Personnel (${ids.length})`,
+    lines.length ? lines.join('\n') : '-# Nobody has marked attendance yet.',
+  ].join('\n');
+}
+
+function isSupportedMassShiftGuild(guildId) {
+  return [PINELLAS_GUILD_ID, FIRE_OPS_GUILD_ID].includes(String(guildId));
+}
+
+export function massShiftChannelIdForGuild(guildId) {
+  if (String(guildId) === PINELLAS_GUILD_ID) return PINELLAS_MASS_SHIFT_CHANNEL_ID;
+  if (String(guildId) === FIRE_OPS_GUILD_ID) return FIRE_MASS_SHIFT_CHANNEL_ID;
+  return null;
+}
+
+function buildFireMassShiftPayload(shift) {
+  const startedTs = Math.floor(new Date(shift.createdAt).getTime() / 1000);
+  const container = new ContainerBuilder().clearAccentColor();
+
+  container
+    .addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(
+        new MediaGalleryItemBuilder().setURL(FIRE_MASS_SHIFT_BANNER_URL),
+      ),
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    )
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent([
+        `# ${FIRE_MASS_SHIFT_TITLE_EMOJI} Mass Shift`,
+        `> A <@&${FIRE_MASS_SHIFT_ROLE_IDS[0]}>, <@&${FIRE_MASS_SHIFT_ROLE_IDS[1]}> mass personnel shift is now ongoing. We request all available personnel to mark their attendance and join the team and in-game server. All personnel are required to uphold departmental standards at all times while on duty.`,
+      ].join('\n')),
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    )
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent([
+        `# ${FIRE_MASS_SHIFT_DETAILS_EMOJI} Additional Details`,
+        `**Primary Focus:** \`${shift.focus}\``,
+        `**Date & Time:** <t:${startedTs}:f>`,
+        `**Initiated By:** <@${shift.initiatorId}>`,
+      ].join('\n')),
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    )
+    .addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(fireAttendingListText(shift.attendeeIds)),
+        )
+        .setButtonAccessory(
+          new ButtonBuilder()
+            .setCustomId(`${PINELLAS_MASS_SHIFT_ATTEND_PREFIX}${shift.id}`)
+            .setStyle(ButtonStyle.Secondary)
+            .setLabel('Mark Attendance')
+            .setEmoji(FIRE_MASS_SHIFT_BUTTON_EMOJI),
+        ),
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small),
+    )
+    .addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(
+        new MediaGalleryItemBuilder().setURL(FIRE_MASS_SHIFT_FOOTER_URL),
+      ),
+    );
+
+  return {
+    components: [container],
+    flags: MessageFlags.IsComponentsV2,
+    allowedMentions: {
+      parse: [],
+      roles: [...FIRE_MASS_SHIFT_ROLE_IDS],
+      users: [...new Set([shift.initiatorId, ...(shift.attendeeIds || [])])],
+    },
+  };
+}
+
+export async function buildMassShiftPayload(shift, { includeFiles = true } = {}) {
+  if (String(shift.guildId) === FIRE_OPS_GUILD_ID) {
+    return buildFireMassShiftPayload(shift);
+  }
   const files = [];
   const banner = includeFiles
     ? await loadAttachment(BANNER_PATH, 'pcso-mass-shift-banner.png')
@@ -164,19 +267,21 @@ async function buildMassShiftPayload(shift, { includeFiles = true } = {}) {
 }
 
 export async function postPinellasMassShift({ guild, issuerMember, focus }) {
-  if (String(guild.id) !== PINELLAS_GUILD_ID) {
-    throw new Error('This command can only be used in the Pinellas County Sheriff\'s Office server.');
+  const guildId = String(guild.id);
+  if (!isSupportedMassShiftGuild(guildId)) {
+    throw new Error('This command can only be used in a supported department server.');
   }
-  requirePinellasCommandAccess(issuerMember);
+  if (guildId === PINELLAS_GUILD_ID) requirePinellasCommandAccess(issuerMember);
 
   const cleanFocus = String(focus || '').trim();
   if (!cleanFocus) throw new Error('Provide a primary focus for the mass shift.');
   if (cleanFocus.length > 200) throw new Error('Keep the focus under 200 characters.');
 
-  const channel = guild.channels.cache.get(PINELLAS_MASS_SHIFT_CHANNEL_ID)
-    || await guild.channels.fetch(PINELLAS_MASS_SHIFT_CHANNEL_ID).catch(() => null);
+  const channelId = massShiftChannelIdForGuild(guildId);
+  const channel = guild.channels.cache.get(channelId)
+    || await guild.channels.fetch(channelId).catch(() => null);
   if (!channel?.isTextBased?.()) {
-    throw new Error(`Mass shift channel \`${PINELLAS_MASS_SHIFT_CHANNEL_ID}\` is unavailable.`);
+    throw new Error(`Mass shift channel \`${channelId}\` is unavailable.`);
   }
 
   const shift = {
@@ -209,9 +314,9 @@ export async function handlePinellasMassShiftInteraction(interaction) {
   if (!id.startsWith(PINELLAS_MASS_SHIFT_ATTEND_PREFIX)) return false;
   if (!interaction.isButton()) return false;
 
-  if (String(interaction.guildId) !== PINELLAS_GUILD_ID) {
+  if (!isSupportedMassShiftGuild(interaction.guildId)) {
     await interaction.reply({
-      content: 'Mass shifts are only available in the Pinellas County Sheriff\'s Office server.',
+      content: 'Mass shifts are only available in a supported department server.',
       flags: MessageFlags.Ephemeral,
     }).catch(() => null);
     return true;
@@ -223,6 +328,15 @@ export async function handlePinellasMassShiftInteraction(interaction) {
   if (!shift) {
     await interaction.reply({
       content: 'That mass shift briefing was not found.',
+      flags: MessageFlags.Ephemeral,
+    }).catch(() => null);
+    return true;
+  }
+  // Older saved shifts predate guildId and belong to PCSO.
+  const shiftGuildId = String(shift.guildId || PINELLAS_GUILD_ID);
+  if (shiftGuildId !== String(interaction.guildId)) {
+    await interaction.reply({
+      content: 'That attendance button belongs to a different department server.',
       flags: MessageFlags.Ephemeral,
     }).catch(() => null);
     return true;

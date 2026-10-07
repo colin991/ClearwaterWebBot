@@ -3042,6 +3042,13 @@
       "summary": "Replaced the external YouTube player with the supplied video file, optimized for the web with its audio removed, automatic playback, and continuous looping.",
       "createdAt": "2026-10-06T23:55:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-07-department-mass-shifts",
+      "title": "Department-specific mass shifts",
+      "summary": "The mass-shift command now works independently in the PCSO and Clearwater Fire & Rescue servers. Fire announcements use the requested channel, branding, role pings, details, and live attendance list.",
+      "createdAt": "2026-10-07T23:45:16.7634892Z",
+      "updatedBy": "colin991"
     }
   ]
 }
