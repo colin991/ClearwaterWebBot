@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   extractDiscordMessageText,
-  mentionedDiscordUserIds,
   migrateTicketStore,
   publicTicketTranscript,
   publicTranscriptUrl,
+  sanitizeWebsiteTicketReply,
 } from '../utils/pcsoWebTickets.js';
 
 test('legacy one-ticket-per-user store migrates to channel records', () => {
@@ -54,7 +54,12 @@ test('only https transcript links are published to the website', () => {
   assert.equal(transcript.closureReason, 'Ticket closed by staff.');
 });
 
-test('website replies mention the tagged Discord users', () => {
-  assert.deepEqual(mentionedDiscordUserIds('<@1169457690066558988> hello'), ['1169457690066558988']);
-  assert.deepEqual(mentionedDiscordUserIds('<@!1074411240757137589>'), ['1074411240757137589']);
+test('website replies neutralize every Discord mention type', () => {
+  const sanitized = sanitizeWebsiteTicketReply(
+    '@everyone @HERE <@1169457690066558988> <@!1074411240757137589> <@&1514363218754142218>',
+  );
+  assert.equal(
+    sanitized,
+    '@\u200Beveryone @\u200BHERE <@\u200B1169457690066558988> <@\u200B!1074411240757137589> <@\u200B&1514363218754142218>',
+  );
 });

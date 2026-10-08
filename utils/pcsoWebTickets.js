@@ -95,8 +95,10 @@ export function extractDiscordMessageText(message) {
   return [...new Set(parts.filter(Boolean))].join('\n\n').slice(0, 1800);
 }
 
-export function mentionedDiscordUserIds(text) {
-  return [...new Set([...String(text || '').matchAll(/<@!?(\d{16,22})>/g)].map((match) => match[1]))];
+export function sanitizeWebsiteTicketReply(content) {
+  return String(content || '')
+    .replace(/@(everyone|here)/gi, '@\u200B$1')
+    .replace(/<@([!&]?)(\d{16,22})>/g, '<@\u200B$1$2>');
 }
 
 function supportTitle(type) {
@@ -516,7 +518,7 @@ export async function openWebTicket(client, { user, type, inquiry }) {
 }
 
 export async function postWebTicketReply(client, { user, content, stored = null, channelId = '' }) {
-  const text = String(content || '').trim().slice(0, 1800);
+  const text = sanitizeWebsiteTicketReply(String(content || '').trim()).slice(0, 1800);
   if (text.length < 1) throw new Error('Enter a reply.');
   const wanted = String(channelId || stored?.channelId || '');
   let channel = null;
@@ -572,7 +574,7 @@ export async function postWebTicketReply(client, { user, content, stored = null,
     content: text,
     username: String(user.displayName || user.username || 'Website user').slice(0, 80),
     avatarURL: webhookAvatar(user),
-    allowedMentions: { parse: [], users: mentionedDiscordUserIds(text) },
+    allowedMentions: { parse: [], users: [], roles: [], repliedUser: false },
   });
   return { ok: true, channelId: ticket.channelId || channel.id };
 }

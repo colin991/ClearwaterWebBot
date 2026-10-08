@@ -3049,6 +3049,13 @@
       "summary": "The mass-shift command now works independently in the PCSO and Clearwater Fire & Rescue servers. Fire announcements use the requested channel, branding, role pings, details, and live attendance list.",
       "createdAt": "2026-10-07T23:45:16.7634892Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-07-ticket-reply-mention-safety",
+      "title": "Safe website ticket replies",
+      "summary": "Website ticket replies can no longer notify everyone, here, roles, or individual Discord users. Mention text is neutralized before the reply reaches Discord.",
+      "createdAt": "2026-10-08T01:08:28.5865687Z",
+      "updatedBy": "colin991"
     }
   ]
 }
