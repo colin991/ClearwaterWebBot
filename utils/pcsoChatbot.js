@@ -7,7 +7,80 @@ const STORE_PATH = join(process.cwd(), 'data', 'pcso-chatbot.json');
 export const DEFAULT_PCSO_CHATBOT = Object.freeze({
   greeting: 'Hi! Ask me a question about PCSO services, careers, records, or the website.',
   fallback: "I don't have an answer for that yet. Please use Contact PCSO so a staff member can help.",
-  rules: [],
+  rules: [
+    {
+      id: 'basic_greeting',
+      triggers: ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening'],
+      response: 'Hello! I can help you find applications, public records, police reports, ride-alongs, policies, events, live operations, and other PCSO website resources.',
+      enabled: true,
+    },
+    {
+      id: 'basic_help',
+      triggers: ['help', 'what can you do', 'what can i ask', 'how can you help'],
+      response: 'You can ask me how to apply, contact PCSO, submit a report, request public records, schedule a ride-along, view policies, find events, or open the Live Operations dashboard.',
+      enabled: true,
+    },
+    {
+      id: 'basic_thanks',
+      triggers: ['thank you', 'thanks', 'thank you for your help'],
+      response: "You're welcome! Let me know if you need help finding anything else on the PCSO website.",
+      enabled: true,
+    },
+    {
+      id: 'basic_careers',
+      triggers: ['how do i apply', 'where do i apply', 'application', 'join pcso', 'careers'],
+      response: 'Visit the Careers page to view recruitment information and start or track your application: /careers',
+      enabled: true,
+    },
+    {
+      id: 'basic_contact',
+      triggers: ['contact pcso', 'open a ticket', 'support ticket', 'i need support', 'talk to staff'],
+      response: 'Use the Contact PCSO page to open or review a support ticket: /contact',
+      enabled: true,
+    },
+    {
+      id: 'basic_records',
+      triggers: ['public records', 'records request', 'request records', 'get a report copy'],
+      response: 'You can submit and track a public records request here: /public-records',
+      enabled: true,
+    },
+    {
+      id: 'basic_report',
+      triggers: ['file a police report', 'submit a police report', 'report an incident', 'police report'],
+      response: 'Use the File a Police Report page to submit an incident report: /police-report',
+      enabled: true,
+    },
+    {
+      id: 'basic_ride_along',
+      triggers: ['ride along', 'ride-along', 'request a ride along'],
+      response: 'The Ride-Along Portal has requests, scheduling, rules, waiver status, and reviews: /ride-along',
+      enabled: true,
+    },
+    {
+      id: 'basic_policies',
+      triggers: ['policies', 'sop', 'standard operating procedures', 'radio procedures'],
+      response: 'Search PCSO policies and standard operating procedures in the Policies and SOP Library: /policies',
+      enabled: true,
+    },
+    {
+      id: 'basic_events',
+      triggers: ['events', 'calendar', 'training dates', 'recruitment session'],
+      response: 'View upcoming public events, recruitment sessions, and training dates on the Community Events Calendar: /calendar',
+      enabled: true,
+    },
+    {
+      id: 'basic_operations',
+      triggers: ['live operations', 'server status', 'who is on duty', 'current weather', 'active priority'],
+      response: 'The Live Operations dashboard shows server status, weather, priorities, on-duty personnel, districts, and Watch Commanders: /operations',
+      enabled: true,
+    },
+    {
+      id: 'basic_directory',
+      triggers: ['deputy directory', 'find a deputy', 'staff directory', 'roster'],
+      response: 'Use the Deputy Directory to search personnel by callsign, rank, division, or name: /deputy-directory',
+      enabled: true,
+    },
+  ],
   updatedAt: null,
 });
 

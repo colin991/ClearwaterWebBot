@@ -3091,6 +3091,13 @@
       "summary": "Added a no-AI website chat assistant in the bottom-left corner. Website administrators can build its answers in the admin panel by entering matching questions or phrases, custom replies, welcome and fallback messages, and can edit, pause, or delete saved answers.",
       "createdAt": "2026-10-08T12:00:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-08-chatbot-basic-answers",
+      "title": "Basic website assistant answers",
+      "summary": "The website assistant now starts with useful answers for greetings, help, applications, support tickets, public records, police reports, ride-alongs, policies, events, live operations, and the deputy directory. Administrators can edit or remove these answers in the Chatbot Builder.",
+      "createdAt": "2026-10-08T12:30:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

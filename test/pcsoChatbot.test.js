@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { findPcsoChatbotReply, normalizePcsoChatbot } from '../utils/pcsoChatbot.js';
+import { DEFAULT_PCSO_CHATBOT, findPcsoChatbotReply, normalizePcsoChatbot } from '../utils/pcsoChatbot.js';
+
+test('default chatbot answers basic greetings and website questions', () => {
+  assert.match(findPcsoChatbotReply('hello', DEFAULT_PCSO_CHATBOT), /Hello!/);
+  assert.match(findPcsoChatbotReply('How do I apply?', DEFAULT_PCSO_CHATBOT), /\/careers/);
+  assert.match(findPcsoChatbotReply('Where can I request public records?', DEFAULT_PCSO_CHATBOT), /\/public-records/);
+});
 
 test('chatbot matches phrases without punctuation or capitalization', () => {
   const config = normalizePcsoChatbot({
