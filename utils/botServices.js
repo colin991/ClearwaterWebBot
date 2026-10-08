@@ -14,6 +14,7 @@ import { startPinellasRosterSync } from './pinellasRoster.js';
 import { startPinellasShiftPanel } from './pinellasShiftPanel.js';
 import { startPinellasMelonlyReports } from './pinellasMelonlyReports.js';
 import { startEconomy } from './economyService.js';
+import { startFireShiftPanel } from './fireShiftPanel.js';
 
 /**
  * Discord-only background services formerly started inside the website HTTP bridge.
@@ -53,6 +54,7 @@ export function startBotServices(client, config) {
   const stopInfractionExpiry = startPinellasInfractionExpiry(client);
   const stopRosterSync = startPinellasRosterSync(client);
   const stopShiftPanel = startPinellasShiftPanel(client);
+  const stopFireShiftPanel = startFireShiftPanel(client);
   const stopMelonlyReports = startPinellasMelonlyReports(client);
   const stopEconomy = startEconomy(client);
 
@@ -61,6 +63,7 @@ export function startBotServices(client, config) {
     stopInfractionExpiry();
     stopRosterSync();
     stopShiftPanel();
+    stopFireShiftPanel();
     stopMelonlyReports();
     stopEconomy();
   };

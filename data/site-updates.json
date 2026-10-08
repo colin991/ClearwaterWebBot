@@ -3056,6 +3056,13 @@
       "summary": "Website ticket replies can no longer notify everyone, here, roles, or individual Discord users. Mention text is neutralized before the reply reaches Discord.",
       "createdAt": "2026-10-08T01:08:28.5865687Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-07-fire-shift-panel",
+      "title": "Clearwater Fire shift panel",
+      "summary": "Added a live Clearwater Fire & Rescue shift panel with department branding, active Melonly personnel, elapsed shift times, and personnel lookup. The bot replaces the old panel on every restart and refreshes it every 30 seconds.",
+      "createdAt": "2026-10-08T01:24:43.2435068Z",
+      "updatedBy": "colin991"
     }
   ]
 }

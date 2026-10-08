@@ -18,6 +18,7 @@ import { handlePcsoSiteFormInteraction } from '../utils/pcsoSiteFormDiscord.js';
 import { handleRideAlongInteraction } from '../utils/pcsoRideAlong.js';
 import { commandAllowedInGuild } from '../utils/commandGuilds.js';
 import { shouldIgnoreGuildCommands } from '../utils/floridaServer.js';
+import { handleFireShiftPanelInteraction } from '../utils/fireShiftPanel.js';
 
 export default {
   name: Events.InteractionCreate,
@@ -115,6 +116,12 @@ export default {
       if (await handlePinellasShiftPanelInteraction(interaction)) return;
     } catch (error) {
       logger.error('Pinellas shift panel interaction failed', error);
+    }
+
+    try {
+      if (await handleFireShiftPanelInteraction(interaction)) return;
+    } catch (error) {
+      logger.error('Fire shift panel interaction failed', error);
     }
 
     try {
