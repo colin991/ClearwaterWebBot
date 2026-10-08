@@ -35,6 +35,27 @@ const FOOTER_URL =
 const FLAG_EMOJI = '<:CWFR_americanflag:1555738513826259016>';
 const ID_EMOJI = '<:ID:1557159365474127992>';
 
+export const FIRE_RANKS = Object.freeze([
+  Object.freeze({ name: 'Chief', roleId: '1514804886418755600' }),
+  Object.freeze({ name: 'Deputy Chief', roleId: '1514804886418755599' }),
+  Object.freeze({ name: 'Assistant Chief', roleId: '1514804886418755598' }),
+  Object.freeze({ name: 'District Chief', roleId: '1514804886418755597' }),
+  Object.freeze({ name: 'Captain', roleId: '1535517948494479380' }),
+  Object.freeze({ name: 'Lieutenant', roleId: '1535518206377201727' }),
+  Object.freeze({ name: 'Engineer', roleId: '1514804886393458855' }),
+  Object.freeze({ name: 'Firefighter III', roleId: '1532920700996944082' }),
+  Object.freeze({ name: 'Firefighter II', roleId: '1514804886393458854' }),
+  Object.freeze({ name: 'Firefighter I', roleId: '1514804886393458853' }),
+]);
+
+export const FIRE_MEDICAL_RANKS = Object.freeze([
+  Object.freeze({ name: 'EMS Chief', roleId: '1529653434171654175' }),
+  Object.freeze({ name: 'Assistant EMS Chief', roleId: '1528263316919816202' }),
+  Object.freeze({ name: 'EMS Captain', roleId: '1529653348125638866' }),
+  Object.freeze({ name: 'EMS Lieutenant', roleId: '1535515556353155135' }),
+  Object.freeze({ name: 'Paramedic', roleId: '1514804886368288856' }),
+]);
+
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const STORE_PATH = path.join(ROOT, 'data', 'fire-shift-panel.json');
 const memberDiscordCache = new Map();
@@ -64,6 +85,13 @@ function formatDuration(ms) {
   return `${minutes}m`;
 }
 
+export function fireRankNamesForMember(member) {
+  const hasRole = (roleId) => Boolean(member?.roles?.cache?.has?.(roleId));
+  const fireRank = FIRE_RANKS.find((rank) => hasRole(rank.roleId));
+  const medicalRank = FIRE_MEDICAL_RANKS.find((rank) => hasRole(rank.roleId));
+  return [fireRank?.name, medicalRank?.name].filter(Boolean);
+}
+
 function parseFireIdentity(member) {
   const displayName = String(member?.displayName || member?.user?.globalName || member?.user?.username || 'Unknown');
   const callsignMatch = displayName.match(/\b([A-Z]{1,5}-\d{1,5})\b/i);
@@ -71,13 +99,13 @@ function parseFireIdentity(member) {
   const name = callsignMatch
     ? displayName.replace(callsignMatch[0], '').replace(/^[\s|,.:;-]+|[\s|,.:;-]+$/g, '').trim()
     : displayName;
-  const roles = member?.roles?.cache;
-  const rank = roles?.filter?.((role) => (
-    role.id !== member.guild?.id
-    && !role.managed
-    && !/on.?duty|member|personnel|verified/i.test(role.name)
-  ))?.sort?.((left, right) => right.position - left.position)?.first?.();
-  return { callsign, name: name || displayName, rankName: rank?.name || 'Personnel' };
+  const rankNames = fireRankNamesForMember(member);
+  return {
+    callsign,
+    name: name || displayName,
+    rankNames,
+    rankName: rankNames.length ? rankNames.join(' / ') : 'Personnel',
+  };
 }
 
 async function discordIdForShift(apiKey, shift) {
@@ -119,6 +147,7 @@ export async function collectFireOnDutyPersonnel(client, { apiKey = config.melon
       memberId: String(shift.memberId || ''),
       callsign: identity.callsign,
       name: identity.name,
+      rankNames: identity.rankNames,
       rankName: identity.rankName,
       startedMs,
       shiftMs: Math.max(0, now - startedMs),
@@ -214,7 +243,7 @@ function lookupPayload(entry) {
         `**Member:** <@${entry.discordId}>`,
         `**Callsign:** ${entry.callsign}`,
         `**Name:** ${entry.name}`,
-        `**Rank:** ${entry.rankName}`,
+        `**Rank${entry.rankNames?.length > 1 ? 's' : ''}:** ${entry.rankName}`,
         `**Current Shift:** ${formatDuration(entry.shiftMs)}`,
       ].join('\n')),
     )

@@ -3063,6 +3063,13 @@
       "summary": "Added a live Clearwater Fire & Rescue shift panel with department branding, active Melonly personnel, elapsed shift times, and personnel lookup. The bot replaces the old panel on every restart and refreshes it every 30 seconds.",
       "createdAt": "2026-10-08T01:24:43.2435068Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-07-fire-medical-ranks",
+      "title": "Fire and medical shift ranks",
+      "summary": "The Clearwater Fire shift panel now uses the configured Fire and EMS role IDs and displays both tracks when a person holds a Fire rank and a medical rank.",
+      "createdAt": "2026-10-08T01:27:26.6207133Z",
+      "updatedBy": "colin991"
     }
   ]
 }

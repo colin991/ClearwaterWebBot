@@ -5,6 +5,7 @@ import {
   FIRE_SHIFT_LOOKUP_ID,
   FIRE_SHIFT_PANEL_CHANNEL_ID,
   buildFireShiftPanelPayload,
+  fireRankNamesForMember,
 } from '../utils/fireShiftPanel.js';
 
 test('Fire shift panel targets the configured channel and department', () => {
@@ -41,4 +42,17 @@ test('Fire shift panel renders live personnel and a lookup menu without pings', 
   assert.equal(select.placeholder, 'Personnel Lookup');
   assert.equal(select.options[0].label, 'F-004, Judah Briggs');
   assert.equal(select.options[0].description, 'District Chief');
+});
+
+test('Fire personnel can display both a fire rank and a medical rank', () => {
+  const roleIds = new Set([
+    '1514804886418755597',
+    '1514804886368288856',
+    // A lower Fire role must not replace the member's highest Fire rank.
+    '1514804886393458854',
+  ]);
+  assert.deepEqual(
+    fireRankNamesForMember({ roles: { cache: { has: (id) => roleIds.has(id) } } }),
+    ['District Chief', 'Paramedic'],
+  );
 });
