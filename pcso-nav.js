@@ -209,7 +209,21 @@ function mountPcsoChatbot() {
   const addMessage = (text, kind = 'assistant') => {
     const bubble = document.createElement('p');
     bubble.className = `pcso-chatbot-message is-${kind}`;
-    bubble.textContent = text;
+    if (kind === 'assistant') {
+      const parts = String(text).split(/(\/[a-z0-9][a-z0-9/-]*)/gi);
+      for (const part of parts) {
+        if (/^\/[a-z0-9][a-z0-9/-]*$/i.test(part)) {
+          const link = document.createElement('a');
+          link.href = part;
+          link.textContent = part;
+          bubble.append(link);
+        } else {
+          bubble.append(document.createTextNode(part));
+        }
+      }
+    } else {
+      bubble.textContent = text;
+    }
     messages.append(bubble);
     messages.scrollTop = messages.scrollHeight;
     return bubble;

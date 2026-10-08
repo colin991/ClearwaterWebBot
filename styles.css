@@ -2037,6 +2037,8 @@ button.pcso-news-card-more { padding:0; cursor:zoom-in; font-family:inherit; lin
 .pcso-chatbot-messages { display:flex; flex-direction:column; gap:9px; height:min(340px,48vh); padding:14px; overflow:auto; }
 .pcso-chatbot-message { width:fit-content; max-width:84%; margin:0; padding:10px 12px; border:1px solid #343840; border-radius:4px 12px 12px; background:#1a1c21; color:#e2e4e8; font-size:14px; line-height:1.45; white-space:pre-wrap; }
 .pcso-chatbot-message.is-user { align-self:flex-end; border-color:#575c65; border-radius:12px 4px 12px 12px; background:#383b42; color:#fff; }
+.pcso-chatbot-message a { color:#fff; font-weight:850; text-decoration:underline; text-decoration-color:#8f949d; text-underline-offset:3px; }
+.pcso-chatbot-message a:hover,.pcso-chatbot-message a:focus-visible { text-decoration-color:#fff; outline:0; }
 .pcso-chatbot-message.is-status { color:#9ea3ac; font-size:12px; font-style:italic; }
 .pcso-chatbot-support { display:grid; gap:8px; width:min(88%,280px); }
 .pcso-chatbot-support strong { color:#f1f2f4; font-size:13px; }

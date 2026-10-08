@@ -3105,6 +3105,13 @@
       "summary": "Fixed starter chatbot answers for websites with an older empty configuration. When the assistant does not recognize a question, it now offers an Open a support ticket button, asks how it can help, and carries the message into the PCSO ticket form.",
       "createdAt": "2026-10-08T13:00:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-08-chatbot-page-links",
+      "title": "Clickable chatbot page links",
+      "summary": "Website assistant answers now turn internal page destinations such as Careers, Ride Along, Public Records, Policies, and Live Operations into clickable links that take visitors directly to the referenced page.",
+      "createdAt": "2026-10-08T13:15:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
