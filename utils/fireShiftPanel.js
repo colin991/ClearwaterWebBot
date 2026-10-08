@@ -1,5 +1,6 @@
 import {
   ActionRowBuilder,
+  AttachmentBuilder,
   ContainerBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
@@ -22,6 +23,9 @@ import {
   shiftCreatedMs,
 } from './melonly.js';
 import { logger } from './logger.js';
+import { fetchErlcServer, libertyPlayerMapPoint, parseErlcPlayer } from './erlc.js';
+import { getIdentityCache } from './identityStore.js';
+import { renderLibertyLocationMap } from './libertyMapImage.js';
 
 export const FIRE_SHIFT_PANEL_CHANNEL_ID = '1557563004986589296';
 export const FIRE_MELONLY_DEPARTMENT_ID = '7471029576076890112';
@@ -92,19 +96,79 @@ export function fireRankNamesForMember(member) {
   return [fireRank?.name, medicalRank?.name].filter(Boolean);
 }
 
-function parseFireIdentity(member) {
-  const displayName = String(member?.displayName || member?.user?.globalName || member?.user?.username || 'Unknown');
+export function fireIdentityForMembers(fireMember, mainMember = null) {
+  const displayName = String(
+    mainMember?.nickname
+    || mainMember?.displayName
+    || fireMember?.displayName
+    || mainMember?.user?.globalName
+    || fireMember?.user?.globalName
+    || mainMember?.user?.username
+    || fireMember?.user?.username
+    || 'Unknown',
+  );
   const callsignMatch = displayName.match(/\b([A-Z]{1,5}-\d{1,5})\b/i);
   const callsign = callsignMatch?.[1]?.toUpperCase() || '—';
   const name = callsignMatch
     ? displayName.replace(callsignMatch[0], '').replace(/^[\s|,.:;-]+|[\s|,.:;-]+$/g, '').trim()
     : displayName;
-  const rankNames = fireRankNamesForMember(member);
+  const rankNames = fireRankNamesForMember(fireMember);
   return {
     callsign,
     name: name || displayName,
     rankNames,
     rankName: rankNames.length ? rankNames.join(' / ') : 'Unranked',
+  };
+}
+
+function normalizedCallsign(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, '');
+}
+
+function inGameLocation(player) {
+  if (!player) return 'Not in game';
+  return [
+    player.location?.building,
+    player.location?.street,
+    player.location?.postal ? `Postal ${player.location.postal}` : '',
+  ].filter(Boolean).join(', ') || `In game${player.team ? ` (${player.team})` : ''}`;
+}
+
+function findFirePlayer(players, { robloxId, callsign }) {
+  const wantedRobloxId = String(robloxId || '');
+  const wantedCallsign = normalizedCallsign(callsign);
+  return players.find((player) => wantedRobloxId && player.robloxId === wantedRobloxId)
+    || players.find((player) => (
+      wantedCallsign
+      && normalizedCallsign(player.callsign) === wantedCallsign
+      && /fire/i.test(String(player.team || ''))
+    ))
+    || players.find((player) => (
+      wantedCallsign && normalizedCallsign(player.callsign) === wantedCallsign
+    ))
+    || null;
+}
+
+async function loadErlcPlayers(serverKey = config.erlcServerKey) {
+  if (!serverKey) return [];
+  try {
+    const server = await fetchErlcServer(serverKey);
+    return (server.Players || server.players || []).map(parseErlcPlayer);
+  } catch (error) {
+    logger.warn(`Fire shift panel: ER:LC fetch failed (${error?.message || error})`);
+    return [];
+  }
+}
+
+function applyPlayerLocation(entry, player) {
+  const pin = player?.location ? libertyPlayerMapPoint(player.location) : null;
+  return {
+    ...entry,
+    inGame: Boolean(player),
+    robloxUsername: player?.username || entry.robloxUsername || null,
+    locationLabel: inGameLocation(player),
+    mapLeft: pin?.left ?? null,
+    mapTop: pin?.top ?? null,
   };
 }
 
@@ -125,6 +189,10 @@ export async function collectFireOnDutyPersonnel(client, { apiKey = config.melon
   const guild = client.guilds.cache.get(FIRE_OPS_GUILD_ID)
     || await client.guilds.fetch(FIRE_OPS_GUILD_ID).catch(() => null);
   if (!guild) throw new Error(`Fire server ${FIRE_OPS_GUILD_ID} is unavailable.`);
+  const mainGuild = config.guildId
+    ? (client.guilds.cache.get(config.guildId)
+      || await client.guilds.fetch(config.guildId).catch(() => null))
+    : null;
 
   const recent = await fetchPinellasDepartmentShifts(apiKey, FIRE_MELONLY_DEPARTMENT_ID, {
     cacheTtlMs: 25_000,
@@ -133,6 +201,10 @@ export async function collectFireOnDutyPersonnel(client, { apiKey = config.melon
   const active = recent.filter(isActiveMelonlyShift);
   const now = Date.now();
   const personnel = [];
+  const [identityCache, erlcPlayers] = await Promise.all([
+    getIdentityCache().catch(() => ({ byDiscord: {} })),
+    loadErlcPlayers(),
+  ]);
 
   for (const shift of active) {
     const discordId = await discordIdForShift(apiKey, shift);
@@ -140,18 +212,23 @@ export async function collectFireOnDutyPersonnel(client, { apiKey = config.melon
     const member = guild.members.cache.get(discordId)
       || await guild.members.fetch(discordId).catch(() => null);
     if (!member) continue;
-    const identity = parseFireIdentity(member);
+    const mainMember = mainGuild?.members?.cache?.get(discordId)
+      || await mainGuild?.members?.fetch(discordId).catch(() => null);
+    const identity = fireIdentityForMembers(member, mainMember);
+    const robloxId = String(identityCache?.byDiscord?.[discordId]?.robloxId || '');
+    const player = findFirePlayer(erlcPlayers, { robloxId, callsign: identity.callsign });
     const startedMs = shiftCreatedMs(shift) || now;
-    personnel.push({
+    personnel.push(applyPlayerLocation({
       discordId,
       memberId: String(shift.memberId || ''),
+      robloxId: robloxId || null,
       callsign: identity.callsign,
       name: identity.name,
       rankNames: identity.rankNames,
       rankName: identity.rankName,
       startedMs,
       shiftMs: Math.max(0, now - startedMs),
-    });
+    }, player));
   }
 
   personnel.sort((left, right) => (
@@ -173,7 +250,8 @@ function tickSnapshot(snapshot) {
 function onShiftText(personnel) {
   if (!personnel.length) return '- Nobody is currently on shift.';
   return personnel.map((entry) => (
-    `- ${entry.callsign}, ${entry.rankName}, ${entry.name} | <@${entry.discordId}> | ${formatDuration(entry.shiftMs)}`
+    `- ${entry.callsign}, ${entry.rankName}, ${entry.name} | <@${entry.discordId}>`
+    + ` | ${entry.locationLabel || 'Not in game'} | ${formatDuration(entry.shiftMs)}`
   )).join('\n');
 }
 
@@ -235,7 +313,22 @@ export function buildFireShiftPanelPayload(snapshot) {
   };
 }
 
-function lookupPayload(entry) {
+async function enrichFireLiveLocation(entry) {
+  const players = await loadErlcPlayers();
+  const player = findFirePlayer(players, entry);
+  return applyPlayerLocation(entry, player);
+}
+
+async function lookupPayload(entry) {
+  const files = [];
+  let map = null;
+  if (Number.isFinite(entry.mapLeft) && Number.isFinite(entry.mapTop)) {
+    const image = await renderLibertyLocationMap({ left: entry.mapLeft, top: entry.mapTop });
+    if (image) {
+      map = new AttachmentBuilder(image, { name: 'fire-shift-location-map.png' });
+      files.push(map);
+    }
+  }
   const container = new ContainerBuilder().clearAccentColor()
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent([
@@ -245,19 +338,30 @@ function lookupPayload(entry) {
         `**Name:** ${entry.name}`,
         `**Rank${entry.rankNames?.length > 1 ? 's' : ''}:** ${entry.rankName}`,
         `**Current Shift:** ${formatDuration(entry.shiftMs)}`,
+        `**In-Game Location:** ${entry.locationLabel || 'Not in game'}`,
       ].join('\n')),
-    )
+    );
+  if (map) {
+    container.addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(
+        new MediaGalleryItemBuilder().setURL('attachment://fire-shift-location-map.png'),
+      ),
+    );
+  }
+  container
     .addSeparatorComponents(
       new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small),
     )
     .addMediaGalleryComponents(
       new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(FOOTER_URL)),
     );
-  return {
+  const payload = {
     components: [container],
     flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
     allowedMentions: { parse: [], users: [], roles: [], repliedUser: false },
   };
+  if (files.length) payload.files = files;
+  return payload;
 }
 
 export async function refreshFireShiftPanel(client, { replace = false } = {}) {
@@ -340,6 +444,8 @@ export async function handleFireShiftPanelInteraction(interaction) {
     await interaction.reply({ content: 'That person is no longer on shift.', flags: MessageFlags.Ephemeral });
     return true;
   }
-  await interaction.reply(lookupPayload(entry));
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const liveEntry = await enrichFireLiveLocation(entry);
+  await interaction.editReply(await lookupPayload(liveEntry));
   return true;
 }

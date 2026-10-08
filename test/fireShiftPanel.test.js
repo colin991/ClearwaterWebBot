@@ -5,6 +5,7 @@ import {
   FIRE_SHIFT_LOOKUP_ID,
   FIRE_SHIFT_PANEL_CHANNEL_ID,
   buildFireShiftPanelPayload,
+  fireIdentityForMembers,
   fireRankNamesForMember,
 } from '../utils/fireShiftPanel.js';
 
@@ -20,6 +21,7 @@ test('Fire shift panel renders live personnel and a lookup menu without pings', 
       callsign: 'F-004',
       rankName: 'District Chief',
       name: 'Judah Briggs',
+      locationLabel: 'Fire Station 1, Freedom Avenue, Postal 213',
       shiftMs: 4_200_000,
     }],
   });
@@ -34,6 +36,7 @@ test('Fire shift panel renders live personnel and a lookup menu without pings', 
   assert.match(serialized, /cwfd_footer_2\.png/);
   assert.match(serialized, /On Shift \(1\)/);
   assert.match(serialized, /F-004, District Chief, Judah Briggs/);
+  assert.match(serialized, /Fire Station 1, Freedom Avenue, Postal 213/);
   assert.match(serialized, /1h 10m/);
 
   const row = json.components.find((component) => component.type === 1);
@@ -72,4 +75,23 @@ test('Fire personnel without a configured rank are unranked', () => {
     }],
   });
   assert.match(JSON.stringify(payload.components[0].toJSON()), /F-100, Unranked, New Member/);
+});
+
+test('Fire identity uses the main-server nickname and Fire-server rank roles', () => {
+  const fireRoleIds = new Set(['1514804886418755597', '1514804886368288856']);
+  const identity = fireIdentityForMembers(
+    {
+      displayName: 'Different Fire Nickname',
+      roles: { cache: { has: (id) => fireRoleIds.has(id) } },
+      user: { username: 'fire-user' },
+    },
+    {
+      nickname: 'F-004 | Judah Briggs',
+      displayName: 'F-004 | Judah Briggs',
+      user: { username: 'main-user' },
+    },
+  );
+  assert.equal(identity.callsign, 'F-004');
+  assert.equal(identity.name, 'Judah Briggs');
+  assert.equal(identity.rankName, 'District Chief / Paramedic');
 });
