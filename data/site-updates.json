@@ -3098,6 +3098,13 @@
       "summary": "The website assistant now starts with useful answers for greetings, help, applications, support tickets, public records, police reports, ride-alongs, policies, events, live operations, and the deputy directory. Administrators can edit or remove these answers in the Chatbot Builder.",
       "createdAt": "2026-10-08T12:30:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-08-chatbot-support-fallback",
+      "title": "Chatbot support ticket fallback",
+      "summary": "Fixed starter chatbot answers for websites with an older empty configuration. When the assistant does not recognize a question, it now offers an Open a support ticket button, asks how it can help, and carries the message into the PCSO ticket form.",
+      "createdAt": "2026-10-08T13:00:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

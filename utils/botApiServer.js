@@ -16,7 +16,7 @@ import {
   deletePcsoContentItem,
   getPcsoSiteContent,
 } from './pcsoSiteContent.js';
-import { findPcsoChatbotReply, getPcsoChatbot, savePcsoChatbot } from './pcsoChatbot.js';
+import { getPcsoChatbot, matchPcsoChatbotReply, savePcsoChatbot } from './pcsoChatbot.js';
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -213,7 +213,7 @@ export function startBotApiServer(client, {
           const message = String(payload.message || '').trim().slice(0, 500);
           if (!message) return sendJson(response, 400, { error: 'Enter a question first.' });
           const config = await getPcsoChatbot();
-          return sendJson(response, 200, { ok: true, reply: findPcsoChatbotReply(message, config) });
+          return sendJson(response, 200, { ok: true, ...matchPcsoChatbotReply(message, config) });
         }
         return sendJson(response, 200, { ok: true, ...(await savePcsoChatbot(payload)) });
       }

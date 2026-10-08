@@ -71,7 +71,12 @@ async function boot() {
   const app = document.querySelector('[data-portal-app]');
   if (!signin || !app) return;
   const session = await fetch('/api/auth/me', { cache: 'no-store' }).then((res) => res.json()).catch(() => ({}));
-  if (!session.authenticated) return;
+  const supportDraft = new URLSearchParams(location.search).get('support')?.slice(0, 1800) || '';
+  if (!session.authenticated) {
+    const signinLink = signin.querySelector('a[href^="/signin"]');
+    if (signinLink) signinLink.href = `/signin?next=${encodeURIComponent(location.pathname + location.search)}`;
+    return;
+  }
   signin.hidden = true;
   app.hidden = false;
 
@@ -90,6 +95,10 @@ async function boot() {
   typeSelect.innerHTML = types.map((entry) => `<option value="${escapeHtml(entry.type)}">${escapeHtml(entry.title)}</option>`).join('');
   const fieldsFor = (type) => types.find((entry) => entry.type === type)?.fields || [];
   renderFields(fieldsWrap, fieldsFor(typeSelect.value));
+  if (supportDraft) {
+    const firstMessageField = fieldsWrap.querySelector('textarea, input');
+    if (firstMessageField) firstMessageField.value = supportDraft;
+  }
   typeSelect.addEventListener('change', () => renderFields(fieldsWrap, fieldsFor(typeSelect.value)));
 
   const log = document.querySelector('[data-ticket-log]');

@@ -20,7 +20,7 @@ const chatbotSettingsForm = document.querySelector('[data-chatbot-settings]');
 const chatbotRuleForm = document.querySelector('[data-chatbot-rule-form]');
 const chatbotRulesEl = document.querySelector('[data-chatbot-rules]');
 
-let chatbotConfig = { greeting: '', fallback: '', rules: [] };
+let chatbotConfig = { defaultsVersion: 0, greeting: '', fallback: '', rules: [] };
 
 let people = [];
 let weekStart = null;
@@ -431,7 +431,7 @@ async function loadChatbot() {
   const response = await fetch('/api/pcso/chatbot?admin=1', { cache: 'no-store', credentials: 'same-origin' });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || 'Chatbot answers could not be loaded.');
-  chatbotConfig = { greeting: payload.greeting || '', fallback: payload.fallback || '', rules: payload.rules || [] };
+  chatbotConfig = { defaultsVersion: payload.defaultsVersion || 0, greeting: payload.greeting || '', fallback: payload.fallback || '', rules: payload.rules || [] };
   chatbotSettingsForm.elements.greeting.value = chatbotConfig.greeting;
   chatbotSettingsForm.elements.fallback.value = chatbotConfig.fallback;
   renderChatbotRules();
@@ -444,7 +444,7 @@ async function saveChatbot() {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || 'Chatbot changes could not be saved.');
-  chatbotConfig = { greeting: payload.greeting || '', fallback: payload.fallback || '', rules: payload.rules || [] };
+  chatbotConfig = { defaultsVersion: payload.defaultsVersion || chatbotConfig.defaultsVersion || 0, greeting: payload.greeting || '', fallback: payload.fallback || '', rules: payload.rules || [] };
   renderChatbotRules();
 }
 

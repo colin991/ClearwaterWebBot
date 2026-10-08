@@ -3,8 +3,10 @@ import { randomBytes } from 'node:crypto';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
 const STORE_PATH = join(process.cwd(), 'data', 'pcso-chatbot.json');
+const DEFAULTS_VERSION = 1;
 
 export const DEFAULT_PCSO_CHATBOT = Object.freeze({
+  defaultsVersion: DEFAULTS_VERSION,
   greeting: 'Hi! Ask me a question about PCSO services, careers, records, or the website.',
   fallback: "I don't have an answer for that yet. Please use Contact PCSO so a staff member can help.",
   rules: [
@@ -98,7 +100,11 @@ export function normalizeChatText(value) {
 }
 
 export function normalizePcsoChatbot(input = {}) {
-  const rules = (Array.isArray(input.rules) ? input.rules : []).map((rule) => ({
+  const suppliedRules = Array.isArray(input.rules) ? input.rules : [];
+  const rawRules = Number(input.defaultsVersion || 0) < DEFAULTS_VERSION
+    ? [...new Map([...DEFAULT_PCSO_CHATBOT.rules, ...suppliedRules].map((rule) => [String(rule?.id || ''), rule])).values()]
+    : suppliedRules;
+  const rules = rawRules.map((rule) => ({
     id: cleanText(rule?.id, 80) || `answer_${Date.now().toString(36)}_${randomBytes(3).toString('hex')}`,
     triggers: [...new Set((Array.isArray(rule?.triggers) ? rule.triggers : [])
       .map((trigger) => cleanText(trigger, 120))
@@ -108,6 +114,7 @@ export function normalizePcsoChatbot(input = {}) {
   })).filter((rule) => rule.triggers.length && rule.response).slice(0, 250);
 
   return {
+    defaultsVersion: DEFAULTS_VERSION,
     greeting: cleanText(input.greeting, 500) || DEFAULT_PCSO_CHATBOT.greeting,
     fallback: cleanText(input.fallback, 1000) || DEFAULT_PCSO_CHATBOT.fallback,
     rules,
@@ -116,20 +123,28 @@ export function normalizePcsoChatbot(input = {}) {
 }
 
 export function findPcsoChatbotReply(message, config = DEFAULT_PCSO_CHATBOT) {
+  return matchPcsoChatbotReply(message, config).reply;
+}
+
+export function matchPcsoChatbotReply(message, config = DEFAULT_PCSO_CHATBOT) {
   const normalizedMessage = normalizeChatText(message);
-  if (!normalizedMessage) return normalizePcsoChatbot(config).fallback;
+  const normalizedConfig = normalizePcsoChatbot(config);
+  if (!normalizedMessage) return { reply: normalizedConfig.fallback, matched: false };
 
   let best = null;
-  for (const rule of normalizePcsoChatbot(config).rules) {
+  for (const rule of normalizedConfig.rules) {
     if (!rule.enabled) continue;
     for (const trigger of rule.triggers) {
       const normalizedTrigger = normalizeChatText(trigger);
       if (!normalizedTrigger || !normalizedMessage.includes(normalizedTrigger)) continue;
       const score = normalizedTrigger.length;
-      if (!best || score > best.score) best = { score, response: rule.response };
+      // Later rules win ties so an administrator's custom answer can override a starter answer.
+      if (!best || score >= best.score) best = { score, response: rule.response };
     }
   }
-  return best?.response || normalizePcsoChatbot(config).fallback;
+  return best
+    ? { reply: best.response, matched: true }
+    : { reply: normalizedConfig.fallback, matched: false };
 }
 
 export async function getPcsoChatbot() {

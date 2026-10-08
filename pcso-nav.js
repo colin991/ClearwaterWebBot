@@ -214,6 +214,28 @@ function mountPcsoChatbot() {
     messages.scrollTop = messages.scrollHeight;
     return bubble;
   };
+  const addSupportButton = (question) => {
+    const action = document.createElement('div');
+    action.className = 'pcso-chatbot-support';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'Open a support ticket';
+    action.append(button);
+    messages.append(action);
+    button.addEventListener('click', () => {
+      action.innerHTML = '<strong>How can we help?</strong><textarea maxlength="1800" aria-label="How can we help?"></textarea><button type="button">Continue to ticket</button>';
+      const textarea = action.querySelector('textarea');
+      textarea.value = question;
+      action.querySelector('button').addEventListener('click', () => {
+        const details = textarea.value.trim();
+        if (!details) { textarea.focus(); return; }
+        window.location.href = `/contact?support=${encodeURIComponent(details)}`;
+      });
+      textarea.focus();
+      messages.scrollTop = messages.scrollHeight;
+    });
+    messages.scrollTop = messages.scrollHeight;
+  };
   const open = () => {
     widget.classList.add('is-open');
     launcher.setAttribute('aria-expanded', 'true');
@@ -244,6 +266,7 @@ function mountPcsoChatbot() {
       if (!response.ok) throw new Error(payload.error || 'The assistant is unavailable right now.');
       pending.remove();
       addMessage(payload.reply || 'I do not have an answer for that yet.');
+      if (payload.matched === false) addSupportButton(question);
     } catch (error) {
       pending.textContent = error.message || 'The assistant is unavailable right now.';
       pending.className = 'pcso-chatbot-message is-status';

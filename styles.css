@@ -2038,6 +2038,11 @@ button.pcso-news-card-more { padding:0; cursor:zoom-in; font-family:inherit; lin
 .pcso-chatbot-message { width:fit-content; max-width:84%; margin:0; padding:10px 12px; border:1px solid #343840; border-radius:4px 12px 12px; background:#1a1c21; color:#e2e4e8; font-size:14px; line-height:1.45; white-space:pre-wrap; }
 .pcso-chatbot-message.is-user { align-self:flex-end; border-color:#575c65; border-radius:12px 4px 12px 12px; background:#383b42; color:#fff; }
 .pcso-chatbot-message.is-status { color:#9ea3ac; font-size:12px; font-style:italic; }
+.pcso-chatbot-support { display:grid; gap:8px; width:min(88%,280px); }
+.pcso-chatbot-support strong { color:#f1f2f4; font-size:13px; }
+.pcso-chatbot-support textarea { min-height:86px; box-sizing:border-box; padding:9px 10px; resize:vertical; border:1px solid #3c4048; background:#090a0c; color:#fff; font:inherit; }
+.pcso-chatbot-support button { width:fit-content; padding:9px 12px; border:1px solid #666b73; border-radius:3px; background:#383b42; color:#fff; font:inherit; font-size:13px; font-weight:800; cursor:pointer; }
+.pcso-chatbot-support button:hover,.pcso-chatbot-support button:focus-visible { background:#494d55; outline:1px solid #9ba0a8; }
 .pcso-chatbot-form { display:grid; grid-template-columns:1fr auto; gap:8px; padding:12px; border-top:1px solid #30333a; }
 .pcso-chatbot-form input { min-width:0; min-height:42px; padding:0 11px; border:1px solid #3c4048; background:#090a0c; color:#fff; font:inherit; }
 .pcso-chatbot-form button { padding:0 14px; border:1px solid #666b73; background:#383b42; color:#fff; font-weight:800; cursor:pointer; }
