@@ -3070,6 +3070,13 @@
       "summary": "The Clearwater Fire shift panel now uses the configured Fire and EMS role IDs and displays both tracks when a person holds a Fire rank and a medical rank.",
       "createdAt": "2026-10-08T01:27:26.6207133Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-07-fire-unranked-shifts",
+      "title": "Unranked Fire shift members",
+      "summary": "People on an active Clearwater Fire shift who do not hold a configured Fire or EMS rank now appear as Unranked.",
+      "createdAt": "2026-10-08T01:30:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

@@ -104,7 +104,7 @@ function parseFireIdentity(member) {
     callsign,
     name: name || displayName,
     rankNames,
-    rankName: rankNames.length ? rankNames.join(' / ') : 'Personnel',
+    rankName: rankNames.length ? rankNames.join(' / ') : 'Unranked',
   };
 }
 

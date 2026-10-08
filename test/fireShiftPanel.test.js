@@ -56,3 +56,20 @@ test('Fire personnel can display both a fire rank and a medical rank', () => {
     ['District Chief', 'Paramedic'],
   );
 });
+
+test('Fire personnel without a configured rank are unranked', () => {
+  assert.deepEqual(
+    fireRankNamesForMember({ roles: { cache: { has: () => false } } }),
+    [],
+  );
+  const payload = buildFireShiftPanelPayload({
+    personnel: [{
+      discordId: '1044686997194805280',
+      callsign: 'F-100',
+      rankName: 'Unranked',
+      name: 'New Member',
+      shiftMs: 60_000,
+    }],
+  });
+  assert.match(JSON.stringify(payload.components[0].toJSON()), /F-100, Unranked, New Member/);
+});
