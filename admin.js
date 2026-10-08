@@ -16,6 +16,11 @@ const recordsEl = document.querySelector('[data-admin-records]');
 const recordsCountEl = document.querySelector('[data-records-count]');
 const rideEl = document.querySelector('[data-admin-ride]');
 const rideCountEl = document.querySelector('[data-ride-count]');
+const chatbotSettingsForm = document.querySelector('[data-chatbot-settings]');
+const chatbotRuleForm = document.querySelector('[data-chatbot-rule-form]');
+const chatbotRulesEl = document.querySelector('[data-chatbot-rules]');
+
+let chatbotConfig = { greeting: '', fallback: '', rules: [] };
 
 let people = [];
 let weekStart = null;
@@ -412,6 +417,37 @@ async function loadContent() {
   renderList(starListEl, Array.isArray(payload.star) ? payload.star : [], 'star');
 }
 
+function renderChatbotRules() {
+  if (!chatbotRulesEl) return;
+  const rules = Array.isArray(chatbotConfig.rules) ? chatbotConfig.rules : [];
+  chatbotRulesEl.innerHTML = rules.length ? rules.map((rule) => `
+    <article class="admin-item" data-chatbot-rule="${escapeHtml(rule.id)}">
+      <div><strong>${escapeHtml(rule.triggers.join(' · '))}</strong><span>${escapeHtml(rule.response)}</span><small>${rule.enabled ? 'Active' : 'Paused'}</small></div>
+      <div class="admin-actions"><button type="button" data-chatbot-edit="${escapeHtml(rule.id)}">Edit</button><button type="button" class="admin-item-delete" data-chatbot-delete="${escapeHtml(rule.id)}">Delete</button></div>
+    </article>`).join('') : '<p class="admin-status">No answers have been added yet.</p>';
+}
+
+async function loadChatbot() {
+  const response = await fetch('/api/pcso/chatbot?admin=1', { cache: 'no-store', credentials: 'same-origin' });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'Chatbot answers could not be loaded.');
+  chatbotConfig = { greeting: payload.greeting || '', fallback: payload.fallback || '', rules: payload.rules || [] };
+  chatbotSettingsForm.elements.greeting.value = chatbotConfig.greeting;
+  chatbotSettingsForm.elements.fallback.value = chatbotConfig.fallback;
+  renderChatbotRules();
+}
+
+async function saveChatbot() {
+  const response = await fetch('/api/pcso/chatbot', {
+    method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(chatbotConfig),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'Chatbot changes could not be saved.');
+  chatbotConfig = { greeting: payload.greeting || '', fallback: payload.fallback || '', rules: payload.rules || [] };
+  renderChatbotRules();
+}
+
 async function mutate(method, body) {
   const response = await fetch('/api/pcso/content', {
     method,
@@ -495,6 +531,9 @@ async function boot() {
       loadRideAlongs().catch((error) => {
         if (rideEl) rideEl.innerHTML = `<p class="admin-status">${escapeHtml(error.message)}</p>`;
       }),
+      loadChatbot().catch((error) => {
+        if (chatbotRulesEl) chatbotRulesEl.innerHTML = `<p class="admin-status">${escapeHtml(error.message)}</p>`;
+      }),
     ]);
 
     if (statusEl.textContent === 'Loading admin tools…') {
@@ -507,6 +546,63 @@ async function boot() {
 }
 
 searchEl?.addEventListener('input', applySearch);
+
+chatbotSettingsForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  chatbotConfig.greeting = chatbotSettingsForm.elements.greeting.value;
+  chatbotConfig.fallback = chatbotSettingsForm.elements.fallback.value;
+  statusEl.textContent = 'Saving assistant messages…';
+  try { await saveChatbot(); statusEl.textContent = 'Assistant messages saved.'; }
+  catch (error) { statusEl.textContent = error.message; }
+});
+
+chatbotRuleForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const data = new FormData(chatbotRuleForm);
+  const triggers = String(data.get('triggers') || '').split(/\n|,/).map((item) => item.trim()).filter(Boolean);
+  if (!triggers.length) return;
+  const id = String(data.get('id') || '') || `answer_${Date.now().toString(36)}`;
+  const rule = { id, triggers, response: String(data.get('response') || '').trim(), enabled: data.get('enabled') === 'on' };
+  const index = chatbotConfig.rules.findIndex((item) => item.id === id);
+  if (index >= 0) chatbotConfig.rules[index] = rule; else chatbotConfig.rules.push(rule);
+  statusEl.textContent = 'Saving answer…';
+  try {
+    await saveChatbot();
+    chatbotRuleForm.reset();
+    chatbotRuleForm.elements.enabled.checked = true;
+    chatbotRuleForm.querySelector('[data-chatbot-cancel]').hidden = true;
+    statusEl.textContent = 'Chatbot answer saved.';
+  } catch (error) { statusEl.textContent = error.message; }
+});
+
+chatbotRuleForm?.querySelector('[data-chatbot-cancel]')?.addEventListener('click', () => {
+  chatbotRuleForm.reset();
+  chatbotRuleForm.elements.id.value = '';
+  chatbotRuleForm.elements.enabled.checked = true;
+  chatbotRuleForm.querySelector('[data-chatbot-cancel]').hidden = true;
+});
+
+chatbotRulesEl?.addEventListener('click', async (event) => {
+  const edit = event.target.closest('[data-chatbot-edit]');
+  if (edit) {
+    const rule = chatbotConfig.rules.find((item) => item.id === edit.dataset.chatbotEdit);
+    if (!rule) return;
+    chatbotRuleForm.elements.id.value = rule.id;
+    chatbotRuleForm.elements.triggers.value = rule.triggers.join('\n');
+    chatbotRuleForm.elements.response.value = rule.response;
+    chatbotRuleForm.elements.enabled.checked = rule.enabled !== false;
+    chatbotRuleForm.querySelector('[data-chatbot-cancel]').hidden = false;
+    chatbotRuleForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  const remove = event.target.closest('[data-chatbot-delete]');
+  if (!remove || !window.confirm('Delete this chatbot answer?')) return;
+  const previous = chatbotConfig.rules;
+  chatbotConfig.rules = previous.filter((item) => item.id !== remove.dataset.chatbotDelete);
+  statusEl.textContent = 'Deleting answer…';
+  try { await saveChatbot(); statusEl.textContent = 'Chatbot answer deleted.'; }
+  catch (error) { chatbotConfig.rules = previous; renderChatbotRules(); statusEl.textContent = error.message; }
+});
 
 newsForm?.addEventListener('submit', async (event) => {
   event.preventDefault();

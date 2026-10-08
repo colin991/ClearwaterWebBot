@@ -7,6 +7,7 @@ import weeklyReport from '../../lib/pcso-api/weekly-report.js';
 import portal from '../../lib/pcso-api/portal.js';
 import calls from '../../lib/pcso-api/calls.js';
 import employee from '../../lib/pcso-api/employee.js';
+import chatbot from '../../lib/pcso-api/chatbot.js';
 
 const ROUTES = {
   admin,
@@ -18,6 +19,7 @@ const ROUTES = {
   portal,
   calls,
   employee,
+  chatbot,
 };
 
 function routeName(request) {

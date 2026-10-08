@@ -3084,6 +3084,13 @@
       "summary": "The Clearwater Fire shift panel now reads callsigns and names from main-server nicknames, matches personnel to ER:LC, shows their live location, and displays an official ER:LC map pin in Personnel Lookup.",
       "createdAt": "2026-10-08T01:32:16.4612819Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-08-rule-based-website-assistant",
+      "title": "Build-your-own website assistant",
+      "summary": "Added a no-AI website chat assistant in the bottom-left corner. Website administrators can build its answers in the admin panel by entering matching questions or phrases, custom replies, welcome and fallback messages, and can edit, pause, or delete saved answers.",
+      "createdAt": "2026-10-08T12:00:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

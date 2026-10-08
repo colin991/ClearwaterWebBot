@@ -110,6 +110,7 @@
 
   refreshPcsoLoginButton();
   mountPcsoFloatingSearch();
+  mountPcsoChatbot();
   showApplicationResultNotice();
   showRideAlongNotices();
   document.dispatchEvent(new Event('pcso-nav-ready'));
@@ -182,6 +183,79 @@ function mountPcsoFloatingSearch() {
     }
     paint();
   });
+}
+
+function mountPcsoChatbot() {
+  if (document.querySelector('[data-pcso-chatbot]')) return;
+  const widget = document.createElement('aside');
+  widget.className = 'pcso-chatbot';
+  widget.dataset.pcsoChatbot = '';
+  widget.innerHTML = `
+    <button class="pcso-chatbot-button" type="button" aria-expanded="false" aria-label="Open the PCSO website assistant">
+      <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 5.5h14v10H9l-4 3v-13Z"></path><path d="M8.5 9.5h7M8.5 12.5h4"></path></svg>
+      <span class="pcso-visually-hidden">Website assistant</span>
+    </button>
+    <section class="pcso-chatbot-panel" aria-label="PCSO website assistant">
+      <header><div><strong>PCSO Assistant</strong><span>Automated website help</span></div><button type="button" data-chat-close aria-label="Close assistant">×</button></header>
+      <div class="pcso-chatbot-messages" data-chat-messages aria-live="polite"></div>
+      <form class="pcso-chatbot-form"><label class="pcso-visually-hidden" for="pcso-chatbot-input">Ask a question</label><input id="pcso-chatbot-input" maxlength="500" autocomplete="off" placeholder="Ask a question…" required><button type="submit">Send</button></form>
+    </section>`;
+  document.body.append(widget);
+  const launcher = widget.querySelector('.pcso-chatbot-button');
+  const panel = widget.querySelector('.pcso-chatbot-panel');
+  const form = widget.querySelector('form');
+  const input = widget.querySelector('input');
+  const messages = widget.querySelector('[data-chat-messages]');
+  const addMessage = (text, kind = 'assistant') => {
+    const bubble = document.createElement('p');
+    bubble.className = `pcso-chatbot-message is-${kind}`;
+    bubble.textContent = text;
+    messages.append(bubble);
+    messages.scrollTop = messages.scrollHeight;
+    return bubble;
+  };
+  const open = () => {
+    widget.classList.add('is-open');
+    launcher.setAttribute('aria-expanded', 'true');
+    input.focus();
+  };
+  const close = () => {
+    widget.classList.remove('is-open');
+    launcher.setAttribute('aria-expanded', 'false');
+    launcher.focus();
+  };
+  launcher.addEventListener('click', () => widget.classList.contains('is-open') ? close() : open());
+  widget.querySelector('[data-chat-close]').addEventListener('click', close);
+  panel.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const question = input.value.trim();
+    if (!question) return;
+    addMessage(question, 'user');
+    input.value = '';
+    const pending = addMessage('Checking my answers…', 'status');
+    form.querySelector('button').disabled = true;
+    try {
+      const response = await fetch('/api/pcso/chatbot', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: question }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'The assistant is unavailable right now.');
+      pending.remove();
+      addMessage(payload.reply || 'I do not have an answer for that yet.');
+    } catch (error) {
+      pending.textContent = error.message || 'The assistant is unavailable right now.';
+      pending.className = 'pcso-chatbot-message is-status';
+    } finally {
+      form.querySelector('button').disabled = false;
+      input.focus();
+    }
+  });
+  fetch('/api/pcso/chatbot', { cache: 'no-store' })
+    .then((response) => response.json())
+    .then((payload) => addMessage(payload.greeting || 'Hi! How can I help?'))
+    .catch(() => addMessage('Hi! Ask me a question about the PCSO website.'));
 }
 
 function pcsoSession() {

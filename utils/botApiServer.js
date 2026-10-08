@@ -16,6 +16,7 @@ import {
   deletePcsoContentItem,
   getPcsoSiteContent,
 } from './pcsoSiteContent.js';
+import { findPcsoChatbotReply, getPcsoChatbot, savePcsoChatbot } from './pcsoChatbot.js';
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -192,6 +193,29 @@ export function startBotApiServer(client, {
             ? await addPcsoStarItem(payload)
             : await addPcsoNewsItem(payload);
         return sendJson(response, 200, { ok: true, ...content });
+      }
+
+      if (url.pathname === '/api/pcso/chatbot') {
+        if (request.method === 'GET') {
+          return sendJson(response, 200, { ok: true, ...(await getPcsoChatbot()) });
+        }
+        if (!['POST', 'PUT'].includes(request.method || '')) {
+          return sendJson(response, 405, { error: 'Method not allowed' });
+        }
+        const raw = await readBinaryBody(request, 100_000);
+        let payload;
+        try {
+          payload = JSON.parse(raw.toString('utf8') || '{}');
+        } catch {
+          return sendJson(response, 400, { error: 'Invalid JSON.' });
+        }
+        if (request.method === 'POST') {
+          const message = String(payload.message || '').trim().slice(0, 500);
+          if (!message) return sendJson(response, 400, { error: 'Enter a question first.' });
+          const config = await getPcsoChatbot();
+          return sendJson(response, 200, { ok: true, reply: findPcsoChatbotReply(message, config) });
+        }
+        return sendJson(response, 200, { ok: true, ...(await savePcsoChatbot(payload)) });
       }
 
       return sendJson(response, 404, { error: 'Not found' });
