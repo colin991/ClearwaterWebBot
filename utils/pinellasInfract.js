@@ -15,6 +15,7 @@ import {
   TextDisplayBuilder,
   TextInputBuilder,
   TextInputStyle,
+  ThreadAutoArchiveDuration,
   UserSelectMenuBuilder,
   LabelBuilder,
 } from 'discord.js';
@@ -502,6 +503,23 @@ async function editInfractionMessage(client, entry, { struck = false } = {}) {
   return true;
 }
 
+export async function createInfractionProofThread(message, issuerId) {
+  if (!message?.startThread) throw new Error('The infraction message does not support threads.');
+  const cleanIssuerId = String(issuerId || '').trim();
+  if (!/^\d{16,22}$/.test(cleanIssuerId)) throw new Error('A valid infraction issuer is required.');
+
+  const thread = await message.startThread({
+    name: 'proof',
+    autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
+    reason: `PCSO infraction proof requested from ${cleanIssuerId}`,
+  });
+  await thread.send({
+    content: `<@${cleanIssuerId}> Please upload the proof for this infraction in this thread.`,
+    allowedMentions: { parse: [], users: [cleanIssuerId] },
+  });
+  return thread;
+}
+
 function assertCanInfract(issuerMember, targetMember, { demoteRank = null } = {}) {
   if (String(issuerMember.guild?.id || targetMember.guild?.id) !== PINELLAS_GUILD_ID) {
     throw new Error('Infractions can only be issued in the Pinellas County Sheriff\'s Office server.');
@@ -674,6 +692,7 @@ export async function createPinellasInfraction({
     callsign: callsign?.nickname || null,
     removedRoleIds: sideEffects.removedRoleIds,
     messageId: null,
+    proofThreadId: null,
     channelId: channel.id,
     guildId: guild.id,
     voidedAt: null,
@@ -684,6 +703,12 @@ export async function createPinellasInfraction({
   const payload = await buildInfractionMessagePayload(entry);
   const message = await channel.send(payload);
   entry.messageId = message.id;
+  try {
+    const proofThread = await createInfractionProofThread(message, entry.issuerId);
+    entry.proofThreadId = proofThread.id;
+  } catch (error) {
+    logger.warn(`Pinellas infract: could not create proof thread for ${entry.id}: ${error?.message || error}`);
+  }
 
   const store = await readStore();
   store.infractions = [entry, ...(store.infractions || [])].slice(0, 2000);

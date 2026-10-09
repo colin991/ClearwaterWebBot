@@ -3112,6 +3112,13 @@
       "summary": "Website assistant answers now turn internal page destinations such as Careers, Ride Along, Public Records, Policies, and Live Operations into clickable links that take visitors directly to the referenced page.",
       "createdAt": "2026-10-08T13:15:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-09-pcso-infraction-proof-threads",
+      "title": "PCSO infraction proof threads",
+      "summary": "Every new PCSO infraction now automatically creates a thread named proof beneath the infraction message and pings the staff member who issued it to upload their evidence.",
+      "createdAt": "2026-10-09T12:00:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
