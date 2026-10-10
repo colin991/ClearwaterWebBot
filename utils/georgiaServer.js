@@ -119,7 +119,7 @@ export function georgiaWelcomePayload(member) {
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true),
         new ButtonBuilder()
-          .setLabel('#dashboard')
+          .setLabel('Guidelines')
           .setStyle(ButtonStyle.Link)
           .setURL(GEORGIA_DASHBOARD_URL),
       ),

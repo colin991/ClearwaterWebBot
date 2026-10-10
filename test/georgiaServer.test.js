@@ -40,7 +40,7 @@ test('Georgia Operations welcomes a joining member with live count and dashboard
   const buttons = sent[0].components[0].toJSON().components;
   assert.equal(buttons[0].label, '35');
   assert.equal(buttons[0].disabled, true);
-  assert.equal(buttons[1].label, '#dashboard');
+  assert.equal(buttons[1].label, 'Guidelines');
   assert.equal(buttons[1].url, 'https://discord.com/channels/1557972171522052226/1558246580065140806');
 
   assert.equal(await sendGeorgiaWelcome({ ...member, guild: { id: 'other' } }), false);

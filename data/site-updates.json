@@ -3147,6 +3147,13 @@
       "summary": "The Georgia welcome now displays the requested session and CAD Discord URLs directly so both links render and open correctly.",
       "createdAt": "2026-10-10T13:15:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-10-georgia-guidelines-button",
+      "title": "Georgia welcome Guidelines button",
+      "summary": "Renamed the Georgia welcome link button from #dashboard to Guidelines while preserving its existing destination.",
+      "createdAt": "2026-10-10T13:30:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
