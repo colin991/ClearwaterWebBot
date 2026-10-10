@@ -946,7 +946,9 @@ async function executeErlcSceneCommand(payload, parsed, {
     nearbyEntries.push(entry);
   };
 
-  if (rosterPlayer) {
+  // ;team is personal: only move the player who issued it. Scene commands keep
+  // their existing nearby-player behavior.
+  if (rosterPlayer && command.kind !== 'team') {
     for (const nearby of playersWithinStuds(rosterPlayer, rosterPlayers)) {
       try {
         const nearbyVoiced = await resolveVoicedSceneMember(client, config, nearby, identityMap);

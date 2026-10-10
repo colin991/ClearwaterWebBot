@@ -384,7 +384,7 @@ test(';civ also drags in-game players within 50 studs into the same VC', async (
   assert.equal(silent.movedTo, undefined);
 });
 
-test(';team also drags nearby players to their team VC', async () => {
+test(';team only moves the command runner and never nearby players', async () => {
   const fire = voice('1514128961951760515', 'Fire Dispatch');
   const lobby = voice('lobby', 'Lobby');
   function voiceUser(id) {
@@ -435,8 +435,8 @@ test(';team also drags nearby players to their team VC', async () => {
   );
   assert.equal(result.reason, 'moved');
   assert.equal(commander.movedTo, TEAM_VOICE_CHANNEL_IDS.fire);
-  assert.equal(result.nearbyMoved, 1);
-  assert.equal(nearby.movedTo, TEAM_VOICE_CHANNEL_IDS.fire);
+  assert.equal(result.nearbyMoved, 0);
+  assert.equal(nearby.movedTo, undefined);
 });
 
 test('majority already in a matching VC stays there instead of opening a new empty one', () => {

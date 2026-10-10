@@ -3154,6 +3154,13 @@
       "summary": "Renamed the Georgia welcome link button from #dashboard to Guidelines while preserving its existing destination.",
       "createdAt": "2026-10-10T13:30:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-10-team-command-personal-move",
+      "title": "Make ;team move only its user",
+      "summary": "The in-game ;team command now moves only the person who ran it to their team voice channel. Nearby players are no longer detected or dragged by this command.",
+      "createdAt": "2026-10-10T14:00:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
