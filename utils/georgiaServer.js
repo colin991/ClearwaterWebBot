@@ -109,7 +109,7 @@ export function georgiaWelcomePayload(member) {
   return {
     content: [
       `<:wave1:1558521422421430412> Welcome <@${member.id}> to **<:logo:1558521199028469800> Georgia State Roleplay**, Georgia Roleplay like never before, where realistic roleplay meets endless possibilities.. We're very excited to have you!`,
-      '-# Vist one of our sessions in [https://canary.discord.com/channels/1514026810348671026/1514122521954226219](https://discord.com/channels/1557972171522052226/1558248110877057206). For CAD and Roleplay info, visit [https://canary.discord.com/channels/1514026810348671026/1514122821360554168](https://discord.com/channels/1557972171522052226/1558248547193720842).',
+      '-# Vist one of our sessions in https://discord.com/channels/1557972171522052226/1558248110877057206. For CAD and Roleplay info, visit https://discord.com/channels/1557972171522052226/1558248547193720842.',
     ].join('\n'),
     components: [
       new ActionRowBuilder().addComponents(

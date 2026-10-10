@@ -3140,6 +3140,13 @@
       "summary": "Updated the Georgia Operations welcome with the Georgia State Roleplay branding, new session and CAD links, and retained the live member-count and dashboard controls as Discord buttons.",
       "createdAt": "2026-10-10T13:00:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-10-georgia-welcome-links",
+      "title": "Fix Georgia welcome links",
+      "summary": "The Georgia welcome now displays the requested session and CAD Discord URLs directly so both links render and open correctly.",
+      "createdAt": "2026-10-10T13:15:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

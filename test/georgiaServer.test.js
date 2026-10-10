@@ -33,8 +33,9 @@ test('Georgia Operations welcomes a joining member with live count and dashboard
   assert.equal(sent.length, 1);
   assert.match(sent[0].content, /Welcome <@1044686997194805280>/);
   assert.match(sent[0].content, /Georgia State Roleplay/);
-  assert.match(sent[0].content, /1558248110877057206/);
-  assert.match(sent[0].content, /1558248547193720842/);
+  assert.match(sent[0].content, /sessions in https:\/\/discord\.com\/channels\/1557972171522052226\/1558248110877057206\./);
+  assert.match(sent[0].content, /visit https:\/\/discord\.com\/channels\/1557972171522052226\/1558248547193720842\./);
+  assert.doesNotMatch(sent[0].content, /canary\.discord\.com/);
   assert.deepEqual(sent[0].allowedMentions, { parse: [], users: ['1044686997194805280'] });
   const buttons = sent[0].components[0].toJSON().components;
   assert.equal(buttons[0].label, '35');
