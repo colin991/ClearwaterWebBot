@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { logger } from './logger.js';
 
 export const GEORGIA_GUILD_ID = '1557972171522052226';
@@ -107,10 +108,22 @@ export function georgiaWelcomePayload(member) {
   const memberCount = Number(member.guild?.memberCount) || member.guild?.members?.cache?.size || 0;
   return {
     content: [
-      `<:wave:1408924228056518737> Welcome <@${member.id}> to **Clearwater Roleplay**, Florida's premier roleplay; we are excited to have you!`,
-      '-# Immerse yourself in quality roleplay in <#1514122521954226219>, or visit <#1514122821360554168> for in-game LEO info.',
-      `\`${memberCount}\` · [\`#dashboard\`](${GEORGIA_DASHBOARD_URL})`,
+      `<:wave1:1558521422421430412> Welcome <@${member.id}> to **<:logo:1558521199028469800> Georgia State Roleplay**, Georgia Roleplay like never before, where realistic roleplay meets endless possibilities.. We're very excited to have you!`,
+      '-# Vist one of our sessions in [https://canary.discord.com/channels/1514026810348671026/1514122521954226219](https://discord.com/channels/1557972171522052226/1558248110877057206). For CAD and Roleplay info, visit [https://canary.discord.com/channels/1514026810348671026/1514122821360554168](https://discord.com/channels/1557972171522052226/1558248547193720842).',
     ].join('\n'),
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('georgia:welcome:members')
+          .setLabel(String(memberCount))
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setLabel('#dashboard')
+          .setStyle(ButtonStyle.Link)
+          .setURL(GEORGIA_DASHBOARD_URL),
+      ),
+    ],
     allowedMentions: { parse: [], users: [member.id] },
   };
 }

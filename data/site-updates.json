@@ -3133,6 +3133,13 @@
       "summary": "New members joining Georgia Operations now receive the requested Clearwater Roleplay welcome in channel 1558250379450523708, including the live server member count and a clickable dashboard link.",
       "createdAt": "2026-10-10T12:00:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-10-georgia-welcome-copy",
+      "title": "Georgia State Roleplay welcome",
+      "summary": "Updated the Georgia Operations welcome with the Georgia State Roleplay branding, new session and CAD links, and retained the live member-count and dashboard controls as Discord buttons.",
+      "createdAt": "2026-10-10T13:00:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

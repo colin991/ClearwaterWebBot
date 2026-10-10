@@ -32,9 +32,15 @@ test('Georgia Operations welcomes a joining member with live count and dashboard
   assert.equal(await sendGeorgiaWelcome(member), true);
   assert.equal(sent.length, 1);
   assert.match(sent[0].content, /Welcome <@1044686997194805280>/);
-  assert.match(sent[0].content, /`35`/);
-  assert.match(sent[0].content, /\[`#dashboard`\]\(https:\/\/discord\.com\/channels\/1557972171522052226\/1558246580065140806\)/);
+  assert.match(sent[0].content, /Georgia State Roleplay/);
+  assert.match(sent[0].content, /1558248110877057206/);
+  assert.match(sent[0].content, /1558248547193720842/);
   assert.deepEqual(sent[0].allowedMentions, { parse: [], users: ['1044686997194805280'] });
+  const buttons = sent[0].components[0].toJSON().components;
+  assert.equal(buttons[0].label, '35');
+  assert.equal(buttons[0].disabled, true);
+  assert.equal(buttons[1].label, '#dashboard');
+  assert.equal(buttons[1].url, 'https://discord.com/channels/1557972171522052226/1558246580065140806');
 
   assert.equal(await sendGeorgiaWelcome({ ...member, guild: { id: 'other' } }), false);
   assert.equal(await sendGeorgiaWelcome({ ...member, user: { bot: true } }), false);
