@@ -3126,6 +3126,13 @@
       "summary": "The bot now uses the Georgia Operations name and the supplied Georgia logo and service-truck banner in Discord server 1557972171522052226. The profile is checked and updated automatically when the bot starts.",
       "createdAt": "2026-10-09T13:00:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-10-georgia-welcome-message",
+      "title": "Georgia Operations welcome message",
+      "summary": "New members joining Georgia Operations now receive the requested Clearwater Roleplay welcome in channel 1558250379450523708, including the live server member count and a clickable dashboard link.",
+      "createdAt": "2026-10-10T12:00:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

@@ -6,6 +6,8 @@ import { logger } from './logger.js';
 
 export const GEORGIA_GUILD_ID = '1557972171522052226';
 export const GEORGIA_NICKNAME = 'Georgia Operations';
+export const GEORGIA_WELCOME_CHANNEL_ID = '1558250379450523708';
+export const GEORGIA_DASHBOARD_URL = 'https://discord.com/channels/1557972171522052226/1558246580065140806';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const GEORGIA_LOGO_PATH = path.join(ROOT, 'assets', 'georgia-ops-logo.png');
@@ -99,4 +101,32 @@ export async function ensureGeorgiaServerProfile(client, { statePath = DEFAULT_S
     }
     return false;
   }
+}
+
+export function georgiaWelcomePayload(member) {
+  const memberCount = Number(member.guild?.memberCount) || member.guild?.members?.cache?.size || 0;
+  return {
+    content: [
+      `<:wave:1408924228056518737> Welcome <@${member.id}> to **Clearwater Roleplay**, Florida's premier roleplay; we are excited to have you!`,
+      '-# Immerse yourself in quality roleplay in <#1514122521954226219>, or visit <#1514122821360554168> for in-game LEO info.',
+      `\`${memberCount}\` · [\`#dashboard\`](${GEORGIA_DASHBOARD_URL})`,
+    ].join('\n'),
+    allowedMentions: { parse: [], users: [member.id] },
+  };
+}
+
+export async function sendGeorgiaWelcome(member) {
+  if (String(member.guild?.id) !== GEORGIA_GUILD_ID) return false;
+  if (member.user?.bot) return false;
+
+  const channel = member.guild.channels.cache.get(GEORGIA_WELCOME_CHANNEL_ID)
+    || await member.guild.channels.fetch(GEORGIA_WELCOME_CHANNEL_ID).catch(() => null);
+  if (!channel?.isTextBased?.()) {
+    logger.warn(`Georgia Operations: welcome channel ${GEORGIA_WELCOME_CHANNEL_ID} unavailable.`);
+    return false;
+  }
+
+  await channel.send(georgiaWelcomePayload(member));
+  logger.info(`Georgia Operations: welcomed ${member.user?.tag || member.id}.`);
+  return true;
 }

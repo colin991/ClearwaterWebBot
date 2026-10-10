@@ -6,8 +6,39 @@ import { join } from 'node:path';
 import {
   GEORGIA_GUILD_ID,
   GEORGIA_NICKNAME,
+  GEORGIA_WELCOME_CHANNEL_ID,
   ensureGeorgiaServerProfile,
+  sendGeorgiaWelcome,
 } from '../utils/georgiaServer.js';
+
+test('Georgia Operations welcomes a joining member with live count and dashboard link', async () => {
+  const sent = [];
+  const member = {
+    id: '1044686997194805280',
+    user: { bot: false, tag: 'member#0001' },
+    guild: {
+      id: GEORGIA_GUILD_ID,
+      memberCount: 35,
+      channels: {
+        cache: {
+          get: (id) => (id === GEORGIA_WELCOME_CHANNEL_ID
+            ? { isTextBased: () => true, send: async (payload) => { sent.push(payload); } }
+            : null),
+        },
+      },
+    },
+  };
+
+  assert.equal(await sendGeorgiaWelcome(member), true);
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].content, /Welcome <@1044686997194805280>/);
+  assert.match(sent[0].content, /`35`/);
+  assert.match(sent[0].content, /\[`#dashboard`\]\(https:\/\/discord\.com\/channels\/1557972171522052226\/1558246580065140806\)/);
+  assert.deepEqual(sent[0].allowedMentions, { parse: [], users: ['1044686997194805280'] });
+
+  assert.equal(await sendGeorgiaWelcome({ ...member, guild: { id: 'other' } }), false);
+  assert.equal(await sendGeorgiaWelcome({ ...member, user: { bot: true } }), false);
+});
 
 function fakeClient(me, edits) {
   const guild = {

@@ -5,6 +5,7 @@ import { handleSecondaryGateJoin } from '../utils/secondaryServerGate.js';
 import { sendPinellasWelcome } from '../utils/pinellasServer.js';
 import { sendBelleairWelcome } from '../utils/belleairServer.js';
 import { sendFireOpsWelcome } from '../utils/fireOpsServer.js';
+import { sendGeorgiaWelcome } from '../utils/georgiaServer.js';
 import { handleSoundboardMemberAdd } from '../utils/soundboardAccess.js';
 import { logger } from '../utils/logger.js';
 import { ensureStarterAccount, postEconomyLog } from '../utils/economyService.js';
@@ -39,6 +40,13 @@ export default {
       if (welcomed) return;
     } catch (error) {
       logger.error('Clearwater Fire & Rescue welcome message failed', error);
+    }
+
+    try {
+      const welcomed = await sendGeorgiaWelcome(member);
+      if (welcomed) return;
+    } catch (error) {
+      logger.error('Georgia Operations welcome message failed', error);
     }
 
     try {
