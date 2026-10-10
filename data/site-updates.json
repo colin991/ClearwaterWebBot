@@ -3119,6 +3119,13 @@
       "summary": "Every new PCSO infraction now automatically creates a thread named proof beneath the infraction message and pings the staff member who issued it to upload their evidence.",
       "createdAt": "2026-10-09T12:00:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-09-georgia-operations-profile",
+      "title": "Georgia Operations server profile",
+      "summary": "The bot now uses the Georgia Operations name and the supplied Georgia logo and service-truck banner in Discord server 1557972171522052226. The profile is checked and updated automatically when the bot starts.",
+      "createdAt": "2026-10-09T13:00:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

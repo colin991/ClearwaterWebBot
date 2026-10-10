@@ -22,6 +22,7 @@ import { ensureBelleairServerProfile } from '../utils/belleairServer.js';
 import { ensureFireOpsServerProfile } from '../utils/fireOpsServer.js';
 import { ensureDodServerProfile } from '../utils/dodServer.js';
 import { clearFloridaServerProfile } from '../utils/floridaServer.js';
+import { ensureGeorgiaServerProfile } from '../utils/georgiaServer.js';
 import { startBotApiServer } from '../utils/botApiServer.js';
 import { startErlcSceneCommands } from '../utils/erlcSceneCommands.js';
 import { startErlcCallRadio } from '../utils/erlcCallRadio.js';
@@ -68,6 +69,12 @@ export default {
         logger.error('Divisional Hub server profile setup failed', error);
       });
     }, 3600);
+
+    setTimeout(() => {
+      void ensureGeorgiaServerProfile(client).catch((error) => {
+        logger.error('Georgia Operations server profile setup failed', error);
+      });
+    }, 4200);
 
     setTimeout(() => {
       void clearFloridaServerProfile(client).catch((error) => {
