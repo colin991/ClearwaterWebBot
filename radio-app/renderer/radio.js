@@ -937,6 +937,16 @@ function applyChannelStatus(message) {
 
 /* ---------- channels ---------- */
 
+// WHO'S ON: OK on a channel's header (or clicking it twice) moves the radio to that channel.
+function joinChannel(id) {
+  if (id === state.channelId) return flash(`ON ${String(state.channel).toUpperCase()}`.slice(0, 28), 900);
+  if (state.conn !== 'online') return flash('NO SIGNAL', 1000);
+  if (state.tx !== 'idle') return undefined;
+  saveSettings({ channel: id });
+  sendJson({ type: 'channel', id });
+  return undefined;
+}
+
 function changeChannel(step) {
   if (state.conn !== 'online' || state.channels.length < 2) {
     flash(String(state.channel || 'RADIO').toUpperCase().slice(0, 28), 1000);
@@ -1250,7 +1260,7 @@ function usersLines() {
   const lines = [];
   state.channels.forEach((channel, index) => {
     const members = channel.members || [];
-    lines.push({ header: true, text: `CH ${index + 1} · ${channel.name} (${members.length})`, current: channel.id === state.channelId });
+    lines.push({ header: true, channelId: channel.id, text: `CH ${index + 1} · ${channel.name} (${members.length})`, current: channel.id === state.channelId });
     if (!members.length) lines.push({ text: 'NOBODY', dim: true });
     for (const member of members) {
       const where = member.app && member.discord ? 'APP + VC' : member.discord ? 'DISCORD VC' : 'APP';
@@ -1483,6 +1493,9 @@ async function choose() {
   } else if (screen === 'size') {
     if (state.firstSetup) return finishSetup();
     setScreen(PARENT.size);
+  } else if (screen === 'users') {
+    const line = usersLines()[state.listIndex];
+    if (line?.header) joinChannel(line.channelId);
   } else if (screen === 'test') {
     setScreen('setup');
   } else if (screen === 'ptt') {
@@ -1713,7 +1726,10 @@ function clickLcd(event) {
     return void choose();
   }
   if (screen === 'users' && index >= 0) {
+    // Second click on the same channel header joins it.
+    const again = state.listIndex === index;
     state.listIndex = index;
+    if (again && usersLines()[index]?.header) return void choose();
     return render();
   }
   if ((screen === 'ptt' && !state.capturing) || screen === 'test') return press('ok');

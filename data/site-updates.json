@@ -3399,6 +3399,13 @@
       "summary": "Pressing PTT 6 times within 10 seconds now times you out of talking on the radio for 1 minute, with a countdown on the radio screen. PANIC can be sent once every 2 minutes per person; pressing it sooner shows how long is left.",
       "createdAt": "2026-10-11T20:35:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-who-join-channel",
+      "title": "Radio: join a channel from WHO'S ON",
+      "summary": "On the radio's WHO'S ON screen, clicking a channel twice (or picking it and pressing OK) switches your radio to that channel.",
+      "createdAt": "2026-10-11T20:40:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
