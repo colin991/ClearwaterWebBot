@@ -29,6 +29,7 @@ import { createRadioStats, buildRadioStatsEmbed } from './radioStats.js';
 import { buildRadioPanicEmbed, RADIO_KICK_BLOCK_MS, setRadioStaffControls } from './radioStaff.js';
 import { createRadioRecorder } from './radioRecorder.js';
 import { createSceneClock, createTalkOverWatch, findSceneChannels } from './radioModeration.js';
+import { createRadioBridge, radioBridgeSettings } from './radioBridge.js';
 import { canUseChannel, createMelonlyProfiles, normalizeAccess, profileLabel } from './radioMelonly.js';
 
 const UNKNOWN_MEMBER = 10007;
@@ -304,7 +305,13 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     return Boolean(member?.permissions?.has(PermissionFlagsBits.Administrator));
   }
 
+  // Fire, DOT and Marine each get a bot of their own in their own Discord voice channel.
+  const bridges = new Map();
   const relay = createRadioRelay({
+    bridge: (radioChannel) => {
+      const bridge = bridges.get(radioChannel);
+      return bridge ? { online: bridge.online } : null;
+    },
     record: (meta) => recorder.start(meta),
     isStaff: (userId) => isAdmin(userId),
     canUse: (radio, channelId) => canUseChannel(access, channelId, { profile: radio.profile, staff: radio.staff }),
@@ -360,10 +367,18 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
       postPanic(message);
     },
     // The main bot's cache has live nicknames (it gets member updates), so it is read first.
-    voiceMembers: () => [...((erlcEvents?.channels?.cache?.get?.(RADIO_CHANNEL_ID) || channel)?.members?.values?.() || [])]
-      .filter((member) => !member.user?.bot)
-      .map((member) => ({ id: member.id, name: member.displayName || member.user?.username || 'Member', label: profileLabel(knownProfiles.get(member.id)) })),
-    inVoice: (userId) => (channel?.guild?.voiceStates?.cache?.get(userId)?.channelId || null) === RADIO_CHANNEL_ID,
+    voiceMembers: (radioChannel) => {
+      const bridge = bridges.get(radioChannel);
+      if (bridge) return bridge.members();
+      return [...((erlcEvents?.channels?.cache?.get?.(RADIO_CHANNEL_ID) || channel)?.members?.values?.() || [])]
+        .filter((member) => !member.user?.bot)
+        .map((member) => ({ id: member.id, name: member.displayName || member.user?.username || 'Member', label: profileLabel(knownProfiles.get(member.id)) }));
+    },
+    inVoice: (userId, radioChannel) => {
+      const bridge = bridges.get(radioChannel);
+      if (bridge) return bridge.inVoice(userId);
+      return (channel?.guild?.voiceStates?.cache?.get(userId)?.channelId || null) === RADIO_CHANNEL_ID;
+    },
     // `removed` closes the member's radio app; anything else (Discord or bot trouble) is retried.
     async authorize(userId) {
       const target = channel || await client.channels.fetch(RADIO_CHANNEL_ID).catch(() => null);
@@ -392,12 +407,22 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
         label: profileLabel(profile),
       };
     },
-    openTransmit() {
+    openTransmit(userId, radioChannel) {
+      const bridge = bridges.get(radioChannel);
+      if (bridge) return bridge.openTransmit();
       if (!isOnline()) return null;
       return createTransmitSink((stream) => player.play(createAudioResource(stream, { inputType: StreamType.Opus })));
     },
   });
   activeRelay = relay;
+  for (const settings of radioBridgeSettings(env)) {
+    bridges.set(settings.channel, createRadioBridge({
+      ...settings,
+      relay: () => relay,
+      label: (member) => profileLabel(knownProfiles.get(member.id)),
+      createSink: (play) => createTransmitSink(play),
+    }));
+  }
 
   // Staff force-mutes survive restarts.
   const adminPath = radioDataPath('radio-admin.json');
@@ -736,6 +761,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     relay.close();
     try { standalone?.close(); } catch { /* ignore */ }
     try { connection?.destroy(); } catch { /* ignore */ }
+    for (const bridge of bridges.values()) bridge.stop();
     player.stop(true);
     client.destroy();
   };

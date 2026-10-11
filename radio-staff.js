@@ -162,7 +162,7 @@
   $('eventForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     const name = $('eventName').value.trim() || 'Server Event';
-    await tool({ action: 'event-open', name }, `Event channel "${name}" is open as CH 4.`);
+    await tool({ action: 'event-open', name }, `Event channel "${name}" is open as CH 7.`);
   });
   $('eventClose').addEventListener('click', async () => {
     if (!window.confirm('Close the event channel? Everyone on it goes back to CH 1.')) return;
@@ -171,7 +171,7 @@
   });
 
   function renderEvent(event) {
-    $('eventState').textContent = event ? `Event channel: open as CH 4 · ${event.name}` : 'Event channel: closed';
+    $('eventState').textContent = event ? `Event channel: open as CH 7 · ${event.name}` : 'Event channel: closed';
     $('eventOpen').textContent = event ? 'Rename' : 'Open event channel';
     $('eventClose').hidden = !event;
   }
@@ -300,9 +300,12 @@
   /* ---------- channel access by Melonly rank ---------- */
 
   const ACCESS_CHANNELS = [
-    { id: 'srt', name: 'CH 2 · Special Response Team' },
-    { id: 'freq', name: 'CH 3 · Frequency Change' },
-    { id: 'event', name: 'CH 4 · Event channel' },
+    { id: 'fire', name: 'CH 2 · Fire Radio' },
+    { id: 'dot', name: 'CH 3 · DOT Radio' },
+    { id: 'marine', name: 'CH 4 · Marine and Boating' },
+    { id: 'freq', name: 'CH 5 · Frequency Change' },
+    { id: 'srt', name: 'CH 6 · Special Response Team' },
+    { id: 'event', name: 'CH 7 · Event channel' },
   ];
   let access = {};
   let melonlyReady = false;

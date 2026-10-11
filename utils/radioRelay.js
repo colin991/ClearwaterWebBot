@@ -17,16 +17,26 @@ export const RADIO_MAX_PACKETS_PER_SECOND = 75;
 /** How often signed-in radios are re-checked against the Discord server (anti-raid). */
 export const RADIO_RECHECK_MS = 5 * 60 * 1000;
 const AUDIO_FRAME = 0x01;
-/** Radio channels. MAIN is bridged to the Discord voice channel; the others are app-to-app only. */
+/**
+ * Radio channels, in order. MAIN is bridged to the Discord radio voice channel by the radio bot; the
+ * others are bridged to their own Discord voice channel when the host gives them a bot of their own,
+ * and are app-to-app only until then.
+ */
 export const RADIO_MAIN_CHANNEL = 'main';
+export const RADIO_FIRE_CHANNEL = 'fire';
+export const RADIO_DOT_CHANNEL = 'dot';
+export const RADIO_MARINE_CHANNEL = 'marine';
 export const RADIO_SRT_CHANNEL = 'srt';
 export const RADIO_FREQ_CHANNEL = 'freq';
 /** A temporary channel staff open for a server event; it closes (moving everyone to MAIN) when they're done. */
 export const RADIO_EVENT_CHANNEL = 'event';
-const APP_CHANNELS = [
-  { id: RADIO_SRT_CHANNEL, name: 'Special Response Team' },
+export const RADIO_EXTRA_CHANNELS = Object.freeze([
+  { id: RADIO_FIRE_CHANNEL, name: 'Fire Radio' },
+  { id: RADIO_DOT_CHANNEL, name: 'DOT Radio' },
+  { id: RADIO_MARINE_CHANNEL, name: 'Marine and Boating' },
   { id: RADIO_FREQ_CHANNEL, name: 'Frequency Change' },
-];
+  { id: RADIO_SRT_CHANNEL, name: 'Special Response Team' },
+]);
 /** One PANIC press per member in this window. */
 export const RADIO_PANIC_GAP_MS = 2 * 60 * 1000;
 /** Synced settings: only these keys, and only small values, are kept per member. */
@@ -68,7 +78,8 @@ function send(socket, message) {
  *   `removed: true` means the member is not in the server or lost radio access; their app is closed.
  * @param {(userId: string) => ({ push(packet: Buffer): void, end(): void }|null)} options.openTransmit
  * @param {() => { online: boolean, channel: string }} options.status
- * @param {() => { id: string, name: string }[]} [options.voiceMembers] members sitting in the Discord radio channel
+ * @param {(channel: string) => { id: string, name: string }[]} [options.voiceMembers] members sitting in a channel's Discord voice channel
+ * @param {(channel: string) => ({ online: boolean }|null)} [options.bridge] a non-MAIN channel's Discord bridge, or null when it has none
  * @param {(userId: string, name: string) => Promise<{ name?: string, location?: string, unit?: string, postal?: string }|null>} [options.locatePanic]
  *   who and where a radio's EMER press came from, for the panic alert.
  * @param {(postal: string) => ({ x: number, y: number }|null)} [options.mapPoint] where a postal sits on the map (fractions)
@@ -91,6 +102,7 @@ export function createRadioRelay({
   status,
   inVoice = () => false,
   voiceMembers = () => [],
+  bridge = () => null,
   locatePanic = async () => null,
   onPanic = () => {},
   onTalked = () => {},
@@ -116,8 +128,13 @@ export function createRadioRelay({
   const clients = new Set();
   // One talker per channel: channel id -> { socket, userId, name, sink, startedAt, lastPacketAt }
   const talkers = new Map();
-  const discordTalkers = new Map(); // userId -> name, members talking in the Discord channel
-  const discordRecordings = new Map(); // userId -> recording of what they say in the Discord channel
+  // Members talking in a bridged channel's Discord voice channel: channel id -> (userId -> name)
+  const discordTalkersByChannel = new Map();
+  const discordTalkers = (channel) => {
+    if (!discordTalkersByChannel.has(channel)) discordTalkersByChannel.set(channel, new Map());
+    return discordTalkersByChannel.get(channel);
+  };
+  const discordRecordings = new Map(); // "channel:userId" -> recording of what they say in Discord
   // Staff controls: force-muted members can listen but not talk; kicked members can't sign in until the time is up.
   const mutedUsers = new Set([...muted].map(String));
   const kickedUntil = new Map();
@@ -138,11 +155,17 @@ export function createRadioRelay({
   let eventChannel = null;
   const channelList = () => [
     { id: RADIO_MAIN_CHANNEL, name: status().channel || 'Radio' },
-    ...APP_CHANNELS,
+    ...RADIO_EXTRA_CHANNELS,
     ...(eventChannel ? [{ id: RADIO_EVENT_CHANNEL, name: eventChannel.name }] : []),
   ];
   const channelName = (id) => channelList().find((channel) => channel.id === id)?.name || 'Radio';
   const isChannel = (id) => channelList().some((channel) => channel.id === id);
+  // Bridged to a Discord voice channel: MAIN always; the others when their bot is set up.
+  const bridgeOf = (id) => {
+    if (id === RADIO_MAIN_CHANNEL) return { online: Boolean(status().online) };
+    try { return bridge(id) || null; } catch { return null; }
+  };
+  const isBridged = (id) => Boolean(bridgeOf(id));
   // Rank-based access: MAIN is open to everyone; other channels follow the staff page's rules.
   const allowedOn = (radio, id) => {
     if (id === RADIO_MAIN_CHANNEL) return true;
@@ -157,7 +180,7 @@ export function createRadioRelay({
   const hears = (socket, speakerId, channel) => {
     const radio = socket.radio;
     if (!radio?.userId || radio.deaf || radio.userId === speakerId || !listensTo(radio, channel)) return false;
-    return channel !== RADIO_MAIN_CHANNEL || !inVoice(radio.userId);
+    return !isBridged(channel) || !inVoice(radio.userId, channel);
   };
   // Private calls: talking socket -> { socket, to, userId, name, startedAt, lastPacketAt }
   const whispers = new Map();
@@ -199,16 +222,16 @@ export function createRadioRelay({
     }
   }
 
-  /** Everyone on a channel, app radios and (for MAIN) the Discord channel together; someone in both is listed once. */
+  /** Everyone on a channel, app radios and (when bridged) its Discord voice channel together; someone in both is listed once. */
   function rosterFor(channel) {
     const byId = new Map();
     for (const socket of clients) {
       const radio = socket.radio;
       if (radio?.userId && radio.channel === channel) byId.set(radio.userId, { id: radio.userId, name: radio.name, ...(radio.label ? { label: radio.label } : {}), app: true, discord: false });
     }
-    if (channel === RADIO_MAIN_CHANNEL) {
+    if (isBridged(channel)) {
       let members = [];
-      try { members = voiceMembers() || []; } catch { /* Discord cache hiccup: apps only */ }
+      try { members = voiceMembers(channel) || []; } catch { /* Discord cache hiccup: apps only */ }
       for (const member of members) {
         const entry = byId.get(member.id);
         if (entry) entry.discord = true;
@@ -221,12 +244,12 @@ export function createRadioRelay({
     return [...byId.values()].sort((a, b) => Number(b.talking) - Number(a.talking) || a.name.localeCompare(b.name));
   }
 
-  /** Who is talking on a channel right now: its app talker and, for MAIN, members speaking in the Discord channel. */
+  /** Who is talking on a channel right now: its app talker and members speaking in its Discord voice channel. */
   function talkingOn(channel) {
     const ids = new Set();
     const talker = talkers.get(channel);
     if (talker) ids.add(talker.userId);
-    if (channel === RADIO_MAIN_CHANNEL) for (const id of discordTalkers.keys()) ids.add(id);
+    for (const id of discordTalkers(channel).keys()) ids.add(id);
     return ids;
   }
 
@@ -255,13 +278,13 @@ export function createRadioRelay({
     const base = status();
     return {
       ...base,
-      // Off-Discord channels work without the bot in voice.
-      online: channel === RADIO_MAIN_CHANNEL ? base.online : true,
+      // Off-Discord channels work without a bot in voice.
+      online: bridgeOf(channel)?.online ?? true,
       channel: channelName(channel),
       channelId: channel,
       channels: channelList().map(({ id, name }) => ({ id, name, members: rosterFor(id), ...(allowedOn(socket.radio, id) ? {} : { locked: true }) })),
       listeners: listenerCount(channel),
-      inVoice: channel === RADIO_MAIN_CHANNEL && Boolean(inVoice(socket.radio.userId)),
+      inVoice: isBridged(channel) && Boolean(inVoice(socket.radio.userId, channel)),
       dispatch: dispatchActive(),
       muted: mutedUsers.has(socket.radio.userId),
       signal: signalOf(socket.radio.userId) ?? null,
@@ -380,16 +403,16 @@ export function createRadioRelay({
       return send(socket, { type: 'tx', ok: false, reason: 'busy', name: talker.name });
     }
     // Talking on MAIN while a dispatcher speaks in the Discord channel (Discord never blocks the radio).
-    if (channel === RADIO_MAIN_CHANNEL && !isDispatcherName(name)) {
-      const dispatcher = [...discordTalkers.values()].find(isDispatcherName);
+    if (!isDispatcherName(name)) {
+      const dispatcher = [...discordTalkers(channel).values()].find(isDispatcherName);
       if (dispatcher) reportTalkOver(socket.radio, channel, dispatcher);
     }
     let sink = null;
-    if (channel === RADIO_MAIN_CHANNEL) {
-      // Members in the Discord channel talk there, not through the radio.
-      if (inVoice(userId)) return send(socket, { type: 'tx', ok: false, reason: 'invoice' });
-      if (!status().online) return send(socket, { type: 'tx', ok: false, reason: 'offline' });
-      sink = openTransmit(userId);
+    if (isBridged(channel)) {
+      // Members in the Discord voice channel talk there, not through the radio.
+      if (inVoice(userId, channel)) return send(socket, { type: 'tx', ok: false, reason: 'invoice' });
+      if (!bridgeOf(channel)?.online) return send(socket, { type: 'tx', ok: false, reason: 'offline' });
+      sink = openTransmit(userId, channel);
       if (!sink) return send(socket, { type: 'tx', ok: false, reason: 'offline' });
     }
     // One transmission at a time per radio.
@@ -467,8 +490,9 @@ export function createRadioRelay({
     for (const [id, talker] of talkers) {
       if (listensTo(socket.radio, id)) send(socket, { type: 'talk', id: talker.userId, name: talker.name, active: true, source: 'app', channel: id, signal: signalOf(talker.userId) });
     }
-    if (listensTo(socket.radio, RADIO_MAIN_CHANNEL)) {
-      for (const [id, name] of discordTalkers) send(socket, { type: 'talk', id, name, active: true, source: 'discord', channel: RADIO_MAIN_CHANNEL });
+    for (const [id, speakers] of discordTalkersByChannel) {
+      if (!listensTo(socket.radio, id)) continue;
+      for (const [speakerId, name] of speakers) send(socket, { type: 'talk', id: speakerId, name, active: true, source: 'discord', channel: id });
     }
     broadcastStatus();
     return true;
@@ -805,21 +829,23 @@ export function createRadioRelay({
       wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request));
       return true;
     },
-    /** Audio a Discord member spoke in the radio channel, forwarded to every app. */
-    relayDiscordAudio(speakerId, packet) {
-      discordRecordings.get(String(speakerId))?.push(packet);
+    /** Audio a Discord member spoke in a bridged channel's voice channel, forwarded to the apps on it. */
+    relayDiscordAudio(speakerId, packet, channel = RADIO_MAIN_CHANNEL) {
+      discordRecordings.get(`${channel}:${speakerId}`)?.push(packet);
       const frame = encodeAudioFrame(speakerId, packet);
       for (const socket of clients) {
-        if (hears(socket, speakerId, RADIO_MAIN_CHANNEL)) send(socket, frame);
+        if (hears(socket, speakerId, channel)) send(socket, frame);
       }
     },
-    /** A member joined or left the Discord channel: their app mutes and stops talking while they are in it. */
+    /** A member joined or left a bridged Discord voice channel: their app mutes and stops talking while they are in it. */
     voiceChanged(userId) {
-      const talker = talkers.get(RADIO_MAIN_CHANNEL);
-      if (talker?.userId === userId && inVoice(userId)) endTransmit(talker.socket);
+      for (const [channel, talker] of talkers) {
+        if (talker.userId === userId && isBridged(channel) && inVoice(userId, channel)) endTransmit(talker.socket);
+      }
       for (const socket of clients) {
         if (socket.radio?.userId === userId) {
-          send(socket, { type: 'invoice', active: socket.radio.channel === RADIO_MAIN_CHANNEL && Boolean(inVoice(userId)) });
+          const channel = socket.radio.channel;
+          send(socket, { type: 'invoice', active: isBridged(channel) && Boolean(inVoice(userId, channel)) });
         }
       }
       // The units lists and dispatch status include the Discord channel.
@@ -829,31 +855,33 @@ export function createRadioRelay({
     alert(message) {
       broadcast(message?.type === 'panic' ? withMap(message) : message);
     },
-    discordSpeaking(speakerId, name, active) {
+    discordSpeaking(speakerId, name, active, channel = RADIO_MAIN_CHANNEL) {
+      const speakers = discordTalkers(channel);
+      const key = `${channel}:${speakerId}`;
       if (active) {
         // Speaking in the Discord channel over a dispatcher (on a radio or in Discord).
         if (!isDispatcherName(name)) {
-          const appTalker = talkers.get(RADIO_MAIN_CHANNEL);
-          const dispatcher = isDispatcherName(appTalker?.name) ? appTalker.name : [...discordTalkers.values()].find(isDispatcherName);
-          if (dispatcher) reportTalkOver({ userId: String(speakerId), name }, RADIO_MAIN_CHANNEL, dispatcher);
+          const appTalker = talkers.get(channel);
+          const dispatcher = isDispatcherName(appTalker?.name) ? appTalker.name : [...speakers.values()].find(isDispatcherName);
+          if (dispatcher) reportTalkOver({ userId: String(speakerId), name }, channel, dispatcher);
         }
-        discordTalkers.set(speakerId, name);
-        if (!discordRecordings.has(String(speakerId))) {
-          const recording = startRecording({ userId: speakerId, name, channel: RADIO_MAIN_CHANNEL, channelName: `${channelName(RADIO_MAIN_CHANNEL)} (Discord)`, source: 'discord' });
-          if (recording) discordRecordings.set(String(speakerId), recording);
+        speakers.set(speakerId, name);
+        if (!discordRecordings.has(key)) {
+          const recording = startRecording({ userId: speakerId, name, channel, channelName: `${channelName(channel)} (Discord)`, source: 'discord' });
+          if (recording) discordRecordings.set(key, recording);
         }
       } else {
-        discordTalkers.delete(speakerId);
-        lastHeard.set(RADIO_MAIN_CHANNEL, { name, at: now() });
-        try { discordRecordings.get(String(speakerId))?.end(); } catch { /* ignore */ }
-        discordRecordings.delete(String(speakerId));
+        speakers.delete(speakerId);
+        lastHeard.set(channel, { name, at: now() });
+        try { discordRecordings.get(key)?.end(); } catch { /* ignore */ }
+        discordRecordings.delete(key);
       }
-      broadcast({ type: 'talk', id: speakerId, name, active, source: 'discord', channel: RADIO_MAIN_CHANNEL }, null, RADIO_MAIN_CHANNEL);
+      broadcast({ type: 'talk', id: speakerId, name, active, source: 'discord', channel }, null, channel);
       broadcastTalking();
     },
     broadcastStatus,
     recheckAll,
-    /** Staff open a temporary event channel (CH 4 on the radios); opening again renames it. */
+    /** Staff open a temporary event channel (the last channel on the radios); opening again renames it. */
     openEvent(name, by = 'Staff') {
       const clean = String(name || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 32) || 'Server Event';
       const wasOpen = Boolean(eventChannel);

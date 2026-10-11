@@ -3525,6 +3525,13 @@
       "summary": "Clicking a unit on WHO'S ON now opens whisper straight away, and the radio screen has an END WHISPER button while you're whispering. The units list and the settings page no longer jump back to the top while you scroll. A new BAR ANIM setting (on by default) makes the signal bars bob up and down. Scene timers now pick up every Discord voice channel with Scene or Traffic Stop in its name, with no setup needed.",
       "createdAt": "2026-10-12T00:40:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-discord-channels-2026-10-12",
+      "title": "Radio: Fire, DOT and Marine channels linked to Discord",
+      "summary": "The radio channels are now CH 1 Law Enforcement, CH 2 Fire Radio, CH 3 DOT Radio, CH 4 Marine and Boating, CH 5 Frequency Change and CH 6 Special Response Team, with the event channel as CH 7. Fire, DOT and Marine are each linked to their own Discord voice channel by a bot of their own, so people in that voice channel and on the radios hear each other. Frequency Change and Special Response Team stay radio-to-radio only.",
+      "createdAt": "2026-10-12T01:30:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

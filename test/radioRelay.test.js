@@ -352,7 +352,7 @@ test('Special Response Team stays off Discord', async () => {
     const ready = await alice.until(() => alice.messages.find((m) => m.type === 'ready'));
     assert.equal(ready.channelId, 'srt');
     assert.equal(ready.channel, 'Special Response Team');
-    assert.deepEqual(ready.channels.map((c) => c.id), ['main', 'srt', 'freq']);
+    assert.deepEqual(ready.channels.map((c) => c.id), ['main', 'fire', 'dot', 'marine', 'freq', 'srt']);
     await bob.until(() => bob.messages.find((m) => m.type === 'ready'));
 
     // Different channels: no shared audio or talk.
@@ -452,7 +452,7 @@ test('each channel lists app radios and Discord members together', async () => {
     await bob.until(() => bob.messages.find((m) => m.type === 'ready'));
     const status = await alice.until(() => alice.messages
       .find((m) => m.type === 'status' && m.channels[0].members.some((member) => member.id === BOB && member.app)));
-    const [main, srt, freq] = status.channels;
+    const [main, srt, freq] = ['main', 'srt', 'freq'].map((id) => status.channels.find((c) => c.id === id));
     assert.deepEqual(main.members, [
       { id: BOB, name: 'Bob', app: true, discord: true, talking: false },
       { id: '333333333333333333', name: 'Carl', app: false, discord: true, talking: false },
@@ -641,7 +641,7 @@ test('whoever is talking is flagged and listed first, on the radio or in the Dis
     const bob = await signIn(harness, BOB);
     harness.relay.discordSpeaking('333333333333333333', 'Carl', true);
     const carl = await alice.until(() => alice.messages.find((m) => m.type === 'talking' && m.channels.main.length));
-    assert.deepEqual(carl.channels, { main: ['333333333333333333'], srt: [], freq: [] });
+    assert.deepEqual(carl.channels, { main: ['333333333333333333'], fire: [], dot: [], marine: [], freq: [], srt: [] });
     harness.relay.broadcastStatus();
     const status = await alice.until(() => alice.messages
       .find((m) => m.type === 'status' && m.channels[0].members[0]?.talking));
@@ -944,14 +944,14 @@ test('staff monitor hears every channel, listen-only, and only admins get it', a
   }
 });
 
-test('staff open an event channel as CH 4, and closing it moves everyone back to CH 1', async () => {
+test('staff open an event channel as CH 7, and closing it moves everyone back to CH 1', async () => {
   const harness = await startRelay();
   try {
     const alice = await signIn(harness, ALICE);
     harness.relay.openEvent('Car Meet', 'staff');
     await alice.until(() => alice.messages.find((m) => m.type === 'event' && m.open));
     const status = await alice.until(() => alice.messages.find((m) => m.type === 'status' && m.event?.name === 'Car Meet'));
-    assert.deepEqual(status.channels.map((c) => c.id), ['main', 'srt', 'freq', 'event']);
+    assert.deepEqual(status.channels.map((c) => c.id), ['main', 'fire', 'dot', 'marine', 'freq', 'srt', 'event']);
     alice.send({ type: 'channel', id: 'event' });
     await alice.until(() => alice.messages.find((m) => m.type === 'channel' && m.channelId === 'event'));
     assert.equal(harness.relay.closeEvent(), 1);
@@ -1024,6 +1024,65 @@ test('rank-limited channels are locked for the wrong rank, and losing access mov
     const moved = await alice.until(() => alice.messages.find((m) => m.type === 'moved'));
     assert.equal(moved.reason, 'locked');
     assert.equal(harness.relay.users().find((u) => u.userId === ALICE).channel, 'main');
+    alice.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('an extra channel with its own bot is bridged to its Discord voice channel', async () => {
+  const fireVoice = new Set();
+  const opened = [];
+  const fired = [];
+  let fireOnline = true;
+  const harness = await startRelay({
+    bridge: (channel) => (channel === 'fire' ? { online: fireOnline } : null),
+    voiceMembers: (channel) => (channel === 'fire' ? [{ id: '333333333333333333', name: 'Carl' }] : []),
+    inVoice: (userId, channel) => (channel === 'fire' ? fireVoice.has(userId) : false),
+    openTransmit: (userId, channel) => {
+      opened.push(channel);
+      return { push: (packet) => fired.push(packet), end: () => {} };
+    },
+  });
+  try {
+    const alice = await signIn(harness, ALICE, { channel: 'fire' });
+    const bob = await signIn(harness, BOB, { channel: 'dot' });
+    const status = await alice.until(() => alice.messages.find((m) => m.type === 'status' && m.channels.find((c) => c.id === 'dot').members.length));
+    assert.deepEqual(status.channels.find((c) => c.id === 'fire').members.map((m) => [m.name, m.discord]), [['Alice', false], ['Carl', true]]);
+    assert.deepEqual(status.channels.find((c) => c.id === 'dot').members.map((m) => m.name), ['Bob']);
+
+    // Discord voice on Fire reaches Fire radios only.
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', true, 'fire');
+    harness.relay.relayDiscordAudio('333333333333333333', Buffer.from([7, 7]), 'fire');
+    await alice.until(() => alice.binary.length);
+    const talk = await alice.until(() => alice.messages.find((m) => m.type === 'talk' && m.source === 'discord'));
+    assert.equal(talk.channel, 'fire');
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', false, 'fire');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(bob.binary.length, 0, 'DOT radios do not hear Fire');
+
+    // Talking on Fire goes into the Fire voice channel through its bot.
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
+    assert.deepEqual(opened, ['fire']);
+    alice.send({ type: 'tx', active: false });
+    await alice.until(() => alice.messages.find((m) => m.type === 'talk' && m.source === 'app' && !m.active));
+
+    // DOT has no bot: radio-to-radio, never opens a Discord transmission.
+    bob.send({ type: 'tx', active: true });
+    await bob.until(() => bob.messages.find((m) => m.type === 'tx' && m.ok));
+    bob.send({ type: 'tx', active: false });
+    assert.deepEqual(opened, ['fire']);
+
+    // In the Fire voice channel: talk in Discord, not on the radio. Bot offline: no transmitting.
+    fireVoice.add(ALICE);
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.reason === 'invoice'));
+    fireVoice.delete(ALICE);
+    fireOnline = false;
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.reason === 'offline'));
     alice.ws.close();
     bob.ws.close();
   } finally {
