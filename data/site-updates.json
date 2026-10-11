@@ -3168,6 +3168,13 @@
       "summary": "Civilian players are no longer jailed by voice checks, and switching to an emergency-services team now starts a fresh five-minute grace period instead of immediately jailing the player and resetting their roleplay name.",
       "createdAt": "2026-10-10T15:00:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-pcso-login-gate-fix",
+      "title": "Fix PCSO website login redirect",
+      "summary": "Valid PCSO Discord members now remain signed into the website instead of being incorrectly redirected to the tester-only Coming Soon screen.",
+      "createdAt": "2026-10-11T00:00:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

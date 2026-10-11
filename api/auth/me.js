@@ -22,7 +22,10 @@ export default async function handler(request, response) {
 
     return sendJson(response, 200, {
       authenticated: true,
-      siteAccess: Boolean(staffAccess.siteAccess),
+      // PCSO membership is also a valid website login. Returning only the
+      // Clearwater tester/staff flag here made the browser gate reject an
+      // otherwise valid PCSO session and redirect it to Coming Soon.
+      siteAccess: signedIn,
       pcso: user.pinellasMember === true,
       user: {
         id: publicUserId(user.id),
