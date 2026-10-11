@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-11-radio-discord-sign-in",
+      "title": "Radio sign-in with Discord",
+      "summary": "The radio app now signs in with Discord instead of a pasted key, and only members of the Clearwater Discord server with access to the radio channel can use it. Every 5 minutes it re-checks; if you left the server or lost access, the radio signs you out and closes. Settings now always save, even when you quit right after changing them.",
+      "createdAt": "2026-10-11T06:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-11-radio-update-fixes",
       "title": "Radio updates apply on restart",
       "summary": "QUIT now fully closes the radio app, so reopening it checks for a new version, and reopening a running radio checks too. The app writes update.log in its settings folder if an update fails. The download embed now shows the newest version instead of an older one.",

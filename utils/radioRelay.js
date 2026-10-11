@@ -7,6 +7,8 @@ export const RADIO_TX_IDLE_MS = 1_500;
 export const RADIO_TX_MAX_MS = 120_000;
 export const RADIO_MAX_PACKET_BYTES = 1_500;
 export const RADIO_MAX_PACKETS_PER_SECOND = 75;
+/** How often signed-in radios are re-checked against the Discord server (anti-raid). */
+export const RADIO_RECHECK_MS = 5 * 60 * 1000;
 const AUDIO_FRAME = 0x01;
 
 /** Binary frame sent to apps: [0x01][speaker Discord ID as uint64 BE][Opus packet]. */
@@ -34,11 +36,25 @@ function send(socket, message) {
  *
  * @param {object} options
  * @param {(key: string) => string|null} options.verifyKey
- * @param {(userId: string) => Promise<{ ok: boolean, name?: string, reason?: string }>} options.authorize
+ * @param {(code: string) => Promise<string>} [options.exchangeCode] Discord OAuth code → user ID
+ * @param {(userId: string) => string|null} [options.createSession] token the app stores after sign-in
+ * @param {() => ({ clientId: string, redirectUri: string }|null)} [options.loginInfo]
+ * @param {(userId: string) => Promise<{ ok: boolean, name?: string, reason?: string, removed?: boolean }>} options.authorize
+ *   `removed: true` means the member is not in the server or lost radio access; their app is closed.
  * @param {(userId: string) => ({ push(packet: Buffer): void, end(): void }|null)} options.openTransmit
  * @param {() => { online: boolean, channel: string }} options.status
  */
-export function createRadioRelay({ verifyKey, authorize, openTransmit, status, now = () => Date.now() }) {
+export function createRadioRelay({
+  verifyKey,
+  exchangeCode = async () => { throw new Error('Discord sign-in is not set up on the bot host.'); },
+  createSession = () => null,
+  loginInfo = () => null,
+  authorize,
+  openTransmit,
+  status,
+  now = () => Date.now(),
+  recheckMs = RADIO_RECHECK_MS,
+}) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 });
   /** @type {Set<import('ws').WebSocket>} */
   const clients = new Set();
@@ -104,11 +120,32 @@ export function createRadioRelay({ verifyKey, authorize, openTransmit, status, n
     }
   }
 
+  function removeSocket(socket, reason) {
+    send(socket, { type: 'error', code: 'removed', message: reason || 'You are no longer allowed on this radio.' });
+    socket.close(4004, 'removed');
+  }
+
   async function onAuth(socket, message) {
-    const userId = verifyKey(String(message.key || ''));
-    if (!userId) {
-      send(socket, { type: 'error', code: 'bad-key', message: 'That radio key is not valid. Get a new one from the download post.' });
-      return socket.close(4001, 'bad key');
+    let userId = null;
+    let session = null;
+    if (message.code) {
+      try {
+        userId = await exchangeCode(String(message.code));
+        session = createSession(userId);
+      } catch (error) {
+        logger.warn(`Radio sign-in failed: ${error?.message || error}`);
+      }
+      if (socket.readyState !== socket.OPEN) return;
+      if (!userId || !session) {
+        send(socket, { type: 'error', code: 'signin-failed', message: 'Discord sign-in failed. Try again.' });
+        return socket.close(4001, 'sign-in failed');
+      }
+    } else {
+      userId = verifyKey(String(message.key || ''));
+      if (!userId) {
+        send(socket, { type: 'error', code: 'bad-key', message: 'Sign in with Discord again.' });
+        return socket.close(4001, 'bad key');
+      }
     }
     let result;
     try {
@@ -119,6 +156,7 @@ export function createRadioRelay({ verifyKey, authorize, openTransmit, status, n
     }
     if (socket.readyState !== socket.OPEN) return;
     if (!result?.ok) {
+      if (result?.removed) return removeSocket(socket, result.reason);
       send(socket, { type: 'error', code: 'denied', message: result?.reason || 'You do not have access to this radio channel.' });
       return socket.close(4003, 'denied');
     }
@@ -131,6 +169,7 @@ export function createRadioRelay({ verifyKey, authorize, openTransmit, status, n
     }
     clearTimeout(socket.radioAuthTimer);
     socket.radio = { userId, name: result.name || 'Unit', deaf: false, rateSecond: 0, rateCount: 0 };
+    if (session) send(socket, { type: 'session', key: session });
     send(socket, { type: 'ready', you: { id: userId, name: socket.radio.name }, ...status(), listeners: listenerCount() });
     if (talker) send(socket, { type: 'talk', id: talker.userId, name: talker.name, active: true, source: 'app' });
     broadcastStatus();
@@ -153,6 +192,11 @@ export function createRadioRelay({ verifyKey, authorize, openTransmit, status, n
       try {
         message = JSON.parse(String(data));
       } catch {
+        return;
+      }
+      if (message?.type === 'hello' && !socket.radio) {
+        const info = loginInfo();
+        send(socket, info ? { type: 'login', clientId: info.clientId, redirectUri: info.redirectUri } : { type: 'login', available: false });
         return;
       }
       if (message?.type === 'auth' && !socket.radio && !socket.radioAuthing) {
@@ -192,6 +236,27 @@ export function createRadioRelay({ verifyKey, authorize, openTransmit, status, n
   }, 30_000);
   heartbeat.unref?.();
 
+  // Anti-raid: everyone on the radio must still be in the Discord server with access to the channel.
+  async function recheckAll() {
+    for (const socket of [...clients]) {
+      const userId = socket.radio?.userId;
+      if (!userId) continue;
+      let result;
+      try {
+        result = await authorize(userId);
+      } catch {
+        continue; // Discord hiccup: never kick on a failed lookup.
+      }
+      if (result?.removed && socket.radio?.userId === userId) {
+        logger.info(`Radio closed for ${userId}: ${result.reason || 'no longer allowed'}`);
+        endTransmit(socket);
+        removeSocket(socket, result.reason);
+      }
+    }
+  }
+  const recheck = recheckMs > 0 ? setInterval(() => { void recheckAll(); }, recheckMs) : null;
+  recheck?.unref?.();
+
   return {
     /** Attach to an http server's 'upgrade' event. Returns true when the request was for the radio. */
     handleUpgrade(request, socket, head) {
@@ -217,6 +282,7 @@ export function createRadioRelay({ verifyKey, authorize, openTransmit, status, n
       broadcast({ type: 'talk', id: speakerId, name, active, source: 'discord' });
     },
     broadcastStatus,
+    recheckAll,
     get listeners() {
       return listenerCount();
     },
@@ -226,6 +292,7 @@ export function createRadioRelay({ verifyKey, authorize, openTransmit, status, n
     close() {
       clearInterval(watchdog);
       clearInterval(heartbeat);
+      clearInterval(recheck);
       if (talker) endTransmit(talker.socket);
       for (const socket of clients) socket.terminate();
       clients.clear();

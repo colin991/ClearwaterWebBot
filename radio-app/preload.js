@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('radioApp', {
   capturePtt: (active) => ipcRenderer.invoke('ptt:capture', active),
   version: () => ipcRenderer.invoke('app:version'),
   checkForUpdates: () => ipcRenderer.invoke('update:check'),
+  signIn: (info) => ipcRenderer.invoke('auth:signin', info),
+  cancelSignIn: () => ipcRenderer.invoke('auth:cancel'),
   quit: () => ipcRenderer.send('app:quit'),
   onPtt: (callback) => listen('ptt', callback),
   onPttBound: (callback) => listen('ptt:bound', callback),

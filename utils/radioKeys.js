@@ -1,7 +1,10 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
-/** Prefix that marks a Clearwater Radio app key (versioned so the format can change later). */
-export const RADIO_KEY_PREFIX = 'CWR1.';
+/**
+ * Prefix that marks a Clearwater Radio sign-in token. CWR2 tokens are only issued after Discord sign-in;
+ * the old pasted CWR1 keys are no longer accepted.
+ */
+export const RADIO_KEY_PREFIX = 'CWR2.';
 
 function radioKeySecret(env = process.env) {
   const explicit = env.RADIO_KEY_SECRET?.trim();
@@ -18,11 +21,11 @@ export function radioPublicUrl(env = process.env) {
 }
 
 function sign(secret, userId) {
-  return createHmac('sha256', secret).update(`radio-user:${userId}`).digest('base64url');
+  return createHmac('sha256', secret).update(`radio-session:${userId}`).digest('base64url');
 }
 
 /**
- * Personal key a member pastes into the Clearwater Radio app once.
+ * Token the radio app stores after a member signs in with Discord.
  * It carries the relay URL and an HMAC of their Discord ID.
  * @returns {string|null} null when the host is missing radio env vars.
  */
