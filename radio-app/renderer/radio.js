@@ -26,6 +26,8 @@ const el = {
 const KEY_PREFIX = 'CWR2.';
 const REMOVED_CLOSE_MS = 6000;
 const FRAME_SAMPLES = 960; // 20 ms at 48 kHz
+const TX_FADE_IN = 240; // 5 ms
+const TX_FADE_OUT = 720; // 15 ms
 // Rows on the MENU (left soft key) and SETUP screens: name on the left, current value on the right.
 const MENU = [
   { label: 'VOL', value: () => String(state.settings.volume), adjust: (step) => changeVolume(step * 5) },
@@ -36,8 +38,9 @@ const MENU = [
   { label: 'CHANNEL', value: () => String(state.channel || 'RADIO'), adjust: (step) => changeChannel(step), action: () => changeChannel(1) },
   { label: 'WHO', value: () => `${state.channels.reduce((total, channel) => total + (channel.members?.length || 0), 0)} ON`, open: 'users' },
   { label: 'FX', value: () => FX_LABELS[state.settings.listenFx] || 'OFF', adjust: (step) => cycleFx(step), action: () => cycleFx(1) },
+  { label: 'FX LVL', value: () => `${fxLevel()}%`, adjust: (step) => changeFxLevel(step), action: () => changeFxLevel(1, true) },
   { label: 'POWER', value: () => powerText(), adjust: (step) => cyclePower(step), action: () => cyclePower(1) },
-  { label: 'SIZE', value: () => `${radioSize()}%`, adjust: (step) => changeSize(step), action: () => changeSize(-1, true) },
+  { label: 'SIZE', value: () => `${radioSize()}%`, adjust: (step) => changeSize(step), open: 'size' },
   { label: 'SETUP', value: () => 'RUN', open: 'setup' },
 ];
 const SETUP = [
@@ -54,13 +57,18 @@ const POWER_MODES = ['auto', 'low', 'full'];
 const LOW_END = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
 // SIZE shrinks the whole radio overlay (percent of full size).
 const SIZES = [50, 60, 70, 80, 90, 100];
-const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', test: 'setup', users: 'home' };
+// FX LVL: how strong the radio effect is (100% is the normal sound).
+const FX_LEVELS = [25, 50, 75, 100, 125, 150];
+const SIZE_ITEMS = [...SIZES].reverse().map((size) => ({ id: String(size), label: `${size}%` }));
+const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', size: 'menu', test: 'setup', users: 'home' };
+// PANIC asks first; a second press (or OK) within this long sends it.
+const PANIC_CONFIRM_MS = 5000;
 // Nobody touching the radio (no PTT, clicks or keys) for this long closes it; a warning shows for the last minute.
 const IDLE_CLOSE_MS = 20 * 60 * 1000;
 const IDLE_WARN_MS = 60 * 1000;
 
 const state = {
-  settings: { volume: 70, txVolume: 60, listenFx: 'radio', power: 'auto', size: 100, deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false, channel: 'main' },
+  settings: { volume: 70, txVolume: 60, listenFx: 'radio', power: 'auto', size: 100, fxLevel: 100, deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false, channel: 'main' },
   version: '',
   screen: 'home',
   menuIndex: 0,
@@ -87,6 +95,8 @@ const state = {
   update: null,
   capturing: false,
   mustBind: false, // first launch: the radio stays on the PTT screen until a talk key is picked
+  firstSetup: false, // first launch: the size screen follows the talk key
+  panicAsk: 0, // when PANIC was pressed and is waiting for ARE YOU SURE
   micLevel: 0,
 };
 
@@ -106,6 +116,8 @@ const audio = {
   encoder: null,
   pending: new Float32Array(FRAME_SAMPLES),
   pendingLen: 0,
+  held: null,
+  fadeIn: 0,
   ts: 0,
   draining: false,
   speakers: new Map(),
@@ -208,6 +220,22 @@ const FX_SETTINGS = {
   police: { low: 450, high: 2600, mid: 7, drive: 2.6, makeup: 0.5, hiss: 0.012 },
 };
 
+// Scales an effect: below 100% it opens toward clean audio, above it gets narrower and grittier.
+function fxStrength(fx, level) {
+  if (!fx) return null;
+  const t = Math.max(0.25, Math.min(1.5, level / 100));
+  const under = Math.min(t, 1);
+  const over = Math.max(0, t - 1);
+  return {
+    low: (80 + (fx.low - 80) * under) * (1 + over * 0.6),
+    high: (8000 - (8000 - fx.high) * under) / (1 + over * 0.5),
+    mid: fx.mid * t,
+    drive: 1 + (fx.drive - 1) * t,
+    makeup: fx.makeup,
+    hiss: fx.hiss * t,
+  };
+}
+
 /**
  * Optional listening effect: band-limited radio voice, a little grit and background static.
  * OFF passes audio straight through, so normal listening is never coloured.
@@ -270,13 +298,15 @@ function createRadioFx(ctx) {
   };
 
   let mode = 'off';
+  let strength = 100;
   return {
     input,
     output,
     get mode() { return mode; },
-    setMode(next) {
+    setMode(next, level = 100) {
       mode = FX_SETTINGS[next] ? next : 'off';
-      const fx = FX_SETTINGS[mode];
+      strength = level;
+      const fx = fxStrength(FX_SETTINGS[mode], strength);
       dry.gain.value = fx ? 0 : 1;
       wet.gain.value = fx ? 1 : 0;
       linkWet(Boolean(fx));
@@ -295,7 +325,7 @@ function createRadioFx(ctx) {
       shaper.oversample = low ? 'none' : '2x';
     },
     setStatic(active) {
-      const fx = FX_SETTINGS[mode];
+      const fx = fxStrength(FX_SETTINGS[mode], strength);
       linkNoise(Boolean(fx && active));
       hiss.gain.setTargetAtTime(fx && active ? fx.hiss : 0, ctx.currentTime, 0.03);
     },
@@ -386,8 +416,13 @@ function applyDeaf() {
   el.deaf.classList.toggle('on', Boolean(state.settings.deaf));
 }
 
+function fxLevel() {
+  const level = Number(state.settings.fxLevel);
+  return FX_LEVELS.includes(level) ? level : 100;
+}
+
 function applyFx() {
-  audio.listenFx?.setMode(state.settings.listenFx);
+  audio.listenFx?.setMode(state.settings.listenFx, fxLevel());
   audio.listenFx?.setStatic(state.rx.size > 0);
 }
 
@@ -473,34 +508,61 @@ async function initEncoder() {
   audio.encoder.configure(config);
 }
 
+function encodeFrame(samples) {
+  const encoder = audio.encoder;
+  if (!encoder || encoder.state !== 'configured') return;
+  // Discord plays stereo Opus, so send the mono mic on both channels.
+  const planar = new Float32Array(FRAME_SAMPLES * 2);
+  planar.set(samples, 0);
+  planar.set(samples, FRAME_SAMPLES);
+  const frame = new AudioData({
+    format: 'f32-planar',
+    sampleRate: 48000,
+    numberOfFrames: FRAME_SAMPLES,
+    numberOfChannels: 2,
+    timestamp: audio.ts,
+    data: planar,
+  });
+  audio.ts += 20000;
+  encoder.encode(frame);
+  frame.close();
+}
+
+// Transmissions fade in and out so a quick PTT tap does not pop: the newest frame is held back
+// until the next one arrives, so the end can be faded when PTT is let go.
 function onSamples(samples) {
   const encoder = audio.encoder;
   if (state.tx !== 'on' || !encoder || encoder.state !== 'configured') return;
   let offset = 0;
   while (offset < samples.length) {
     const take = Math.min(FRAME_SAMPLES - audio.pendingLen, samples.length - offset);
-    audio.pending.set(samples.subarray(offset, offset + take), audio.pendingLen);
+    for (let i = 0; i < take; i += 1) {
+      const gain = audio.fadeIn < TX_FADE_IN ? (audio.fadeIn += 1) / TX_FADE_IN : 1;
+      audio.pending[audio.pendingLen + i] = samples[offset + i] * gain;
+    }
     audio.pendingLen += take;
     offset += take;
     if (audio.pendingLen === FRAME_SAMPLES) {
-      // Discord plays stereo Opus, so send the mono mic on both channels.
-      const planar = new Float32Array(FRAME_SAMPLES * 2);
-      planar.set(audio.pending, 0);
-      planar.set(audio.pending, FRAME_SAMPLES);
-      const frame = new AudioData({
-        format: 'f32-planar',
-        sampleRate: 48000,
-        numberOfFrames: FRAME_SAMPLES,
-        numberOfChannels: 2,
-        timestamp: audio.ts,
-        data: planar,
-      });
-      audio.ts += 20000;
-      encoder.encode(frame);
-      frame.close();
+      if (audio.held) encodeFrame(audio.held);
+      audio.held = audio.pending.slice();
       audio.pendingLen = 0;
     }
   }
+}
+
+// End of a transmission: fade the held frame and any partial one to silence, then one silent frame.
+function encodeTail() {
+  const tail = new Float32Array((audio.held ? FRAME_SAMPLES : 0) + audio.pendingLen);
+  if (audio.held) tail.set(audio.held, 0);
+  tail.set(audio.pending.subarray(0, audio.pendingLen), audio.held ? FRAME_SAMPLES : 0);
+  const fade = Math.min(tail.length, TX_FADE_OUT);
+  for (let i = 0; i < fade; i += 1) tail[tail.length - fade + i] *= 1 - (i + 1) / fade;
+  const frames = Math.ceil(tail.length / FRAME_SAMPLES) + 1;
+  const padded = new Float32Array(frames * FRAME_SAMPLES);
+  padded.set(tail, 0);
+  for (let i = 0; i < frames; i += 1) encodeFrame(padded.subarray(i * FRAME_SAMPLES, (i + 1) * FRAME_SAMPLES));
+  audio.held = null;
+  audio.pendingLen = 0;
 }
 
 let meterFill = null;
@@ -977,7 +1039,32 @@ function showPanic(message) {
 
 // PANIC button: every radio flashes with your name and in-game location (the relay allows one press per 15 s).
 let lastPanicAt = 0;
+let panicAskTimer = null;
+
+// First press asks ARE YOU SURE; PANIC again or OK sends, anything else (or 5 s) cancels.
+function askPanic() {
+  if (state.panicAsk) return sendPanic();
+  if (state.conn !== 'online') {
+    flash('NO SIGNAL', 1000);
+    return;
+  }
+  state.panicAsk = Date.now();
+  playTone('busy');
+  clearTimeout(panicAskTimer);
+  panicAskTimer = setTimeout(() => cancelPanic(), PANIC_CONFIRM_MS);
+  render();
+}
+
+function cancelPanic() {
+  if (!state.panicAsk) return;
+  clearTimeout(panicAskTimer);
+  state.panicAsk = 0;
+  render();
+}
+
 function sendPanic() {
+  clearTimeout(panicAskTimer);
+  state.panicAsk = 0;
   if (state.conn !== 'online') {
     flash('NO SIGNAL', 1000);
     return;
@@ -1038,6 +1125,8 @@ function onTxReply(message) {
   }
   state.tx = 'on';
   audio.pendingLen = 0;
+  audio.held = null;
+  audio.fadeIn = 0;
   audio.capture.port.postMessage({ active: true });
   playTone('permit');
   updateLamps();
@@ -1049,8 +1138,9 @@ function onTxReply(message) {
 async function stopTx() {
   if (state.tx !== 'on') return;
   audio.capture.port.postMessage({ active: false });
-  state.tx = 'idle';
   audio.draining = true;
+  encodeTail();
+  state.tx = 'idle';
   try {
     await audio.encoder?.flush();
   } catch {
@@ -1082,6 +1172,7 @@ function setScreen(screen) {
   if (screen === 'menu' || screen === 'setup') void refreshDeviceCache();
   if (screen === 'test' && audio.testGain) audio.testGain.gain.value = volumeGain();
   if (screen === 'mic' || screen === 'headset') void loadDevices(screen);
+  if (screen === 'size') state.listIndex = Math.max(0, SIZE_ITEMS.findIndex((item) => item.id === String(radioSize())));
   render();
 }
 
@@ -1270,6 +1361,11 @@ function render() {
         ? listHtml(state.devices, state.listIndex, screen === 'mic' ? state.settings.micId : state.settings.outputId)
         : '<div class="small">LOADING</div>';
       break;
+    case 'size':
+      left = state.firstSetup ? 'SET SIZE' : 'SIZE';
+      body = (state.firstSetup ? '<div class="small">PICK THE RADIO SIZE · OK WHEN DONE</div>' : '')
+        + listHtml(SIZE_ITEMS, state.listIndex, String(radioSize()));
+      break;
     case 'test':
       body = '<div class="mid">SPEAK NOW</div><div class="meter"><b id="meterFill"></b></div><div class="small">YOU HEAR WHAT OTHERS HEAR</div>';
       break;
@@ -1294,10 +1390,19 @@ function render() {
     left = 'PANIC';
     body = `<div class="big">PANIC</div><div class="mid">${escapeHtml(state.panic.name)}</div><div class="small">${escapeHtml(state.panic.location)}</div>`;
   }
+  if (state.panicAsk) {
+    left = 'PANIC';
+    body = '<div class="big">ARE YOU SURE?</div><div class="small">PRESS PANIC OR OK TO SEND · BACK TO CANCEL</div>';
+  }
   if (state.idleWarn) {
     left = 'INACTIVE';
     const seconds = Math.max(0, Math.ceil((IDLE_CLOSE_MS - (Date.now() - lastActiveAt)) / 1000));
     body = `<div class="mid">CLOSING IN ${seconds}s</div><div class="small">NO ACTIVITY FOR 20 MIN · PRESS ANY KEY TO STAY ON</div>`;
+  }
+  // First-launch setup has no way out but finishing it.
+  if (state.mustBind || state.firstSetup) {
+    el.softLeftLabel.textContent = '';
+    el.softRightLabel.textContent = '';
   }
   el.lcdLeft.textContent = left;
   el.lcdBody.innerHTML = body;
@@ -1312,6 +1417,10 @@ function updateLamps() {
   el.lampMic.classList.toggle('on', Boolean(audio.micStream));
   const angle = -135 + (270 * state.settings.volume) / 100;
   el.vol.style.transform = `rotate(${angle}deg)`;
+  // CH points at the channel, spread over the same arc as VOL.
+  const channels = Math.max(1, state.channels.length);
+  const chAngle = channels > 1 ? -135 + (270 * (channelNumber() - 1)) / (channels - 1) : 0;
+  el.ch.style.transform = `rotate(${chAngle}deg)`;
 }
 
 /* ---------- controls ---------- */
@@ -1344,6 +1453,9 @@ async function choose() {
     void refreshDeviceCache();
     setScreen(PARENT[screen]);
     flash('SAVED', 800);
+  } else if (screen === 'size') {
+    if (state.firstSetup) return finishSetup();
+    setScreen(PARENT.size);
   } else if (screen === 'test') {
     setScreen('setup');
   } else if (screen === 'ptt') {
@@ -1384,14 +1496,25 @@ function radioSize() {
   return SIZES.includes(size) ? size : 100;
 }
 
-// Arrows step the size up or down; selecting the row steps it smaller and wraps back to full size.
-async function changeSize(step, wrap = false) {
-  const index = SIZES.indexOf(radioSize());
-  let next = index + (step < 0 ? -1 : 1);
-  if (wrap) next = (next + SIZES.length) % SIZES.length;
-  const size = SIZES[Math.max(0, Math.min(SIZES.length - 1, next))];
-  if (size === radioSize()) return;
+async function setSize(size) {
+  if (size === radioSize()) return render();
   await saveNow({ size });
+  return render();
+}
+
+// Arrows on the SIZE row step it up or down; OK opens the size list.
+function changeSize(step) {
+  const index = SIZES.indexOf(radioSize());
+  return setSize(SIZES[Math.max(0, Math.min(SIZES.length - 1, index + (step < 0 ? -1 : 1)))]);
+}
+
+async function changeFxLevel(step, wrap = false) {
+  let next = FX_LEVELS.indexOf(fxLevel()) + (step < 0 ? -1 : 1);
+  if (wrap) next = (next + FX_LEVELS.length) % FX_LEVELS.length;
+  const level = FX_LEVELS[Math.max(0, Math.min(FX_LEVELS.length - 1, next))];
+  if (level === fxLevel()) return;
+  await saveNow({ fxLevel: level });
+  applyFx();
   render();
 }
 
@@ -1404,9 +1527,16 @@ function startBind() {
   if (state.settings.hook) void api.capturePtt(true);
 }
 
+// Talk key picked: then the size, then sign in.
 function bindDone() {
   state.mustBind = false;
   state.capturing = false;
+  state.firstSetup = true;
+  setScreen('size');
+}
+
+function finishSetup() {
+  state.firstSetup = false;
   setScreen('home');
   flash(`PTT ${state.settings.ptt?.label || 'SET'}`, 1200);
   connect({ autoSignIn: true });
@@ -1436,6 +1566,7 @@ function back() {
     render();
     return;
   }
+  if (state.firstSetup) return void finishSetup();
   setScreen(PARENT[screen] || 'home');
 }
 
@@ -1451,6 +1582,9 @@ function move(delta) {
   } else if ((screen === 'mic' || screen === 'headset') && state.devices.length) {
     state.listIndex = (state.listIndex + delta + state.devices.length) % state.devices.length;
     render();
+  } else if (screen === 'size') {
+    state.listIndex = (state.listIndex + delta + SIZE_ITEMS.length) % SIZE_ITEMS.length;
+    void setSize(Number(SIZE_ITEMS[state.listIndex].id));
   } else if (screen === 'users') {
     const length = Math.max(1, usersLines().length);
     state.listIndex = (state.listIndex + delta + length) % length;
@@ -1461,6 +1595,8 @@ function move(delta) {
 function press(key) {
   playTone('key');
   if (state.mustBind) return undefined;
+  if (state.panicAsk) return key === 'ok' || key === '#' ? sendPanic() : cancelPanic();
+  if (state.firstSetup && (key === 'softL' || key === 'softR')) return undefined;
   // Gray left button: open the menu from the radio screen, otherwise go straight back to the radio.
   if (key === 'softL') return setScreen(state.screen === 'home' ? 'menu' : 'home');
   // Home key: back to the radio screen; on the radio screen it opens every unit on every channel.
@@ -1519,6 +1655,7 @@ function checkIdle() {
 // Clicking the screen: pick a row, use its arrows, or press OK on the sign-in card.
 function clickLcd(event) {
   if (state.mustBind || state.panic) return;
+  if (state.panicAsk) return;
   const { screen } = state;
   const item = event.target.closest('li[data-row]');
   const index = item ? Number(item.dataset.row) : -1;
@@ -1531,6 +1668,12 @@ function clickLcd(event) {
     if (step && row.adjust) return void row.adjust(step);
     if (row.open || row.action) return void choose();
     return render();
+  }
+  if (screen === 'size' && index >= 0) {
+    playTone('key');
+    state.listIndex = index;
+    void setSize(Number(SIZE_ITEMS[index].id)).then(() => choose());
+    return undefined;
   }
   if ((screen === 'mic' || screen === 'headset') && index >= 0) {
     playTone('key');
@@ -1572,8 +1715,30 @@ function bindControls() {
   });
 
   $('quit').addEventListener('click', () => { void quitApp(); });
-  $('emer').addEventListener('click', sendPanic);
-  el.ch.addEventListener('click', () => changeChannel(1));
+  $('emer').addEventListener('click', askPanic);
+  // CH knob: turn it like VOL (drag up/down or scroll); a plain click steps to the next channel.
+  let chDrag = null;
+  el.ch.addEventListener('pointerdown', (event) => {
+    el.ch.setPointerCapture(event.pointerId);
+    chDrag = { y: event.clientY, moved: false };
+  });
+  el.ch.addEventListener('pointermove', (event) => {
+    if (!chDrag) return;
+    const steps = Math.trunc((chDrag.y - event.clientY) / 18);
+    if (!steps) return;
+    chDrag.y -= steps * 18;
+    chDrag.moved = true;
+    changeChannel(steps > 0 ? 1 : -1);
+  });
+  el.ch.addEventListener('pointerup', () => {
+    if (chDrag && !chDrag.moved) changeChannel(1);
+    chDrag = null;
+  });
+  el.ch.addEventListener('pointercancel', () => { chDrag = null; });
+  el.ch.addEventListener('wheel', (event) => {
+    event.preventDefault();
+    changeChannel(event.deltaY < 0 ? 1 : -1);
+  }, { passive: false });
 
   // Side PTT bar: hold with the mouse.
   el.pttSide.addEventListener('pointerdown', (event) => {

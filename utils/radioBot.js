@@ -28,6 +28,8 @@ export const RADIO_CHANNEL_ID = process.env.RADIO_CHANNEL_ID?.trim() || '1514128
 /** Separate @discordjs/voice group so the radio bot never replaces the main bot's connection. */
 const VOICE_GROUP = 'clearwater-radio';
 const REJOIN_DELAY_MS = 10_000;
+// 80 ms: shorter transmissions are PTT taps with nothing said.
+const RADIO_MIN_TX_PACKETS = 4;
 
 let activeRelay = null;
 // Secure relay address for the web radio (cwpcso.com/radio); '' until the tunnel is up.
@@ -63,6 +65,34 @@ async function locateRadioPanic(env, userId, name) {
  * radio key plus the secure relay address. The relay still checks Clearwater membership on connect.
  * @returns {{ key: string, url: string } | { error: string }}
  */
+/**
+ * Audio from one radio transmission into Discord. Playback starts once a few packets have arrived,
+ * so a PTT tap too short to say anything is dropped instead of popping in the voice channel.
+ * @param {(stream: Readable) => void} play
+ */
+export function createTransmitSink(play, minPackets = RADIO_MIN_TX_PACKETS) {
+  let stream = null;
+  let queued = [];
+  return {
+    push(packet) {
+      if (stream) {
+        stream.push(packet);
+        return;
+      }
+      queued.push(packet);
+      if (queued.length < minPackets) return;
+      stream = new Readable({ objectMode: true, read() {} });
+      for (const item of queued) stream.push(item);
+      queued = [];
+      play(stream);
+    },
+    end() {
+      queued = [];
+      stream?.push(null);
+    },
+  };
+}
+
 export function radioWebSession(discordId) {
   if (!activeRelay) return { error: 'The radio is not running on the bot host.' };
   if (!webRelayUrl) return { error: 'The radio web link is starting. Try again in a minute.' };
@@ -174,12 +204,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     },
     openTransmit() {
       if (!isOnline()) return null;
-      const stream = new Readable({ objectMode: true, read() {} });
-      player.play(createAudioResource(stream, { inputType: StreamType.Opus }));
-      return {
-        push: (packet) => stream.push(packet),
-        end: () => stream.push(null),
-      };
+      return createTransmitSink((stream) => player.play(createAudioResource(stream, { inputType: StreamType.Opus })));
     },
   });
   activeRelay = relay;
