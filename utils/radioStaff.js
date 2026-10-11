@@ -10,21 +10,15 @@ import {
 import { logger } from './logger.js';
 
 /**
- * Clearwater Radio staff tools: the admin panel (force-mute / kick off the radio) and the
- * staff channel posts (panic history, weekly stats). Only members with Administrator use the panel.
+ * Clearwater Radio staff tools: the admin panel (/radio-staff: force-mute / kick off the radio) and the
+ * panic history post. Only members with Administrator use the panel.
  */
 export const RADIO_STAFF_PREFIX = 'radio-staff:';
-export const RADIO_STAFF_OPEN_ID = `${RADIO_STAFF_PREFIX}open`;
 export const RADIO_STAFF_PICK_ID = `${RADIO_STAFF_PREFIX}pick`;
 export const RADIO_STAFF_REFRESH_ID = `${RADIO_STAFF_PREFIX}refresh`;
 /** Kicked members can't sign back in to the radio for this long. */
 export const RADIO_KICK_BLOCK_MS = 5 * 60 * 1000;
 const PANEL_FOOTER = 'Clearwater Radio staff panel';
-
-/** Staff channel for panic history, weekly stats and the panel. Unset: those posts are skipped. */
-export function radioStaffChannelId(env = process.env) {
-  return env.RADIO_STAFF_CHANNEL_ID?.trim() || '';
-}
 
 // radioBot.js registers the live relay controls here once the radio is running.
 let controls = null;
@@ -89,45 +83,12 @@ export function buildRadioStaffPanel(selectedId = '') {
   return { embeds: [embed], components: rows };
 }
 
-/** The message that stays in the staff channel; its button opens the panel for admins only. */
-export function buildRadioStaffLauncher() {
-  const embed = new EmbedBuilder()
-    .setColor(0x267bd7)
-    .setTitle('📻 Radio staff panel')
-    .setDescription('Admins: open the panel to see who is on the radio, force-mute someone, or kick them off the radio.')
-    .setFooter({ text: PANEL_FOOTER });
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(RADIO_STAFF_OPEN_ID).setLabel('Open staff panel').setStyle(ButtonStyle.Primary),
-  );
-  return { embeds: [embed], components: [row] };
-}
-
-/** Keeps one launcher message in the staff channel. */
-export async function ensureRadioStaffLauncher(client, env = process.env) {
-  const channelId = radioStaffChannelId(env);
-  if (!channelId) return;
-  const channel = await client.channels.fetch(channelId).catch(() => null);
-  if (!channel?.isTextBased?.() || !channel.messages) {
-    logger.warn('Radio staff channel is missing or not a text channel.');
-    return;
-  }
-  const recent = await channel.messages.fetch({ limit: 50 }).catch(() => null);
-  const existing = recent?.find((message) => message.author?.id === client.user?.id
-    && message.embeds?.[0]?.footer?.text === PANEL_FOOTER);
-  if (existing) return;
-  await channel.send(buildRadioStaffLauncher()).catch((error) => logger.warn(`Radio staff panel post failed: ${error?.message || error}`));
-}
-
 /** Handles the panel's buttons and select; returns true when the interaction was the radio staff panel's. */
 export async function handleRadioStaffInteraction(interaction) {
   const id = interaction.customId;
   if (typeof id !== 'string' || !id.startsWith(RADIO_STAFF_PREFIX)) return false;
   if (!isRadioAdmin(interaction)) {
     await interaction.reply({ content: 'Only admins can use the radio staff panel.', flags: MessageFlags.Ephemeral });
-    return true;
-  }
-  if (id === RADIO_STAFF_OPEN_ID) {
-    await interaction.reply({ ...buildRadioStaffPanel(), flags: MessageFlags.Ephemeral });
     return true;
   }
   if (id === RADIO_STAFF_PICK_ID && interaction.isUserSelectMenu?.()) {

@@ -3427,6 +3427,13 @@
       "summary": "In the radio's units lists, whoever is talking now moves to the top of their channel and their name turns green, whether they talk on a radio or in the Discord channel.",
       "createdAt": "2026-10-11T21:15:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-no-staff-channel",
+      "title": "Radio: no separate staff channel",
+      "summary": "The radio no longer needs its own staff channel. Panic history, weekly radio stats and staff actions now post in the radio voice channel's chat with the talk log, and admins open the staff panel with /radio-staff.",
+      "createdAt": "2026-10-11T21:30:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

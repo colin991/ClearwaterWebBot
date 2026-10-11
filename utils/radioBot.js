@@ -23,7 +23,7 @@ import { startRadioTunnel } from './radioTunnel.js';
 import { createRadioTalkLog } from './radioTalkLog.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { createRadioStats, buildRadioStatsEmbed } from './radioStats.js';
-import { buildRadioPanicEmbed, radioStaffChannelId, RADIO_KICK_BLOCK_MS, setRadioStaffControls } from './radioStaff.js';
+import { buildRadioPanicEmbed, RADIO_KICK_BLOCK_MS, setRadioStaffControls } from './radioStaff.js';
 
 const UNKNOWN_MEMBER = 10007;
 
@@ -151,31 +151,12 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
 
   const isOnline = () => connection?.state?.status === VoiceConnectionStatus.Ready;
 
-  // Who talked when, in the radio voice channel's chat. The main bot posts it (it can send messages
-  // there); the radio bot is the fallback. Mentions never ping.
+  // The radio voice channel's chat gets the talk log, panic history, weekly stats and staff actions.
+  // The main bot posts (it can send messages there); the radio bot is the fallback. Mentions never ping.
   const talkLogChannelId = env.RADIO_LOG_CHANNEL_ID?.trim() || RADIO_CHANNEL_ID;
-  const talkLog = createRadioTalkLog({
-    send: async (content) => {
-      for (const poster of [erlcEvents, client]) {
-        const target = await poster?.channels?.fetch?.(talkLogChannelId).catch(() => null);
-        if (!target?.isTextBased?.()) continue;
-        try {
-          return await target.send({ content, allowedMentions: { parse: [] } });
-        } catch {
-          // No Send Messages for this bot: try the next one.
-        }
-      }
-      throw new Error(`no bot can post in ${talkLogChannelId}`);
-    },
-    onError: (error) => logger.warn(`Radio talk log failed: ${error?.message || error}`),
-  });
-
-  // Staff channel: panic history, weekly stats and staff actions. The main bot posts; the radio bot is the fallback.
-  const staffChannelId = radioStaffChannelId(env);
-  async function postStaff(payload) {
-    if (!staffChannelId) return null;
+  async function postRadioChat(payload) {
     for (const poster of [erlcEvents, client]) {
-      const target = await poster?.channels?.fetch?.(staffChannelId).catch(() => null);
+      const target = await poster?.channels?.fetch?.(talkLogChannelId).catch(() => null);
       if (!target?.isTextBased?.()) continue;
       try {
         return await target.send({ allowedMentions: { parse: [] }, ...payload });
@@ -183,9 +164,16 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
         // No Send Messages for this bot: try the next one.
       }
     }
-    logger.warn(`Radio: could not post in the staff channel ${staffChannelId}.`);
-    return null;
+    throw new Error(`no bot can post in ${talkLogChannelId}`);
   }
+  const talkLog = createRadioTalkLog({
+    send: (content) => postRadioChat({ content }),
+    onError: (error) => logger.warn(`Radio talk log failed: ${error?.message || error}`),
+  });
+  const postStaff = (payload) => postRadioChat(payload).catch((error) => {
+    logger.warn(`Radio post failed: ${error?.message || error}`);
+    return null;
+  });
   const postPanic = (alert) => { void postStaff({ embeds: [buildRadioPanicEmbed(alert)] }); };
 
   // Weekly stats: radio time is counted every minute for everyone signed in; transmissions as they end.
