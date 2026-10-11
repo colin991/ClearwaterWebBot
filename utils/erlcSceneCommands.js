@@ -1184,6 +1184,15 @@ export async function scanSceneCommandLogs(client, { snapshot, identities, execu
   let handled = 0;
   for (const entry of logs) {
     if (isStealCommandText(entry.command)) continue;
+    if (/^[:;]\s*panic\b/i.test(String(entry.command || '').trim())) {
+      // `;panic` belongs to the radio, which listens for 'erlcCommandLog'.
+      const id = `${entry.at || 0}:${entry.username || ''}:${entry.command || ''}`;
+      if (!sceneLogSeen.has(id)) {
+        sceneLogSeen.add(id);
+        client?.emit?.('erlcCommandLog', commandLogToScenePayload(entry));
+      }
+      continue;
+    }
     if (!parseCustomCommand(entry.command) && !isRefreshCommandText(entry.command)) continue;
     const id = `${entry.at || 0}:${entry.username || ''}:${entry.command || ''}`;
     if (sceneLogSeen.has(id)) continue;

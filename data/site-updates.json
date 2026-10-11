@@ -3259,6 +3259,13 @@
       "summary": "When a panic comes through from ER:LC, or someone types ;panic with a location in game chat, every Clearwater Radio app flashes red for 10 seconds and shows who pressed it and where.",
       "createdAt": "2026-10-11T14:11:44.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-panic-command-fix",
+      "title": "Fix ;panic not reaching the radio",
+      "summary": "Typing ;panic (with an optional location) in ER:LC now flashes the Clearwater Radio app even when the command arrives through the server's command logs or a batched webhook.",
+      "createdAt": "2026-10-11T14:23:09.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

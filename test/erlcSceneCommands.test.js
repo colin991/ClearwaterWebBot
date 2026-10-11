@@ -950,3 +950,15 @@ test('a webhook "refresh" with only a Roblox id refreshes that player by usernam
   assert.equal(offline.reason, 'missing_player');
   assert.equal(sent.length, 1);
 });
+
+test('command-log scan hands ;panic to the radio once', async () => {
+  resetSceneLogScannerForTests();
+  const emitted = [];
+  const client = { emit: (name, payload) => emitted.push([name, payload]) };
+  const logs = [{ at: 1, username: 'Old', robloxId: '1', command: ';panic' }];
+  await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }) });
+  logs.push({ at: 2, username: 'Colin', robloxId: '99', command: ';panic gas station' });
+  await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }) });
+  await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }) });
+  assert.deepEqual(emitted, [['erlcCommandLog', { Type: 'Command', Player: 'Colin:99', Command: ';panic gas station', Message: ';panic gas station' }]]);
+});

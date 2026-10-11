@@ -19,6 +19,18 @@ test('reads ;panic typed in game', () => {
     { name: 'Unit12', location: 'gas station' },
   );
   assert.equal(parseRadioPanic({ Type: 'Command', Command: ';ss 10-8', Player: 'Unit12:55' }), null);
+  assert.equal(parseRadioPanic({ Type: 'Command', Command: ';ss panic', Player: 'Unit12:55' }), null);
+});
+
+test('reads panics inside a batched webhook body and from command logs', () => {
+  assert.deepEqual(
+    parseRadioPanic({ events: [{ Type: 'Command', Command: ';ss 10-8', Player: 'A:1' }, { Type: 'Command', Command: ';panic', Player: 'B:2' }] }),
+    { name: 'B', location: '' },
+  );
+  assert.deepEqual(
+    parseRadioPanic([{ Type: 'Command', Player: 'Cop:7', Command: ':panic bank', Message: ':panic bank' }]),
+    { name: 'Cop', location: 'bank' },
+  );
 });
 
 test('ignores ordinary calls and panic attacks', () => {
