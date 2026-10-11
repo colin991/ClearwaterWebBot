@@ -381,7 +381,7 @@ test('Special Response Team stays off Discord', async () => {
   }
 });
 
-test('Frequency Change is app-only, and EMER alerts every radio once per 15 seconds', async () => {
+test('Frequency Change is app-only, and PANIC alerts every radio once per 2 minutes', async () => {
   const harness = await startRelay();
   try {
     const alice = client(harness.url);
@@ -409,6 +409,8 @@ test('Frequency Change is app-only, and EMER alerts every radio once per 15 seco
     alice.send({ type: 'panic' });
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.equal(bob.messages.filter((m) => m.type === 'panic').length, 1, 'a second press right away is ignored');
+    const wait = await alice.until(() => alice.messages.find((m) => m.type === 'panic-wait'));
+    assert.ok(wait.seconds > 110 && wait.seconds <= 120, 'the presser is told how long the 2 minute cooldown has left');
 
     alice.ws.close();
     bob.ws.close();
@@ -459,6 +461,45 @@ test('each channel lists app radios and Discord members together', async () => {
     assert.deepEqual(freq.members, []);
     alice.ws.close();
     bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('spamming PTT times the member out of talking for a minute, even after reconnecting', async () => {
+  let clock = 1_000_000;
+  const harness = await startRelay({ now: () => clock });
+  try {
+    const alice = client(harness.url);
+    await once(alice.ws, 'open');
+    alice.send({ type: 'auth', key: createRadioKey(ALICE, env) });
+    await alice.until(() => alice.messages.find((m) => m.type === 'ready'));
+    const replies = () => alice.messages.filter((m) => m.type === 'tx');
+    for (let press = 1; press <= 6; press += 1) {
+      alice.send({ type: 'tx', active: true });
+      await alice.until(() => replies().length === press);
+      alice.send({ type: 'tx', active: false });
+      clock += 500;
+    }
+    assert.deepEqual(replies().slice(0, 5).map((m) => m.ok), [true, true, true, true, true]);
+    assert.deepEqual(replies()[5], { type: 'tx', ok: false, reason: 'timeout', seconds: 60 });
+
+    alice.ws.close();
+    const again = client(harness.url);
+    await once(again.ws, 'open');
+    again.send({ type: 'auth', key: createRadioKey(ALICE, env) });
+    await again.until(() => again.messages.find((m) => m.type === 'ready'));
+    clock += 30_000;
+    again.send({ type: 'tx', active: true });
+    const blocked = await again.until(() => again.messages.find((m) => m.type === 'tx'));
+    assert.equal(blocked.reason, 'timeout');
+    assert.equal(blocked.seconds, 30);
+
+    clock += 30_000;
+    again.send({ type: 'tx', active: true });
+    await again.until(() => again.messages.filter((m) => m.type === 'tx').length === 2);
+    assert.equal(again.messages.filter((m) => m.type === 'tx')[1].ok, true, 'talking works again after the minute');
+    again.ws.close();
   } finally {
     await harness.close();
   }
