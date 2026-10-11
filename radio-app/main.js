@@ -40,6 +40,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   scanPtt: null,
   replayKey: null,
   chanKey: null,
+  sigAnim: true,
   syncAt: 0,
   tutorialDone: false,
   volume: 70,
@@ -468,7 +469,7 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('settings:get', () => ({ ...settings, hook: Boolean(uIOhook), relayUrl: DEFAULT_RELAY_URL }));
     ipcMain.handle('settings:set', (_event, patch) => {
       const allowedKeys = ['key', 'micId', 'outputId', 'volume', 'listenFx', 'size', 'scan', 'channel', 'deaf', 'ptt',
-        'scanPtt', 'replayKey', 'chanKey', 'syncAt', 'tutorialDone', 'recordNotice', 'monitor'];
+        'scanPtt', 'replayKey', 'chanKey', 'sigAnim', 'syncAt', 'tutorialDone', 'recordNotice', 'monitor'];
       for (const key of allowedKeys) {
         if (patch && Object.prototype.hasOwnProperty.call(patch, key)) settings[key] = patch[key];
       }

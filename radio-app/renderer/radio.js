@@ -48,6 +48,7 @@ const MENU = [
   { label: 'WHO', value: () => `${state.channels.reduce((total, channel) => total + (channel.members?.length || 0), 0)} ON`, open: 'users' },
   { label: 'FX', value: () => FX_LABELS[state.settings.listenFx] || 'OFF', adjust: (step) => cycleFx(step), action: () => cycleFx(1) },
   { label: 'SIZE', value: () => `${radioSize()}%`, adjust: (step) => changeSize(step), open: 'size' },
+  { label: 'BAR ANIM', value: () => (state.settings.sigAnim === false ? 'OFF' : 'ON'), adjust: () => toggleSigAnim(), action: () => toggleSigAnim() },
   { label: 'SETUP', value: () => 'RUN', open: 'setup' },
 ];
 const SETUP = [
@@ -104,7 +105,7 @@ const IDLE_WARN_MS = 60 * 1000;
 const state = {
   settings: {
     volume: 70, listenFx: 'radio', size: 100, scan: [], deaf: false, key: '', micId: 'default', outputId: 'default',
-    ptt: null, scanPtt: null, replayKey: null, chanKey: null, syncAt: 0, tutorialDone: false, hook: false, channel: 'main',
+    ptt: null, scanPtt: null, replayKey: null, chanKey: null, sigAnim: true, syncAt: 0, tutorialDone: false, hook: false, channel: 'main',
   },
   version: '',
   screen: 'home',
@@ -594,6 +595,12 @@ function applyVolume() {
   audio.volume.gain.value = gain;
   audio.toneOut.gain.value = gain;
   if (state.screen === 'test') audio.testGain.gain.value = gain;
+}
+
+// BAR ANIM: the signal bars bob up and down (faster while talking or hearing someone).
+async function toggleSigAnim() {
+  await saveNow({ sigAnim: state.settings.sigAnim === false });
+  render();
 }
 
 const muted = () => Boolean(state.settings.deaf || state.inVoice);
@@ -2167,7 +2174,7 @@ function render() {
   const searching = ['connecting', 'lost', 'signing', 'updating'].includes(state.conn);
   // Online, the bars show this radio's own signal from the coverage map.
   el.lcdSig.className = `sig${state.conn === 'online' ? (state.botOnline ? ` on b${signalBars(state.signal)}` : ' weak') : ''}${searching ? ' scan' : ''}`
-    + `${state.rx.size ? ' rx' : ''}${state.tx === 'on' ? ' tx' : ''}`;
+    + `${state.rx.size ? ' rx' : ''}${state.tx === 'on' ? ' tx' : ''}${state.settings.sigAnim === false ? '' : ' anim'}`;
   if (state.settings.deaf) el.lcdRight.textContent = 'DEAF';
   else if (state.inVoice) el.lcdRight.textContent = 'IN VC';
   else if (state.practice) el.lcdRight.textContent = 'PRACTICE';
