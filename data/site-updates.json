@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-11-radio-dpad-select-full-device-names",
+      "title": "Radio d-pad select, LISTEN device, full device names",
+      "summary": "The center of the radio's d-pad is now a select button (it opens the menu from the home screen), the menu has a LISTEN row to pick speakers or a headset, and microphone and speaker names show in full instead of being cut off.",
+      "createdAt": "2026-10-11T05:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-11-clearwater-radio-app",
       "title": "Add the Clearwater Radio app and radio bot",
       "summary": "Added a Windows radio overlay app that stays on top of other windows, with push-to-talk, mic and headset picking, a mic test, volume knob, deafen button, and a light radio effect. It talks through a new second bot that always sits in the radio voice channel. The main bot posts a download embed with a personal radio key button, and the app updates itself when a new version is released.",

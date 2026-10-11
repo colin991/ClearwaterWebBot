@@ -26,19 +26,19 @@ const FRAME_SAMPLES = 960; // 20 ms at 48 kHz
 const MENU = [
   { label: 'VOL', value: () => String(state.settings.volume), adjust: (step) => changeVolume(step * 5) },
   { label: 'MIC', value: () => deviceLabel('audioinput', state.settings.micId), open: 'mic' },
+  { label: 'LISTEN', value: () => deviceLabel('audiooutput', state.settings.outputId), open: 'headset' },
   { label: 'PTT', value: () => state.settings.ptt?.label || 'NONE', open: 'ptt' },
   { label: 'CHANNEL', value: () => String(state.channel || 'RADIO'), action: () => flash(String(state.channel || 'RADIO').toUpperCase().slice(0, 14), 1000) },
   { label: 'FX', value: () => (state.settings.filter ? 'LIGHT' : 'OFF'), adjust: () => toggleFilter(), action: () => toggleFilter() },
   { label: 'SETUP', value: () => 'RUN', open: 'setup' },
 ];
 const SETUP = [
-  { label: 'HEADSET', value: () => deviceLabel('audiooutput', state.settings.outputId), open: 'headset' },
   { label: 'TEST', value: () => 'MIC', open: 'test' },
   { label: 'KEY', value: () => (decodeKey(state.settings.key) ? 'SET' : 'NONE'), open: 'key' },
   { label: 'UPDATE', value: () => updateText(), action: () => void checkUpdates() },
 ];
 const ROWS = { menu: MENU, setup: SETUP };
-const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'setup', test: 'setup', key: 'setup' };
+const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', test: 'setup', key: 'setup' };
 
 const state = {
   settings: { volume: 70, filter: true, deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false },
@@ -266,7 +266,7 @@ async function applyOutput() {
   try {
     await audio.ctx.setSinkId(!id || id === 'default' ? '' : id);
   } catch {
-    flash('HEADSET ERR');
+    flash('LISTEN ERR');
     await audio.ctx.setSinkId('').catch(() => {});
   }
 }
@@ -706,9 +706,8 @@ async function loadDevices(screen) {
 }
 
 function listHtml(items, selected, current) {
-  const start = Math.max(0, Math.min(selected - 2, items.length - 5));
-  return `<ul class="list">${items.slice(start, start + 5).map((item, offset) => {
-    const index = start + offset;
+  // Full device names wrap; the LCD scrolls to keep the highlighted one in view.
+  return `<ul class="list">${items.map((item, index) => {
     const mark = current !== undefined && item.id === current ? '*' : ' ';
     return `<li class="${index === selected ? 'sel' : ''}">${mark}${escapeHtml(item.label.toUpperCase())}</li>`;
   }).join('')}</ul>`;
@@ -789,7 +788,7 @@ function render() {
       break;
     case 'mic':
     case 'headset':
-      left = screen === 'mic' ? 'MIC' : 'HEADSET';
+      left = screen === 'mic' ? 'MIC' : 'LISTEN';
       body = state.devices.length
         ? listHtml(state.devices, state.listIndex, screen === 'mic' ? state.settings.micId : state.settings.outputId)
         : '<div class="small">LOADING</div>';
@@ -816,6 +815,7 @@ function render() {
   }
   el.lcdLeft.textContent = left;
   el.lcdBody.innerHTML = body;
+  el.lcdBody.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
   if (screen === 'test') meterFill = $('meterFill');
   updateLamps();
 }
@@ -939,6 +939,8 @@ function press(key) {
     return step < 0 ? back() : void choose();
   }
   if (key === '#') return void choose();
+  // Center of the d-pad: select, or open the menu from the home screen.
+  if (key === 'ok') return state.screen === 'home' ? setScreen('menu') : void choose();
   if (key === '*') return back();
   // Number keys pick a row: 1 = first row.
   if (rows && /^[1-9]$/.test(key) && Number(key) <= rows.length) {
@@ -952,7 +954,7 @@ function bindControls() {
   document.querySelectorAll('.keypad button').forEach((button) => {
     button.addEventListener('click', () => press(button.dataset.key));
   });
-  for (const id of ['softL', 'softR', 'up', 'down', 'left', 'right']) {
+  for (const id of ['softL', 'softR', 'up', 'down', 'left', 'right', 'ok']) {
     $(id).addEventListener('click', () => press(id));
   }
 
