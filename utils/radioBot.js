@@ -18,7 +18,9 @@ import { createRadioKey, verifyRadioKey } from './radioKeys.js';
 import { exchangeRadioCode, radioOAuthConfig } from './radioOAuth.js';
 import { callsignFromName, createRadioPanicWatch, findPanicPlayer, panicUnitAndPostal, playerLocationLabel } from './radioPanic.js';
 import { LIBERTY_POSTAL_POINTS } from './libertyMapCalibration.js';
-import { erlcPlayersFromServer, fetchErlcServer, parseErlcPlayer } from './erlc.js';
+import { erlcPlayersFromServer, fetchErlcServer, libertyPlayerMapPoint, parseErlcPlayer } from './erlc.js';
+import { createCoverageTracker, normalizeCoverage } from './radioCoverage.js';
+import { createGameFeed, GAME_TICK_MS } from './radioGameFeed.js';
 import { getIdentityCache } from './identityStore.js';
 import { startRadioTunnel } from './radioTunnel.js';
 import { createRadioTalkLog } from './radioTalkLog.js';
@@ -58,6 +60,40 @@ async function findPanicPlayerInGame(env, { robloxId = '', names = [] }) {
     logger.warn(`Radio panic: could not read the ER:LC player list (${error?.message || error})`);
     return null;
   }
+}
+
+/**
+ * Where each member on a radio is in game (userId -> { left, top, x, z, postal, street, team,
+ * player }), from the live ER:LC player list. Also returns the raw server snapshot.
+ */
+async function locateRadioUsers(env, users) {
+  const key = env.ERLC_SERVER_KEY?.trim();
+  if (!key) return { located: new Map(), server: null };
+  const server = await fetchErlcServer(key, { timeoutMs: 4_000, maxAgeMs: GAME_TICK_MS - 1_000 });
+  const players = erlcPlayersFromServer(server).map(parseErlcPlayer);
+  const byDiscord = (await getIdentityCache().catch(() => ({ byDiscord: {} }))).byDiscord || {};
+  const located = new Map();
+  for (const user of users) {
+    const identity = byDiscord[user.userId] || {};
+    const nick = String(user.name || '').replace(/^(\s*[[(][^\])]*[\])]\s*)+/, '').trim();
+    const player = findPanicPlayer(players, {
+      robloxId: identity.robloxId,
+      names: [identity.robloxUsername, user.name, nick, nick.split(/\s*[|/-]\s*/)[0]],
+    });
+    if (!player) continue;
+    const pin = libertyPlayerMapPoint(player.location);
+    located.set(user.userId, {
+      left: Number.isFinite(pin?.left) ? pin.left : null,
+      top: Number.isFinite(pin?.top) ? pin.top : null,
+      x: player.location?.x,
+      z: player.location?.z,
+      postal: player.location?.postal || '',
+      street: player.location?.street || '',
+      team: player.team || '',
+      player,
+    });
+  }
+  return { located, server };
 }
 
 /** EMER on a radio: the member's linked Roblox player, so the alert shows where they are in game. */
@@ -293,8 +329,54 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     admin = { muted: { ...(saved?.muted || {}) } };
     for (const id of Object.keys(admin.muted)) relay.setMuted(id, true);
   });
+  // Coverage map (cell towers and weak areas) from the website staff panel; survives restarts.
+  const coveragePath = radioDataPath('radio-coverage.json');
+  let coverage = normalizeCoverage({});
+  const coverageTracker = createCoverageTracker({
+    users: () => relay.users(),
+    setSignals: (signals) => relay.setSignals(signals),
+    getCoverage: () => coverage,
+  });
+  const gameFeed = createGameFeed({ send: (userId, info) => relay.setGame(userId, info) });
+  void readJsonFile(coveragePath, null).then((saved) => {
+    if (saved) coverage = normalizeCoverage(saved);
+  });
+  // Every few seconds: where each radio user is in game (postal, speed, heading, signal) and the weather.
+  let gameBusy = false;
+  async function gameTick() {
+    relay.setWeather(erlcEvents?.serverWeather?.state?.currentWeather || '');
+    const users = relay.users();
+    if (!users.length) {
+      coverageTracker.clear();
+      return;
+    }
+    if (gameBusy) return;
+    gameBusy = true;
+    try {
+      const { located } = await locateRadioUsers(env, users);
+      gameFeed.update(users, located);
+      coverageTracker.update(new Map([...located]
+        .filter(([, spot]) => Number.isFinite(spot.left) && Number.isFinite(spot.top))
+        .map(([id, spot]) => [id, { left: spot.left, top: spot.top }])));
+    } finally {
+      gameBusy = false;
+    }
+  }
+  const coverageTimer = setInterval(() => {
+    void gameTick().catch((error) => logger.warn(`Radio game data check failed: ${error?.message || error}`));
+  }, GAME_TICK_MS);
+  coverageTimer.unref?.();
+
   setRadioStaffControls({
     users: () => relay.users(),
+    coverage: () => coverage,
+    positions: () => coverageTracker.positions(),
+    async setCoverage(next, by) {
+      coverage = normalizeCoverage(next);
+      await writeJsonFile(coveragePath, { ...coverage, updatedBy: by, updatedAt: new Date().toISOString() });
+      coverageTracker.recompute();
+      return coverage;
+    },
     get muted() {
       return relay.muted;
     },
@@ -501,6 +583,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     clearTimeout(rejoinTimer);
     clearInterval(statsTimer);
     clearInterval(weeklyStatsTimer);
+    clearInterval(coverageTimer);
     setRadioStaffControls(null);
     if (activeRelay === relay) activeRelay = null;
     stopTunnel();

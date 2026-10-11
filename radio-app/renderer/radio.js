@@ -40,6 +40,8 @@ const MENU = [
   { label: 'SCAN PTT', value: () => bindLabel('scanPtt'), bind: 'scanPtt' },
   { label: 'CH KEY', value: () => bindLabel('chanKey'), bind: 'chanKey' },
   { label: 'REPLAY', value: () => (audio.replay ? 'STOP' : 'LAST 30s'), action: () => replay() },
+  { label: 'WHERE AM I', value: () => (state.game?.postal ? `PST ${state.game.postal}` : 'SAY'), action: () => whereAmI() },
+  { label: 'PRACTICE', value: () => (state.practice ? 'ON' : 'OFF'), adjust: () => togglePractice(), action: () => togglePractice() },
   { label: 'REPLAY KEY', value: () => bindLabel('replayKey'), bind: 'replayKey' },
   { label: 'WHO', value: () => `${state.channels.reduce((total, channel) => total + (channel.members?.length || 0), 0)} ON`, open: 'users' },
   { label: 'FX', value: () => FX_LABELS[state.settings.listenFx] || 'OFF', adjust: (step) => cycleFx(step), action: () => cycleFx(1) },
@@ -132,6 +134,12 @@ const state = {
   panicAsk: 0, // when PANIC was pressed and is waiting for ARE YOU SURE
   pttTimeoutUntil: 0, // the relay timed this member out of talking for spamming PTT
   muted: false, // force-muted by staff: can listen, can't talk
+  signal: null, // this radio's signal from the staff coverage map (0.1-1); null = clear
+  game: null, // { postal, street, speed, heading } from the game, null when not in game
+  weather: '', // server weather: clear, rain, fog, thunderstorm
+  practice: false, // PRACTICE: PTT records and plays you back, nothing goes out
+  practiceTx: false,
+  retryAt: 0, // RADIO UPDATING: when the next try is
   lastHeard: null, // { name, at } of the last transmission heard on this channel
   micLevel: 0,
   bindWhich: 'ptt', // which hotkey the PTT KEY screen is setting
@@ -152,6 +160,7 @@ const audio = {
   txGain: null,
   rxIn: null,
   listenFx: null,
+  signalFx: null,
   volume: null,
   deafGain: null,
   toneOut: null,
@@ -169,7 +178,11 @@ const audio = {
   replay: null,
 };
 
-const net = { ws: null, retry: 0, timer: null, browser: false };
+const net = { ws: null, retry: 0, timer: null, browser: false, wasOnline: false };
+// A dropped link retries fast (RECONNECTING); after this many misses the bot is treated as down
+// and the radio shows RADIO UPDATING and tries again every 10 seconds, keeping all settings.
+const QUICK_RETRIES = 3;
+const UPDATING_RETRY_MS = 10_000;
 
 /* ---------- helpers ---------- */
 
@@ -417,6 +430,89 @@ function createRadioFx(ctx) {
   };
 }
 
+/**
+ * Weak signal (staff coverage map: far from a cell tower or in a weak area): the voice is muffled,
+ * gets a static bed and the odd dropout, but always still comes through. Works with FX on or off.
+ */
+function createSignalFx(ctx) {
+  const input = ctx.createGain();
+  const output = ctx.createGain();
+  const muffle = ctx.createBiquadFilter();
+  muffle.type = 'lowpass';
+  muffle.frequency.value = 20000;
+  muffle.Q.value = 0.7;
+  const gate = ctx.createGain();
+  input.connect(muffle);
+  muffle.connect(gate);
+  gate.connect(output);
+  const noise = ctx.createBufferSource();
+  noise.buffer = noiseBuffer(ctx, 2);
+  noise.loop = true;
+  const band = ctx.createBiquadFilter();
+  band.type = 'bandpass';
+  band.frequency.value = 1800;
+  band.Q.value = 0.5;
+  const hiss = ctx.createGain();
+  hiss.gain.value = 0;
+  band.connect(hiss);
+  hiss.connect(output);
+  noise.start();
+  let noiseLinked = false;
+  const linkNoise = (on) => {
+    if (on === noiseLinked) return;
+    noiseLinked = on;
+    if (on) noise.connect(band);
+    else noise.disconnect(band);
+  };
+  let weakness = 0;
+  let hearing = false;
+  let dropTimer = null;
+  // Short random dips while a weak voice comes in.
+  const dropouts = () => {
+    dropTimer = null;
+    if (!hearing || weakness < 0.3) return;
+    if (Math.random() < weakness * 0.7) {
+      const at = ctx.currentTime;
+      gate.gain.setTargetAtTime(Math.max(0.08, 0.55 - 0.45 * weakness), at, 0.01);
+      gate.gain.setTargetAtTime(1, at + 0.04 + Math.random() * 0.14 * weakness, 0.02);
+    }
+    dropTimer = setTimeout(dropouts, 220 + Math.random() * 600);
+  };
+  return {
+    input,
+    output,
+    /** signal 0.1-1 (null = clear) of what is being heard; hearing = someone is talking. */
+    set(signal, active) {
+      weakness = signal === null || signal === undefined || signal >= 0.85 ? 0 : Math.min(1, (0.85 - signal) / 0.75);
+      hearing = Boolean(active) && weakness > 0;
+      const at = ctx.currentTime;
+      muffle.frequency.setTargetAtTime(weakness ? 3600 - 2500 * weakness : 20000, at, 0.05);
+      linkNoise(hearing);
+      hiss.gain.setTargetAtTime(hearing ? 0.012 + 0.07 * weakness : 0, at, 0.04);
+      if (!hearing) gate.gain.setTargetAtTime(1, at, 0.02);
+      if (hearing && !dropTimer) dropouts();
+    },
+  };
+}
+
+/** The weakest signal among the voices coming in right now (null when all are clear). */
+function heardSignal() {
+  let weakest = null;
+  for (const voice of state.rx.values()) {
+    if (Number.isFinite(voice.signal) && (weakest === null || voice.signal < weakest)) weakest = voice.signal;
+  }
+  return weakest;
+}
+
+/** Bars for this radio's own signal: 4 is clear, 1 is barely there (matches the bot's signalBars). */
+function signalBars(signal) {
+  if (!Number.isFinite(signal)) return 4;
+  if (signal >= 0.8) return 4;
+  if (signal >= 0.55) return 3;
+  if (signal >= 0.3) return 2;
+  return 1;
+}
+
 async function initAudio() {
   const ctx = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
   audio.ctx = ctx;
@@ -431,7 +527,9 @@ async function initAudio() {
     processorOptions: { ceiling: 0.7 }, // about -3 dBFS
   });
   audio.deafGain = ctx.createGain();
-  audio.rxIn.connect(audio.listenFx.input);
+  audio.signalFx = createSignalFx(ctx);
+  audio.rxIn.connect(audio.signalFx.input);
+  audio.signalFx.output.connect(audio.listenFx.input);
   audio.listenFx.output.connect(audio.volume);
   audio.volume.connect(rxLimiter);
   rxLimiter.connect(audio.deafGain);
@@ -639,6 +737,13 @@ function encodeFrame(samples) {
 // Transmissions fade in and out so a quick PTT tap does not pop: the newest frame is held back
 // until the next one arrives, so the end can be faded when PTT is let go.
 function onSamples(samples) {
+  if (state.practiceTx && audio.practice) {
+    if (audio.practiceLen < (audio.ctx?.sampleRate || 48000) * 30) {
+      audio.practice.push(samples.slice(0));
+      audio.practiceLen += samples.length;
+    }
+    return;
+  }
   const encoder = audio.encoder;
   if (state.tx !== 'on' || !encoder || encoder.state !== 'configured') return;
   let offset = 0;
@@ -1001,13 +1106,16 @@ function connect(options = {}) {
       render();
       return;
     }
-    state.conn = 'lost';
     // Web radio: the secure address changes when the bot restarts, so ask the website again.
     if (api.refreshRelay) {
       void api.refreshRelay().then((url) => { if (url) state.settings.webRelay = url; }).catch(() => {});
     }
     net.retry += 1;
-    net.timer = setTimeout(connect, Math.min(30000, 1000 * 2 ** Math.min(net.retry, 5)));
+    const quick = net.retry <= QUICK_RETRIES;
+    state.conn = quick ? (net.wasOnline ? 'lost' : 'connecting') : 'updating';
+    const delay = quick ? 1000 * 2 ** (net.retry - 1) : UPDATING_RETRY_MS;
+    state.retryAt = Date.now() + delay;
+    net.timer = setTimeout(connect, delay);
     render();
   };
 }
@@ -1022,6 +1130,8 @@ function onMessage(message) {
       break;
     case 'ready':
       net.retry = 0;
+      net.wasOnline = true;
+      if (message.game !== undefined) state.game = message.game || null;
       state.error = '';
       state.me = message.you;
       state.conn = 'online';
@@ -1036,6 +1146,10 @@ function onMessage(message) {
       applyChannelStatus(message);
       render();
       break;
+    case 'game':
+      state.game = message.game || null;
+      if (state.screen === 'home' || state.screen === 'menu') render();
+      break;
     case 'channel':
       // Switched channel: voices from the old one no longer apply.
       state.rx.clear();
@@ -1046,7 +1160,7 @@ function onMessage(message) {
       break;
     case 'talk':
       if (message.active) {
-        state.rx.set(message.id, { name: message.name || 'UNIT', source: message.source, channel: message.channel || state.channelId });
+        state.rx.set(message.id, { name: message.name || 'UNIT', source: message.source, channel: message.channel || state.channelId, signal: Number.isFinite(message.signal) ? message.signal : null });
       } else if (state.rx.delete(message.id)) {
         squelchTail();
       }
@@ -1059,7 +1173,7 @@ function onMessage(message) {
     case 'whisper':
       // A private call to this radio only.
       if (message.active) {
-        state.rx.set(message.id, { name: message.name || 'UNIT', whisper: true, channel: state.channelId });
+        state.rx.set(message.id, { name: message.name || 'UNIT', whisper: true, channel: state.channelId, signal: Number.isFinite(message.signal) ? message.signal : null });
         flash(`WHISPER FROM ${String(message.name || 'UNIT').toUpperCase()}`.slice(0, 28), 1200);
       } else if (state.rx.delete(message.id)) {
         squelchTail();
@@ -1123,6 +1237,8 @@ function applyChannelStatus(message) {
   state.listeners = message.listeners || 0;
   if ('dispatch' in message) state.dispatch = Boolean(message.dispatch);
   if ('muted' in message) state.muted = Boolean(message.muted);
+  if ('signal' in message) state.signal = Number.isFinite(message.signal) ? message.signal : null;
+  if ('weather' in message) applyWeather(message.weather);
   if ('lastHeard' in message) state.lastHeard = message.lastHeard;
   if (Array.isArray(message.calls)) {
     // A new 911 call waiting: a short tone and a flash.
@@ -1227,15 +1343,7 @@ function panicSpeech(message) {
 
 // Free on-device text to speech (Windows' built-in voices), only on this radio, never into Discord.
 function speakPanic(message) {
-  const synth = window.speechSynthesis;
-  if (!synth || typeof SpeechSynthesisUtterance !== 'function') return;
-  const utterance = new SpeechSynthesisUtterance(panicSpeech(message));
-  const voices = synth.getVoices().filter((voice) => voice.localService && /^en/i.test(voice.lang));
-  if (voices.length) utterance.voice = voices[0];
-  utterance.volume = Math.max(0.2, Math.min(1, (Number(state.settings.volume) || 70) / 100));
-  utterance.rate = 1.05;
-  synth.cancel();
-  synth.speak(utterance);
+  speak(panicSpeech(message));
 }
 
 // The panic sound, played twice back to back on the radio's speaker at the radio's volume,
@@ -1347,6 +1455,7 @@ function pttPress(kind = 'main') {
   state.pttHeld = kind;
   el.pttSide.classList.add('active');
   if (state.screen === 'test') return;
+  if (state.practice) return startPractice();
   if (state.conn !== 'online') {
     playTone('busy');
     flash(state.conn === 'signin' ? 'SIGN IN' : 'NO LINK');
@@ -1400,6 +1509,7 @@ function pttRelease(kind = 'main') {
   if (!state.pttHeld || state.pttHeld !== kind) return;
   state.pttHeld = false;
   el.pttSide.classList.remove('active');
+  if (state.practiceTx) return endPractice();
   if (state.tx === 'on') void stopTx();
   else if (state.tx === 'requesting') state.txCancel = true;
 }
@@ -1579,6 +1689,117 @@ function rowsHtml(rows, selected) {
   }).join('')}</ul>`;
 }
 
+/* ---------- game data, weather, practice ---------- */
+
+const WET_WEATHER = { rain: 'RAIN', thunderstorm: 'THUNDERSTORM' };
+
+// How long this transmission has been going: 0:07.
+function talkTime() {
+  const started = state.practiceTx ? state.practiceStartedAt : state.txStartedAt;
+  const seconds = Math.max(0, Math.floor((Date.now() - started) / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+// Nearest postal and street live as you drive, with a speed and heading worked out from the game.
+function gameLine() {
+  const game = state.game;
+  if (!game?.postal && !game?.street) return '';
+  const parts = [game.postal ? `PST ${game.postal}` : '', game.street || ''];
+  if (Number.isFinite(game.speed)) parts.push(`${game.speed} MPH${game.heading && game.speed > 0 ? ` ${game.heading}` : ''}`);
+  return `<div class="last game">${escapeHtml(parts.filter(Boolean).join(' · ').toUpperCase())}</div>`;
+}
+
+// Rain or a storm in game: an alert on the radio screen when it starts.
+function applyWeather(next) {
+  const weather = String(next || '');
+  if (weather === state.weather) return;
+  const wasWet = Boolean(WET_WEATHER[state.weather]);
+  state.weather = weather;
+  if (WET_WEATHER[weather] && !wasWet) {
+    playTone('call');
+    flash(`WEATHER ALERT · ${WET_WEATHER[weather]}`, 2200);
+  }
+}
+
+/** Reads text aloud with the computer's own (free) voice, like the panic announcement. */
+function speak(text) {
+  const synth = window.speechSynthesis;
+  if (!synth || typeof SpeechSynthesisUtterance !== 'function') return false;
+  const utterance = new SpeechSynthesisUtterance(text);
+  const voices = synth.getVoices().filter((voice) => voice.localService && /^en/i.test(voice.lang));
+  if (voices.length) utterance.voice = voices[0];
+  utterance.volume = Math.max(0.2, Math.min(1, (Number(state.settings.volume) || 70) / 100));
+  utterance.rate = 1.05;
+  synth.cancel();
+  synth.speak(utterance);
+  return true;
+}
+
+// WHERE AM I: reads your postal (and street) aloud.
+function whereAmI() {
+  const game = state.game;
+  if (!game?.postal) {
+    flash('NOT IN GAME', 1200);
+    speak('Location unavailable. You are not in game.');
+    return;
+  }
+  const digits = String(game.postal).split('').join(' ');
+  speak(`You are at postal ${digits}${game.street ? `, ${game.street}` : ''}.`);
+  flash(`PST ${game.postal}${game.street ? ` · ${game.street}` : ''}`.toUpperCase().slice(0, 30), 1800);
+}
+
+// PRACTICE: PTT records you and plays it back through the radio sound, nothing goes on air.
+function togglePractice() {
+  state.practice = !state.practice;
+  if (!state.practice) endPractice(false);
+  flash(state.practice ? 'PRACTICE ON · NOT LIVE' : 'PRACTICE OFF · LIVE', 1200);
+  render();
+}
+
+function startPractice() {
+  if (!audio.capture || !audio.micStream) {
+    playTone('busy');
+    flash('NO MIC');
+    return;
+  }
+  state.practiceTx = true;
+  state.practiceStartedAt = Date.now();
+  audio.practice = [];
+  audio.practiceLen = 0;
+  audio.capture.port.postMessage({ active: true });
+  playTone('permit');
+  updateLamps();
+  render();
+}
+
+// Up to 30 seconds is kept; letting go plays it back.
+function endPractice(playBack = true) {
+  if (!state.practiceTx) return;
+  state.practiceTx = false;
+  audio.capture?.port.postMessage({ active: false });
+  playTone('end');
+  updateLamps();
+  render();
+  const chunks = audio.practice || [];
+  audio.practice = null;
+  const ctx = audio.ctx;
+  if (!playBack || !ctx || !chunks.length) return;
+  const length = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  let offset = 0;
+  for (const chunk of chunks) {
+    data.set(chunk, offset);
+    offset += chunk.length;
+  }
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(audio.rxIn);
+  // Played back after the end tone, as others would hear you.
+  source.start(ctx.currentTime + 0.35);
+  flash('PLAYING BACK', Math.min(4000, 400 + buffer.duration * 1000));
+}
+
 function homeBody() {
   if (state.update?.state === 'installing') return '<div class="mid">UPDATING</div><div class="small">RADIO WILL REOPEN</div>';
   if (state.update?.state === 'downloading') return `<div class="mid">UPDATING</div><div class="small">DOWNLOADING ${state.update.percent || 0}%</div>`;
@@ -1593,7 +1814,10 @@ function homeBody() {
     case 'connecting':
       return '<div class="mid">CONNECTING</div><div class="small dim">. . .</div>';
     case 'lost':
-      return '<div class="mid">NO SIGNAL</div><div class="small">RETRYING</div>';
+      return '<div class="mid">RECONNECTING</div><div class="small">LINK DROPPED · TRYING AGAIN</div><div class="small dim">. . .</div>';
+    case 'updating':
+      return `<div class="mid">RADIO UPDATING</div><div class="small">PLEASE WAIT · SETTINGS ARE KEPT</div>`
+        + `<div class="small dim">TRYING AGAIN IN ${Math.max(1, Math.ceil((state.retryAt - Date.now()) / 1000))}s</div>`;
     case 'error':
       return `<div class="mid">DENIED</div><div class="small">${escapeHtml(state.error.toUpperCase())}</div>`;
     default:
@@ -1602,10 +1826,15 @@ function homeBody() {
   // Zone/channel card, like a handheld's main screen, then the units on this channel.
   let kind = '';
   let line;
-  if (state.tx === 'on') {
+  if (state.practiceTx) {
     kind = 'tx';
-    if (!state.txChannel && state.whisper) line = `WHISPERING ${state.whisper.name}`;
-    else line = state.txChannel && state.txChannel !== state.channelId ? `TRANSMITTING ON CH ${channelNumber(state.txChannel)}` : 'TRANSMITTING';
+    line = `PRACTICE · TALKING ${talkTime()} · NOT LIVE`;
+  } else if (state.tx === 'on') {
+    kind = 'tx';
+    if (!state.txChannel && state.whisper) line = `WHISPERING ${state.whisper.name} · ${talkTime()}`;
+    else line = `${state.txChannel && state.txChannel !== state.channelId ? `TRANSMITTING ON CH ${channelNumber(state.txChannel)}` : 'TRANSMITTING'} · ${talkTime()}`;
+  } else if (state.practice) {
+    line = 'PRACTICE MODE · PTT TO TEST · NOT LIVE';
   } else if (state.rx.size) {
     kind = 'rx';
     // Scanned channels show which channel the voice is on; whispers say so.
@@ -1640,6 +1869,8 @@ function homeBody() {
       ? `<div class="last">LAST HEARD ${escapeHtml(String(state.lastHeard.name).toUpperCase())} · ${clockText(state.lastHeard.at)}</div>`
       : '')
     + (scanIds().length ? `<div class="last">SCAN ${escapeHtml(scanText())}</div>` : '')
+    + gameLine()
+    + (WET_WEATHER[state.weather] ? `<div class="last weather">&#9888; ${WET_WEATHER[state.weather]} · ROADS ARE WET</div>` : '')
     + '</div>';
   html += callsCard();
   const members = channelMembers(state.channels.find((channel) => channel.id === state.channelId));
@@ -1766,11 +1997,14 @@ function render() {
   el.softRightLabel.textContent = 'HOME';
   // Status bar: signal bars, then DEAF / IN VC / who is on the channel.
   // Signal bars sweep while looking for the relay and bounce while a voice comes in (just for looks).
-  const searching = ['connecting', 'lost', 'signing'].includes(state.conn);
-  el.lcdSig.className = `sig${state.conn === 'online' ? (state.botOnline ? ' on' : ' weak') : ''}${searching ? ' scan' : ''}`
+  const searching = ['connecting', 'lost', 'signing', 'updating'].includes(state.conn);
+  // Online, the bars show this radio's own signal from the coverage map.
+  el.lcdSig.className = `sig${state.conn === 'online' ? (state.botOnline ? ` on b${signalBars(state.signal)}` : ' weak') : ''}${searching ? ' scan' : ''}`
     + `${state.rx.size ? ' rx' : ''}${state.tx === 'on' ? ' tx' : ''}`;
   if (state.settings.deaf) el.lcdRight.textContent = 'DEAF';
   else if (state.inVoice) el.lcdRight.textContent = 'IN VC';
+  else if (state.practice) el.lcdRight.textContent = 'PRACTICE';
+  else if (state.conn === 'updating') el.lcdRight.textContent = 'NO SVC';
   else if (state.conn === 'online') el.lcdRight.textContent = `${state.listeners} ON`;
   else el.lcdRight.textContent = state.version || '';
   updateClock();
@@ -1903,7 +2137,8 @@ function placeMap() {
 }
 
 function updateLamps() {
-  el.lampTx.classList.toggle('on', state.tx === 'on');
+  audio.signalFx?.set(heardSignal(), state.rx.size > 0);
+  el.lampTx.classList.toggle('on', state.tx === 'on' || state.practiceTx);
   el.lampRx.classList.toggle('on', state.rx.size > 0 && !muted());
   el.lampMic.classList.toggle('on', Boolean(audio.micStream));
   const angle = -135 + (270 * state.settings.volume) / 100;
@@ -2253,6 +2488,8 @@ function checkIdle() {
   if (state.whisper && state.whisper.until < Date.now() && state.tx !== 'on') endWhisper('WHISPER ENDED');
   // The 911 waiting times count up on the radio screen.
   if (state.calls.length && state.screen === 'home' && !state.toast && Date.now() % 5000 < 1000) render();
+  // Talk timer and the RADIO UPDATING countdown tick every second.
+  if (state.screen === 'home' && !state.toast && (state.tx === 'on' || state.practiceTx || state.conn === 'updating')) render();
   if (state.pttHeld || state.tx === 'on') return markActive();
   const idle = Date.now() - lastActiveAt;
   if (idle >= IDLE_CLOSE_MS) {
@@ -2380,6 +2617,7 @@ function bindControls() {
     applyDeaf();
     sendJson({ type: 'deaf', active: deaf });
     if (deaf) state.rx.clear();
+    updateLamps();
     flash(deaf ? 'DEAFENED' : 'UNDEAFENED', 900);
   });
 
@@ -2509,9 +2747,23 @@ function bindControls() {
   });
 }
 
+// Start-up: the Clearwater logo on the screen while the radio turns on.
+function bootAnimation() {
+  const boot = document.getElementById('boot');
+  if (!boot) return;
+  const logo = boot.querySelector('img');
+  if (logo && window.RADIO_LOGO) logo.src = window.RADIO_LOGO;
+  const version = boot.querySelector('.boot-ver');
+  if (version && state.version) version.textContent = /^\d/.test(state.version) ? `v${state.version}` : `${state.version} RADIO`;
+  boot.hidden = false;
+  setTimeout(() => boot.classList.add('done'), 1900);
+  setTimeout(() => { boot.hidden = true; }, 2400);
+}
+
 async function init() {
   state.settings = { ...state.settings, ...(await api.getSettings()) };
   state.version = await api.version();
+  bootAnimation();
   bindControls();
   applyDeaf();
   applyNight();

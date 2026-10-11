@@ -8,7 +8,7 @@
 <title>Radio Staff | Clearwater Radio</title>
 <link rel="icon" type="image/png" href="assets/clearwater-logo.png">
 <link rel="apple-touch-icon" href="assets/clearwater-logo.png">
-<link rel="stylesheet" href="radio-staff.css?v=20261011">
+<link rel="stylesheet" href="radio-staff.css?v=20261011b">
 </head>
 <body>
 <header class="rs-top">
@@ -41,12 +41,49 @@
     <ul id="found" class="rs-list"></ul>
   </section>
 
+  <section class="rs-card">
+    <div class="rs-head">
+      <h2>Signal coverage</h2>
+      <span id="covState" class="rs-fine"></span>
+    </div>
+    <p class="rs-fine">Place cell towers and draw weak-signal areas, like deep in the park or High Rock. A unit's signal comes from where they are in game: near a tower is clear, far from every tower or inside a weak area sounds static-y and muffled on the radio, but still comes through. With no towers, only the weak areas change anything. Discord voice is not affected.</p>
+    <div class="rs-tools">
+      <button type="button" class="rs-tool" data-mode="select">Move</button>
+      <button type="button" class="rs-tool" data-mode="tower">+ Cell tower</button>
+      <button type="button" class="rs-tool" data-mode="area">+ Weak area</button>
+      <span class="rs-zoom"><button type="button" id="zoomOut" aria-label="Zoom out">&minus;</button><b id="zoomLevel">1x</b><button type="button" id="zoomIn" aria-label="Zoom in">+</button></span>
+    </div>
+    <div id="drawBar" class="rs-drawbar" hidden>
+      <span>Tap the map to add corners.</span>
+      <button type="button" id="drawDone" class="rs-btn">Finish area</button>
+      <button type="button" id="drawCancel" class="rs-btn rs-ghost">Cancel</button>
+    </div>
+    <div id="mapWrap" class="rs-mapwrap">
+      <div id="map" class="rs-map">
+        <img src="assets/liberty-county-map.jpg?v=20260928-erlc-maps" alt="Liberty County map" width="2048" height="2048" draggable="false">
+        <svg id="mapSvg" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-label="Coverage map"></svg>
+      </div>
+    </div>
+    <div class="rs-legend">
+      <span><i class="lg-tower"></i>Cell tower (inner ring clear, outer ring fading)</span>
+      <span><i class="lg-zone"></i>Weak area</span>
+      <span><i class="lg-dot" data-c="good"></i>Unit, clear</span>
+      <span><i class="lg-dot" data-c="bad"></i>Unit, weak</span>
+    </div>
+    <div id="editor" class="rs-editor" hidden></div>
+    <div class="rs-save">
+      <button type="button" id="covReset" class="rs-btn rs-ghost" disabled>Undo changes</button>
+      <button type="button" id="covSave" class="rs-btn" disabled>Save coverage</button>
+    </div>
+  </section>
+
   <p class="rs-fine rs-center">Force-muted members still hear the radio but can't talk. A kick keeps them off the radio for 5 minutes. Every action is posted in the radio channel chat.</p>
 </main>
 
 <section id="gate" class="rs-gate" hidden><div class="rs-card rs-gate-card"></div></section>
 <div id="toast" class="rs-toast" role="status" aria-live="polite" hidden></div>
 
-<script src="radio-staff.js?v=20261011"></script>
+<script src="radio-staff-map.js?v=20261011b"></script>
+<script src="radio-staff.js?v=20261011b"></script>
 </body>
 </html>

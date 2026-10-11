@@ -58,6 +58,11 @@ test('the website staff route signs in with Discord and forwards views and actio
   assert.deepEqual(mute.asked[0].body, { discordId: ADMIN, action: 'mute', userId: ALICE });
 
   assert.equal((await call(siteCookie(), { action: 'ban', userId: ALICE })).status, 400);
+
+  const tower = { towers: [{ left: 0.5, top: 0.5, range: 0.2 }], zones: [] };
+  const coverage = await call(siteCookie(), { action: 'coverage', coverage: tower });
+  assert.deepEqual(coverage.asked[0].body, { discordId: ADMIN, action: 'coverage', coverage: tower });
+  assert.equal((await call(siteCookie(), { action: 'coverage' })).status, 400);
   assert.equal((await call(siteCookie(), { action: 'kick', userId: 'nope' })).status, 400);
 
   const notAdmin = await call(siteCookie(), { view: true }, {
@@ -90,7 +95,7 @@ test('the bot only lets members with Administrator use the website panel', async
 
 test('staff actions from the website mute, unmute and kick through the radio controls', async () => {
   setRadioStaffControls(null);
-  assert.deepEqual(radioStaffSnapshot(), { running: false, users: [], muted: [] });
+  assert.deepEqual(radioStaffSnapshot(), { running: false, users: [], muted: [], coverage: { towers: [], zones: [] }, positions: [] });
   await assert.rejects(runRadioStaffAction('mute', ALICE, ADMIN), { status: 503 });
 
   const muted = new Set([BOB]);
@@ -105,7 +110,7 @@ test('staff actions from the website mute, unmute and kick through the radio con
   });
 
   const snapshot = radioStaffSnapshot((id) => (id === BOB ? 'Bob' : ''));
-  assert.deepEqual(snapshot.users, [{ userId: ALICE, name: 'Alice', channel: 'Radio', muted: false, since: 5 }]);
+  assert.deepEqual(snapshot.users, [{ userId: ALICE, name: 'Alice', channel: 'Radio', muted: false, since: 5, signal: null }]);
   assert.deepEqual(snapshot.muted, [{ userId: BOB, name: 'Bob' }]);
 
   await runRadioStaffAction('mute', ALICE, ADMIN, { from: 'website' });
@@ -122,5 +127,26 @@ test('staff actions from the website mute, unmute and kick through the radio con
     `🔊 <@${ADMIN}> unmuted <@${BOB}> on the radio (website).`,
     `👢 <@${ADMIN}> kicked <@${ALICE}> off the radio for 5 minutes (website).`,
   ]);
+  setRadioStaffControls(null);
+});
+
+test('staff save the coverage map through the radio controls and it is noted in the radio chat', async () => {
+  const { saveRadioCoverage } = await import('../utils/radioStaff.js');
+  setRadioStaffControls(null);
+  await assert.rejects(saveRadioCoverage({}, ADMIN), { status: 503 });
+  const posts = [];
+  let stored = null;
+  setRadioStaffControls({
+    users: () => [],
+    muted: [],
+    coverage: () => stored,
+    async setCoverage(next) { stored = next; return next; },
+    postStaff: async (payload) => { posts.push(payload.content); },
+  });
+  const saved = await saveRadioCoverage({ towers: [{ left: 0.5, top: 0.5 }, { left: 9, top: 0 }], zones: [] }, ADMIN);
+  assert.equal(saved.towers.length, 1, 'bad towers are dropped before saving');
+  assert.deepEqual(radioStaffSnapshot().coverage, saved);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(posts, [`📡 <@${ADMIN}> updated radio coverage (website): 1 cell tower, 0 weak-signal areas.`]);
   setRadioStaffControls(null);
 });

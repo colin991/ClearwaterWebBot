@@ -3462,6 +3462,20 @@
       "summary": "SIZE on the radio is now a dial from 60% to 130% in 5% steps, so the radio can be made bigger as well as smaller. Turn it with the arrows, scroll, or drag or click the dial. The first-launch setup uses the same dial, and the size is still remembered.",
       "createdAt": "2026-10-11T21:45:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-signal-coverage-2026-10-11",
+      "title": "Radio signal coverage: cell towers and weak areas",
+      "summary": "Admins can now place cell towers and draw weak-signal areas on a map in the radio staff panel at cwpcso.com/radio-staff. A unit's signal comes from where they are in game: near a tower is clear, while far from every tower or inside a weak area (like deep in the park or High Rock) sounds static-y and muffled on the radio, but still comes through. The radio's signal bars show your own signal. Discord voice is not affected.",
+      "createdAt": "2026-10-11T22:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-screen-extras-2026-10-11",
+      "title": "Radio screen: startup, reconnecting, postal, speed, weather, practice",
+      "summary": "The radio now shows the Clearwater logo when it turns on, a RECONNECTING screen when the link drops, and RADIO UPDATING, PLEASE WAIT (trying again every 10 seconds, settings kept) when the bot is down. While you talk it shows a talk timer. The channel card shows your nearest postal, street, speed and heading from the game, and a weather alert when it rains in game. SETTINGS has WHERE AM I, which reads your postal aloud, and PRACTICE, which lets new users test PTT and hear themselves without going live.",
+      "createdAt": "2026-10-11T23:00:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

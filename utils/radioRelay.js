@@ -107,6 +107,12 @@ export function createRadioRelay({
   // Staff controls: force-muted members can listen but not talk; kicked members can't sign in until the time is up.
   const mutedUsers = new Set([...muted].map(String));
   const kickedUntil = new Map();
+  // Signal (0.1-1) per member from where they are in game and the staff's coverage map; none = clear.
+  const signals = new Map();
+  const signalOf = (userId) => signals.get(String(userId));
+  // Game data per member (postal, street, speed, heading) and the server weather, for the radio screen.
+  const games = new Map();
+  let weather = '';
   // Who was last heard on each channel: channel id -> { name, at }
   const lastHeard = new Map();
   // Per member, so reconnecting does not reset them: last PANIC, recent PTT presses, PTT timeout.
@@ -230,6 +236,8 @@ export function createRadioRelay({
       inVoice: channel === RADIO_MAIN_CHANNEL && Boolean(inVoice(socket.radio.userId)),
       dispatch: dispatchActive(),
       muted: mutedUsers.has(socket.radio.userId),
+      signal: signalOf(socket.radio.userId) ?? null,
+      weather,
       lastHeard: lastHeard.get(channel) || null,
       scan: [...(socket.radio.scan || [])],
       calls: pendingCalls(),
@@ -335,7 +343,7 @@ export function createRadioRelay({
     socket.radio.txChannel = channel;
     talkers.set(channel, { socket, userId, name, sink, startedAt: at, lastPacketAt: at });
     send(socket, { type: 'tx', ok: true, channel });
-    broadcast({ type: 'talk', id: userId, name, active: true, source: 'app', channel }, socket, channel);
+    broadcast({ type: 'talk', id: userId, name, active: true, source: 'app', channel, signal: signalOf(userId) }, socket, channel);
     broadcastTalking();
   }
 
@@ -352,7 +360,7 @@ export function createRadioRelay({
     const at = now();
     whispers.set(socket, { socket, to: target, userId, name, startedAt: at, lastPacketAt: at });
     send(socket, { type: 'tx', ok: true, to: target });
-    for (const other of targets) send(other, { type: 'whisper', id: userId, name, active: true });
+    for (const other of targets) send(other, { type: 'whisper', id: userId, name, active: true, signal: signalOf(userId) });
   }
 
   function onAudio(socket, packet) {
@@ -392,7 +400,7 @@ export function createRadioRelay({
     socket.radio.scan?.delete(channel);
     send(socket, { type: 'channel', ...statusFor(socket) });
     for (const [id, talker] of talkers) {
-      if (listensTo(socket.radio, id)) send(socket, { type: 'talk', id: talker.userId, name: talker.name, active: true, source: 'app', channel: id });
+      if (listensTo(socket.radio, id)) send(socket, { type: 'talk', id: talker.userId, name: talker.name, active: true, source: 'app', channel: id, signal: signalOf(talker.userId) });
     }
     if (listensTo(socket.radio, RADIO_MAIN_CHANNEL)) {
       for (const [id, name] of discordTalkers) send(socket, { type: 'talk', id, name, active: true, source: 'discord', channel: RADIO_MAIN_CHANNEL });
@@ -533,10 +541,11 @@ export function createRadioRelay({
       type: 'ready',
       you: { id: userId, name: socket.radio.name, callsign: String(result.callsign || '') },
       synced,
+      game: games.get(userId) || null,
       ...statusFor(socket),
     });
     for (const [id, talker] of talkers) {
-      if (listensTo(socket.radio, id)) send(socket, { type: 'talk', id: talker.userId, name: talker.name, active: true, source: 'app', channel: id });
+      if (listensTo(socket.radio, id)) send(socket, { type: 'talk', id: talker.userId, name: talker.name, active: true, source: 'app', channel: id, signal: signalOf(talker.userId) });
     }
     broadcastStatus();
   }
@@ -688,6 +697,48 @@ export function createRadioRelay({
     },
     broadcastStatus,
     recheckAll,
+    /**
+     * New signal strengths from the coverage map (userId -> 0.1-1, or null for clear). Each radio
+     * hears its own bars change, and listeners hear a talker's signal change mid-transmission.
+     */
+    setSignals(next) {
+      const changed = new Set();
+      const incoming = new Map([...(next || [])].map(([id, value]) => [String(id), value === null || value === undefined ? null : Number(value)]));
+      for (const id of new Set([...signals.keys(), ...incoming.keys()])) {
+        const value = incoming.get(id);
+        const fresh = value === null || value === undefined || !Number.isFinite(value) ? undefined : value;
+        if (signals.get(id) === fresh) continue;
+        if (fresh === undefined) signals.delete(id);
+        else signals.set(id, fresh);
+        changed.add(id);
+      }
+      if (!changed.size) return 0;
+      for (const socket of clients) {
+        if (changed.has(socket.radio?.userId)) send(socket, { type: 'status', ...statusFor(socket) });
+      }
+      for (const [channel, talker] of talkers) {
+        if (!changed.has(talker.userId)) continue;
+        broadcast({ type: 'talk', id: talker.userId, name: talker.name, active: true, source: 'app', channel, signal: signalOf(talker.userId) }, talker.socket, channel);
+      }
+      return changed.size;
+    },
+    /** Game data for one member's radios: { postal, street, speed, heading }, or null when not in game. */
+    setGame(userId, info) {
+      const id = String(userId);
+      if (info) games.set(id, info);
+      else games.delete(id);
+      for (const socket of clients) {
+        if (socket.radio?.userId === id) send(socket, { type: 'game', game: info || null });
+      }
+    },
+    /** Server weather (clear, rain, fog, thunderstorm); radios show an alert when it turns wet. */
+    setWeather(next) {
+      const value = String(next || '');
+      if (value === weather) return false;
+      weather = value;
+      broadcastStatus();
+      return true;
+    },
     /** Everyone signed in on a radio right now, for the staff panel and the weekly stats. */
     users() {
       return [...clients].filter((socket) => socket.radio?.userId).map((socket) => ({
@@ -697,6 +748,7 @@ export function createRadioRelay({
         channelName: channelName(socket.radio.channel),
         muted: mutedUsers.has(socket.radio.userId),
         since: socket.radio.since,
+        signal: signalOf(socket.radio.userId) ?? null,
       }));
     },
     /** Staff force-mute: the member still hears the radio but can't talk until unmuted. */

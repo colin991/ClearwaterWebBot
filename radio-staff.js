@@ -12,6 +12,20 @@
   let toastTimer = null;
   let lastFound = [];
   let mutedIds = new Set();
+  const coverageMap = window.createCoverageMap({
+    toast: (text, bad) => toast(text, bad),
+    async save(coverage) {
+      const { status, data } = await call({ action: 'coverage', coverage });
+      if (status !== 200) {
+        if (status === 401 || status === 403) handleError(status, data);
+        else toast(data.error || 'Could not save the coverage map. Try again.', true);
+        return null;
+      }
+      toast('Coverage saved. Radios update within a few seconds.');
+      render(data);
+      return data.coverage;
+    },
+  });
 
   async function call(body) {
     try {
@@ -49,6 +63,12 @@
     if (minutes < 1) return 'just joined';
     if (minutes < 60) return `on for ${minutes} min`;
     return `on for ${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+  }
+
+  function signalText(signal) {
+    if (!Number.isFinite(signal)) return '';
+    const bars = signal >= 0.8 ? 4 : signal >= 0.55 ? 3 : signal >= 0.3 ? 2 : 1;
+    return `signal ${bars}/4`;
   }
 
   function button(label, kind, onClick) {
@@ -115,7 +135,7 @@
     else if (!users.length) empty(onList, 'Nobody is on a radio.');
     else {
       onList.replaceChildren(...users.map((user) => row(user,
-        [user.channel, minutesSince(user.since)].filter(Boolean).join(' · '),
+        [user.channel, minutesSince(user.since), signalText(user.signal)].filter(Boolean).join(' · '),
         muteButtons(user, true))));
     }
 
@@ -126,6 +146,7 @@
     // Keep search results' mute state in step with the latest list.
     mutedIds = new Set([...muted.map((member) => member.userId), ...users.filter((user) => user.muted).map((user) => user.userId)]);
     if (lastFound.length) renderFound(lastFound);
+    coverageMap.update(data.coverage, data.positions);
   }
 
   function renderFound(members) {

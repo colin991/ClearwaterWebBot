@@ -305,6 +305,8 @@ button:focus { outline: none; }
 .lcd .card .state { font-size: 9px; font-weight: 700; color: var(--accent); margin-top: 1px; }
 .lcd .card.tx .state { color: #c0261b; }
 .lcd .card .last { font-size: 8px; color: var(--ink-dim); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lcd .card .last.game { color: var(--ink); font-weight: 700; }
+.lcd .card .last.weather { color: #a5520c; font-weight: 700; }
 .lcd .card.rx .state { color: #138a3a; }
 
 .lcd .card.units { font-size: 9px; max-height: 58px; overflow: hidden; }
@@ -564,3 +566,35 @@ body.night .keypad button, body.night .pkey { filter: brightness(.7); }
 .lcd .dial .knob-dot { stroke: var(--screen-top, #fff); stroke-width: 1.5; }
 .lcd .dial text { fill: var(--ink); font-size: 15px; font-weight: 800; font-family: inherit; }
 .lcd .dial text.end { fill: var(--ink-dim); font-size: 8px; font-weight: 700; }
+
+/* Signal bars follow this radio's own signal from the staff coverage map (b4 = clear). */
+.sig.on.b3 i:nth-child(4),
+.sig.on.b2 i:nth-child(n+3),
+.sig.on.b1 i:nth-child(n+2) { opacity: .25; animation: none; }
+
+/* Startup screen: the Clearwater logo while the radio turns on. */
+.lcd .boot {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: linear-gradient(180deg, var(--screen-top), var(--screen-bottom));
+  color: var(--ink);
+  transition: opacity .5s ease;
+}
+.lcd .boot img { width: 64px; height: 64px; animation: boot-logo 1.2s ease-out both; }
+.lcd .boot b { font-size: 13px; letter-spacing: 3px; margin-top: 4px; animation: boot-text .9s .5s ease-out both; }
+.lcd .boot span { font-size: 9px; letter-spacing: 4px; color: var(--ink-dim); animation: boot-text .9s .7s ease-out both; }
+.lcd .boot .boot-bar { width: 90px; height: 3px; margin-top: 8px; border-radius: 2px; background: rgba(13, 36, 64, .15); overflow: hidden; position: relative; }
+.lcd .boot .boot-bar::after { content: ""; position: absolute; inset: 0; background: var(--ink); transform-origin: left; animation: boot-bar 1.7s .2s ease-in-out both; }
+.lcd .boot em { font-style: normal; font-size: 8px; color: var(--ink-dim); margin-top: 3px; }
+.lcd .boot.done { opacity: 0; }
+.lcd .boot[hidden] { display: none; }
+@keyframes boot-logo { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: scale(1); } }
+@keyframes boot-text { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes boot-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.low-power .lcd .boot * { animation: none !important; }

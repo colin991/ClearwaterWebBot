@@ -8,6 +8,7 @@ import {
   UserSelectMenuBuilder,
 } from 'discord.js';
 import { logger } from './logger.js';
+import { normalizeCoverage } from './radioCoverage.js';
 
 /**
  * Clearwater Radio staff tools: the admin panel (/radio-staff: force-mute / kick off the radio) and the
@@ -92,7 +93,7 @@ export function buildRadioStaffPanel(selectedId = '') {
  * muted members who are not on a radio.
  */
 export function radioStaffSnapshot(nameOf = () => '') {
-  if (!controls) return { running: false, users: [], muted: [] };
+  if (!controls) return { running: false, users: [], muted: [], coverage: normalizeCoverage({}), positions: [] };
   const users = controls.users();
   const onRadio = new Set(users.map((user) => user.userId));
   return {
@@ -103,8 +104,11 @@ export function radioStaffSnapshot(nameOf = () => '') {
       channel: user.channelName,
       muted: Boolean(user.muted),
       since: user.since || null,
+      signal: user.signal ?? null,
     })),
     muted: [...(controls.muted || [])].filter((id) => !onRadio.has(id)).map((id) => ({ userId: id, name: nameOf(id) || '' })),
+    coverage: controls.coverage?.() || normalizeCoverage({}),
+    positions: controls.positions?.() || [],
   };
 }
 
@@ -133,6 +137,18 @@ export async function runRadioStaffAction(action, userId, by, { from = '' } = {}
   // Not awaited, so a slow Discord post never holds up the panel's reply.
   void Promise.resolve(controls.postStaff?.({ content: note, allowedMentions: { parse: [] } })).catch(() => {});
   return { ok: true, action, userId, closed };
+}
+
+/** Saves the coverage map from the website and notes it in the radio channel chat. */
+export async function saveRadioCoverage(raw, by) {
+  if (!controls?.setCoverage) throw Object.assign(new Error('The radio is not running on the bot host right now.'), { status: 503 });
+  const saved = await controls.setCoverage(normalizeCoverage(raw), by);
+  const towers = saved.towers.length;
+  const zones = saved.zones.length;
+  logger.info(`Radio staff: coverage saved by ${by} (${towers} towers, ${zones} weak areas)`);
+  const note = `📡 <@${by}> updated radio coverage (website): ${towers} cell tower${towers === 1 ? '' : 's'}, ${zones} weak-signal area${zones === 1 ? '' : 's'}.`;
+  void Promise.resolve(controls.postStaff?.({ content: note, allowedMentions: { parse: [] } })).catch(() => {});
+  return saved;
 }
 
 /** Handles the panel's buttons and select; returns true when the interaction was the radio staff panel's. */
