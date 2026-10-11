@@ -1249,10 +1249,16 @@ function onMessage(message) {
         speak('You are on the civilian team on the police radio. Staff have been told.');
       }
       break;
-    case 'moved':
-      saveSettings({ channel: message.channel });
-      flash(message.reason === 'event-closed' ? 'EVENT CLOSED · BACK ON CH 1' : `DISPATCH MOVED YOU · CH ${channelNumber(message.channel)}`, 1800);
+    case 'locked':
+      playTone('busy');
+      flash(`CH ${channelNumber(message.channel)} LOCKED · RANK`, 1600);
       break;
+    case 'moved': {
+      saveSettings({ channel: message.channel });
+      const why = { 'event-closed': 'EVENT CLOSED · BACK ON CH 1', locked: 'CHANNEL LOCKED · BACK ON CH 1' }[message.reason];
+      flash(why || `DISPATCH MOVED YOU · CH ${channelNumber(message.channel)}`, 1800);
+      break;
+    }
     case 'move':
       if (message.ok) flash(`MOVED ${String(message.name || 'UNIT').toUpperCase()} · CH ${channelNumber(message.channel)}`.slice(0, 32), 1400);
       else flash(message.reason === 'dispatch-only' ? 'DISPATCH (!C) ONLY' : 'UNIT NOT ON A RADIO', 1400);
@@ -1349,8 +1355,11 @@ function changeChannel(step) {
     return;
   }
   if (state.tx !== 'idle') return;
-  const index = Math.max(0, state.channels.findIndex((channel) => channel.id === state.channelId));
-  const next = state.channels[(index + (step < 0 ? state.channels.length - 1 : 1)) % state.channels.length];
+  // Channels this member's Melonly rank can't use are skipped.
+  const open = state.channels.filter((channel) => !channel.locked || channel.id === state.channelId);
+  if (open.length < 2) return void flash('OTHER CHANNELS LOCKED', 1200);
+  const index = Math.max(0, open.findIndex((channel) => channel.id === state.channelId));
+  const next = open[(index + (step < 0 ? open.length - 1 : 1)) % open.length];
   saveSettings({ channel: next.id });
   sendJson({ type: 'channel', id: next.id });
 }
@@ -1370,7 +1379,7 @@ function scanText() {
 }
 
 function scanItems() {
-  return state.channels.filter((channel) => channel.id !== state.channelId)
+  return state.channels.filter((channel) => channel.id !== state.channelId && !channel.locked)
     .map((channel) => ({ id: channel.id, label: `CH ${channelNumber(channel.id)} · ${channel.name}` }));
 }
 
@@ -1731,10 +1740,10 @@ function usersLines() {
   const lines = [];
   state.channels.forEach((channel, index) => {
     const members = channelMembers(channel);
-    lines.push({ header: true, channelId: channel.id, text: `CH ${index + 1} · ${channel.name} (${members.length})`, current: channel.id === state.channelId });
+    lines.push({ header: true, channelId: channel.id, text: `CH ${index + 1} · ${channel.name} (${members.length})${channel.locked ? ' · LOCKED' : ''}`, current: channel.id === state.channelId });
     if (!members.length) lines.push({ text: 'NOBODY', dim: true });
     for (const member of members) {
-      const where = member.app && member.discord ? 'APP + VC' : member.discord ? 'DISCORD VC' : 'APP';
+      const where = `${member.label ? `${member.label} · ` : ''}${member.app && member.discord ? 'APP + VC' : member.discord ? 'DISCORD VC' : 'APP'}`;
       lines.push({ text: member.name, where, me: member.id === state.me?.id, talking: member.talking, id: member.id, app: member.app, channelId: channel.id });
     }
   });
@@ -2046,7 +2055,7 @@ function homeBody() {
   html += `<div class="card units"><div class="zone">UNITS ON CH ${channelNumber()} (${members.length})</div>`
     + (members.length
       ? members.map((member) => `<div class="unit${member.talking ? ' talking' : ''}"><span>${escapeHtml(member.name.toUpperCase())}${member.id === state.me?.id ? ' (YOU)' : ''}</span>`
-        + `<span class="where">${member.app && member.discord ? 'APP+VC' : member.discord ? 'VC' : 'APP'}</span></div>`).join('')
+        + `<span class="where">${member.label ? `${escapeHtml(member.label)} · ` : ''}${member.app && member.discord ? 'APP+VC' : member.discord ? 'VC' : 'APP'}</span></div>`).join('')
       : '<div class="unit dim">NOBODY</div>')
     + '</div>';
   return html;

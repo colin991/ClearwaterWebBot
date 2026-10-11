@@ -274,7 +274,7 @@
     else if (!users.length) empty(onList, 'Nobody is on a radio.');
     else {
       onList.replaceChildren(...users.map((user) => row(user,
-        [user.channel, minutesSince(user.since), signalText(user.signal)].filter(Boolean).join(' · '),
+        [user.label, user.channel, minutesSince(user.since), signalText(user.signal)].filter(Boolean).join(' · '),
         muteButtons(user, true))));
     }
 
@@ -292,7 +292,115 @@
     scenesAt = Date.now();
     renderScenes();
     renderEvent(data.event || null);
+    access = data.access || {};
+    melonlyReady = Boolean(data.melonly);
+    renderAccessSummary();
   }
+
+  /* ---------- channel access by Melonly rank ---------- */
+
+  const ACCESS_CHANNELS = [
+    { id: 'srt', name: 'CH 2 · Special Response Team' },
+    { id: 'freq', name: 'CH 3 · Frequency Change' },
+    { id: 'event', name: 'CH 4 · Event channel' },
+  ];
+  let access = {};
+  let melonlyReady = false;
+  let catalog = null;
+  const rankName = (key) => {
+    const [deptId, rankId] = key.split(':');
+    const dept = catalog?.find((entry) => entry.id === deptId);
+    const rank = dept?.ranks.find((entry) => entry.id === rankId);
+    return rank ? `${dept.short} ${rank.name}` : null;
+  };
+
+  function renderAccessSummary() {
+    const box = $('accessSummary');
+    if (!melonlyReady) {
+      box.textContent = 'Melonly is not set up on the bot host (MELONLY_API_KEY), so every channel is open.';
+      $('accessLoad').hidden = true;
+      return;
+    }
+    $('accessLoad').hidden = false;
+    box.textContent = ACCESS_CHANNELS.map((channel) => {
+      const ranks = access[channel.id]?.ranks || [];
+      if (!ranks.length) return `${channel.name}: everyone`;
+      const names = catalog ? ranks.map(rankName).filter(Boolean) : [];
+      return `${channel.name}: ${names.length ? names.join(', ') : `${ranks.length} rank${ranks.length === 1 ? '' : 's'}`}`;
+    }).join(' · ');
+  }
+
+  function renderAccessEditor() {
+    const editor = $('accessEditor');
+    editor.hidden = false;
+    editor.replaceChildren();
+    if (!catalog.length) {
+      const empty = document.createElement('p');
+      empty.className = 'rs-fine';
+      empty.textContent = 'No Melonly departments found for this API key.';
+      editor.append(empty);
+      return;
+    }
+    for (const channel of ACCESS_CHANNELS) {
+      const chosen = new Set(access[channel.id]?.ranks || []);
+      const box = document.createElement('details');
+      box.className = 'rs-access-channel';
+      box.open = chosen.size > 0;
+      const summary = document.createElement('summary');
+      summary.textContent = channel.name;
+      const count = document.createElement('span');
+      count.textContent = chosen.size ? `${chosen.size} rank${chosen.size === 1 ? '' : 's'}` : 'open to everyone';
+      summary.append(count);
+      box.append(summary);
+      for (const dept of catalog) {
+        const group = document.createElement('div');
+        group.className = 'rs-access-dept';
+        const title = document.createElement('b');
+        title.textContent = dept.name;
+        const ranks = document.createElement('div');
+        ranks.className = 'rs-access-ranks';
+        for (const rank of dept.ranks) {
+          const label = document.createElement('label');
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.dataset.channel = channel.id;
+          input.value = `${dept.id}:${rank.id}`;
+          input.checked = chosen.has(input.value);
+          input.addEventListener('change', () => {
+            const ticked = editor.querySelectorAll(`input[data-channel="${channel.id}"]:checked`).length;
+            count.textContent = ticked ? `${ticked} rank${ticked === 1 ? '' : 's'}` : 'open to everyone';
+          });
+          label.append(input, document.createTextNode(rank.name));
+          ranks.append(label);
+        }
+        group.append(title, ranks);
+        box.append(group);
+      }
+      editor.append(box);
+    }
+    const save = document.createElement('div');
+    save.className = 'rs-save';
+    const cancel = button('Cancel', 'ghost', () => { editor.hidden = true; });
+    const store = button('Save channel access', 'go', async () => {
+      const next = {};
+      for (const channel of ACCESS_CHANNELS) {
+        const ranks = [...editor.querySelectorAll(`input[data-channel="${channel.id}"]:checked`)].map((input) => input.value);
+        if (ranks.length) next[channel.id] = { ranks };
+      }
+      const data = await tool({ action: 'access', access: next }, 'Channel access saved. Radios update straight away.');
+      if (data) editor.hidden = true;
+    });
+    save.append(cancel, store);
+    editor.append(save);
+  }
+
+  $('accessLoad').addEventListener('click', async () => {
+    const data = await tool({ action: 'ranks' });
+    if (!data) return;
+    catalog = Array.isArray(data.departments) ? data.departments : [];
+    renderAccessSummary();
+    renderAccessEditor();
+  });
 
   const FLAG_LABELS = { 'off-team': 'OFF TEAM', 'talk-over': 'TALK-OVER' };
   function renderFlags(flags) {

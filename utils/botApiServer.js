@@ -229,7 +229,7 @@ export function startBotApiServer(client, {
           if (RADIO_STAFF_TOOLS.includes(payload.action)) {
             const result = await runRadioStaffTool(payload.action, payload, discordId);
             // Recordings come back on their own; everything else refreshes the panel too.
-            if (payload.action === 'recordings' || payload.action === 'recording') return sendJson(response, 200, result);
+            if (['recordings', 'recording', 'ranks'].includes(payload.action)) return sendJson(response, 200, result);
             return sendJson(response, 200, { ...result, ...radioStaffView(access.guild, access.member) });
           }
           const result = await runRadioStaffAction(String(payload.action || ''), String(payload.userId || ''), discordId, { from: 'website' });

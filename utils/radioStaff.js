@@ -9,6 +9,7 @@ import {
 } from 'discord.js';
 import { logger } from './logger.js';
 import { normalizeCoverage } from './radioCoverage.js';
+import { normalizeAccess } from './radioMelonly.js';
 
 /**
  * Clearwater Radio staff tools: the admin panel (/radio-staff: force-mute / kick off the radio) and the
@@ -24,7 +25,7 @@ const PANEL_FOOTER = 'Clearwater Radio staff panel';
 export const RADIO_STAFF_URL = 'https://www.cwpcso.com/radio-staff';
 export const RADIO_STAFF_ACTIONS = Object.freeze(['mute', 'unmute', 'kick']);
 /** Website-only staff tools: warning pop-ups, shout-outs, the event channel and recordings. */
-export const RADIO_STAFF_TOOLS = Object.freeze(['warn', 'shout', 'event-open', 'event-close', 'recordings', 'recording']);
+export const RADIO_STAFF_TOOLS = Object.freeze(['warn', 'shout', 'event-open', 'event-close', 'recordings', 'recording', 'ranks', 'access']);
 export const RADIO_WARNING_MAX = 200;
 export const RADIO_SHOUT_MAX = 200;
 
@@ -97,7 +98,7 @@ export function buildRadioStaffPanel(selectedId = '') {
  * muted members who are not on a radio.
  */
 export function radioStaffSnapshot(nameOf = () => '') {
-  if (!controls) return { running: false, users: [], muted: [], coverage: normalizeCoverage({}), positions: [], flags: [], crashes: [], scenes: [], event: null };
+  if (!controls) return { running: false, users: [], muted: [], coverage: normalizeCoverage({}), positions: [], flags: [], crashes: [], scenes: [], event: null, access: {}, melonly: false };
   const users = controls.users();
   const onRadio = new Set(users.map((user) => user.userId));
   return {
@@ -110,6 +111,7 @@ export function radioStaffSnapshot(nameOf = () => '') {
       since: user.since || null,
       signal: user.signal ?? null,
       monitor: Boolean(user.monitor),
+      label: user.label || '',
     })),
     muted: [...(controls.muted || [])].filter((id) => !onRadio.has(id)).map((id) => ({ userId: id, name: nameOf(id) || '' })),
     coverage: controls.coverage?.() || normalizeCoverage({}),
@@ -121,6 +123,9 @@ export function radioStaffSnapshot(nameOf = () => '') {
     // Units in the scene / traffic stop voice channels and how long they've been there.
     scenes: (controls.scenes?.() || []).map((scene) => ({ ...scene })),
     event: controls.event?.() || null,
+    // Rank-based channel access: { channelId: { ranks: ['deptId:rankId'] } }, and whether Melonly is set up.
+    access: controls.access?.() || {},
+    melonly: Boolean(controls.melonly?.()),
   };
 }
 
@@ -238,6 +243,24 @@ export async function runRadioStaffTool(action, payload, by) {
     logger.info(`Radio staff: event channel closed by ${by} (${moved} moved to CH 1)`);
     note(`🎪 <@${by}> closed the event channel; ${moved} radio${moved === 1 ? '' : 's'} moved back to CH 1.`);
     return { ok: true, action, moved };
+  }
+  if (action === 'ranks') {
+    // Melonly departments and their ranks, for the channel access picker.
+    if (!controls.melonly?.()) throw fail('Melonly is not set up on the bot host (MELONLY_API_KEY).', 409);
+    try {
+      return { ok: true, action, departments: (await controls.catalog?.()) || [] };
+    } catch (error) {
+      logger.warn(`Radio staff: Melonly ranks failed (${error?.message || error})`);
+      throw fail('Could not load the Melonly ranks. Try again shortly.', 503);
+    }
+  }
+  if (action === 'access') {
+    const saved = await controls.setAccess?.(normalizeAccess(payload?.access || {}), by);
+    if (!saved) throw fail('The radio is not running on the bot host right now.', 503);
+    const locked = Object.keys(saved);
+    logger.info(`Radio staff: channel access saved by ${by} (${locked.join(', ') || 'all open'})`);
+    note(`🔒 <@${by}> updated radio channel access (website): ${locked.length ? `${locked.length} channel${locked.length === 1 ? '' : 's'} limited by Melonly rank` : 'every channel open to everyone'}.`);
+    return { ok: true, action, access: saved };
   }
   if (action === 'recordings') {
     const list = (await controls.recordings?.()) || [];
