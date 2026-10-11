@@ -255,10 +255,12 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     try { onPanic(payload); } catch (error) { logger.warn(`Radio panic failed: ${error?.message || error}`); }
   };
   erlcEvents?.on('erlcEvent', onErlcEvent);
+  erlcEvents?.on('erlcCommandLog', onErlcEvent);
 
   return () => {
     stopped = true;
     erlcEvents?.off('erlcEvent', onErlcEvent);
+    erlcEvents?.off('erlcCommandLog', onErlcEvent);
     clearTimeout(rejoinTimer);
     clearInterval(statsTimer);
     if (activeRelay === relay) activeRelay = null;
