@@ -223,6 +223,8 @@ export function createRadioRelay({
     const { userId, name, channel } = socket.radio;
     const talker = talkers.get(channel);
     if (talker?.socket === socket) return send(socket, { type: 'tx', ok: true });
+    // Deafened radios can't talk, like being muted in the Discord channel.
+    if (socket.radio.deaf) return send(socket, { type: 'tx', ok: false, reason: 'deaf' });
     const timeoutUntil = pttSpamTimeout(userId);
     if (timeoutUntil) return send(socket, { type: 'tx', ok: false, reason: 'timeout', seconds: secondsLeft(timeoutUntil) });
     if (talker) return send(socket, { type: 'tx', ok: false, reason: 'busy', name: talker.name });
@@ -399,6 +401,7 @@ export function createRadioRelay({
         void onPanicPress(socket);
       } else if (message.type === 'deaf') {
         socket.radio.deaf = Boolean(message.active);
+        if (socket.radio.deaf) endTransmit(socket);
       } else if (message.type === 'ping') {
         send(socket, { type: 'pong', t: message.t });
       }

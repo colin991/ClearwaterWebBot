@@ -1123,6 +1123,11 @@ function pttPress() {
     flash('IN DISCORD VC');
     return;
   }
+  if (state.settings.deaf) {
+    playTone('busy');
+    flash('DEAFENED · NO TALK');
+    return;
+  }
   if (state.pttTimeoutUntil > Date.now()) {
     playTone('busy');
     flash(`TIMED OUT ${waitText(state.pttTimeoutUntil - Date.now())}`);
@@ -1151,7 +1156,9 @@ function onTxReply(message) {
   if (!message.ok) {
     state.tx = 'idle';
     playTone('busy');
-    if (message.reason === 'timeout') {
+    if (message.reason === 'deaf') {
+      flash('DEAFENED · NO TALK');
+    } else if (message.reason === 'timeout') {
       state.pttTimeoutUntil = Date.now() + (Number(message.seconds) || 60) * 1000;
       flash('PTT SPAM · TIMED OUT', 1500);
     } else if (message.reason === 'busy') flash(`BUSY ${String(message.name || '').toUpperCase()}`.trim());
@@ -1323,6 +1330,8 @@ function homeBody() {
     line = `RX ${[...state.rx.values()].map((entry) => entry.name).join(', ')}`;
   } else if (!state.botOnline) {
     line = 'BOT OFFLINE · WAITING';
+  } else if (state.settings.deaf) {
+    line = 'DEAFENED · NO TALK';
   } else if (state.pttTimeoutUntil > Date.now()) {
     line = `PTT TIMED OUT FOR SPAM · ${waitText(state.pttTimeoutUntil - Date.now())}`;
   } else if (state.inVoice) {
@@ -1755,6 +1764,9 @@ function bindControls() {
 
   el.deaf.addEventListener('click', () => {
     const deaf = !state.settings.deaf;
+    // Deafening while talking ends the transmission.
+    if (deaf && state.tx === 'on') void stopTx();
+    else if (deaf && state.tx === 'requesting') state.txCancel = true;
     saveSettings({ deaf });
     applyDeaf();
     sendJson({ type: 'deaf', active: deaf });

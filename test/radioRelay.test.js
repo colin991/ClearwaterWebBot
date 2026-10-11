@@ -504,3 +504,31 @@ test('spamming PTT times the member out of talking for a minute, even after reco
     await harness.close();
   }
 });
+
+test('a deafened radio cannot talk, and deafening mid-transmission ends it', async () => {
+  const harness = await startRelay();
+  try {
+    const alice = client(harness.url);
+    await once(alice.ws, 'open');
+    alice.send({ type: 'auth', key: createRadioKey(ALICE, env) });
+    await alice.until(() => alice.messages.find((m) => m.type === 'ready'));
+    const replies = () => alice.messages.filter((m) => m.type === 'tx');
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => replies().length === 1);
+    assert.equal(replies()[0].ok, true);
+    alice.send({ type: 'deaf', active: true });
+    await alice.until(() => harness.ended === 1);
+
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => replies().length === 2);
+    assert.deepEqual(replies()[1], { type: 'tx', ok: false, reason: 'deaf' });
+
+    alice.send({ type: 'deaf', active: false });
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => replies().length === 3);
+    assert.equal(replies()[2].ok, true, 'undeafened radios can talk again');
+    alice.ws.close();
+  } finally {
+    await harness.close();
+  }
+});

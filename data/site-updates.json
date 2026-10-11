@@ -3406,6 +3406,13 @@
       "summary": "On the radio's WHO'S ON screen, clicking a channel twice (or picking it and pressing OK) switches your radio to that channel.",
       "createdAt": "2026-10-11T20:40:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-deaf-no-talk",
+      "title": "Radio: no talking while deafened",
+      "summary": "While you are deafened on the Clearwater Radio (app or web), PTT no longer transmits. You hear the busy tone and the screen shows DEAFENED · NO TALK.",
+      "createdAt": "2026-10-11T20:45:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
