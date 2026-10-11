@@ -7,7 +7,7 @@
     <meta name="description" content="Sign in to the Pinellas County Sheriff's Office portal with Discord." />
     <title>Sign in · PCSO</title>
     <link rel="icon" type="image/png" href="assets/pcso-sheriff-star.png" />
-    <link rel="stylesheet" href="signin.css?v=20260913-gray-black" />
+    <link rel="stylesheet" href="signin.css?v=20261011-signin-errors" />
   </head>
   <body class="signin-body">
     <div class="signin-atmosphere" aria-hidden="true">
@@ -23,6 +23,7 @@
       </a>
       <h1>Welcome to<br />PCSO</h1>
       <p class="signin-lead">Sign in with Discord to access the Pinellas County Sheriff&apos;s Office portal.</p>
+      <p class="signin-error" data-signin-error role="alert" hidden></p>
       <form class="signin-form" data-signin-form>
         <label class="signin-agree">
           <input type="checkbox" data-legal-agree />
@@ -36,6 +37,6 @@
       </form>
       <p class="signin-note">You must be in the PCSO Discord server to use this portal.</p>
     </main>
-    <script src="signin.js?v=20261003-next-paths"></script>
+    <script src="signin.js?v=20261011-signin-errors"></script>
   </body>
 </html>

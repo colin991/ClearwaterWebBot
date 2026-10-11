@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-11-pcso-signin-access",
+      "title": "PCSO website sign-in no longer bounces to Coming Soon",
+      "summary": "Signing in on cwpcso.com now checks PCSO Discord server membership from your server list, so a Discord rate limit can no longer turn a PCSO member away. If sign-in fails or you are not in the PCSO server, you stay on the PCSO sign-in page with a clear message instead of the Clearwater Coming Soon tester page.",
+      "createdAt": "2026-10-11T15:40:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-11-radio-audio-fixes",
       "title": "Radio audio: quieter bot, clean talk, optional effects",
       "summary": "Your voice now goes to the RTO channel clean and at a reasonable level: the old radio filter and automatic boost that made the bot too loud are gone, and a limiter caps peaks. New TX VOL setting controls how loud you are. Radio effects (RADIO or POLICE, with static) are now an optional listening setting, off by default, and only change what you hear in the app. Listening is protected from clipping and catches up after network hiccups, and the bot logs how many Discord voice packets it passes to radios each minute.",

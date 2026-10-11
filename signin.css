@@ -180,6 +180,20 @@ body.signin-body {
   cursor: not-allowed;
   filter: none;
 }
+.signin-error {
+  max-width: 42ch;
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 120, 120, .35);
+  border-radius: 12px;
+  color: #ffc9c9;
+  background: rgba(120, 20, 20, .25);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.signin-error[hidden] { display: none; }
+
 .signin-note {
   max-width: 42ch;
   margin: 20px 0 0;
