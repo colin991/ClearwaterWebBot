@@ -1,4 +1,4 @@
-/* cwpcso.com/radio-staff: who is on the radio, force-mute, unmute and kick. Admins only; the bot checks. */
+/* cwpcso.com/radio-staff: who is on the radio, mute, kick and warn, plus staff tools. Admins only; the bot checks. */
 (() => {
   const $ = (id) => document.getElementById(id);
   const gate = $('gate');
@@ -98,6 +98,12 @@
       tag.textContent = 'MUTED';
       item.append(tag);
     }
+    if (member.monitor) {
+      const tag = document.createElement('span');
+      tag.className = 'rs-tag live';
+      tag.textContent = 'MONITOR';
+      item.append(tag);
+    }
     const box = document.createElement('div');
     box.className = 'rs-actions';
     box.append(...actions);
@@ -117,9 +123,142 @@
     const actions = [member.muted
       ? button('Unmute', 'unmute', () => act('unmute', member.userId, name))
       : button('Force mute', 'mute', () => act('mute', member.userId, name))];
-    if (withKick) actions.push(button('Kick', 'kick', () => act('kick', member.userId, name)));
+    if (withKick) {
+      actions.unshift(button('Warn', 'warn', () => warn(member.userId, name)));
+      actions.push(button('Kick', 'kick', () => act('kick', member.userId, name)));
+    }
     return actions;
   }
+
+  /* ---------- staff tools ---------- */
+
+  async function tool(body, done) {
+    if (busy) return null;
+    busy = true;
+    const { status, data } = await call(body);
+    busy = false;
+    if (status !== 200) {
+      if (status === 401 || status === 403) handleError(status, data);
+      else toast(data.error || 'That did not work. Try again.', true);
+      return null;
+    }
+    if (done) toast(done);
+    if (data.running !== undefined) render(data);
+    return data;
+  }
+
+  async function warn(userId, name) {
+    const text = window.prompt(`Warning for ${name} (shows on their radio until they press OK):`, '');
+    if (!text?.trim()) return;
+    await tool({ action: 'warn', userId, text: text.trim() }, `Warning sent to ${name}.`);
+  }
+
+  $('shoutForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const text = $('shoutText').value.trim();
+    if (!text) return;
+    if (await tool({ action: 'shout', text }, 'Playing on every radio.')) $('shoutText').value = '';
+  });
+  $('eventForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const name = $('eventName').value.trim() || 'Server Event';
+    await tool({ action: 'event-open', name }, `Event channel "${name}" is open as CH 4.`);
+  });
+  $('eventClose').addEventListener('click', async () => {
+    if (!window.confirm('Close the event channel? Everyone on it goes back to CH 1.')) return;
+    const data = await tool({ action: 'event-close' });
+    if (data) toast(`Event channel closed${data.moved ? `; ${data.moved} radio${data.moved === 1 ? '' : 's'} moved to CH 1` : ''}.`);
+  });
+
+  function renderEvent(event) {
+    $('eventState').textContent = event ? `Event channel: open as CH 4 · ${event.name}` : 'Event channel: closed';
+    $('eventOpen').textContent = event ? 'Rename' : 'Open event channel';
+    $('eventClose').hidden = !event;
+  }
+
+  function durationText(seconds) {
+    const total = Math.max(0, Math.round(seconds));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    return h ? `${h} h ${m} min` : `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  let scenes = [];
+  let scenesAt = 0;
+  function renderScenes() {
+    $('sceneCount').textContent = String(scenes.length);
+    const list = $('sceneList');
+    if (!scenes.length) return empty(list, 'Nobody is in a scene or traffic stop channel (or RADIO_SCENE_CHANNEL_IDS is not set on the bot).');
+    const extra = (Date.now() - scenesAt) / 1000;
+    list.replaceChildren(...scenes.map((scene) => row({ name: scene.name, userId: scene.id }, `${scene.channel} · ${durationText(scene.seconds + extra)}`, [])));
+    return undefined;
+  }
+  setInterval(() => { if (scenes.length && !document.hidden) renderScenes(); }, 1000);
+
+  function renderCrashes(crashes) {
+    $('crashCount').textContent = String(crashes.length);
+    const list = $('crashList');
+    if (!crashes.length) return empty(list, 'No crash reports.');
+    list.replaceChildren(...crashes.map((crash) => {
+      const when = new Date(crash.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const item = row({ name: crash.name, userId: crash.userId }, `${when} · ${crash.version ? `v${crash.version} · ` : ''}${crash.where || ''} · ${crash.message}`, []);
+      item.classList.add('crash');
+      if (crash.stack || crash.platform) {
+        const details = document.createElement('details');
+        const summary = document.createElement('summary');
+        summary.textContent = 'Details';
+        const pre = document.createElement('pre');
+        pre.textContent = [crash.platform, crash.stack].filter(Boolean).join('\n');
+        details.append(summary, pre);
+        item.append(details);
+      }
+      return item;
+    }));
+    return undefined;
+  }
+
+  /* ---------- recordings ---------- */
+
+  let recordings = [];
+  function renderRecordings() {
+    const list = $('recList');
+    const query = $('recSearch').value.trim().toLowerCase();
+    const shown = recordings.filter((rec) => !query || `${rec.name} ${rec.channel}`.toLowerCase().includes(query)).slice(0, 150);
+    if (!shown.length) return empty(list, recordings.length ? 'No recordings match.' : 'No recordings in the last 24 hours.');
+    list.replaceChildren(...shown.map((rec) => {
+      const when = new Date(rec.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const item = row({ name: rec.name, userId: rec.userId }, `${when} · ${rec.channel} · ${rec.seconds}s${rec.source === 'discord' ? ' · Discord' : ''}`, [
+        button('Play', 'ghost', async (event) => {
+          const target = event.currentTarget;
+          target.disabled = true;
+          const { status, data } = await call({ action: 'recording', id: rec.id });
+          target.disabled = false;
+          if (status !== 200 || !data.audio) return toast(data.error || 'Could not load that recording.', true);
+          const bytes = Uint8Array.from(atob(data.audio), (char) => char.charCodeAt(0));
+          const audio = document.createElement('audio');
+          audio.controls = true;
+          audio.src = URL.createObjectURL(new Blob([bytes], { type: data.type || 'audio/ogg' }));
+          item.querySelector('audio')?.remove();
+          item.append(audio);
+          void audio.play().catch(() => {});
+          return undefined;
+        }),
+      ]);
+      return item;
+    }));
+    return undefined;
+  }
+  $('recLoad').addEventListener('click', async () => {
+    const data = await tool({ action: 'recordings' });
+    if (!data) return;
+    recordings = Array.isArray(data.recordings) ? data.recordings : [];
+    $('recFilter').hidden = false;
+    $('recLoad').textContent = 'Reload';
+    renderRecordings();
+  });
+  $('recSearch').addEventListener('input', () => renderRecordings());
+  $('recFilter').addEventListener('submit', (event) => event.preventDefault());
 
   function render(data) {
     gate.hidden = true;
@@ -148,9 +287,14 @@
     if (lastFound.length) renderFound(lastFound);
     coverageMap.update(data.coverage, data.positions);
     renderFlags(Array.isArray(data.flags) ? data.flags : []);
+    renderCrashes(Array.isArray(data.crashes) ? data.crashes : []);
+    scenes = Array.isArray(data.scenes) ? data.scenes : [];
+    scenesAt = Date.now();
+    renderScenes();
+    renderEvent(data.event || null);
   }
 
-  const FLAG_LABELS = { 'off-team': 'OFF TEAM' };
+  const FLAG_LABELS = { 'off-team': 'OFF TEAM', 'talk-over': 'TALK-OVER' };
   function renderFlags(flags) {
     $('flagCount').textContent = String(flags.length);
     const list = $('flagList');

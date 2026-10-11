@@ -66,6 +66,40 @@ const bindDown = new Set();
 let popup = null;
 
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
+const crashPath = () => path.join(app.getPath('userData'), 'crashes.json');
+
+/* ---------- crash reporter ---------- */
+
+// Errors in the app itself are saved here and handed to the radio screen, which sends them to the
+// staff panel on its next sign-in.
+function readCrashes() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(crashPath(), 'utf8'));
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+}
+
+function recordCrash(error, where) {
+  try {
+    const crash = {
+      message: String(error?.message || error || 'Unknown error').slice(0, 300),
+      stack: String(error?.stack || '').slice(0, 2000),
+      where,
+      version: app.getVersion(),
+      platform: `${process.platform} ${process.arch}`,
+      at: Date.now(),
+    };
+    fs.mkdirSync(path.dirname(crashPath()), { recursive: true });
+    fs.writeFileSync(crashPath(), JSON.stringify([...readCrashes(), crash].slice(-5)));
+  } catch {
+    // Never let the crash reporter itself take the app down.
+  }
+}
+
+process.on('uncaughtException', (error) => recordCrash(error, 'app'));
+process.on('unhandledRejection', (error) => recordCrash(error, 'app-promise'));
 
 function loadSettings() {
   try {
@@ -305,6 +339,11 @@ function createWindow() {
     },
   });
   keepOnTop();
+  // The radio screen crashed: note it for the staff panel and bring it back.
+  win.webContents.on('render-process-gone', (_event, details) => {
+    recordCrash(new Error(`Radio screen stopped (${details?.reason || 'unknown'}, exit ${details?.exitCode ?? '?'})`), 'screen');
+    if (details?.reason !== 'clean-exit' && win && !win.isDestroyed()) setTimeout(() => win?.webContents?.reload(), 1000);
+  });
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   win.on('blur', keepOnTop);
   win.on('moved', () => {
@@ -434,7 +473,7 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('settings:get', () => ({ ...settings, hook: Boolean(uIOhook), relayUrl: DEFAULT_RELAY_URL }));
     ipcMain.handle('settings:set', (_event, patch) => {
       const allowedKeys = ['key', 'micId', 'outputId', 'volume', 'txVolume', 'listenFx', 'power', 'size', 'fxLevel', 'scan', 'channel', 'deaf', 'ptt',
-        'scanPtt', 'replayKey', 'chanKey', 'night', 'agc', 'syncAt', 'tutorialDone'];
+        'scanPtt', 'replayKey', 'chanKey', 'night', 'agc', 'syncAt', 'tutorialDone', 'recordNotice', 'monitor'];
       for (const key of allowedKeys) {
         if (patch && Object.prototype.hasOwnProperty.call(patch, key)) settings[key] = patch[key];
       }
@@ -448,6 +487,11 @@ if (!app.requestSingleInstanceLock()) {
     });
     ipcMain.on('talk:popup', (_event, text) => showTalkPopup(typeof text === 'string' ? text : ''));
     ipcMain.handle('app:version', () => app.getVersion());
+    ipcMain.handle('crash:take', () => {
+      const crashes = readCrashes();
+      try { fs.rmSync(crashPath(), { force: true }); } catch { /* ignore */ }
+      return crashes;
+    });
     ipcMain.handle('auth:signin', (_event, info) => signIn(info));
     ipcMain.handle('auth:cancel', () => finishSignIn({ error: 'SIGN-IN CANCELLED' }));
     ipcMain.handle('update:check', async () => {

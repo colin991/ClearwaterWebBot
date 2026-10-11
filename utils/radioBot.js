@@ -27,6 +27,8 @@ import { createRadioTalkLog } from './radioTalkLog.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { createRadioStats, buildRadioStatsEmbed } from './radioStats.js';
 import { buildRadioPanicEmbed, RADIO_KICK_BLOCK_MS, setRadioStaffControls } from './radioStaff.js';
+import { createRadioRecorder } from './radioRecorder.js';
+import { createSceneClock, createTalkOverWatch, sceneChannelIds } from './radioModeration.js';
 
 const UNKNOWN_MEMBER = 10007;
 
@@ -43,6 +45,10 @@ const FLAG_KEEP_MS = 24 * 60 * 60 * 1000;
 const FLAG_LIMIT = 100;
 /** A damaged radio (member downed in game) gets this signal: very weak, but still comes through. */
 const DAMAGED_SIGNAL = 0.1;
+/** Crash reports from radios, for the staff panel: kept this long, newest first. */
+const CRASH_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
+const CRASH_LIMIT = 200;
+const RECORDING_PRUNE_MS = 30 * 60 * 1000;
 const radioDataPath = (name) => join(process.cwd(), 'data', name);
 // 80 ms: shorter transmissions are PTT taps with nothing said.
 const RADIO_MIN_TX_PACKETS = 4;
@@ -259,7 +265,47 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   let settingsSaveTimer = null;
   void readJsonFile(settingsPath, {}).then((saved) => { syncedSettings = { ...(saved || {}), ...syncedSettings }; });
 
+  // Every transmission (radio and the Discord radio channel) is recorded for staff review, kept 24 hours.
+  const recorder = createRadioRecorder({ dir: radioDataPath('radio-recordings') });
+  void recorder.prune();
+  const pruneTimer = setInterval(() => { void recorder.prune(); }, RECORDING_PRUNE_MS);
+  pruneTimer.unref?.();
+  const talkOver = createTalkOverWatch();
+  const sceneIds = sceneChannelIds(env.RADIO_SCENE_CHANNEL_IDS);
+  const sceneClock = createSceneClock();
+  let sceneList = [];
+  // Crash reports from radios (desktop and web), for the staff panel; survive restarts.
+  const crashPath = radioDataPath('radio-crashes.json');
+  let crashes = [];
+  void readJsonFile(crashPath, []).then((saved) => { if (Array.isArray(saved)) crashes = [...crashes, ...saved]; });
+  async function isAdmin(userId) {
+    const target = channel || await client.channels.fetch(RADIO_CHANNEL_ID).catch(() => null);
+    const member = await target?.guild?.members.fetch({ user: userId, force: true }).catch(() => null);
+    return Boolean(member?.permissions?.has(PermissionFlagsBits.Administrator));
+  }
+
   const relay = createRadioRelay({
+    record: (meta) => recorder.start(meta),
+    isStaff: (userId) => isAdmin(userId),
+    scenes: () => sceneList,
+    onTalkOver: (event) => {
+      const count = talkOver.hit(event.userId);
+      if (!count) return;
+      addFlag({
+        kind: 'talk-over',
+        userId: event.userId,
+        name: event.name,
+        detail: `Talked over dispatch (${event.dispatcher}) ${count} times in 10 minutes on ${event.channel}.`,
+      });
+      void postStaff({ content: `⚠️ <@${event.userId}> keeps talking over dispatch on the radio (${count} times in 10 minutes). Flagged on the radio staff page.`, allowedMentions: { parse: [] } });
+      logger.info(`Radio: talk-over flag for ${event.userId}`);
+    },
+    onCrash: (report) => {
+      const at = Date.now();
+      crashes = [{ ...report, id: `${at.toString(36)}${Math.random().toString(36).slice(2, 6)}` }, ...crashes.filter((entry) => at - entry.at < CRASH_KEEP_MS)].slice(0, CRASH_LIMIT);
+      void writeJsonFile(crashPath, crashes).catch((error) => logger.warn(`Radio crash log save failed: ${error?.message || error}`));
+      logger.warn(`Radio: crash report from ${report.userId} (${report.version || '?'}): ${report.message}`);
+    },
     verifyKey: (key) => verifyRadioKey(key, env),
     exchangeCode: (code) => exchangeRadioCode(code, env),
     createSession: (userId) => createRadioKey(userId, env),
@@ -315,7 +361,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
         return { ok: false, removed: true, reason: `You do not have access to #${target.name}.` };
       }
       const name = member.displayName || member.user.username;
-      return { ok: true, name, callsign: callsignFromName(name) };
+      return { ok: true, name, callsign: callsignFromName(name), staff: Boolean(member.permissions?.has(PermissionFlagsBits.Administrator)) };
     },
     openTransmit() {
       if (!isOnline()) return null;
@@ -354,10 +400,28 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   void readJsonFile(coveragePath, null).then((saved) => {
     if (saved) coverage = normalizeCoverage(saved);
   });
+  // Scene timers: members in the scene / traffic stop voice channels (RADIO_SCENE_CHANNEL_IDS), for dispatch.
+  let sceneKey = '';
+  function updateScenes() {
+    if (!sceneIds.length) return;
+    const rooms = sceneIds.map((id) => client.channels.cache.get(id) || erlcEvents?.channels?.cache?.get?.(id)).filter(Boolean).map((room) => ({
+      id: room.id,
+      name: room.name,
+      members: [...(room.members?.values?.() || [])].filter((member) => !member.user?.bot)
+        .map((member) => ({ id: member.id, name: member.displayName || member.user?.username || 'Member' })),
+    }));
+    sceneList = sceneClock.update(rooms);
+    const key = sceneList.map((scene) => `${scene.id}@${scene.channel}`).join('|');
+    if (key !== sceneKey) {
+      sceneKey = key;
+      relay.broadcastStatus();
+    }
+  }
   // Every few seconds: where each radio user is in game (postal, speed, heading, signal) and the weather.
   let gameBusy = false;
   async function gameTick() {
     relay.setWeather(erlcEvents?.serverWeather?.state?.currentWeather || '');
+    updateScenes();
     const users = relay.users();
     if (!users.length) {
       coverageTracker.clear();
@@ -375,6 +439,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
       }
       // Recompute when the next damaged radio recovers, not just on the next tick.
       clearTimeout(damageTimer);
+    clearInterval(pruneTimer);
       const nextEnd = damage.nextEnd();
       if (nextEnd) {
         damageTimer = setTimeout(() => coverageTracker.recompute(), Math.max(0, nextEnd - Date.now()) + 50);
@@ -412,6 +477,15 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     coverage: () => coverage,
     positions: () => coverageTracker.positions(),
     flags: () => staffFlags.filter((flag) => Date.now() - flag.at < FLAG_KEEP_MS),
+    crashes: () => crashes.filter((entry) => Date.now() - entry.at < CRASH_KEEP_MS).slice(0, 50),
+    scenes: () => sceneList,
+    recordings: () => recorder.list(),
+    recording: (id) => recorder.read(id),
+    event: () => relay.event,
+    openEvent: (name, by) => relay.openEvent(name, by),
+    closeEvent: () => relay.closeEvent(),
+    warn: (userId, text) => relay.sendTo(userId, { type: 'warning', text }),
+    shout: (text) => relay.alert({ type: 'shout', text }),
     async setCoverage(next, by) {
       coverage = normalizeCoverage(next);
       await writeJsonFile(coveragePath, { ...coverage, updatedBy: by, updatedAt: new Date().toISOString() });

@@ -123,7 +123,9 @@
           void navigator.wakeLock?.request('screen').catch(() => {});
           // Lets the radio show who is talking while the page is in the background.
           try { void window.Notification?.requestPermission?.()?.catch?.(() => {}); } catch { /* not supported */ }
-          resolve({ ...load(), hook: false, web: true, key: result.key, webRelay: result.url });
+          // ?monitor=1 (Listen live on the staff panel): admins hear every channel, listen-only.
+          const monitor = new URLSearchParams(window.location.search).has('monitor') || undefined;
+          resolve({ ...load(), hook: false, web: true, key: result.key, webRelay: result.url, ...(monitor ? { monitor } : {}) });
         };
       };
       void attempt();

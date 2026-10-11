@@ -608,3 +608,9 @@ body.night .keypad button, body.night .pkey { filter: brightness(.7); }
 body.damaged .lcd { animation: damage-flicker 2.4s steps(1) infinite; }
 @keyframes damage-flicker { 0%, 100% { filter: none; } 46% { filter: brightness(.82) contrast(1.15); } 48% { filter: none; } 81% { filter: brightness(.9); } 82% { filter: none; } }
 .low-power.damaged .lcd { animation: none; }
+
+/* Staff warning / recorded notice pop-up. */
+.lcd .modal { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; border-radius: 4px; text-align: center; }
+.lcd .modal.warning { background: rgba(192, 38, 27, .12); border: 1px solid #c0261b; }
+.lcd .modal.warning .mid { color: #c0261b; }
+.lcd .modal.notice { background: rgba(38, 123, 215, .1); border: 1px solid #267bd7; }

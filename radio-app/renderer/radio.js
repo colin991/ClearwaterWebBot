@@ -42,6 +42,8 @@ const MENU = [
   { label: 'REPLAY', value: () => (audio.replay ? 'STOP' : 'LAST 30s'), action: () => replay() },
   { label: 'WHERE AM I', value: () => (state.game?.postal ? `PST ${state.game.postal}` : 'SAY'), action: () => whereAmI() },
   { label: 'NEAREST', value: () => `${state.game?.nearest?.length || 0} UNITS`, open: 'nearest' },
+  { label: 'SCENES', value: () => `${state.scenes.length} ON`, open: 'scenes', dispatch: true },
+  { label: 'MONITOR', value: () => (state.monitor ? 'ON' : 'OFF'), adjust: () => toggleMonitor(), action: () => toggleMonitor(), staff: true },
   { label: 'PRACTICE', value: () => (state.practice ? 'ON' : 'OFF'), adjust: () => togglePractice(), action: () => togglePractice() },
   { label: 'REPLAY KEY', value: () => bindLabel('replayKey'), bind: 'replayKey' },
   { label: 'WHO', value: () => `${state.channels.reduce((total, channel) => total + (channel.members?.length || 0), 0)} ON`, open: 'users' },
@@ -77,7 +79,13 @@ const STUCK_MIC_MS = 60_000;
 const WHISPER_IDLE_MS = 60_000;
 // Settings shared between this member's desktop and phone radios.
 const SYNC_KEYS = ['volume', 'txVolume', 'listenFx', 'fxLevel', 'scan', 'night', 'agc'];
-const ROWS = { menu: MENU, setup: SETUP };
+// Staff rows (MONITOR) only show for admins, dispatch rows (SCENES) only for !C names.
+const ROWS = {
+  get menu() {
+    return MENU.filter((row) => (!row.staff || state.me?.staff) && (!row.dispatch || String(state.me?.name || '').includes('!C')));
+  },
+  setup: SETUP,
+};
 // Radio effects only change what this radio hears; what you send stays clean.
 const FX_MODES = ['off', 'radio', 'police'];
 const FX_LABELS = { off: 'OFF', radio: 'RADIO', police: 'POLICE' };
@@ -90,7 +98,7 @@ const SIZE_MAX = 130;
 const SIZE_STEP = 5;
 // FX LVL: how strong the radio effect is (100% is the normal sound).
 const FX_LEVELS = [25, 50, 75, 100, 125, 150];
-const PARENT = { nearest: 'menu', menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', size: 'menu', scan: 'menu', test: 'setup', users: 'home', unit: 'users', tutorial: 'home' };
+const PARENT = { scenes: 'menu', nearest: 'menu', menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', size: 'menu', scan: 'menu', test: 'setup', users: 'home', unit: 'users', tutorial: 'home' };
 // PANIC asks first; a second press (or OK) within this long sends it.
 const PANIC_CONFIRM_MS = 5000;
 // The relay allows one PANIC per member every 2 minutes.
@@ -138,6 +146,11 @@ const state = {
   signal: null, // this radio's signal from the staff coverage map (0.1-1); null = clear
   game: null, // { postal, street, speed, heading, nearest } from the game, null when not in game
   damagedUntil: 0, // downed in game: the radio is cracked and very weak until then
+  monitor: false, // staff live listen: every channel, listen-only
+  scenes: [], // dispatch: units in scene / traffic stop voice channels { name, channel, seconds }
+  scenesAt: 0,
+  event: null, // staff's temporary event channel { name } while open
+  modal: null, // a staff warning or the recorded-transmissions notice: { title, text, kind }
   weather: '', // server weather: clear, rain, fog, thunderstorm
   practice: false, // PRACTICE: PTT records and plays you back, nothing goes out
   practiceTx: false,
@@ -1144,6 +1157,13 @@ function onMessage(message) {
       applyChannelStatus(message);
       if (state.settings.deaf) sendJson({ type: 'deaf', active: true });
       applySync(message.synced);
+      state.monitor = false;
+      // A web radio opened from the staff panel's Listen live, or a desktop radio that had it on.
+      if (state.me?.staff && state.settings.monitor) sendJson({ type: 'monitor', active: true });
+      sendPendingCrashes();
+      if (!state.settings.recordNotice) {
+        showModal({ title: 'RECORDED', text: 'RADIO TRANSMISSIONS ARE RECORDED AND KEPT FOR 24 HOURS SO STAFF CAN REVIEW REPORTS.', kind: 'notice' });
+      }
       render();
       break;
     case 'status':
@@ -1186,6 +1206,35 @@ function onMessage(message) {
       updateLamps();
       render();
       break;
+    case 'warning':
+      // A staff warning stays up until OK.
+      playTone('busy');
+      showModal({ title: 'STAFF WARNING', text: String(message.text || ''), kind: 'warning' });
+      speak('Staff warning.');
+      break;
+    case 'shout':
+      // Staff announcement, read aloud on every radio.
+      playTone('call');
+      flash(`STAFF · ${String(message.text || '').toUpperCase()}`.slice(0, 90), 6000);
+      setTimeout(() => speak(`Staff announcement. ${message.text || ''}`), 450);
+      break;
+    case 'event':
+      if (message.open) {
+        playTone('call');
+        flash(`EVENT CHANNEL OPEN · ${String(message.name || 'EVENT').toUpperCase()}`.slice(0, 40), 3000);
+      }
+      break;
+    case 'monitor':
+      state.monitor = Boolean(message.ok && message.active);
+      if (!message.ok) flash('STAFF ONLY', 1400);
+      else flash(state.monitor ? 'MONITOR ON · ALL CHANNELS' : 'MONITOR OFF', 1400);
+      if (!state.monitor) {
+        // Voices on channels this radio no longer hears.
+        for (const [id, voice] of [...state.rx]) if (voice.channel !== state.channelId && !scanIds().includes(voice.channel)) state.rx.delete(id);
+        updateLamps();
+      }
+      render();
+      break;
     case 'damage':
       // Downed in game: the radio is cracked and very weak for a while.
       state.damagedUntil = Date.now() + (Number(message.seconds) || 20) * 1000;
@@ -1202,7 +1251,7 @@ function onMessage(message) {
       break;
     case 'moved':
       saveSettings({ channel: message.channel });
-      flash(`DISPATCH MOVED YOU · CH ${channelNumber(message.channel)}`, 1800);
+      flash(message.reason === 'event-closed' ? 'EVENT CLOSED · BACK ON CH 1' : `DISPATCH MOVED YOU · CH ${channelNumber(message.channel)}`, 1800);
       break;
     case 'move':
       if (message.ok) flash(`MOVED ${String(message.name || 'UNIT').toUpperCase()} · CH ${channelNumber(message.channel)}`.slice(0, 32), 1400);
@@ -1257,6 +1306,12 @@ function applyChannelStatus(message) {
   if ('muted' in message) state.muted = Boolean(message.muted);
   if ('signal' in message) state.signal = Number.isFinite(message.signal) ? message.signal : null;
   if ('weather' in message) applyWeather(message.weather);
+  if ('monitor' in message) state.monitor = Boolean(message.monitor);
+  if ('event' in message) state.event = message.event || null;
+  if (Array.isArray(message.scenes)) {
+    state.scenes = message.scenes;
+    state.scenesAt = Date.now();
+  }
   if ('lastHeard' in message) state.lastHeard = message.lastHeard;
   if (Array.isArray(message.calls)) {
     // A new 911 call waiting: a short tone and a flash.
@@ -1546,6 +1601,7 @@ function onTxReply(message) {
       state.pttTimeoutUntil = Date.now() + (Number(message.seconds) || 60) * 1000;
       flash('PTT SPAM · TIMED OUT', 1500);
     } else if (message.reason === 'busy') flash(`BUSY ${String(message.name || '').toUpperCase()}`.trim());
+    else if (message.reason === 'monitor') flash('MONITOR · LISTEN ONLY');
     else if (message.reason === 'whisper-offline') {
       state.whisper = null;
       flash('UNIT NOT ON A RADIO');
@@ -1739,6 +1795,74 @@ function applyDamage() {
   updateLamps();
 }
 
+// A pop-up over the screen (staff warning, recorded-transmissions notice) until OK or BACK.
+function showModal(modal) {
+  state.modal = modal;
+  render();
+}
+
+function closeModal() {
+  if (state.modal?.kind === 'notice') saveSettings({ recordNotice: true });
+  state.modal = null;
+  render();
+}
+
+// MONITOR (staff only): hear every channel, listen-only. The relay checks Administrator live.
+function toggleMonitor() {
+  if (!state.me?.staff) return flash('STAFF ONLY', 1200);
+  const active = !state.monitor;
+  saveSettings({ monitor: active });
+  sendJson({ type: 'monitor', active });
+  return undefined;
+}
+
+// SCENES (dispatch): how long each unit has been in a scene or traffic stop voice channel.
+function scenesBody() {
+  if (!state.scenes.length) return '<div class="mid">NO SCENES</div><div class="small">NOBODY IN A SCENE OR TRAFFIC STOP VC</div>';
+  const extra = Math.floor((Date.now() - state.scenesAt) / 1000);
+  return `<ul class="list users">${state.scenes.map((scene) => `<li>${escapeHtml(String(scene.name).toUpperCase())}`
+    + `<span class="where">${escapeHtml(String(scene.channel).toUpperCase())} · ${waitText((scene.seconds + extra) * 1000)}</span></li>`).join('')}</ul>`;
+}
+
+// Crash reporter: errors on this radio go to the staff panel (sent now, or on the next sign-in).
+const CRASH_KEY = `${KEY_PREFIX}crashes`;
+function reportCrash(error, where) {
+  const report = {
+    type: 'crash',
+    message: String(error?.message || error || 'Unknown error').slice(0, 300),
+    stack: String(error?.stack || '').slice(0, 2000),
+    where,
+    version: String(state.version || ''),
+    platform: String(navigator.userAgent || '').slice(0, 60),
+    at: Date.now(),
+  };
+  if (net.ws?.readyState === WebSocket.OPEN && state.conn === 'online') return sendJson(report);
+  try {
+    const queued = JSON.parse(localStorage.getItem(CRASH_KEY) || '[]');
+    localStorage.setItem(CRASH_KEY, JSON.stringify([...queued, report].slice(-5)));
+  } catch { /* storage off: lose it */ }
+  return undefined;
+}
+
+async function sendPendingCrashes() {
+  let queued = [];
+  try {
+    queued = JSON.parse(localStorage.getItem(CRASH_KEY) || '[]');
+    localStorage.removeItem(CRASH_KEY);
+  } catch { queued = []; }
+  // The desktop app's own (main process) crashes, saved to disk.
+  try { queued.push(...((await api.takeCrashes?.()) || []).map((crash) => ({ type: 'crash', ...crash }))); } catch { /* older app */ }
+  for (const report of queued.slice(-5)) sendJson({ ...report, type: 'crash' });
+}
+
+let crashCount = 0;
+window.addEventListener('error', (event) => {
+  if ((crashCount += 1) <= 5) reportCrash(event.error || event.message, 'renderer');
+});
+window.addEventListener('unhandledrejection', (event) => {
+  if ((crashCount += 1) <= 5) reportCrash(event.reason, 'promise');
+});
+
 // NEAREST: the 3 closest units on a radio in game, with their postal and distance.
 function nearestBody() {
   if (!state.game) return '<div class="mid">NOT IN GAME</div><div class="small">JOIN THE SERVER TO SEE NEARBY UNITS</div>';
@@ -1875,6 +1999,8 @@ function homeBody() {
     else line = `${state.txChannel && state.txChannel !== state.channelId ? `TRANSMITTING ON CH ${channelNumber(state.txChannel)}` : 'TRANSMITTING'} · ${talkTime()}`;
   } else if (state.practice) {
     line = 'PRACTICE MODE · PTT TO TEST · NOT LIVE';
+  } else if (state.monitor && !state.rx.size) {
+    line = 'STAFF MONITOR · ALL CHANNELS · LISTEN ONLY';
   } else if (state.damagedUntil > Date.now()) {
     kind = 'tx';
     line = `RADIO DAMAGED · ${Math.ceil((state.damagedUntil - Date.now()) / 1000)}s`;
@@ -2069,6 +2195,10 @@ function render() {
       left = 'NEAREST UNITS';
       body = nearestBody();
       break;
+    case 'scenes':
+      left = 'SCENE TIMERS';
+      body = scenesBody();
+      break;
     case 'unit': {
       left = 'UNIT';
       const items = unitItems();
@@ -2084,7 +2214,7 @@ function render() {
       break;
     }
     case 'menu':
-      body = rowsHtml(MENU, state.menuIndex);
+      body = rowsHtml(ROWS.menu, state.menuIndex);
       break;
     case 'setup':
       body = rowsHtml(SETUP, state.setupIndex);
@@ -2147,6 +2277,11 @@ function render() {
       + (state.panic.map ? '<div class="pmap" id="pmap"><i></i></div>' : '<div class="big">PANIC</div>')
       + postal
       + `<div class="small">${escapeHtml(state.panic.location)}</div>`;
+  }
+  if (state.modal) {
+    left = state.modal.title;
+    body = `<div class="modal ${escapeHtml(state.modal.kind)}"><div class="mid">${escapeHtml(state.modal.title)}</div>`
+      + `<div class="small">${escapeHtml(String(state.modal.text).toUpperCase())}</div><div class="small dim">PRESS OK</div></div>`;
   }
   if (state.panicAsk) {
     left = 'PANIC';
@@ -2476,6 +2611,7 @@ function press(key) {
   playTone('key');
   if (state.mustBind) return undefined;
   if (state.panicAsk) return key === 'ok' || key === '#' ? sendPanic() : cancelPanic();
+  if (state.modal && ['ok', '#', 'back', '*'].includes(key)) return closeModal();
   if (state.firstSetup && (key === 'softL' || key === 'softR')) return undefined;
   // Gray left button: open the menu from the radio screen, otherwise go straight back to the radio.
   if (key === 'softL') return setScreen(state.screen === 'home' ? 'menu' : 'home');
@@ -2537,6 +2673,7 @@ function checkIdle() {
   if (state.calls.length && state.screen === 'home' && !state.toast && Date.now() % 5000 < 1000) render();
   // Talk timer and the RADIO UPDATING countdown tick every second.
   if (state.screen === 'home' && !state.toast && (state.tx === 'on' || state.practiceTx || state.conn === 'updating' || state.damagedUntil)) render();
+  if (state.screen === 'scenes' && !state.toast) render();
   if (state.pttHeld || state.tx === 'on') return markActive();
   const idle = Date.now() - lastActiveAt;
   if (idle >= IDLE_CLOSE_MS) {
@@ -2552,6 +2689,7 @@ function checkIdle() {
 function clickLcd(event) {
   if (state.mustBind || state.panic) return;
   if (state.panicAsk) return;
+  if (state.modal) return void closeModal();
   const { screen } = state;
   const item = event.target.closest('li[data-row]');
   const index = item ? Number(item.dataset.row) : -1;
