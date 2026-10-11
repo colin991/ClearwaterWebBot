@@ -14,10 +14,53 @@ import {
 } from '../../../lib/discord-auth.js';
 import { rolesGrantSiteAccess } from '../../../lib/site-access.js';
 
+const CLEARWATER_GUILD_ID = '1514026810348671026';
+const PINELLAS_GUILD_ID = '1514100977920245760';
+const ADMINISTRATOR = 0x8n;
+
+/** Where a finished or failed sign-in lands. PCSO is the website, so errors stay on its sign-in page. */
+export function signinErrorPath(error, next = '/') {
+  const params = new URLSearchParams({ error });
+  if (next && next !== '/') params.set('next', next);
+  return `/signin?${params.toString()}`;
+}
+
+/**
+ * Discord rate-limits the per-guild member lookup hard, and two back-to-back
+ * calls (Clearwater, then Pinellas) often 429 on the second one. Retry once
+ * after Discord's retry_after so a rate limit is not mistaken for "not a member".
+ */
+async function discordGet(path, accessToken) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await fetch(`https://discord.com/api/v10${path}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (response.status !== 429 || attempt === 1) return response;
+    let waitMs = 1000;
+    try {
+      const body = await response.json();
+      if (Number.isFinite(Number(body?.retry_after))) waitMs = Number(body.retry_after) * 1000;
+    } catch {
+      // Use the default wait.
+    }
+    await new Promise((resolve) => setTimeout(resolve, Math.min(Math.max(waitMs, 250), 3000)));
+  }
+  return null;
+}
+
+async function discordJson(path, accessToken) {
+  try {
+    const response = await discordGet(path, accessToken);
+    return response?.ok ? await response.json() : null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function handler(request, response) {
   if (request.method !== 'GET') return sendJson(response, 405, { error: 'Method not allowed' });
 
-  const siteRedirect = '/coming-soon?denied=1';
+  let next = '/';
 
   try {
     const { clientId, clientSecret, redirectUri, sessionSecret } = getAuthConfig(request);
@@ -25,9 +68,11 @@ export default async function handler(request, response) {
     const code = requestUrl.searchParams.get('code');
     const state = requestUrl.searchParams.get('state');
     const cookies = parseCookies(request.headers.cookie);
+    next = safeNextPath(cookies[NEXT_COOKIE] || '');
+    const failed = () => redirect(response, signinErrorPath('failed', next), [clearCookie(STATE_COOKIE)]);
 
     if (!code || !state || !cookies[STATE_COOKIE] || !safeEqual(state, cookies[STATE_COOKIE])) {
-      return redirect(response, siteRedirect, [clearCookie(STATE_COOKIE)]);
+      return failed();
     }
 
     const tokenResponse = await fetch('https://discord.com/api/v10/oauth2/token', {
@@ -42,76 +87,50 @@ export default async function handler(request, response) {
       }),
     });
 
-    if (!tokenResponse.ok) return redirect(response, siteRedirect, [clearCookie(STATE_COOKIE)]);
+    if (!tokenResponse.ok) return failed();
     const token = await tokenResponse.json();
+    const accessToken = token.access_token;
 
-    const userResponse = await fetch('https://discord.com/api/v10/users/@me', {
-      headers: { Authorization: `Bearer ${token.access_token}` },
-    });
+    const user = await discordJson('/users/@me', accessToken);
+    if (!user?.id) return failed();
 
-    if (!userResponse.ok) return redirect(response, siteRedirect, [clearCookie(STATE_COOKIE)]);
-    const user = await userResponse.json();
+    // One call lists every server they are in. Being in the Pinellas server is
+    // what opens the PCSO website, so this list is the membership check; the
+    // per-guild member calls below only add roles and server banners.
+    const guilds = await discordJson('/users/@me/guilds', accessToken);
+    const guildList = Array.isArray(guilds) ? guilds : [];
+    const guildIds = new Set(guildList.map((guild) => String(guild?.id || '')));
 
-    const CLEARWATER_GUILD_ID = '1514026810348671026';
-    const PINELLAS_GUILD_ID = '1514100977920245760';
-    const ADMINISTRATOR = 0x8n;
-
-    let guildMember = null;
-    let pinellasMember = null;
-    try {
-      const memberResponse = await fetch(
-        `https://discord.com/api/v10/users/@me/guilds/${CLEARWATER_GUILD_ID}/member`,
-        { headers: { Authorization: `Bearer ${token.access_token}` } },
-      );
-      if (memberResponse.ok) guildMember = await memberResponse.json();
-    } catch {
-      // Global Discord profile remains available below.
+    let discordAdmin = false;
+    for (const guild of guildList) {
+      const id = String(guild?.id || '');
+      if (id !== PINELLAS_GUILD_ID && id !== CLEARWATER_GUILD_ID) continue;
+      try {
+        if ((BigInt(guild.permissions || 0) & ADMINISTRATOR) === ADMINISTRATOR) discordAdmin = true;
+      } catch {
+        // Ignore malformed permission bitfields.
+      }
     }
-    try {
-      const pinellasMemberResponse = await fetch(
-        `https://discord.com/api/v10/users/@me/guilds/${PINELLAS_GUILD_ID}/member`,
-        { headers: { Authorization: `Bearer ${token.access_token}` } },
-      );
-      if (pinellasMemberResponse.ok) pinellasMember = await pinellasMemberResponse.json();
-    } catch {
-      // Pinellas membership is enough for the PCSO website even without Clearwater.
-    }
+
+    // Skip a member lookup only when the guild list loaded and says they are not there.
+    const guildListLoaded = Array.isArray(guilds);
+    const guildMember = !guildListLoaded || guildIds.has(CLEARWATER_GUILD_ID)
+      ? await discordJson(`/users/@me/guilds/${CLEARWATER_GUILD_ID}/member`, accessToken)
+      : null;
+    const pinellasMember = !guildListLoaded || guildIds.has(PINELLAS_GUILD_ID)
+      ? await discordJson(`/users/@me/guilds/${PINELLAS_GUILD_ID}/member`, accessToken)
+      : null;
 
     const guildRoles = Array.isArray(guildMember?.roles) ? guildMember.roles.map(String) : [];
     const pinellasRoles = Array.isArray(pinellasMember?.roles) ? pinellasMember.roles.map(String) : [];
     const hasClearwaterAccess = Boolean(guildMember) && rolesGrantSiteAccess(guildRoles);
-    const hasPcsoAccess = Boolean(pinellasMember);
+    const hasPcsoAccess = guildIds.has(PINELLAS_GUILD_ID) || Boolean(pinellasMember);
     if (!hasClearwaterAccess && !hasPcsoAccess) {
-      return redirect(response, '/coming-soon?denied=1', [
+      return redirect(response, signinErrorPath('not-member', next), [
         clearCookie(STATE_COOKIE),
         clearCookie(NEXT_COOKIE),
         clearCookie(SESSION_COOKIE),
       ]);
-    }
-
-    let discordAdmin = false;
-    try {
-      const guildsResponse = await fetch('https://discord.com/api/v10/users/@me/guilds', {
-        headers: { Authorization: `Bearer ${token.access_token}` },
-      });
-      if (guildsResponse.ok) {
-        const guilds = await guildsResponse.json();
-        const list = Array.isArray(guilds) ? guilds : [];
-        for (const guild of list) {
-          const id = String(guild?.id || '');
-          if (id !== PINELLAS_GUILD_ID && id !== '1514026810348671026') continue;
-          try {
-            if ((BigInt(guild.permissions || 0) & ADMINISTRATOR) === ADMINISTRATOR) {
-              discordAdmin = true;
-              break;
-            }
-          } catch {
-            // Ignore malformed permission bitfields.
-          }
-        }
-      }
-    } catch {
-      // Guild permission lookup is best-effort.
     }
 
     const session = createSessionToken({
@@ -122,7 +141,6 @@ export default async function handler(request, response) {
       pinellasMember: hasPcsoAccess,
       discordAdmin,
     }, sessionSecret);
-    const next = safeNextPath(cookies[NEXT_COOKIE] || '');
     const destination = next === '/' ? '/?login=success' : next;
 
     return redirect(response, destination, [
@@ -131,6 +149,6 @@ export default async function handler(request, response) {
       makeCookie(SESSION_COOKIE, session, 60 * 60 * 24 * 7),
     ]);
   } catch {
-    return redirect(response, siteRedirect, [clearCookie(STATE_COOKIE)]);
+    return redirect(response, signinErrorPath('failed', next), [clearCookie(STATE_COOKIE)]);
   }
 }
