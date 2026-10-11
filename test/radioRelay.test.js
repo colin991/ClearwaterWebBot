@@ -262,7 +262,7 @@ test('Discord talkers never block the app, and members in the Discord channel ar
   }
 });
 
-test('Special Response Team stays off Discord, and messages reach only the same channel', async () => {
+test('Special Response Team stays off Discord', async () => {
   const harness = await startRelay();
   try {
     const alice = client(harness.url);
@@ -276,13 +276,10 @@ test('Special Response Team stays off Discord, and messages reach only the same 
     assert.deepEqual(ready.channels.map((c) => c.id), ['main', 'srt', 'freq']);
     await bob.until(() => bob.messages.find((m) => m.type === 'ready'));
 
-    // Different channels: no shared audio, talk or messages.
+    // Different channels: no shared audio or talk.
     harness.relay.relayDiscordAudio('333333333333333333', Buffer.from([1]));
-    bob.send({ type: 'text', text: 'main only' });
-    await bob.until(() => bob.messages.find((m) => m.type === 'text'));
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.equal(alice.binary.length, 0, 'Discord audio never reaches SRT');
-    assert.equal(alice.messages.some((m) => m.type === 'text'), false);
 
     // Bob joins SRT; Alice talks: Bob hears it and nothing goes to the Discord bot.
     bob.send({ type: 'channel', id: 'srt' });
@@ -297,12 +294,6 @@ test('Special Response Team stays off Discord, and messages reach only the same 
     bob.send({ type: 'tx', active: true });
     const busy = await bob.until(() => bob.messages.find((m) => m.type === 'tx' && !m.ok));
     assert.equal(busy.name, 'Alice');
-
-    alice.send({ type: 'text', text: '  10-4\n copy  ' });
-    const text = await bob.until(() => bob.messages.find((m) => m.type === 'text' && m.channelId === 'srt'));
-    assert.equal(text.text, '10-4 copy');
-    assert.equal(text.from, 'Alice');
-    await alice.until(() => alice.messages.find((m) => m.type === 'text'));
 
     alice.ws.close();
     bob.ws.close();

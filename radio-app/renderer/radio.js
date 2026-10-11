@@ -34,7 +34,6 @@ const MENU = [
   { label: 'LISTEN', value: () => deviceLabel('audiooutput', state.settings.outputId), open: 'headset' },
   { label: 'PTT', value: () => state.settings.ptt?.label || 'NONE', open: 'ptt' },
   { label: 'CHANNEL', value: () => String(state.channel || 'RADIO'), adjust: (step) => changeChannel(step), action: () => changeChannel(1) },
-  { label: 'MSGS', value: () => (state.unread ? `${state.unread} NEW` : String(state.messages.length)), open: 'messages' },
   { label: 'WHO', value: () => `${state.channels.reduce((total, channel) => total + (channel.members?.length || 0), 0)} ON`, open: 'users' },
   { label: 'FX', value: () => FX_LABELS[state.settings.listenFx] || 'OFF', adjust: (step) => cycleFx(step), action: () => cycleFx(1) },
   { label: 'SETUP', value: () => 'RUN', open: 'setup' },
@@ -48,12 +47,10 @@ const ROWS = { menu: MENU, setup: SETUP };
 // Radio effects only change what this radio hears; what you send stays clean.
 const FX_MODES = ['off', 'radio', 'police'];
 const FX_LABELS = { off: 'OFF', radio: 'RADIO', police: 'POLICE' };
-const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', test: 'setup', messages: 'home', compose: 'messages', users: 'menu' };
-// Canned messages for the compose screen; TYPE lets you write your own on the keyboard.
-const QUICK_MESSAGES = ['10-4', 'COPY', 'EN ROUTE', 'ON SCENE', 'NEED BACKUP', 'CODE 4', 'STANDBY', 'TYPE A MESSAGE'];
-const MESSAGE_MAX = 140;
-const MESSAGE_KEEP = 30;
-const MESSAGE_CARD_MS = 2 * 60 * 1000;
+const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', test: 'setup', users: 'home' };
+// Nobody touching the radio (no PTT, clicks or keys) for this long closes it; a warning shows for the last minute.
+const IDLE_CLOSE_MS = 20 * 60 * 1000;
+const IDLE_WARN_MS = 60 * 1000;
 
 const state = {
   settings: { volume: 70, txVolume: 60, listenFx: 'radio', deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false, channel: 'main' },
@@ -69,9 +66,7 @@ const state = {
   channel: 'RADIO',
   channelId: 'main',
   channels: [],
-  messages: [], // newest first: { id, from, text, channel, at, mine }
-  unread: 0,
-  typing: null, // text being typed on the compose screen, or null
+  idleWarn: false,
   botOnline: false,
   listeners: 0,
   me: null,
@@ -540,7 +535,6 @@ const TONES = {
   end: [[900, 0.05], [1250, 0.05]],
   busy: [[420, 0.12], [0, 0.06], [420, 0.12], [0, 0.06], [420, 0.12]],
   key: [[1600, 0.03]],
-  message: [[1400, 0.06], [0, 0.04], [1800, 0.08]],
 };
 
 function playTone(name) {
@@ -771,9 +765,6 @@ function onMessage(message) {
       updateLamps();
       flash(String(state.channel).toUpperCase().slice(0, 28), 1200);
       break;
-    case 'text':
-      onText(message);
-      break;
     case 'talk':
       if (message.active) {
         state.rx.set(message.id, { name: message.name || 'UNIT', source: message.source });
@@ -815,7 +806,7 @@ function applyChannelStatus(message) {
   }
 }
 
-/* ---------- channels and messages ---------- */
+/* ---------- channels ---------- */
 
 function changeChannel(step) {
   if (state.conn !== 'online' || state.channels.length < 2) {
@@ -831,32 +822,6 @@ function changeChannel(step) {
 
 function channelNumber() {
   return Math.max(0, state.channels.findIndex((channel) => channel.id === state.channelId)) + 1;
-}
-
-function onText(message) {
-  const mine = message.id === state.me?.id;
-  state.messages.unshift({
-    id: message.id, from: String(message.from || 'UNIT'), text: String(message.text || ''),
-    channel: String(message.channel || state.channel), at: Number(message.at) || Date.now(), mine,
-  });
-  state.messages.length = Math.min(state.messages.length, MESSAGE_KEEP);
-  if (!mine) {
-    if (state.screen !== 'messages') state.unread += 1;
-    playTone('message');
-  }
-  render();
-}
-
-function sendText(text) {
-  const clean = String(text || '').replace(/\s+/g, ' ').trim().slice(0, MESSAGE_MAX);
-  if (!clean) return false;
-  if (state.conn !== 'online') {
-    flash('NO SIGNAL', 1000);
-    return false;
-  }
-  sendJson({ type: 'text', text: clean });
-  flash('SENT', 800);
-  return true;
 }
 
 function clockText(at = Date.now()) {
@@ -970,6 +935,7 @@ function sendPanic() {
 /* ---------- push to talk ---------- */
 
 function pttPress() {
+  markActive();
   if (state.pttHeld) return;
   state.pttHeld = true;
   el.pttSide.classList.add('active');
@@ -1046,8 +1012,6 @@ function setScreen(screen) {
     state.capturing = false;
     void api.capturePtt(false);
   }
-  if (screen !== 'compose') state.typing = null;
-  if (screen === 'messages') state.unread = 0;
   state.screen = screen;
   state.listIndex = 0;
   if (screen === 'menu' || screen === 'setup') void refreshDeviceCache();
@@ -1154,7 +1118,7 @@ function homeBody() {
     default:
       break;
   }
-  // Zone/channel card, like a handheld's main screen, then the latest message if it is recent.
+  // Zone/channel card, like a handheld's main screen, then the units on this channel.
   let kind = '';
   let line;
   if (state.tx === 'on') {
@@ -1173,29 +1137,14 @@ function homeBody() {
   let html = `<div class="card ${kind}"><div class="zone">Zone 1 · CH ${channelNumber()}</div>`
     + `<div class="chan">${escapeHtml(state.channel || 'Radio')}</div>`
     + `<div class="state">${escapeHtml(line.toUpperCase())}</div></div>`;
-  const latest = state.messages[0];
-  if (latest && Date.now() - latest.at < MESSAGE_CARD_MS) {
-    html += `<div class="card msg"><span class="ico"></span><span class="from">${escapeHtml(latest.mine ? `You → ${latest.channel}` : latest.from)}</span>`
-      + `<span class="when">${state.unread ? `<span class="badge">${Math.min(state.unread, 9)}</span>` : clockText(latest.at)}</span>`
-      + `<span class="text">${escapeHtml(latest.text)}</span></div>`;
-  }
+  const members = state.channels.find((channel) => channel.id === state.channelId)?.members || [];
+  html += `<div class="card units"><div class="zone">UNITS ON CH ${channelNumber()} (${members.length})</div>`
+    + (members.length
+      ? members.map((member) => `<div class="unit"><span>${escapeHtml(member.name.toUpperCase())}${member.id === state.me?.id ? ' (YOU)' : ''}</span>`
+        + `<span class="where">${member.app && member.discord ? 'APP+VC' : member.discord ? 'VC' : 'APP'}</span></div>`).join('')
+      : '<div class="unit dim">NOBODY</div>')
+    + '</div>';
   return html;
-}
-
-function messagesBody() {
-  const items = [{ label: '+ NEW MESSAGE' }, ...state.messages.map((message) => ({
-    label: message.text,
-    meta: `${message.mine ? 'YOU' : message.from} · ${clockText(message.at)}`,
-  }))];
-  return `<ul class="list">${items.map((item, index) => `<li class="${index === state.listIndex ? 'sel' : ''}">`
-    + `${item.meta ? `<span class="meta">${escapeHtml(item.meta.toUpperCase())}</span>` : ''}${escapeHtml(item.label)}</li>`).join('')}</ul>`;
-}
-
-function composeBody() {
-  if (state.typing !== null) {
-    return `<div class="typed">${escapeHtml(state.typing)}</div><div class="small">TYPE ON YOUR KEYBOARD · ENTER SENDS · ESC CANCELS</div>`;
-  }
-  return `<ul class="list">${QUICK_MESSAGES.map((text, index) => `<li class="${index === state.listIndex ? 'sel' : ''}">${escapeHtml(text)}</li>`).join('')}</ul>`;
 }
 
 function updateText() {
@@ -1230,29 +1179,18 @@ function render() {
   switch (screen) {
     case 'home':
       left = `Z1 · ${String(state.me?.name || 'RADIO')}`.toUpperCase();
-      el.softRightLabel.textContent = state.unread ? `MSGS (${state.unread})` : 'MSGS';
+      el.softRightLabel.textContent = 'UNITS';
       body = homeBody();
-      break;
-    case 'messages':
-      left = 'MESSAGES';
-      el.softRightLabel.textContent = 'NEW';
-      body = messagesBody();
       break;
     case 'users':
       left = "WHO'S ON";
       body = usersBody();
-      break;
-    case 'compose':
-      left = `TO ${String(state.channel || 'RADIO').toUpperCase()}`;
-      el.softRightLabel.textContent = 'SEND';
-      body = composeBody();
       break;
     case 'menu':
       body = rowsHtml(MENU, state.menuIndex);
       break;
     case 'setup':
       body = rowsHtml(SETUP, state.setupIndex);
-      el.softRightLabel.textContent = '* BACK';
       break;
     case 'mic':
     case 'headset':
@@ -1260,11 +1198,9 @@ function render() {
       body = state.devices.length
         ? listHtml(state.devices, state.listIndex, screen === 'mic' ? state.settings.micId : state.settings.outputId)
         : '<div class="small">LOADING</div>';
-      el.softRightLabel.textContent = '# SET';
       break;
     case 'test':
       body = '<div class="mid">SPEAK NOW</div><div class="meter"><b id="meterFill"></b></div><div class="small">YOU HEAR WHAT OTHERS HEAR</div>';
-      el.softRightLabel.textContent = '# STOP';
       break;
     case 'ptt': {
       left = 'PTT KEY';
@@ -1280,6 +1216,11 @@ function render() {
   if (state.panic) {
     left = 'PANIC';
     body = `<div class="big">PANIC</div><div class="mid">${escapeHtml(state.panic.name)}</div><div class="small">${escapeHtml(state.panic.location)}</div>`;
+  }
+  if (state.idleWarn) {
+    left = 'INACTIVE';
+    const seconds = Math.max(0, Math.ceil((IDLE_CLOSE_MS - (Date.now() - lastActiveAt)) / 1000));
+    body = `<div class="mid">CLOSING IN ${seconds}s</div><div class="small">NO ACTIVITY FOR 20 MIN · PRESS ANY KEY TO STAY ON</div>`;
   }
   el.lcdLeft.textContent = left;
   el.lcdBody.innerHTML = body;
@@ -1326,17 +1267,6 @@ async function choose() {
     void refreshDeviceCache();
     setScreen(PARENT[screen]);
     flash('SAVED', 800);
-  } else if (screen === 'messages') {
-    if (state.listIndex === 0) setScreen('compose');
-  } else if (screen === 'compose') {
-    if (state.typing !== null) {
-      if (sendText(state.typing)) setScreen('messages');
-    } else if (state.listIndex === QUICK_MESSAGES.length - 1) {
-      state.typing = '';
-      render();
-    } else if (sendText(QUICK_MESSAGES[state.listIndex])) {
-      setScreen('messages');
-    }
   } else if (screen === 'test') {
     setScreen('setup');
   } else if (screen === 'ptt') {
@@ -1405,30 +1335,15 @@ function move(delta) {
     const length = Math.max(1, usersLines().length);
     state.listIndex = (state.listIndex + delta + length) % length;
     render();
-  } else if (screen === 'messages' || (screen === 'compose' && state.typing === null)) {
-    const length = screen === 'messages' ? state.messages.length + 1 : QUICK_MESSAGES.length;
-    state.listIndex = (state.listIndex + delta + length) % length;
-    render();
   }
 }
 
 function press(key) {
   playTone('key');
-  // Keypad while typing a message: 0 is a space, * deletes, # sends.
-  if (state.screen === 'compose' && state.typing !== null && /^[0-9*#]$/.test(key)) {
-    if (key === '#') return void choose();
-    if (key === '*') state.typing = state.typing.slice(0, -1);
-    else if (state.typing.length < MESSAGE_MAX) state.typing += key === '0' ? ' ' : key;
-    return render();
-  }
   // Gray left button: open the menu from the radio screen, otherwise go straight back to the radio.
   if (key === 'softL') return setScreen(state.screen === 'home' ? 'menu' : 'home');
-  if (key === 'softR') {
-    if (state.screen === 'mic' || state.screen === 'headset' || state.screen === 'test' || state.screen === 'compose') return void choose();
-    if (state.screen === 'home') return setScreen('messages');
-    if (state.screen === 'messages') return setScreen('compose');
-    return setScreen('home');
-  }
+  // Home key: back to the radio screen; on the radio screen it opens every unit on every channel.
+  if (key === 'softR') return setScreen(state.screen === 'home' ? 'users' : 'home');
   if (key === 'back') return back();
   if (key === 'up') return move(-1);
   if (key === 'down') return move(1);
@@ -1455,9 +1370,36 @@ function press(key) {
   return undefined;
 }
 
+/* ---------- inactivity ---------- */
+
+let lastActiveAt = Date.now();
+
+function markActive() {
+  lastActiveAt = Date.now();
+  if (state.idleWarn) {
+    state.idleWarn = false;
+    render();
+  }
+}
+
+// Nobody has keyed up or touched the radio for 20 minutes: warn for the last minute, then shut it off.
+function checkIdle() {
+  if (state.pttHeld || state.tx === 'on') return markActive();
+  const idle = Date.now() - lastActiveAt;
+  if (idle >= IDLE_CLOSE_MS) {
+    void quitApp();
+  } else if (idle >= IDLE_CLOSE_MS - IDLE_WARN_MS) {
+    if (!state.idleWarn) playTone('busy');
+    state.idleWarn = true;
+    render();
+  }
+}
+
 function bindControls() {
-  window.addEventListener('pointerdown', () => { void resumeAudio(); });
-  window.addEventListener('keydown', () => { void resumeAudio(); });
+  window.addEventListener('pointerdown', () => { markActive(); void resumeAudio(); });
+  window.addEventListener('keydown', () => { markActive(); void resumeAudio(); });
+  window.addEventListener('wheel', markActive, { passive: true });
+  setInterval(checkIdle, 1000);
   document.querySelectorAll('.keypad button').forEach((button) => {
     button.addEventListener('click', () => press(button.dataset.key));
   });
@@ -1505,20 +1447,6 @@ function bindControls() {
 
   // Keyboard while the radio has focus.
   window.addEventListener('keydown', (event) => {
-    // Typing a message: every key goes into the text.
-    if (state.screen === 'compose' && state.typing !== null) {
-      event.preventDefault();
-      if (event.key === 'Enter') return void choose();
-      if (event.key === 'Escape') {
-        state.typing = null;
-      } else if (event.key === 'Backspace') {
-        state.typing = state.typing.slice(0, -1);
-      } else if (event.key.length === 1 && state.typing.length < MESSAGE_MAX) {
-        state.typing += event.key;
-      }
-      render();
-      return;
-    }
     if (state.screen === 'ptt' && state.capturing && !state.settings.hook) {
       event.preventDefault();
       if (event.code !== 'Escape') {

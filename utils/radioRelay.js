@@ -22,8 +22,6 @@ const APP_CHANNELS = [
 ];
 /** One EMER press per radio in this window. */
 export const RADIO_PANIC_GAP_MS = 15_000;
-export const RADIO_MESSAGE_MAX = 140;
-const RADIO_MESSAGE_GAP_MS = 1_000;
 
 /** Binary frame sent to apps: [0x01][speaker Discord ID as uint64 BE][Opus packet]. */
 export function encodeAudioFrame(speakerId, packet) {
@@ -213,20 +211,6 @@ export function createRadioRelay({
     broadcastStatus();
   }
 
-  // Short text to everyone on the sender's channel, the sender included so it lands in their log.
-  function onText(socket, text) {
-    const clean = String(text || '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, RADIO_MESSAGE_MAX);
-    if (!clean) return;
-    const at = now();
-    if (at - (socket.radio.lastTextAt || 0) < RADIO_MESSAGE_GAP_MS) return;
-    socket.radio.lastTextAt = at;
-    const channel = socket.radio.channel;
-    broadcast({
-      type: 'text', id: socket.radio.userId, from: socket.radio.name, text: clean,
-      channel: channelName(channel), channelId: channel, at,
-    }, null, channel);
-  }
-
   // EMER on a radio: alert every radio with who pressed it and, when the game knows, where they are.
   async function onPanicPress(socket) {
     const { userId, name } = socket.radio;
@@ -344,8 +328,6 @@ export function createRadioRelay({
         else endTransmit(socket);
       } else if (message.type === 'channel') {
         switchChannel(socket, message.id);
-      } else if (message.type === 'text') {
-        onText(socket, message.text);
       } else if (message.type === 'panic') {
         void onPanicPress(socket);
       } else if (message.type === 'deaf') {
