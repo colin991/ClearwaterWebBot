@@ -21,7 +21,7 @@ import { memberHasSiteAccess } from '../lib/site-access.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess } from './staffRanks.js';
 import { config } from '../config.js';
 import { handleRadioUpgrade, radioWebSession } from './radioBot.js';
-import { radioStaffSnapshot, runRadioStaffAction } from './radioStaff.js';
+import { radioStaffSnapshot, runRadioStaffAction, saveRadioCoverage } from './radioStaff.js';
 import { PermissionFlagsBits } from 'discord.js';
 
 const UNKNOWN_MEMBER = 10007;
@@ -196,7 +196,7 @@ export function startBotApiServer(client, {
         let payload = {};
         if (request.method === 'POST') {
           try {
-            payload = JSON.parse((await readBinaryBody(request, 4_000)).toString('utf8') || '{}');
+            payload = JSON.parse((await readBinaryBody(request, 64_000)).toString('utf8') || '{}');
           } catch {
             return sendJson(response, 400, { error: 'Invalid JSON.' });
           }
@@ -222,6 +222,10 @@ export function startBotApiServer(client, {
         }
 
         try {
+          if (payload.action === 'coverage') {
+            await saveRadioCoverage(payload.coverage, discordId);
+            return sendJson(response, 200, { ok: true, action: 'coverage', ...radioStaffView(access.guild, access.member) });
+          }
           const result = await runRadioStaffAction(String(payload.action || ''), String(payload.userId || ''), discordId, { from: 'website' });
           return sendJson(response, 200, { ...result, ...radioStaffView(access.guild, access.member) });
         } catch (error) {

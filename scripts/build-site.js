@@ -19,7 +19,7 @@ const staticFiles = new Set([
   'pcso-nav.js', 'pcso-portal.js', 'pcso-ride-along.js', 'pcso-careers.js', 'application-result.js', 'pcso-calls.js', 'pcso-employee.js',
   'pcso-resource-pages.js', 'pcso-dashboard.js',
   'radio-web.css', 'radio-web-shim.js',
-  'radio-staff.html', 'radio-staff.css', 'radio-staff.js',
+  'radio-staff.html', 'radio-staff.css', 'radio-staff.js', 'radio-staff-map.js',
 ]);
 
 rmSync(output, { recursive: true, force: true });

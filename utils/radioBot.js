@@ -18,7 +18,8 @@ import { createRadioKey, verifyRadioKey } from './radioKeys.js';
 import { exchangeRadioCode, radioOAuthConfig } from './radioOAuth.js';
 import { callsignFromName, createRadioPanicWatch, findPanicPlayer, panicUnitAndPostal, playerLocationLabel } from './radioPanic.js';
 import { LIBERTY_POSTAL_POINTS } from './libertyMapCalibration.js';
-import { erlcPlayersFromServer, fetchErlcServer, parseErlcPlayer } from './erlc.js';
+import { erlcPlayersFromServer, fetchErlcServer, libertyPlayerMapPoint, parseErlcPlayer } from './erlc.js';
+import { createCoverageTracker, hasCoverage, normalizeCoverage } from './radioCoverage.js';
 import { getIdentityCache } from './identityStore.js';
 import { startRadioTunnel } from './radioTunnel.js';
 import { createRadioTalkLog } from './radioTalkLog.js';
@@ -34,6 +35,8 @@ export const RADIO_CHANNEL_ID = process.env.RADIO_CHANNEL_ID?.trim() || '1514128
 const VOICE_GROUP = 'clearwater-radio';
 const REJOIN_DELAY_MS = 10_000;
 const STATS_TICK_MS = 60_000;
+/** How often the radio checks where everyone is in game for their signal (only with a coverage map). */
+const COVERAGE_TICK_MS = 10_000;
 /** Discord voice channel callers wait in for 911; anyone in it shows as a pending call on every radio. */
 export const RADIO_911_CHANNEL_ID = process.env.RADIO_911_CHANNEL_ID?.trim() || '1532197874690035843';
 /** In-game 911 calls stay on the radios' pending list this long. */
@@ -58,6 +61,27 @@ async function findPanicPlayerInGame(env, { robloxId = '', names = [] }) {
     logger.warn(`Radio panic: could not read the ER:LC player list (${error?.message || error})`);
     return null;
   }
+}
+
+/** Where each member on a radio is on the map (userId -> { left, top }), from the live ER:LC player list. */
+async function locateRadioUsers(env, users) {
+  const key = env.ERLC_SERVER_KEY?.trim();
+  if (!key) return new Map();
+  const server = await fetchErlcServer(key, { timeoutMs: 4_000, maxAgeMs: COVERAGE_TICK_MS - 1_000 });
+  const players = erlcPlayersFromServer(server).map(parseErlcPlayer);
+  const byDiscord = (await getIdentityCache().catch(() => ({ byDiscord: {} }))).byDiscord || {};
+  const located = new Map();
+  for (const user of users) {
+    const identity = byDiscord[user.userId] || {};
+    const nick = String(user.name || '').replace(/^(\s*[[(][^\])]*[\])]\s*)+/, '').trim();
+    const player = findPanicPlayer(players, {
+      robloxId: identity.robloxId,
+      names: [identity.robloxUsername, user.name, nick, nick.split(/\s*[|/-]\s*/)[0]],
+    });
+    const pin = player ? libertyPlayerMapPoint(player.location) : null;
+    if (pin && Number.isFinite(pin.left) && Number.isFinite(pin.top)) located.set(user.userId, { left: pin.left, top: pin.top });
+  }
+  return located;
 }
 
 /** EMER on a radio: the member's linked Roblox player, so the alert shows where they are in game. */
@@ -293,8 +317,34 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     admin = { muted: { ...(saved?.muted || {}) } };
     for (const id of Object.keys(admin.muted)) relay.setMuted(id, true);
   });
+  // Coverage map (cell towers and weak areas) from the website staff panel; survives restarts.
+  const coveragePath = radioDataPath('radio-coverage.json');
+  let coverage = normalizeCoverage({});
+  const coverageTracker = createCoverageTracker({
+    users: () => relay.users(),
+    players: (users) => locateRadioUsers(env, users),
+    setSignals: (signals) => relay.setSignals(signals),
+    getCoverage: () => coverage,
+  });
+  void readJsonFile(coveragePath, null).then((saved) => {
+    if (saved) coverage = normalizeCoverage(saved);
+  });
+  const coverageTimer = setInterval(() => {
+    void coverageTracker.tick().catch((error) => logger.warn(`Radio coverage check failed: ${error?.message || error}`));
+  }, COVERAGE_TICK_MS);
+  coverageTimer.unref?.();
+
   setRadioStaffControls({
     users: () => relay.users(),
+    coverage: () => coverage,
+    positions: () => coverageTracker.positions(),
+    async setCoverage(next, by) {
+      coverage = normalizeCoverage(next);
+      await writeJsonFile(coveragePath, { ...coverage, updatedBy: by, updatedAt: new Date().toISOString() });
+      coverageTracker.recompute();
+      if (hasCoverage(coverage)) void coverageTracker.tick().catch(() => {});
+      return coverage;
+    },
     get muted() {
       return relay.muted;
     },
@@ -501,6 +551,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     clearTimeout(rejoinTimer);
     clearInterval(statsTimer);
     clearInterval(weeklyStatsTimer);
+    clearInterval(coverageTimer);
     setRadioStaffControls(null);
     if (activeRelay === relay) activeRelay = null;
     stopTunnel();

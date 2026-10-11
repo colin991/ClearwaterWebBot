@@ -769,3 +769,34 @@ test('settings sync, pending 911 calls, callsigns and the panic map point', asyn
     await harness.close();
   }
 });
+
+test('signal from the coverage map reaches the radio bars and rides along with a transmission', async () => {
+  const harness = await startRelay();
+  try {
+    const alice = await signIn(harness, ALICE);
+    const bob = await signIn(harness, BOB);
+    assert.equal(alice.messages.find((m) => m.type === 'ready').signal, null, 'clear until the map says otherwise');
+
+    assert.equal(harness.relay.setSignals(new Map([[ALICE, 0.4], [BOB, null]])), 1);
+    const status = await alice.until(() => alice.messages.find((m) => m.type === 'status' && m.signal === 0.4));
+    assert.equal(status.signal, 0.4);
+    assert.equal(harness.relay.setSignals(new Map([[ALICE, 0.4]])), 0, 'no change, nothing sent');
+    assert.equal(harness.relay.users().find((u) => u.userId === ALICE).signal, 0.4);
+
+    alice.send({ type: 'tx', active: true });
+    const talk = await bob.until(() => bob.messages.find((m) => m.type === 'talk' && m.active && m.id === ALICE));
+    assert.equal(talk.signal, 0.4, 'listeners hear how weak the talker is');
+
+    // Driving out of range mid-transmission: listeners get the new signal.
+    harness.relay.setSignals(new Map([[ALICE, 0.15]]));
+    const weaker = await bob.until(() => bob.messages.find((m) => m.type === 'talk' && m.active && m.signal === 0.15));
+    assert.equal(weaker.id, ALICE);
+
+    harness.relay.setSignals(new Map());
+    await alice.until(() => alice.messages.filter((m) => m.type === 'status').at(-1)?.signal === null);
+    alice.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});

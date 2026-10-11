@@ -564,3 +564,8 @@ body.night .keypad button, body.night .pkey { filter: brightness(.7); }
 .lcd .dial .knob-dot { stroke: var(--screen-top, #fff); stroke-width: 1.5; }
 .lcd .dial text { fill: var(--ink); font-size: 15px; font-weight: 800; font-family: inherit; }
 .lcd .dial text.end { fill: var(--ink-dim); font-size: 8px; font-weight: 700; }
+
+/* Signal bars follow this radio's own signal from the staff coverage map (b4 = clear). */
+.sig.on.b3 i:nth-child(4),
+.sig.on.b2 i:nth-child(n+3),
+.sig.on.b1 i:nth-child(n+2) { opacity: .25; animation: none; }

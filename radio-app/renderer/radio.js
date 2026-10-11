@@ -132,6 +132,7 @@ const state = {
   panicAsk: 0, // when PANIC was pressed and is waiting for ARE YOU SURE
   pttTimeoutUntil: 0, // the relay timed this member out of talking for spamming PTT
   muted: false, // force-muted by staff: can listen, can't talk
+  signal: null, // this radio's signal from the staff coverage map (0.1-1); null = clear
   lastHeard: null, // { name, at } of the last transmission heard on this channel
   micLevel: 0,
   bindWhich: 'ptt', // which hotkey the PTT KEY screen is setting
@@ -152,6 +153,7 @@ const audio = {
   txGain: null,
   rxIn: null,
   listenFx: null,
+  signalFx: null,
   volume: null,
   deafGain: null,
   toneOut: null,
@@ -417,6 +419,89 @@ function createRadioFx(ctx) {
   };
 }
 
+/**
+ * Weak signal (staff coverage map: far from a cell tower or in a weak area): the voice is muffled,
+ * gets a static bed and the odd dropout, but always still comes through. Works with FX on or off.
+ */
+function createSignalFx(ctx) {
+  const input = ctx.createGain();
+  const output = ctx.createGain();
+  const muffle = ctx.createBiquadFilter();
+  muffle.type = 'lowpass';
+  muffle.frequency.value = 20000;
+  muffle.Q.value = 0.7;
+  const gate = ctx.createGain();
+  input.connect(muffle);
+  muffle.connect(gate);
+  gate.connect(output);
+  const noise = ctx.createBufferSource();
+  noise.buffer = noiseBuffer(ctx, 2);
+  noise.loop = true;
+  const band = ctx.createBiquadFilter();
+  band.type = 'bandpass';
+  band.frequency.value = 1800;
+  band.Q.value = 0.5;
+  const hiss = ctx.createGain();
+  hiss.gain.value = 0;
+  band.connect(hiss);
+  hiss.connect(output);
+  noise.start();
+  let noiseLinked = false;
+  const linkNoise = (on) => {
+    if (on === noiseLinked) return;
+    noiseLinked = on;
+    if (on) noise.connect(band);
+    else noise.disconnect(band);
+  };
+  let weakness = 0;
+  let hearing = false;
+  let dropTimer = null;
+  // Short random dips while a weak voice comes in.
+  const dropouts = () => {
+    dropTimer = null;
+    if (!hearing || weakness < 0.3) return;
+    if (Math.random() < weakness * 0.7) {
+      const at = ctx.currentTime;
+      gate.gain.setTargetAtTime(Math.max(0.08, 0.55 - 0.45 * weakness), at, 0.01);
+      gate.gain.setTargetAtTime(1, at + 0.04 + Math.random() * 0.14 * weakness, 0.02);
+    }
+    dropTimer = setTimeout(dropouts, 220 + Math.random() * 600);
+  };
+  return {
+    input,
+    output,
+    /** signal 0.1-1 (null = clear) of what is being heard; hearing = someone is talking. */
+    set(signal, active) {
+      weakness = signal === null || signal === undefined || signal >= 0.85 ? 0 : Math.min(1, (0.85 - signal) / 0.75);
+      hearing = Boolean(active) && weakness > 0;
+      const at = ctx.currentTime;
+      muffle.frequency.setTargetAtTime(weakness ? 3600 - 2500 * weakness : 20000, at, 0.05);
+      linkNoise(hearing);
+      hiss.gain.setTargetAtTime(hearing ? 0.012 + 0.07 * weakness : 0, at, 0.04);
+      if (!hearing) gate.gain.setTargetAtTime(1, at, 0.02);
+      if (hearing && !dropTimer) dropouts();
+    },
+  };
+}
+
+/** The weakest signal among the voices coming in right now (null when all are clear). */
+function heardSignal() {
+  let weakest = null;
+  for (const voice of state.rx.values()) {
+    if (Number.isFinite(voice.signal) && (weakest === null || voice.signal < weakest)) weakest = voice.signal;
+  }
+  return weakest;
+}
+
+/** Bars for this radio's own signal: 4 is clear, 1 is barely there (matches the bot's signalBars). */
+function signalBars(signal) {
+  if (!Number.isFinite(signal)) return 4;
+  if (signal >= 0.8) return 4;
+  if (signal >= 0.55) return 3;
+  if (signal >= 0.3) return 2;
+  return 1;
+}
+
 async function initAudio() {
   const ctx = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
   audio.ctx = ctx;
@@ -431,7 +516,9 @@ async function initAudio() {
     processorOptions: { ceiling: 0.7 }, // about -3 dBFS
   });
   audio.deafGain = ctx.createGain();
-  audio.rxIn.connect(audio.listenFx.input);
+  audio.signalFx = createSignalFx(ctx);
+  audio.rxIn.connect(audio.signalFx.input);
+  audio.signalFx.output.connect(audio.listenFx.input);
   audio.listenFx.output.connect(audio.volume);
   audio.volume.connect(rxLimiter);
   rxLimiter.connect(audio.deafGain);
@@ -1046,7 +1133,7 @@ function onMessage(message) {
       break;
     case 'talk':
       if (message.active) {
-        state.rx.set(message.id, { name: message.name || 'UNIT', source: message.source, channel: message.channel || state.channelId });
+        state.rx.set(message.id, { name: message.name || 'UNIT', source: message.source, channel: message.channel || state.channelId, signal: Number.isFinite(message.signal) ? message.signal : null });
       } else if (state.rx.delete(message.id)) {
         squelchTail();
       }
@@ -1059,7 +1146,7 @@ function onMessage(message) {
     case 'whisper':
       // A private call to this radio only.
       if (message.active) {
-        state.rx.set(message.id, { name: message.name || 'UNIT', whisper: true, channel: state.channelId });
+        state.rx.set(message.id, { name: message.name || 'UNIT', whisper: true, channel: state.channelId, signal: Number.isFinite(message.signal) ? message.signal : null });
         flash(`WHISPER FROM ${String(message.name || 'UNIT').toUpperCase()}`.slice(0, 28), 1200);
       } else if (state.rx.delete(message.id)) {
         squelchTail();
@@ -1123,6 +1210,7 @@ function applyChannelStatus(message) {
   state.listeners = message.listeners || 0;
   if ('dispatch' in message) state.dispatch = Boolean(message.dispatch);
   if ('muted' in message) state.muted = Boolean(message.muted);
+  if ('signal' in message) state.signal = Number.isFinite(message.signal) ? message.signal : null;
   if ('lastHeard' in message) state.lastHeard = message.lastHeard;
   if (Array.isArray(message.calls)) {
     // A new 911 call waiting: a short tone and a flash.
@@ -1767,7 +1855,8 @@ function render() {
   // Status bar: signal bars, then DEAF / IN VC / who is on the channel.
   // Signal bars sweep while looking for the relay and bounce while a voice comes in (just for looks).
   const searching = ['connecting', 'lost', 'signing'].includes(state.conn);
-  el.lcdSig.className = `sig${state.conn === 'online' ? (state.botOnline ? ' on' : ' weak') : ''}${searching ? ' scan' : ''}`
+  // Online, the bars show this radio's own signal from the coverage map.
+  el.lcdSig.className = `sig${state.conn === 'online' ? (state.botOnline ? ` on b${signalBars(state.signal)}` : ' weak') : ''}${searching ? ' scan' : ''}`
     + `${state.rx.size ? ' rx' : ''}${state.tx === 'on' ? ' tx' : ''}`;
   if (state.settings.deaf) el.lcdRight.textContent = 'DEAF';
   else if (state.inVoice) el.lcdRight.textContent = 'IN VC';
@@ -1903,6 +1992,7 @@ function placeMap() {
 }
 
 function updateLamps() {
+  audio.signalFx?.set(heardSignal(), state.rx.size > 0);
   el.lampTx.classList.toggle('on', state.tx === 'on');
   el.lampRx.classList.toggle('on', state.rx.size > 0 && !muted());
   el.lampMic.classList.toggle('on', Boolean(audio.micStream));
@@ -2380,6 +2470,7 @@ function bindControls() {
     applyDeaf();
     sendJson({ type: 'deaf', active: deaf });
     if (deaf) state.rx.clear();
+    updateLamps();
     flash(deaf ? 'DEAFENED' : 'UNDEAFENED', 900);
   });
 

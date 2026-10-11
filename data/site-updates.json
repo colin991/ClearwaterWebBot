@@ -3462,6 +3462,13 @@
       "summary": "SIZE on the radio is now a dial from 60% to 130% in 5% steps, so the radio can be made bigger as well as smaller. Turn it with the arrows, scroll, or drag or click the dial. The first-launch setup uses the same dial, and the size is still remembered.",
       "createdAt": "2026-10-11T21:45:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-signal-coverage-2026-10-11",
+      "title": "Radio signal coverage: cell towers and weak areas",
+      "summary": "Admins can now place cell towers and draw weak-signal areas on a map in the radio staff panel at cwpcso.com/radio-staff. A unit's signal comes from where they are in game: near a tower is clear, while far from every tower or inside a weak area (like deep in the park or High Rock) sounds static-y and muffled on the radio, but still comes through. The radio's signal bars show your own signal. Discord voice is not affected.",
+      "createdAt": "2026-10-11T22:00:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
