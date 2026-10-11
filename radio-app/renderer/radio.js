@@ -68,6 +68,8 @@ const BIND_HELP = {
 const SETUP_BINDS = ['replayKey', 'chanKey'];
 // Replay keeps this much of what the radio played.
 const REPLAY_MS = 30_000;
+// Letting go of PTT keeps transmitting this long, so the end of what you said isn't cut off.
+const PTT_TAIL_MS = 1000;
 // Stuck mic: the radio lets go of a transmission held this long (the relay cuts it too).
 const STUCK_MIC_MS = 60_000;
 // Whisper: a private call to one unit stays armed this long after its last use.
@@ -122,6 +124,8 @@ const state = {
   me: null,
   tx: 'idle', // idle | requesting | on
   txCancel: false,
+  txKind: 'main', // which talk key started the transmission
+  pttReleasedAt: 0,
   pttHeld: false,
   rx: new Map(),
   talking: {}, // channel id -> ids of everyone talking there, for the units lists
@@ -1110,6 +1114,9 @@ function onMessage(message) {
       // A web radio opened from the staff panel's Listen live, or a desktop radio that had it on.
       if (state.me?.staff && state.settings.monitor) sendJson({ type: 'monitor', active: true });
       sendPendingCrashes();
+      if (!state.settings.recordNotice) {
+        showModal({ title: 'RECORDED', text: 'RADIO TRANSMISSIONS ARE RECORDED AND KEPT FOR 24 HOURS SO STAFF CAN REVIEW REPORTS.', kind: 'notice' });
+      }
       render();
       break;
     case 'status':
@@ -1476,12 +1483,38 @@ function sendPanic() {
 
 /* ---------- push to talk ---------- */
 
+// Pending end of a transmission after PTT was let go (see PTT_TAIL_MS).
+let txTail = null;
+
+function releaseTx(delay = PTT_TAIL_MS) {
+  clearTimeout(txTail);
+  txTail = setTimeout(() => {
+    txTail = null;
+    if (!state.pttHeld) void stopTx();
+  }, delay);
+}
+
 /** @param {'main'|'scan'} kind the talk key, or the second key that talks on your scan channel */
 function pttPress(kind = 'main') {
   markActive();
   if (state.pttHeld) return;
   state.pttHeld = kind;
   el.pttSide.classList.add('active');
+  if (txTail) {
+    clearTimeout(txTail);
+    txTail = null;
+    // Pressed again within the tail: the same key just keeps talking.
+    if (state.tx === 'on' && state.txKind === kind) return;
+    // The other key: end that transmission first, then start this one.
+    if (state.tx === 'on') {
+      void stopTx().then(() => {
+        if (state.pttHeld !== kind) return;
+        state.pttHeld = false;
+        pttPress(kind);
+      });
+      return;
+    }
+  }
   if (state.screen === 'test') return;
   if (state.practice) return startPractice();
   if (state.conn !== 'online') {
@@ -1529,6 +1562,7 @@ function pttPress(kind = 'main') {
     state.whisper.until = Date.now() + WHISPER_IDLE_MS;
   }
   state.tx = 'requesting';
+  state.txKind = kind;
   state.txCancel = false;
   sendJson(request);
 }
@@ -1536,9 +1570,10 @@ function pttPress(kind = 'main') {
 function pttRelease(kind = 'main') {
   if (!state.pttHeld || state.pttHeld !== kind) return;
   state.pttHeld = false;
+  state.pttReleasedAt = Date.now();
   el.pttSide.classList.remove('active');
   if (state.practiceTx) return endPractice();
-  if (state.tx === 'on') void stopTx();
+  if (state.tx === 'on') releaseTx();
   else if (state.tx === 'requesting') state.txCancel = true;
 }
 
@@ -1573,11 +1608,14 @@ function onTxReply(message) {
   playTone('permit');
   updateLamps();
   render();
-  if (state.txCancel || !state.pttHeld) void stopTx();
+  // Let go before the channel answered: the tail counts from when PTT was let go.
+  if (state.txCancel || !state.pttHeld) releaseTx(Math.max(0, state.pttReleasedAt + PTT_TAIL_MS - Date.now()));
   state.txCancel = false;
 }
 
 async function stopTx() {
+  clearTimeout(txTail);
+  txTail = null;
   if (state.tx !== 'on') return;
   audio.capture.port.postMessage({ active: false });
   audio.draining = true;
@@ -1596,6 +1634,8 @@ async function stopTx() {
 }
 
 function forceTxOff() {
+  clearTimeout(txTail);
+  txTail = null;
   audio.capture?.port.postMessage({ active: false });
   state.tx = 'idle';
   updateLamps();
@@ -1750,13 +1790,14 @@ function applyDamage() {
   updateLamps();
 }
 
-// A pop-up over the screen (staff warning) until OK or BACK.
+// A pop-up over the screen (staff warning, recorded-transmissions notice) until OK or BACK.
 function showModal(modal) {
   state.modal = modal;
   render();
 }
 
 function closeModal() {
+  if (state.modal?.kind === 'notice') saveSettings({ recordNotice: true });
   state.modal = null;
   render();
 }

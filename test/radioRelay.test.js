@@ -881,6 +881,38 @@ test('talking over dispatch is reported, on a radio or in the Discord channel', 
   }
 });
 
+test('every transmission is handed to the recorder, and Discord speech too', async () => {
+  const recordings = [];
+  const harness = await startRelay({
+    record: (meta) => {
+      const entry = { meta, packets: 0, ended: false };
+      recordings.push(entry);
+      return { push: () => { entry.packets += 1; }, end: () => { entry.ended = true; } };
+    },
+  });
+  try {
+    const alice = await signIn(harness, ALICE);
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
+    alice.ws.send(Buffer.from([1, 2, 3]));
+    alice.ws.send(Buffer.from([4, 5, 6]));
+    alice.send({ type: 'tx', active: false });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(recordings[0].meta.name, 'Alice');
+    assert.equal(recordings[0].meta.channelName, 'Radio');
+    assert.equal(recordings[0].packets, 2);
+    assert.equal(recordings[0].ended, true);
+
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', true);
+    harness.relay.relayDiscordAudio('333333333333333333', Buffer.from([9]));
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', false);
+    assert.deepEqual([recordings[1].meta.source, recordings[1].packets, recordings[1].ended], ['discord', 1, true]);
+    alice.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
 test('staff monitor hears every channel, listen-only, and only admins get it', async () => {
   const harness = await startRelay({
     authorize: async (userId) => ({ ok: true, name: userId === ALICE ? 'Alice' : 'Bob', staff: userId === ALICE }),

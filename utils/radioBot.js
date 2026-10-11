@@ -1,5 +1,4 @@
 import { createServer } from 'node:http';
-import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import {
@@ -28,6 +27,7 @@ import { createRadioTalkLog } from './radioTalkLog.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { createRadioStats, buildRadioStatsEmbed } from './radioStats.js';
 import { buildRadioPanicEmbed, RADIO_KICK_BLOCK_MS, setRadioStaffControls } from './radioStaff.js';
+import { createRadioRecorder } from './radioRecorder.js';
 import { createSceneClock, createTalkOverWatch, sceneChannelIds } from './radioModeration.js';
 import { canUseChannel, createMelonlyProfiles, normalizeAccess, profileLabel } from './radioMelonly.js';
 
@@ -49,6 +49,7 @@ const DAMAGED_SIGNAL = 0.1;
 /** Crash reports from radios, for the staff panel: kept this long, newest first. */
 const CRASH_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
 const CRASH_LIMIT = 200;
+const RECORDING_PRUNE_MS = 30 * 60 * 1000;
 const radioDataPath = (name) => join(process.cwd(), 'data', name);
 // 80 ms: shorter transmissions are PTT taps with nothing said.
 const RADIO_MIN_TX_PACKETS = 4;
@@ -77,13 +78,18 @@ async function findPanicPlayerInGame(env, { robloxId = '', names = [] }) {
  */
 async function locateRadioUsers(env, users) {
   const key = env.ERLC_SERVER_KEY?.trim();
-  if (!key) return { located: new Map(), server: null };
+  if (!key) return { located: new Map(), known: new Map(), server: null };
   const server = await fetchErlcServer(key, { timeoutMs: 4_000, maxAgeMs: GAME_TICK_MS - 1_000 });
   const players = erlcPlayersFromServer(server).map(parseErlcPlayer);
   const byDiscord = (await getIdentityCache().catch(() => ({ byDiscord: {} }))).byDiscord || {};
   const located = new Map();
+  // Linked Roblox accounts, so a kill log entry still finds a member the player list missed.
+  const known = new Map();
   for (const user of users) {
     const identity = byDiscord[user.userId] || {};
+    if (identity.robloxId || identity.robloxUsername) {
+      known.set(user.userId, { robloxId: identity.robloxId ? String(identity.robloxId) : '', names: [identity.robloxUsername].filter(Boolean) });
+    }
     const nick = String(user.name || '').replace(/^(\s*[[(][^\])]*[\])]\s*)+/, '').trim();
     const player = findPanicPlayer(players, {
       robloxId: identity.robloxId,
@@ -102,7 +108,7 @@ async function locateRadioUsers(env, users) {
       player,
     });
   }
-  return { located, server };
+  return { located, known, server };
 }
 
 /** EMER on a radio: the member's linked Roblox player, so the alert shows where they are in game. */
@@ -265,8 +271,11 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   let settingsSaveTimer = null;
   void readJsonFile(settingsPath, {}).then((saved) => { syncedSettings = { ...(saved || {}), ...syncedSettings }; });
 
-  // Transmissions are no longer recorded: clear out any saved by an older version.
-  void rm(radioDataPath('radio-recordings'), { recursive: true, force: true }).catch(() => {});
+  // Every transmission (radio and the Discord radio channel) is recorded for staff review, kept 24 hours.
+  const recorder = createRadioRecorder({ dir: radioDataPath('radio-recordings') });
+  void recorder.prune();
+  const pruneTimer = setInterval(() => { void recorder.prune(); }, RECORDING_PRUNE_MS);
+  pruneTimer.unref?.();
   const talkOver = createTalkOverWatch();
   const sceneIds = sceneChannelIds(env.RADIO_SCENE_CHANNEL_IDS);
   const sceneClock = createSceneClock();
@@ -297,6 +306,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   }
 
   const relay = createRadioRelay({
+    record: (meta) => recorder.start(meta),
     isStaff: (userId) => isAdmin(userId),
     canUse: (radio, channelId) => canUseChannel(access, channelId, { profile: radio.profile, staff: radio.staff }),
     scenes: () => sceneList,
@@ -450,10 +460,10 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     if (gameBusy) return;
     gameBusy = true;
     try {
-      const { located, server } = await locateRadioUsers(env, users);
+      const { located, known, server } = await locateRadioUsers(env, users);
       gameFeed.update(users, located);
       const kills = (server?.KillLogs || server?.killLogs || []).map((entry) => (entry?.at ? entry : parseErlcKill(entry)));
-      for (const userId of damage.update(kills, located)) {
+      for (const userId of damage.update(kills, located, known)) {
         relay.sendTo(userId, { type: 'damage', seconds: DOWNED_MS / 1000 });
         logger.info(`Radio: ${userId} was downed in game; radio damaged for ${DOWNED_MS / 1000}s.`);
       }
@@ -507,6 +517,8 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     },
     crashes: () => crashes.filter((entry) => Date.now() - entry.at < CRASH_KEEP_MS).slice(0, 50),
     scenes: () => sceneList,
+    recordings: () => recorder.list(),
+    recording: (id) => recorder.read(id),
     event: () => relay.event,
     openEvent: (name, by) => relay.openEvent(name, by),
     closeEvent: () => relay.closeEvent(),
@@ -714,6 +726,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     clearInterval(statsTimer);
     clearInterval(weeklyStatsTimer);
     clearInterval(coverageTimer);
+    clearInterval(pruneTimer);
     clearTimeout(damageTimer);
     setRadioStaffControls(null);
     if (activeRelay === relay) activeRelay = null;

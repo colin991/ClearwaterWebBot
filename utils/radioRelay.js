@@ -75,6 +75,7 @@ function send(socket, message) {
  * @param {() => { id: string, name: string, since: number, kind?: string, detail?: string }[]} [options.calls] pending 911 calls
  * @param {(userId: string) => ({ data: object, updatedAt: number }|null)} [options.loadSettings] a member's synced settings
  * @param {(userId: string, saved: { data: object, updatedAt: number }) => void} [options.saveSettings]
+ * @param {(meta: object) => ({ push(packet: Buffer): void, end(): void }|null)} [options.record] records a transmission for staff review
  * @param {(event: { userId: string, name: string, channel: string, dispatcher: string }) => void} [options.onTalkOver]
  * @param {(report: object) => void} [options.onCrash] a radio's crash report, for the staff panel
  * @param {() => { id: string, name: string, channel: string, since: number }[]} [options.scenes] units in scene voice channels (dispatch only)
@@ -99,6 +100,7 @@ export function createRadioRelay({
   saveSettings = () => {},
   isStaff = async () => false,
   canUse = () => true,
+  record = () => null,
   onTalkOver = () => {},
   onCrash = () => {},
   scenes = () => [],
@@ -115,6 +117,7 @@ export function createRadioRelay({
   // One talker per channel: channel id -> { socket, userId, name, sink, startedAt, lastPacketAt }
   const talkers = new Map();
   const discordTalkers = new Map(); // userId -> name, members talking in the Discord channel
+  const discordRecordings = new Map(); // userId -> recording of what they say in the Discord channel
   // Staff controls: force-muted members can listen but not talk; kicked members can't sign in until the time is up.
   const mutedUsers = new Set([...muted].map(String));
   const kickedUntil = new Map();
@@ -296,6 +299,7 @@ export function createRadioRelay({
     const whisper = whispers.get(socket);
     if (!whisper) return;
     whispers.delete(socket);
+    try { whisper.recording?.end(); } catch { /* recording never breaks the radio */ }
     for (const other of clients) {
       if (other.radio?.userId === whisper.to) send(other, { type: 'whisper', id: whisper.userId, name: whisper.name, active: false });
     }
@@ -308,6 +312,7 @@ export function createRadioRelay({
     if (!talker || talker.socket !== socket) return;
     talkers.delete(channel);
     try { talker.sink?.end(); } catch { /* ignore */ }
+    try { talker.recording?.end(); } catch { /* recording never breaks the radio */ }
     lastHeard.set(channel, { name: talker.name, at: now() });
     broadcast({ type: 'talk', id: talker.userId, name: talker.name, active: false, source: 'app', channel }, null, channel);
     broadcastTalking();
@@ -391,7 +396,7 @@ export function createRadioRelay({
     endTransmit(socket);
     const at = now();
     socket.radio.txChannel = channel;
-    talkers.set(channel, { socket, userId, name, sink, startedAt: at, lastPacketAt: at });
+    talkers.set(channel, { socket, userId, name, sink, startedAt: at, lastPacketAt: at, recording: startRecording({ userId, name, channel, channelName: channelName(channel), source: 'app' }) });
     send(socket, { type: 'tx', ok: true, channel });
     broadcast({ type: 'talk', id: userId, name, active: true, source: 'app', channel, signal: signalOf(userId) }, socket, channel);
     broadcastTalking();
@@ -408,7 +413,11 @@ export function createRadioRelay({
     if (refusal) return send(socket, { type: 'tx', ok: false, ...refusal });
     endTransmit(socket);
     const at = now();
-    whispers.set(socket, { socket, to: target, userId, name, startedAt: at, lastPacketAt: at });
+    const toName = targets[0].radio.name;
+    whispers.set(socket, {
+      socket, to: target, userId, name, startedAt: at, lastPacketAt: at,
+      recording: startRecording({ userId, name, channel: 'whisper', channelName: `Whisper to ${toName}`, source: 'app', to: toName }),
+    });
     send(socket, { type: 'tx', ok: true, to: target });
     for (const other of targets) send(other, { type: 'whisper', id: userId, name, active: true, signal: signalOf(userId) });
   }
@@ -429,6 +438,7 @@ export function createRadioRelay({
     if (state.rateCount > RADIO_MAX_PACKETS_PER_SECOND) return;
     if (whisper) {
       whisper.lastPacketAt = now();
+      whisper.recording?.push(packet);
       const frame = encodeAudioFrame(whisper.userId, packet);
       for (const other of clients) {
         if (other.radio?.userId === whisper.to && !other.radio.deaf) send(other, frame);
@@ -437,6 +447,7 @@ export function createRadioRelay({
     }
     talker.lastPacketAt = now();
     talker.sink?.push(packet);
+    talker.recording?.push(packet);
     const frame = encodeAudioFrame(talker.userId, packet);
     for (const other of clients) {
       if (other !== socket && hears(other, talker.userId, channel)) send(other, frame);
@@ -473,6 +484,10 @@ export function createRadioRelay({
     radio.channel = RADIO_MAIN_CHANNEL;
     send(socket, { type: 'moved', by: 'Staff', channel: RADIO_MAIN_CHANNEL, channelName: channelName(RADIO_MAIN_CHANNEL), reason: 'locked' });
     send(socket, { type: 'channel', ...statusFor(socket) });
+  }
+
+  function startRecording(meta) {
+    try { return record(meta) || null; } catch { return null; }
   }
 
   function reportTalkOver(radio, channel, dispatcher) {
@@ -792,6 +807,7 @@ export function createRadioRelay({
     },
     /** Audio a Discord member spoke in the radio channel, forwarded to every app. */
     relayDiscordAudio(speakerId, packet) {
+      discordRecordings.get(String(speakerId))?.push(packet);
       const frame = encodeAudioFrame(speakerId, packet);
       for (const socket of clients) {
         if (hears(socket, speakerId, RADIO_MAIN_CHANNEL)) send(socket, frame);
@@ -822,9 +838,15 @@ export function createRadioRelay({
           if (dispatcher) reportTalkOver({ userId: String(speakerId), name }, RADIO_MAIN_CHANNEL, dispatcher);
         }
         discordTalkers.set(speakerId, name);
+        if (!discordRecordings.has(String(speakerId))) {
+          const recording = startRecording({ userId: speakerId, name, channel: RADIO_MAIN_CHANNEL, channelName: `${channelName(RADIO_MAIN_CHANNEL)} (Discord)`, source: 'discord' });
+          if (recording) discordRecordings.set(String(speakerId), recording);
+        }
       } else {
         discordTalkers.delete(speakerId);
         lastHeard.set(RADIO_MAIN_CHANNEL, { name, at: now() });
+        try { discordRecordings.get(String(speakerId))?.end(); } catch { /* ignore */ }
+        discordRecordings.delete(String(speakerId));
       }
       broadcast({ type: 'talk', id: speakerId, name, active, source: 'discord', channel: RADIO_MAIN_CHANNEL }, null, RADIO_MAIN_CHANNEL);
       broadcastTalking();
