@@ -3511,6 +3511,13 @@
       "summary": "Radio transmissions are recorded and kept for 24 hours for staff review again, with the Recordings section back on the staff page. The cracked damaged-radio screen now triggers more reliably when someone is downed in game. Letting go of PTT now keeps transmitting for one more second so the end of what you said isn't cut off.",
       "createdAt": "2026-10-12T00:30:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-ingame-commands-priority",
+      "title": "In-game commands: faster pickup and timing in logs",
+      "summary": "The bot now checks ER:LC's command log every 2 seconds with a small, quick request instead of waiting for the full server snapshot. ;refresh skips ahead of background in-game commands. Every SceneCmd log line now shows how long the command took and whether it came through the webhook or the command log.",
+      "createdAt": "2026-10-11T23:20:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

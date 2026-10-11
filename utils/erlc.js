@@ -10,7 +10,10 @@ const ERLC_SERVER_CACHE_TTL_MS = 5_000;
 let erlcMinIntervalMs = ERLC_MIN_INTERVAL_MS;
 let erlcAvailableAt = 0;
 let erlcCommandAvailableAt = 0;
-let erlcCommandQueue = Promise.resolve();
+// Player-triggered commands (`;refresh` and its PMs) jump ahead of background
+// jobs so a backlog of automated commands doesn't stall them by 5s per item.
+let erlcCommandWaiters = { priority: [], normal: [] };
+let erlcCommandRunning = false;
 let erlcSnapshotQueue = Promise.resolve();
 let erlcHttpQueue = Promise.resolve();
 let erlcSlotDepth = 0;
@@ -207,19 +210,33 @@ function withErlcHttp(task) {
 }
 
 /** Commands and snapshots use separate queues so GET refreshes are not stuck behind the 5s POST gap. */
-export function withErlcNetworkSlot(task, { kind = 'snapshot' } = {}) {
+function pumpErlcCommands() {
+  if (erlcCommandRunning) return;
+  const next = erlcCommandWaiters.priority.shift() || erlcCommandWaiters.normal.shift();
+  if (!next) return;
+  erlcCommandRunning = true;
+  void next().finally(() => {
+    erlcCommandRunning = false;
+    pumpErlcCommands();
+  });
+}
+
+export function withErlcNetworkSlot(task, { kind = 'snapshot', priority = false } = {}) {
   if (kind === 'command') {
     queuedCommands += 1;
-    const run = erlcCommandQueue.then(async () => {
-      try {
-        throwIfErlcHalted();
-        return await task();
-      } finally {
-        queuedCommands -= 1;
-      }
+    return new Promise((resolve, reject) => {
+      erlcCommandWaiters[priority ? 'priority' : 'normal'].push(async () => {
+        try {
+          throwIfErlcHalted();
+          resolve(await task());
+        } catch (error) {
+          reject(error);
+        } finally {
+          queuedCommands -= 1;
+        }
+      });
+      pumpErlcCommands();
     });
-    erlcCommandQueue = run.then(() => undefined, () => undefined);
-    return run;
   }
   const run = erlcSnapshotQueue.then(async () => {
     throwIfErlcHalted();
@@ -234,21 +251,17 @@ export function withErlcNetworkSlot(task, { kind = 'snapshot' } = {}) {
   return run;
 }
 
-async function fetchErlcBundle(serverKey) {
+const ERLC_BUNDLE_SECTIONS = ['Players', 'Queue', 'Vehicles', 'KillLogs', 'ModCalls', 'EmergencyCalls', 'CommandLogs', 'Staff'];
+
+/** One GET /v2/server with the given sections; applies halts and rate-limit cooldowns. */
+async function getErlcServerJson(serverKey, sections, { timeoutMs = 8000 } = {}) {
   const url = new URL('https://api.erlc.gg/v2/server');
-  url.searchParams.set('Players', 'true');
-  url.searchParams.set('Queue', 'true');
-  url.searchParams.set('Vehicles', 'true');
-  url.searchParams.set('KillLogs', 'true');
-  url.searchParams.set('ModCalls', 'true');
-  url.searchParams.set('EmergencyCalls', 'true');
-  url.searchParams.set('CommandLogs', 'true');
-  url.searchParams.set('Staff', 'true');
+  for (const section of sections) url.searchParams.set(section, 'true');
 
   throwIfErlcHalted();
   const response = await fetch(url, {
     headers: { 'server-key': serverKey },
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(timeoutMs),
   }).catch((error) => {
     const wrapped = new Error('Could not reach the ER:LC API in time. Check ERLC_SERVER_KEY and that the bot host can reach api.erlc.gg.');
     wrapped.cause = error;
@@ -273,6 +286,28 @@ async function fetchErlcBundle(serverKey) {
     throw error;
   }
   rememberErlcCooldown(retryAfter);
+  return json;
+}
+
+let commandLogsInflight = null;
+
+/**
+ * Light GET of just the command logs, for in-game `;` commands. It skips the
+ * heavy snapshot queue so a slow full snapshot never delays a command, and
+ * returns null (skip this tick) while ER:LC asked us to back off.
+ */
+export function fetchErlcCommandLogs(serverKey, { timeoutMs = 4000 } = {}) {
+  if (!serverKey) return Promise.reject(new Error('ERLC_SERVER_KEY is not configured'));
+  if (commandLogsInflight) return commandLogsInflight;
+  if ((erlcHaltError && Date.now() < erlcHaltUntil) || erlcAvailableAt > Date.now()) return Promise.resolve(null);
+  commandLogsInflight = getErlcServerJson(serverKey, ['CommandLogs'], { timeoutMs })
+    .then((json) => json?.CommandLogs || json?.commandLogs || [])
+    .finally(() => { commandLogsInflight = null; });
+  return commandLogsInflight;
+}
+
+async function fetchErlcBundle(serverKey) {
+  const json = await getErlcServerJson(serverKey, ERLC_BUNDLE_SECTIONS);
   const fetchedAt = Date.now();
   bundleCache = {
     value: json,
@@ -391,12 +426,14 @@ export function resetErlcNetworkForTests({ minIntervalMs = 0, idleRefresh = fals
   erlcMinIntervalMs = Number.isFinite(minIntervalMs) ? minIntervalMs : 0;
   erlcAvailableAt = 0;
   erlcCommandAvailableAt = 0;
-  erlcCommandQueue = Promise.resolve();
+  erlcCommandWaiters = { priority: [], normal: [] };
+  erlcCommandRunning = false;
   erlcSnapshotQueue = Promise.resolve();
   erlcHttpQueue = Promise.resolve();
   erlcSlotDepth = 0;
   queuedCommands = 0;
   bundleCache = { value: null, expiresAt: 0, fetchedAt: 0, inflight: null };
+  commandLogsInflight = null;
   erlcHaltUntil = 0;
   erlcHaltError = null;
 }
@@ -718,14 +755,14 @@ function sanitizeErlcReason(value) {
 
 /** Run one in-game command through the ER:LC private server API. */
 export async function executeErlcCommand(serverKey, command, options = {}) {
-  return withErlcCommandSession(serverKey, send => send(command, options));
+  return withErlcCommandSession(serverKey, send => send(command, options), { priority: Boolean(options.priority) });
 }
 
 /** Reserve the shared command queue for a short grant/revoke transaction. */
-export function withErlcCommandSession(serverKey, action) {
+export function withErlcCommandSession(serverKey, action, { priority = false } = {}) {
   return withErlcNetworkSlot(
     () => action((command, options) => sendErlcCommand(serverKey, command, options)),
-    { kind: 'command' },
+    { kind: 'command', priority },
   );
 }
 

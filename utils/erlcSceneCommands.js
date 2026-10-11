@@ -1,5 +1,7 @@
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
-import { executeErlcCommand, fetchErlcServer, parseErlcPlayer, parseErlcCommandLog } from './erlc.js';
+import {
+  executeErlcCommand, fetchErlcCommandLogs, fetchErlcServer, parseErlcPlayer, parseErlcCommandLog,
+} from './erlc.js';
 import { discordIdsByRobloxId } from './identityStore.js';
 import { resolveZoneDiscordMember } from './erlcZoneVoice.js';
 import { markBotVoiceMove } from './botVoiceMoves.js';
@@ -252,6 +254,7 @@ export async function runRefreshCommand({
       await executeCommand(
         config.erlcServerKey,
         `:pm ${username} ${refreshCooldownMessage(REFRESH_COOLDOWN_MS - elapsed)}`,
+        { priority: true },
       ).catch((error) => {
         logger.warn(`;refresh cooldown PM to ${username} failed: ${error?.message || error}`);
       });
@@ -268,7 +271,7 @@ export async function runRefreshCommand({
     }
   }
   try {
-    await executeCommand(config.erlcServerKey, `:refresh ${username}`);
+    await executeCommand(config.erlcServerKey, `:refresh ${username}`, { priority: true });
     return { handled: true, reason: 'refreshed', player: { ...player, username } };
   } catch (error) {
     recentRefreshes.delete(key);
@@ -648,6 +651,7 @@ export function sceneCommandLogBody({
   nearbyMoved = 0,
   error = '',
   payloadHint = '',
+  timing = '',
 } = {}) {
   const who = `${player?.username || 'unknown'} (${player?.robloxId || 'unknown'})`;
   const cmd = commandName ? `;${commandName}` : String(rawText || 'unknown command').slice(0, 80);
@@ -655,6 +659,15 @@ export function sceneCommandLogBody({
     const detail = [payloadHint].map((part) => String(part || '').trim()).filter(Boolean).join(' · ');
     return `RECV — ${cmd} ${who}${detail ? ` · ${detail}` : ''}`;
   }
+  const body = sceneCommandOutcome({
+    handled, reason, commandName, cmd, who, channelName, nearbyMoved, error, payloadHint,
+  });
+  return timing ? `${body} · ⏱ ${timing}` : body;
+}
+
+function sceneCommandOutcome({
+  handled, reason, commandName, cmd, who, channelName, nearbyMoved, error, payloadHint,
+}) {
   if (handled && commandName === 'refresh') return `OK — ;refresh ${who} refreshed in game`;
   if (handled) {
     const extra = nearbyMoved ? ` · dragged ${nearbyMoved} nearby` : '';
@@ -730,6 +743,19 @@ async function moveMember(member, voiceChannel, reason, { skipGreetingMark = fal
   await member.voice.setChannel(voiceChannel, reason);
 }
 
+function seconds(ms) {
+  return `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
+}
+
+/** "via logs · 3.1s after typed · bot 0.4s" so slow commands show where the time went. */
+export function sceneCommandTiming({ source = '', issuedAt = 0, startedAt = Date.now(), doneAt = Date.now() } = {}) {
+  const parts = [];
+  if (source) parts.push(`via ${source}`);
+  if (issuedAt > 0 && doneAt >= issuedAt) parts.push(`${seconds(doneAt - issuedAt)} after typed`);
+  parts.push(`bot ${seconds(doneAt - startedAt)}`);
+  return parts.join(' · ');
+}
+
 export async function handleErlcSceneEvent(payload, {
   client,
   config = client?.config || {},
@@ -738,7 +764,14 @@ export async function handleErlcSceneEvent(payload, {
   snapshot,
   identities,
   executeCommand,
+  source = '',
+  issuedAt = 0,
 } = {}) {
+  const startedAt = Date.now();
+  const log = (details) => logSceneCommandResult(client, {
+    ...details,
+    timing: sceneCommandTiming({ source, issuedAt, startedAt }),
+  });
   const parsed = resolveSceneCommand(payload);
   const stealText = extractWebhookCommandText(payload);
   if (isRefreshCommandText(stealText) || (parsed && /^\s*refresh\b/i.test(stealText))) {
@@ -746,7 +779,7 @@ export async function handleErlcSceneEvent(payload, {
     const result = await runRefreshCommand({
       config, player, now, snapshot, ...(executeCommand ? { executeCommand } : {}),
     });
-    await logSceneCommandResult(client, {
+    await log({
       handled: result.handled,
       reason: result.reason,
       commandName: 'refresh',
@@ -771,7 +804,7 @@ export async function handleErlcSceneEvent(payload, {
         player,
       };
     }
-    await logSceneCommandResult(client, {
+    await log({
       handled: result.handled,
       reason: result.reason,
       commandName: 'steal',
@@ -784,7 +817,7 @@ export async function handleErlcSceneEvent(payload, {
   }
   if (!parsed) {
     if (!looksLikeEmergencyCallEvent(payload)) {
-      await logSceneCommandResult(client, {
+      await log({
         handled: false,
         reason: 'unparsed_event',
         rawText: extractWebhookCommandText(payload) || extractWebhookEventType(payload) || 'erlc event',
@@ -810,7 +843,7 @@ export async function handleErlcSceneEvent(payload, {
     };
   }
 
-  await logSceneCommandResult(client, {
+  await log({
     handled: result.handled,
     reason: result.reason,
     commandName: parsed.command?.name || '',
@@ -920,7 +953,7 @@ async function moveForSceneCommand(payload, command, webhookPlayer, {
   try {
     const server = snapshot
       ? await snapshot()
-      : (config.erlcServerKey ? await fetchErlcServer(config.erlcServerKey) : null);
+      : (config.erlcServerKey ? await fetchErlcServer(config.erlcServerKey, { timeoutMs: 3_000 }) : null);
     rosterPlayers = (server?.Players || server?.players || []).map((entry) => {
       const mapped = parseErlcPlayer(entry);
       if (entry?.username == null) return mapped;
@@ -1191,7 +1224,9 @@ export async function runDiscordSceneCommand({
   );
 }
 
-const SCENE_LOG_SCAN_INTERVAL_MS = 1_000;
+// Each scan is one light CommandLogs GET on ER:LC's global bucket; rate-limit
+// headers are honored, so a 429 or empty window pauses polling automatically.
+const SCENE_LOG_SCAN_INTERVAL_MS = 2_000;
 const sceneLogSeen = new Set();
 let sceneLogsPrimed = false;
 
@@ -1210,10 +1245,18 @@ export function commandLogToScenePayload(entry) {
 
 export async function scanSceneCommandLogs(client, { snapshot, identities, executeCommand } = {}) {
   if (!snapshot && !client?.config?.erlcServerKey) return { scanned: 0 };
-  const server = snapshot
-    ? await snapshot()
-    : await fetchErlcServer(client.config.erlcServerKey, { timeoutMs: 4_000 }).catch(() => null);
-  const logs = (server?.CommandLogs || server?.commandLogs || []).map((entry) => (
+  let server = snapshot ? await snapshot() : null;
+  let rawLogs = server?.CommandLogs || server?.commandLogs;
+  if (!snapshot) {
+    // A light CommandLogs-only GET is fresher than the shared 5s snapshot;
+    // fall back to the snapshot cache while ER:LC asks us to back off.
+    rawLogs = await fetchErlcCommandLogs(client.config.erlcServerKey).catch(() => null);
+    if (!rawLogs) {
+      server = await fetchErlcServer(client.config.erlcServerKey, { timeoutMs: 4_000 }).catch(() => null);
+      rawLogs = server?.CommandLogs || server?.commandLogs;
+    }
+  }
+  const logs = (rawLogs || []).map((entry) => (
     entry?.command != null || entry?.username != null ? entry : parseErlcCommandLog(entry)
   ));
   if (!sceneLogsPrimed) {
@@ -1255,9 +1298,13 @@ export async function scanSceneCommandLogs(client, { snapshot, identities, execu
         const result = await handleErlcSceneEvent(commandLogToScenePayload(entry), {
           client,
           config: client?.config || {},
-          snapshot: async () => server,
+          // Injected snapshots carry the roster; a logs-only poll does not, so
+          // the handler reads players from the shared snapshot cache instead.
+          ...(snapshot ? { snapshot: async () => server } : {}),
           identities,
           executeCommand,
+          source: 'logs',
+          issuedAt: Number(entry.at) || 0,
         });
         if (result?.handled) handled += 1;
       } catch (error) {
@@ -1281,7 +1328,7 @@ export function resetSceneLogScannerForTests() {
 }
 
 export function startErlcSceneCommands(client) {
-  const listener = (payload, eventId) => {
+  const listener = (payload, eventId, meta = {}) => {
     void (async () => {
       const items = erlcEventPayloads(payload);
       if (!items.length) {
@@ -1289,7 +1336,9 @@ export function startErlcSceneCommands(client) {
         return;
       }
       for (const item of items) {
-        await handleErlcSceneEvent(item, { client, config: client.config, eventId });
+        await handleErlcSceneEvent(item, {
+          client, config: client.config, eventId, source: 'webhook', issuedAt: meta?.signedAt || 0,
+        });
       }
     })().catch(async (error) => {
       logger.error('ER:LC scene command failed', error);
@@ -1302,10 +1351,9 @@ export function startErlcSceneCommands(client) {
     });
   };
   client.on('erlcEvent', listener);
-  // Scans read the shared ER:LC snapshot cache (refreshed in the background),
-  // so a short interval picks up new command logs as soon as they land without
-  // extra API calls. Overlapping scans are safe: each log line is claimed in
-  // sceneLogSeen before it is handled.
+  // Command logs are the fallback when the ER:LC webhook doesn't reach the bot.
+  // Overlapping scans are safe: each log line is claimed in sceneLogSeen
+  // before it is handled, and concurrent polls share one in-flight GET.
   const scan = () => {
     void scanSceneCommandLogs(client).catch((error) => {
       logger.warn(`ER:LC scene command log scan failed: ${error?.message || error}`);
