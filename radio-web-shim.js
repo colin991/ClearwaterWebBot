@@ -68,7 +68,9 @@
   function fit() {
     const width = window.innerWidth - 16;
     const height = window.innerHeight - header.offsetHeight - ptt.offsetHeight - 28;
-    const scale = Math.max(0.6, Math.min(width / RADIO_W, height / RADIO_H, 1.8));
+    // SIZE on the radio's menu shrinks it below the fitted size.
+    const size = Math.min(100, Math.max(50, Number(load().size) || 100)) / 100;
+    const scale = Math.max(0.6, Math.min(width / RADIO_W, height / RADIO_H, 1.8)) * size;
     frame.style.transform = `scale(${scale})`;
     stage.style.width = `${Math.round(RADIO_W * scale)}px`;
     stage.style.height = `${Math.round(RADIO_H * scale)}px`;
@@ -119,7 +121,7 @@
         gate.querySelector('button').onclick = () => {
           gate.hidden = true;
           void navigator.wakeLock?.request('screen').catch(() => {});
-          resolve({ ...load(), hook: false, key: result.key, webRelay: result.url });
+          resolve({ ...load(), hook: false, web: true, key: result.key, webRelay: result.url });
         };
       };
       void attempt();
@@ -149,7 +151,10 @@
 
   window.radioApp = {
     getSettings: waitForGate,
-    setSettings: async (patch) => store(patch || {}),
+    setSettings: async (patch) => {
+      store(patch || {});
+      if (patch && 'size' in patch) fit();
+    },
     capturePtt: async () => {},
     version: async () => 'WEB',
     checkForUpdates: async () => {

@@ -40,6 +40,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   txVolume: 60,
   listenFx: 'radio',
   power: 'auto',
+  size: 100,
   channel: 'main',
   deaf: false,
   bounds: null,
@@ -199,12 +200,38 @@ function startHook() {
   }
 }
 
+// SIZE setting: the whole radio is drawn smaller (50-100% of full size).
+function sizeFactor() {
+  const size = Number(settings.size);
+  return Number.isFinite(size) && size >= 50 && size <= 100 ? size / 100 : 1;
+}
+
+function windowSize() {
+  const factor = sizeFactor();
+  return { width: Math.round(WINDOW_WIDTH * factor), height: Math.round(WINDOW_HEIGHT * factor) };
+}
+
 function defaultBounds() {
   const area = screen.getPrimaryDisplay().workArea;
+  const { width, height } = windowSize();
   return {
-    x: area.x + area.width - WINDOW_WIDTH - 24,
-    y: area.y + Math.max(0, area.height - WINDOW_HEIGHT - 24),
+    x: area.x + area.width - width - 24,
+    y: area.y + Math.max(0, area.height - height - 24),
   };
+}
+
+// Resize around the bottom-right corner, where the radio usually sits.
+function applySize() {
+  if (!win || win.isDestroyed()) return;
+  const { width, height } = windowSize();
+  const [x, y] = win.getPosition();
+  const [oldWidth, oldHeight] = win.getSize();
+  if (oldWidth !== width || oldHeight !== height) {
+    win.setResizable(true);
+    win.setBounds({ x: x + oldWidth - width, y: y + oldHeight - height, width, height });
+    win.setResizable(false);
+  }
+  win.webContents.setZoomFactor(sizeFactor());
 }
 
 function visibleBounds(saved) {
@@ -224,11 +251,12 @@ function keepOnTop() {
 
 function createWindow() {
   const { x, y } = visibleBounds(settings.bounds);
+  const { width, height } = windowSize();
   win = new BrowserWindow({
     x,
     y,
-    width: WINDOW_WIDTH,
-    height: WINDOW_HEIGHT,
+    width,
+    height,
     frame: false,
     transparent: true,
     resizable: false,
@@ -259,6 +287,7 @@ function createWindow() {
   win.on('closed', () => { win = null; });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event) => event.preventDefault());
+  win.webContents.on('did-finish-load', () => win?.webContents.setZoomFactor(sizeFactor()));
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 
@@ -324,11 +353,12 @@ if (!app.requestSingleInstanceLock()) {
 
     ipcMain.handle('settings:get', () => ({ ...settings, hook: Boolean(uIOhook), relayUrl: DEFAULT_RELAY_URL }));
     ipcMain.handle('settings:set', (_event, patch) => {
-      const allowedKeys = ['key', 'micId', 'outputId', 'volume', 'txVolume', 'listenFx', 'power', 'channel', 'deaf', 'ptt'];
+      const allowedKeys = ['key', 'micId', 'outputId', 'volume', 'txVolume', 'listenFx', 'power', 'size', 'channel', 'deaf', 'ptt'];
       for (const key of allowedKeys) {
         if (patch && Object.prototype.hasOwnProperty.call(patch, key)) settings[key] = patch[key];
       }
       saveSettings();
+      if (patch && Object.prototype.hasOwnProperty.call(patch, 'size')) applySize();
       return { ...settings, hook: Boolean(uIOhook), relayUrl: DEFAULT_RELAY_URL };
     });
     ipcMain.handle('ptt:capture', (_event, active) => {

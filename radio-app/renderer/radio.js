@@ -37,6 +37,7 @@ const MENU = [
   { label: 'WHO', value: () => `${state.channels.reduce((total, channel) => total + (channel.members?.length || 0), 0)} ON`, open: 'users' },
   { label: 'FX', value: () => FX_LABELS[state.settings.listenFx] || 'OFF', adjust: (step) => cycleFx(step), action: () => cycleFx(1) },
   { label: 'POWER', value: () => powerText(), adjust: (step) => cyclePower(step), action: () => cyclePower(1) },
+  { label: 'SIZE', value: () => `${radioSize()}%`, adjust: (step) => changeSize(step), action: () => changeSize(-1, true) },
   { label: 'SETUP', value: () => 'RUN', open: 'setup' },
 ];
 const SETUP = [
@@ -51,13 +52,15 @@ const FX_LABELS = { off: 'OFF', radio: 'RADIO', police: 'POLICE' };
 // LOW trims audio work for slower PCs; AUTO picks LOW on machines with few cores or little memory.
 const POWER_MODES = ['auto', 'low', 'full'];
 const LOW_END = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
+// SIZE shrinks the whole radio overlay (percent of full size).
+const SIZES = [50, 60, 70, 80, 90, 100];
 const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', test: 'setup', users: 'home' };
 // Nobody touching the radio (no PTT, clicks or keys) for this long closes it; a warning shows for the last minute.
 const IDLE_CLOSE_MS = 20 * 60 * 1000;
 const IDLE_WARN_MS = 60 * 1000;
 
 const state = {
-  settings: { volume: 70, txVolume: 60, listenFx: 'radio', power: 'auto', deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false, channel: 'main' },
+  settings: { volume: 70, txVolume: 60, listenFx: 'radio', power: 'auto', size: 100, deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false, channel: 'main' },
   version: '',
   screen: 'home',
   menuIndex: 0,
@@ -83,6 +86,7 @@ const state = {
   toast: null,
   update: null,
   capturing: false,
+  mustBind: false, // first launch: the radio stays on the PTT screen until a talk key is picked
   micLevel: 0,
 };
 
@@ -971,7 +975,7 @@ function showPanic(message) {
   render();
 }
 
-// EMER: every radio flashes with your name and in-game location (the relay allows one press per 15 s).
+// PANIC button: every radio flashes with your name and in-game location (the relay allows one press per 15 s).
 let lastPanicAt = 0;
 function sendPanic() {
   if (state.conn !== 'online') {
@@ -979,12 +983,12 @@ function sendPanic() {
     return;
   }
   if (Date.now() - lastPanicAt < 15_000) {
-    flash('EMER SENT', 900);
+    flash('PANIC SENT', 900);
     return;
   }
   lastPanicAt = Date.now();
   sendJson({ type: 'panic' });
-  flash('EMER SENT', 1200);
+  flash('PANIC SENT', 1200);
 }
 
 /* ---------- push to talk ---------- */
@@ -1121,7 +1125,7 @@ function listHtml(items, selected, current) {
   // Full device names wrap; the LCD scrolls to keep the highlighted one in view.
   return `<ul class="list">${items.map((item, index) => {
     const mark = current !== undefined && item.id === current ? '*' : ' ';
-    return `<li class="${index === selected ? 'sel' : ''}">${mark}${escapeHtml(item.label.toUpperCase())}</li>`;
+    return `<li class="${index === selected ? 'sel' : ''}" data-row="${index}">${mark}${escapeHtml(item.label.toUpperCase())}</li>`;
   }).join('')}</ul>`;
 }
 
@@ -1146,16 +1150,19 @@ function usersBody() {
   return `<ul class="list users">${lines.map((line, index) => {
     const classes = [index === state.listIndex ? 'sel' : '', line.header ? 'hdr' : '', line.dim ? 'dim' : '', line.current ? 'cur' : ''].filter(Boolean).join(' ');
     const where = line.where ? `<span class="where">${escapeHtml(line.where)}</span>` : '';
-    return `<li class="${classes}">${escapeHtml(String(line.text).toUpperCase())}${line.me ? ' (YOU)' : ''}${where}</li>`;
+    return `<li class="${classes}" data-row="${index}">${escapeHtml(String(line.text).toUpperCase())}${line.me ? ' (YOU)' : ''}${where}</li>`;
   }).join('')}</ul>`;
 }
 
 function rowsHtml(rows, selected) {
   return `<ul class="list rows">${rows.map((row, index) => {
     const on = index === selected;
-    return `<li class="${on ? 'sel' : ''}"><span class="caret">${on ? '&gt;' : ''}</span>`
+    // The highlighted row's value gets clickable arrows when it can be turned up and down.
+    const arrows = on && row.adjust;
+    return `<li class="${on ? 'sel' : ''}" data-row="${index}"><span class="caret">${on ? '&gt;' : ''}</span>`
       + `<span class="name">${escapeHtml(row.label)}</span>`
-      + `<span class="val">${escapeHtml(String(row.value()).toUpperCase())}</span></li>`;
+      + `<span class="val">${arrows ? '<b class="adj" data-step="-1">&#9664;</b>' : ''}`
+      + `${escapeHtml(String(row.value()).toUpperCase())}${arrows ? '<b class="adj" data-step="1">&#9654;</b>' : ''}</span></li>`;
   }).join('')}</ul>`;
 }
 
@@ -1268,6 +1275,12 @@ function render() {
       break;
     case 'ptt': {
       left = 'PTT KEY';
+      if (state.mustBind) {
+        left = 'SET PTT KEY';
+        body = '<div class="mid">PICK A TALK KEY</div><div class="small">PRESS THE KEY OR MOUSE 4/5 YOU WANT TO HOLD TO TALK</div>'
+          + (state.settings.hook ? '' : '<div class="small dim">CLICK THE RADIO FIRST</div>');
+        break;
+      }
       const label = state.settings.ptt?.label || 'NONE';
       body = state.capturing
         ? '<div class="mid">PRESS KEY</div><div class="small">OR MOUSE 4/5 · ESC CANCEL</div>'
@@ -1366,6 +1379,39 @@ async function cycleFx(step) {
   render();
 }
 
+function radioSize() {
+  const size = Number(state.settings.size);
+  return SIZES.includes(size) ? size : 100;
+}
+
+// Arrows step the size up or down; selecting the row steps it smaller and wraps back to full size.
+async function changeSize(step, wrap = false) {
+  const index = SIZES.indexOf(radioSize());
+  let next = index + (step < 0 ? -1 : 1);
+  if (wrap) next = (next + SIZES.length) % SIZES.length;
+  const size = SIZES[Math.max(0, Math.min(SIZES.length - 1, next))];
+  if (size === radioSize()) return;
+  await saveNow({ size });
+  render();
+}
+
+// First launch (or no talk key saved): wait on the PTT screen until one is picked.
+function startBind() {
+  state.mustBind = true;
+  state.screen = 'ptt';
+  state.capturing = true;
+  render();
+  if (state.settings.hook) void api.capturePtt(true);
+}
+
+function bindDone() {
+  state.mustBind = false;
+  state.capturing = false;
+  setScreen('home');
+  flash(`PTT ${state.settings.ptt?.label || 'SET'}`, 1200);
+  connect({ autoSignIn: true });
+}
+
 async function checkUpdates() {
   state.update = { state: 'checking' };
   render();
@@ -1414,6 +1460,7 @@ function move(delta) {
 
 function press(key) {
   playTone('key');
+  if (state.mustBind) return undefined;
   // Gray left button: open the menu from the radio screen, otherwise go straight back to the radio.
   if (key === 'softL') return setScreen(state.screen === 'home' ? 'menu' : 'home');
   // Home key: back to the radio screen; on the radio screen it opens every unit on every channel.
@@ -1469,6 +1516,36 @@ function checkIdle() {
   }
 }
 
+// Clicking the screen: pick a row, use its arrows, or press OK on the sign-in card.
+function clickLcd(event) {
+  if (state.mustBind || state.panic) return;
+  const { screen } = state;
+  const item = event.target.closest('li[data-row]');
+  const index = item ? Number(item.dataset.row) : -1;
+  if (ROWS[screen] && index >= 0) {
+    playTone('key');
+    const field = screen === 'menu' ? 'menuIndex' : 'setupIndex';
+    const row = ROWS[screen][index];
+    const step = Number(event.target.closest('[data-step]')?.dataset.step || 0);
+    state[field] = index;
+    if (step && row.adjust) return void row.adjust(step);
+    if (row.open || row.action) return void choose();
+    return render();
+  }
+  if ((screen === 'mic' || screen === 'headset') && index >= 0) {
+    playTone('key');
+    state.listIndex = index;
+    return void choose();
+  }
+  if (screen === 'users' && index >= 0) {
+    state.listIndex = index;
+    return render();
+  }
+  if ((screen === 'ptt' && !state.capturing) || screen === 'test') return press('ok');
+  if (screen === 'home' && (state.conn === 'signin' || state.conn === 'signing')) return press(state.conn === 'signin' ? 'ok' : '*');
+  return undefined;
+}
+
 function bindControls() {
   window.addEventListener('pointerdown', () => { markActive(); void resumeAudio(); });
   window.addEventListener('keydown', () => { markActive(); void resumeAudio(); });
@@ -1480,6 +1557,10 @@ function bindControls() {
   for (const id of ['softL', 'softR', 'up', 'down', 'left', 'right', 'ok', 'back']) {
     $(id).addEventListener('click', () => press(id));
   }
+  // The screen's own labels and rows click too.
+  el.softLeftLabel.addEventListener('click', () => press('softL'));
+  el.softRightLabel.addEventListener('click', () => press('softR'));
+  el.lcdBody.addEventListener('click', clickLcd);
 
   el.deaf.addEventListener('click', () => {
     const deaf = !state.settings.deaf;
@@ -1523,12 +1604,15 @@ function bindControls() {
   window.addEventListener('keydown', (event) => {
     if (state.screen === 'ptt' && state.capturing && !state.settings.hook) {
       event.preventDefault();
-      if (event.code !== 'Escape') {
-        const ptt = { kind: 'dom', code: event.code, label: event.code.replace(/^Key|^Digit/, '').toUpperCase() };
-        void saveNow({ ptt });
+      if (event.code === 'Escape') {
+        if (state.mustBind) return;
+        state.capturing = false;
+        render();
+        return;
       }
+      const ptt = { kind: 'dom', code: event.code, label: event.code.replace(/^Key|^Digit/, '').toUpperCase() };
       state.capturing = false;
-      render();
+      void saveNow({ ptt }).then(() => (state.mustBind ? bindDone() : render()));
       return;
     }
     if (!state.settings.hook && state.settings.ptt?.kind === 'dom' && event.code === state.settings.ptt.code) {
@@ -1554,6 +1638,8 @@ function bindControls() {
   api.onPttBound((ptt) => {
     state.capturing = false;
     if (ptt) state.settings.ptt = ptt;
+    // Escape on the first-launch screen does not skip it.
+    if (state.mustBind) return void (ptt ? bindDone() : startBind());
     render();
   });
   api.onUpdate((update) => {
@@ -1580,7 +1666,9 @@ async function init() {
     flash('AUDIO ERR', 3000);
   }
   void refreshDeviceCache();
-  connect({ autoSignIn: true });
+  // A talk key comes first; the web radio has its own hold-to-talk bar instead.
+  if (!state.settings.ptt && !state.settings.web) startBind();
+  else connect({ autoSignIn: true });
 }
 
 void init();

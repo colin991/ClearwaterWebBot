@@ -3378,6 +3378,13 @@
       "summary": "The Clearwater Radio screen (app and web) now shows DISPATCH ACTIVE or DISPATCH OFFLINE. Dispatch counts as active when someone with !C in their name is in the radio voice channel or on a radio.",
       "createdAt": "2026-10-11T16:50:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-panic-size-keybind",
+      "title": "Radio: PANIC button, talk key on first open, size",
+      "summary": "The radio's EMER button is now labelled PANIC. The desktop radio asks you to pick a talk key the first time it opens. A new SIZE setting makes the overlay smaller, and the radio's screen can now be clicked: settings rows, arrows to change values, and the labels at the bottom.",
+      "createdAt": "2026-10-11T20:15:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
