@@ -3385,6 +3385,13 @@
       "summary": "The radio's EMER button is now labelled PANIC. The desktop radio asks you to pick a talk key the first time it opens. A new SIZE setting makes the overlay smaller, and the radio's screen can now be clicked: settings rows, arrows to change values, and the labels at the bottom.",
       "createdAt": "2026-10-11T20:15:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-panic-confirm-ch-dial-fx-level",
+      "title": "Radio: panic check, CH dial, FX level, no PTT pops",
+      "summary": "PANIC now asks ARE YOU SURE before sending. First-time setup lets you pick the radio size after the talk key. The CH knob turns like VOL. A new FX LVL setting picks how strong the radio effect is. Quick PTT taps no longer pop in the Discord channel.",
+      "createdAt": "2026-10-11T20:30:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

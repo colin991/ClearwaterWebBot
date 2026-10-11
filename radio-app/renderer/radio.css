@@ -94,7 +94,6 @@ button:focus { outline: none; }
   -webkit-app-region: no-drag;
 }
 
-.knob-wrap.tall .knob { width: 32px; height: 44px; border-radius: 12px; cursor: pointer; }
 
 .knob i {
   position: absolute;
