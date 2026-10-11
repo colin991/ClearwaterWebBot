@@ -94,11 +94,11 @@ function signIn(info) {
   try {
     redirect = new URL(String(info?.redirectUri || ''));
   } catch {
-    return Promise.resolve({ error: 'SIGN-IN NOT SET UP' });
+    return Promise.resolve({ error: 'BAD SIGN-IN SETUP ON BOT' });
   }
   const clientId = String(info?.clientId || '');
   if (!/^\d{15,22}$/.test(clientId) || redirect.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(redirect.hostname)) {
-    return Promise.resolve({ error: 'SIGN-IN NOT SET UP' });
+    return Promise.resolve({ error: 'BAD SIGN-IN SETUP ON BOT' });
   }
   const state = crypto.randomBytes(16).toString('hex');
   return new Promise((resolve) => {

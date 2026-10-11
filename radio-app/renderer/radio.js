@@ -525,13 +525,15 @@ function signInFailed(message) {
   }
   state.conn = 'signin';
   state.error = message || 'SIGN-IN FAILED';
-  render();
+  // Blink so a press that fails straight away is still visible.
+  flash('SIGN-IN FAILED', 900);
 }
 
 async function onLoginInfo(message) {
   if (state.conn !== 'signing') return;
   if (message.available === false || !message.clientId) {
-    signInFailed('SIGN-IN NOT SET UP');
+    // The bot host has no Discord client ID/secret configured.
+    signInFailed('BOT HAS NO DISCORD SECRET');
     return;
   }
   const result = await api.signIn({ clientId: message.clientId, redirectUri: message.redirectUri });
