@@ -99,7 +99,7 @@ export function profileLabel(profile) {
  * Channel access rules from the staff page: { [channelId]: { ranks: ["deptId:rankId", ...] } }.
  * A channel with no rule (or an empty list) is open to everyone.
  */
-export function normalizeAccess(raw = {}, channels = ['srt', 'freq', 'event']) {
+export function normalizeAccess(raw = {}, channels = ['fire', 'dot', 'freq', 'srt', 'event']) {
   const access = {};
   for (const channel of channels) {
     const ranks = Array.isArray(raw?.[channel]?.ranks) ? raw[channel].ranks : [];

@@ -36,8 +36,8 @@ test('a member is looked up in every Melonly department with their rank', async 
 });
 
 test('channel access: open by default, rank-limited when staff tick ranks, admins always in', () => {
-  const access = normalizeAccess({ srt: { ranks: ['d1:r2', 'bad key', 'd1:r2'] }, freq: { ranks: [] }, main: { ranks: ['d1:r1'] } });
-  assert.deepEqual(access, { srt: { ranks: ['d1:r2'] } }, 'only real channels and valid keys are kept');
+  const access = normalizeAccess({ srt: { ranks: ['d1:r2', 'bad key', 'd1:r2'] }, freq: { ranks: [] }, fire: { ranks: ['d1:r3'] }, main: { ranks: ['d1:r1'] } });
+  assert.deepEqual(access, { fire: { ranks: ['d1:r3'] }, srt: { ranks: ['d1:r2'] } }, 'only real channels and valid keys are kept');
   const sergeant = [{ departmentId: 'd1', rankId: 'r2' }];
   const deputy = [{ departmentId: 'd1', rankId: 'r1' }];
   assert.equal(canUseChannel(access, 'srt', { profile: sergeant }), true);

@@ -235,7 +235,7 @@ export async function runRadioStaffTool(action, payload, by) {
     const opened = controls.openEvent?.(cleanText(payload?.name, 32), by);
     if (!opened) throw fail('The event channel is not available.', 503);
     logger.info(`Radio staff: event channel "${opened.name}" opened by ${by}`);
-    note(`🎪 <@${by}> opened the event channel on the radio: **${opened.name}** (CH 4).`);
+    note(`🎪 <@${by}> opened the event channel on the radio: **${opened.name}** (CH 6).`);
     return { ok: true, action, event: opened };
   }
   if (action === 'event-close') {
