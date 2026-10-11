@@ -3287,6 +3287,13 @@
       "summary": "The blue EMER button on the radio now sends your panic to every radio with your in-game location, and ;panic typed in game now reaches the radios. Talking in the Discord radio channel no longer blocks the app, and a new app-only Frequency Change channel was added.",
       "createdAt": "2026-10-11T15:05:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-panic-sound",
+      "title": "Panic sound on the radio",
+      "summary": "When anyone sets off a panic, from the EMER button or in game, every Clearwater Radio now plays the panic sound twice along with the red flash.",
+      "createdAt": "2026-10-11T15:03:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

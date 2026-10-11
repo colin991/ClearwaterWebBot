@@ -859,6 +859,32 @@ function updateClock() {
 const PANIC_MS = 10_000;
 let panicTimer = null;
 
+let panicBuffer = null;
+
+// The panic sound, played twice back to back on the radio's speaker at the radio's volume.
+async function playPanicSound() {
+  const ctx = audio.ctx;
+  if (!ctx) return;
+  if (ctx.state === 'suspended') await resumeAudio();
+  try {
+    if (!panicBuffer) {
+      const bytes = Uint8Array.from(atob(window.PANIC_SOUND || ''), (c) => c.charCodeAt(0));
+      panicBuffer = await ctx.decodeAudioData(bytes.buffer);
+    }
+  } catch {
+    playTone('busy');
+    return;
+  }
+  let at = ctx.currentTime + 0.02;
+  for (let i = 0; i < 2; i += 1) {
+    const source = ctx.createBufferSource();
+    source.buffer = panicBuffer;
+    source.connect(audio.toneOut);
+    source.start(at);
+    at += panicBuffer.duration + 0.15;
+  }
+}
+
 // An in-game panic: flash the radio red and show who and where for 10 seconds.
 function showPanic(message) {
   state.panic = {
@@ -866,6 +892,7 @@ function showPanic(message) {
     location: String(message.location || 'UNKNOWN LOCATION').toUpperCase().slice(0, 60),
   };
   clearTimeout(panicTimer);
+  void playPanicSound();
   el.radio.classList.add('panic');
   panicTimer = setTimeout(() => {
     state.panic = null;
