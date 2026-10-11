@@ -164,7 +164,25 @@ export function createRadioRelay({
         else byId.set(member.id, { id: member.id, name: member.name, app: false, discord: true });
       }
     }
-    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+    const talking = talkingOn(channel);
+    for (const entry of byId.values()) entry.talking = talking.has(entry.id);
+    // Whoever is talking goes to the top of the list.
+    return [...byId.values()].sort((a, b) => Number(b.talking) - Number(a.talking) || a.name.localeCompare(b.name));
+  }
+
+  /** Who is talking on a channel right now: its app talker and, for MAIN, members speaking in the Discord channel. */
+  function talkingOn(channel) {
+    const ids = new Set();
+    const talker = talkers.get(channel);
+    if (talker) ids.add(talker.userId);
+    if (channel === RADIO_MAIN_CHANNEL) for (const id of discordTalkers.keys()) ids.add(id);
+    return ids;
+  }
+
+  /** Tells every radio who is talking on each channel, so the units lists can put them on top. */
+  function broadcastTalking() {
+    const channels = Object.fromEntries(channelList().map(({ id }) => [id, [...talkingOn(id)]]));
+    broadcast({ type: 'talking', channels });
   }
 
   function statusFor(socket) {
@@ -201,6 +219,7 @@ export function createRadioRelay({
     try { talker.sink?.end(); } catch { /* ignore */ }
     lastHeard.set(channel, { name: talker.name, at: now() });
     broadcast({ type: 'talk', id: talker.userId, name: talker.name, active: false, source: 'app', channel }, null, channel);
+    broadcastTalking();
     try {
       onTalked({
         userId: talker.userId,
@@ -259,6 +278,7 @@ export function createRadioRelay({
     talkers.set(channel, { socket, userId, name, sink, startedAt: at, lastPacketAt: at });
     send(socket, { type: 'tx', ok: true });
     broadcast({ type: 'talk', id: userId, name, active: true, source: 'app', channel }, socket, channel);
+    broadcastTalking();
   }
 
   function onAudio(socket, packet) {
@@ -528,6 +548,7 @@ export function createRadioRelay({
         lastHeard.set(RADIO_MAIN_CHANNEL, { name, at: now() });
       }
       broadcast({ type: 'talk', id: speakerId, name, active, source: 'discord', channel: RADIO_MAIN_CHANNEL }, null, RADIO_MAIN_CHANNEL);
+      broadcastTalking();
     },
     broadcastStatus,
     recheckAll,

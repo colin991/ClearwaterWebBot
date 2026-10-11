@@ -312,6 +312,7 @@ button:focus { outline: none; }
 .lcd .card.units .unit span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lcd .card.units .unit .where { font-size: 8px; font-weight: 400; color: var(--ink-dim); }
 .lcd .card.units .unit.dim { color: var(--ink-dim); font-weight: 400; }
+.lcd .card.units .unit.talking span:first-child { color: #12963a; }
 
 .lcd .list {
   align-self: stretch;
@@ -340,6 +341,7 @@ button:focus { outline: none; }
 .lcd .list.users li.hdr { justify-content: flex-start; font-weight: 700; color: var(--accent); background: rgba(31, 98, 179, .1); margin-top: 2px; }
 .lcd .list.users li.hdr.cur::before { content: '\25B8 '; }
 .lcd .list.users li.dim { opacity: .55; }
+.lcd .list.users li.talking { color: #12963a; font-weight: 700; }
 .lcd .list.users li .where { font-size: 8px; opacity: .8; white-space: nowrap; }
 .lcd .list.users li.sel, .lcd .list.users li.hdr.sel { background: var(--accent); color: #fff; }
 
