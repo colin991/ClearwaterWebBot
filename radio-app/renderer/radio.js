@@ -25,11 +25,12 @@ const FRAME_SAMPLES = 960; // 20 ms at 48 kHz
 // Rows on the MENU (left soft key) and SETUP screens: name on the left, current value on the right.
 const MENU = [
   { label: 'VOL', value: () => String(state.settings.volume), adjust: (step) => changeVolume(step * 5) },
+  { label: 'TX VOL', value: () => String(state.settings.txVolume), adjust: (step) => changeTxVolume(step * 5) },
   { label: 'MIC', value: () => deviceLabel('audioinput', state.settings.micId), open: 'mic' },
   { label: 'LISTEN', value: () => deviceLabel('audiooutput', state.settings.outputId), open: 'headset' },
   { label: 'PTT', value: () => state.settings.ptt?.label || 'NONE', open: 'ptt' },
   { label: 'CHANNEL', value: () => String(state.channel || 'RADIO'), action: () => flash(String(state.channel || 'RADIO').toUpperCase().slice(0, 14), 1000) },
-  { label: 'FX', value: () => (state.settings.filter ? 'LIGHT' : 'OFF'), adjust: () => toggleFilter(), action: () => toggleFilter() },
+  { label: 'FX', value: () => FX_LABELS[state.settings.rxFx] || 'OFF', adjust: (step) => cycleFx(step), action: () => cycleFx(1) },
   { label: 'SETUP', value: () => 'RUN', open: 'setup' },
 ];
 const SETUP = [
@@ -38,10 +39,13 @@ const SETUP = [
   { label: 'UPDATE', value: () => updateText(), action: () => void checkUpdates() },
 ];
 const ROWS = { menu: MENU, setup: SETUP };
+// Radio effects only change what this radio hears; what you send stays clean.
+const FX_MODES = ['off', 'radio', 'police'];
+const FX_LABELS = { off: 'OFF', radio: 'RADIO', police: 'POLICE' };
 const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', test: 'setup' };
 
 const state = {
-  settings: { volume: 70, filter: true, deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false },
+  settings: { volume: 70, txVolume: 60, rxFx: 'off', deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false },
   version: '',
   screen: 'home',
   menuIndex: 0,
@@ -69,9 +73,10 @@ const audio = {
   ctx: null,
   micStream: null,
   micSource: null,
-  txFilter: null,
-  rxFilter: null,
-  rxDry: null,
+  txIn: null,
+  txGain: null,
+  rxIn: null,
+  rxFx: null,
   volume: null,
   deafGain: null,
   toneOut: null,
@@ -95,6 +100,11 @@ function clampVolume(value) {
 
 function volumeGain() {
   return Math.pow(state.settings.volume / 100, 1.5) * 1.4;
+}
+
+/** Talk level: 70 sends the mic as-is, lower is quieter. */
+function txVolumeGain() {
+  return Math.pow(state.settings.txVolume / 70, 1.5);
 }
 
 // Quick changes (volume drags) are batched; every changed field is kept until it is written.
@@ -154,57 +164,99 @@ function escapeHtml(value) {
 
 /* ---------- audio ---------- */
 
-function distortionCurve(amount) {
+function softClipCurve(drive) {
   const curve = new Float32Array(1024);
+  const norm = Math.tanh(drive);
   for (let i = 0; i < curve.length; i += 1) {
     const x = (i * 2) / curve.length - 1;
-    curve[i] = ((1 + amount) * x) / (1 + amount * Math.abs(x));
+    curve[i] = Math.tanh(drive * x) / norm;
   }
   return curve;
 }
 
-/** Light handheld-radio sound: narrow band, a little mid push and grit, then squashed. */
-function createRadioFilter(ctx) {
+function noiseBuffer(ctx, seconds) {
+  const length = Math.floor(ctx.sampleRate * seconds);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i += 1) data[i] = Math.random() * 2 - 1;
+  return buffer;
+}
+
+const FX_SETTINGS = {
+  radio: { low: 300, high: 3200, mid: 4, drive: 1.6, makeup: 0.55, hiss: 0.004 },
+  police: { low: 450, high: 2600, mid: 7, drive: 2.6, makeup: 0.5, hiss: 0.012 },
+};
+
+/**
+ * Optional listening effect: band-limited radio voice, a little grit and background static.
+ * OFF passes audio straight through, so normal listening is never coloured.
+ */
+function createRadioFx(ctx) {
   const input = ctx.createGain();
   const output = ctx.createGain();
+  const dry = ctx.createGain();
+  const wet = ctx.createGain();
   const highpass = ctx.createBiquadFilter();
   highpass.type = 'highpass';
-  highpass.frequency.value = 350;
-  highpass.Q.value = 0.8;
+  highpass.Q.value = 0.7;
   const lowpass = ctx.createBiquadFilter();
   lowpass.type = 'lowpass';
-  lowpass.frequency.value = 3000;
-  lowpass.Q.value = 0.8;
+  lowpass.Q.value = 0.7;
   const mid = ctx.createBiquadFilter();
   mid.type = 'peaking';
-  mid.frequency.value = 1700;
-  mid.gain.value = 5;
-  mid.Q.value = 1;
+  mid.frequency.value = 1800;
+  mid.Q.value = 0.9;
   const shaper = ctx.createWaveShaper();
-  shaper.curve = distortionCurve(5);
   shaper.oversample = '2x';
-  const compressor = ctx.createDynamicsCompressor();
-  compressor.threshold.value = -26;
-  compressor.ratio.value = 5;
-  compressor.attack.value = 0.003;
-  compressor.release.value = 0.15;
-  const wet = ctx.createGain();
-  const dry = ctx.createGain();
+  const makeup = ctx.createGain();
+  input.connect(dry);
+  dry.connect(output);
   input.connect(highpass);
   highpass.connect(lowpass);
   lowpass.connect(mid);
   mid.connect(shaper);
-  shaper.connect(compressor);
-  compressor.connect(wet);
+  shaper.connect(makeup);
+  makeup.connect(wet);
   wet.connect(output);
-  input.connect(dry);
-  dry.connect(output);
+
+  // Static bed: plays only while someone is talking and an effect is on.
+  const noise = ctx.createBufferSource();
+  noise.buffer = noiseBuffer(ctx, 2);
+  noise.loop = true;
+  const noiseBand = ctx.createBiquadFilter();
+  noiseBand.type = 'bandpass';
+  noiseBand.frequency.value = 2400;
+  noiseBand.Q.value = 0.6;
+  const hiss = ctx.createGain();
+  hiss.gain.value = 0;
+  noise.connect(noiseBand);
+  noiseBand.connect(hiss);
+  hiss.connect(output);
+  noise.start();
+
+  let mode = 'off';
   return {
     input,
     output,
-    setEnabled(on) {
-      wet.gain.value = on ? 0.9 : 0;
-      dry.gain.value = on ? 0 : 1;
+    get mode() { return mode; },
+    setMode(next) {
+      mode = FX_SETTINGS[next] ? next : 'off';
+      const fx = FX_SETTINGS[mode];
+      dry.gain.value = fx ? 0 : 1;
+      wet.gain.value = fx ? 1 : 0;
+      if (!fx) {
+        hiss.gain.value = 0;
+        return;
+      }
+      highpass.frequency.value = fx.low;
+      lowpass.frequency.value = fx.high;
+      mid.gain.value = fx.mid;
+      shaper.curve = softClipCurve(fx.drive);
+      makeup.gain.value = fx.makeup;
+    },
+    setStatic(active) {
+      const fx = FX_SETTINGS[mode];
+      hiss.gain.setTargetAtTime(fx && active ? fx.hiss : 0, ctx.currentTime, 0.03);
     },
   };
 }
@@ -214,32 +266,42 @@ async function initAudio() {
   audio.ctx = ctx;
   await ctx.audioWorklet.addModule('capture-worklet.js');
 
+  // Listening: every voice -> optional radio FX -> listen volume -> limiter -> deafen -> speakers.
+  audio.rxIn = ctx.createGain();
+  audio.rxFx = createRadioFx(ctx);
   audio.volume = ctx.createGain();
+  const rxLimiter = new AudioWorkletNode(ctx, 'radio-limiter', {
+    outputChannelCount: [2],
+    processorOptions: { ceiling: 0.7 }, // about -3 dBFS
+  });
   audio.deafGain = ctx.createGain();
-  audio.volume.connect(audio.deafGain);
+  audio.rxIn.connect(audio.rxFx.input);
+  audio.rxFx.output.connect(audio.volume);
+  audio.volume.connect(rxLimiter);
+  rxLimiter.connect(audio.deafGain);
   audio.deafGain.connect(ctx.destination);
   audio.toneOut = ctx.createGain();
   audio.toneOut.connect(ctx.destination);
 
-  audio.rxFilter = createRadioFilter(ctx);
-  audio.rxFilter.output.connect(audio.volume);
-  audio.rxDry = ctx.createGain();
-  audio.rxDry.connect(audio.volume);
-
-  audio.txFilter = createRadioFilter(ctx);
+  // Talking: clean voice (no effects). The mic's auto gain levels it, TX VOL scales it, and a
+  // limiter caps peaks at -6 dBFS so the bot never blasts the channel.
+  const txHighpass = ctx.createBiquadFilter();
+  txHighpass.type = 'highpass';
+  txHighpass.frequency.value = 90;
+  audio.txIn = txHighpass;
+  audio.txGain = ctx.createGain();
+  txHighpass.connect(audio.txGain);
   audio.capture = new AudioWorkletNode(ctx, 'radio-capture', {
     numberOfInputs: 1,
     numberOfOutputs: 1,
     outputChannelCount: [1],
+    processorOptions: { ceiling: 0.5 },
   });
-  const sink = ctx.createGain();
-  sink.gain.value = 0;
-  audio.txFilter.output.connect(audio.capture);
-  audio.capture.connect(sink);
-  sink.connect(ctx.destination);
+  audio.txGain.connect(audio.capture);
+  // TEST plays the limited talk signal; at gain 0 it still keeps the worklet running.
   audio.testGain = ctx.createGain();
   audio.testGain.gain.value = 0;
-  audio.txFilter.output.connect(audio.testGain);
+  audio.capture.connect(audio.testGain);
   audio.testGain.connect(ctx.destination);
 
   audio.capture.port.onmessage = (event) => {
@@ -249,12 +311,18 @@ async function initAudio() {
   };
 
   applyVolume();
+  applyTxVolume();
   applyDeaf();
-  applyFilter();
+  applyFx();
   await applyOutput();
   await openMic();
   await initEncoder();
-  if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
+  await resumeAudio();
+}
+
+/** Audio can start suspended; any click, key or incoming voice wakes it. */
+async function resumeAudio() {
+  if (audio.ctx?.state === 'suspended') await audio.ctx.resume().catch(() => {});
 }
 
 function applyVolume() {
@@ -265,14 +333,18 @@ function applyVolume() {
   if (state.screen === 'test') audio.testGain.gain.value = gain;
 }
 
+function applyTxVolume() {
+  if (audio.txGain) audio.txGain.gain.value = txVolumeGain();
+}
+
 function applyDeaf() {
   if (audio.deafGain) audio.deafGain.gain.value = state.settings.deaf ? 0 : 1;
   el.deaf.classList.toggle('on', Boolean(state.settings.deaf));
 }
 
-function applyFilter() {
-  audio.txFilter?.setEnabled(state.settings.filter);
-  audio.rxFilter?.setEnabled(state.settings.filter);
+function applyFx() {
+  audio.rxFx?.setMode(state.settings.rxFx);
+  audio.rxFx?.setStatic(state.rx.size > 0);
 }
 
 async function applyOutput() {
@@ -310,7 +382,7 @@ async function openMic() {
   if (stream) {
     audio.micStream = stream;
     audio.micSource = audio.ctx.createMediaStreamSource(stream);
-    audio.micSource.connect(audio.txFilter.input);
+    audio.micSource.connect(audio.txIn);
   }
   updateLamps();
 }
@@ -397,6 +469,7 @@ function speakerFor(id) {
 
 function onAudioFrame(buffer) {
   if (!audio.ctx || state.settings.deaf || buffer.byteLength < 10) return;
+  if (audio.ctx.state === 'suspended') void resumeAudio();
   const view = new DataView(buffer);
   if (view.getUint8(0) !== 1) return;
   const id = view.getBigUint64(1).toString();
@@ -424,10 +497,10 @@ function playDecoded(speaker, id, data) {
   data.close();
   const source = ctx.createBufferSource();
   source.buffer = buffer;
-  // Other radios already filtered their own voice; only Discord voices get the effect here.
-  source.connect(state.rx.get(id)?.source === 'app' ? audio.rxDry : audio.rxFilter.input);
+  source.connect(audio.rxIn);
   const now = ctx.currentTime;
-  if (speaker.next < now + 0.01) speaker.next = now + 0.06; // small jitter buffer
+  // Small jitter buffer; if a stall left us far behind, skip ahead instead of lagging.
+  if (speaker.next < now + 0.01 || speaker.next > now + 0.3) speaker.next = now + 0.06;
   source.start(speaker.next);
   speaker.next += buffer.duration;
 }
@@ -475,14 +548,14 @@ function playTone(name) {
 /** Short static burst when a transmission ends, like a real squelch tail. */
 function squelchTail() {
   const ctx = audio.ctx;
-  if (!ctx || state.settings.deaf) return;
+  if (!ctx || state.settings.deaf || !FX_SETTINGS[state.settings.rxFx]) return;
   const length = Math.floor(ctx.sampleRate * 0.08);
   const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
   const data = buffer.getChannelData(0);
   for (let i = 0; i < length; i += 1) data[i] = (Math.random() * 2 - 1) * 0.18 * (1 - i / length);
   const source = ctx.createBufferSource();
   source.buffer = buffer;
-  source.connect(audio.rxFilter.input);
+  source.connect(audio.rxIn);
   source.start();
 }
 
@@ -666,6 +739,7 @@ function onMessage(message) {
       } else if (state.rx.delete(message.id)) {
         squelchTail();
       }
+      audio.rxFx?.setStatic(state.rx.size > 0);
       updateLamps();
       render();
       break;
@@ -897,7 +971,7 @@ function render() {
       el.softRightLabel.textContent = '# SET';
       break;
     case 'test':
-      body = '<div class="mid">SPEAK NOW</div><div class="meter"><b id="meterFill"></b></div><div class="small">YOU HEAR YOUR RADIO VOICE</div>';
+      body = '<div class="mid">SPEAK NOW</div><div class="meter"><b id="meterFill"></b></div><div class="small">YOU HEAR WHAT OTHERS HEAR</div>';
       el.softRightLabel.textContent = '# STOP';
       break;
     case 'ptt': {
@@ -965,9 +1039,19 @@ async function choose() {
   }
 }
 
-async function toggleFilter() {
-  await saveNow({ filter: !state.settings.filter });
-  applyFilter();
+function changeTxVolume(delta) {
+  const txVolume = clampVolume(state.settings.txVolume + delta);
+  if (txVolume === state.settings.txVolume) return;
+  saveSettings({ txVolume });
+  applyTxVolume();
+  render();
+}
+
+async function cycleFx(step) {
+  const index = Math.max(0, FX_MODES.indexOf(state.settings.rxFx));
+  const rxFx = FX_MODES[(index + (step < 0 ? FX_MODES.length - 1 : 1)) % FX_MODES.length];
+  await saveNow({ rxFx });
+  applyFx();
   render();
 }
 
@@ -1047,6 +1131,8 @@ function press(key) {
 }
 
 function bindControls() {
+  window.addEventListener('pointerdown', () => { void resumeAudio(); });
+  window.addEventListener('keydown', () => { void resumeAudio(); });
   document.querySelectorAll('.keypad button').forEach((button) => {
     button.addEventListener('click', () => press(button.dataset.key));
   });

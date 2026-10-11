@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-11-radio-audio-fixes",
+      "title": "Radio audio: quieter bot, clean talk, optional effects",
+      "summary": "Your voice now goes to the RTO channel clean and at a reasonable level: the old radio filter and automatic boost that made the bot too loud are gone, and a limiter caps peaks. New TX VOL setting controls how loud you are. Radio effects (RADIO or POLICE, with static) are now an optional listening setting, off by default, and only change what you hear in the app. Listening is protected from clipping and catches up after network hiccups, and the bot logs how many Discord voice packets it passes to radios each minute.",
+      "createdAt": "2026-10-11T13:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-11-bot-auto-update",
       "title": "Bot and radio embed update on their own",
       "summary": "The bot now checks main every 5 minutes and restarts itself onto new code when something is merged, so changes go live without pressing restart. The radio download embed reads the same version feed the app uses and refreshes every 2 minutes. The radio now says clearly when sign-in fails because the bot host is missing its Discord client secret.",
