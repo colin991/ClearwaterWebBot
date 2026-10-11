@@ -6,9 +6,9 @@ import {
   MessageFlags,
 } from 'discord.js';
 import { logger } from './logger.js';
-import { createRadioKey } from './radioKeys.js';
 
 export const RADIO_DOWNLOAD_CHANNEL_ID = process.env.RADIO_DOWNLOAD_CHANNEL_ID?.trim() || '1514190592005902336';
+/** Old "Get my radio key" button; kept so presses on stale copies get an answer. */
 export const RADIO_KEY_BUTTON_ID = 'radio-app:key';
 export const RADIO_RELEASE_REPO = 'colin991/ClearwaterWebBot';
 export const RADIO_RELEASE_TAG_PREFIX = 'radio-v';
@@ -61,16 +61,16 @@ export function buildRadioDownloadPanel(release) {
       '',
       '**Setup**',
       '1. Press **Download for Windows** and run the installer.',
-      '2. Press **Get my radio key** below and copy the key.',
-      '3. On the radio press the gray button on the left for **MENU**, open **SETUP → KEY**, and paste it.',
-      '4. In the menu set your **MIC**, **LISTEN** (speakers or headset) and **PTT** key, then use **SETUP → TEST** to hear yourself.',
+      '2. Open the radio and press the center button to **sign in with Discord**.',
+      '3. Press the gray button on the left for **MENU** and set your **MIC**, **LISTEN** (speakers or headset) and **PTT** key, then use **SETUP → TEST** to hear yourself.',
+      '',
+      'Only members of the Clearwater Discord server can use the radio. It checks every 5 minutes and closes if you leave the server or lose access to the radio channel.',
       '',
       'The app updates itself when a new version comes out. If Windows SmartScreen warns you, press **More info → Run anyway**.',
     ].join('\n'))
     .setFooter({ text: PANEL_FOOTER });
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Download for Windows').setURL(RADIO_DOWNLOAD_URL),
-    new ButtonBuilder().setStyle(ButtonStyle.Secondary).setLabel('Get my radio key').setCustomId(RADIO_KEY_BUTTON_ID).setEmoji('🔑'),
   );
   return { embeds: [embed], components: [row] };
 }
@@ -103,7 +103,7 @@ export async function ensureRadioDownloadPanel(client) {
     logger.info('Posted the Clearwater Radio download panel.');
     return;
   }
-  if (embedSummary(existing.embeds) !== embedSummary(payload.embeds) || existing.components?.[0]?.components?.length !== 2) {
+  if (embedSummary(existing.embeds) !== embedSummary(payload.embeds) || existing.components?.[0]?.components?.length !== 1) {
     await existing.edit(payload);
     logger.info('Updated the Clearwater Radio download panel.');
   }
@@ -128,22 +128,8 @@ export function startRadioDownloadPanel(client) {
 
 export async function handleRadioDownloadInteraction(interaction) {
   if (!interaction.isButton?.() || interaction.customId !== RADIO_KEY_BUTTON_ID) return false;
-  const key = createRadioKey(interaction.user.id);
-  if (!key) {
-    await interaction.reply({
-      content: 'The radio is not set up on the bot host yet (RADIO_BOT_TOKEN or RADIO_PUBLIC_URL is missing). Ask a developer.',
-      flags: MessageFlags.Ephemeral,
-    });
-    return true;
-  }
   await interaction.reply({
-    content: [
-      '**Your Clearwater Radio key.** Keep it private: anyone with it can talk on the radio as you.',
-      '```',
-      key,
-      '```',
-      'On the radio: gray left button → **SETUP** → **KEY** → paste (Ctrl+V) → **# SEND**.',
-    ].join('\n'),
+    content: 'Radio keys are gone. Open the radio app and press the center button to **sign in with Discord**.',
     flags: MessageFlags.Ephemeral,
   });
   return true;

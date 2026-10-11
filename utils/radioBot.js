@@ -13,7 +13,10 @@ import {
 import { Client, Events, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
 import { logger } from './logger.js';
 import { createRadioRelay } from './radioRelay.js';
-import { verifyRadioKey } from './radioKeys.js';
+import { createRadioKey, verifyRadioKey } from './radioKeys.js';
+import { exchangeRadioCode, radioOAuthConfig } from './radioOAuth.js';
+
+const UNKNOWN_MEMBER = 10007;
 
 /** Voice channel the radio bot always sits in. */
 export const RADIO_CHANNEL_ID = process.env.RADIO_CHANNEL_ID?.trim() || '1514128904783139018';
@@ -57,15 +60,29 @@ export function startRadioBot(env = process.env) {
 
   const relay = createRadioRelay({
     verifyKey: (key) => verifyRadioKey(key, env),
+    exchangeCode: (code) => exchangeRadioCode(code, env),
+    createSession: (userId) => createRadioKey(userId, env),
+    loginInfo: () => {
+      const config = radioOAuthConfig(env);
+      return config ? { clientId: config.clientId, redirectUri: config.redirectUri } : null;
+    },
     status: () => ({ online: isOnline(), channel: channel?.name || 'Radio' }),
+    // `removed` closes the member's radio app; anything else (Discord or bot trouble) is retried.
     async authorize(userId) {
       const target = channel || await client.channels.fetch(RADIO_CHANNEL_ID).catch(() => null);
       if (!target?.guild) return { ok: false, reason: 'The radio bot is not in its channel yet. Try again shortly.' };
-      const member = await target.guild.members.fetch(userId).catch(() => null);
-      if (!member) return { ok: false, reason: 'You must be in the Discord server to use the radio.' };
+      let member;
+      try {
+        member = await target.guild.members.fetch({ user: userId, force: true });
+      } catch (error) {
+        if (error?.code === UNKNOWN_MEMBER) {
+          return { ok: false, removed: true, reason: 'You must be in the Clearwater Discord server to use the radio.' };
+        }
+        throw error;
+      }
       const permissions = target.permissionsFor(member);
       if (!permissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect])) {
-        return { ok: false, reason: `You do not have access to #${target.name}.` };
+        return { ok: false, removed: true, reason: `You do not have access to #${target.name}.` };
       }
       return { ok: true, name: member.displayName || member.user.username };
     },

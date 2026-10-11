@@ -8,7 +8,6 @@ const el = {
   lcdLeft: $('lcdLeft'),
   lcdRight: $('lcdRight'),
   lcdBody: $('lcdBody'),
-  keyInput: $('keyInput'),
   softLeftLabel: $('softLeftLabel'),
   softRightLabel: $('softRightLabel'),
   lampTx: $('lampTx'),
@@ -20,7 +19,8 @@ const el = {
   pttSide: $('pttSide'),
 };
 
-const KEY_PREFIX = 'CWR1.';
+const KEY_PREFIX = 'CWR2.';
+const REMOVED_CLOSE_MS = 6000;
 const FRAME_SAMPLES = 960; // 20 ms at 48 kHz
 // Rows on the MENU (left soft key) and SETUP screens: name on the left, current value on the right.
 const MENU = [
@@ -34,11 +34,11 @@ const MENU = [
 ];
 const SETUP = [
   { label: 'TEST', value: () => 'MIC', open: 'test' },
-  { label: 'KEY', value: () => (decodeKey(state.settings.key) ? 'SET' : 'NONE'), open: 'key' },
+  { label: 'ACCOUNT', value: () => accountText(), action: () => (decodeKey(state.settings.key) ? signOut() : signIn()) },
   { label: 'UPDATE', value: () => updateText(), action: () => void checkUpdates() },
 ];
 const ROWS = { menu: MENU, setup: SETUP };
-const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', test: 'setup', key: 'setup' };
+const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', test: 'setup' };
 
 const state = {
   settings: { volume: 70, filter: true, deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false },
@@ -49,7 +49,7 @@ const state = {
   deviceCache: { audioinput: [], audiooutput: [] },
   listIndex: 0,
   devices: [],
-  conn: 'nokey', // nokey | connecting | lost | online | error
+  conn: 'signin', // signin | signing | connecting | lost | online | error | removed
   error: '',
   channel: 'RADIO',
   botOnline: false,
@@ -97,16 +97,31 @@ function volumeGain() {
   return Math.pow(state.settings.volume / 100, 1.5) * 1.4;
 }
 
+// Quick changes (volume drags) are batched; every changed field is kept until it is written.
 let saveTimer = null;
+let pendingSave = {};
 function saveSettings(patch) {
   Object.assign(state.settings, patch);
+  Object.assign(pendingSave, patch);
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => { void api.setSettings(patch); }, 250);
+  saveTimer = setTimeout(() => { void flushSettings(); }, 250);
+}
+
+function flushSettings() {
+  clearTimeout(saveTimer);
+  const patch = pendingSave;
+  pendingSave = {};
+  return Object.keys(patch).length ? api.setSettings(patch) : Promise.resolve();
 }
 
 function saveNow(patch) {
   Object.assign(state.settings, patch);
   return api.setSettings(patch);
+}
+
+async function quitApp() {
+  try { await flushSettings(); } catch { /* still quit */ }
+  api.quit();
 }
 
 function flash(text, ms = 1400) {
@@ -477,7 +492,69 @@ function sendJson(message) {
   if (net.ws && net.ws.readyState === WebSocket.OPEN) net.ws.send(JSON.stringify(message));
 }
 
-function connect() {
+function relayUrl() {
+  return decodeKey(state.settings.key)?.u || state.settings.relayUrl || '';
+}
+
+function accountText() {
+  if (!decodeKey(state.settings.key)) return 'SIGN IN';
+  return state.me?.name ? `${state.me.name} · SIGN OUT` : 'SIGN OUT';
+}
+
+function signIn() {
+  if (state.conn === 'signing') return;
+  state.error = '';
+  setScreen('home');
+  connect({ signIn: true });
+}
+
+async function signOut() {
+  await saveNow({ key: '' });
+  state.me = null;
+  state.error = '';
+  setScreen('home');
+  connect();
+}
+
+function signInFailed(message) {
+  if (net.ws) {
+    const old = net.ws;
+    net.ws = null;
+    old.onclose = null;
+    try { old.close(); } catch { /* ignore */ }
+  }
+  state.conn = 'signin';
+  state.error = message || 'SIGN-IN FAILED';
+  render();
+}
+
+async function onLoginInfo(message) {
+  if (state.conn !== 'signing') return;
+  if (message.available === false || !message.clientId) {
+    signInFailed('SIGN-IN NOT SET UP');
+    return;
+  }
+  const result = await api.signIn({ clientId: message.clientId, redirectUri: message.redirectUri });
+  if (state.conn !== 'signing') return;
+  if (!result?.code) {
+    signInFailed(result?.error || 'SIGN-IN CANCELLED');
+    return;
+  }
+  sendJson({ type: 'auth', code: result.code, version: state.version });
+}
+
+// Removed from the Discord server or the radio channel: the radio closes itself.
+async function accessRemoved(message) {
+  state.conn = 'removed';
+  state.error = message || 'You are no longer allowed on this radio.';
+  state.me = null;
+  forceTxOff();
+  render();
+  try { await saveNow({ key: '' }); } catch { /* ignore */ }
+  setTimeout(() => { void quitApp(); }, REMOVED_CLOSE_MS);
+}
+
+function connect(options = {}) {
   clearTimeout(net.timer);
   if (net.ws) {
     const old = net.ws;
@@ -488,26 +565,26 @@ function connect() {
   forceTxOff();
   state.rx.clear();
   const key = state.settings.key;
-  const decoded = decodeKey(key);
-  if (!decoded) {
-    state.conn = 'nokey';
+  const signingIn = Boolean(options.signIn);
+  if (!signingIn && !decodeKey(key)) {
+    state.conn = 'signin';
     render();
     return;
   }
-  state.conn = 'connecting';
+  state.conn = signingIn ? 'signing' : 'connecting';
   render();
   let ws;
   try {
-    ws = new WebSocket(decoded.u);
+    ws = new WebSocket(relayUrl());
   } catch {
-    state.conn = 'error';
-    state.error = 'Bad radio address in key.';
+    state.conn = signingIn ? 'signin' : 'error';
+    state.error = 'Bad radio address.';
     render();
     return;
   }
   ws.binaryType = 'arraybuffer';
   net.ws = ws;
-  ws.onopen = () => ws.send(JSON.stringify({ type: 'auth', key, version: state.version }));
+  ws.onopen = () => ws.send(JSON.stringify(signingIn ? { type: 'hello', version: state.version } : { type: 'auth', key, version: state.version }));
   ws.onmessage = (event) => {
     if (typeof event.data !== 'string') {
       onAudioFrame(event.data);
@@ -528,7 +605,23 @@ function connect() {
     forceTxOff();
     state.rx.clear();
     updateLamps();
-    if (event.code === 4001 || event.code === 4002 || event.code === 4003) {
+    if (state.conn === 'removed') return;
+    if (event.code === 4004) {
+      void accessRemoved(state.error);
+      return;
+    }
+    if (state.conn === 'signing') {
+      signInFailed(state.error || 'NO SIGNAL');
+      return;
+    }
+    if (event.code === 4001) {
+      // Old or revoked sign-in: ask for Discord sign-in again.
+      void saveNow({ key: '' });
+      state.conn = 'signin';
+      render();
+      return;
+    }
+    if (event.code === 4002 || event.code === 4003) {
       state.conn = 'error';
       render();
       return;
@@ -542,8 +635,15 @@ function connect() {
 
 function onMessage(message) {
   switch (message.type) {
+    case 'login':
+      void onLoginInfo(message);
+      break;
+    case 'session':
+      if (decodeKey(message.key)) void saveNow({ key: message.key });
+      break;
     case 'ready':
       net.retry = 0;
+      state.error = '';
       state.me = message.you;
       state.channel = message.channel || 'RADIO';
       state.botOnline = Boolean(message.online);
@@ -587,7 +687,7 @@ function pttPress() {
   if (state.screen === 'test') return;
   if (state.conn !== 'online') {
     playTone('busy');
-    flash(state.conn === 'nokey' ? 'NO KEY' : 'NO LINK');
+    flash(state.conn === 'signin' ? 'SIGN IN' : 'NO LINK');
     return;
   }
   if (!audio.micStream || !audio.encoder) {
@@ -662,10 +762,6 @@ function setScreen(screen) {
   if (screen === 'menu' || screen === 'setup') void refreshDeviceCache();
   if (screen === 'test' && audio.testGain) audio.testGain.gain.value = volumeGain();
   if (screen === 'mic' || screen === 'headset') void loadDevices(screen);
-  if (screen === 'key') {
-    el.keyInput.value = '';
-    setTimeout(() => el.keyInput.focus(), 0);
-  }
   render();
 }
 
@@ -727,8 +823,12 @@ function homeBody() {
   if (state.update?.state === 'downloading') return `<div class="mid">UPDATING</div><div class="small">DOWNLOADING ${state.update.percent || 0}%</div>`;
   if (state.toast) return `<div class="mid">${escapeHtml(state.toast.text)}</div>`;
   switch (state.conn) {
-    case 'nokey':
-      return '<div class="big">NO KEY</div><div class="small">MENU &gt; SETUP &gt; KEY</div>';
+    case 'signin':
+      return `<div class="mid">SIGN IN</div><div class="small">${state.error ? `${escapeHtml(state.error.toUpperCase())} · ` : ''}PRESS CENTER FOR DISCORD</div>`;
+    case 'signing':
+      return '<div class="mid">SIGNING IN</div><div class="small">FINISH IN YOUR BROWSER · * CANCEL</div>';
+    case 'removed':
+      return `<div class="mid">NO ACCESS</div><div class="small">${escapeHtml(state.error.toUpperCase())}</div><div class="small dim">RADIO CLOSING</div>`;
     case 'connecting':
       return '<div class="mid">CONNECTING</div><div class="small dim">. . .</div>';
     case 'lost':
@@ -765,7 +865,6 @@ function updateText() {
 function render() {
   const { screen } = state;
   meterFill = null;
-  el.keyInput.hidden = screen !== 'key';
   el.softLeftLabel.textContent = screen === 'home' ? 'MENU' : 'RADIO';
   el.softRightLabel.textContent = 'HOME';
   el.lcdRight.textContent = state.version || '';
@@ -807,10 +906,6 @@ function render() {
         : `<div class="mid">${escapeHtml(label)}</div><div class="small">${state.settings.hook ? '# TO CHANGE' : '# TO CHANGE · ONLY WHEN FOCUSED'}</div>`;
       break;
     }
-    case 'key':
-      left = 'RADIO KEY';
-      body = '<div class="small key-note">PASTE KEY · # SAVE · * CLEAR</div>';
-      break;
     default:
       break;
   }
@@ -865,17 +960,6 @@ async function choose() {
     state.capturing = true;
     render();
     if (state.settings.hook) await api.capturePtt(true);
-  } else if (screen === 'key') {
-    const key = el.keyInput.value.trim();
-    if (!decodeKey(key)) {
-      flash('BAD KEY');
-      return;
-    }
-    await saveNow({ key });
-    state.error = '';
-    net.retry = 0;
-    setScreen('home');
-    connect();
   }
 }
 
@@ -898,8 +982,9 @@ async function checkUpdates() {
 
 function back() {
   const { screen } = state;
-  if (screen === 'key' && el.keyInput.value) {
-    el.keyInput.value = '';
+  if (screen === 'home' && state.conn === 'signing') {
+    void api.cancelSignIn();
+    signInFailed('SIGN-IN CANCELLED');
     return;
   }
   if (screen === 'ptt' && state.capturing) {
@@ -946,7 +1031,10 @@ function press(key) {
   }
   if (key === '#') return void choose();
   // Center of the d-pad: select, or open the menu from the home screen.
-  if (key === 'ok') return state.screen === 'home' ? setScreen('menu') : void choose();
+  if (key === 'ok') {
+    if (state.screen !== 'home') return void choose();
+    return state.conn === 'signin' ? signIn() : setScreen('menu');
+  }
   if (key === '*') return back();
   // Number keys pick a row: 1 = first row.
   if (rows && /^[1-9]$/.test(key) && Number(key) <= rows.length) {
@@ -973,7 +1061,7 @@ function bindControls() {
     flash(deaf ? 'DEAFENED' : 'UNDEAFENED', 900);
   });
 
-  $('quit').addEventListener('click', () => api.quit());
+  $('quit').addEventListener('click', () => { void quitApp(); });
   $('emer').addEventListener('click', () => flash('EMER N/A', 900));
   el.ch.addEventListener('click', () => flash(String(state.channel || 'RADIO').toUpperCase().slice(0, 14), 1200));
 
@@ -1017,15 +1105,6 @@ function bindControls() {
     if (!state.settings.hook && state.settings.ptt?.kind === 'dom' && event.code === state.settings.ptt.code) {
       event.preventDefault();
       pttPress();
-      return;
-    }
-    if (event.target === el.keyInput) {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        void choose();
-      } else if (event.key === 'Escape') {
-        back();
-      }
       return;
     }
     const map = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Enter: '#', Escape: '*', Backspace: '*' };

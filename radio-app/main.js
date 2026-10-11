@@ -1,7 +1,9 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, screen, session } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, session, shell } = require('electron');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
+const http = require('node:http');
 const path = require('node:path');
 
 let autoUpdater = null;
@@ -24,6 +26,9 @@ try {
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 const UPDATE_CHECK_MS = 10 * 60 * 1000;
+// Bot host relay the radio signs in through (the bot's RADIO_PUBLIC_URL).
+const DEFAULT_RELAY_URL = process.env.CLEARWATER_RADIO_URL || 'ws://216.173.77.2:8102/radio';
+const SIGN_IN_TIMEOUT_MS = 5 * 60 * 1000;
 const WINDOW_WIDTH = 232;
 const WINDOW_HEIGHT = 620;
 const DEFAULT_SETTINGS = Object.freeze({
@@ -60,6 +65,70 @@ function saveSettings() {
   } catch {
     // Settings are a convenience; the radio still works without them.
   }
+}
+
+/* ---------- Discord sign-in ---------- */
+
+let signInFlow = null;
+
+function finishSignIn(result) {
+  const flow = signInFlow;
+  if (!flow) return;
+  signInFlow = null;
+  clearTimeout(flow.timer);
+  try { flow.server.close(); } catch { /* ignore */ }
+  flow.resolve(result);
+}
+
+const SIGN_IN_PAGE = (text) => `<!doctype html><meta charset="utf-8"><title>Clearwater Radio</title>
+<body style="background:#050b14;color:#267bd7;font:16px Segoe UI,sans-serif;display:grid;place-items:center;height:90vh">
+<div>${text}</div></body>`;
+
+/**
+ * Opens Discord sign-in in the browser and waits for the redirect on the loopback address.
+ * The relay exchanges the returned code, so no secret lives in the app.
+ */
+function signIn(info) {
+  finishSignIn({ error: 'SIGN-IN CANCELLED' });
+  let redirect;
+  try {
+    redirect = new URL(String(info?.redirectUri || ''));
+  } catch {
+    return Promise.resolve({ error: 'SIGN-IN NOT SET UP' });
+  }
+  const clientId = String(info?.clientId || '');
+  if (!/^\d{15,22}$/.test(clientId) || redirect.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(redirect.hostname)) {
+    return Promise.resolve({ error: 'SIGN-IN NOT SET UP' });
+  }
+  const state = crypto.randomBytes(16).toString('hex');
+  return new Promise((resolve) => {
+    const server = http.createServer((request, response) => {
+      const url = new URL(request.url || '/', redirect.origin);
+      if (url.pathname !== redirect.pathname) {
+        response.writeHead(404).end();
+        return;
+      }
+      const ok = url.searchParams.get('state') === state && url.searchParams.get('code');
+      response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      response.end(SIGN_IN_PAGE(ok ? 'Signed in. You can close this tab and go back to the radio.' : 'Sign-in was cancelled. Go back to the radio and try again.'));
+      if (ok) finishSignIn({ code: url.searchParams.get('code') });
+      else if (url.searchParams.has('error') || url.searchParams.has('code')) finishSignIn({ error: 'SIGN-IN CANCELLED' });
+    });
+    signInFlow = { server, resolve, timer: setTimeout(() => finishSignIn({ error: 'SIGN-IN TIMED OUT' }), SIGN_IN_TIMEOUT_MS) };
+    server.on('error', () => finishSignIn({ error: 'SIGN-IN PORT BUSY' }));
+    server.listen(Number(redirect.port) || 80, redirect.hostname === 'localhost' ? '127.0.0.1' : redirect.hostname, () => {
+      const authorize = new URL('https://discord.com/oauth2/authorize');
+      authorize.search = new URLSearchParams({
+        client_id: clientId,
+        response_type: 'code',
+        redirect_uri: redirect.toString(),
+        scope: 'identify',
+        state,
+        prompt: 'none',
+      }).toString();
+      shell.openExternal(authorize.toString()).catch(() => finishSignIn({ error: 'NO BROWSER' }));
+    });
+  });
 }
 
 function send(channel, payload) {
@@ -249,20 +318,22 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(allowed.has(permission)));
     session.defaultSession.setPermissionCheckHandler((_contents, permission) => allowed.has(permission));
 
-    ipcMain.handle('settings:get', () => ({ ...settings, hook: Boolean(uIOhook) }));
+    ipcMain.handle('settings:get', () => ({ ...settings, hook: Boolean(uIOhook), relayUrl: DEFAULT_RELAY_URL }));
     ipcMain.handle('settings:set', (_event, patch) => {
       const allowedKeys = ['key', 'micId', 'outputId', 'volume', 'filter', 'deaf', 'ptt'];
       for (const key of allowedKeys) {
         if (patch && Object.prototype.hasOwnProperty.call(patch, key)) settings[key] = patch[key];
       }
       saveSettings();
-      return { ...settings, hook: Boolean(uIOhook) };
+      return { ...settings, hook: Boolean(uIOhook), relayUrl: DEFAULT_RELAY_URL };
     });
     ipcMain.handle('ptt:capture', (_event, active) => {
       capturingPtt = Boolean(active) && Boolean(uIOhook);
       return capturingPtt;
     });
     ipcMain.handle('app:version', () => app.getVersion());
+    ipcMain.handle('auth:signin', (_event, info) => signIn(info));
+    ipcMain.handle('auth:cancel', () => finishSignIn({ error: 'SIGN-IN CANCELLED' }));
     ipcMain.handle('update:check', async () => {
       if (!autoUpdater || !app.isPackaged) return { state: 'dev' };
       void checkForUpdates();
@@ -270,6 +341,7 @@ if (!app.requestSingleInstanceLock()) {
     });
     // QUIT always ends the process (so the next launch checks for updates), installing a waiting update first.
     ipcMain.on('app:quit', () => {
+      saveSettings();
       if (updateReady) {
         autoUpdater.quitAndInstall(true, true);
         return;
