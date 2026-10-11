@@ -3522,7 +3522,7 @@
     {
       "id": "radio-whisper-units-scenes-2026-10-12",
       "title": "Radio: easier whispering, steady units list, automatic scene channels",
-      "summary": "Clicking a unit on WHO'S ON now opens whisper straight away, and the radio screen has an END WHISPER button while you're whispering. The units list no longer jumps back to the top while people talk or join. Scene timers now pick up every Discord voice channel with Scene or Traffic Stop in its name, with no setup needed.",
+      "summary": "Clicking a unit on WHO'S ON now opens whisper straight away, and the radio screen has an END WHISPER button while you're whispering. The units list and the settings page no longer jump back to the top while you scroll. A new BAR ANIM setting (on by default) makes the signal bars bob up and down. Scene timers now pick up every Discord voice channel with Scene or Traffic Stop in its name, with no setup needed.",
       "createdAt": "2026-10-12T00:40:00.000Z",
       "updatedBy": "colin991"
     }

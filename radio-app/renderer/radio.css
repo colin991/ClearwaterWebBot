@@ -527,9 +527,16 @@ button:focus { outline: none; }
 .sig.rx i, .sig.tx i { animation: sig-live .6s infinite alternate; }
 .sig.rx i:nth-child(odd), .sig.tx i:nth-child(odd) { animation-delay: .2s; }
 @keyframes sig-live { from { opacity: 1; } to { opacity: .55; } }
+/* BAR ANIM: the bars bob up and down, faster while a voice is on. */
+.sig.anim:not(.scan) i { transform-origin: bottom; animation: sig-bob 1.6s ease-in-out infinite; }
+.sig.anim:not(.scan) i:nth-child(2) { animation-delay: .2s; }
+.sig.anim:not(.scan) i:nth-child(3) { animation-delay: .4s; }
+.sig.anim:not(.scan) i:nth-child(4) { animation-delay: .6s; }
+.sig.anim.rx:not(.scan) i, .sig.anim.tx:not(.scan) i { animation-duration: .5s; }
+@keyframes sig-bob { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(.45); } }
 .bat i { background: linear-gradient(90deg, #e9f1fb 0 70%, #fff 80%, #e9f1fb 90%); background-size: 300% 100%; animation: bat-shine 5s linear infinite; }
 @keyframes bat-shine { from { background-position: 100% 0; } to { background-position: -200% 0; } }
-body.low-power .sig i, body.low-power .bat i { animation: none; }
+body.low-power .bat i { animation: none; }
 
 
 /* 911 calls waiting. */
