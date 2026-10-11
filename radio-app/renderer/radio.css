@@ -503,3 +503,10 @@ button:focus { outline: none; }
   0% { box-shadow: inset 0 0 0 2px #000, inset 0 2px 0 3px #33373d, 0 0 0 3px #b3261e, 0 0 16px #b3261e; }
   50% { box-shadow: inset 0 0 0 2px #000, inset 0 2px 0 3px #33373d; }
 }
+
+/* Clickable screen: rows, value arrows and the soft-key labels. */
+.lcd .list li[data-row] { cursor: pointer; }
+.lcd .list li[data-row]:not(.sel):hover { background: rgba(31, 98, 179, .12); }
+.lcd .rows .adj { display: inline-block; padding: 0 3px; font-size: 8px; cursor: pointer; }
+.lcd-foot span { cursor: pointer; }
+.lcd-foot span:hover { background: rgba(255, 255, 255, .15); }
