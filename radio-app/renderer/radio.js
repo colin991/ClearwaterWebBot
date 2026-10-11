@@ -22,21 +22,31 @@ const el = {
 
 const KEY_PREFIX = 'CWR1.';
 const FRAME_SAMPLES = 960; // 20 ms at 48 kHz
+// Rows on the MENU (left soft key) and SETUP screens: name on the left, current value on the right.
 const MENU = [
-  { key: '1', label: 'MIC', screen: 'mic' },
-  { key: '2', label: 'HEADSET', screen: 'headset' },
-  { key: '3', label: 'TEST', screen: 'test' },
-  { key: '4', label: 'PTT KEY', screen: 'ptt' },
-  { key: '5', label: 'KEY', screen: 'key' },
-  { key: '6', label: 'FILTER', screen: 'filter' },
-  { key: '7', label: 'UPDATE', screen: 'update' },
+  { label: 'VOL', value: () => String(state.settings.volume), adjust: (step) => changeVolume(step * 5) },
+  { label: 'MIC', value: () => deviceLabel('audioinput', state.settings.micId), open: 'mic' },
+  { label: 'PTT', value: () => state.settings.ptt?.label || 'NONE', open: 'ptt' },
+  { label: 'CHANNEL', value: () => String(state.channel || 'RADIO'), action: () => flash(String(state.channel || 'RADIO').toUpperCase().slice(0, 14), 1000) },
+  { label: 'FX', value: () => (state.settings.filter ? 'LIGHT' : 'OFF'), adjust: () => toggleFilter(), action: () => toggleFilter() },
+  { label: 'SETUP', value: () => 'RUN', open: 'setup' },
 ];
+const SETUP = [
+  { label: 'HEADSET', value: () => deviceLabel('audiooutput', state.settings.outputId), open: 'headset' },
+  { label: 'TEST', value: () => 'MIC', open: 'test' },
+  { label: 'KEY', value: () => (decodeKey(state.settings.key) ? 'SET' : 'NONE'), open: 'key' },
+  { label: 'UPDATE', value: () => updateText(), action: () => void checkUpdates() },
+];
+const ROWS = { menu: MENU, setup: SETUP };
+const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'setup', test: 'setup', key: 'setup' };
 
 const state = {
   settings: { volume: 70, filter: true, deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false },
   version: '',
   screen: 'home',
   menuIndex: 0,
+  setupIndex: 0,
+  deviceCache: { audioinput: [], audiooutput: [] },
   listIndex: 0,
   devices: [],
   conn: 'nokey', // nokey | connecting | lost | online | error
@@ -649,6 +659,7 @@ function setScreen(screen) {
   }
   state.screen = screen;
   state.listIndex = 0;
+  if (screen === 'menu' || screen === 'setup') void refreshDeviceCache();
   if (screen === 'test' && audio.testGain) audio.testGain.gain.value = volumeGain();
   if (screen === 'mic' || screen === 'headset') void loadDevices(screen);
   if (screen === 'key') {
@@ -656,6 +667,24 @@ function setScreen(screen) {
     setTimeout(() => el.keyInput.focus(), 0);
   }
   render();
+}
+
+async function refreshDeviceCache() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    state.deviceCache = {
+      audioinput: devices.filter((device) => device.kind === 'audioinput'),
+      audiooutput: devices.filter((device) => device.kind === 'audiooutput'),
+    };
+  } catch {
+    return;
+  }
+  if (ROWS[state.screen]) render();
+}
+
+function deviceLabel(kind, id) {
+  const device = state.deviceCache[kind].find((entry) => entry.deviceId === (id || 'default'));
+  return device?.label || (id && id !== 'default' ? 'MISSING' : 'DEFAULT');
 }
 
 async function loadDevices(screen) {
@@ -670,7 +699,7 @@ async function loadDevices(screen) {
   if (!devices.some((device) => device.deviceId === 'default')) devices.unshift({ deviceId: 'default', label: 'Default' });
   state.devices = devices.map((device, index) => ({
     id: device.deviceId,
-    label: (device.label || `Device ${index + 1}`).replace(/^Default - /, 'Default: '),
+    label: (device.label || `Device ${index + 1}`),
   }));
   state.listIndex = Math.max(0, state.devices.findIndex((device) => device.id === (current || 'default')));
   if (state.screen === screen) render();
@@ -685,12 +714,21 @@ function listHtml(items, selected, current) {
   }).join('')}</ul>`;
 }
 
+function rowsHtml(rows, selected) {
+  return `<ul class="list rows">${rows.map((row, index) => {
+    const on = index === selected;
+    return `<li class="${on ? 'sel' : ''}"><span class="caret">${on ? '&gt;' : ''}</span>`
+      + `<span class="name">${escapeHtml(row.label)}</span>`
+      + `<span class="val">${escapeHtml(String(row.value()).toUpperCase())}</span></li>`;
+  }).join('')}</ul>`;
+}
+
 function homeBody() {
   if (state.update?.state === 'installing') return '<div class="mid">UPDATING</div><div class="small">RADIO WILL REOPEN</div>';
   if (state.toast) return `<div class="mid">${escapeHtml(state.toast.text)}</div>`;
   switch (state.conn) {
     case 'nokey':
-      return '<div class="big">NO KEY</div><div class="small">MENU &gt; 5 KEY</div>';
+      return '<div class="big">NO KEY</div><div class="small">MENU &gt; SETUP &gt; KEY</div>';
     case 'connecting':
       return '<div class="mid">CONNECTING</div><div class="small dim">. . .</div>';
     case 'lost':
@@ -711,15 +749,15 @@ function homeBody() {
 
 function updateText() {
   const update = state.update;
-  if (!update) return 'UP TO DATE CHECK';
+  if (!update) return 'CHECK';
   switch (update.state) {
-    case 'checking': return 'CHECKING...';
-    case 'current': return 'UP TO DATE';
-    case 'downloading': return `DOWNLOADING ${update.percent || 0}%`;
+    case 'checking': return 'CHECKING';
+    case 'current': return 'CURRENT';
+    case 'downloading': return `GET ${update.percent || 0}%`;
     case 'installing': return 'INSTALLING';
     case 'dev': return 'DEV BUILD';
-    case 'error': return 'UPDATE FAILED';
-    default: return '';
+    case 'error': return 'FAILED';
+    default: return 'CHECK';
   }
 }
 
@@ -729,7 +767,7 @@ function render() {
   el.keyInput.hidden = screen !== 'key';
   el.softLeftLabel.textContent = 'MENU';
   el.softRightLabel.textContent = 'HOME';
-  el.lcdRight.textContent = state.version ? `v${state.version}` : '';
+  el.lcdRight.textContent = state.version || '';
   let left = screen.toUpperCase();
   let body = '';
 
@@ -742,7 +780,12 @@ function render() {
       body = homeBody();
       break;
     case 'menu':
-      body = listHtml(MENU.map((item) => ({ id: item.key, label: `${item.key} ${item.label}` })), state.menuIndex);
+      body = rowsHtml(MENU, state.menuIndex);
+      el.softLeftLabel.textContent = 'CLOSE';
+      break;
+    case 'setup':
+      body = rowsHtml(SETUP, state.setupIndex);
+      el.softRightLabel.textContent = '* BACK';
       break;
     case 'mic':
     case 'headset':
@@ -767,12 +810,6 @@ function render() {
     case 'key':
       left = 'RADIO KEY';
       body = '<div class="small key-note">PASTE KEY · # SAVE · * CLEAR</div>';
-      break;
-    case 'filter':
-      body = `<div class="mid">EFFECT ${state.settings.filter ? 'ON' : 'OFF'}</div><div class="small"># TO SWITCH</div>`;
-      break;
-    case 'update':
-      body = `<div class="mid">v${escapeHtml(state.version)}</div><div class="small">${escapeHtml(updateText())}</div><div class="small dim"># CHECK NOW</div>`;
       break;
     default:
       break;
@@ -804,8 +841,10 @@ function changeVolume(delta) {
 
 async function choose() {
   const { screen } = state;
-  if (screen === 'menu') {
-    setScreen(MENU[state.menuIndex].screen);
+  if (ROWS[screen]) {
+    const row = ROWS[screen][screen === 'menu' ? state.menuIndex : state.setupIndex];
+    if (row.open) setScreen(row.open);
+    else if (row.action) row.action();
   } else if (screen === 'mic' || screen === 'headset') {
     const device = state.devices[state.listIndex];
     if (!device) return;
@@ -816,10 +855,11 @@ async function choose() {
       await saveNow({ outputId: device.id });
       await applyOutput();
     }
+    void refreshDeviceCache();
+    setScreen(PARENT[screen]);
     flash('SAVED', 800);
-    setScreen('menu');
   } else if (screen === 'test') {
-    setScreen('menu');
+    setScreen('setup');
   } else if (screen === 'ptt') {
     state.capturing = true;
     render();
@@ -835,14 +875,20 @@ async function choose() {
     net.retry = 0;
     setScreen('home');
     connect();
-  } else if (screen === 'filter') {
-    await saveNow({ filter: !state.settings.filter });
-    applyFilter();
-    render();
-  } else if (screen === 'update') {
-    state.update = await api.checkForUpdates();
-    render();
   }
+}
+
+async function toggleFilter() {
+  await saveNow({ filter: !state.settings.filter });
+  applyFilter();
+  render();
+}
+
+async function checkUpdates() {
+  state.update = { state: 'checking' };
+  render();
+  state.update = await api.checkForUpdates();
+  render();
 }
 
 function back() {
@@ -857,15 +903,17 @@ function back() {
     render();
     return;
   }
-  setScreen(screen === 'menu' || screen === 'home' ? 'home' : 'menu');
+  setScreen(PARENT[screen] || 'home');
 }
 
 function move(delta) {
   const { screen } = state;
   if (screen === 'home') {
     changeVolume(delta < 0 ? 5 : -5);
-  } else if (screen === 'menu') {
-    state.menuIndex = (state.menuIndex + delta + MENU.length) % MENU.length;
+  } else if (ROWS[screen]) {
+    const field = screen === 'menu' ? 'menuIndex' : 'setupIndex';
+    const rows = ROWS[screen];
+    state[field] = (state[field] + delta + rows.length) % rows.length;
     render();
   } else if ((screen === 'mic' || screen === 'headset') && state.devices.length) {
     state.listIndex = (state.listIndex + delta + state.devices.length) % state.devices.length;
@@ -882,16 +930,20 @@ function press(key) {
   }
   if (key === 'up') return move(-1);
   if (key === 'down') return move(1);
-  if (key === 'left') return state.screen === 'home' ? changeVolume(-5) : back();
-  if (key === 'right') return state.screen === 'home' ? changeVolume(5) : void choose();
+  const rows = ROWS[state.screen];
+  if (key === 'left' || key === 'right') {
+    const step = key === 'left' ? -1 : 1;
+    if (state.screen === 'home') return changeVolume(step * 5);
+    const row = rows?.[state.screen === 'menu' ? state.menuIndex : state.setupIndex];
+    if (row?.adjust) return void row.adjust(step);
+    return step < 0 ? back() : void choose();
+  }
   if (key === '#') return void choose();
   if (key === '*') return back();
-  if (/^[0-9]$/.test(key) && (state.screen === 'home' || state.screen === 'menu')) {
-    const index = MENU.findIndex((item) => item.key === key);
-    if (index >= 0) {
-      state.menuIndex = index;
-      setScreen(MENU[index].screen);
-    }
+  // Number keys pick a row: 1 = first row.
+  if (rows && /^[1-9]$/.test(key) && Number(key) <= rows.length) {
+    state[state.screen === 'menu' ? 'menuIndex' : 'setupIndex'] = Number(key) - 1;
+    return void choose();
   }
   return undefined;
 }
@@ -994,6 +1046,7 @@ function bindControls() {
   });
   navigator.mediaDevices.addEventListener('devicechange', () => {
     if (state.screen === 'mic' || state.screen === 'headset') void loadDevices(state.screen);
+    void refreshDeviceCache();
   });
 }
 
@@ -1008,6 +1061,7 @@ async function init() {
   } catch {
     flash('AUDIO ERR', 3000);
   }
+  void refreshDeviceCache();
   connect();
 }
 

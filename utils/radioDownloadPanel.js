@@ -49,8 +49,8 @@ export function buildRadioDownloadPanel(release) {
       '**Setup**',
       '1. Press **Download for Windows** and run the installer.',
       '2. Press **Get my radio key** below and copy the key.',
-      '3. In the radio press the left soft key for **MENU**, open **5 KEY**, and paste it.',
-      '4. Pick your **MIC** and **HEADSET**, use **TEST** to hear yourself, and set your **PTT** key.',
+      '3. On the radio press the gray button on the left for **MENU**, open **SETUP → KEY**, and paste it.',
+      '4. Set your **MIC** and **PTT** key in the menu, then **HEADSET** and **TEST** under **SETUP**.',
       '',
       'The app updates itself when a new version comes out. If Windows SmartScreen warns you, press **More info → Run anyway**.',
     ].join('\n'))
@@ -129,7 +129,7 @@ export async function handleRadioDownloadInteraction(interaction) {
       '```',
       key,
       '```',
-      'In the radio: left soft key → **5 KEY** → paste (Ctrl+V) → **# SEND**.',
+      'On the radio: gray left button → **SETUP** → **KEY** → paste (Ctrl+V) → **# SEND**.',
     ].join('\n'),
     flags: MessageFlags.Ephemeral,
   });
