@@ -33,7 +33,7 @@ test('audio frames round-trip the speaker ID', () => {
   assert.deepEqual([...decoded.packet], [1, 2, 3]);
 });
 
-async function startRelay() {
+async function startRelay(extra = {}) {
   const played = [];
   let ended = 0;
   let online = true;
@@ -56,6 +56,7 @@ async function startRelay() {
       : { ok: false, removed: true, reason: 'Not in the server.' }),
     status: () => ({ online, channel: 'Radio' }),
     openTransmit: () => ({ push: (packet) => played.push(packet), end: () => { ended += 1; } }),
+    ...extra,
   });
   const server = createServer();
   server.on('upgrade', (request, socket, head) => {
@@ -341,6 +342,26 @@ test('Frequency Change is app-only, and EMER alerts every radio once per 15 seco
 
     alice.ws.close();
     bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('a radio approving Discord sign-in in the browser is not cut off by the auth timeout', async () => {
+  const harness = await startRelay({ authTimeoutMs: 80, signInTimeoutMs: 400 });
+  try {
+    const idle = client(harness.url);
+    const alice = client(harness.url);
+    await Promise.all([once(idle.ws, 'open'), once(alice.ws, 'open')]);
+    alice.send({ type: 'hello' });
+    await alice.until(() => alice.messages.find((m) => m.type === 'login'));
+    const [idleCode] = await once(idle.ws, 'close');
+    assert.equal(idleCode, 4000, 'a socket that never signs in still times out');
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    assert.equal(alice.ws.readyState, WebSocket.OPEN, 'still open after the normal auth window');
+    alice.send({ type: 'auth', code: 'alice-code' });
+    await alice.until(() => alice.messages.find((m) => m.type === 'ready'));
+    alice.ws.close();
   } finally {
     await harness.close();
   }

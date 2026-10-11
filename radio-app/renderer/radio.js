@@ -107,7 +107,7 @@ const audio = {
   speakers: new Map(),
 };
 
-const net = { ws: null, retry: 0, timer: null };
+const net = { ws: null, retry: 0, timer: null, browser: false };
 
 /* ---------- helpers ---------- */
 
@@ -629,13 +629,20 @@ async function onLoginInfo(message) {
     signInFailed('BOT HAS NO DISCORD SECRET');
     return;
   }
+  net.browser = true;
   const result = await api.signIn({ clientId: message.clientId, redirectUri: message.redirectUri });
+  net.browser = false;
   if (state.conn !== 'signing') return;
   if (!result?.code) {
     signInFailed(result?.error || 'SIGN-IN CANCELLED');
     return;
   }
-  sendJson({ type: 'auth', code: result.code, version: state.version, channel: state.settings.channel });
+  // The relay link can drop while the member approves in the browser: hand the code over on a fresh one.
+  if (net.ws?.readyState === WebSocket.OPEN) {
+    sendJson({ type: 'auth', code: result.code, version: state.version, channel: state.settings.channel });
+  } else {
+    connect({ signIn: true, code: result.code });
+  }
 }
 
 // Removed from the Discord server or the radio channel: the radio closes itself.
@@ -681,7 +688,10 @@ function connect(options = {}) {
   }
   ws.binaryType = 'arraybuffer';
   net.ws = ws;
-  ws.onopen = () => ws.send(JSON.stringify(signingIn ? { type: 'hello', version: state.version } : { type: 'auth', key, version: state.version, channel: state.settings.channel }));
+  const hello = options.code
+    ? { type: 'auth', code: options.code, version: state.version, channel: state.settings.channel }
+    : signingIn ? { type: 'hello', version: state.version } : { type: 'auth', key, version: state.version, channel: state.settings.channel };
+  ws.onopen = () => ws.send(JSON.stringify(hello));
   ws.onmessage = (event) => {
     if (typeof event.data !== 'string') {
       onAudioFrame(event.data);
@@ -708,6 +718,8 @@ function connect(options = {}) {
       return;
     }
     if (state.conn === 'signing') {
+      // Still approving in the browser: the code goes over a new link when it arrives.
+      if (net.browser) return;
       signInFailed(state.error || 'NO SIGNAL');
       return;
     }
