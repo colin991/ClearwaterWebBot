@@ -20,6 +20,7 @@ import { getPcsoChatbot, matchPcsoChatbotReply, savePcsoChatbot } from './pcsoCh
 import { memberHasSiteAccess } from '../lib/site-access.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess } from './staffRanks.js';
 import { config } from '../config.js';
+import { handleRadioUpgrade } from './radioBot.js';
 
 const UNKNOWN_MEMBER = 10007;
 const ACCESS_CACHE_MS = 30_000;
@@ -277,6 +278,11 @@ export function startBotApiServer(client, {
       logger.error('Bot API server request failed', error);
       return sendJson(response, 500, { error: error?.message || 'Server error' });
     }
+  });
+
+  // Clearwater Radio desktop apps connect over WebSocket at /radio on this same port.
+  server.on('upgrade', (request, socket, head) => {
+    if (!handleRadioUpgrade(request, socket, head)) socket.destroy();
   });
 
   server.on('error', (error) => {

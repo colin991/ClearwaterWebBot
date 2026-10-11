@@ -8,6 +8,7 @@ import { logger } from './utils/logger.js';
 import { startErlcRoleSync } from './utils/erlcRoleSync.js';
 import { startRobloxGroupSync } from './utils/robloxGroupSync.js';
 import { startDepartmentSalaryJob } from './utils/departmentSalary.js';
+import { startRadioBot } from './utils/radioBot.js';
 import { registrationGuildIds, slashCommandsForGuild } from './utils/commandGuilds.js';
 
 // Keep boot loaders in the entry module so an incomplete host upload cannot
@@ -130,6 +131,7 @@ try {
 }
 
 const stopBotServices = startBotServices(client, config);
+const stopRadioBot = startRadioBot();
 let stopErlcSync = () => {};
 let stopRobloxGroupSync = () => {};
 let stopDepartmentSalary = () => {};
@@ -142,6 +144,7 @@ client.once(Events.ClientReady, () => {
 const shutDown = async (signal) => {
   logger.info(`${signal} received; shutting down.`);
   stopBotServices();
+  stopRadioBot();
   stopErlcSync();
   stopRobloxGroupSync();
   stopDepartmentSalary();

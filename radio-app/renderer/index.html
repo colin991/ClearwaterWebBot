@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ws: wss:; media-src 'self' blob: mediastream:">
+  <title>Clearwater Radio</title>
+  <link rel="stylesheet" href="radio.css">
+</head>
+<body>
+  <div id="radio" class="radio">
+    <div class="antenna"></div>
+
+    <div class="top">
+      <button id="emer" class="emer" title="Emergency (not used)"><span>EMER</span></button>
+      <div class="knob-wrap">
+        <div id="vol" class="knob" title="Volume: drag or scroll"><i></i></div>
+        <span>VOL</span>
+      </div>
+      <div class="knob-wrap">
+        <div id="ch" class="knob" title="Channel"><i></i></div>
+        <span>CH</span>
+      </div>
+    </div>
+
+    <div class="grille"></div>
+
+    <div class="body-row">
+      <button id="pttSide" class="side-ptt" title="Hold to talk"><span>PTT</span></button>
+      <div class="lcd">
+        <div class="lcd-head"><span id="lcdLeft">RADIO</span><span id="lcdRight"></span></div>
+        <div id="lcdBody" class="lcd-body"></div>
+        <textarea id="keyInput" class="key-input" spellcheck="false" placeholder="Paste key (Ctrl+V)" hidden></textarea>
+        <div class="lcd-foot"><span id="softLeftLabel">MENU</span><span id="softRightLabel">HOME</span></div>
+      </div>
+    </div>
+
+    <div class="nav">
+      <button id="softL" class="soft" title="Menu"></button>
+      <button id="deaf" class="deaf" title="Deafen yourself">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 14v-2a8 8 0 0 1 16 0v2" />
+          <rect x="3" y="14" width="4" height="6" rx="1.5" />
+          <rect x="17" y="14" width="4" height="6" rx="1.5" />
+          <line x1="3" y1="3" x2="21" y2="21" />
+        </svg>
+      </button>
+      <div class="dpad">
+        <button id="up" class="dir up" title="Up"></button>
+        <button id="left" class="dir left" title="Left"></button>
+        <button id="right" class="dir right" title="Right"></button>
+        <button id="down" class="dir down" title="Down"></button>
+        <span class="hub"></span>
+      </div>
+      <button id="softR" class="soft" title="Home"></button>
+    </div>
+
+    <div class="keypad">
+      <button data-key="1">1</button>
+      <button data-key="2">2</button>
+      <button data-key="3">3</button>
+      <button data-key="4">4</button>
+      <button data-key="5">5</button>
+      <button data-key="6">6</button>
+      <button data-key="7">7</button>
+      <button data-key="8">8</button>
+      <button data-key="9">9</button>
+      <button data-key="*" class="fn">*<small>CLR</small></button>
+      <button data-key="0">0</button>
+      <button data-key="#" class="fn">#<small>SEND</small></button>
+    </div>
+
+    <div class="lamps">
+      <span id="lampTx" class="lamp">TX</span>
+      <span id="lampRx" class="lamp">RX</span>
+      <span id="lampMic" class="lamp dot">MIC</span>
+    </div>
+
+    <div class="bottom">
+      <button id="quit" class="quit" title="Shut off the radio">QUIT</button>
+      <div class="slot"></div>
+    </div>
+  </div>
+  <script src="radio.js"></script>
+</body>
+</html>

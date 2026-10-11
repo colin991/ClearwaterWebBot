@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-11-clearwater-radio-app",
+      "title": "Add the Clearwater Radio app and radio bot",
+      "summary": "Added a Windows radio overlay app that stays on top of other windows, with push-to-talk, mic and headset picking, a mic test, volume knob, deafen button, and a light radio effect. It talks through a new second bot that always sits in the radio voice channel. The main bot posts a download embed with a personal radio key button, and the app updates itself when a new version is released.",
+      "createdAt": "2026-10-11T05:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-04-register-divisional-hub-commands",
       "title": "Register DOD commands in the Divisional Hub",
       "summary": "Fixed slash-command startup registration so the bot now publishes commands to every department guild declared by the command files, including the PCSO Divisional Hub server 1536695906768781362.",
