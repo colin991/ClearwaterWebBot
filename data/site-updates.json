@@ -3532,6 +3532,13 @@
       "summary": "The radio channels are now CH 1 Law Enforcement, CH 2 Fire Radio, CH 3 DOT Radio, CH 4 Marine and Boating, CH 5 Frequency Change and CH 6 Special Response Team, with the event channel as CH 7. Fire, DOT and Marine are each linked to their own Discord voice channel by a bot of their own, so people in that voice channel and on the radios hear each other. Frequency Change and Special Response Team stay radio-to-radio only.",
       "createdAt": "2026-10-12T01:30:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-smoother-listening-2026-10-12",
+      "title": "Radio: smoother listening on shaky connections",
+      "summary": "Incoming voices on the radio no longer turn choppy or fall further and further behind when the connection hiccups. The radio now holds a little more audio back after a hiccup, catches up smoothly after a burst instead of overlapping or lagging, and shrinks the delay again once the connection is steady.",
+      "createdAt": "2026-10-12T01:50:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

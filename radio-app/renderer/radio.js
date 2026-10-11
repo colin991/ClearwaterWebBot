@@ -186,6 +186,7 @@ const audio = {
   ts: 0,
   draining: false,
   speakers: new Map(),
+  jitter: 0.08, // seconds of incoming audio held back to ride out network hiccups (JITTER_MIN..JITTER_MAX)
   history: [], // what the radio played, for REPLAY: { at, samples }
   replay: null,
 };
@@ -805,8 +806,32 @@ function onAudioFrame(buffer) {
   speaker.ts += 20000;
 }
 
+const JITTER_MIN = 0.08;
+const JITTER_MAX = 0.32;
+const JITTER_STEP = 0.04;
+const JITTER_DECAY = 0.0002; // per 20 ms frame: about 10 ms less each second the stream is smooth
+// Audio queued past the buffer plays 6% faster until it's caught up (a burst after a hiccup), and anything
+// beyond the hard limit is dropped.
+const CATCH_UP_AFTER = 0.04;
+const CATCH_UP_RATE = 1.06;
+const JITTER_SLACK = 0.25;
+
 function playDecoded(speaker, id, data) {
   const ctx = audio.ctx;
+  const now = ctx.currentTime;
+  // Jitter buffer: each voice starts a little behind so network hiccups don't cut it. A hiccup that runs it dry
+  // makes the buffer bigger for this connection; a smooth stream shrinks it again, and after a burst of late
+  // audio the radio catches up instead of playing everything late.
+  if (speaker.next < now + 0.005) {
+    if (speaker.next && now - speaker.next < 0.25) audio.jitter = Math.min(JITTER_MAX, audio.jitter + JITTER_STEP);
+    speaker.next = now + audio.jitter;
+  } else {
+    audio.jitter = Math.max(JITTER_MIN, audio.jitter - JITTER_DECAY);
+    if (speaker.next - now > audio.jitter + JITTER_SLACK) {
+      data.close();
+      return;
+    }
+  }
   const frames = data.numberOfFrames;
   const channels = Math.max(1, Math.min(2, data.numberOfChannels));
   const buffer = ctx.createBuffer(2, frames, data.sampleRate);
@@ -819,12 +844,11 @@ function playDecoded(speaker, id, data) {
   data.close();
   const source = ctx.createBufferSource();
   source.buffer = buffer;
+  const rate = speaker.next - now > audio.jitter + CATCH_UP_AFTER ? CATCH_UP_RATE : 1;
+  source.playbackRate.value = rate;
   source.connect(audio.rxIn);
-  const now = ctx.currentTime;
-  // Small jitter buffer; if a stall left us far behind, skip ahead instead of lagging.
-  if (speaker.next < now + 0.01 || speaker.next > now + 0.3) speaker.next = now + 0.06;
   source.start(speaker.next);
-  speaker.next += buffer.duration;
+  speaker.next += buffer.duration / rate;
 }
 
 // REPLAY: keep the last 30 seconds of what the radio played.
