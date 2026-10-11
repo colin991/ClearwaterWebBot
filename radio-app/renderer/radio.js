@@ -706,9 +706,8 @@ async function loadDevices(screen) {
 }
 
 function listHtml(items, selected, current) {
-  const start = Math.max(0, Math.min(selected - 2, items.length - 5));
-  return `<ul class="list">${items.slice(start, start + 5).map((item, offset) => {
-    const index = start + offset;
+  // Full device names wrap; the LCD scrolls to keep the highlighted one in view.
+  return `<ul class="list">${items.map((item, index) => {
     const mark = current !== undefined && item.id === current ? '*' : ' ';
     return `<li class="${index === selected ? 'sel' : ''}">${mark}${escapeHtml(item.label.toUpperCase())}</li>`;
   }).join('')}</ul>`;
@@ -816,6 +815,7 @@ function render() {
   }
   el.lcdLeft.textContent = left;
   el.lcdBody.innerHTML = body;
+  el.lcdBody.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
   if (screen === 'test') meterFill = $('meterFill');
   updateLamps();
 }
@@ -939,6 +939,8 @@ function press(key) {
     return step < 0 ? back() : void choose();
   }
   if (key === '#') return void choose();
+  // Center of the d-pad: select, or open the menu from the home screen.
+  if (key === 'ok') return state.screen === 'home' ? setScreen('menu') : void choose();
   if (key === '*') return back();
   // Number keys pick a row: 1 = first row.
   if (rows && /^[1-9]$/.test(key) && Number(key) <= rows.length) {
@@ -952,7 +954,7 @@ function bindControls() {
   document.querySelectorAll('.keypad button').forEach((button) => {
     button.addEventListener('click', () => press(button.dataset.key));
   });
-  for (const id of ['softL', 'softR', 'up', 'down', 'left', 'right']) {
+  for (const id of ['softL', 'softR', 'up', 'down', 'left', 'right', 'ok']) {
     $(id).addEventListener('click', () => press(id));
   }
 

@@ -19,7 +19,7 @@ The **Get my radio key** button gives a member a personal key (relay address + s
 - **PTT**: hold the bound key or mouse button (works while a game is focused), or hold the PTT strip on the left edge.
 - **VOL** knob: drag up/down or scroll. On the home screen the d-pad also changes volume.
 - **Red headset button**: deafen yourself (stops incoming audio).
-- **Gray left button**: MENU with `VOL`, `MIC`, `PTT`, `CHANNEL`, `FX` (radio effect LIGHT/OFF) and `SETUP` (`HEADSET`, `TEST` to hear your own radio voice, `KEY` to paste your radio key, `UPDATE`). D-pad up/down picks a row, left/right changes VOL and FX.
+- **Gray left button**: MENU with `VOL`, `MIC`, `PTT`, `CHANNEL`, `FX` (radio effect LIGHT/OFF) and `SETUP` (`HEADSET`, `TEST` to hear your own radio voice, `KEY` to paste your radio key, `UPDATE`). D-pad up/down picks a row, left/right changes VOL and FX, and the center button selects (or opens the menu from the home screen). Device names show in full.
 - `#` selects, `*` goes back. **QUIT** shuts the app off.
 
 ## Host setup
