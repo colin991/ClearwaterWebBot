@@ -3,6 +3,8 @@ import { logger } from './logger.js';
 
 export const RADIO_WS_PATH = '/radio';
 export const RADIO_AUTH_TIMEOUT_MS = 8_000;
+/** A radio waiting on Discord sign-in in the browser: as long as the app's own sign-in window. */
+export const RADIO_SIGNIN_TIMEOUT_MS = 5 * 60 * 1000;
 export const RADIO_TX_IDLE_MS = 1_500;
 export const RADIO_TX_MAX_MS = 120_000;
 export const RADIO_MAX_PACKET_BYTES = 1_500;
@@ -71,6 +73,8 @@ export function createRadioRelay({
   onPanic = () => {},
   now = () => Date.now(),
   recheckMs = RADIO_RECHECK_MS,
+  authTimeoutMs = RADIO_AUTH_TIMEOUT_MS,
+  signInTimeoutMs = RADIO_SIGNIN_TIMEOUT_MS,
 }) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 });
   /** @type {Set<import('ws').WebSocket>} */
@@ -283,7 +287,7 @@ export function createRadioRelay({
     clients.add(socket);
     socket.radioAuthTimer = setTimeout(() => {
       if (!socket.radio) socket.close(4000, 'auth timeout');
-    }, RADIO_AUTH_TIMEOUT_MS);
+    }, authTimeoutMs);
     socket.isAlive = true;
     socket.on('pong', () => { socket.isAlive = true; });
 
@@ -299,6 +303,11 @@ export function createRadioRelay({
         return;
       }
       if (message?.type === 'hello' && !socket.radio) {
+        // The member is approving in the browser, which takes longer than the normal auth window.
+        clearTimeout(socket.radioAuthTimer);
+        socket.radioAuthTimer = setTimeout(() => {
+          if (!socket.radio) socket.close(4000, 'auth timeout');
+        }, signInTimeoutMs);
         const info = loginInfo();
         send(socket, info ? { type: 'login', clientId: info.clientId, redirectUri: info.redirectUri } : { type: 'login', available: false });
         return;

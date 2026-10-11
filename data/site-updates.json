@@ -3308,6 +3308,13 @@
       "summary": "When the Clearwater Radio app starts without a sign-in, it now opens the Discord sign-in page straight away instead of waiting for a button press. If you close it, press OK to try again.",
       "createdAt": "2026-10-11T15:20:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-signin-timeout-fix",
+      "title": "Radio Discord sign-in fixed",
+      "summary": "Signing in to the Clearwater Radio with Discord now works even when approving in the browser takes more than a few seconds. Before, the radio gave up after 8 seconds and showed NO SIGNAL.",
+      "createdAt": "2026-10-11T15:25:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
