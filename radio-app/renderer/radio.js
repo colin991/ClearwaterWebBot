@@ -30,7 +30,7 @@ const MENU = [
   { label: 'LISTEN', value: () => deviceLabel('audiooutput', state.settings.outputId), open: 'headset' },
   { label: 'PTT', value: () => state.settings.ptt?.label || 'NONE', open: 'ptt' },
   { label: 'CHANNEL', value: () => String(state.channel || 'RADIO'), action: () => flash(String(state.channel || 'RADIO').toUpperCase().slice(0, 14), 1000) },
-  { label: 'FX', value: () => FX_LABELS[state.settings.rxFx] || 'OFF', adjust: (step) => cycleFx(step), action: () => cycleFx(1) },
+  { label: 'FX', value: () => FX_LABELS[state.settings.listenFx] || 'OFF', adjust: (step) => cycleFx(step), action: () => cycleFx(1) },
   { label: 'SETUP', value: () => 'RUN', open: 'setup' },
 ];
 const SETUP = [
@@ -45,7 +45,7 @@ const FX_LABELS = { off: 'OFF', radio: 'RADIO', police: 'POLICE' };
 const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', test: 'setup' };
 
 const state = {
-  settings: { volume: 70, txVolume: 60, rxFx: 'off', deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false },
+  settings: { volume: 70, txVolume: 60, listenFx: 'radio', deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false },
   version: '',
   screen: 'home',
   menuIndex: 0,
@@ -76,7 +76,7 @@ const audio = {
   txIn: null,
   txGain: null,
   rxIn: null,
-  rxFx: null,
+  listenFx: null,
   volume: null,
   deafGain: null,
   toneOut: null,
@@ -268,15 +268,15 @@ async function initAudio() {
 
   // Listening: every voice -> optional radio FX -> listen volume -> limiter -> deafen -> speakers.
   audio.rxIn = ctx.createGain();
-  audio.rxFx = createRadioFx(ctx);
+  audio.listenFx = createRadioFx(ctx);
   audio.volume = ctx.createGain();
   const rxLimiter = new AudioWorkletNode(ctx, 'radio-limiter', {
     outputChannelCount: [2],
     processorOptions: { ceiling: 0.7 }, // about -3 dBFS
   });
   audio.deafGain = ctx.createGain();
-  audio.rxIn.connect(audio.rxFx.input);
-  audio.rxFx.output.connect(audio.volume);
+  audio.rxIn.connect(audio.listenFx.input);
+  audio.listenFx.output.connect(audio.volume);
   audio.volume.connect(rxLimiter);
   rxLimiter.connect(audio.deafGain);
   audio.deafGain.connect(ctx.destination);
@@ -343,8 +343,8 @@ function applyDeaf() {
 }
 
 function applyFx() {
-  audio.rxFx?.setMode(state.settings.rxFx);
-  audio.rxFx?.setStatic(state.rx.size > 0);
+  audio.listenFx?.setMode(state.settings.listenFx);
+  audio.listenFx?.setStatic(state.rx.size > 0);
 }
 
 async function applyOutput() {
@@ -548,7 +548,7 @@ function playTone(name) {
 /** Short static burst when a transmission ends, like a real squelch tail. */
 function squelchTail() {
   const ctx = audio.ctx;
-  if (!ctx || state.settings.deaf || !FX_SETTINGS[state.settings.rxFx]) return;
+  if (!ctx || state.settings.deaf || !FX_SETTINGS[state.settings.listenFx]) return;
   const length = Math.floor(ctx.sampleRate * 0.08);
   const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
   const data = buffer.getChannelData(0);
@@ -739,7 +739,7 @@ function onMessage(message) {
       } else if (state.rx.delete(message.id)) {
         squelchTail();
       }
-      audio.rxFx?.setStatic(state.rx.size > 0);
+      audio.listenFx?.setStatic(state.rx.size > 0);
       updateLamps();
       render();
       break;
@@ -1048,9 +1048,9 @@ function changeTxVolume(delta) {
 }
 
 async function cycleFx(step) {
-  const index = Math.max(0, FX_MODES.indexOf(state.settings.rxFx));
-  const rxFx = FX_MODES[(index + (step < 0 ? FX_MODES.length - 1 : 1)) % FX_MODES.length];
-  await saveNow({ rxFx });
+  const index = Math.max(0, FX_MODES.indexOf(state.settings.listenFx));
+  const listenFx = FX_MODES[(index + (step < 0 ? FX_MODES.length - 1 : 1)) % FX_MODES.length];
+  await saveNow({ listenFx });
   applyFx();
   render();
 }
