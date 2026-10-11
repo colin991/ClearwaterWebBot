@@ -8,7 +8,7 @@
 <title>Radio Staff | Clearwater Radio</title>
 <link rel="icon" type="image/png" href="assets/clearwater-logo.png">
 <link rel="apple-touch-icon" href="assets/clearwater-logo.png">
-<link rel="stylesheet" href="radio-staff.css?v=20261011d">
+<link rel="stylesheet" href="radio-staff.css?v=20261011e">
 </head>
 <body>
 <header class="rs-top">
@@ -46,6 +46,16 @@
       </div>
       <p class="rs-fine">The event channel shows on every radio as CH 4 while it's open. Closing it moves everyone on it back to CH 1.</p>
     </form>
+  </section>
+
+  <section class="rs-card">
+    <div class="rs-head">
+      <h2>Channel access by rank</h2>
+      <button type="button" id="accessLoad" class="rs-btn rs-ghost">Edit</button>
+    </div>
+    <p class="rs-fine">Pick which Melonly department ranks can use each channel. A channel with nothing ticked is open to everyone. CH 1 is always open, and admins can use every channel. Department and rank also show next to callsigns on the radios.</p>
+    <p id="accessSummary" class="rs-fine"></p>
+    <div id="accessEditor" class="rs-stack" hidden></div>
   </section>
 
   <section class="rs-card">
@@ -138,7 +148,7 @@
 <section id="gate" class="rs-gate" hidden><div class="rs-card rs-gate-card"></div></section>
 <div id="toast" class="rs-toast" role="status" aria-live="polite" hidden></div>
 
-<script src="radio-staff-map.js?v=20261011d"></script>
-<script src="radio-staff.js?v=20261011d"></script>
+<script src="radio-staff-map.js?v=20261011e"></script>
+<script src="radio-staff.js?v=20261011e"></script>
 </body>
 </html>

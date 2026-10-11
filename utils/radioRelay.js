@@ -79,6 +79,7 @@ function send(socket, message) {
  * @param {(event: { userId: string, name: string, channel: string, dispatcher: string }) => void} [options.onTalkOver]
  * @param {(report: object) => void} [options.onCrash] a radio's crash report, for the staff panel
  * @param {() => { id: string, name: string, channel: string, since: number }[]} [options.scenes] units in scene voice channels (dispatch only)
+ * @param {(radio: object, channel: string) => boolean} [options.canUse] rank-based channel access (MAIN is always open)
  */
 export function createRadioRelay({
   verifyKey,
@@ -98,6 +99,7 @@ export function createRadioRelay({
   loadSettings = () => null,
   saveSettings = () => {},
   isStaff = async () => false,
+  canUse = () => true,
   record = () => null,
   onTalkOver = () => {},
   onCrash = () => {},
@@ -141,6 +143,11 @@ export function createRadioRelay({
   ];
   const channelName = (id) => channelList().find((channel) => channel.id === id)?.name || 'Radio';
   const isChannel = (id) => channelList().some((channel) => channel.id === id);
+  // Rank-based access: MAIN is open to everyone; other channels follow the staff page's rules.
+  const allowedOn = (radio, id) => {
+    if (id === RADIO_MAIN_CHANNEL) return true;
+    try { return canUse(radio, id) !== false; } catch { return true; }
+  };
   // Members sitting in the Discord channel already hear MAIN there, so their app stays quiet on it.
   // Scan mode: a radio also listens to up to two other channels while it talks on its own.
   // Staff monitor (live listen) hears every channel and can't talk.
@@ -197,7 +204,7 @@ export function createRadioRelay({
     const byId = new Map();
     for (const socket of clients) {
       const radio = socket.radio;
-      if (radio?.userId && radio.channel === channel) byId.set(radio.userId, { id: radio.userId, name: radio.name, app: true, discord: false });
+      if (radio?.userId && radio.channel === channel) byId.set(radio.userId, { id: radio.userId, name: radio.name, ...(radio.label ? { label: radio.label } : {}), app: true, discord: false });
     }
     if (channel === RADIO_MAIN_CHANNEL) {
       let members = [];
@@ -205,7 +212,7 @@ export function createRadioRelay({
       for (const member of members) {
         const entry = byId.get(member.id);
         if (entry) entry.discord = true;
-        else byId.set(member.id, { id: member.id, name: member.name, app: false, discord: true });
+        else byId.set(member.id, { id: member.id, name: member.name, ...(member.label ? { label: member.label } : {}), app: false, discord: true });
       }
     }
     const talking = talkingOn(channel);
@@ -252,7 +259,7 @@ export function createRadioRelay({
       online: channel === RADIO_MAIN_CHANNEL ? base.online : true,
       channel: channelName(channel),
       channelId: channel,
-      channels: channelList().map(({ id, name }) => ({ id, name, members: rosterFor(id) })),
+      channels: channelList().map(({ id, name }) => ({ id, name, members: rosterFor(id), ...(allowedOn(socket.radio, id) ? {} : { locked: true }) })),
       listeners: listenerCount(channel),
       inVoice: channel === RADIO_MAIN_CHANNEL && Boolean(inVoice(socket.radio.userId)),
       dispatch: dispatchActive(),
@@ -449,6 +456,10 @@ export function createRadioRelay({
 
   function switchChannel(socket, channel) {
     if (!isChannel(channel) || socket.radio.channel === channel) return false;
+    if (!allowedOn(socket.radio, channel)) {
+      send(socket, { type: 'locked', channel, channelName: channelName(channel) });
+      return false;
+    }
     endTransmit(socket);
     socket.radio.channel = channel;
     socket.radio.scan?.delete(channel);
@@ -461,6 +472,18 @@ export function createRadioRelay({
     }
     broadcastStatus();
     return true;
+  }
+
+  // A radio on (or scanning) a channel it may no longer use goes back to MAIN.
+  function enforceAccess(socket) {
+    const radio = socket.radio;
+    if (!radio?.userId) return;
+    for (const id of [...(radio.scan || [])]) if (!allowedOn(radio, id)) radio.scan.delete(id);
+    if (allowedOn(radio, radio.channel)) return;
+    endTransmit(socket);
+    radio.channel = RADIO_MAIN_CHANNEL;
+    send(socket, { type: 'moved', by: 'Staff', channel: RADIO_MAIN_CHANNEL, channelName: channelName(RADIO_MAIN_CHANNEL), reason: 'locked' });
+    send(socket, { type: 'channel', ...statusFor(socket) });
   }
 
   function startRecording(meta) {
@@ -584,7 +607,7 @@ export function createRadioRelay({
 
   function setScan(socket, ids) {
     const list = Array.isArray(ids) ? ids.map(String) : [];
-    socket.radio.scan = new Set(list.filter((id) => isChannel(id) && id !== socket.radio.channel).slice(0, 2));
+    socket.radio.scan = new Set(list.filter((id) => isChannel(id) && id !== socket.radio.channel && allowedOn(socket.radio, id)).slice(0, 2));
   }
 
   async function onAuth(socket, message) {
@@ -636,14 +659,18 @@ export function createRadioRelay({
     }
     clearTimeout(socket.radioAuthTimer);
     const channel = isChannel(message.channel) ? message.channel : RADIO_MAIN_CHANNEL;
-    socket.radio = { userId, name: result.name || 'Unit', staff: Boolean(result.staff), deaf: false, channel, txChannel: null, scan: new Set(), rateSecond: 0, rateCount: 0, since: now() };
+    socket.radio = {
+      userId, name: result.name || 'Unit', staff: Boolean(result.staff), profile: result.profile || [], label: String(result.label || ''),
+      deaf: false, channel, txChannel: null, scan: new Set(), rateSecond: 0, rateCount: 0, since: now(),
+    };
+    if (!allowedOn(socket.radio, channel)) socket.radio.channel = RADIO_MAIN_CHANNEL;
     setScan(socket, message.scan);
     if (session) send(socket, { type: 'session', key: session });
     let synced = null;
     try { synced = loadSettings(userId) || null; } catch { synced = null; }
     send(socket, {
       type: 'ready',
-      you: { id: userId, name: socket.radio.name, callsign: String(result.callsign || ''), staff: socket.radio.staff },
+      you: { id: userId, name: socket.radio.name, callsign: String(result.callsign || ''), staff: socket.radio.staff, label: socket.radio.label },
       synced,
       game: games.get(userId) || null,
       ...statusFor(socket),
@@ -752,8 +779,15 @@ export function createRadioRelay({
         logger.info(`Radio closed for ${userId}: ${result.reason || 'no longer allowed'}`);
         endTransmit(socket);
         removeSocket(socket, result.reason);
+      } else if (result?.ok && socket.radio?.userId === userId) {
+        // Rank or department changed in Melonly: new label, and maybe new channel access.
+        socket.radio.staff = Boolean(result.staff);
+        socket.radio.profile = result.profile || [];
+        socket.radio.label = String(result.label || '');
+        enforceAccess(socket);
       }
     }
+    if (clients.size) broadcastStatus();
   }
   const recheck = recheckMs > 0 ? setInterval(() => { void recheckAll(); }, recheckMs) : null;
   recheck?.unref?.();
@@ -849,6 +883,11 @@ export function createRadioRelay({
       broadcastStatus();
       return moved;
     },
+    /** Channel access rules changed: move anyone who lost access back to MAIN and refresh every radio. */
+    accessChanged() {
+      for (const socket of clients) enforceAccess(socket);
+      broadcastStatus();
+    },
     get event() {
       return eventChannel ? { ...eventChannel } : null;
     },
@@ -916,6 +955,8 @@ export function createRadioRelay({
         since: socket.radio.since,
         signal: signalOf(socket.radio.userId) ?? null,
         monitor: Boolean(socket.radio.monitor),
+        label: socket.radio.label || '',
+        profile: socket.radio.profile || [],
       }));
     },
     /** Staff force-mute: the member still hears the radio but can't talk until unmuted. */

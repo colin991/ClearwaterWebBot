@@ -95,7 +95,7 @@ test('the bot only lets members with Administrator use the website panel', async
 
 test('staff actions from the website mute, unmute and kick through the radio controls', async () => {
   setRadioStaffControls(null);
-  assert.deepEqual(radioStaffSnapshot(), { running: false, users: [], muted: [], coverage: { towers: [], zones: [], buildings: false }, positions: [], flags: [], crashes: [], scenes: [], event: null });
+  assert.deepEqual(radioStaffSnapshot(), { running: false, users: [], muted: [], coverage: { towers: [], zones: [], buildings: false }, positions: [], flags: [], crashes: [], scenes: [], event: null, access: {}, melonly: false });
   await assert.rejects(runRadioStaffAction('mute', ALICE, ADMIN), { status: 503 });
 
   const muted = new Set([BOB]);
@@ -110,7 +110,7 @@ test('staff actions from the website mute, unmute and kick through the radio con
   });
 
   const snapshot = radioStaffSnapshot((id) => (id === BOB ? 'Bob' : ''));
-  assert.deepEqual(snapshot.users, [{ userId: ALICE, name: 'Alice', channel: 'Radio', muted: false, since: 5, signal: null, monitor: false }]);
+  assert.deepEqual(snapshot.users, [{ userId: ALICE, name: 'Alice', channel: 'Radio', muted: false, since: 5, signal: null, monitor: false, label: '' }]);
   assert.deepEqual(snapshot.muted, [{ userId: BOB, name: 'Bob' }]);
 
   await runRadioStaffAction('mute', ALICE, ADMIN, { from: 'website' });
@@ -208,4 +208,27 @@ test('staff tools warn a unit, play a shout-out, run the event channel and play 
   assert.equal(posts.length, 4, 'warn, shout, event open and close are noted in the radio chat');
   assert.match(posts[0], /radio warning/);
   setRadioStaffControls(null);
+});
+
+test('staff load Melonly ranks and save channel access', async () => {
+  let saved = null;
+  setRadioStaffControls({
+    users: () => [],
+    muted: [],
+    melonly: () => true,
+    catalog: async () => [{ id: 'd1', name: 'PCSO', short: 'PCSO', ranks: [{ id: 'r1', name: 'Sergeant', position: 1 }] }],
+    access: () => saved || {},
+    setAccess: async (next) => { saved = next; return next; },
+    postStaff: async () => {},
+  });
+  assert.equal((await runRadioStaffTool('ranks', {}, ADMIN)).departments[0].ranks[0].name, 'Sergeant');
+  const result = await runRadioStaffTool('access', { access: { srt: { ranks: ['d1:r1'] }, bogus: { ranks: ['x:y'] } } }, ADMIN);
+  assert.deepEqual(result.access, { srt: { ranks: ['d1:r1'] } });
+  assert.deepEqual(radioStaffSnapshot().access, { srt: { ranks: ['d1:r1'] } });
+  setRadioStaffControls({ users: () => [], muted: [], melonly: () => false });
+  await assert.rejects(runRadioStaffTool('ranks', {}, ADMIN), { status: 409 });
+  setRadioStaffControls(null);
+  const forwarded = await call(siteCookie(), { action: 'access', access: { srt: { ranks: ['d1:r1'] } } });
+  assert.deepEqual(forwarded.asked[0].body, { discordId: ADMIN, action: 'access', access: { srt: { ranks: ['d1:r1'] } } });
+  assert.equal((await call(siteCookie(), { action: 'access', access: [] })).status, 400);
 });

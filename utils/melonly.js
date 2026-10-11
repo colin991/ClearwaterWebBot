@@ -460,6 +460,28 @@ export async function fetchMelonlyMembers(apiKey, { maxPages = 5, cacheTtlMs = 1
   return listPages(apiKey, '/server/members', { limit: 100, maxPages, cacheTtlMs });
 }
 
+/** Departments on the Melonly server (name, activated). */
+export async function fetchMelonlyDepartments(apiKey) {
+  return listPages(apiKey, '/server/departments', { limit: 100, maxPages: 2, cacheTtlMs: 15 * 60_000 });
+}
+
+/** A department's ranks: { id, name, position, linkedDiscordRoleId }. */
+export async function fetchMelonlyDepartmentRanks(apiKey, departmentId) {
+  return listPages(apiKey, `/server/departments/${encodeURIComponent(departmentId)}/ranks`, { limit: 100, maxPages: 2, cacheTtlMs: 15 * 60_000 });
+}
+
+/** A Discord member's spot in one department ({ rankId, rankPosition, inactive }), or null when they're not in it. */
+export async function fetchMelonlyDepartmentMemberByDiscord(apiKey, departmentId, discordId) {
+  try {
+    return await melonlyFetch(apiKey, `/server/departments/${encodeURIComponent(departmentId)}/members/discord/${encodeURIComponent(discordId)}`, {
+      cacheTtlMs: 10 * 60_000,
+    });
+  } catch (error) {
+    if (error?.status === 404) return null;
+    throw error;
+  }
+}
+
 export async function fetchMelonlyRoles(apiKey) {
   return listPages(apiKey, '/server/roles', {
     limit: 100,

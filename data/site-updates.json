@@ -3490,6 +3490,13 @@
       "summary": "The radio staff page at cwpcso.com/radio-staff can now send a warning that pops up on a unit's radio, listen live to every channel, play recordings of the last 24 hours of radio traffic, play a text-to-speech announcement on every radio, and open a temporary event channel (CH 4). It also shows scene timers, crash reports from radios, and flags anyone who keeps talking over dispatch. Radios show a one-time notice that transmissions are recorded, and dispatch can see scene timers under SCENES.",
       "createdAt": "2026-10-11T23:59:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-melonly-ranks-2026-10-12",
+      "title": "Radio: Melonly department and rank, rank-locked channels",
+      "summary": "The radio now shows each member's Melonly department and rank next to their callsign (for example PCSO SGT). On the radio staff page, staff can pick which Melonly ranks may use CH 2, CH 3 and the event channel. Members without one of those ranks see the channel as locked, and anyone who loses access is moved back to CH 1. CH 1 stays open to everyone.",
+      "createdAt": "2026-10-12T00:10:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

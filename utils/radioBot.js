@@ -29,6 +29,7 @@ import { createRadioStats, buildRadioStatsEmbed } from './radioStats.js';
 import { buildRadioPanicEmbed, RADIO_KICK_BLOCK_MS, setRadioStaffControls } from './radioStaff.js';
 import { createRadioRecorder } from './radioRecorder.js';
 import { createSceneClock, createTalkOverWatch, sceneChannelIds } from './radioModeration.js';
+import { canUseChannel, createMelonlyProfiles, normalizeAccess, profileLabel } from './radioMelonly.js';
 
 const UNKNOWN_MEMBER = 10007;
 
@@ -278,6 +279,21 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   const crashPath = radioDataPath('radio-crashes.json');
   let crashes = [];
   void readJsonFile(crashPath, []).then((saved) => { if (Array.isArray(saved)) crashes = [...crashes, ...saved]; });
+  // Melonly department and rank next to callsigns, and rank-based channel access from the staff page.
+  const profiles = createMelonlyProfiles({ apiKey: env.MELONLY_API_KEY?.trim() || '' });
+  const knownProfiles = new Map(); // userId -> Melonly profile, for Discord channel members too
+  const accessPath = radioDataPath('radio-access.json');
+  let access = {};
+  void readJsonFile(accessPath, {}).then((saved) => { access = normalizeAccess(saved || {}); relay.accessChanged(); });
+  async function melonlyProfile(userId) {
+    if (!profiles.configured) return [];
+    const timeout = new Promise((resolve) => { setTimeout(() => resolve(null), 4_000).unref?.(); });
+    const found = await Promise.race([profiles.lookup(userId).catch(() => null), timeout]);
+    // A slow or failed lookup keeps what we knew, so access doesn't flicker.
+    if (found === null) return knownProfiles.get(userId) || [];
+    knownProfiles.set(userId, found);
+    return found;
+  }
   async function isAdmin(userId) {
     const target = channel || await client.channels.fetch(RADIO_CHANNEL_ID).catch(() => null);
     const member = await target?.guild?.members.fetch({ user: userId, force: true }).catch(() => null);
@@ -287,6 +303,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   const relay = createRadioRelay({
     record: (meta) => recorder.start(meta),
     isStaff: (userId) => isAdmin(userId),
+    canUse: (radio, channelId) => canUseChannel(access, channelId, { profile: radio.profile, staff: radio.staff }),
     scenes: () => sceneList,
     onTalkOver: (event) => {
       const count = talkOver.hit(event.userId);
@@ -341,7 +358,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     // The main bot's cache has live nicknames (it gets member updates), so it is read first.
     voiceMembers: () => [...((erlcEvents?.channels?.cache?.get?.(RADIO_CHANNEL_ID) || channel)?.members?.values?.() || [])]
       .filter((member) => !member.user?.bot)
-      .map((member) => ({ id: member.id, name: member.displayName || member.user?.username || 'Member' })),
+      .map((member) => ({ id: member.id, name: member.displayName || member.user?.username || 'Member', label: profileLabel(knownProfiles.get(member.id)) })),
     inVoice: (userId) => (channel?.guild?.voiceStates?.cache?.get(userId)?.channelId || null) === RADIO_CHANNEL_ID,
     // `removed` closes the member's radio app; anything else (Discord or bot trouble) is retried.
     async authorize(userId) {
@@ -361,7 +378,15 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
         return { ok: false, removed: true, reason: `You do not have access to #${target.name}.` };
       }
       const name = member.displayName || member.user.username;
-      return { ok: true, name, callsign: callsignFromName(name), staff: Boolean(member.permissions?.has(PermissionFlagsBits.Administrator)) };
+      const profile = await melonlyProfile(userId);
+      return {
+        ok: true,
+        name,
+        callsign: callsignFromName(name),
+        staff: Boolean(member.permissions?.has(PermissionFlagsBits.Administrator)),
+        profile,
+        label: profileLabel(profile),
+      };
     },
     openTransmit() {
       if (!isOnline()) return null;
@@ -477,6 +502,15 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     coverage: () => coverage,
     positions: () => coverageTracker.positions(),
     flags: () => staffFlags.filter((flag) => Date.now() - flag.at < FLAG_KEEP_MS),
+    access: () => access,
+    melonly: () => profiles.configured,
+    catalog: () => profiles.catalog(),
+    async setAccess(next, by) {
+      access = normalizeAccess(next);
+      await writeJsonFile(accessPath, { ...access, updatedBy: by, updatedAt: new Date().toISOString() });
+      relay.accessChanged();
+      return access;
+    },
     crashes: () => crashes.filter((entry) => Date.now() - entry.at < CRASH_KEEP_MS).slice(0, 50),
     scenes: () => sceneList,
     recordings: () => recorder.list(),

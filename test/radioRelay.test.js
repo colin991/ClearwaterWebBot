@@ -1001,3 +1001,32 @@ test('dispatch radios get scene timers; other radios do not', async () => {
     await harness.close();
   }
 });
+
+test('rank-limited channels are locked for the wrong rank, and losing access moves a radio back to CH 1', async () => {
+  let allowed = true;
+  const harness = await startRelay({
+    authorize: async (userId) => ({ ok: true, name: userId === ALICE ? 'Alice' : 'Bob', label: 'PCSO SGT' }),
+    canUse: (radio, channel) => channel !== 'srt' || (radio.userId === ALICE && allowed),
+  });
+  try {
+    const alice = await signIn(harness, ALICE);
+    const bob = await signIn(harness, BOB);
+    const ready = bob.messages.find((m) => m.type === 'ready');
+    assert.equal(ready.channels.find((c) => c.id === 'srt').locked, true);
+    assert.equal(ready.channels[0].members.find((m) => m.id === ALICE).label, 'PCSO SGT');
+    bob.send({ type: 'channel', id: 'srt' });
+    assert.equal((await bob.until(() => bob.messages.find((m) => m.type === 'locked'))).channel, 'srt');
+
+    alice.send({ type: 'channel', id: 'srt' });
+    await alice.until(() => alice.messages.find((m) => m.type === 'channel' && m.channelId === 'srt'));
+    allowed = false;
+    harness.relay.accessChanged();
+    const moved = await alice.until(() => alice.messages.find((m) => m.type === 'moved'));
+    assert.equal(moved.reason, 'locked');
+    assert.equal(harness.relay.users().find((u) => u.userId === ALICE).channel, 'main');
+    alice.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
