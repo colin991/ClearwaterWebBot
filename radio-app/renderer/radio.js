@@ -629,7 +629,8 @@ function sendJson(message) {
 }
 
 function relayUrl() {
-  return decodeKey(state.settings.key)?.u || state.settings.relayUrl || '';
+  // The web radio (cwpcso.com/radio) reaches the relay over a secure address the website hands it.
+  return state.settings.webRelay || decodeKey(state.settings.key)?.u || state.settings.relayUrl || '';
 }
 
 function accountText() {
@@ -778,6 +779,10 @@ function connect(options = {}) {
       return;
     }
     state.conn = 'lost';
+    // Web radio: the secure address changes when the bot restarts, so ask the website again.
+    if (api.refreshRelay) {
+      void api.refreshRelay().then((url) => { if (url) state.settings.webRelay = url; }).catch(() => {});
+    }
     net.retry += 1;
     net.timer = setTimeout(connect, Math.min(30000, 1000 * 2 ** Math.min(net.retry, 5)));
     render();
