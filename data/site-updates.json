@@ -3245,6 +3245,13 @@
       "summary": "Valid PCSO Discord members now remain signed into the website instead of being incorrectly redirected to the tester-only Coming Soon screen.",
       "createdAt": "2026-10-11T00:00:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-listen-fx-default",
+      "title": "Radio effect on by default when listening",
+      "summary": "The Clearwater Radio app now plays what you hear with a light radio effect by default. Change it with FX in the menu (RADIO, POLICE or OFF). What you send to Discord stays clean.",
+      "createdAt": "2026-10-11T14:05:49.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

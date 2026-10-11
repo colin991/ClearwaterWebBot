@@ -38,7 +38,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   ptt: null,
   volume: 70,
   txVolume: 60,
-  rxFx: 'off',
+  listenFx: 'radio',
   deaf: false,
   bounds: null,
 });
@@ -321,7 +321,7 @@ if (!app.requestSingleInstanceLock()) {
 
     ipcMain.handle('settings:get', () => ({ ...settings, hook: Boolean(uIOhook), relayUrl: DEFAULT_RELAY_URL }));
     ipcMain.handle('settings:set', (_event, patch) => {
-      const allowedKeys = ['key', 'micId', 'outputId', 'volume', 'txVolume', 'rxFx', 'deaf', 'ptt'];
+      const allowedKeys = ['key', 'micId', 'outputId', 'volume', 'txVolume', 'listenFx', 'deaf', 'ptt'];
       for (const key of allowedKeys) {
         if (patch && Object.prototype.hasOwnProperty.call(patch, key)) settings[key] = patch[key];
       }
