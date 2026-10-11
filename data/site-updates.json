@@ -4,7 +4,7 @@
     {
       "id": "2026-10-11-bot-auto-update",
       "title": "Bot and radio embed update on their own",
-      "summary": "The bot now checks main every 5 minutes and restarts itself onto new code when something is merged, so changes go live without pressing restart. The radio download embed reads the same version feed the app uses and refreshes every 2 minutes.",
+      "summary": "The bot now checks main every 5 minutes and restarts itself onto new code when something is merged, so changes go live without pressing restart. The radio download embed reads the same version feed the app uses and refreshes every 2 minutes. The radio now says clearly when sign-in fails because the bot host is missing its Discord client secret.",
       "createdAt": "2026-10-11T06:10:00.000Z",
       "updatedBy": "colin991"
     },
