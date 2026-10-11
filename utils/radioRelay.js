@@ -52,6 +52,7 @@ export function createRadioRelay({
   authorize,
   openTransmit,
   status,
+  inVoice = () => false,
   now = () => Date.now(),
   recheckMs = RADIO_RECHECK_MS,
 }) {
@@ -59,6 +60,12 @@ export function createRadioRelay({
   /** @type {Set<import('ws').WebSocket>} */
   const clients = new Set();
   let talker = null; // { socket, userId, name, sink, startedAt, lastPacketAt }
+  const discordTalkers = new Map(); // userId -> name, members talking in the Discord channel
+  // Members sitting in the Discord channel already hear it there, so their app stays quiet.
+  const hears = (socket, speakerId) => {
+    const radio = socket.radio;
+    return Boolean(radio?.userId) && !radio.deaf && radio.userId !== speakerId && !inVoice(radio.userId);
+  };
   const watchdog = setInterval(() => {
     if (!talker) return;
     const at = now();
@@ -92,6 +99,9 @@ export function createRadioRelay({
     const { userId, name } = socket.radio;
     if (talker?.socket === socket) return send(socket, { type: 'tx', ok: true });
     if (talker) return send(socket, { type: 'tx', ok: false, reason: 'busy', name: talker.name });
+    // One voice at a time: wait while someone is talking in the Discord channel.
+    const discordTalker = [...discordTalkers].find(([id]) => id !== userId);
+    if (discordTalker) return send(socket, { type: 'tx', ok: false, reason: 'busy', name: discordTalker[1] });
     if (!status().online) return send(socket, { type: 'tx', ok: false, reason: 'offline' });
     const sink = openTransmit(userId);
     if (!sink) return send(socket, { type: 'tx', ok: false, reason: 'offline' });
@@ -116,7 +126,7 @@ export function createRadioRelay({
     talker.sink.push(packet);
     const frame = encodeAudioFrame(talker.userId, packet);
     for (const other of clients) {
-      if (other !== socket && other.radio?.userId && !other.radio.deaf) send(other, frame);
+      if (other !== socket && hears(other, talker.userId)) send(other, frame);
     }
   }
 
@@ -170,7 +180,7 @@ export function createRadioRelay({
     clearTimeout(socket.radioAuthTimer);
     socket.radio = { userId, name: result.name || 'Unit', deaf: false, rateSecond: 0, rateCount: 0 };
     if (session) send(socket, { type: 'session', key: session });
-    send(socket, { type: 'ready', you: { id: userId, name: socket.radio.name }, ...status(), listeners: listenerCount() });
+    send(socket, { type: 'ready', you: { id: userId, name: socket.radio.name }, ...status(), listeners: listenerCount(), inVoice: Boolean(inVoice(userId)) });
     if (talker) send(socket, { type: 'talk', id: talker.userId, name: talker.name, active: true, source: 'app' });
     broadcastStatus();
   }
@@ -274,8 +284,13 @@ export function createRadioRelay({
     relayDiscordAudio(speakerId, packet) {
       const frame = encodeAudioFrame(speakerId, packet);
       for (const socket of clients) {
-        const radio = socket.radio;
-        if (radio?.userId && !radio.deaf && radio.userId !== speakerId) send(socket, frame);
+        if (hears(socket, speakerId)) send(socket, frame);
+      }
+    },
+    /** A member joined or left the Discord channel: their app mutes while they are in it. */
+    voiceChanged(userId) {
+      for (const socket of clients) {
+        if (socket.radio?.userId === userId) send(socket, { type: 'invoice', active: Boolean(inVoice(userId)) });
       }
     },
     /** A message for every signed-in radio, such as an in-game panic. */
@@ -283,6 +298,8 @@ export function createRadioRelay({
       broadcast(message);
     },
     discordSpeaking(speakerId, name, active) {
+      if (active) discordTalkers.set(speakerId, name);
+      else discordTalkers.delete(speakerId);
       broadcast({ type: 'talk', id: speakerId, name, active, source: 'discord' });
     },
     broadcastStatus,

@@ -65,6 +65,7 @@ const state = {
   pttHeld: false,
   rx: new Map(),
   panic: null,
+  inVoice: false, // in the Discord channel already, so the radio stays quiet
   toast: null,
   update: null,
   capturing: false,
@@ -339,8 +340,10 @@ function applyTxVolume() {
   if (audio.txGain) audio.txGain.gain.value = txVolumeGain();
 }
 
+const muted = () => Boolean(state.settings.deaf || state.inVoice);
+
 function applyDeaf() {
-  if (audio.deafGain) audio.deafGain.gain.value = state.settings.deaf ? 0 : 1;
+  if (audio.deafGain) audio.deafGain.gain.value = muted() ? 0 : 1;
   el.deaf.classList.toggle('on', Boolean(state.settings.deaf));
 }
 
@@ -470,7 +473,7 @@ function speakerFor(id) {
 }
 
 function onAudioFrame(buffer) {
-  if (!audio.ctx || state.settings.deaf || buffer.byteLength < 10) return;
+  if (!audio.ctx || muted() || buffer.byteLength < 10) return;
   if (audio.ctx.state === 'suspended') void resumeAudio();
   const view = new DataView(buffer);
   if (view.getUint8(0) !== 1) return;
@@ -550,7 +553,7 @@ function playTone(name) {
 /** Short static burst when a transmission ends, like a real squelch tail. */
 function squelchTail() {
   const ctx = audio.ctx;
-  if (!ctx || state.settings.deaf || !FX_SETTINGS[state.settings.listenFx]) return;
+  if (!ctx || muted() || !FX_SETTINGS[state.settings.listenFx]) return;
   const length = Math.floor(ctx.sampleRate * 0.08);
   const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
   const data = buffer.getChannelData(0);
@@ -726,6 +729,8 @@ function onMessage(message) {
       state.botOnline = Boolean(message.online);
       state.listeners = message.listeners || 0;
       state.conn = 'online';
+      state.inVoice = Boolean(message.inVoice);
+      applyDeaf();
       if (state.settings.deaf) sendJson({ type: 'deaf', active: true });
       render();
       break;
@@ -750,6 +755,11 @@ function onMessage(message) {
       break;
     case 'panic':
       showPanic(message);
+      break;
+    case 'invoice':
+      state.inVoice = Boolean(message.active);
+      applyDeaf();
+      flash(state.inVoice ? 'IN DISCORD VC' : 'RADIO ON', 1600);
       break;
     case 'error':
       state.error = message.message || 'Radio error.';
@@ -975,6 +985,7 @@ function render() {
     case 'home':
       left = String(state.channel || 'RADIO').toUpperCase().slice(0, 14);
       if (state.settings.deaf) el.lcdRight.textContent = 'DEAF';
+      else if (state.inVoice) el.lcdRight.textContent = 'IN VC';
       else if (state.conn === 'online') el.lcdRight.textContent = `${state.listeners} ON`;
       el.softRightLabel.textContent = `VOL ${state.settings.volume}`;
       body = homeBody();
@@ -1022,7 +1033,7 @@ function render() {
 
 function updateLamps() {
   el.lampTx.classList.toggle('on', state.tx === 'on');
-  el.lampRx.classList.toggle('on', state.rx.size > 0 && !state.settings.deaf);
+  el.lampRx.classList.toggle('on', state.rx.size > 0 && !muted());
   el.lampMic.classList.toggle('on', Boolean(audio.micStream));
   const angle = -135 + (270 * state.settings.volume) / 100;
   el.vol.style.transform = `rotate(${angle}deg)`;

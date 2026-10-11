@@ -80,6 +80,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
       return config ? { clientId: config.clientId, redirectUri: config.redirectUri } : null;
     },
     status: () => ({ online: isOnline(), channel: channel?.name || 'Radio' }),
+    inVoice: (userId) => (channel?.guild?.voiceStates?.cache?.get(userId)?.channelId || null) === RADIO_CHANNEL_ID,
     // `removed` closes the member's radio app; anything else (Discord or bot trouble) is retried.
     async authorize(userId) {
       const target = channel || await client.channels.fetch(RADIO_CHANNEL_ID).catch(() => null);
@@ -211,7 +212,10 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   // Dragged out of the radio channel: go straight back.
   client.on(Events.VoiceStateUpdate, (oldState, newState) => {
     if (newState.id !== client.user?.id) {
-      if (oldState.channelId === RADIO_CHANNEL_ID || newState.channelId === RADIO_CHANNEL_ID) relay.broadcastStatus();
+      if (oldState.channelId === RADIO_CHANNEL_ID || newState.channelId === RADIO_CHANNEL_ID) {
+        relay.broadcastStatus();
+        if (oldState.channelId !== newState.channelId) relay.voiceChanged(newState.id);
+      }
       return;
     }
     if (newState.channelId && newState.channelId !== RADIO_CHANNEL_ID && connection) {

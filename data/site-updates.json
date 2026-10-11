@@ -3266,6 +3266,13 @@
       "summary": "Typing ;panic (with an optional location) in ER:LC now flashes the Clearwater Radio app even when the command arrives through the server's command logs or a batched webhook.",
       "createdAt": "2026-10-11T14:23:09.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-one-voice-in-vc-mute",
+      "title": "Radio: one voice at a time, auto-mute in Discord VC",
+      "summary": "Clearwater Radio users can no longer talk over someone speaking in the Discord radio channel. If you are already in that Discord voice channel, the app mutes itself so you don't hear it twice, and turns back on when you leave.",
+      "createdAt": "2026-10-11T14:35:30.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
