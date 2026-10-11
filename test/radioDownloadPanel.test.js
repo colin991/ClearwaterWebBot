@@ -22,6 +22,7 @@ test('radio download panel is a Components V2 container with the banner, text an
   const buttons = container.components[2].components;
   assert.deepEqual(buttons.map((button) => button.label), ['Download Radio', 'Radio Website', 'Update Log']);
   assert.equal(buttons[0].custom_id, undefined, 'link buttons carry no custom id');
+  assert.equal(buttons[0].url, 'https://www.cwpcso.com/radio/download');
   assert.equal(buttons[2].custom_id, RADIO_UPDATE_LOG_BUTTON_ID);
   assert.equal(panelSignature(buildRadioDownloadPanel().components), panelSignature(panel.components), 'the banner does not change the signature');
 });

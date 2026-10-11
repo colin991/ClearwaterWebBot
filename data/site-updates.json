@@ -3546,6 +3546,13 @@
       "summary": "The radio download post moved to its new channel with a new look: a banner, how to install the radio, and Download Radio, Radio Website and Update Log buttons. Update Log shows the latest radio updates just to you. The old post in the previous channel is removed.",
       "createdAt": "2026-10-12T02:00:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-download-page-2026-10-12",
+      "title": "Radio: download page on the website",
+      "summary": "The Download Radio button now opens a download page at cwpcso.com/radio/download. It shows the latest version, release date, file size and SHA-256 checksum, a Download for Windows button, a link to the web radio for Mac and phones, and a few setup tips.",
+      "createdAt": "2026-10-12T02:10:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

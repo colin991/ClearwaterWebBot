@@ -25,16 +25,18 @@ export const RADIO_UPDATE_LOG_BUTTON_ID = 'radio-app:updates';
 export const RADIO_RELEASE_REPO = 'colin991/ClearwaterWebBot';
 export const RADIO_DOWNLOAD_URL = `https://github.com/${RADIO_RELEASE_REPO}/releases/latest/download/ClearwaterRadio-Setup.exe`;
 export const RADIO_WEBSITE_URL = 'https://www.cwpcso.com/radio';
+/** The website's download page (version, size, checksum, then the installer). */
+export const RADIO_DOWNLOAD_PAGE_URL = 'https://www.cwpcso.com/radio/download';
 const REFRESH_MS = 2 * 60 * 1000;
 
 /**
  * Banner at the top of the panel, sent as an attachment. Discord CDN links expire, so the first download is
- * kept in data/; a file committed at public/assets/clearwater-radio-banner.png is used before either.
+ * kept in data/; a file committed at assets/clearwater-radio-banner.png is used before either.
  */
 const BANNER_NAME = 'clearwater-radio-banner.png';
 const BANNER_URL = process.env.RADIO_PANEL_BANNER_URL?.trim()
   || 'https://cdn.discordapp.com/attachments/1533940161497530468/1558949741675552788/clearwater_ban_1.png?ex=6acd4c96&is=6acbfb16&hm=bf7a8abb2513f96effe1ededd93380a5da4d742d8af11abaeaa9399e16ee2adc&';
-const BANNER_FILES = [join(process.cwd(), 'public', 'assets', BANNER_NAME), join(process.cwd(), 'data', BANNER_NAME)];
+const BANNER_FILES = [join(process.cwd(), 'assets', BANNER_NAME), join(process.cwd(), 'data', BANNER_NAME)];
 
 const PANEL_TEXT = [
   '# <:CRP:1514421531844022352> Clearwater Radio',
@@ -69,7 +71,7 @@ export function buildRadioDownloadPanel({ banner = false } = {}) {
   container
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(PANEL_TEXT))
     .addActionRowComponents(new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Download Radio').setURL(RADIO_DOWNLOAD_URL),
+      new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Download Radio').setURL(RADIO_DOWNLOAD_PAGE_URL),
       new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Radio Website').setURL(RADIO_WEBSITE_URL),
       new ButtonBuilder().setStyle(ButtonStyle.Success).setLabel('Update Log').setCustomId(RADIO_UPDATE_LOG_BUTTON_ID),
     ));
