@@ -80,3 +80,25 @@ test('a broken OAuth round trip asks to try again instead of claiming no access'
   const response = await runCallback({ routes: {}, state: 'abc', cookieState: 'other', next: '/' });
   assert.equal(response.headers.Location, '/signin?error=failed');
 });
+
+test('Clearwater members without site access get a radio-only cookie when signing in for /radio', async () => {
+  const { CLEARWATER_GUILD_ID } = await import('../utils/staffRanks.js');
+  const { RADIO_COOKIE, radioCookieSecret } = await import('../lib/discord-auth.js');
+  const routes = {
+    '/oauth2/token': { access_token: 'token' },
+    '/users/@me': { id: '1128547120304095272', username: 'unit', global_name: 'Unit 12' },
+    '/users/@me/guilds': [{ id: CLEARWATER_GUILD_ID, permissions: '0' }],
+    [`/users/@me/guilds/${CLEARWATER_GUILD_ID}/member`]: { roles: [] },
+  };
+  const response = await runCallback({ routes, next: '/radio' });
+  assert.equal(response.headers.Location, '/radio');
+  assert.equal(sessionFrom(response), null, 'no site session');
+  const cookie = [].concat(response.headers['Set-Cookie']).find((value) => value.startsWith(`${RADIO_COOKIE}=`));
+  const token = decodeURIComponent(cookie.split(';')[0].split('=').slice(1).join('='));
+  assert.equal(readSessionToken(token, radioCookieSecret(secret))?.id, '1128547120304095272');
+  assert.equal(readSessionToken(token, secret), null, 'a radio cookie never passes as a site session');
+
+  // Any other page still turns them away.
+  const denied = await runCallback({ routes, next: '/careers' });
+  assert.match(denied.headers.Location, /error=not-member/);
+});

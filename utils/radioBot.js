@@ -18,6 +18,7 @@ import { exchangeRadioCode, radioOAuthConfig } from './radioOAuth.js';
 import { createRadioPanicWatch, findPanicPlayer, panicUnitAndPostal, playerLocationLabel } from './radioPanic.js';
 import { erlcPlayersFromServer, fetchErlcServer, parseErlcPlayer } from './erlc.js';
 import { getIdentityCache } from './identityStore.js';
+import { startRadioTunnel } from './radioTunnel.js';
 
 const UNKNOWN_MEMBER = 10007;
 
@@ -28,6 +29,9 @@ const VOICE_GROUP = 'clearwater-radio';
 const REJOIN_DELAY_MS = 10_000;
 
 let activeRelay = null;
+// Secure relay address for the web radio (cwpcso.com/radio); '' until the tunnel is up.
+let webRelayUrl = '';
+let radioEnv = process.env;
 
 /** The in-game player behind a panic, looked up in the live ER:LC player list (null when unavailable). */
 async function findPanicPlayerInGame(env, { robloxId = '', names = [] }) {
@@ -51,6 +55,19 @@ async function locateRadioPanic(env, userId, name) {
     names: [identity.robloxUsername, name, nick, nick.split(/\s*[|/-]\s*/)[0]],
   });
   return { name, location: player ? playerLocationLabel(player) : '', ...panicUnitAndPostal(player, [name]) };
+}
+
+/**
+ * Sign-in for the web radio: the website vouches for the member's Discord ID, and gets back a
+ * radio key plus the secure relay address. The relay still checks Clearwater membership on connect.
+ * @returns {{ key: string, url: string } | { error: string }}
+ */
+export function radioWebSession(discordId) {
+  if (!activeRelay) return { error: 'The radio is not running on the bot host.' };
+  if (!webRelayUrl) return { error: 'The radio web link is starting. Try again in a minute.' };
+  const key = createRadioKey(discordId, radioEnv);
+  if (!key) return { error: 'Radio sign-in is not set up on the bot host.' };
+  return { key, url: webRelayUrl };
 }
 
 /** Hook for the bot API HTTP server so the radio can share its port. */
@@ -280,6 +297,13 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     standalone.listen(relayPort, '0.0.0.0', () => logger.info(`Radio relay listening on :${relayPort}/radio.`));
   }
 
+  radioEnv = env;
+  const stopTunnel = startRadioTunnel({
+    port: (Number.isInteger(relayPort) && relayPort > 0) ? relayPort : apiPort,
+    env,
+    onUrl: (url) => { webRelayUrl = url; },
+  });
+
   void client.login(token).catch((error) => {
     logger.error('Radio bot login failed (check RADIO_BOT_TOKEN).', error);
   });
@@ -312,6 +336,8 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     clearTimeout(rejoinTimer);
     clearInterval(statsTimer);
     if (activeRelay === relay) activeRelay = null;
+    stopTunnel();
+    webRelayUrl = '';
     relay.close();
     try { standalone?.close(); } catch { /* ignore */ }
     try { connection?.destroy(); } catch { /* ignore */ }

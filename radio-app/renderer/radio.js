@@ -36,6 +36,7 @@ const MENU = [
   { label: 'CHANNEL', value: () => String(state.channel || 'RADIO'), adjust: (step) => changeChannel(step), action: () => changeChannel(1) },
   { label: 'WHO', value: () => `${state.channels.reduce((total, channel) => total + (channel.members?.length || 0), 0)} ON`, open: 'users' },
   { label: 'FX', value: () => FX_LABELS[state.settings.listenFx] || 'OFF', adjust: (step) => cycleFx(step), action: () => cycleFx(1) },
+  { label: 'POWER', value: () => powerText(), adjust: (step) => cyclePower(step), action: () => cyclePower(1) },
   { label: 'SETUP', value: () => 'RUN', open: 'setup' },
 ];
 const SETUP = [
@@ -47,13 +48,16 @@ const ROWS = { menu: MENU, setup: SETUP };
 // Radio effects only change what this radio hears; what you send stays clean.
 const FX_MODES = ['off', 'radio', 'police'];
 const FX_LABELS = { off: 'OFF', radio: 'RADIO', police: 'POLICE' };
+// LOW trims audio work for slower PCs; AUTO picks LOW on machines with few cores or little memory.
+const POWER_MODES = ['auto', 'low', 'full'];
+const LOW_END = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
 const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', test: 'setup', users: 'home' };
 // Nobody touching the radio (no PTT, clicks or keys) for this long closes it; a warning shows for the last minute.
 const IDLE_CLOSE_MS = 20 * 60 * 1000;
 const IDLE_WARN_MS = 60 * 1000;
 
 const state = {
-  settings: { volume: 70, txVolume: 60, listenFx: 'radio', deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false, channel: 'main' },
+  settings: { volume: 70, txVolume: 60, listenFx: 'radio', power: 'auto', deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false, channel: 'main' },
   version: '',
   screen: 'home',
   menuIndex: 0,
@@ -224,13 +228,20 @@ function createRadioFx(ctx) {
   const makeup = ctx.createGain();
   input.connect(dry);
   dry.connect(output);
-  input.connect(highpass);
   highpass.connect(lowpass);
   lowpass.connect(mid);
   mid.connect(shaper);
   shaper.connect(makeup);
   makeup.connect(wet);
   wet.connect(output);
+  // The effect chain only gets audio while an effect is on, so OFF costs nothing.
+  let wetLinked = false;
+  const linkWet = (on) => {
+    if (on === wetLinked) return;
+    wetLinked = on;
+    if (on) input.connect(highpass);
+    else input.disconnect(highpass);
+  };
 
   // Static bed: plays only while someone is talking and an effect is on.
   const noise = ctx.createBufferSource();
@@ -242,10 +253,17 @@ function createRadioFx(ctx) {
   noiseBand.Q.value = 0.6;
   const hiss = ctx.createGain();
   hiss.gain.value = 0;
-  noise.connect(noiseBand);
   noiseBand.connect(hiss);
   hiss.connect(output);
   noise.start();
+  // Static is only wired in while it can be heard.
+  let noiseLinked = false;
+  const linkNoise = (on) => {
+    if (on === noiseLinked) return;
+    noiseLinked = on;
+    if (on) noise.connect(noiseBand);
+    else noise.disconnect(noiseBand);
+  };
 
   let mode = 'off';
   return {
@@ -257,8 +275,10 @@ function createRadioFx(ctx) {
       const fx = FX_SETTINGS[mode];
       dry.gain.value = fx ? 0 : 1;
       wet.gain.value = fx ? 1 : 0;
+      linkWet(Boolean(fx));
       if (!fx) {
         hiss.gain.value = 0;
+        linkNoise(false);
         return;
       }
       highpass.frequency.value = fx.low;
@@ -267,8 +287,12 @@ function createRadioFx(ctx) {
       shaper.curve = softClipCurve(fx.drive);
       makeup.gain.value = fx.makeup;
     },
+    setLowPower(low) {
+      shaper.oversample = low ? 'none' : '2x';
+    },
     setStatic(active) {
       const fx = FX_SETTINGS[mode];
+      linkNoise(Boolean(fx && active));
       hiss.gain.setTargetAtTime(fx && active ? fx.hiss : 0, ctx.currentTime, 0.03);
     },
   };
@@ -327,6 +351,7 @@ async function initAudio() {
   applyTxVolume();
   applyDeaf();
   applyFx();
+  applyPower();
   await applyOutput();
   await openMic();
   await initEncoder();
@@ -360,6 +385,22 @@ function applyDeaf() {
 function applyFx() {
   audio.listenFx?.setMode(state.settings.listenFx);
   audio.listenFx?.setStatic(state.rx.size > 0);
+}
+
+const lowPower = () => state.settings.power === 'low' || (state.settings.power !== 'full' && LOW_END);
+
+function powerText() {
+  if (state.settings.power === 'low') return 'LOW';
+  if (state.settings.power === 'full') return 'FULL';
+  return LOW_END ? 'AUTO LOW' : 'AUTO';
+}
+
+// LOW: a lighter Opus encoder, no effect oversampling, and fewer mic-level updates.
+function applyPower() {
+  const low = lowPower();
+  audio.listenFx?.setLowPower(low);
+  audio.capture?.port.postMessage({ levelEvery: low ? 24 : 8 });
+  document.body.classList.toggle('low-power', low);
 }
 
 async function applyOutput() {
@@ -403,12 +444,14 @@ async function openMic() {
 }
 
 async function initEncoder() {
+  try { audio.encoder?.close(); } catch { /* ignore */ }
+  audio.encoder = null;
   if (typeof AudioEncoder === 'undefined') {
     flash('NO OPUS');
     return;
   }
   const base = { codec: 'opus', sampleRate: 48000, numberOfChannels: 2, bitrate: 64000 };
-  let config = { ...base, opus: { frameDuration: 20000, complexity: 8 } };
+  let config = { ...base, opus: { frameDuration: 20000, complexity: lowPower() ? 4 : 8 } };
   try {
     const support = await AudioEncoder.isConfigSupported(config);
     if (!support.supported) config = base;
@@ -457,9 +500,14 @@ function onSamples(samples) {
 }
 
 let meterFill = null;
+let micHot = false;
 function onMicLevel(level) {
   state.micLevel = level;
-  el.lampMic.classList.toggle('hot', Boolean(audio.micStream) && level > 0.06);
+  const hot = Boolean(audio.micStream) && level > 0.06;
+  if (hot !== micHot) {
+    micHot = hot;
+    el.lampMic.classList.toggle('hot', hot);
+  }
   if (meterFill) meterFill.style.width = `${Math.min(100, Math.round(level * 140))}%`;
 }
 
@@ -1288,6 +1336,16 @@ function changeTxVolume(delta) {
   if (txVolume === state.settings.txVolume) return;
   saveSettings({ txVolume });
   applyTxVolume();
+  render();
+}
+
+async function cyclePower(step) {
+  const before = lowPower();
+  const index = Math.max(0, POWER_MODES.indexOf(state.settings.power));
+  const power = POWER_MODES[(index + (step < 0 ? POWER_MODES.length - 1 : 1)) % POWER_MODES.length];
+  await saveNow({ power });
+  applyPower();
+  if (before !== lowPower() && state.tx === 'idle') await initEncoder();
   render();
 }
 

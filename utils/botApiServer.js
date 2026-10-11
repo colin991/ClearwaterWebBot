@@ -20,7 +20,7 @@ import { getPcsoChatbot, matchPcsoChatbotReply, savePcsoChatbot } from './pcsoCh
 import { memberHasSiteAccess } from '../lib/site-access.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess } from './staffRanks.js';
 import { config } from '../config.js';
-import { handleRadioUpgrade } from './radioBot.js';
+import { handleRadioUpgrade, radioWebSession } from './radioBot.js';
 
 const UNKNOWN_MEMBER = 10007;
 const ACCESS_CACHE_MS = 30_000;
@@ -154,6 +154,13 @@ export function startBotApiServer(client, {
         const access = await resolveWebsiteAccess(client, discordId);
         if (!access) return sendJson(response, 503, { error: 'Clearwater guild unavailable' });
         return sendJson(response, 200, access);
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/radio/web-session') {
+        const discordId = String(url.searchParams.get('discordId') || '');
+        if (!/^\d{15,22}$/.test(discordId)) return sendJson(response, 400, { error: 'Invalid discordId' });
+        const session = radioWebSession(discordId);
+        return sendJson(response, session.error ? 503 : 200, session);
       }
 
       if (request.method === 'GET' && url.pathname === '/api/status') {

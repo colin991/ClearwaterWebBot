@@ -17,6 +17,7 @@ const staticFiles = new Set([
   'jail.js', 'pcso-forms.js', 'inside-the-star.js', 'pcso-events.js', 'pcso-home.js', 'pcso-news-page.js', 'pcso-events-page.js', 'admin.js',
   'pcso-nav.js', 'pcso-portal.js', 'pcso-ride-along.js', 'pcso-careers.js', 'application-result.js', 'pcso-calls.js', 'pcso-employee.js',
   'pcso-resource-pages.js', 'pcso-dashboard.js',
+  'radio.html', 'radio-web.css', 'radio-web.js',
 ]);
 
 rmSync(output, { recursive: true, force: true });
@@ -30,6 +31,10 @@ for (const entry of readdirSync(root, { withFileTypes: true })) {
 for (const page of PCSO_STATIC_PAGES) {
   writeFileSync(join(output, `${page.slug}.html`), pcsoSectionHtml(page));
 }
+
+// The web radio (/radio) shares its mic worklet and panic sound with the desktop radio app.
+cpSync(join(root, 'radio-app', 'renderer', 'capture-worklet.js'), join(output, 'radio-worklet.js'));
+cpSync(join(root, 'radio-app', 'renderer', 'panic-sound.js'), join(output, 'radio-panic-sound.js'));
 
 if (existsSync(join(root, 'assets'))) {
   cpSync(join(root, 'assets'), join(output, 'assets'), { recursive: true });
