@@ -530,10 +530,6 @@ button:focus { outline: none; }
 @keyframes bat-shine { from { background-position: 100% 0; } to { background-position: -200% 0; } }
 body.low-power .sig i, body.low-power .bat i { animation: none; }
 
-/* NIGHT: dims the screen and the lit keys for dark games. */
-body.night .lcd { filter: brightness(.42) saturate(.85); }
-body.night .lamp, body.night .lcd-foot { opacity: .6; }
-body.night .keypad button, body.night .pkey { filter: brightness(.7); }
 
 /* 911 calls waiting. */
 .lcd .card.calls { border-color: #d9822b; background: rgba(255, 244, 230, .92); }

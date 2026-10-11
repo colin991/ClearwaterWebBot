@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import {
@@ -27,7 +28,6 @@ import { createRadioTalkLog } from './radioTalkLog.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { createRadioStats, buildRadioStatsEmbed } from './radioStats.js';
 import { buildRadioPanicEmbed, RADIO_KICK_BLOCK_MS, setRadioStaffControls } from './radioStaff.js';
-import { createRadioRecorder } from './radioRecorder.js';
 import { createSceneClock, createTalkOverWatch, sceneChannelIds } from './radioModeration.js';
 import { canUseChannel, createMelonlyProfiles, normalizeAccess, profileLabel } from './radioMelonly.js';
 
@@ -49,7 +49,6 @@ const DAMAGED_SIGNAL = 0.1;
 /** Crash reports from radios, for the staff panel: kept this long, newest first. */
 const CRASH_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
 const CRASH_LIMIT = 200;
-const RECORDING_PRUNE_MS = 30 * 60 * 1000;
 const radioDataPath = (name) => join(process.cwd(), 'data', name);
 // 80 ms: shorter transmissions are PTT taps with nothing said.
 const RADIO_MIN_TX_PACKETS = 4;
@@ -266,11 +265,8 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   let settingsSaveTimer = null;
   void readJsonFile(settingsPath, {}).then((saved) => { syncedSettings = { ...(saved || {}), ...syncedSettings }; });
 
-  // Every transmission (radio and the Discord radio channel) is recorded for staff review, kept 24 hours.
-  const recorder = createRadioRecorder({ dir: radioDataPath('radio-recordings') });
-  void recorder.prune();
-  const pruneTimer = setInterval(() => { void recorder.prune(); }, RECORDING_PRUNE_MS);
-  pruneTimer.unref?.();
+  // Transmissions are no longer recorded: clear out any saved by an older version.
+  void rm(radioDataPath('radio-recordings'), { recursive: true, force: true }).catch(() => {});
   const talkOver = createTalkOverWatch();
   const sceneIds = sceneChannelIds(env.RADIO_SCENE_CHANNEL_IDS);
   const sceneClock = createSceneClock();
@@ -301,7 +297,6 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   }
 
   const relay = createRadioRelay({
-    record: (meta) => recorder.start(meta),
     isStaff: (userId) => isAdmin(userId),
     canUse: (radio, channelId) => canUseChannel(access, channelId, { profile: radio.profile, staff: radio.staff }),
     scenes: () => sceneList,
@@ -464,7 +459,6 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
       }
       // Recompute when the next damaged radio recovers, not just on the next tick.
       clearTimeout(damageTimer);
-    clearInterval(pruneTimer);
       const nextEnd = damage.nextEnd();
       if (nextEnd) {
         damageTimer = setTimeout(() => coverageTracker.recompute(), Math.max(0, nextEnd - Date.now()) + 50);
@@ -513,8 +507,6 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     },
     crashes: () => crashes.filter((entry) => Date.now() - entry.at < CRASH_KEEP_MS).slice(0, 50),
     scenes: () => sceneList,
-    recordings: () => recorder.list(),
-    recording: (id) => recorder.read(id),
     event: () => relay.event,
     openEvent: (name, by) => relay.openEvent(name, by),
     closeEvent: () => relay.closeEvent(),
