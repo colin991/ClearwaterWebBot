@@ -28,7 +28,7 @@ import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { createRadioStats, buildRadioStatsEmbed } from './radioStats.js';
 import { buildRadioPanicEmbed, RADIO_KICK_BLOCK_MS, setRadioStaffControls } from './radioStaff.js';
 import { createRadioRecorder } from './radioRecorder.js';
-import { createSceneClock, createTalkOverWatch, sceneChannelIds } from './radioModeration.js';
+import { createSceneClock, createTalkOverWatch, findSceneChannels } from './radioModeration.js';
 import { canUseChannel, createMelonlyProfiles, normalizeAccess, profileLabel } from './radioMelonly.js';
 
 const UNKNOWN_MEMBER = 10007;
@@ -277,7 +277,6 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   const pruneTimer = setInterval(() => { void recorder.prune(); }, RECORDING_PRUNE_MS);
   pruneTimer.unref?.();
   const talkOver = createTalkOverWatch();
-  const sceneIds = sceneChannelIds(env.RADIO_SCENE_CHANNEL_IDS);
   const sceneClock = createSceneClock();
   let sceneList = [];
   // Crash reports from radios (desktop and web), for the staff panel; survive restarts.
@@ -430,11 +429,12 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   void readJsonFile(coveragePath, null).then((saved) => {
     if (saved) coverage = normalizeCoverage(saved);
   });
-  // Scene timers: members in the scene / traffic stop voice channels (RADIO_SCENE_CHANNEL_IDS), for dispatch.
+  // Scene timers: members in any voice channel named "Scene" or "Traffic Stop" (in the radio's server), for dispatch.
   let sceneKey = '';
   function updateScenes() {
-    if (!sceneIds.length) return;
-    const rooms = sceneIds.map((id) => client.channels.cache.get(id) || erlcEvents?.channels?.cache?.get?.(id)).filter(Boolean).map((room) => ({
+    const guildId = client.channels.cache.get(RADIO_CHANNEL_ID)?.guild?.id || '';
+    const all = [...client.channels.cache.values(), ...(erlcEvents?.channels?.cache?.values?.() || [])];
+    const rooms = findSceneChannels(all, guildId).map((room) => ({
       id: room.id,
       name: room.name,
       members: [...(room.members?.values?.() || [])].filter((member) => !member.user?.bot)

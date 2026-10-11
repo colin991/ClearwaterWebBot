@@ -47,7 +47,18 @@ export function createSceneClock({ now = Date.now } = {}) {
   };
 }
 
-/** RADIO_SCENE_CHANNEL_IDS: comma-separated Discord voice channel IDs (traffic stops, scenes). */
-export function sceneChannelIds(value = process.env.RADIO_SCENE_CHANNEL_IDS) {
-  return String(value || '').split(/[\s,]+/).filter((id) => /^\d{15,22}$/.test(id)).slice(0, 25);
+/** Scene voice channels are found by name: "Scene" or "Traffic Stop" anywhere in it, any case. */
+export function isSceneChannelName(name) {
+  return /scene|traffic[\s_-]*stop/i.test(String(name || ''));
+}
+
+/** Every voice channel in the server whose name marks it as a scene or traffic stop. */
+export function findSceneChannels(channels, guildId = '') {
+  const found = new Map();
+  for (const channel of channels || []) {
+    if (!channel?.id || found.has(channel.id) || !channel.isVoiceBased?.()) continue;
+    if (guildId && channel.guild?.id && channel.guild.id !== guildId) continue;
+    if (isSceneChannelName(channel.name)) found.set(channel.id, channel);
+  }
+  return [...found.values()].slice(0, 50);
 }

@@ -749,6 +749,8 @@ function encodeTail() {
 }
 
 let meterFill = null;
+// The last screen and selection drawn, so a refresh keeps your scroll place instead of jumping to the top.
+let lastDrawn = { screen: '', sel: '' };
 let micHot = false;
 function onMicLevel(level) {
   state.micLevel = level;
@@ -2009,7 +2011,7 @@ function homeBody() {
   } else if (audio.replay) {
     line = 'REPLAYING LAST 30s';
   } else if (state.whisper) {
-    line = `WHISPER ${state.whisper.name} · PTT IS PRIVATE · BACK ENDS`;
+    line = `WHISPER ${state.whisper.name} · PTT IS PRIVATE`;
   } else if (!state.botOnline) {
     line = 'BOT OFFLINE · WAITING';
   } else if (state.muted) {
@@ -2035,6 +2037,7 @@ function homeBody() {
     + (scanIds().length ? `<div class="last">SCAN ${escapeHtml(scanText())}</div>` : '')
     + gameLine()
     + (WET_WEATHER[state.weather] ? `<div class="last weather">&#9888; ${WET_WEATHER[state.weather]} · ROADS ARE WET</div>` : '')
+    + (state.whisper ? `<button type="button" class="end-whisper" data-end-whisper>&#9632; END WHISPER TO ${escapeHtml(state.whisper.name)}</button>` : '')
     + '</div>';
   html += callsCard();
   const members = channelMembers(state.channels.find((channel) => channel.id === state.channelId));
@@ -2293,8 +2296,14 @@ function render() {
     el.softRightLabel.textContent = '';
   }
   el.lcdLeft.textContent = left;
+  const sel = `${state.listIndex}:${state.menuIndex}:${state.setupIndex}`;
+  const sameScreen = lastDrawn.screen === screen;
+  const scrollTop = sameScreen ? el.lcdBody.scrollTop : 0;
   el.lcdBody.innerHTML = body;
-  el.lcdBody.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
+  el.lcdBody.scrollTop = scrollTop;
+  // Only a new selection scrolls the list; live updates (talking, joins) leave it where you scrolled.
+  if (!sameScreen || lastDrawn.sel !== sel) el.lcdBody.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
+  lastDrawn = { screen, sel };
   if (screen === 'test') meterFill = $('meterFill');
   placeMap();
   updateLamps();
@@ -2658,6 +2667,10 @@ function clickLcd(event) {
   if (state.panicAsk) return;
   if (state.modal) return void closeModal();
   const { screen } = state;
+  if (event.target.closest('[data-end-whisper]')) {
+    playTone('key');
+    return void endWhisper();
+  }
   const item = event.target.closest('li[data-row]');
   const index = item ? Number(item.dataset.row) : -1;
   if (ROWS[screen] && index >= 0) {
@@ -2690,11 +2703,11 @@ function clickLcd(event) {
     return void choose();
   }
   if (screen === 'users' && index >= 0) {
-    // Second click on the same channel header joins it; on a unit it opens whisper / move.
+    // A unit opens whisper / move straight away; a channel header joins on the second click.
     const again = state.listIndex === index;
     state.listIndex = index;
     const line = usersLines()[index];
-    if (again && (line?.header || line?.id)) return void choose();
+    if (line?.id || (again && line?.header)) return void choose();
     return render();
   }
   if (screen === 'unit' && index >= 0) {

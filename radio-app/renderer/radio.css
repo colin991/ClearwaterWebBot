@@ -306,6 +306,7 @@ button:focus { outline: none; }
 .lcd .card.tx .state { color: #c0261b; }
 .lcd .card .last { font-size: 8px; color: var(--ink-dim); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lcd .card .last.game { color: var(--ink); font-weight: 700; }
+.lcd .card .end-whisper { display: block; width: 100%; margin-top: 3px; padding: 2px 4px; font: inherit; font-size: 9px; font-weight: 700; letter-spacing: .04em; color: #e9f1fb; background: var(--ink); border: 0; border-radius: 2px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lcd .card .last.weather { color: #a5520c; font-weight: 700; }
 .lcd .card.rx .state { color: #138a3a; }
 
