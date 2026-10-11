@@ -352,7 +352,7 @@ test('Special Response Team stays off Discord', async () => {
     const ready = await alice.until(() => alice.messages.find((m) => m.type === 'ready'));
     assert.equal(ready.channelId, 'srt');
     assert.equal(ready.channel, 'Special Response Team');
-    assert.deepEqual(ready.channels.map((c) => c.id), ['main', 'fire', 'dot', 'freq', 'srt']);
+    assert.deepEqual(ready.channels.map((c) => c.id), ['main', 'fire', 'dot', 'marine', 'freq', 'srt']);
     await bob.until(() => bob.messages.find((m) => m.type === 'ready'));
 
     // Different channels: no shared audio or talk.
@@ -641,7 +641,7 @@ test('whoever is talking is flagged and listed first, on the radio or in the Dis
     const bob = await signIn(harness, BOB);
     harness.relay.discordSpeaking('333333333333333333', 'Carl', true);
     const carl = await alice.until(() => alice.messages.find((m) => m.type === 'talking' && m.channels.main.length));
-    assert.deepEqual(carl.channels, { main: ['333333333333333333'], fire: [], dot: [], freq: [], srt: [] });
+    assert.deepEqual(carl.channels, { main: ['333333333333333333'], fire: [], dot: [], marine: [], freq: [], srt: [] });
     harness.relay.broadcastStatus();
     const status = await alice.until(() => alice.messages
       .find((m) => m.type === 'status' && m.channels[0].members[0]?.talking));
@@ -944,14 +944,14 @@ test('staff monitor hears every channel, listen-only, and only admins get it', a
   }
 });
 
-test('staff open an event channel as CH 6, and closing it moves everyone back to CH 1', async () => {
+test('staff open an event channel as CH 7, and closing it moves everyone back to CH 1', async () => {
   const harness = await startRelay();
   try {
     const alice = await signIn(harness, ALICE);
     harness.relay.openEvent('Car Meet', 'staff');
     await alice.until(() => alice.messages.find((m) => m.type === 'event' && m.open));
     const status = await alice.until(() => alice.messages.find((m) => m.type === 'status' && m.event?.name === 'Car Meet'));
-    assert.deepEqual(status.channels.map((c) => c.id), ['main', 'fire', 'dot', 'freq', 'srt', 'event']);
+    assert.deepEqual(status.channels.map((c) => c.id), ['main', 'fire', 'dot', 'marine', 'freq', 'srt', 'event']);
     alice.send({ type: 'channel', id: 'event' });
     await alice.until(() => alice.messages.find((m) => m.type === 'channel' && m.channelId === 'event'));
     assert.equal(harness.relay.closeEvent(), 1);

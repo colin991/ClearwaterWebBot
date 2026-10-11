@@ -305,7 +305,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     return Boolean(member?.permissions?.has(PermissionFlagsBits.Administrator));
   }
 
-  // Fire, DOT, Freq and SRT each get a bot of their own in their own Discord voice channel.
+  // Fire, DOT and Marine each get a bot of their own in their own Discord voice channel.
   const bridges = new Map();
   const relay = createRadioRelay({
     bridge: (radioChannel) => {

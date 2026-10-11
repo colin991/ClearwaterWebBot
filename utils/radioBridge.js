@@ -21,8 +21,7 @@ const REJOIN_DELAY_MS = 10_000;
 export const RADIO_BRIDGE_CONFIG = Object.freeze([
   { channel: 'fire', tokenEnv: 'RADIO_FIRE_BOT_TOKEN', channelEnv: 'RADIO_FIRE_CHANNEL_ID', defaultChannelId: '1514128961951760515' },
   { channel: 'dot', tokenEnv: 'RADIO_DOT_BOT_TOKEN', channelEnv: 'RADIO_DOT_CHANNEL_ID', defaultChannelId: '1514130037052407932' },
-  { channel: 'freq', tokenEnv: 'RADIO_FREQ_BOT_TOKEN', channelEnv: 'RADIO_FREQ_CHANNEL_ID', defaultChannelId: '' },
-  { channel: 'srt', tokenEnv: 'RADIO_SRT_BOT_TOKEN', channelEnv: 'RADIO_SRT_CHANNEL_ID', defaultChannelId: '' },
+  { channel: 'marine', tokenEnv: 'RADIO_MARINE_BOT_TOKEN', channelEnv: 'RADIO_MARINE_CHANNEL_ID', defaultChannelId: '1553601769819480084' },
 ]);
 
 /** The bridges this env sets up: a token and a voice channel id are both needed. */
@@ -45,7 +44,7 @@ export function radioBridgeSettings(env = process.env) {
  * One extra channel's bridge bot: sits in its Discord voice channel, sends what members say there
  * to the radios on that channel, and plays radio transmissions into it.
  * @param {object} options
- * @param {string} options.channel radio channel id ('fire', 'dot', ...)
+ * @param {string} options.channel radio channel id ('fire', 'dot', 'marine')
  * @param {string} options.token the bridge bot's token
  * @param {string} options.channelId the Discord voice channel it sits in
  * @param {() => object} options.relay the radio relay (read lazily; it is created after the bridges)

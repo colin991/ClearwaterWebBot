@@ -25,6 +25,7 @@ const AUDIO_FRAME = 0x01;
 export const RADIO_MAIN_CHANNEL = 'main';
 export const RADIO_FIRE_CHANNEL = 'fire';
 export const RADIO_DOT_CHANNEL = 'dot';
+export const RADIO_MARINE_CHANNEL = 'marine';
 export const RADIO_SRT_CHANNEL = 'srt';
 export const RADIO_FREQ_CHANNEL = 'freq';
 /** A temporary channel staff open for a server event; it closes (moving everyone to MAIN) when they're done. */
@@ -32,6 +33,7 @@ export const RADIO_EVENT_CHANNEL = 'event';
 export const RADIO_EXTRA_CHANNELS = Object.freeze([
   { id: RADIO_FIRE_CHANNEL, name: 'Fire Radio' },
   { id: RADIO_DOT_CHANNEL, name: 'DOT Radio' },
+  { id: RADIO_MARINE_CHANNEL, name: 'Marine and Boating' },
   { id: RADIO_FREQ_CHANNEL, name: 'Frequency Change' },
   { id: RADIO_SRT_CHANNEL, name: 'Special Response Team' },
 ]);
