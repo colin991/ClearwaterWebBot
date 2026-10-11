@@ -292,6 +292,34 @@ test('members in the Discord channel cannot talk through the radio until they le
   }
 });
 
+test('each finished transmission is reported for the talk log', async () => {
+  const talked = [];
+  const harness = await startRelay({ onTalked: (entry) => talked.push(entry) });
+  try {
+    const alice = client(harness.url);
+    await once(alice.ws, 'open');
+    alice.send({ type: 'auth', key: createRadioKey(ALICE, env) });
+    await alice.until(() => alice.messages.find((m) => m.type === 'ready'));
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
+    alice.send({ type: 'tx', active: false });
+    alice.send({ type: 'channel', id: 'srt' });
+    await alice.until(() => alice.messages.find((m) => m.type === 'channel'));
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.filter((m) => m.type === 'tx' && m.ok).length === 2);
+    alice.ws.close();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(talked.length, 2);
+    assert.equal(talked[0].userId, ALICE);
+    assert.equal(talked[0].onDiscordChannel, true);
+    assert.ok(talked[0].endedAt >= talked[0].startedAt);
+    assert.equal(talked[1].channelName, 'Special Response Team');
+    assert.equal(talked[1].onDiscordChannel, false, 'closing the radio mid-transmission still logs it');
+  } finally {
+    await harness.close();
+  }
+});
+
 test('Special Response Team stays off Discord', async () => {
   const harness = await startRelay();
   try {

@@ -3364,6 +3364,13 @@
       "summary": "The radio at cwpcso.com/radio now looks and works exactly like the desktop radio, with the same screen, settings, channels, units list and panic alerts, plus a big hold-to-talk bar for phones. It also fixes the web radio getting stuck on CONNECTING.",
       "createdAt": "2026-10-11T16:40:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-talk-log",
+      "title": "Radio talk log in Discord",
+      "summary": "Every time someone talks on the Clearwater Radio (app or web), the radio channel's chat gets a line like \"@member talked from 14:35:34-14:35:57\", shown in each reader's own time zone. Special Response Team and Frequency Change are named on their lines.",
+      "createdAt": "2026-10-11T16:45:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

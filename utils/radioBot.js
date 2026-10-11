@@ -19,6 +19,7 @@ import { createRadioPanicWatch, findPanicPlayer, panicUnitAndPostal, playerLocat
 import { erlcPlayersFromServer, fetchErlcServer, parseErlcPlayer } from './erlc.js';
 import { getIdentityCache } from './identityStore.js';
 import { startRadioTunnel } from './radioTunnel.js';
+import { createRadioTalkLog } from './radioTalkLog.js';
 
 const UNKNOWN_MEMBER = 10007;
 
@@ -114,6 +115,25 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
 
   const isOnline = () => connection?.state?.status === VoiceConnectionStatus.Ready;
 
+  // Who talked when, in the radio voice channel's chat. The main bot posts it (it can send messages
+  // there); the radio bot is the fallback. Mentions never ping.
+  const talkLogChannelId = env.RADIO_LOG_CHANNEL_ID?.trim() || RADIO_CHANNEL_ID;
+  const talkLog = createRadioTalkLog({
+    send: async (content) => {
+      for (const poster of [erlcEvents, client]) {
+        const target = await poster?.channels?.fetch?.(talkLogChannelId).catch(() => null);
+        if (!target?.isTextBased?.()) continue;
+        try {
+          return await target.send({ content, allowedMentions: { parse: [] } });
+        } catch {
+          // No Send Messages for this bot: try the next one.
+        }
+      }
+      throw new Error(`no bot can post in ${talkLogChannelId}`);
+    },
+    onError: (error) => logger.warn(`Radio talk log failed: ${error?.message || error}`),
+  });
+
   const relay = createRadioRelay({
     verifyKey: (key) => verifyRadioKey(key, env),
     exchangeCode: (code) => exchangeRadioCode(code, env),
@@ -124,6 +144,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     },
     status: () => ({ online: isOnline(), channel: channel?.name || 'Radio' }),
     locatePanic: (userId, name) => locateRadioPanic(env, userId, name),
+    onTalked: (entry) => talkLog.add(entry),
     onPanic: (message) => {
       logger.info(`Radio: EMER from ${message.name} at ${message.location || 'unknown location'} sent to ${relay.listeners} radio(s).`);
     },
@@ -337,6 +358,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     clearInterval(statsTimer);
     if (activeRelay === relay) activeRelay = null;
     stopTunnel();
+    talkLog.stop();
     webRelayUrl = '';
     relay.close();
     try { standalone?.close(); } catch { /* ignore */ }
