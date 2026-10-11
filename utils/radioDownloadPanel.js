@@ -50,7 +50,7 @@ export function buildRadioDownloadPanel(release) {
       '1. Press **Download for Windows** and run the installer.',
       '2. Press **Get my radio key** below and copy the key.',
       '3. On the radio press the gray button on the left for **MENU**, open **SETUP → KEY**, and paste it.',
-      '4. Set your **MIC** and **PTT** key in the menu, then **HEADSET** and **TEST** under **SETUP**.',
+      '4. In the menu set your **MIC**, **LISTEN** (speakers or headset) and **PTT** key, then use **SETUP → TEST** to hear yourself.',
       '',
       'The app updates itself when a new version comes out. If Windows SmartScreen warns you, press **More info → Run anyway**.',
     ].join('\n'))

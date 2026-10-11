@@ -26,19 +26,19 @@ const FRAME_SAMPLES = 960; // 20 ms at 48 kHz
 const MENU = [
   { label: 'VOL', value: () => String(state.settings.volume), adjust: (step) => changeVolume(step * 5) },
   { label: 'MIC', value: () => deviceLabel('audioinput', state.settings.micId), open: 'mic' },
+  { label: 'LISTEN', value: () => deviceLabel('audiooutput', state.settings.outputId), open: 'headset' },
   { label: 'PTT', value: () => state.settings.ptt?.label || 'NONE', open: 'ptt' },
   { label: 'CHANNEL', value: () => String(state.channel || 'RADIO'), action: () => flash(String(state.channel || 'RADIO').toUpperCase().slice(0, 14), 1000) },
   { label: 'FX', value: () => (state.settings.filter ? 'LIGHT' : 'OFF'), adjust: () => toggleFilter(), action: () => toggleFilter() },
   { label: 'SETUP', value: () => 'RUN', open: 'setup' },
 ];
 const SETUP = [
-  { label: 'HEADSET', value: () => deviceLabel('audiooutput', state.settings.outputId), open: 'headset' },
   { label: 'TEST', value: () => 'MIC', open: 'test' },
   { label: 'KEY', value: () => (decodeKey(state.settings.key) ? 'SET' : 'NONE'), open: 'key' },
   { label: 'UPDATE', value: () => updateText(), action: () => void checkUpdates() },
 ];
 const ROWS = { menu: MENU, setup: SETUP };
-const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'setup', test: 'setup', key: 'setup' };
+const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', test: 'setup', key: 'setup' };
 
 const state = {
   settings: { volume: 70, filter: true, deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false },
@@ -266,7 +266,7 @@ async function applyOutput() {
   try {
     await audio.ctx.setSinkId(!id || id === 'default' ? '' : id);
   } catch {
-    flash('HEADSET ERR');
+    flash('LISTEN ERR');
     await audio.ctx.setSinkId('').catch(() => {});
   }
 }
@@ -788,7 +788,7 @@ function render() {
       break;
     case 'mic':
     case 'headset':
-      left = screen === 'mic' ? 'MIC' : 'HEADSET';
+      left = screen === 'mic' ? 'MIC' : 'LISTEN';
       body = state.devices.length
         ? listHtml(state.devices, state.listIndex, screen === 'mic' ? state.settings.micId : state.settings.outputId)
         : '<div class="small">LOADING</div>';
