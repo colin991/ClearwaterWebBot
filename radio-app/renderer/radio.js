@@ -7,6 +7,9 @@ const $ = (id) => document.getElementById(id);
 const el = {
   radio: $('radio'),
   lcdLeft: $('lcdLeft'),
+  lcdSig: $('lcdSig'),
+  lcdDate: $('lcdDate'),
+  lcdTime: $('lcdTime'),
   lcdRight: $('lcdRight'),
   lcdBody: $('lcdBody'),
   softLeftLabel: $('softLeftLabel'),
@@ -30,7 +33,8 @@ const MENU = [
   { label: 'MIC', value: () => deviceLabel('audioinput', state.settings.micId), open: 'mic' },
   { label: 'LISTEN', value: () => deviceLabel('audiooutput', state.settings.outputId), open: 'headset' },
   { label: 'PTT', value: () => state.settings.ptt?.label || 'NONE', open: 'ptt' },
-  { label: 'CHANNEL', value: () => String(state.channel || 'RADIO'), action: () => flash(String(state.channel || 'RADIO').toUpperCase().slice(0, 14), 1000) },
+  { label: 'CHANNEL', value: () => String(state.channel || 'RADIO'), adjust: (step) => changeChannel(step), action: () => changeChannel(1) },
+  { label: 'MSGS', value: () => (state.unread ? `${state.unread} NEW` : String(state.messages.length)), open: 'messages' },
   { label: 'FX', value: () => FX_LABELS[state.settings.listenFx] || 'OFF', adjust: (step) => cycleFx(step), action: () => cycleFx(1) },
   { label: 'SETUP', value: () => 'RUN', open: 'setup' },
 ];
@@ -43,10 +47,15 @@ const ROWS = { menu: MENU, setup: SETUP };
 // Radio effects only change what this radio hears; what you send stays clean.
 const FX_MODES = ['off', 'radio', 'police'];
 const FX_LABELS = { off: 'OFF', radio: 'RADIO', police: 'POLICE' };
-const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', test: 'setup' };
+const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', test: 'setup', messages: 'home', compose: 'messages' };
+// Canned messages for the compose screen; TYPE lets you write your own on the keyboard.
+const QUICK_MESSAGES = ['10-4', 'COPY', 'EN ROUTE', 'ON SCENE', 'NEED BACKUP', 'CODE 4', 'STANDBY', 'TYPE A MESSAGE'];
+const MESSAGE_MAX = 140;
+const MESSAGE_KEEP = 30;
+const MESSAGE_CARD_MS = 2 * 60 * 1000;
 
 const state = {
-  settings: { volume: 70, txVolume: 60, listenFx: 'radio', deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false },
+  settings: { volume: 70, txVolume: 60, listenFx: 'radio', deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false, channel: 'main' },
   version: '',
   screen: 'home',
   menuIndex: 0,
@@ -57,6 +66,11 @@ const state = {
   conn: 'signin', // signin | signing | connecting | lost | online | error | removed
   error: '',
   channel: 'RADIO',
+  channelId: 'main',
+  channels: [],
+  messages: [], // newest first: { id, from, text, channel, at, mine }
+  unread: 0,
+  typing: null, // text being typed on the compose screen, or null
   botOnline: false,
   listeners: 0,
   me: null,
@@ -525,6 +539,7 @@ const TONES = {
   end: [[900, 0.05], [1250, 0.05]],
   busy: [[420, 0.12], [0, 0.06], [420, 0.12], [0, 0.06], [420, 0.12]],
   key: [[1600, 0.03]],
+  message: [[1400, 0.06], [0, 0.04], [1800, 0.08]],
 };
 
 function playTone(name) {
@@ -620,7 +635,7 @@ async function onLoginInfo(message) {
     signInFailed(result?.error || 'SIGN-IN CANCELLED');
     return;
   }
-  sendJson({ type: 'auth', code: result.code, version: state.version });
+  sendJson({ type: 'auth', code: result.code, version: state.version, channel: state.settings.channel });
 }
 
 // Removed from the Discord server or the radio channel: the radio closes itself.
@@ -664,7 +679,7 @@ function connect(options = {}) {
   }
   ws.binaryType = 'arraybuffer';
   net.ws = ws;
-  ws.onopen = () => ws.send(JSON.stringify(signingIn ? { type: 'hello', version: state.version } : { type: 'auth', key, version: state.version }));
+  ws.onopen = () => ws.send(JSON.stringify(signingIn ? { type: 'hello', version: state.version } : { type: 'auth', key, version: state.version, channel: state.settings.channel }));
   ws.onmessage = (event) => {
     if (typeof event.data !== 'string') {
       onAudioFrame(event.data);
@@ -725,20 +740,25 @@ function onMessage(message) {
       net.retry = 0;
       state.error = '';
       state.me = message.you;
-      state.channel = message.channel || 'RADIO';
-      state.botOnline = Boolean(message.online);
-      state.listeners = message.listeners || 0;
       state.conn = 'online';
-      state.inVoice = Boolean(message.inVoice);
-      applyDeaf();
+      applyChannelStatus(message);
       if (state.settings.deaf) sendJson({ type: 'deaf', active: true });
       render();
       break;
     case 'status':
-      state.channel = message.channel || state.channel;
-      state.botOnline = Boolean(message.online);
-      state.listeners = message.listeners || 0;
+      applyChannelStatus(message);
       render();
+      break;
+    case 'channel':
+      // Switched channel: voices from the old one no longer apply.
+      state.rx.clear();
+      audio.listenFx?.setStatic(false);
+      applyChannelStatus(message);
+      updateLamps();
+      flash(String(state.channel).toUpperCase().slice(0, 28), 1200);
+      break;
+    case 'text':
+      onText(message);
       break;
     case 'talk':
       if (message.active) {
@@ -769,6 +789,73 @@ function onMessage(message) {
   }
 }
 
+function applyChannelStatus(message) {
+  state.channel = message.channel || state.channel;
+  if (message.channelId) state.channelId = message.channelId;
+  if (Array.isArray(message.channels)) state.channels = message.channels;
+  state.botOnline = Boolean(message.online);
+  state.listeners = message.listeners || 0;
+  if ('inVoice' in message) {
+    state.inVoice = Boolean(message.inVoice);
+    applyDeaf();
+  }
+}
+
+/* ---------- channels and messages ---------- */
+
+function changeChannel(step) {
+  if (state.conn !== 'online' || state.channels.length < 2) {
+    flash(String(state.channel || 'RADIO').toUpperCase().slice(0, 28), 1000);
+    return;
+  }
+  if (state.tx !== 'idle') return;
+  const index = Math.max(0, state.channels.findIndex((channel) => channel.id === state.channelId));
+  const next = state.channels[(index + (step < 0 ? state.channels.length - 1 : 1)) % state.channels.length];
+  saveSettings({ channel: next.id });
+  sendJson({ type: 'channel', id: next.id });
+}
+
+function channelNumber() {
+  return Math.max(0, state.channels.findIndex((channel) => channel.id === state.channelId)) + 1;
+}
+
+function onText(message) {
+  const mine = message.id === state.me?.id;
+  state.messages.unshift({
+    id: message.id, from: String(message.from || 'UNIT'), text: String(message.text || ''),
+    channel: String(message.channel || state.channel), at: Number(message.at) || Date.now(), mine,
+  });
+  state.messages.length = Math.min(state.messages.length, MESSAGE_KEEP);
+  if (!mine) {
+    if (state.screen !== 'messages') state.unread += 1;
+    playTone('message');
+  }
+  render();
+}
+
+function sendText(text) {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim().slice(0, MESSAGE_MAX);
+  if (!clean) return false;
+  if (state.conn !== 'online') {
+    flash('NO SIGNAL', 1000);
+    return false;
+  }
+  sendJson({ type: 'text', text: clean });
+  flash('SENT', 800);
+  return true;
+}
+
+function clockText(at = Date.now()) {
+  const date = new Date(at);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function updateClock() {
+  const now = new Date();
+  el.lcdDate.textContent = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}/${now.getFullYear()}`;
+  el.lcdTime.textContent = clockText(now.getTime());
+}
+
 const PANIC_MS = 10_000;
 let panicTimer = null;
 
@@ -786,6 +873,22 @@ function showPanic(message) {
     render();
   }, PANIC_MS);
   render();
+}
+
+// EMER: every radio flashes with your name and in-game location (the relay allows one press per 15 s).
+let lastPanicAt = 0;
+function sendPanic() {
+  if (state.conn !== 'online') {
+    flash('NO SIGNAL', 1000);
+    return;
+  }
+  if (Date.now() - lastPanicAt < 15_000) {
+    flash('EMER SENT', 900);
+    return;
+  }
+  lastPanicAt = Date.now();
+  sendJson({ type: 'panic' });
+  flash('EMER SENT', 1200);
 }
 
 /* ---------- push to talk ---------- */
@@ -867,6 +970,8 @@ function setScreen(screen) {
     state.capturing = false;
     void api.capturePtt(false);
   }
+  if (screen !== 'compose') state.typing = null;
+  if (screen === 'messages') state.unread = 0;
   state.screen = screen;
   state.listIndex = 0;
   if (screen === 'menu' || screen === 'setup') void refreshDeviceCache();
@@ -948,14 +1053,48 @@ function homeBody() {
     default:
       break;
   }
-  if (state.tx === 'on') return '<div class="big">TX</div><div class="small">TALKING</div>';
-  if (state.rx.size) {
-    const names = [...state.rx.values()].map((entry) => entry.name.toUpperCase()).join(', ');
-    return `<div class="big">RX</div><div class="small">${escapeHtml(names)}</div>`;
+  // Zone/channel card, like a handheld's main screen, then the latest message if it is recent.
+  let kind = '';
+  let line;
+  if (state.tx === 'on') {
+    kind = 'tx';
+    line = 'TRANSMITTING';
+  } else if (state.rx.size) {
+    kind = 'rx';
+    line = `RX ${[...state.rx.values()].map((entry) => entry.name).join(', ')}`;
+  } else if (!state.botOnline) {
+    line = 'BOT OFFLINE · WAITING';
+  } else if (state.inVoice) {
+    line = 'MUTED · YOU ARE IN THE DISCORD VC';
+  } else {
+    line = state.settings.ptt ? 'READY' : 'READY · SET PTT IN MENU';
   }
-  if (!state.botOnline) return '<div class="mid">BOT OFFLINE</div><div class="small">WAITING FOR RADIO</div>';
-  const hint = state.settings.ptt ? String(state.me?.name || '').toUpperCase() : 'SET PTT IN MENU';
-  return `<div class="big">READY</div><div class="small">${escapeHtml(hint)}</div>`;
+  let html = `<div class="card ${kind}"><div class="zone">Zone 1 · CH ${channelNumber()}</div>`
+    + `<div class="chan">${escapeHtml(state.channel || 'Radio')}</div>`
+    + `<div class="state">${escapeHtml(line.toUpperCase())}</div></div>`;
+  const latest = state.messages[0];
+  if (latest && Date.now() - latest.at < MESSAGE_CARD_MS) {
+    html += `<div class="card msg"><span class="ico"></span><span class="from">${escapeHtml(latest.mine ? `You → ${latest.channel}` : latest.from)}</span>`
+      + `<span class="when">${state.unread ? `<span class="badge">${Math.min(state.unread, 9)}</span>` : clockText(latest.at)}</span>`
+      + `<span class="text">${escapeHtml(latest.text)}</span></div>`;
+  }
+  return html;
+}
+
+function messagesBody() {
+  const items = [{ label: '+ NEW MESSAGE' }, ...state.messages.map((message) => ({
+    label: message.text,
+    meta: `${message.mine ? 'YOU' : message.from} · ${clockText(message.at)}`,
+  }))];
+  return `<ul class="list">${items.map((item, index) => `<li class="${index === state.listIndex ? 'sel' : ''}">`
+    + `${item.meta ? `<span class="meta">${escapeHtml(item.meta.toUpperCase())}</span>` : ''}${escapeHtml(item.label)}</li>`).join('')}</ul>`;
+}
+
+function composeBody() {
+  if (state.typing !== null) {
+    return `<div class="typed">${escapeHtml(state.typing)}</div><div class="small">TYPE ON YOUR KEYBOARD · ENTER SENDS · ESC CANCELS</div>`;
+  }
+  return `<ul class="list">${QUICK_MESSAGES.map((text, index) => `<li class="${index === state.listIndex ? 'sel' : ''}">${escapeHtml(text)}</li>`).join('')}</ul>`;
 }
 
 function updateText() {
@@ -977,18 +1116,31 @@ function render() {
   meterFill = null;
   el.softLeftLabel.textContent = screen === 'home' ? 'MENU' : 'RADIO';
   el.softRightLabel.textContent = 'HOME';
-  el.lcdRight.textContent = state.version || '';
+  // Status bar: signal bars, then DEAF / IN VC / who is on the channel.
+  el.lcdSig.className = `sig${state.conn === 'online' ? (state.botOnline ? ' on' : ' weak') : ''}`;
+  if (state.settings.deaf) el.lcdRight.textContent = 'DEAF';
+  else if (state.inVoice) el.lcdRight.textContent = 'IN VC';
+  else if (state.conn === 'online') el.lcdRight.textContent = `${state.listeners} ON`;
+  else el.lcdRight.textContent = state.version || '';
+  updateClock();
   let left = screen.toUpperCase();
   let body = '';
 
   switch (screen) {
     case 'home':
-      left = String(state.channel || 'RADIO').toUpperCase().slice(0, 14);
-      if (state.settings.deaf) el.lcdRight.textContent = 'DEAF';
-      else if (state.inVoice) el.lcdRight.textContent = 'IN VC';
-      else if (state.conn === 'online') el.lcdRight.textContent = `${state.listeners} ON`;
-      el.softRightLabel.textContent = `VOL ${state.settings.volume}`;
+      left = `Z1 · ${String(state.me?.name || 'RADIO')}`.toUpperCase();
+      el.softRightLabel.textContent = state.unread ? `MSGS (${state.unread})` : 'MSGS';
       body = homeBody();
+      break;
+    case 'messages':
+      left = 'MESSAGES';
+      el.softRightLabel.textContent = 'NEW';
+      body = messagesBody();
+      break;
+    case 'compose':
+      left = `TO ${String(state.channel || 'RADIO').toUpperCase()}`;
+      el.softRightLabel.textContent = 'SEND';
+      body = composeBody();
       break;
     case 'menu':
       body = rowsHtml(MENU, state.menuIndex);
@@ -1069,6 +1221,17 @@ async function choose() {
     void refreshDeviceCache();
     setScreen(PARENT[screen]);
     flash('SAVED', 800);
+  } else if (screen === 'messages') {
+    if (state.listIndex === 0) setScreen('compose');
+  } else if (screen === 'compose') {
+    if (state.typing !== null) {
+      if (sendText(state.typing)) setScreen('messages');
+    } else if (state.listIndex === QUICK_MESSAGES.length - 1) {
+      state.typing = '';
+      render();
+    } else if (sendText(QUICK_MESSAGES[state.listIndex])) {
+      setScreen('messages');
+    }
   } else if (screen === 'test') {
     setScreen('setup');
   } else if (screen === 'ptt') {
@@ -1133,17 +1296,31 @@ function move(delta) {
   } else if ((screen === 'mic' || screen === 'headset') && state.devices.length) {
     state.listIndex = (state.listIndex + delta + state.devices.length) % state.devices.length;
     render();
+  } else if (screen === 'messages' || (screen === 'compose' && state.typing === null)) {
+    const length = screen === 'messages' ? state.messages.length + 1 : QUICK_MESSAGES.length;
+    state.listIndex = (state.listIndex + delta + length) % length;
+    render();
   }
 }
 
 function press(key) {
   playTone('key');
+  // Keypad while typing a message: 0 is a space, * deletes, # sends.
+  if (state.screen === 'compose' && state.typing !== null && /^[0-9*#]$/.test(key)) {
+    if (key === '#') return void choose();
+    if (key === '*') state.typing = state.typing.slice(0, -1);
+    else if (state.typing.length < MESSAGE_MAX) state.typing += key === '0' ? ' ' : key;
+    return render();
+  }
   // Gray left button: open the menu from the radio screen, otherwise go straight back to the radio.
   if (key === 'softL') return setScreen(state.screen === 'home' ? 'menu' : 'home');
   if (key === 'softR') {
-    if (state.screen === 'mic' || state.screen === 'headset' || state.screen === 'test') return void choose();
+    if (state.screen === 'mic' || state.screen === 'headset' || state.screen === 'test' || state.screen === 'compose') return void choose();
+    if (state.screen === 'home') return setScreen('messages');
+    if (state.screen === 'messages') return setScreen('compose');
     return setScreen('home');
   }
+  if (key === 'back') return back();
   if (key === 'up') return move(-1);
   if (key === 'down') return move(1);
   const rows = ROWS[state.screen];
@@ -1175,7 +1352,7 @@ function bindControls() {
   document.querySelectorAll('.keypad button').forEach((button) => {
     button.addEventListener('click', () => press(button.dataset.key));
   });
-  for (const id of ['softL', 'softR', 'up', 'down', 'left', 'right', 'ok']) {
+  for (const id of ['softL', 'softR', 'up', 'down', 'left', 'right', 'ok', 'back']) {
     $(id).addEventListener('click', () => press(id));
   }
 
@@ -1189,8 +1366,8 @@ function bindControls() {
   });
 
   $('quit').addEventListener('click', () => { void quitApp(); });
-  $('emer').addEventListener('click', () => flash('EMER N/A', 900));
-  el.ch.addEventListener('click', () => flash(String(state.channel || 'RADIO').toUpperCase().slice(0, 14), 1200));
+  $('emer').addEventListener('click', sendPanic);
+  el.ch.addEventListener('click', () => changeChannel(1));
 
   // Side PTT bar: hold with the mouse.
   el.pttSide.addEventListener('pointerdown', (event) => {
@@ -1219,6 +1396,20 @@ function bindControls() {
 
   // Keyboard while the radio has focus.
   window.addEventListener('keydown', (event) => {
+    // Typing a message: every key goes into the text.
+    if (state.screen === 'compose' && state.typing !== null) {
+      event.preventDefault();
+      if (event.key === 'Enter') return void choose();
+      if (event.key === 'Escape') {
+        state.typing = null;
+      } else if (event.key === 'Backspace') {
+        state.typing = state.typing.slice(0, -1);
+      } else if (event.key.length === 1 && state.typing.length < MESSAGE_MAX) {
+        state.typing += event.key;
+      }
+      render();
+      return;
+    }
     if (state.screen === 'ptt' && state.capturing && !state.settings.hook) {
       event.preventDefault();
       if (event.code !== 'Escape') {
@@ -1270,6 +1461,8 @@ async function init() {
   bindControls();
   applyDeaf();
   render();
+  // Keep the clock current and let the message card expire.
+  setInterval(() => (state.screen === 'home' && !state.toast ? render() : updateClock()), 15_000);
   try {
     await initAudio();
   } catch {

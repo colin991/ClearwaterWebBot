@@ -41,6 +41,7 @@ async function startRelay() {
   const voice = new Set();
   const relay = createRadioRelay({
     inVoice: (userId) => voice.has(userId),
+    locatePanic: async (userId, name) => ({ name, location: userId === ALICE ? '120 Main St' : '' }),
     verifyKey: (key) => verifyRadioKey(key, env),
     exchangeCode: async (code) => {
       if (code === 'alice-code') return ALICE;
@@ -223,7 +224,7 @@ test('the periodic check closes radios of members who left the server', async ()
   }
 });
 
-test('one voice at a time with Discord, and members in the Discord channel are muted in the app', async () => {
+test('Discord talkers never block the app, and members in the Discord channel are muted in the app', async () => {
   const harness = await startRelay();
   try {
     const alice = client(harness.url);
@@ -236,14 +237,10 @@ test('one voice at a time with Discord, and members in the Discord channel are m
     const bobReady = await bob.until(() => bob.messages.find((m) => m.type === 'ready'));
     assert.equal(bobReady.inVoice, true);
 
-    // Someone talking in Discord blocks app transmit until they stop.
+    // Talking in Discord does not stop an app from keying up.
     harness.relay.discordSpeaking('333333333333333333', 'Carl', true);
-    alice.send({ type: 'tx', active: true });
-    const busy = await alice.until(() => alice.messages.find((m) => m.type === 'tx' && !m.ok));
-    assert.equal(busy.name, 'Carl');
     harness.relay.relayDiscordAudio('333333333333333333', Buffer.from([1]));
     await alice.until(() => alice.binary.length > 0);
-    harness.relay.discordSpeaking('333333333333333333', 'Carl', false);
     alice.send({ type: 'tx', active: true });
     await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
     alice.ws.send(Buffer.from([2]));
@@ -256,6 +253,89 @@ test('one voice at a time with Discord, and members in the Discord channel are m
     assert.equal(left.active, false);
     alice.ws.send(Buffer.from([3]));
     await bob.until(() => bob.binary.length > 0);
+
+    alice.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('Special Response Team stays off Discord, and messages reach only the same channel', async () => {
+  const harness = await startRelay();
+  try {
+    const alice = client(harness.url);
+    const bob = client(harness.url);
+    await Promise.all([once(alice.ws, 'open'), once(bob.ws, 'open')]);
+    alice.send({ type: 'auth', key: createRadioKey(ALICE, env), channel: 'srt' });
+    bob.send({ type: 'auth', key: createRadioKey(BOB, env) });
+    const ready = await alice.until(() => alice.messages.find((m) => m.type === 'ready'));
+    assert.equal(ready.channelId, 'srt');
+    assert.equal(ready.channel, 'Special Response Team');
+    assert.deepEqual(ready.channels.map((c) => c.id), ['main', 'srt', 'freq']);
+    await bob.until(() => bob.messages.find((m) => m.type === 'ready'));
+
+    // Different channels: no shared audio, talk or messages.
+    harness.relay.relayDiscordAudio('333333333333333333', Buffer.from([1]));
+    bob.send({ type: 'text', text: 'main only' });
+    await bob.until(() => bob.messages.find((m) => m.type === 'text'));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(alice.binary.length, 0, 'Discord audio never reaches SRT');
+    assert.equal(alice.messages.some((m) => m.type === 'text'), false);
+
+    // Bob joins SRT; Alice talks: Bob hears it and nothing goes to the Discord bot.
+    bob.send({ type: 'channel', id: 'srt' });
+    const moved = await bob.until(() => bob.messages.find((m) => m.type === 'channel'));
+    assert.equal(moved.listeners, 2);
+    harness.setOnline(false); // SRT does not need the bot in voice
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
+    alice.ws.send(Buffer.from([7]));
+    await bob.until(() => bob.binary.length > 0);
+    assert.equal(harness.played.length, 0, 'SRT audio is not played into Discord');
+    bob.send({ type: 'tx', active: true });
+    const busy = await bob.until(() => bob.messages.find((m) => m.type === 'tx' && !m.ok));
+    assert.equal(busy.name, 'Alice');
+
+    alice.send({ type: 'text', text: '  10-4\n copy  ' });
+    const text = await bob.until(() => bob.messages.find((m) => m.type === 'text' && m.channelId === 'srt'));
+    assert.equal(text.text, '10-4 copy');
+    assert.equal(text.from, 'Alice');
+    await alice.until(() => alice.messages.find((m) => m.type === 'text'));
+
+    alice.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('Frequency Change is app-only, and EMER alerts every radio once per 15 seconds', async () => {
+  const harness = await startRelay();
+  try {
+    const alice = client(harness.url);
+    const bob = client(harness.url);
+    await Promise.all([once(alice.ws, 'open'), once(bob.ws, 'open')]);
+    alice.send({ type: 'auth', key: createRadioKey(ALICE, env), channel: 'freq' });
+    bob.send({ type: 'auth', key: createRadioKey(BOB, env), channel: 'freq' });
+    const ready = await alice.until(() => alice.messages.find((m) => m.type === 'ready'));
+    assert.equal(ready.channel, 'Frequency Change');
+    await bob.until(() => bob.messages.find((m) => m.type === 'ready'));
+    harness.setOnline(false);
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
+    alice.ws.send(Buffer.from([9]));
+    await bob.until(() => bob.binary.length > 0);
+    assert.equal(harness.played.length, 0, 'Frequency Change audio is not played into Discord');
+
+    alice.send({ type: 'panic' });
+    const panic = await bob.until(() => bob.messages.find((m) => m.type === 'panic'));
+    assert.equal(panic.name, 'Alice');
+    assert.equal(panic.location, '120 Main St');
+    await alice.until(() => alice.messages.find((m) => m.type === 'panic'));
+    alice.send({ type: 'panic' });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(bob.messages.filter((m) => m.type === 'panic').length, 1, 'a second press right away is ignored');
 
     alice.ws.close();
     bob.ws.close();
