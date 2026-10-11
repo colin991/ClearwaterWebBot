@@ -3448,6 +3448,13 @@
       "summary": "Admins can now open the radio staff panel at cwpcso.com/radio-staff after signing in with Discord. It shows who is on the radio and who is muted, with buttons to force-mute, unmute or kick (5 minutes), and a search to mute someone before they sign in. Only members with Administrator in the Clearwater server can use it. /radio-staff in Discord still works and links to the page.",
       "createdAt": "2026-10-11T23:30:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-size-dial-2026-10-11",
+      "title": "Radio size dial",
+      "summary": "SIZE on the radio is now a dial from 60% to 130% in 5% steps, so the radio can be made bigger as well as smaller. Turn it with the arrows, scroll, or drag or click the dial. The first-launch setup uses the same dial, and the size is still remembered.",
+      "createdAt": "2026-10-11T21:45:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

@@ -68,8 +68,8 @@
   function fit() {
     const width = window.innerWidth - 16;
     const height = window.innerHeight - header.offsetHeight - ptt.offsetHeight - 28;
-    // SIZE on the radio's menu shrinks it below the fitted size.
-    const size = Math.min(100, Math.max(50, Number(load().size) || 100)) / 100;
+    // SIZE on the radio's menu (60-130%) scales it from the fitted size; above 100% the page scrolls.
+    const size = Math.min(130, Math.max(60, Number(load().size) || 100)) / 100;
     const scale = Math.max(0.6, Math.min(width / RADIO_W, height / RADIO_H, 1.8)) * size;
     frame.style.transform = `scale(${scale})`;
     stage.style.width = `${Math.round(RADIO_W * scale)}px`;

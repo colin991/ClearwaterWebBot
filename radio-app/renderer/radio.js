@@ -81,11 +81,12 @@ const FX_LABELS = { off: 'OFF', radio: 'RADIO', police: 'POLICE' };
 // LOW trims audio work for slower PCs; AUTO picks LOW on machines with few cores or little memory.
 const POWER_MODES = ['auto', 'low', 'full'];
 const LOW_END = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
-// SIZE shrinks the whole radio overlay (percent of full size).
-const SIZES = [50, 60, 70, 80, 90, 100];
+// SIZE: a dial from 60% to 130% of full size, in 5% steps.
+const SIZE_MIN = 60;
+const SIZE_MAX = 130;
+const SIZE_STEP = 5;
 // FX LVL: how strong the radio effect is (100% is the normal sound).
 const FX_LEVELS = [25, 50, 75, 100, 125, 150];
-const SIZE_ITEMS = [...SIZES].reverse().map((size) => ({ id: String(size), label: `${size}%` }));
 const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', size: 'menu', scan: 'menu', test: 'setup', users: 'home', unit: 'users', tutorial: 'home' };
 // PANIC asks first; a second press (or OK) within this long sends it.
 const PANIC_CONFIRM_MS = 5000;
@@ -1486,7 +1487,6 @@ function setScreen(screen) {
   if (screen === 'menu' || screen === 'setup') void refreshDeviceCache();
   if (screen === 'test' && audio.testGain) audio.testGain.gain.value = volumeGain();
   if (screen === 'mic' || screen === 'headset') void loadDevices(screen);
-  if (screen === 'size') state.listIndex = Math.max(0, SIZE_ITEMS.findIndex((item) => item.id === String(radioSize())));
   render();
 }
 
@@ -1826,8 +1826,8 @@ function render() {
     }
     case 'size':
       left = state.firstSetup ? 'SET SIZE' : 'SIZE';
-      body = (state.firstSetup ? '<div class="small">PICK THE RADIO SIZE · OK WHEN DONE</div>' : '')
-        + listHtml(SIZE_ITEMS, state.listIndex, String(radioSize()));
+      body = sizeDialHtml()
+        + `<div class="small">${state.firstSetup ? 'TURN THE DIAL · OK WHEN DONE' : 'TURN THE DIAL · OK SAVES'}</div>`;
       break;
     case 'test':
       if (state.firstSetup) left = 'MIC CHECK';
@@ -2004,7 +2004,8 @@ async function cycleFx(step) {
 
 function radioSize() {
   const size = Number(state.settings.size);
-  return SIZES.includes(size) ? size : 100;
+  if (!Number.isFinite(size) || size <= 0) return 100;
+  return Math.max(SIZE_MIN, Math.min(SIZE_MAX, Math.round(size / SIZE_STEP) * SIZE_STEP));
 }
 
 async function setSize(size) {
@@ -2013,10 +2014,63 @@ async function setSize(size) {
   return render();
 }
 
-// Arrows on the SIZE row step it up or down; OK opens the size list.
+// Arrows on the SIZE row (or on the dial screen) step it 5% up or down; OK opens the dial.
 function changeSize(step) {
-  const index = SIZES.indexOf(radioSize());
-  return setSize(SIZES[Math.max(0, Math.min(SIZES.length - 1, index + (step < 0 ? -1 : 1)))]);
+  return setSize(Math.max(SIZE_MIN, Math.min(SIZE_MAX, radioSize() + (step < 0 ? -SIZE_STEP : SIZE_STEP))));
+}
+
+// The dial sweeps 240 degrees, open at the bottom: 60% at lower left, 130% at lower right.
+const DIAL = { cx: 60, cy: 52, r: 40, start: 150, sweep: 240 };
+
+function dialPoint(fraction, radius = DIAL.r) {
+  const angle = ((DIAL.start + DIAL.sweep * fraction) * Math.PI) / 180;
+  return [DIAL.cx + radius * Math.cos(angle), DIAL.cy + radius * Math.sin(angle)];
+}
+
+function dialArc(fraction) {
+  const [x0, y0] = dialPoint(0);
+  const [x1, y1] = dialPoint(fraction);
+  const large = DIAL.sweep * fraction > 180 ? 1 : 0;
+  return `M${x0.toFixed(1)} ${y0.toFixed(1)}A${DIAL.r} ${DIAL.r} 0 ${large} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+}
+
+function sizeDialHtml() {
+  const size = radioSize();
+  const fraction = (size - SIZE_MIN) / (SIZE_MAX - SIZE_MIN);
+  const ticks = [];
+  for (let value = SIZE_MIN; value <= SIZE_MAX; value += 10) {
+    const at = (value - SIZE_MIN) / (SIZE_MAX - SIZE_MIN);
+    const [x0, y0] = dialPoint(at, DIAL.r + 4);
+    const [x1, y1] = dialPoint(at, DIAL.r + (value === 100 ? 11 : 8));
+    ticks.push(`<line class="${value === 100 ? 'tick full' : 'tick'}" x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}"/>`);
+  }
+  const [nx, ny] = dialPoint(fraction, DIAL.r - 9);
+  const [kx, ky] = dialPoint(fraction);
+  return '<div class="size-dial"><b class="adj" data-step="-1">&#9664;</b>'
+    + `<svg class="dial" viewBox="0 0 120 92" role="slider" aria-label="Radio size" aria-valuemin="${SIZE_MIN}" aria-valuemax="${SIZE_MAX}" aria-valuenow="${size}">`
+    + `<path class="track" d="${dialArc(1)}"/>`
+    + (fraction > 0 ? `<path class="fill" d="${dialArc(fraction)}"/>` : '')
+    + ticks.join('')
+    + `<line class="needle" x1="${DIAL.cx}" y1="${DIAL.cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}"/>`
+    + `<circle class="hub" cx="${DIAL.cx}" cy="${DIAL.cy}" r="4"/><circle class="knob-dot" cx="${kx.toFixed(1)}" cy="${ky.toFixed(1)}" r="4.5"/>`
+    + `<text x="${DIAL.cx}" y="${DIAL.cy + 30}" text-anchor="middle">${size}%</text>`
+    + `<text class="end" x="14" y="90" text-anchor="middle">${SIZE_MIN}</text><text class="end" x="106" y="90" text-anchor="middle">${SIZE_MAX}</text>`
+    + '</svg><b class="adj" data-step="1">&#9654;</b></div>';
+}
+
+// Pointing at the dial picks the size under the pointer (5% steps).
+function sizeFromPointer(event) {
+  const dial = el.lcdBody.querySelector('svg.dial');
+  if (!dial) return null;
+  const box = dial.getBoundingClientRect();
+  const x = ((event.clientX - box.left) / box.width) * 120 - DIAL.cx;
+  const y = ((event.clientY - box.top) / box.height) * 92 - DIAL.cy;
+  let angle = (Math.atan2(y, x) * 180) / Math.PI;
+  if (angle < DIAL.start - 60) angle += 360; // 0-90 degrees is the right-hand end of the sweep
+  const fraction = Math.max(0, Math.min(1, (angle - DIAL.start) / DIAL.sweep));
+  // The gap at the bottom snaps to whichever end is closer.
+  const gap = angle > DIAL.start + DIAL.sweep ? (x < 0 ? 0 : 1) : fraction;
+  return Math.round((SIZE_MIN + gap * (SIZE_MAX - SIZE_MIN)) / SIZE_STEP) * SIZE_STEP;
 }
 
 async function changeFxLevel(step, wrap = false) {
@@ -2122,8 +2176,8 @@ function move(delta) {
     state.listIndex = (state.listIndex + delta + scanItems().length) % scanItems().length;
     render();
   } else if (screen === 'size') {
-    state.listIndex = (state.listIndex + delta + SIZE_ITEMS.length) % SIZE_ITEMS.length;
-    void setSize(Number(SIZE_ITEMS[state.listIndex].id));
+    // Up turns the dial up.
+    void changeSize(-delta);
   } else if (screen === 'users') {
     const length = Math.max(1, usersLines().length);
     state.listIndex = (state.listIndex + delta + length) % length;
@@ -2152,6 +2206,7 @@ function press(key) {
   if (key === 'left' || key === 'right') {
     const step = key === 'left' ? -1 : 1;
     if (state.screen === 'home') return changeVolume(step * 5);
+    if (state.screen === 'size') return void changeSize(step);
     const row = rows?.[state.screen === 'menu' ? state.menuIndex : state.setupIndex];
     if (row?.adjust) return void row.adjust(step);
     return step < 0 ? back() : void choose();
@@ -2231,10 +2286,13 @@ function clickLcd(event) {
     state.listIndex = index;
     return void choose();
   }
-  if (screen === 'size' && index >= 0) {
-    playTone('key');
-    state.listIndex = index;
-    void setSize(Number(SIZE_ITEMS[index].id)).then(() => choose());
+  if (screen === 'size') {
+    const step = Number(event.target.closest('[data-step]')?.dataset.step || 0);
+    if (step) {
+      playTone('key');
+      void changeSize(step);
+    }
+    // The dial itself is turned with the pointer (see the lcdBody pointer handlers).
     return undefined;
   }
   if ((screen === 'mic' || screen === 'headset') && index >= 0) {
@@ -2292,6 +2350,26 @@ function bindControls() {
   el.softLeftLabel.addEventListener('click', () => press('softL'));
   el.softRightLabel.addEventListener('click', () => press('softR'));
   el.lcdBody.addEventListener('click', clickLcd);
+  // SIZE dial: drag around it, click a spot on it, or scroll over it.
+  let dialDrag = false;
+  const dialTo = (event) => {
+    const size = sizeFromPointer(event);
+    if (size !== null && size !== radioSize()) void setSize(size);
+  };
+  el.lcdBody.addEventListener('pointerdown', (event) => {
+    if (state.screen !== 'size' || !event.target.closest('svg.dial')) return;
+    el.lcdBody.setPointerCapture(event.pointerId);
+    dialDrag = true;
+    dialTo(event);
+  });
+  el.lcdBody.addEventListener('pointermove', (event) => { if (dialDrag) dialTo(event); });
+  el.lcdBody.addEventListener('pointerup', () => { dialDrag = false; });
+  el.lcdBody.addEventListener('pointercancel', () => { dialDrag = false; });
+  el.lcdBody.addEventListener('wheel', (event) => {
+    if (state.screen !== 'size') return;
+    event.preventDefault();
+    void changeSize(event.deltaY < 0 ? 1 : -1);
+  }, { passive: false });
 
   el.deaf.addEventListener('click', () => {
     const deaf = !state.settings.deaf;

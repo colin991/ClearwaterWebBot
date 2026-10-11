@@ -223,10 +223,11 @@ function startHook() {
   }
 }
 
-// SIZE setting: the whole radio is drawn smaller (50-100% of full size).
+// SIZE setting: the whole radio is drawn at 60-130% of full size (the dial on the radio).
 function sizeFactor() {
   const size = Number(settings.size);
-  return Number.isFinite(size) && size >= 50 && size <= 100 ? size / 100 : 1;
+  if (!Number.isFinite(size) || size <= 0) return 1;
+  return Math.max(60, Math.min(130, Math.round(size / 5) * 5)) / 100;
 }
 
 function windowSize() {
@@ -250,8 +251,12 @@ function applySize() {
   const [x, y] = win.getPosition();
   const [oldWidth, oldHeight] = win.getSize();
   if (oldWidth !== width || oldHeight !== height) {
+    // A bigger radio grows up and left, but never off the top or left of its screen.
+    const area = screen.getDisplayMatching({ x, y, width: oldWidth, height: oldHeight }).workArea;
+    const left = Math.max(area.x, x + oldWidth - width);
+    const top = Math.max(area.y, y + oldHeight - height);
     win.setResizable(true);
-    win.setBounds({ x: x + oldWidth - width, y: y + oldHeight - height, width, height });
+    win.setBounds({ x: left, y: top, width, height });
     win.setResizable(false);
   }
   win.webContents.setZoomFactor(sizeFactor());
