@@ -10,7 +10,8 @@ export const RADIO_DISPATCH_CHECK_MS = 15_000;
 const DISPATCH_TAG = '!C';
 export const isDispatcherName = (name) => String(name || '').includes(DISPATCH_TAG);
 export const RADIO_TX_IDLE_MS = 1_500;
-export const RADIO_TX_MAX_MS = 120_000;
+/** Stuck mic: a transmission (or whisper) still open after this long is cut. */
+export const RADIO_TX_MAX_MS = 60_000;
 export const RADIO_MAX_PACKET_BYTES = 1_500;
 export const RADIO_MAX_PACKETS_PER_SECOND = 75;
 /** How often signed-in radios are re-checked against the Discord server (anti-raid). */
@@ -26,6 +27,8 @@ const APP_CHANNELS = [
 ];
 /** One PANIC press per member in this window. */
 export const RADIO_PANIC_GAP_MS = 2 * 60 * 1000;
+/** Synced settings: only these keys, and only small values, are kept per member. */
+export const RADIO_SYNC_KEYS = Object.freeze(['volume', 'txVolume', 'listenFx', 'fxLevel', 'scan', 'night', 'agc']);
 /** PTT spam: this many presses inside the window times the member out of talking on the radio. */
 export const RADIO_SPAM_PRESSES = 6;
 export const RADIO_SPAM_WINDOW_MS = 10_000;
@@ -66,6 +69,10 @@ function send(socket, message) {
  * @param {() => { id: string, name: string }[]} [options.voiceMembers] members sitting in the Discord radio channel
  * @param {(userId: string, name: string) => Promise<{ name?: string, location?: string, unit?: string, postal?: string }|null>} [options.locatePanic]
  *   who and where a radio's EMER press came from, for the panic alert.
+ * @param {(postal: string) => ({ x: number, y: number }|null)} [options.mapPoint] where a postal sits on the map (fractions)
+ * @param {() => { id: string, name: string, since: number, kind?: string, detail?: string }[]} [options.calls] pending 911 calls
+ * @param {(userId: string) => ({ data: object, updatedAt: number }|null)} [options.loadSettings] a member's synced settings
+ * @param {(userId: string, saved: { data: object, updatedAt: number }) => void} [options.saveSettings]
  */
 export function createRadioRelay({
   verifyKey,
@@ -80,6 +87,10 @@ export function createRadioRelay({
   locatePanic = async () => null,
   onPanic = () => {},
   onTalked = () => {},
+  mapPoint = () => null,
+  calls = () => [],
+  loadSettings = () => null,
+  saveSettings = () => {},
   muted = [],
   dispatchCheckMs = RADIO_DISPATCH_CHECK_MS,
   now = () => Date.now(),
@@ -114,10 +125,16 @@ export function createRadioRelay({
     if (!radio?.userId || radio.deaf || radio.userId === speakerId || !listensTo(radio, channel)) return false;
     return channel !== RADIO_MAIN_CHANNEL || !inVoice(radio.userId);
   };
+  // Private calls: talking socket -> { socket, to, userId, name, startedAt, lastPacketAt }
+  const whispers = new Map();
   const watchdog = setInterval(() => {
     const at = now();
-    for (const talker of [...talkers.values()]) {
-      if (at - talker.lastPacketAt > RADIO_TX_IDLE_MS || at - talker.startedAt > RADIO_TX_MAX_MS) {
+    for (const talker of [...talkers.values(), ...whispers.values()]) {
+      if (at - talker.startedAt > RADIO_TX_MAX_MS) {
+        // Stuck mic: tell the radio why it was cut.
+        send(talker.socket, { type: 'cut', reason: 'stuck' });
+        endTransmit(talker.socket);
+      } else if (at - talker.lastPacketAt > RADIO_TX_IDLE_MS) {
         endTransmit(talker.socket);
       }
     }
@@ -185,6 +202,20 @@ export function createRadioRelay({
     broadcast({ type: 'talking', channels });
   }
 
+  /** Pending 911 calls, with how long each has waited so far. */
+  function pendingCalls() {
+    let list = [];
+    try { list = calls() || []; } catch { /* Discord cache hiccup */ }
+    const at = now();
+    return list.slice(0, 10).map((call) => ({
+      id: String(call.id || ''),
+      name: String(call.name || 'Caller').slice(0, 40),
+      kind: String(call.kind || 'discord'),
+      detail: String(call.detail || '').slice(0, 80),
+      waited: Math.max(0, Math.round((at - (Number(call.since) || at)) / 1000)),
+    }));
+  }
+
   function statusFor(socket) {
     const channel = socket.radio.channel;
     const base = status();
@@ -201,6 +232,7 @@ export function createRadioRelay({
       muted: mutedUsers.has(socket.radio.userId),
       lastHeard: lastHeard.get(channel) || null,
       scan: [...(socket.radio.scan || [])],
+      calls: pendingCalls(),
     };
   }
 
@@ -211,8 +243,18 @@ export function createRadioRelay({
     }
   }
 
+  function endWhisper(socket) {
+    const whisper = whispers.get(socket);
+    if (!whisper) return;
+    whispers.delete(socket);
+    for (const other of clients) {
+      if (other.radio?.userId === whisper.to) send(other, { type: 'whisper', id: whisper.userId, name: whisper.name, active: false });
+    }
+  }
+
   function endTransmit(socket) {
-    const channel = socket.radio?.channel;
+    endWhisper(socket);
+    const channel = socket.radio?.txChannel;
     const talker = talkers.get(channel);
     if (!talker || talker.socket !== socket) return;
     talkers.delete(channel);
@@ -250,15 +292,28 @@ export function createRadioRelay({
     return at + RADIO_SPAM_TIMEOUT_MS;
   }
 
-  function startTransmit(socket) {
-    const { userId, name, channel } = socket.radio;
-    const talker = talkers.get(channel);
-    if (talker?.socket === socket) return send(socket, { type: 'tx', ok: true });
+  // Who may talk at all: deafened, staff-muted and PTT-spam timed-out radios can't. Returns the refusal, if any.
+  function talkRefusal(socket) {
+    const { userId } = socket.radio;
     // Deafened radios can't talk, like being muted in the Discord channel.
-    if (socket.radio.deaf) return send(socket, { type: 'tx', ok: false, reason: 'deaf' });
-    if (mutedUsers.has(userId)) return send(socket, { type: 'tx', ok: false, reason: 'muted' });
+    if (socket.radio.deaf) return { reason: 'deaf' };
+    if (mutedUsers.has(userId)) return { reason: 'muted' };
     const timeoutUntil = pttSpamTimeout(userId);
-    if (timeoutUntil) return send(socket, { type: 'tx', ok: false, reason: 'timeout', seconds: secondsLeft(timeoutUntil) });
+    if (timeoutUntil) return { reason: 'timeout', seconds: secondsLeft(timeoutUntil) };
+    return null;
+  }
+
+  /**
+   * PTT: talk on your own channel, or (second PTT key) on a channel you are scanning.
+   * @param {string} [target] channel id to talk on
+   */
+  function startTransmit(socket, target) {
+    const { userId, name } = socket.radio;
+    const channel = target && socket.radio.scan?.has(target) ? target : socket.radio.channel;
+    const talker = talkers.get(channel);
+    if (talker?.socket === socket) return send(socket, { type: 'tx', ok: true, channel });
+    const refusal = talkRefusal(socket);
+    if (refusal) return send(socket, { type: 'tx', ok: false, ...refusal });
     // Dispatch priority: someone tagged !C cuts in over anyone who isn't dispatch.
     if (talker && isDispatcherName(name) && !isDispatcherName(talker.name)) {
       send(talker.socket, { type: 'cut', name });
@@ -274,17 +329,37 @@ export function createRadioRelay({
       sink = openTransmit(userId);
       if (!sink) return send(socket, { type: 'tx', ok: false, reason: 'offline' });
     }
+    // One transmission at a time per radio.
+    endTransmit(socket);
     const at = now();
+    socket.radio.txChannel = channel;
     talkers.set(channel, { socket, userId, name, sink, startedAt: at, lastPacketAt: at });
-    send(socket, { type: 'tx', ok: true });
+    send(socket, { type: 'tx', ok: true, channel });
     broadcast({ type: 'talk', id: userId, name, active: true, source: 'app', channel }, socket, channel);
     broadcastTalking();
   }
 
+  /** Private call: PTT talks to one unit's radio only (never Discord, never the channel). */
+  function startWhisper(socket, to) {
+    const { userId, name } = socket.radio;
+    const target = String(to || '');
+    if (whispers.get(socket)?.to === target) return send(socket, { type: 'tx', ok: true, to: target });
+    const targets = [...clients].filter((other) => other.radio?.userId === target);
+    if (!targets.length || target === userId) return send(socket, { type: 'tx', ok: false, reason: 'whisper-offline' });
+    const refusal = talkRefusal(socket);
+    if (refusal) return send(socket, { type: 'tx', ok: false, ...refusal });
+    endTransmit(socket);
+    const at = now();
+    whispers.set(socket, { socket, to: target, userId, name, startedAt: at, lastPacketAt: at });
+    send(socket, { type: 'tx', ok: true, to: target });
+    for (const other of targets) send(other, { type: 'whisper', id: userId, name, active: true });
+  }
+
   function onAudio(socket, packet) {
-    const channel = socket.radio.channel;
+    const whisper = whispers.get(socket);
+    const channel = socket.radio.txChannel;
     const talker = talkers.get(channel);
-    if (!talker || talker.socket !== socket) return;
+    if (!whisper && (!talker || talker.socket !== socket)) return;
     if (packet.length === 0 || packet.length > RADIO_MAX_PACKET_BYTES) return;
     const state = socket.radio;
     const second = Math.floor(now() / 1000);
@@ -294,6 +369,14 @@ export function createRadioRelay({
     }
     state.rateCount += 1;
     if (state.rateCount > RADIO_MAX_PACKETS_PER_SECOND) return;
+    if (whisper) {
+      whisper.lastPacketAt = now();
+      const frame = encodeAudioFrame(whisper.userId, packet);
+      for (const other of clients) {
+        if (other.radio?.userId === whisper.to && !other.radio.deaf) send(other, frame);
+      }
+      return;
+    }
     talker.lastPacketAt = now();
     talker.sink?.push(packet);
     const frame = encodeAudioFrame(talker.userId, packet);
@@ -303,7 +386,7 @@ export function createRadioRelay({
   }
 
   function switchChannel(socket, channel) {
-    if (!isChannel(channel) || socket.radio.channel === channel) return;
+    if (!isChannel(channel) || socket.radio.channel === channel) return false;
     endTransmit(socket);
     socket.radio.channel = channel;
     socket.radio.scan?.delete(channel);
@@ -315,6 +398,47 @@ export function createRadioRelay({
       for (const [id, name] of discordTalkers) send(socket, { type: 'talk', id, name, active: true, source: 'discord', channel: RADIO_MAIN_CHANNEL });
     }
     broadcastStatus();
+    return true;
+  }
+
+  // Dispatch (a !C name) moves another unit's radio to a channel.
+  function moveUnit(socket, userId, channel) {
+    const by = socket.radio.name;
+    if (!isDispatcherName(by)) return send(socket, { type: 'move', ok: false, reason: 'dispatch-only' });
+    if (!isChannel(channel)) return send(socket, { type: 'move', ok: false, reason: 'bad-channel' });
+    const targets = [...clients].filter((other) => other.radio?.userId === String(userId || ''));
+    if (!targets.length) return send(socket, { type: 'move', ok: false, reason: 'not-on-radio' });
+    for (const target of targets) {
+      if (switchChannel(target, channel)) send(target, { type: 'moved', by, channel, channelName: channelName(channel) });
+    }
+    logger.info(`Radio: ${by} moved ${userId} to ${channelName(channel)}`);
+    return send(socket, { type: 'move', ok: true, name: targets[0].radio.name, channel, channelName: channelName(channel) });
+  }
+
+  // Settings sync between a member's desktop and phone radios: a small whitelisted set, newest wins.
+  function syncSettings(socket, message) {
+    const data = {};
+    for (const key of RADIO_SYNC_KEYS) {
+      const value = message?.data?.[key];
+      if (value === undefined) continue;
+      if (key === 'scan') data.scan = Array.isArray(value) ? value.map(String).filter(isChannel).slice(0, 2) : [];
+      else if (typeof value === 'number' && Number.isFinite(value)) data[key] = value;
+      else if (typeof value === 'boolean') data[key] = value;
+      else if (typeof value === 'string' && value.length <= 16) data[key] = value;
+    }
+    const updatedAt = Math.min(Number(message?.updatedAt) || now(), now());
+    try {
+      saveSettings(socket.radio.userId, { data, updatedAt });
+    } catch (error) {
+      logger.warn(`Radio settings sync failed: ${error?.message || error}`);
+    }
+  }
+
+  // Panics carry where their postal sits on the map, for the radio's mini map.
+  function withMap(alert) {
+    let map = null;
+    try { map = alert.postal ? mapPoint(String(alert.postal)) : null; } catch { map = null; }
+    return map ? { ...alert, map } : alert;
   }
 
   // EMER on a radio: alert every radio with who pressed it and, when the game knows, where they are.
@@ -333,10 +457,10 @@ export function createRadioRelay({
     } catch (error) {
       logger.warn(`Radio panic lookup failed: ${error?.message || error}`);
     }
-    const alert = {
+    const alert = withMap({
       type: 'panic', name: found?.name || name, location: found?.location || '',
       unit: found?.unit || '', postal: found?.postal || '', at, source: 'radio',
-    };
+    });
     broadcast(alert);
     onPanic({ ...alert, userId });
   }
@@ -400,10 +524,17 @@ export function createRadioRelay({
     }
     clearTimeout(socket.radioAuthTimer);
     const channel = isChannel(message.channel) ? message.channel : RADIO_MAIN_CHANNEL;
-    socket.radio = { userId, name: result.name || 'Unit', deaf: false, channel, scan: new Set(), rateSecond: 0, rateCount: 0, since: now() };
+    socket.radio = { userId, name: result.name || 'Unit', deaf: false, channel, txChannel: null, scan: new Set(), rateSecond: 0, rateCount: 0, since: now() };
     setScan(socket, message.scan);
     if (session) send(socket, { type: 'session', key: session });
-    send(socket, { type: 'ready', you: { id: userId, name: socket.radio.name }, ...statusFor(socket) });
+    let synced = null;
+    try { synced = loadSettings(userId) || null; } catch { synced = null; }
+    send(socket, {
+      type: 'ready',
+      you: { id: userId, name: socket.radio.name, callsign: String(result.callsign || '') },
+      synced,
+      ...statusFor(socket),
+    });
     for (const [id, talker] of talkers) {
       if (listensTo(socket.radio, id)) send(socket, { type: 'talk', id: talker.userId, name: talker.name, active: true, source: 'app', channel: id });
     }
@@ -446,10 +577,15 @@ export function createRadioRelay({
       }
       if (!socket.radio) return;
       if (message.type === 'tx') {
-        if (message.active) startTransmit(socket);
-        else endTransmit(socket);
+        if (!message.active) endTransmit(socket);
+        else if (message.to) startWhisper(socket, message.to);
+        else startTransmit(socket, message.channel);
       } else if (message.type === 'channel') {
         switchChannel(socket, message.id);
+      } else if (message.type === 'move') {
+        moveUnit(socket, message.userId, message.channel);
+      } else if (message.type === 'settings') {
+        syncSettings(socket, message);
       } else if (message.type === 'scan') {
         setScan(socket, message.ids);
         send(socket, { type: 'status', ...statusFor(socket) });
@@ -539,7 +675,7 @@ export function createRadioRelay({
     },
     /** A message for every signed-in radio, such as an in-game panic. */
     alert(message) {
-      broadcast(message);
+      broadcast(message?.type === 'panic' ? withMap(message) : message);
     },
     discordSpeaking(speakerId, name, active) {
       if (active) discordTalkers.set(speakerId, name);

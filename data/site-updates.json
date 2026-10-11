@@ -3434,6 +3434,13 @@
       "summary": "The radio no longer needs its own staff channel. Panic history, weekly radio stats and staff actions now post in the radio voice channel's chat with the talk log, and admins open the staff panel with /radio-staff.",
       "createdAt": "2026-10-11T21:30:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-whisper-911-map-hotkeys",
+      "title": "Radio: whisper, 911 calls, panic map, hotkeys and more",
+      "summary": "The radio shows your callsign, pending 911 calls (people waiting in the 911 voice channel and new in-game calls) and a mini map at the postal on a panic. You can whisper to one unit, dispatch can move a unit to another channel, and new hotkeys talk on your scan channel, replay the last 30 seconds and switch channels. A stuck mic is cut after 60 seconds. New NIGHT and AUTO GAIN settings, a pop-up showing who is talking while the radio is hidden, settings that sync between PC and phone, a first-launch tour, and animated signal and battery bars.",
+      "createdAt": "2026-10-11T21:45:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

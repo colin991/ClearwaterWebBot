@@ -36,6 +36,14 @@ const DEFAULT_SETTINGS = Object.freeze({
   micId: 'default',
   outputId: 'default',
   ptt: null,
+  // Extra hotkeys: talk on your scan channel, replay the last 30 seconds, next channel.
+  scanPtt: null,
+  replayKey: null,
+  chanKey: null,
+  night: false,
+  agc: true,
+  syncAt: 0,
+  tutorialDone: false,
   volume: 70,
   txVolume: 60,
   listenFx: 'radio',
@@ -50,9 +58,12 @@ const DEFAULT_SETTINGS = Object.freeze({
 
 let win = null;
 let settings = { ...DEFAULT_SETTINGS };
-let capturingPtt = false;
+// Which hotkey is being set ('ptt', 'scanPtt', 'replayKey', 'chanKey'), or '' when none.
+let capturing = '';
 let updateReady = false;
-let pttDown = false;
+const BINDS = ['ptt', 'scanPtt', 'replayKey', 'chanKey'];
+const bindDown = new Set();
+let popup = null;
 
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
 
@@ -150,51 +161,61 @@ function bindingLabel(binding) {
   return String(keyNames.get(binding.code) || `KEY ${binding.code}`).toUpperCase();
 }
 
+// The bound hotkey reaches the radio: PTT keeps its own channel; the others share 'bind'.
+function boundEvent(which, binding) {
+  if (which === 'ptt') send('ptt:bound', binding);
+  else send('bind:bound', { which, binding });
+}
+
 function finishCapture(binding) {
-  capturingPtt = false;
-  settings.ptt = { ...binding, label: bindingLabel(binding) };
+  const which = capturing;
+  capturing = '';
+  // Backspace clears an extra hotkey; the talk key can't be cleared.
+  settings[which] = binding ? { ...binding, label: bindingLabel(binding) } : (which === 'ptt' ? settings.ptt : null);
   saveSettings();
-  send('ptt:bound', settings.ptt);
+  boundEvent(which, settings[which]);
 }
 
-function setPtt(down) {
-  if (pttDown === down) return;
-  pttDown = down;
-  send('ptt', down);
+function setBind(which, down) {
+  if (bindDown.has(which) === down) return;
+  if (down) bindDown.add(which);
+  else bindDown.delete(which);
+  if (which === 'ptt') send('ptt', down);
+  else send('bind', { which, down });
 }
 
-function matches(kind, code) {
-  return settings.ptt && settings.ptt.kind === kind && settings.ptt.code === code;
+function onInput(kind, code, down) {
+  for (const which of BINDS) {
+    const binding = settings[which];
+    if (binding && binding.kind === kind && binding.code === code) setBind(which, down);
+  }
 }
 
 function startHook() {
   if (!uIOhook) return;
   uIOhook.on('keydown', (event) => {
-    if (capturingPtt) {
+    if (capturing) {
       if (event.keycode === UiohookKey.Escape) {
-        capturingPtt = false;
-        send('ptt:bound', settings.ptt);
+        const which = capturing;
+        capturing = '';
+        boundEvent(which, settings[which]);
         return;
       }
-      finishCapture({ kind: 'key', code: event.keycode });
+      finishCapture(event.keycode === UiohookKey.Backspace && capturing !== 'ptt' ? null : { kind: 'key', code: event.keycode });
       return;
     }
-    if (matches('key', event.keycode)) setPtt(true);
+    onInput('key', event.keycode, true);
   });
-  uIOhook.on('keyup', (event) => {
-    if (matches('key', event.keycode)) setPtt(false);
-  });
+  uIOhook.on('keyup', (event) => onInput('key', event.keycode, false));
   uIOhook.on('mousedown', (event) => {
     // Left click stays free for clicking the radio itself.
-    if (capturingPtt && event.button !== 1) {
+    if (capturing && event.button !== 1) {
       finishCapture({ kind: 'mouse', code: event.button });
       return;
     }
-    if (matches('mouse', event.button)) setPtt(true);
+    onInput('mouse', event.button, true);
   });
-  uIOhook.on('mouseup', (event) => {
-    if (matches('mouse', event.button)) setPtt(false);
-  });
+  uIOhook.on('mouseup', (event) => onInput('mouse', event.button, false));
   try {
     uIOhook.start();
   } catch {
@@ -287,10 +308,62 @@ function createWindow() {
     saveSettings();
   });
   win.on('closed', () => { win = null; });
+  // Back on screen: the talk pop-up is not needed.
+  win.on('restore', () => showTalkPopup(''));
+  win.on('show', () => showTalkPopup(''));
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event) => event.preventDefault());
   win.webContents.on('did-finish-load', () => win?.webContents.setZoomFactor(sizeFactor()));
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+}
+
+// Who is talking, in a small always-on-top pop-up while the radio window is minimized or hidden.
+const POPUP_HTML = `<!doctype html><meta charset="utf-8"><style>
+html,body{margin:0;height:100%;background:transparent;overflow:hidden;font:700 13px Segoe UI,sans-serif}
+#p{box-sizing:border-box;height:100%;display:flex;align-items:center;gap:8px;padding:0 12px;border-radius:10px;
+background:rgba(6,14,26,.92);color:#e9f1fb;border:1px solid #267bd7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#p b{color:#36c25a}#p i{width:9px;height:9px;border-radius:50%;background:#36c25a;box-shadow:0 0 6px #36c25a;flex:none}
+</style><div id="p"><i></i><span id="t"></span></div>`;
+
+function radioHidden() {
+  return !win || win.isDestroyed() || win.isMinimized() || !win.isVisible();
+}
+
+function showTalkPopup(text) {
+  if (!text || !radioHidden()) {
+    if (popup && !popup.isDestroyed()) popup.hide();
+    return;
+  }
+  if (!popup || popup.isDestroyed()) {
+    const area = screen.getPrimaryDisplay().workArea;
+    popup = new BrowserWindow({
+      x: area.x + area.width - 284,
+      y: area.y + area.height - 64,
+      width: 260,
+      height: 40,
+      frame: false,
+      transparent: true,
+      resizable: false,
+      focusable: false,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      show: false,
+      backgroundColor: '#00000000',
+      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+    });
+    popup.setAlwaysOnTop(true, 'screen-saver');
+    popup.setIgnoreMouseEvents(true);
+    popup.on('closed', () => { popup = null; });
+    popup.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(POPUP_HTML)}`);
+  }
+  const target = popup;
+  const apply = () => {
+    if (target.isDestroyed()) return;
+    void target.webContents.executeJavaScript(`document.getElementById('t').textContent=${JSON.stringify(String(text).slice(0, 60))}`).catch(() => {});
+    target.showInactive();
+  };
+  if (target.webContents.isLoading()) target.webContents.once('did-finish-load', apply);
+  else apply();
 }
 
 function updateLog(level, args) {
@@ -355,7 +428,8 @@ if (!app.requestSingleInstanceLock()) {
 
     ipcMain.handle('settings:get', () => ({ ...settings, hook: Boolean(uIOhook), relayUrl: DEFAULT_RELAY_URL }));
     ipcMain.handle('settings:set', (_event, patch) => {
-      const allowedKeys = ['key', 'micId', 'outputId', 'volume', 'txVolume', 'listenFx', 'power', 'size', 'fxLevel', 'scan', 'channel', 'deaf', 'ptt'];
+      const allowedKeys = ['key', 'micId', 'outputId', 'volume', 'txVolume', 'listenFx', 'power', 'size', 'fxLevel', 'scan', 'channel', 'deaf', 'ptt',
+        'scanPtt', 'replayKey', 'chanKey', 'night', 'agc', 'syncAt', 'tutorialDone'];
       for (const key of allowedKeys) {
         if (patch && Object.prototype.hasOwnProperty.call(patch, key)) settings[key] = patch[key];
       }
@@ -363,10 +437,11 @@ if (!app.requestSingleInstanceLock()) {
       if (patch && Object.prototype.hasOwnProperty.call(patch, 'size')) applySize();
       return { ...settings, hook: Boolean(uIOhook), relayUrl: DEFAULT_RELAY_URL };
     });
-    ipcMain.handle('ptt:capture', (_event, active) => {
-      capturingPtt = Boolean(active) && Boolean(uIOhook);
-      return capturingPtt;
+    ipcMain.handle('ptt:capture', (_event, active, which = 'ptt') => {
+      capturing = active && uIOhook && BINDS.includes(which) ? which : '';
+      return Boolean(capturing);
     });
+    ipcMain.on('talk:popup', (_event, text) => showTalkPopup(typeof text === 'string' ? text : ''));
     ipcMain.handle('app:version', () => app.getVersion());
     ipcMain.handle('auth:signin', (_event, info) => signIn(info));
     ipcMain.handle('auth:cancel', () => finishSignIn({ error: 'SIGN-IN CANCELLED' }));

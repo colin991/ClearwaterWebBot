@@ -296,6 +296,7 @@ button:focus { outline: none; }
 }
 
 .lcd .card + .card { margin-top: 4px; }
+.lcd .card { flex: none; }
 .lcd .card .zone { font-size: 9px; color: var(--ink-dim); }
 .lcd .card .zone .dispatch { float: right; font-weight: 700; }
 .lcd .card .zone .dispatch.on { color: #138a3a; }
@@ -512,3 +513,39 @@ button:focus { outline: none; }
 .lcd .rows .adj { display: inline-block; padding: 0 3px; font-size: 8px; cursor: pointer; }
 .lcd-foot span { cursor: pointer; }
 .lcd-foot span:hover { background: rgba(255, 255, 255, .15); }
+
+/* Signal and battery animations (just for looks). */
+.sig i, .bat i { transition: opacity .3s, width .6s; }
+.sig.scan i { animation: sig-scan 1.2s infinite; }
+.sig.scan i:nth-child(2) { animation-delay: .15s; }
+.sig.scan i:nth-child(3) { animation-delay: .3s; }
+.sig.scan i:nth-child(4) { animation-delay: .45s; }
+@keyframes sig-scan { 0%, 100% { opacity: .2; } 40% { opacity: 1; } }
+.sig.rx i, .sig.tx i { animation: sig-live .6s infinite alternate; }
+.sig.rx i:nth-child(odd), .sig.tx i:nth-child(odd) { animation-delay: .2s; }
+@keyframes sig-live { from { opacity: 1; } to { opacity: .55; } }
+.bat i { background: linear-gradient(90deg, #e9f1fb 0 70%, #fff 80%, #e9f1fb 90%); background-size: 300% 100%; animation: bat-shine 5s linear infinite; }
+@keyframes bat-shine { from { background-position: 100% 0; } to { background-position: -200% 0; } }
+body.low-power .sig i, body.low-power .bat i { animation: none; }
+
+/* NIGHT: dims the screen and the lit keys for dark games. */
+body.night .lcd { filter: brightness(.42) saturate(.85); }
+body.night .lamp, body.night .lcd-foot { opacity: .6; }
+body.night .keypad button, body.night .pkey { filter: brightness(.7); }
+
+/* 911 calls waiting. */
+.lcd .card.calls { border-color: #d9822b; background: rgba(255, 244, 230, .92); }
+.lcd .card.calls .zone { color: #b4560f; font-weight: 700; }
+.lcd .card.calls .unit { display: flex; justify-content: space-between; gap: 4px; font-size: 9px; font-weight: 700; line-height: 11px; }
+.lcd .card.calls .unit span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lcd .card.calls .unit .where { font-weight: 400; color: #b4560f; }
+.lcd .card.calls .call-detail { font-size: 8px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 1px; }
+
+/* Panic mini map: the postal sits under the marker in the middle. */
+.lcd .pmap { position: relative; align-self: stretch; height: 72px; margin: 2px 0; border-radius: 3px; background-color: #0b1a2c; background-repeat: no-repeat; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .5); }
+.lcd .pmap i { position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #ff2a1a; box-shadow: 0 0 0 2px #fff, 0 0 8px 3px rgba(255, 42, 26, .8); animation: pin-pulse .8s infinite alternate; }
+@keyframes pin-pulse { from { transform: scale(1); } to { transform: scale(1.35); } }
+.lcd .postal { font-size: 17px; font-weight: 800; letter-spacing: 1px; line-height: 1.1; }
+
+/* Tutorial text. */
+.lcd .small.tour { font-size: 10px; line-height: 1.35; margin-top: 4px; color: var(--ink); }
