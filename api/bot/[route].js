@@ -1,9 +1,11 @@
 import action from '../../lib/bot-api/action.js';
 import status from '../../lib/bot-api/status.js';
+import radio from '../../lib/bot-api/radio.js';
 
 const ROUTES = {
   action,
   status,
+  radio,
 };
 
 function routeName(request) {

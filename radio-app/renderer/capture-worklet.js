@@ -31,9 +31,12 @@ class RadioCapture extends AudioWorkletProcessor {
     this.active = false;
     this.peak = 0;
     this.blocks = 0;
+    this.levelEvery = 8;
     this.limiter = new Limiter(options?.processorOptions?.ceiling ?? 0.5);
     this.port.onmessage = (event) => {
-      this.active = Boolean(event.data && event.data.active);
+      const data = event.data || {};
+      if ('active' in data) this.active = Boolean(data.active);
+      if (data.levelEvery) this.levelEvery = data.levelEvery;
     };
   }
 
@@ -49,7 +52,7 @@ class RadioCapture extends AudioWorkletProcessor {
       if (this.active) this.port.postMessage({ samples: out.slice(0) });
     }
     this.blocks += 1;
-    if (this.blocks >= 8) {
+    if (this.blocks >= this.levelEvery) {
       this.port.postMessage({ level: this.peak });
       this.peak = 0;
       this.blocks = 0;

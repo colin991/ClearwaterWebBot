@@ -1,5 +1,6 @@
 import {
   NEXT_COOKIE,
+  RADIO_COOKIE,
   SESSION_COOKIE,
   STATE_COOKIE,
   clearCookie,
@@ -7,6 +8,7 @@ import {
   getAuthConfig,
   makeCookie,
   parseCookies,
+  radioCookieSecret,
   redirect,
   safeEqual,
   safeNextPath,
@@ -125,6 +127,15 @@ export default async function handler(request, response) {
     const pinellasRoles = Array.isArray(pinellasMember?.roles) ? pinellasMember.roles.map(String) : [];
     const hasClearwaterAccess = Boolean(guildMember) && rolesGrantSiteAccess(guildRoles);
     const hasPcsoAccess = guildIds.has(PINELLAS_GUILD_ID) || Boolean(pinellasMember);
+    // The web radio is for every Clearwater member, not only website testers. They get a radio-only
+    // cookie instead of a site session, so it opens nothing else on the site.
+    if (!hasClearwaterAccess && !hasPcsoAccess && next === '/radio' && guildMember) {
+      return redirect(response, '/radio', [
+        clearCookie(STATE_COOKIE),
+        clearCookie(NEXT_COOKIE),
+        makeCookie(RADIO_COOKIE, createSessionToken({ id: user.id, username: user.username, global_name: user.global_name }, radioCookieSecret(sessionSecret)), 60 * 60 * 24 * 7),
+      ]);
+    }
     if (!hasClearwaterAccess && !hasPcsoAccess) {
       return redirect(response, signinErrorPath('not-member', next), [
         clearCookie(STATE_COOKIE),
