@@ -39,7 +39,7 @@ export function buildRadioDownloadPanel(release) {
     ? `**Latest version:** ${release.version}${published ? ` (released <t:${published}:R>)` : ''}`
     : '**Latest version:** the first build is being published. Check back soon.';
   const embed = new EmbedBuilder()
-    .setColor(0xf26b1d)
+    .setColor(0x267bd7)
     .setTitle('📻 Clearwater Radio')
     .setDescription([
       'A radio overlay that sits on top of your game and talks through the radio bot in <#1514128904783139018>.',
