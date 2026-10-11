@@ -15,6 +15,7 @@ import { logger } from './logger.js';
 import { createRadioRelay } from './radioRelay.js';
 import { createRadioKey, verifyRadioKey } from './radioKeys.js';
 import { exchangeRadioCode, radioOAuthConfig } from './radioOAuth.js';
+import { createRadioPanicWatch } from './radioPanic.js';
 
 const UNKNOWN_MEMBER = 10007;
 
@@ -36,7 +37,8 @@ export function handleRadioUpgrade(request, socket, head) {
  * push-to-talk audio from the Clearwater Radio desktop app.
  * @returns {() => void} stop function
  */
-export function startRadioBot(env = process.env) {
+/** @param {{ erlcEvents?: import('node:events').EventEmitter }} options main bot client that emits 'erlcEvent' */
+export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   const token = env.RADIO_BOT_TOKEN?.trim();
   if (!token) {
     logger.info('Radio bot skipped (RADIO_BOT_TOKEN missing).');
@@ -245,8 +247,18 @@ export function startRadioBot(env = process.env) {
     logger.error('Radio bot login failed (check RADIO_BOT_TOKEN).', error);
   });
 
+  const onPanic = createRadioPanicWatch((message) => {
+    relay.alert(message);
+    logger.info(`Radio: panic from ${message.name || 'unknown'} at ${message.location || 'unknown location'} sent to ${relay.listeners} radio(s).`);
+  });
+  const onErlcEvent = (payload) => {
+    try { onPanic(payload); } catch (error) { logger.warn(`Radio panic failed: ${error?.message || error}`); }
+  };
+  erlcEvents?.on('erlcEvent', onErlcEvent);
+
   return () => {
     stopped = true;
+    erlcEvents?.off('erlcEvent', onErlcEvent);
     clearTimeout(rejoinTimer);
     clearInterval(statsTimer);
     if (activeRelay === relay) activeRelay = null;

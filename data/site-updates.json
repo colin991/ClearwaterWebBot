@@ -3252,6 +3252,13 @@
       "summary": "The Clearwater Radio app now plays what you hear with a light radio effect by default. Change it with FX in the menu (RADIO, POLICE or OFF). What you send to Discord stays clean.",
       "createdAt": "2026-10-11T14:05:49.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-panic-alert",
+      "title": "Radio flashes red on a panic",
+      "summary": "When a panic comes through from ER:LC, or someone types ;panic with a location in game chat, every Clearwater Radio app flashes red for 10 seconds and shows who pressed it and where.",
+      "createdAt": "2026-10-11T14:11:44.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

@@ -132,7 +132,7 @@ try {
 }
 
 const stopBotServices = startBotServices(client, config);
-const stopRadioBot = startRadioBot();
+const stopRadioBot = startRadioBot(process.env, { erlcEvents: client });
 let stopErlcSync = () => {};
 let stopRobloxGroupSync = () => {};
 let stopDepartmentSalary = () => {};

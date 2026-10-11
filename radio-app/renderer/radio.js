@@ -5,6 +5,7 @@
 const api = window.radioApp;
 const $ = (id) => document.getElementById(id);
 const el = {
+  radio: $('radio'),
   lcdLeft: $('lcdLeft'),
   lcdRight: $('lcdRight'),
   lcdBody: $('lcdBody'),
@@ -63,6 +64,7 @@ const state = {
   txCancel: false,
   pttHeld: false,
   rx: new Map(),
+  panic: null,
   toast: null,
   update: null,
   capturing: false,
@@ -746,12 +748,34 @@ function onMessage(message) {
     case 'tx':
       onTxReply(message);
       break;
+    case 'panic':
+      showPanic(message);
+      break;
     case 'error':
       state.error = message.message || 'Radio error.';
       break;
     default:
       break;
   }
+}
+
+const PANIC_MS = 10_000;
+let panicTimer = null;
+
+// An in-game panic: flash the radio red and show who and where for 10 seconds.
+function showPanic(message) {
+  state.panic = {
+    name: String(message.name || 'UNKNOWN UNIT').toUpperCase().slice(0, 40),
+    location: String(message.location || 'UNKNOWN LOCATION').toUpperCase().slice(0, 60),
+  };
+  clearTimeout(panicTimer);
+  el.radio.classList.add('panic');
+  panicTimer = setTimeout(() => {
+    state.panic = null;
+    el.radio.classList.remove('panic');
+    render();
+  }, PANIC_MS);
+  render();
 }
 
 /* ---------- push to talk ---------- */
@@ -984,6 +1008,10 @@ function render() {
     }
     default:
       break;
+  }
+  if (state.panic) {
+    left = 'PANIC';
+    body = `<div class="big">PANIC</div><div class="mid">${escapeHtml(state.panic.name)}</div><div class="small">${escapeHtml(state.panic.location)}</div>`;
   }
   el.lcdLeft.textContent = left;
   el.lcdBody.innerHTML = body;
