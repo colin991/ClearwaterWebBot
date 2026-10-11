@@ -8,7 +8,7 @@
 <title>Radio Staff | Clearwater Radio</title>
 <link rel="icon" type="image/png" href="assets/clearwater-logo.png">
 <link rel="apple-touch-icon" href="assets/clearwater-logo.png">
-<link rel="stylesheet" href="radio-staff.css?v=20261011c">
+<link rel="stylesheet" href="radio-staff.css?v=20261011d">
 </head>
 <body>
 <header class="rs-top">
@@ -27,9 +27,55 @@
   </section>
 
   <section class="rs-card">
+    <h2>Staff tools</h2>
+    <div class="rs-tool-row">
+      <div><b>Listen live</b><p class="rs-fine">Opens the radio in monitor mode: you hear every channel and can't talk.</p></div>
+      <a class="rs-btn rs-linkbtn" href="/radio?monitor=1" target="_blank" rel="noopener">Listen live</a>
+    </div>
+    <form id="shoutForm" class="rs-stack">
+      <label class="rs-field"><span>Announcement on every radio (read aloud with text to speech, not in Discord)</span>
+        <textarea id="shoutText" maxlength="200" rows="2" placeholder="Server restart in 5 minutes."></textarea></label>
+      <div class="rs-save"><button type="submit" class="rs-btn">Play on all radios</button></div>
+    </form>
+    <form id="eventForm" class="rs-stack">
+      <label class="rs-field"><span id="eventState">Event channel: closed</span>
+        <input id="eventName" maxlength="32" placeholder="Event name, e.g. Car Meet" autocomplete="off"></label>
+      <div class="rs-save">
+        <button type="button" id="eventClose" class="rs-btn rs-kick" hidden>Close event channel</button>
+        <button type="submit" id="eventOpen" class="rs-btn">Open event channel</button>
+      </div>
+      <p class="rs-fine">The event channel shows on every radio as CH 4 while it's open. Closing it moves everyone on it back to CH 1.</p>
+    </form>
+  </section>
+
+  <section class="rs-card">
+    <h2>Scene timers <span id="sceneCount" class="rs-count">0</span></h2>
+    <p class="rs-fine">How long each unit has been in a traffic stop or scene voice channel. Dispatch (!C) sees the same on their radio under SCENES.</p>
+    <ul id="sceneList" class="rs-list"></ul>
+  </section>
+
+  <section class="rs-card">
     <h2>Flags <span id="flagCount" class="rs-count">0</span></h2>
     <p class="rs-fine">Things the radio noticed for staff to check, like a Civilian-team player on the police radio. Kept for 24 hours.</p>
     <ul id="flagList" class="rs-list"></ul>
+  </section>
+
+  <section class="rs-card">
+    <div class="rs-head">
+      <h2>Recordings</h2>
+      <button type="button" id="recLoad" class="rs-btn rs-ghost">Load</button>
+    </div>
+    <p class="rs-fine">Every radio transmission and everything said in the Discord radio channel from the last 24 hours, for reviewing reports. Older ones are deleted.</p>
+    <form id="recFilter" class="rs-search" hidden>
+      <input id="recSearch" type="search" maxlength="40" placeholder="Filter by name or channel" autocomplete="off" aria-label="Filter recordings">
+    </form>
+    <ul id="recList" class="rs-list"></ul>
+  </section>
+
+  <section class="rs-card">
+    <h2>Crash reports <span id="crashCount" class="rs-count">0</span></h2>
+    <p class="rs-fine">Errors sent in by radios (desktop and web) in the last 7 days.</p>
+    <ul id="crashList" class="rs-list"></ul>
   </section>
 
   <section class="rs-card">
@@ -86,13 +132,13 @@
     </div>
   </section>
 
-  <p class="rs-fine rs-center">Force-muted members still hear the radio but can't talk. A kick keeps them off the radio for 5 minutes. Every action is posted in the radio channel chat.</p>
+  <p class="rs-fine rs-center">Warnings pop up on the member's radio until they press OK. Force-muted members still hear the radio but can't talk. A kick keeps them off the radio for 5 minutes. Every action is posted in the radio channel chat.</p>
 </main>
 
 <section id="gate" class="rs-gate" hidden><div class="rs-card rs-gate-card"></div></section>
 <div id="toast" class="rs-toast" role="status" aria-live="polite" hidden></div>
 
-<script src="radio-staff-map.js?v=20261011c"></script>
-<script src="radio-staff.js?v=20261011c"></script>
+<script src="radio-staff-map.js?v=20261011d"></script>
+<script src="radio-staff.js?v=20261011d"></script>
 </body>
 </html>

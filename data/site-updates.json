@@ -3483,6 +3483,13 @@
       "summary": "When you're downed in game, your radio cracks and goes very weak for 20 seconds, with a countdown on screen. Staff can draw tunnels and parking garages on the coverage map and turn on building interference (off by default) for a weaker signal inside them. NEAREST in the radio settings shows the 3 closest units in game with their postal and distance. A Civilian-team player on the police radio is flagged on the radio staff page and told on their radio that staff have been notified. The 911 list on the radio now only shows people waiting in the 911 voice channel.",
       "createdAt": "2026-10-11T23:30:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-staff-tools-2026-10-11",
+      "title": "Radio staff tools: warnings, live listen, recordings, announcements, event channel",
+      "summary": "The radio staff page at cwpcso.com/radio-staff can now send a warning that pops up on a unit's radio, listen live to every channel, play recordings of the last 24 hours of radio traffic, play a text-to-speech announcement on every radio, and open a temporary event channel (CH 4). It also shows scene timers, crash reports from radios, and flags anyone who keeps talking over dispatch. Radios show a one-time notice that transmissions are recorded, and dispatch can see scene timers under SCENES.",
+      "createdAt": "2026-10-11T23:59:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

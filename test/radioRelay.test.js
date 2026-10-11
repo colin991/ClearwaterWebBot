@@ -847,3 +847,157 @@ test('a one-off message reaches every radio a member has open, and nobody else',
     await harness.close();
   }
 });
+
+test('talking over dispatch is reported, on a radio or in the Discord channel', async () => {
+  const talkOvers = [];
+  const harness = await startRelay({
+    authorize: async (userId) => ({ ok: true, name: userId === ALICE ? 'Alice' : 'Bob !C' }),
+    onTalkOver: (event) => talkOvers.push(event),
+  });
+  try {
+    const alice = await signIn(harness, ALICE);
+    const bob = await signIn(harness, BOB);
+    bob.send({ type: 'tx', active: true });
+    await bob.until(() => bob.messages.find((m) => m.type === 'tx' && m.ok));
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.reason === 'busy'));
+    assert.deepEqual(talkOvers.at(-1), { userId: ALICE, name: 'Alice', channel: 'Radio', dispatcher: 'Bob !C' });
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', true);
+    assert.equal(talkOvers.at(-1).userId, '333333333333333333', 'speaking in Discord over a radio dispatcher');
+    bob.send({ type: 'tx', active: false });
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', false);
+
+    // A Discord dispatcher speaking: a radio talking on MAIN is talking over them.
+    harness.relay.discordSpeaking('444444444444444444', 'Dee !C', true);
+    alice.send({ type: 'tx', active: false });
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.filter((m) => m.type === 'tx' && m.ok).length >= 1);
+    assert.equal(talkOvers.at(-1).dispatcher, 'Dee !C');
+    assert.equal(talkOvers.length, 3);
+    alice.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('every transmission is handed to the recorder, and Discord speech too', async () => {
+  const recordings = [];
+  const harness = await startRelay({
+    record: (meta) => {
+      const entry = { meta, packets: 0, ended: false };
+      recordings.push(entry);
+      return { push: () => { entry.packets += 1; }, end: () => { entry.ended = true; } };
+    },
+  });
+  try {
+    const alice = await signIn(harness, ALICE);
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
+    alice.ws.send(Buffer.from([1, 2, 3]));
+    alice.ws.send(Buffer.from([4, 5, 6]));
+    alice.send({ type: 'tx', active: false });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(recordings[0].meta.name, 'Alice');
+    assert.equal(recordings[0].meta.channelName, 'Radio');
+    assert.equal(recordings[0].packets, 2);
+    assert.equal(recordings[0].ended, true);
+
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', true);
+    harness.relay.relayDiscordAudio('333333333333333333', Buffer.from([9]));
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', false);
+    assert.deepEqual([recordings[1].meta.source, recordings[1].packets, recordings[1].ended], ['discord', 1, true]);
+    alice.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('staff monitor hears every channel, listen-only, and only admins get it', async () => {
+  const harness = await startRelay({
+    authorize: async (userId) => ({ ok: true, name: userId === ALICE ? 'Alice' : 'Bob', staff: userId === ALICE }),
+    isStaff: async (userId) => userId === ALICE,
+  });
+  try {
+    const alice = await signIn(harness, ALICE);
+    const bob = await signIn(harness, BOB);
+    assert.equal(alice.messages.find((m) => m.type === 'ready').you.staff, true);
+    bob.send({ type: 'monitor', active: true });
+    assert.equal((await bob.until(() => bob.messages.find((m) => m.type === 'monitor'))).reason, 'staff-only');
+
+    alice.send({ type: 'monitor', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'monitor' && m.active));
+    assert.equal(harness.relay.users().find((u) => u.userId === ALICE).monitor, true);
+    bob.send({ type: 'channel', id: 'srt' });
+    await bob.until(() => bob.messages.find((m) => m.type === 'channel'));
+    bob.send({ type: 'tx', active: true });
+    await bob.until(() => bob.messages.find((m) => m.type === 'tx' && m.ok));
+    bob.ws.send(Buffer.from([7, 7]));
+    await alice.until(() => alice.messages.find((m) => m.type === 'talk' && m.channel === 'srt' && m.active));
+    await alice.until(() => alice.binary.length > 0);
+    alice.send({ type: 'tx', active: true });
+    assert.equal((await alice.until(() => alice.messages.find((m) => m.type === 'tx'))).reason, 'monitor');
+    alice.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('staff open an event channel as CH 4, and closing it moves everyone back to CH 1', async () => {
+  const harness = await startRelay();
+  try {
+    const alice = await signIn(harness, ALICE);
+    harness.relay.openEvent('Car Meet', 'staff');
+    await alice.until(() => alice.messages.find((m) => m.type === 'event' && m.open));
+    const status = await alice.until(() => alice.messages.find((m) => m.type === 'status' && m.event?.name === 'Car Meet'));
+    assert.deepEqual(status.channels.map((c) => c.id), ['main', 'srt', 'freq', 'event']);
+    alice.send({ type: 'channel', id: 'event' });
+    await alice.until(() => alice.messages.find((m) => m.type === 'channel' && m.channelId === 'event'));
+    assert.equal(harness.relay.closeEvent(), 1);
+    const moved = await alice.until(() => alice.messages.find((m) => m.type === 'moved'));
+    assert.equal(moved.reason, 'event-closed');
+    assert.equal(harness.relay.users()[0].channel, 'main');
+    assert.equal(harness.relay.event, null);
+    alice.send({ type: 'channel', id: 'event' });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(harness.relay.users()[0].channel, 'main', 'a closed event channel cannot be joined');
+    alice.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('crash reports from a radio reach the staff panel, a few per connection', async () => {
+  const crashes = [];
+  const harness = await startRelay({ onCrash: (report) => crashes.push(report) });
+  try {
+    const alice = await signIn(harness, ALICE);
+    for (let i = 0; i < 8; i += 1) alice.send({ type: 'crash', message: `boom ${i}`, stack: 'at x', where: 'renderer', version: '1.2.3' });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(crashes.length, 5);
+    assert.deepEqual([crashes[0].userId, crashes[0].name, crashes[0].message, crashes[0].version], [ALICE, 'Alice', 'boom 0', '1.2.3']);
+    alice.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('dispatch radios get scene timers; other radios do not', async () => {
+  const harness = await startRelay({
+    authorize: async (userId) => ({ ok: true, name: userId === ALICE ? 'Alice' : 'Bob !C' }),
+    scenes: () => [{ id: '333333333333333333', name: 'Carl', channel: 'Traffic Stop 1', since: Date.now() - 65_000 }],
+  });
+  try {
+    const alice = await signIn(harness, ALICE);
+    const bob = await signIn(harness, BOB);
+    const ready = bob.messages.find((m) => m.type === 'ready');
+    assert.equal(ready.scenes[0].channel, 'Traffic Stop 1');
+    assert.ok(ready.scenes[0].seconds >= 65);
+    assert.equal('scenes' in alice.messages.find((m) => m.type === 'ready'), false);
+    alice.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});

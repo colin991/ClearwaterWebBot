@@ -23,6 +23,10 @@ const PANEL_FOOTER = 'Clearwater Radio staff panel';
 /** The same panel on the website, for admins signed in with Discord. */
 export const RADIO_STAFF_URL = 'https://www.cwpcso.com/radio-staff';
 export const RADIO_STAFF_ACTIONS = Object.freeze(['mute', 'unmute', 'kick']);
+/** Website-only staff tools: warning pop-ups, shout-outs, the event channel and recordings. */
+export const RADIO_STAFF_TOOLS = Object.freeze(['warn', 'shout', 'event-open', 'event-close', 'recordings', 'recording']);
+export const RADIO_WARNING_MAX = 200;
+export const RADIO_SHOUT_MAX = 200;
 
 // radioBot.js registers the live relay controls here once the radio is running.
 let controls = null;
@@ -93,7 +97,7 @@ export function buildRadioStaffPanel(selectedId = '') {
  * muted members who are not on a radio.
  */
 export function radioStaffSnapshot(nameOf = () => '') {
-  if (!controls) return { running: false, users: [], muted: [], coverage: normalizeCoverage({}), positions: [], flags: [] };
+  if (!controls) return { running: false, users: [], muted: [], coverage: normalizeCoverage({}), positions: [], flags: [], crashes: [], scenes: [], event: null };
   const users = controls.users();
   const onRadio = new Set(users.map((user) => user.userId));
   return {
@@ -105,12 +109,18 @@ export function radioStaffSnapshot(nameOf = () => '') {
       muted: Boolean(user.muted),
       since: user.since || null,
       signal: user.signal ?? null,
+      monitor: Boolean(user.monitor),
     })),
     muted: [...(controls.muted || [])].filter((id) => !onRadio.has(id)).map((id) => ({ userId: id, name: nameOf(id) || '' })),
     coverage: controls.coverage?.() || normalizeCoverage({}),
     positions: controls.positions?.() || [],
     // Flags for staff to look at, like a Civilian-team player on the police radio.
     flags: (controls.flags?.() || []).map((flag) => ({ ...flag, name: flag.name || nameOf(flag.userId) || 'Unknown' })),
+    // Radio crash reports (desktop and web), newest first.
+    crashes: (controls.crashes?.() || []).map((crash) => ({ ...crash, name: crash.name || nameOf(crash.userId) || 'Unknown' })),
+    // Units in the scene / traffic stop voice channels and how long they've been there.
+    scenes: (controls.scenes?.() || []).map((scene) => ({ ...scene })),
+    event: controls.event?.() || null,
   };
 }
 
@@ -182,4 +192,60 @@ export async function handleRadioStaffInteraction(interaction) {
   await runRadioStaffAction(action, userId, interaction.user.id);
   await interaction.update(buildRadioStaffPanel(userId));
   return true;
+}
+
+const cleanText = (value, max) => String(value ?? '').replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+
+/**
+ * The website's staff tools. Returns what the page needs; throws with a status when it can't.
+ * warn: a pop-up on one unit's radio. shout: text read aloud on every radio. event-open / event-close:
+ * the temporary event channel. recordings / recording: the last 24 hours of transmissions.
+ */
+export async function runRadioStaffTool(action, payload, by) {
+  const fail = (message, status) => Object.assign(new Error(message), { status });
+  if (!RADIO_STAFF_TOOLS.includes(action)) throw fail('Unknown action.', 400);
+  if (!controls) throw fail('The radio is not running on the bot host right now.', 503);
+  const note = (content) => { void Promise.resolve(controls.postStaff?.({ content, allowedMentions: { parse: [] } })).catch(() => {}); };
+
+  if (action === 'warn') {
+    const userId = String(payload?.userId || '');
+    const text = cleanText(payload?.text, RADIO_WARNING_MAX);
+    if (!/^\d{15,22}$/.test(userId)) throw fail('Pick a member first.', 400);
+    if (!text) throw fail('Write the warning first.', 400);
+    const sent = controls.warn?.(userId, text) || 0;
+    if (!sent) throw fail('They are not on a radio right now.', 409);
+    logger.info(`Radio staff: warning to ${userId} by ${by}`);
+    note(`⚠️ <@${by}> sent <@${userId}> a radio warning (website): "${text}"`);
+    return { ok: true, action, userId };
+  }
+  if (action === 'shout') {
+    const text = cleanText(payload?.text, RADIO_SHOUT_MAX);
+    if (!text) throw fail('Write the announcement first.', 400);
+    controls.shout?.(text);
+    logger.info(`Radio staff: shout-out by ${by}`);
+    note(`📢 <@${by}> played an announcement on every radio (website): "${text}"`);
+    return { ok: true, action };
+  }
+  if (action === 'event-open') {
+    const opened = controls.openEvent?.(cleanText(payload?.name, 32), by);
+    if (!opened) throw fail('The event channel is not available.', 503);
+    logger.info(`Radio staff: event channel "${opened.name}" opened by ${by}`);
+    note(`🎪 <@${by}> opened the event channel on the radio: **${opened.name}** (CH 4).`);
+    return { ok: true, action, event: opened };
+  }
+  if (action === 'event-close') {
+    const moved = controls.closeEvent?.() || 0;
+    logger.info(`Radio staff: event channel closed by ${by} (${moved} moved to CH 1)`);
+    note(`🎪 <@${by}> closed the event channel; ${moved} radio${moved === 1 ? '' : 's'} moved back to CH 1.`);
+    return { ok: true, action, moved };
+  }
+  if (action === 'recordings') {
+    const list = (await controls.recordings?.()) || [];
+    return { ok: true, action, recordings: list.slice(0, 300) };
+  }
+  // recording: one transmission's audio, as base64 Ogg Opus for the page to play.
+  const found = await controls.recording?.(String(payload?.id || ''));
+  if (!found?.audio) throw fail('That recording is gone (they are kept for 24 hours).', 404);
+  logger.info(`Radio staff: recording ${found.entry.id} played by ${by}`);
+  return { ok: true, action, recording: found.entry, audio: found.audio.toString('base64'), type: 'audio/ogg' };
 }

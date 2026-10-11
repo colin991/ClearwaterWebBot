@@ -4,7 +4,7 @@ import { PermissionFlagsBits } from 'discord.js';
 import radioStaffRoute from '../lib/bot-api/radio-staff.js';
 import { RADIO_COOKIE, SESSION_COOKIE, createSessionToken, radioCookieSecret } from '../lib/discord-auth.js';
 import { radioStaffGuild } from '../utils/botApiServer.js';
-import { radioStaffSnapshot, runRadioStaffAction, setRadioStaffControls } from '../utils/radioStaff.js';
+import { radioStaffSnapshot, runRadioStaffAction, runRadioStaffTool, setRadioStaffControls } from '../utils/radioStaff.js';
 import { CLEARWATER_GUILD_ID } from '../utils/staffRanks.js';
 
 const secret = 'test-session-secret-value-32chars!!';
@@ -95,7 +95,7 @@ test('the bot only lets members with Administrator use the website panel', async
 
 test('staff actions from the website mute, unmute and kick through the radio controls', async () => {
   setRadioStaffControls(null);
-  assert.deepEqual(radioStaffSnapshot(), { running: false, users: [], muted: [], coverage: { towers: [], zones: [], buildings: false }, positions: [], flags: [] });
+  assert.deepEqual(radioStaffSnapshot(), { running: false, users: [], muted: [], coverage: { towers: [], zones: [], buildings: false }, positions: [], flags: [], crashes: [], scenes: [], event: null });
   await assert.rejects(runRadioStaffAction('mute', ALICE, ADMIN), { status: 503 });
 
   const muted = new Set([BOB]);
@@ -110,7 +110,7 @@ test('staff actions from the website mute, unmute and kick through the radio con
   });
 
   const snapshot = radioStaffSnapshot((id) => (id === BOB ? 'Bob' : ''));
-  assert.deepEqual(snapshot.users, [{ userId: ALICE, name: 'Alice', channel: 'Radio', muted: false, since: 5, signal: null }]);
+  assert.deepEqual(snapshot.users, [{ userId: ALICE, name: 'Alice', channel: 'Radio', muted: false, since: 5, signal: null, monitor: false }]);
   assert.deepEqual(snapshot.muted, [{ userId: BOB, name: 'Bob' }]);
 
   await runRadioStaffAction('mute', ALICE, ADMIN, { from: 'website' });
@@ -159,5 +159,53 @@ test('flags for staff (an off-team player on the radio) show on the website pane
   });
   const { flags } = radioStaffSnapshot((id) => (id === ALICE ? 'Alice' : ''));
   assert.deepEqual(flags, [{ kind: 'off-team', userId: ALICE, name: 'Alice', detail: 'On the Civilian team in game.', at: 1 }]);
+  setRadioStaffControls(null);
+});
+
+test('the website forwards staff tools to the bot with only the fields each one needs', async () => {
+  const warn = await call(siteCookie(), { action: 'warn', userId: ALICE, text: 'Stop talking over dispatch', extra: 'x' });
+  assert.deepEqual(warn.asked[0].body, { discordId: ADMIN, action: 'warn', userId: ALICE, text: 'Stop talking over dispatch' });
+  assert.equal((await call(siteCookie(), { action: 'warn', userId: ALICE, text: '  ' })).status, 400);
+  assert.deepEqual((await call(siteCookie(), { action: 'shout', text: 'Restart soon' })).asked[0].body, { discordId: ADMIN, action: 'shout', text: 'Restart soon' });
+  assert.deepEqual((await call(siteCookie(), { action: 'event-open', name: 'Car Meet' })).asked[0].body, { discordId: ADMIN, action: 'event-open', name: 'Car Meet' });
+  assert.deepEqual((await call(siteCookie(), { action: 'recording', id: 'abc-123' })).asked[0].body, { discordId: ADMIN, action: 'recording', id: 'abc-123' });
+  assert.equal((await call(siteCookie(), { action: 'recording', id: '../etc' })).status, 400);
+  const gone = await call(siteCookie(), { action: 'recording', id: 'abc-123' }, { bot: { ok: false, status: 404, json: async () => ({ error: 'That recording is gone.' }) } });
+  assert.equal(gone.status, 404);
+});
+
+test('staff tools warn a unit, play a shout-out, run the event channel and play recordings', async () => {
+  const posts = [];
+  const sent = [];
+  let event = null;
+  setRadioStaffControls({
+    users: () => [],
+    muted: [],
+    warn: (userId, text) => { sent.push(['warn', userId, text]); return userId === ALICE ? 1 : 0; },
+    shout: (text) => sent.push(['shout', text]),
+    event: () => event,
+    openEvent: (name) => { event = { name: name || 'Server Event' }; return event; },
+    closeEvent: () => { event = null; return 2; },
+    recordings: async () => [{ id: 'r1', name: 'Alice' }],
+    recording: async (id) => (id === 'r1' ? { entry: { id: 'r1' }, audio: Buffer.from('OggS') } : null),
+    postStaff: async (payload) => { posts.push(payload.content); },
+  });
+  await runRadioStaffTool('warn', { userId: ALICE, text: ' Stop\n spamming ' }, ADMIN);
+  assert.deepEqual(sent[0], ['warn', ALICE, 'Stop spamming']);
+  await assert.rejects(runRadioStaffTool('warn', { userId: BOB, text: 'hi' }, ADMIN), { status: 409 });
+  await assert.rejects(runRadioStaffTool('shout', { text: '' }, ADMIN), { status: 400 });
+  await runRadioStaffTool('shout', { text: 'Restart in 5' }, ADMIN);
+  assert.deepEqual(sent.at(-1), ['shout', 'Restart in 5']);
+  assert.deepEqual((await runRadioStaffTool('event-open', { name: 'Car Meet' }, ADMIN)).event, { name: 'Car Meet' });
+  assert.deepEqual(radioStaffSnapshot().event, { name: 'Car Meet' });
+  assert.equal((await runRadioStaffTool('event-close', {}, ADMIN)).moved, 2);
+  assert.equal((await runRadioStaffTool('recordings', {}, ADMIN)).recordings.length, 1);
+  const played = await runRadioStaffTool('recording', { id: 'r1' }, ADMIN);
+  assert.equal(Buffer.from(played.audio, 'base64').toString(), 'OggS');
+  await assert.rejects(runRadioStaffTool('recording', { id: 'r2' }, ADMIN), { status: 404 });
+  await assert.rejects(runRadioStaffTool('ban', {}, ADMIN), { status: 400 });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(posts.length, 4, 'warn, shout, event open and close are noted in the radio chat');
+  assert.match(posts[0], /radio warning/);
   setRadioStaffControls(null);
 });

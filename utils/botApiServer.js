@@ -21,7 +21,7 @@ import { memberHasSiteAccess } from '../lib/site-access.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess } from './staffRanks.js';
 import { config } from '../config.js';
 import { handleRadioUpgrade, radioWebSession } from './radioBot.js';
-import { radioStaffSnapshot, runRadioStaffAction, saveRadioCoverage } from './radioStaff.js';
+import { RADIO_STAFF_TOOLS, radioStaffSnapshot, runRadioStaffAction, runRadioStaffTool, saveRadioCoverage } from './radioStaff.js';
 import { PermissionFlagsBits } from 'discord.js';
 
 const UNKNOWN_MEMBER = 10007;
@@ -225,6 +225,12 @@ export function startBotApiServer(client, {
           if (payload.action === 'coverage') {
             await saveRadioCoverage(payload.coverage, discordId);
             return sendJson(response, 200, { ok: true, action: 'coverage', ...radioStaffView(access.guild, access.member) });
+          }
+          if (RADIO_STAFF_TOOLS.includes(payload.action)) {
+            const result = await runRadioStaffTool(payload.action, payload, discordId);
+            // Recordings come back on their own; everything else refreshes the panel too.
+            if (payload.action === 'recordings' || payload.action === 'recording') return sendJson(response, 200, result);
+            return sendJson(response, 200, { ...result, ...radioStaffView(access.guild, access.member) });
           }
           const result = await runRadioStaffAction(String(payload.action || ''), String(payload.userId || ''), discordId, { from: 'website' });
           return sendJson(response, 200, { ...result, ...radioStaffView(access.guild, access.member) });
