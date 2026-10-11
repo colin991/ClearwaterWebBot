@@ -334,6 +334,12 @@ button:focus { outline: none; }
 }
 
 .lcd .list li .meta { display: block; font-size: 8px; opacity: .75; }
+.lcd .list.users li { display: flex; justify-content: space-between; gap: 4px; }
+.lcd .list.users li.hdr { justify-content: flex-start; font-weight: 700; color: var(--accent); background: rgba(31, 98, 179, .1); margin-top: 2px; }
+.lcd .list.users li.hdr.cur::before { content: '\25B8 '; }
+.lcd .list.users li.dim { opacity: .55; }
+.lcd .list.users li .where { font-size: 8px; opacity: .8; white-space: nowrap; }
+.lcd .list.users li.sel, .lcd .list.users li.hdr.sel { background: var(--accent); color: #fff; }
 
 .lcd .meter {
   width: 100%;

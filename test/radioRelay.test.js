@@ -366,3 +366,30 @@ test('a radio approving Discord sign-in in the browser is not cut off by the aut
     await harness.close();
   }
 });
+
+test('each channel lists app radios and Discord members together', async () => {
+  const discord = [{ id: '333333333333333333', name: 'Carl' }, { id: BOB, name: 'Bob (VC)' }];
+  const harness = await startRelay({ voiceMembers: () => discord });
+  try {
+    const alice = client(harness.url);
+    const bob = client(harness.url);
+    await Promise.all([once(alice.ws, 'open'), once(bob.ws, 'open')]);
+    alice.send({ type: 'auth', key: createRadioKey(ALICE, env), channel: 'srt' });
+    await alice.until(() => alice.messages.find((m) => m.type === 'ready'));
+    bob.send({ type: 'auth', key: createRadioKey(BOB, env) });
+    await bob.until(() => bob.messages.find((m) => m.type === 'ready'));
+    const status = await alice.until(() => alice.messages
+      .find((m) => m.type === 'status' && m.channels[0].members.some((member) => member.id === BOB && member.app)));
+    const [main, srt, freq] = status.channels;
+    assert.deepEqual(main.members, [
+      { id: BOB, name: 'Bob', app: true, discord: true },
+      { id: '333333333333333333', name: 'Carl', app: false, discord: true },
+    ]);
+    assert.deepEqual(srt.members, [{ id: ALICE, name: 'Alice', app: true, discord: false }]);
+    assert.deepEqual(freq.members, []);
+    alice.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});

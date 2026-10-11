@@ -57,6 +57,7 @@ function send(socket, message) {
  *   `removed: true` means the member is not in the server or lost radio access; their app is closed.
  * @param {(userId: string) => ({ push(packet: Buffer): void, end(): void }|null)} options.openTransmit
  * @param {() => { online: boolean, channel: string }} options.status
+ * @param {() => { id: string, name: string }[]} [options.voiceMembers] members sitting in the Discord radio channel
  * @param {(userId: string, name: string) => Promise<{ name?: string, location?: string, unit?: string, postal?: string }|null>} [options.locatePanic]
  *   who and where a radio's EMER press came from, for the panic alert.
  */
@@ -69,6 +70,7 @@ export function createRadioRelay({
   openTransmit,
   status,
   inVoice = () => false,
+  voiceMembers = () => [],
   locatePanic = async () => null,
   onPanic = () => {},
   now = () => Date.now(),
@@ -111,6 +113,25 @@ export function createRadioRelay({
     }
   }
 
+  /** Everyone on a channel, app radios and (for MAIN) the Discord channel together; someone in both is listed once. */
+  function rosterFor(channel) {
+    const byId = new Map();
+    for (const socket of clients) {
+      const radio = socket.radio;
+      if (radio?.userId && radio.channel === channel) byId.set(radio.userId, { id: radio.userId, name: radio.name, app: true, discord: false });
+    }
+    if (channel === RADIO_MAIN_CHANNEL) {
+      let members = [];
+      try { members = voiceMembers() || []; } catch { /* Discord cache hiccup: apps only */ }
+      for (const member of members) {
+        const entry = byId.get(member.id);
+        if (entry) entry.discord = true;
+        else byId.set(member.id, { id: member.id, name: member.name, app: false, discord: true });
+      }
+    }
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   function statusFor(socket) {
     const channel = socket.radio.channel;
     const base = status();
@@ -120,7 +141,7 @@ export function createRadioRelay({
       online: channel === RADIO_MAIN_CHANNEL ? base.online : true,
       channel: channelName(channel),
       channelId: channel,
-      channels: channelList().map(({ id, name }) => ({ id, name })),
+      channels: channelList().map(({ id, name }) => ({ id, name, members: rosterFor(id) })),
       listeners: listenerCount(channel),
       inVoice: channel === RADIO_MAIN_CHANNEL && Boolean(inVoice(socket.radio.userId)),
     };
