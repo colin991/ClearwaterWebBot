@@ -334,6 +334,12 @@ button:focus { outline: none; }
 }
 
 .lcd .list li .meta { display: block; font-size: 8px; opacity: .75; }
+.lcd .list.users li { display: flex; justify-content: space-between; gap: 4px; }
+.lcd .list.users li.hdr { justify-content: flex-start; font-weight: 700; color: var(--accent); background: rgba(31, 98, 179, .1); margin-top: 2px; }
+.lcd .list.users li.hdr.cur::before { content: '\25B8 '; }
+.lcd .list.users li.dim { opacity: .55; }
+.lcd .list.users li .where { font-size: 8px; opacity: .8; white-space: nowrap; }
+.lcd .list.users li.sel, .lcd .list.users li.hdr.sel { background: var(--accent); color: #fff; }
 
 .lcd .meter {
   width: 100%;
@@ -390,6 +396,8 @@ button:focus { outline: none; }
 #softR { grid-column: 3; grid-row: 1; }
 .okkey { grid-column: 1; grid-row: 2; }
 .backkey { grid-column: 3; grid-row: 2; display: grid; place-items: center; }
+.gearkey { display: grid; place-items: center; }
+.gearkey svg { width: 15px; height: 15px; fill: none; stroke: var(--key-text); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .backkey svg { width: 14px; height: 14px; fill: none; stroke: var(--key-text); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 
 .dpad {

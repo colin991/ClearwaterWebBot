@@ -3322,6 +3322,20 @@
       "summary": "Signing in to the Clearwater Radio with Discord now works even when approving in the browser takes more than a few seconds. Before, the radio gave up after 8 seconds and showed NO SIGNAL.",
       "createdAt": "2026-10-11T15:25:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-who-is-on",
+      "title": "See who is on each radio channel",
+      "summary": "The Clearwater Radio menu has a new WHO screen listing everyone on each channel, with people on the app and people in the Discord radio voice channel shown together and marked APP, DISCORD VC or APP + VC.",
+      "createdAt": "2026-10-11T15:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-gear-key",
+      "title": "Settings gear on the radio",
+      "summary": "The P1 key on the Clearwater Radio is now a gear icon that opens the radio's settings.",
+      "createdAt": "2026-10-11T15:32:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

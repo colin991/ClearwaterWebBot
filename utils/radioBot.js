@@ -110,6 +110,9 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     onPanic: (message) => {
       logger.info(`Radio: EMER from ${message.name} at ${message.location || 'unknown location'} sent to ${relay.listeners} radio(s).`);
     },
+    voiceMembers: () => [...(channel?.members?.values?.() || [])]
+      .filter((member) => !member.user?.bot)
+      .map((member) => ({ id: member.id, name: member.displayName || member.user?.username || 'Member' })),
     inVoice: (userId) => (channel?.guild?.voiceStates?.cache?.get(userId)?.channelId || null) === RADIO_CHANNEL_ID,
     // `removed` closes the member's radio app; anything else (Discord or bot trouble) is retried.
     async authorize(userId) {

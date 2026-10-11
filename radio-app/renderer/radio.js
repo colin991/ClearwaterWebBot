@@ -35,6 +35,7 @@ const MENU = [
   { label: 'PTT', value: () => state.settings.ptt?.label || 'NONE', open: 'ptt' },
   { label: 'CHANNEL', value: () => String(state.channel || 'RADIO'), adjust: (step) => changeChannel(step), action: () => changeChannel(1) },
   { label: 'MSGS', value: () => (state.unread ? `${state.unread} NEW` : String(state.messages.length)), open: 'messages' },
+  { label: 'WHO', value: () => `${state.channels.reduce((total, channel) => total + (channel.members?.length || 0), 0)} ON`, open: 'users' },
   { label: 'FX', value: () => FX_LABELS[state.settings.listenFx] || 'OFF', adjust: (step) => cycleFx(step), action: () => cycleFx(1) },
   { label: 'SETUP', value: () => 'RUN', open: 'setup' },
 ];
@@ -47,7 +48,7 @@ const ROWS = { menu: MENU, setup: SETUP };
 // Radio effects only change what this radio hears; what you send stays clean.
 const FX_MODES = ['off', 'radio', 'police'];
 const FX_LABELS = { off: 'OFF', radio: 'RADIO', police: 'POLICE' };
-const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', test: 'setup', messages: 'home', compose: 'messages' };
+const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', test: 'setup', messages: 'home', compose: 'messages', users: 'menu' };
 // Canned messages for the compose screen; TYPE lets you write your own on the keyboard.
 const QUICK_MESSAGES = ['10-4', 'COPY', 'EN ROUTE', 'ON SCENE', 'NEED BACKUP', 'CODE 4', 'STANDBY', 'TYPE A MESSAGE'];
 const MESSAGE_MAX = 140;
@@ -1099,6 +1100,31 @@ function listHtml(items, selected, current) {
   }).join('')}</ul>`;
 }
 
+// Lines of the WHO screen: a header per channel, then everyone on it (app radio, Discord VC, or both).
+function usersLines() {
+  const lines = [];
+  state.channels.forEach((channel, index) => {
+    const members = channel.members || [];
+    lines.push({ header: true, text: `CH ${index + 1} · ${channel.name} (${members.length})`, current: channel.id === state.channelId });
+    if (!members.length) lines.push({ text: 'NOBODY', dim: true });
+    for (const member of members) {
+      const where = member.app && member.discord ? 'APP + VC' : member.discord ? 'DISCORD VC' : 'APP';
+      lines.push({ text: member.name, where, me: member.id === state.me?.id });
+    }
+  });
+  return lines;
+}
+
+function usersBody() {
+  const lines = usersLines();
+  if (!lines.length) return '<div class="small">NOT CONNECTED</div>';
+  return `<ul class="list users">${lines.map((line, index) => {
+    const classes = [index === state.listIndex ? 'sel' : '', line.header ? 'hdr' : '', line.dim ? 'dim' : '', line.current ? 'cur' : ''].filter(Boolean).join(' ');
+    const where = line.where ? `<span class="where">${escapeHtml(line.where)}</span>` : '';
+    return `<li class="${classes}">${escapeHtml(String(line.text).toUpperCase())}${line.me ? ' (YOU)' : ''}${where}</li>`;
+  }).join('')}</ul>`;
+}
+
 function rowsHtml(rows, selected) {
   return `<ul class="list rows">${rows.map((row, index) => {
     const on = index === selected;
@@ -1142,7 +1168,7 @@ function homeBody() {
   } else if (state.inVoice) {
     line = 'MUTED · YOU ARE IN THE DISCORD VC';
   } else {
-    line = state.settings.ptt ? 'READY' : 'READY · SET PTT IN MENU';
+    line = state.settings.ptt ? 'READY' : 'READY · SET PTT IN SETTINGS';
   }
   let html = `<div class="card ${kind}"><div class="zone">Zone 1 · CH ${channelNumber()}</div>`
     + `<div class="chan">${escapeHtml(state.channel || 'Radio')}</div>`
@@ -1189,7 +1215,7 @@ function updateText() {
 function render() {
   const { screen } = state;
   meterFill = null;
-  el.softLeftLabel.textContent = screen === 'home' ? 'MENU' : 'RADIO';
+  el.softLeftLabel.textContent = screen === 'home' ? 'SETTINGS' : 'RADIO';
   el.softRightLabel.textContent = 'HOME';
   // Status bar: signal bars, then DEAF / IN VC / who is on the channel.
   el.lcdSig.className = `sig${state.conn === 'online' ? (state.botOnline ? ' on' : ' weak') : ''}`;
@@ -1211,6 +1237,10 @@ function render() {
       left = 'MESSAGES';
       el.softRightLabel.textContent = 'NEW';
       body = messagesBody();
+      break;
+    case 'users':
+      left = "WHO'S ON";
+      body = usersBody();
       break;
     case 'compose':
       left = `TO ${String(state.channel || 'RADIO').toUpperCase()}`;
@@ -1370,6 +1400,10 @@ function move(delta) {
     render();
   } else if ((screen === 'mic' || screen === 'headset') && state.devices.length) {
     state.listIndex = (state.listIndex + delta + state.devices.length) % state.devices.length;
+    render();
+  } else if (screen === 'users') {
+    const length = Math.max(1, usersLines().length);
+    state.listIndex = (state.listIndex + delta + length) % length;
     render();
   } else if (screen === 'messages' || (screen === 'compose' && state.typing === null)) {
     const length = screen === 'messages' ? state.messages.length + 1 : QUICK_MESSAGES.length;
