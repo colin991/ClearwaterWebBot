@@ -1,3 +1,4 @@
+import { CLEARWATER_GUILD_ID } from '../utils/staffRanks.js';
 import { requireAdministrator, snowflakeFrom } from '../utils/prefixHelpers.js';
 import {
   fetchRobloxGroupFunds,
@@ -102,10 +103,14 @@ export default {
       return;
     }
 
-    requireAdministrator(message);
     if (looksLikeRobloxCookie(args.join(' ')) || looksLikeRobloxCookie(message.content)) {
       throw new Error('Do not paste your Roblox cookie in Discord. Put it in ROBLOX_COOKIE on the bot host .env and restart.');
     }
+    // Clearwater's Roblox treasury is only shown to Clearwater administrators.
+    if (String(message.guild?.id || message.guildId || '') !== CLEARWATER_GUILD_ID) {
+      throw new Error('Roblox group funds can only be viewed in the Clearwater server.');
+    }
+    requireAdministrator(message);
 
     const config = client?.config || message.client?.config || {};
     const info = await fetchRobloxGroupFunds({

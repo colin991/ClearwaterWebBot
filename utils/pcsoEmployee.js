@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
+import { PINELLAS_INFRACTION_ACCESS_ROLE_IDS } from './pinellasServer.js';
 
 const STORE_PATH = join(process.cwd(), 'data', 'pcso-employee.json');
 
@@ -190,6 +191,20 @@ export function canJoinTraining(user) {
   const role = String(EMPLOYEE_ROLE_IDS.joinTraining || '');
   const roles = [...(user.guildRoles || []), ...(user.pinellasRoles || [])].map(String);
   return role && roles.includes(role);
+}
+
+/**
+ * Approving training reports is pushed to the PCSO ER:LC API, so it stays limited to
+ * the reports-admin role (when configured), PCSO supervisors, or Discord administrators,
+ * even while the rest of the panel is open access.
+ */
+export function canDecideReports(user) {
+  if (!canUseEmployeePanel(user)) return false;
+  const roles = [...(user.guildRoles || []), ...(user.pinellasRoles || [])].map(String);
+  const reportsAdmin = String(EMPLOYEE_ROLE_IDS.reportsAdmin || '');
+  if (reportsAdmin) return roles.includes(reportsAdmin);
+  if (user.discordAdmin === true) return true;
+  return PINELLAS_INFRACTION_ACCESS_ROLE_IDS.some((roleId) => roles.includes(String(roleId)));
 }
 
 export function quizForType(type, { includeAnswer = false } = {}) {
@@ -444,7 +459,8 @@ export async function handleEmployeeAction(action, payload = {}, user = null, he
   }
 
   if (action === 'review-quiz') {
-    if (String(session.createdBy?.id) !== me.id && !EMPLOYEE_OPEN_ACCESS) {
+    // The review includes the answer key, so only the instructor may open it.
+    if (String(session.createdBy?.id) !== me.id) {
       throw Object.assign(new Error('Only the instructor can open the review.'), { status: 403 });
     }
     session.status = 'review';
@@ -453,8 +469,14 @@ export async function handleEmployeeAction(action, payload = {}, user = null, he
   }
 
   if (action === 'decide-report') {
+    if (!canDecideReports(user)) {
+      throw Object.assign(new Error('Only PCSO supervisors can approve or deny training reports.'), { status: 403 });
+    }
     const report = store.reports.find((row) => row.id === String(payload.reportId || ''));
     if (!report) throw Object.assign(new Error('Report not found.'), { status: 404 });
+    if (String(report.trainee?.id || '') === me.id) {
+      throw Object.assign(new Error('You cannot decide your own training report.'), { status: 403 });
+    }
     const decision = String(payload.decision || '').toLowerCase();
     if (decision !== 'approved' && decision !== 'denied') {
       throw Object.assign(new Error('Choose approve or deny.'), { status: 400 });

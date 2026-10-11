@@ -1,0 +1,77 @@
+name: Clearwater Radio app
+
+# Builds the Windows radio overlay. Pushes to main publish a GitHub Release
+# (radio-v1.0.<run>) that installed apps auto-update from; pull requests only build.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'radio-app/**'
+      - '.github/workflows/radio-app.yml'
+  pull_request:
+    paths:
+      - 'radio-app/**'
+      - '.github/workflows/radio-app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: radio-app-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: radio-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: radio-app/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Set version
+        shell: bash
+        run: |
+          VERSION="1.0.${{ github.run_number }}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Build installer
+        run: npx electron-builder --win --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClearwaterRadio-${{ env.VERSION }}
+          path: |
+            radio-app/dist/ClearwaterRadio-Setup.exe
+            radio-app/dist/latest.yml
+          retention-days: 7
+
+      - name: Publish release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "radio-v$VERSION" \
+            dist/ClearwaterRadio-Setup.exe \
+            dist/ClearwaterRadio-Setup.exe.blockmap \
+            dist/latest.yml \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "Clearwater Radio $VERSION" \
+            --notes "Windows radio overlay. Installed radios update themselves." \
+            --latest

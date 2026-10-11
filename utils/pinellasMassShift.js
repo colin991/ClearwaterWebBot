@@ -12,7 +12,7 @@ import {
   TextDisplayBuilder,
 } from 'discord.js';
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -22,6 +22,7 @@ import {
 } from './pinellasServer.js';
 import { FIRE_OPS_GUILD_ID } from './fireOpsServer.js';
 import { logger } from './logger.js';
+import { writeJsonFile } from './jsonStore.js';
 
 export const PINELLAS_MASS_SHIFT_CHANNEL_ID = '1516237998180794388';
 export const FIRE_MASS_SHIFT_CHANNEL_ID = '1514804888742269111';
@@ -60,14 +61,17 @@ async function readStore() {
     return {
       shifts: store.shifts && typeof store.shifts === 'object' ? store.shifts : {},
     };
-  } catch {
+  } catch (error) {
+    // Only a missing file starts fresh. A corrupt file must not be silently replaced
+    // with an empty store (that would wipe every record on the next write).
+    if (error?.code !== 'ENOENT') throw error;
     return { shifts: {} };
   }
 }
 
 async function writeStore(store) {
-  await mkdir(path.dirname(STORE_PATH), { recursive: true });
-  await writeFile(STORE_PATH, `${JSON.stringify(store, null, 2)}\n`, 'utf8');
+  // Temp file + rename, so a crash mid-write cannot leave a truncated store behind.
+  await writeJsonFile(STORE_PATH, store);
 }
 
 async function loadAttachment(filePath, name) {

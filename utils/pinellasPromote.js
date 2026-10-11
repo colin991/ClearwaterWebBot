@@ -182,12 +182,20 @@ export async function promotePinellasMember({
   requirePinellasCommandAccess(issuerMember);
 
   const issuerRank = getHighestPinellasRank(issuerMember);
+  const issuerIsAdmin = issuerMember.permissions?.has?.(PermissionFlagsBits.Administrator) === true;
   if (issuerRank) {
     if (rankIndex(issuerRank) >= rankIndex(rank)) {
       throw new Error(
         `You can only promote members to ranks below your own (**${issuerRank.name}**).`,
       );
     }
+    // The target must also currently sit below the issuer, so nobody can re-rank a superior.
+    const targetRank = getHighestPinellasRank(targetMember);
+    if (targetRank && rankIndex(targetRank) <= rankIndex(issuerRank)) {
+      throw new Error(`You can only promote members below your own rank (**${issuerRank.name}**).`);
+    }
+  } else if (!issuerIsAdmin) {
+    throw new Error('You need a PCSO rank to promote members.');
   }
 
   if (targetMember.roles.cache.has(rank.roleId) && getMemberPinellasRanks(targetMember).length === 1) {

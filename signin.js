@@ -35,7 +35,19 @@ function safeNextPath(value = '') {
   return '';
 }
 
-const destination = safeNextPath(new URLSearchParams(location.search).get('next') || '');
+const params = new URLSearchParams(location.search);
+const destination = safeNextPath(params.get('next') || '');
+
+const SIGNIN_ERRORS = {
+  'not-member': 'Your Discord account is not in the PCSO Discord server. Join it, then sign in again.',
+  failed: 'Discord sign-in did not finish. Please try again.',
+};
+const errorNotice = document.querySelector('[data-signin-error]');
+const errorText = SIGNIN_ERRORS[params.get('error')];
+if (errorNotice && errorText) {
+  errorNotice.textContent = errorText;
+  errorNotice.hidden = false;
+}
 
 function syncSubmitState() {
   submit.disabled = !agree.checked;

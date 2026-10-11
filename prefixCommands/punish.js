@@ -4,6 +4,7 @@ import {
   formatDuration,
   RANK_FLOOR,
   requireBotPerms,
+  requireCanModerate,
   requireMinRank,
   resolveMember,
   resolveUser,
@@ -34,6 +35,7 @@ export const ban = {
     if (!user) return message.reply('Use `-ban @user [duration] [reason]`.');
     const member = await message.guild.members.fetch(user.id).catch(() => null);
     if (member && !member.bannable) return message.reply('I cannot ban that member.');
+    requireCanModerate(message, member);
 
     const entry = await withModerationStore((store) => createCase(store, {
       type: 'ban',
@@ -66,6 +68,7 @@ export const softban = {
     if (!user) return message.reply('Use `-softban @user [reason]`.');
     const member = await message.guild.members.fetch(user.id).catch(() => null);
     if (member && !member.bannable) return message.reply('I cannot softban that member.');
+    requireCanModerate(message, member);
 
     const entry = await withModerationStore((store) => createCase(store, {
       type: 'softban',
@@ -122,6 +125,7 @@ export const kick = {
     const member = await resolveMember(message, target);
     if (!member) return message.reply('Use `-kick @user [reason]`.');
     if (!member.kickable) return message.reply('I cannot kick that member.');
+    requireCanModerate(message, member);
     const entry = await withModerationStore((store) => createCase(store, {
       type: 'kick',
       guildId: message.guild.id,
@@ -147,6 +151,7 @@ export const mute = {
     const member = await resolveMember(message, target);
     if (!member) return message.reply('Use `-mute @user [duration] [reason]`.');
     if (!member.moderatable) return message.reply('I cannot mute that member.');
+    requireCanModerate(message, member);
     const ms = duration && duration > 0 ? duration : 60 * 60 * 1000;
     if (ms > 28 * 24 * 60 * 60 * 1000) return message.reply('Discord timeouts cannot exceed 28 days.');
     const entry = await withModerationStore((store) => createCase(store, {
@@ -177,6 +182,7 @@ export const unmute = {
     const member = await resolveMember(message, target);
     if (!member) return message.reply('Use `-unmute @user [reason]`.');
     if (!member.moderatable) return message.reply('I cannot unmute that member.');
+    requireCanModerate(message, member);
     await member.timeout(null, reason.slice(0, 512));
     const entry = await withModerationStore((store) => createCase(store, {
       type: 'unmute',

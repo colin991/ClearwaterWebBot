@@ -1,0 +1,515 @@
+import { createServer } from 'node:http';
+import { join } from 'node:path';
+import { Readable } from 'node:stream';
+import {
+  EndBehaviorType,
+  NoSubscriberBehavior,
+  StreamType,
+  VoiceConnectionStatus,
+  createAudioPlayer,
+  createAudioResource,
+  entersState,
+  joinVoiceChannel,
+} from '@discordjs/voice';
+import { Client, Events, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
+import { logger } from './logger.js';
+import { createRadioRelay } from './radioRelay.js';
+import { createRadioKey, verifyRadioKey } from './radioKeys.js';
+import { exchangeRadioCode, radioOAuthConfig } from './radioOAuth.js';
+import { callsignFromName, createRadioPanicWatch, findPanicPlayer, panicUnitAndPostal, playerLocationLabel } from './radioPanic.js';
+import { LIBERTY_POSTAL_POINTS } from './libertyMapCalibration.js';
+import { erlcPlayersFromServer, fetchErlcServer, parseErlcPlayer } from './erlc.js';
+import { getIdentityCache } from './identityStore.js';
+import { startRadioTunnel } from './radioTunnel.js';
+import { createRadioTalkLog } from './radioTalkLog.js';
+import { readJsonFile, writeJsonFile } from './jsonStore.js';
+import { createRadioStats, buildRadioStatsEmbed } from './radioStats.js';
+import { buildRadioPanicEmbed, RADIO_KICK_BLOCK_MS, setRadioStaffControls } from './radioStaff.js';
+
+const UNKNOWN_MEMBER = 10007;
+
+/** Voice channel the radio bot always sits in. */
+export const RADIO_CHANNEL_ID = process.env.RADIO_CHANNEL_ID?.trim() || '1514128904783139018';
+/** Separate @discordjs/voice group so the radio bot never replaces the main bot's connection. */
+const VOICE_GROUP = 'clearwater-radio';
+const REJOIN_DELAY_MS = 10_000;
+const STATS_TICK_MS = 60_000;
+/** Discord voice channel callers wait in for 911; anyone in it shows as a pending call on every radio. */
+export const RADIO_911_CHANNEL_ID = process.env.RADIO_911_CHANNEL_ID?.trim() || '1532197874690035843';
+/** In-game 911 calls stay on the radios' pending list this long. */
+const GAME_CALL_MS = 10 * 60 * 1000;
+const radioDataPath = (name) => join(process.cwd(), 'data', name);
+// 80 ms: shorter transmissions are PTT taps with nothing said.
+const RADIO_MIN_TX_PACKETS = 4;
+
+let activeRelay = null;
+// Secure relay address for the web radio (cwpcso.com/radio); '' until the tunnel is up.
+let webRelayUrl = '';
+let radioEnv = process.env;
+
+/** The in-game player behind a panic, looked up in the live ER:LC player list (null when unavailable). */
+async function findPanicPlayerInGame(env, { robloxId = '', names = [] }) {
+  const key = env.ERLC_SERVER_KEY?.trim();
+  if (!key) return null;
+  try {
+    const server = await fetchErlcServer(key, { timeoutMs: 4_000 });
+    return findPanicPlayer(erlcPlayersFromServer(server).map(parseErlcPlayer), { robloxId, names });
+  } catch (error) {
+    logger.warn(`Radio panic: could not read the ER:LC player list (${error?.message || error})`);
+    return null;
+  }
+}
+
+/** EMER on a radio: the member's linked Roblox player, so the alert shows where they are in game. */
+async function locateRadioPanic(env, userId, name) {
+  const identity = (await getIdentityCache().catch(() => ({ byDiscord: {} }))).byDiscord?.[userId] || {};
+  const nick = String(name || '').replace(/^(\s*[[(][^\])]*[\])]\s*)+/, '').trim();
+  const player = await findPanicPlayerInGame(env, {
+    robloxId: identity.robloxId,
+    names: [identity.robloxUsername, name, nick, nick.split(/\s*[|/-]\s*/)[0]],
+  });
+  return { name, location: player ? playerLocationLabel(player) : '', ...panicUnitAndPostal(player, [name]) };
+}
+
+/**
+ * Sign-in for the web radio: the website vouches for the member's Discord ID, and gets back a
+ * radio key plus the secure relay address. The relay still checks Clearwater membership on connect.
+ * @returns {{ key: string, url: string } | { error: string }}
+ */
+/**
+ * Audio from one radio transmission into Discord. Playback starts once a few packets have arrived,
+ * so a PTT tap too short to say anything is dropped instead of popping in the voice channel.
+ * @param {(stream: Readable) => void} play
+ */
+export function createTransmitSink(play, minPackets = RADIO_MIN_TX_PACKETS) {
+  let stream = null;
+  let queued = [];
+  return {
+    push(packet) {
+      if (stream) {
+        stream.push(packet);
+        return;
+      }
+      queued.push(packet);
+      if (queued.length < minPackets) return;
+      stream = new Readable({ objectMode: true, read() {} });
+      for (const item of queued) stream.push(item);
+      queued = [];
+      play(stream);
+    },
+    end() {
+      queued = [];
+      stream?.push(null);
+    },
+  };
+}
+
+export function radioWebSession(discordId) {
+  if (!activeRelay) return { error: 'The radio is not running on the bot host.' };
+  if (!webRelayUrl) return { error: 'The radio web link is starting. Try again in a minute.' };
+  const key = createRadioKey(discordId, radioEnv);
+  if (!key) return { error: 'Radio sign-in is not set up on the bot host.' };
+  return { key, url: webRelayUrl };
+}
+
+/** Hook for the bot API HTTP server so the radio can share its port. */
+export function handleRadioUpgrade(request, socket, head) {
+  return activeRelay ? activeRelay.handleUpgrade(request, socket, head) : false;
+}
+
+/**
+ * Second Discord bot ("radio"): no commands, just sits in the radio channel and bridges
+ * push-to-talk audio from the Clearwater Radio desktop app.
+ * @returns {() => void} stop function
+ */
+/** @param {{ erlcEvents?: import('node:events').EventEmitter }} options main bot client that emits 'erlcEvent' */
+export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
+  const token = env.RADIO_BOT_TOKEN?.trim();
+  if (!token) {
+    logger.info('Radio bot skipped (RADIO_BOT_TOKEN missing).');
+    return () => {};
+  }
+
+  const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
+  const player = createAudioPlayer({
+    behaviors: { noSubscriber: NoSubscriberBehavior.Play, maxMissedFrames: 25 },
+  });
+  player.on('error', (error) => logger.warn(`Radio player error: ${error?.message || error}`));
+
+  let connection = null;
+  let channel = null;
+  let joining = false;
+  let stopped = false;
+  let rejoinTimer = null;
+  const receiving = new Set();
+  // Console stats so a host can see whether Discord voices reach the radios.
+  const stats = { packets: 0, decryptFailures: 0 };
+  const statsTimer = setInterval(() => {
+    if (stats.packets || stats.decryptFailures) {
+      logger.info(`Radio: relayed ${stats.packets} Discord voice packets to ${relay.listeners} radio(s) in the last minute`
+        + (stats.decryptFailures ? `; ${stats.decryptFailures} could not be decrypted.` : '.'));
+    }
+    stats.packets = 0;
+    stats.decryptFailures = 0;
+  }, 60_000);
+  statsTimer.unref?.();
+
+  const isOnline = () => connection?.state?.status === VoiceConnectionStatus.Ready;
+
+  // The radio voice channel's chat gets the talk log, panic history, weekly stats and staff actions.
+  // The main bot posts (it can send messages there); the radio bot is the fallback. Mentions never ping.
+  const talkLogChannelId = env.RADIO_LOG_CHANNEL_ID?.trim() || RADIO_CHANNEL_ID;
+  async function postRadioChat(payload) {
+    for (const poster of [erlcEvents, client]) {
+      const target = await poster?.channels?.fetch?.(talkLogChannelId).catch(() => null);
+      if (!target?.isTextBased?.()) continue;
+      try {
+        return await target.send({ allowedMentions: { parse: [] }, ...payload });
+      } catch {
+        // No Send Messages for this bot: try the next one.
+      }
+    }
+    throw new Error(`no bot can post in ${talkLogChannelId}`);
+  }
+  const talkLog = createRadioTalkLog({
+    send: (content) => postRadioChat({ content }),
+    onError: (error) => logger.warn(`Radio talk log failed: ${error?.message || error}`),
+  });
+  const postStaff = (payload) => postRadioChat(payload).catch((error) => {
+    logger.warn(`Radio post failed: ${error?.message || error}`);
+    return null;
+  });
+  const postPanic = (alert) => { void postStaff({ embeds: [buildRadioPanicEmbed(alert)] }); };
+
+  // Weekly stats: radio time is counted every minute for everyone signed in; transmissions as they end.
+  let weekly = createRadioStats(null);
+  let statsLoaded = false;
+  void readJsonFile(radioDataPath('radio-stats.json'), null).then((saved) => {
+    if (saved) weekly = createRadioStats(saved);
+    statsLoaded = true;
+  });
+  const weeklyStatsTimer = setInterval(() => {
+    if (!statsLoaded) return;
+    weekly.tick(relay.users(), STATS_TICK_MS);
+    if (weekly.due()) {
+      const report = weekly.report();
+      weekly.reset();
+      void postStaff({ embeds: [buildRadioStatsEmbed(report)] });
+    }
+    void writeJsonFile(radioDataPath('radio-stats.json'), weekly.data).catch((error) => logger.warn(`Radio stats save failed: ${error?.message || error}`));
+  }, STATS_TICK_MS);
+  weeklyStatsTimer.unref?.();
+
+  // Pending 911: members waiting in the Discord 911 channel (since they joined) plus recent in-game calls.
+  const waitingSince = new Map();
+  const gameCalls = new Map();
+  function pendingCalls() {
+    const at = Date.now();
+    // The radio bot tracks voice states, so its cache knows who is in the channel.
+    const room = client.channels.cache.get(RADIO_911_CHANNEL_ID) || erlcEvents?.channels?.cache?.get?.(RADIO_911_CHANNEL_ID);
+    const waiting = [...(room?.members?.values?.() || [])].filter((member) => !member.user?.bot).map((member) => {
+      if (!waitingSince.has(member.id)) waitingSince.set(member.id, at);
+      return { id: member.id, name: member.displayName || member.user?.username || 'Caller', since: waitingSince.get(member.id), kind: 'discord' };
+    });
+    for (const [key, call] of gameCalls) if (at - call.since > GAME_CALL_MS) gameCalls.delete(key);
+    return [...waiting, ...gameCalls.values()].sort((a, b) => a.since - b.since);
+  }
+
+  // Synced radio settings (desktop and phone share them), kept per member.
+  const settingsPath = radioDataPath('radio-settings.json');
+  let syncedSettings = {};
+  let settingsSaveTimer = null;
+  void readJsonFile(settingsPath, {}).then((saved) => { syncedSettings = { ...(saved || {}), ...syncedSettings }; });
+
+  const relay = createRadioRelay({
+    verifyKey: (key) => verifyRadioKey(key, env),
+    exchangeCode: (code) => exchangeRadioCode(code, env),
+    createSession: (userId) => createRadioKey(userId, env),
+    loginInfo: () => {
+      const config = radioOAuthConfig(env);
+      return config ? { clientId: config.clientId, redirectUri: config.redirectUri } : null;
+    },
+    status: () => ({ online: isOnline(), channel: channel?.name || 'Radio' }),
+    locatePanic: (userId, name) => locateRadioPanic(env, userId, name),
+    mapPoint: (postal) => {
+      const point = LIBERTY_POSTAL_POINTS[String(postal).match(/\d{3,5}/)?.[0] || ''];
+      return point ? { x: point.left, y: point.top } : null;
+    },
+    calls: pendingCalls,
+    loadSettings: (userId) => syncedSettings[userId] || null,
+    saveSettings: (userId, saved) => {
+      const current = syncedSettings[userId];
+      if (current && current.updatedAt > saved.updatedAt) return;
+      syncedSettings[userId] = saved;
+      clearTimeout(settingsSaveTimer);
+      settingsSaveTimer = setTimeout(() => {
+        void writeJsonFile(settingsPath, syncedSettings).catch((error) => logger.warn(`Radio settings save failed: ${error?.message || error}`));
+      }, 2_000);
+    },
+    onTalked: (entry) => {
+      talkLog.add(entry);
+      weekly.addTalk(entry);
+    },
+    onPanic: (message) => {
+      logger.info(`Radio: EMER from ${message.name} at ${message.location || 'unknown location'} sent to ${relay.listeners} radio(s).`);
+      postPanic(message);
+    },
+    // The main bot's cache has live nicknames (it gets member updates), so it is read first.
+    voiceMembers: () => [...((erlcEvents?.channels?.cache?.get?.(RADIO_CHANNEL_ID) || channel)?.members?.values?.() || [])]
+      .filter((member) => !member.user?.bot)
+      .map((member) => ({ id: member.id, name: member.displayName || member.user?.username || 'Member' })),
+    inVoice: (userId) => (channel?.guild?.voiceStates?.cache?.get(userId)?.channelId || null) === RADIO_CHANNEL_ID,
+    // `removed` closes the member's radio app; anything else (Discord or bot trouble) is retried.
+    async authorize(userId) {
+      const target = channel || await client.channels.fetch(RADIO_CHANNEL_ID).catch(() => null);
+      if (!target?.guild) return { ok: false, reason: 'The radio bot is not in its channel yet. Try again shortly.' };
+      let member;
+      try {
+        member = await target.guild.members.fetch({ user: userId, force: true });
+      } catch (error) {
+        if (error?.code === UNKNOWN_MEMBER) {
+          return { ok: false, removed: true, reason: 'You must be in the Clearwater Discord server to use the radio.' };
+        }
+        throw error;
+      }
+      const permissions = target.permissionsFor(member);
+      if (!permissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect])) {
+        return { ok: false, removed: true, reason: `You do not have access to #${target.name}.` };
+      }
+      const name = member.displayName || member.user.username;
+      return { ok: true, name, callsign: callsignFromName(name) };
+    },
+    openTransmit() {
+      if (!isOnline()) return null;
+      return createTransmitSink((stream) => player.play(createAudioResource(stream, { inputType: StreamType.Opus })));
+    },
+  });
+  activeRelay = relay;
+
+  // Staff force-mutes survive restarts.
+  const adminPath = radioDataPath('radio-admin.json');
+  let admin = { muted: {} };
+  void readJsonFile(adminPath, { muted: {} }).then((saved) => {
+    admin = { muted: { ...(saved?.muted || {}) } };
+    for (const id of Object.keys(admin.muted)) relay.setMuted(id, true);
+  });
+  setRadioStaffControls({
+    users: () => relay.users(),
+    get muted() {
+      return relay.muted;
+    },
+    async setMuted(userId, active, by) {
+      relay.setMuted(userId, active);
+      if (active) admin.muted[userId] = { by, at: new Date().toISOString() };
+      else delete admin.muted[userId];
+      await writeJsonFile(adminPath, admin).catch((error) => logger.warn(`Radio admin save failed: ${error?.message || error}`));
+    },
+    kick: (userId) => relay.kick(userId, RADIO_KICK_BLOCK_MS),
+    postStaff,
+  });
+
+  function scheduleRejoin() {
+    if (stopped || rejoinTimer) return;
+    rejoinTimer = setTimeout(() => {
+      rejoinTimer = null;
+      void join();
+    }, REJOIN_DELAY_MS);
+    rejoinTimer.unref?.();
+  }
+
+  function listenTo(userId) {
+    if (!connection || receiving.has(userId) || userId === client.user?.id) return;
+    receiving.add(userId);
+    const member = channel?.guild?.members?.cache?.get(userId);
+    const name = member?.displayName || member?.user?.username || 'Unit';
+    relay.discordSpeaking(userId, name, true);
+    const { receiver } = connection;
+    // A stream that just ended can linger for a tick; never reuse it or the voice is lost.
+    const stale = receiver.subscriptions.get(userId);
+    if (stale && (stale.readableEnded || stale.destroyed)) receiver.subscriptions.delete(userId);
+    const stream = receiver.subscribe(userId, {
+      end: { behavior: EndBehaviorType.AfterSilence, duration: 400 },
+    });
+    const done = () => {
+      if (!receiving.delete(userId)) return;
+      relay.discordSpeaking(userId, name, false);
+    };
+    stream.on('data', (packet) => {
+      stats.packets += 1;
+      relay.relayDiscordAudio(userId, packet);
+    });
+    stream.once('end', done);
+    stream.once('close', done);
+    stream.on('error', (error) => {
+      logger.warn(`Radio could not receive ${name}: ${error?.message || error}`);
+      done();
+    });
+  }
+
+  async function join() {
+    if (stopped || joining) return;
+    joining = true;
+    try {
+      channel = await client.channels.fetch(RADIO_CHANNEL_ID);
+      if (!channel?.isVoiceBased?.()) throw new Error(`Channel ${RADIO_CHANNEL_ID} is not a voice channel the radio bot can see.`);
+      const next = joinVoiceChannel({
+        channelId: channel.id,
+        guildId: channel.guild.id,
+        adapterCreator: channel.guild.voiceAdapterCreator,
+        group: VOICE_GROUP,
+        selfDeaf: false,
+        selfMute: false,
+        debug: true, // only used to count voice decrypt failures for the stats line
+      });
+      if (next !== connection) {
+        connection = next;
+        next.subscribe(player);
+        next.receiver.speaking.on('start', (userId) => listenTo(userId));
+        next.on('stateChange', () => relay.broadcastStatus());
+        next.on(VoiceConnectionStatus.Disconnected, async () => {
+          try {
+            await Promise.race([
+              entersState(next, VoiceConnectionStatus.Signalling, 5_000),
+              entersState(next, VoiceConnectionStatus.Connecting, 5_000),
+            ]);
+          } catch {
+            next.destroy();
+          }
+        });
+        next.on(VoiceConnectionStatus.Destroyed, () => {
+          if (connection === next) connection = null;
+          receiving.clear();
+          relay.broadcastStatus();
+          scheduleRejoin();
+        });
+        next.on('error', (error) => logger.warn(`Radio voice error: ${error?.message || error}`));
+        next.on('debug', (message) => {
+          if (/failed to decrypt/i.test(String(message))) stats.decryptFailures += 1;
+        });
+      }
+      await entersState(next, VoiceConnectionStatus.Ready, 30_000);
+      logger.info(`Radio bot connected to #${channel.name}.`);
+    } catch (error) {
+      logger.warn(`Radio bot could not join its channel: ${error?.message || error}`);
+      scheduleRejoin();
+    } finally {
+      joining = false;
+    }
+  }
+
+  client.once(Events.ClientReady, () => {
+    try {
+      client.user.setPresence({ activities: [], status: 'online' });
+    } catch { /* ignore */ }
+    logger.info(`Radio bot logged in as ${client.user.tag}.`);
+    void join();
+  });
+
+  // Dragged out of the radio channel: go straight back.
+  client.on(Events.VoiceStateUpdate, (oldState, newState) => {
+    if (newState.id !== client.user?.id) {
+      if (oldState.channelId === RADIO_CHANNEL_ID || newState.channelId === RADIO_CHANNEL_ID) {
+        relay.broadcastStatus();
+        if (oldState.channelId !== newState.channelId) relay.voiceChanged(newState.id);
+      }
+      // Someone joined or left the 911 waiting channel: the radios' pending calls change.
+      if ((oldState.channelId === RADIO_911_CHANNEL_ID) !== (newState.channelId === RADIO_911_CHANNEL_ID)) {
+        if (newState.channelId === RADIO_911_CHANNEL_ID) waitingSince.set(newState.id, Date.now());
+        else waitingSince.delete(newState.id);
+        relay.broadcastStatus();
+      }
+      return;
+    }
+    if (newState.channelId && newState.channelId !== RADIO_CHANNEL_ID && connection) {
+      connection.rejoin({ channelId: RADIO_CHANNEL_ID, selfDeaf: false, selfMute: false });
+    }
+  });
+  client.on(Events.Error, (error) => logger.warn(`Radio bot client error: ${error?.message || error}`));
+
+  let standalone = null;
+  const radioPort = Number(env.RADIO_PORT || 0);
+  const apiPort = Number(env.SERVER_PORT || env.PORT || 0);
+  // The bot API server only runs with BOT_API_KEY; without it the relay listens on SERVER_PORT itself.
+  const apiServerRuns = Number.isInteger(apiPort) && apiPort > 0 && Boolean(env.BOT_API_KEY);
+  const relayPort = Number.isInteger(radioPort) && radioPort > 0 ? radioPort : (apiServerRuns ? 0 : apiPort);
+  if (!relayPort && !apiServerRuns) {
+    logger.warn('Radio relay has no port: set SERVER_PORT (or RADIO_PORT) so the radio app can connect.');
+  } else if (apiServerRuns && relayPort === 0) {
+    logger.info(`Radio relay shares the bot API server on :${apiPort}/radio.`);
+  }
+  if (Number.isInteger(relayPort) && relayPort > 0 && !(apiServerRuns && relayPort === apiPort)) {
+    standalone = createServer((request, response) => {
+      response.writeHead(426, { 'Content-Type': 'text/plain' });
+      response.end('Clearwater Radio relay. Connect with the desktop app.');
+    });
+    standalone.on('upgrade', (request, socket, head) => {
+      if (!relay.handleUpgrade(request, socket, head)) socket.destroy();
+    });
+    standalone.on('error', (error) => logger.warn(`Radio relay server error: ${error?.message || error}`));
+    standalone.listen(relayPort, '0.0.0.0', () => logger.info(`Radio relay listening on :${relayPort}/radio.`));
+  }
+
+  radioEnv = env;
+  const stopTunnel = startRadioTunnel({
+    port: (Number.isInteger(relayPort) && relayPort > 0) ? relayPort : apiPort,
+    env,
+    onUrl: (url) => { webRelayUrl = url; },
+  });
+
+  void client.login(token).catch((error) => {
+    logger.error('Radio bot login failed (check RADIO_BOT_TOKEN).', error);
+  });
+
+  // `;panic` gives a Roblox ID and maybe a typed location: fill in the name and in-game location from ER:LC.
+  const onPanic = createRadioPanicWatch((panic) => {
+    void (async () => {
+      const player = await findPanicPlayerInGame(env, { robloxId: panic.robloxId, names: [panic.name] });
+      const message = {
+        type: 'panic',
+        name: player?.username || panic.name || 'Unknown',
+        location: panic.location || playerLocationLabel(player),
+        ...panicUnitAndPostal(player),
+        at: panic.at,
+      };
+      relay.alert(message);
+      postPanic({ ...message, source: 'game' });
+      logger.info(`Radio: panic from ${message.name} at ${message.location || 'unknown location'} sent to ${relay.listeners} radio(s).`);
+    })().catch((error) => logger.warn(`Radio panic failed: ${error?.message || error}`));
+  });
+  const onErlcEvent = (payload) => {
+    try { onPanic(payload); } catch (error) { logger.warn(`Radio panic failed: ${error?.message || error}`); }
+  };
+  erlcEvents?.on('erlcEvent', onErlcEvent);
+  erlcEvents?.on('erlcCommandLog', onErlcEvent);
+  // New in-game 911 calls show as pending on the radios for 10 minutes.
+  const onGameCall = (call) => {
+    const label = [call.label, call.location].filter(Boolean).join(' · ');
+    gameCalls.set(call.key, {
+      id: `game:${call.key}`, name: call.caller || 'In-game caller', since: call.at || Date.now(),
+      kind: String(call.team || 'game'), detail: label,
+    });
+    relay.broadcastStatus();
+  };
+  erlcEvents?.on('erlcRadioCall', onGameCall);
+
+  return () => {
+    stopped = true;
+    erlcEvents?.off('erlcEvent', onErlcEvent);
+    erlcEvents?.off('erlcCommandLog', onErlcEvent);
+    erlcEvents?.off('erlcRadioCall', onGameCall);
+    clearTimeout(settingsSaveTimer);
+    clearTimeout(rejoinTimer);
+    clearInterval(statsTimer);
+    clearInterval(weeklyStatsTimer);
+    setRadioStaffControls(null);
+    if (activeRelay === relay) activeRelay = null;
+    stopTunnel();
+    talkLog.stop();
+    webRelayUrl = '';
+    relay.close();
+    try { standalone?.close(); } catch { /* ignore */ }
+    try { connection?.destroy(); } catch { /* ignore */ }
+    player.stop(true);
+    client.destroy();
+  };
+}

@@ -2,6 +2,76 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-11-pcso-signin-access",
+      "title": "PCSO website sign-in no longer bounces to Coming Soon",
+      "summary": "Signing in on cwpcso.com now checks PCSO Discord server membership from your server list, so a Discord rate limit can no longer turn a PCSO member away. If sign-in fails or you are not in the PCSO server, you stay on the PCSO sign-in page with a clear message instead of the Clearwater Coming Soon tester page.",
+      "createdAt": "2026-10-11T15:40:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-audio-fixes",
+      "title": "Radio audio: quieter bot, clean talk, optional effects",
+      "summary": "Your voice now goes to the RTO channel clean and at a reasonable level: the old radio filter and automatic boost that made the bot too loud are gone, and a limiter caps peaks. New TX VOL setting controls how loud you are. Radio effects (RADIO or POLICE, with static) are now an optional listening setting, off by default, and only change what you hear in the app. Listening is protected from clipping and catches up after network hiccups, and the bot logs how many Discord voice packets it passes to radios each minute.",
+      "createdAt": "2026-10-11T13:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-bot-auto-update",
+      "title": "Bot and radio embed update on their own",
+      "summary": "The bot now checks main every 5 minutes and restarts itself onto new code when something is merged, so changes go live without pressing restart. The radio download embed reads the same version feed the app uses and refreshes every 2 minutes. The radio now says clearly when sign-in fails because the bot host is missing its Discord client secret.",
+      "createdAt": "2026-10-11T06:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-discord-sign-in",
+      "title": "Radio sign-in with Discord",
+      "summary": "The radio app now signs in with Discord instead of a pasted key, and only members of the Clearwater Discord server with access to the radio channel can use it. Every 5 minutes it re-checks; if you left the server or lost access, the radio signs you out and closes. Settings now always save, even when you quit right after changing them.",
+      "createdAt": "2026-10-11T06:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-update-fixes",
+      "title": "Radio updates apply on restart",
+      "summary": "QUIT now fully closes the radio app, so reopening it checks for a new version, and reopening a running radio checks too. The app writes update.log in its settings folder if an update fails. The download embed now shows the newest version instead of an older one.",
+      "createdAt": "2026-10-11T05:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-gray-button-home",
+      "title": "Gray left button returns to the radio",
+      "summary": "On the radio app, the gray left button now takes you straight back to the radio screen from the menu or any setup page. From the radio screen it still opens the menu.",
+      "createdAt": "2026-10-11T05:40:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-relay-port-and-update-progress",
+      "title": "Radio relay always listens and shows update progress",
+      "summary": "The radio relay now listens on SERVER_PORT even when BOT_API_KEY is not set, so the app can always reach it. The radio screen shows update download progress and reminds you to set a PTT key when none is set.",
+      "createdAt": "2026-10-11T05:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-blue-theme",
+      "title": "Blue theme for the radio app",
+      "summary": "The radio app's screen, EMER button, highlights, and icon changed from orange to blue (#267bd7), and the download post uses the same blue.",
+      "createdAt": "2026-10-11T05:25:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-dpad-select-full-device-names",
+      "title": "Radio d-pad select, LISTEN device, full device names",
+      "summary": "The center of the radio's d-pad is now a select button (it opens the menu from the home screen), the menu has a LISTEN row to pick speakers or a headset, and microphone and speaker names show in full instead of being cut off.",
+      "createdAt": "2026-10-11T05:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-clearwater-radio-app",
+      "title": "Add the Clearwater Radio app and radio bot",
+      "summary": "Added a Windows radio overlay app that stays on top of other windows, with push-to-talk, mic and headset picking, a mic test, volume knob, deafen button, and a light radio effect. It talks through a new second bot that always sits in the radio voice channel. The main bot posts a download embed with a personal radio key button, and the app updates itself when a new version is released.",
+      "createdAt": "2026-10-11T05:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-04-register-divisional-hub-commands",
       "title": "Register DOD commands in the Divisional Hub",
       "summary": "Fixed slash-command startup registration so the bot now publishes commands to every department guild declared by the command files, including the PCSO Divisional Hub server 1536695906768781362.",
@@ -3160,6 +3230,216 @@
       "title": "Make ;team move only its user",
       "summary": "The in-game ;team command now moves only the person who ran it to their team voice channel. Nearby players are no longer detected or dragged by this command.",
       "createdAt": "2026-10-10T14:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-10-vc-team-switch-grace",
+      "title": "Stop false jail on team changes",
+      "summary": "Civilian players are no longer jailed by voice checks, and switching to an emergency-services team now starts a fresh five-minute grace period instead of immediately jailing the player and resetting their roleplay name.",
+      "createdAt": "2026-10-10T15:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-security-review-fixes",
+      "title": "Security and reliability fixes from code review",
+      "summary": "Website developer access now uses Discord IDs only and live role checks. -ecoadmin, -eco and Roblox -funds only work in Clearwater. Staff Internet bans survive rejoining. Roblox name matching needs the whole name (callsign nicknames still work). Moderation, promote and edit-infraction respect rank. Training reports need a supervisor. Pinellas data files are saved safely. Scene commands have a cooldown and only pull people from VCs the caller can see. LEO briefing End works every time. /ml links survive restarts. Internet replies have a short cooldown and no longer copy large avatars.",
+      "createdAt": "2026-10-11T03:45:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-pcso-login-gate-fix",
+      "title": "Fix PCSO website login redirect",
+      "summary": "Valid PCSO Discord members now remain signed into the website instead of being incorrectly redirected to the tester-only Coming Soon screen.",
+      "createdAt": "2026-10-11T00:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-listen-fx-default",
+      "title": "Radio effect on by default when listening",
+      "summary": "The Clearwater Radio app now plays what you hear with a light radio effect by default. Change it with FX in the menu (RADIO, POLICE or OFF). What you send to Discord stays clean.",
+      "createdAt": "2026-10-11T14:05:49.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-panic-alert",
+      "title": "Radio flashes red on a panic",
+      "summary": "When a panic comes through from ER:LC, or someone types ;panic with a location in game chat, every Clearwater Radio app flashes red for 10 seconds and shows who pressed it and where.",
+      "createdAt": "2026-10-11T14:11:44.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-panic-command-fix",
+      "title": "Fix ;panic not reaching the radio",
+      "summary": "Typing ;panic (with an optional location) in ER:LC now flashes the Clearwater Radio app even when the command arrives through the server's command logs or a batched webhook.",
+      "createdAt": "2026-10-11T14:23:09.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-one-voice-in-vc-mute",
+      "title": "Radio: one voice at a time, auto-mute in Discord VC",
+      "summary": "Clearwater Radio users can no longer talk over someone speaking in the Discord radio channel. If you are already in that Discord voice channel, the app mutes itself so you don't hear it twice, and turns back on when you leave.",
+      "createdAt": "2026-10-11T14:35:30.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-handheld-redesign",
+      "title": "New handheld radio look, messages and SRT channel",
+      "summary": "The Clearwater Radio app now looks like a handheld police radio with a color screen showing zone, channel, time and the latest message. P2 opens radio-to-radio text messages, and the CH knob switches to the new Special Response Team channel, which is app-only and never goes to Discord.",
+      "createdAt": "2026-10-11T14:47:15.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-emer-panic-frequency-change",
+      "title": "Radio EMER button, working ;panic and Frequency Change",
+      "summary": "The blue EMER button on the radio now sends your panic to every radio with your in-game location, and ;panic typed in game now reaches the radios. Talking in the Discord radio channel no longer blocks the app, and a new app-only Frequency Change channel was added.",
+      "createdAt": "2026-10-11T15:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-panic-sound",
+      "title": "Panic sound on the radio",
+      "summary": "When anyone sets off a panic, from the EMER button or in game, every Clearwater Radio now plays the panic sound twice along with the red flash.",
+      "createdAt": "2026-10-11T15:03:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-panic-voice",
+      "title": "Radio reads out panics",
+      "summary": "With the panic sound, the radio now says \"<unit> panic at postal <postal>\" using the computer's built-in voice. It only plays on the radio app, never in Discord.",
+      "createdAt": "2026-10-11T15:15:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-auto-signin",
+      "title": "Radio opens Discord sign-in by itself",
+      "summary": "When the Clearwater Radio app starts without a sign-in, it now opens the Discord sign-in page straight away instead of waiting for a button press. If you close it, press OK to try again.",
+      "createdAt": "2026-10-11T15:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-signin-timeout-fix",
+      "title": "Radio Discord sign-in fixed",
+      "summary": "Signing in to the Clearwater Radio with Discord now works even when approving in the browser takes more than a few seconds. Before, the radio gave up after 8 seconds and showed NO SIGNAL.",
+      "createdAt": "2026-10-11T15:25:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-who-is-on",
+      "title": "See who is on each radio channel",
+      "summary": "The Clearwater Radio menu has a new WHO screen listing everyone on each channel, with people on the app and people in the Discord radio voice channel shown together and marked APP, DISCORD VC or APP + VC.",
+      "createdAt": "2026-10-11T15:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-gear-key",
+      "title": "Settings gear on the radio",
+      "summary": "The P1 key on the Clearwater Radio is now a gear icon that opens the radio's settings.",
+      "createdAt": "2026-10-11T15:32:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-home-key-units-idle",
+      "title": "Radio home key, units list and auto-close",
+      "summary": "The P2 key on the Clearwater Radio is now a home key, and the radio screen shows the units on your channel. Pressing home again lists every unit on every channel. Text messages were removed. The radio now closes itself after 20 minutes with no activity, with a one-minute warning.",
+      "createdAt": "2026-10-11T15:40:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-no-talk-in-vc",
+      "title": "Radio can't talk while you're in the Discord VC",
+      "summary": "If you are in the Discord radio voice channel, the Clearwater Radio app now blocks push-to-talk as well as muting, so you talk in Discord instead. Talking comes back when you leave the voice channel or switch radio channels.",
+      "createdAt": "2026-10-11T15:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-web-low-power",
+      "title": "Clearwater Radio on phones, and a low power mode",
+      "summary": "The Clearwater Radio now works in a phone or computer browser at cwpcso.com/radio: sign in with Discord, pick a channel and hold the big button to talk. The desktop radio also has a POWER setting that uses less CPU on slower PCs, and it turns on by itself on low-end machines.",
+      "createdAt": "2026-10-11T16:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-web-radio-full",
+      "title": "Web radio now matches the app, and connects",
+      "summary": "The radio at cwpcso.com/radio now looks and works exactly like the desktop radio, with the same screen, settings, channels, units list and panic alerts, plus a big hold-to-talk bar for phones. It also fixes the web radio getting stuck on CONNECTING.",
+      "createdAt": "2026-10-11T16:40:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-talk-log",
+      "title": "Radio talk log in Discord",
+      "summary": "Every time someone talks on the Clearwater Radio (app or web), the radio channel's chat gets a line like \"@member talked from 14:35:34-14:35:57\", shown in each reader's own time zone. Special Response Team and Frequency Change are named on their lines.",
+      "createdAt": "2026-10-11T16:45:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-dispatch-status",
+      "title": "Radio shows if dispatch is on",
+      "summary": "The Clearwater Radio screen (app and web) now shows DISPATCH ACTIVE or DISPATCH OFFLINE. Dispatch counts as active when someone with !C in their name is in the radio voice channel or on a radio.",
+      "createdAt": "2026-10-11T16:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-panic-size-keybind",
+      "title": "Radio: PANIC button, talk key on first open, size",
+      "summary": "The radio's EMER button is now labelled PANIC. The desktop radio asks you to pick a talk key the first time it opens. A new SIZE setting makes the overlay smaller, and the radio's screen can now be clicked: settings rows, arrows to change values, and the labels at the bottom.",
+      "createdAt": "2026-10-11T20:15:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-panic-confirm-ch-dial-fx-level",
+      "title": "Radio: panic check, CH dial, FX level, no PTT pops",
+      "summary": "PANIC now asks ARE YOU SURE before sending. First-time setup lets you pick the radio size after the talk key. The CH knob turns like VOL. A new FX LVL setting picks how strong the radio effect is. Quick PTT taps no longer pop in the Discord channel.",
+      "createdAt": "2026-10-11T20:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-ptt-spam-panic-cooldown",
+      "title": "Radio: PTT spam timeout and 2 minute panic cooldown",
+      "summary": "Pressing PTT 6 times within 10 seconds now times you out of talking on the radio for 1 minute, with a countdown on the radio screen. PANIC can be sent once every 2 minutes per person; pressing it sooner shows how long is left.",
+      "createdAt": "2026-10-11T20:35:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-who-join-channel",
+      "title": "Radio: join a channel from WHO'S ON",
+      "summary": "On the radio's WHO'S ON screen, clicking a channel twice (or picking it and pressing OK) switches your radio to that channel.",
+      "createdAt": "2026-10-11T20:40:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-deaf-no-talk",
+      "title": "Radio: no talking while deafened",
+      "summary": "While you are deafened on the Clearwater Radio (app or web), PTT no longer transmits. You hear the busy tone and the screen shows DEAFENED · NO TALK.",
+      "createdAt": "2026-10-11T20:45:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-dispatch-priority-staff-scan",
+      "title": "Radio: dispatch priority, staff panel, scan, weekly stats",
+      "summary": "Dispatchers (!C) can now talk over anyone on the radio. The radio screen shows who was last heard, scan mode lets you hear up to two more channels, and first-time setup ends with a mic check. Admins get a radio staff panel to force-mute or kick someone off the radio, and the staff channel gets every panic and a weekly radio stats post.",
+      "createdAt": "2026-10-11T21:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-talker-on-top",
+      "title": "Radio: talker shown on top in green",
+      "summary": "In the radio's units lists, whoever is talking now moves to the top of their channel and their name turns green, whether they talk on a radio or in the Discord channel.",
+      "createdAt": "2026-10-11T21:15:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-no-staff-channel",
+      "title": "Radio: no separate staff channel",
+      "summary": "The radio no longer needs its own staff channel. Panic history, weekly radio stats and staff actions now post in the radio voice channel's chat with the talk log, and admins open the staff panel with /radio-staff.",
+      "createdAt": "2026-10-11T21:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-whisper-911-map-hotkeys",
+      "title": "Radio: whisper, 911 calls, panic map, hotkeys and more",
+      "summary": "The radio shows your callsign, pending 911 calls (people waiting in the 911 voice channel and new in-game calls) and a mini map at the postal on a panic. You can whisper to one unit, dispatch can move a unit to another channel, and new hotkeys talk on your scan channel, replay the last 30 seconds and switch channels. A stuck mic is cut after 60 seconds. New NIGHT and AUTO GAIN settings, a pop-up showing who is talking while the radio is hidden, settings that sync between PC and phone, a first-launch tour, and animated signal and battery bars.",
+      "createdAt": "2026-10-11T21:45:00.000Z",
       "updatedBy": "colin991"
     },
     {

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ChannelType } from 'discord.js';
 import {
+  clearSceneIssuerCooldowns,
   extractWebhookCommandText,
   extractWebhookPlayer,
   handleErlcSceneEvent,
@@ -45,6 +46,8 @@ function member(id, { bot = false, channelId = 'here', channel = null } = {}) {
     voice: { channelId, channel },
   };
 }
+
+test.beforeEach(() => clearSceneIssuerCooldowns());
 
 test('parses in-game scene commands and ignores other chat', () => {
   assert.equal(parseCustomCommand(';ss').baseName, 'Mod Scene');
@@ -967,4 +970,16 @@ test('findVoicedDiscordMember skips REST lookups in guilds where the user is not
   const result = await findVoicedDiscordMember(client, 'discord1', { guildId: 'quiet' });
   assert.equal(result.guild, loud);
   assert.deepEqual(fetched, ['loud']);
+});
+
+test('command-log scan hands ;panic to the radio once', async () => {
+  resetSceneLogScannerForTests();
+  const emitted = [];
+  const client = { emit: (name, payload) => emitted.push([name, payload]) };
+  const logs = [{ at: 1, username: 'Old', robloxId: '1', command: ';panic' }];
+  await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }) });
+  logs.push({ at: 2, username: 'Colin', robloxId: '99', command: ';panic gas station' });
+  await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }) });
+  await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }) });
+  assert.deepEqual(emitted, [['erlcCommandLog', { Type: 'Command', Player: 'Colin:99', Command: ';panic gas station', Message: ';panic gas station' }]]);
 });

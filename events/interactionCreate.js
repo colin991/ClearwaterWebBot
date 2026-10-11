@@ -19,6 +19,8 @@ import { handleRideAlongInteraction } from '../utils/pcsoRideAlong.js';
 import { commandAllowedInGuild } from '../utils/commandGuilds.js';
 import { shouldIgnoreGuildCommands } from '../utils/floridaServer.js';
 import { handleFireShiftPanelInteraction } from '../utils/fireShiftPanel.js';
+import { handleRadioDownloadInteraction } from '../utils/radioDownloadPanel.js';
+import { handleRadioStaffInteraction } from '../utils/radioStaff.js';
 
 export default {
   name: Events.InteractionCreate,
@@ -50,6 +52,22 @@ export default {
     }
     if (await handleDiscordInternetModerationInteraction(interaction)) return;
     if (await handleDiscordInternetInteraction(interaction, client)) return;
+
+    try {
+      if (await handleRadioDownloadInteraction(interaction)) return;
+    } catch (error) {
+      logger.error('Radio key interaction failed', error);
+    }
+
+    try {
+      if (await handleRadioStaffInteraction(interaction)) return;
+    } catch (error) {
+      logger.error('Radio staff panel interaction failed', error);
+      const reply = { content: 'That radio staff action failed.', flags: MessageFlags.Ephemeral };
+      if (interaction.deferred || interaction.replied) await interaction.followUp(reply).catch(() => {});
+      else await interaction.reply(reply).catch(() => {});
+      return;
+    }
 
     try {
       if (await handleMarketInteraction(interaction)) return;

@@ -24,6 +24,7 @@ import { ensureDodServerProfile } from '../utils/dodServer.js';
 import { clearFloridaServerProfile } from '../utils/floridaServer.js';
 import { ensureGeorgiaServerProfile } from '../utils/georgiaServer.js';
 import { startBotApiServer } from '../utils/botApiServer.js';
+import { startRadioDownloadPanel } from '../utils/radioDownloadPanel.js';
 import { startErlcSceneCommands } from '../utils/erlcSceneCommands.js';
 import { startErlcCallRadio } from '../utils/erlcCallRadio.js';
 import { fetchErlcServer } from '../utils/erlc.js';
@@ -45,6 +46,7 @@ export default {
     startOpenTicketPermissionSync(client);
     startRideAlongScheduler(client);
     if (!client.stopUpdateCountdown) client.stopUpdateCountdown = startUpdateCountdown(client);
+    if (!client.stopRadioDownloadPanel) client.stopRadioDownloadPanel = startRadioDownloadPanel(client);
 
     setTimeout(() => {
       void ensurePinellasServerProfile(client).catch((error) => {

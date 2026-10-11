@@ -17,6 +17,53 @@ import {
   getPcsoSiteContent,
 } from './pcsoSiteContent.js';
 import { getPcsoChatbot, matchPcsoChatbotReply, savePcsoChatbot } from './pcsoChatbot.js';
+import { memberHasSiteAccess } from '../lib/site-access.js';
+import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess } from './staffRanks.js';
+import { config } from '../config.js';
+import { handleRadioUpgrade, radioWebSession } from './radioBot.js';
+
+const UNKNOWN_MEMBER = 10007;
+const ACCESS_CACHE_MS = 30_000;
+const accessCache = new Map();
+
+/** Live Clearwater membership + roles for the website, so stale login roles are not trusted. */
+async function resolveWebsiteAccess(client, discordId) {
+  const cached = accessCache.get(discordId);
+  if (cached && Date.now() - cached.at < ACCESS_CACHE_MS) return cached.access;
+  const access = await fetchWebsiteAccess(client, discordId);
+  if (access) {
+    accessCache.set(discordId, { at: Date.now(), access });
+    if (accessCache.size > 1000) {
+      for (const [key, entry] of accessCache) {
+        if (Date.now() - entry.at >= ACCESS_CACHE_MS) accessCache.delete(key);
+      }
+    }
+  }
+  return access;
+}
+
+async function fetchWebsiteAccess(client, discordId) {
+  const guild = client?.guilds?.cache?.get(CLEARWATER_GUILD_ID);
+  if (!guild) return null;
+  let member;
+  try {
+    member = await guild.members.fetch({ user: discordId, force: true });
+  } catch (error) {
+    if (error?.code === UNKNOWN_MEMBER) {
+      return { member: false, memberChecked: true, siteAccess: false, panelAccess: null, staffRank: null, badges: [] };
+    }
+    throw error;
+  }
+  const options = { ownerDiscordIds: config.ownerDiscordIds, ownerRoleIds: config.ownerRoleIds };
+  return {
+    member: true,
+    memberChecked: true,
+    siteAccess: memberHasSiteAccess(member, options),
+    panelAccess: getStaffPanelAccess(member, options),
+    staffRank: getHighestStaffRank(member)?.name || null,
+    badges: getInternetBadges(member),
+  };
+}
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -99,6 +146,21 @@ export function startBotApiServer(client, {
         } catch (error) {
           return sendJson(response, error.status || 503, { error: error.status ? error.message : 'Event persistence unavailable' });
         }
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/access') {
+        const discordId = String(url.searchParams.get('discordId') || '');
+        if (!/^\d{15,22}$/.test(discordId)) return sendJson(response, 400, { error: 'Invalid discordId' });
+        const access = await resolveWebsiteAccess(client, discordId);
+        if (!access) return sendJson(response, 503, { error: 'Clearwater guild unavailable' });
+        return sendJson(response, 200, access);
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/radio/web-session') {
+        const discordId = String(url.searchParams.get('discordId') || '');
+        if (!/^\d{15,22}$/.test(discordId)) return sendJson(response, 400, { error: 'Invalid discordId' });
+        const session = radioWebSession(discordId);
+        return sendJson(response, session.error ? 503 : 200, session);
       }
 
       if (request.method === 'GET' && url.pathname === '/api/status') {
@@ -223,6 +285,11 @@ export function startBotApiServer(client, {
       logger.error('Bot API server request failed', error);
       return sendJson(response, 500, { error: error?.message || 'Server error' });
     }
+  });
+
+  // Clearwater Radio desktop apps connect over WebSocket at /radio on this same port.
+  server.on('upgrade', (request, socket, head) => {
+    if (!handleRadioUpgrade(request, socket, head)) socket.destroy();
   });
 
   server.on('error', (error) => {
