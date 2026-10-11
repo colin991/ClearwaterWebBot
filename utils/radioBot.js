@@ -55,6 +55,17 @@ export function startRadioBot(env = process.env) {
   let stopped = false;
   let rejoinTimer = null;
   const receiving = new Set();
+  // Console stats so a host can see whether Discord voices reach the radios.
+  const stats = { packets: 0, decryptFailures: 0 };
+  const statsTimer = setInterval(() => {
+    if (stats.packets || stats.decryptFailures) {
+      logger.info(`Radio: relayed ${stats.packets} Discord voice packets to ${relay.listeners} radio(s) in the last minute`
+        + (stats.decryptFailures ? `; ${stats.decryptFailures} could not be decrypted.` : '.'));
+    }
+    stats.packets = 0;
+    stats.decryptFailures = 0;
+  }, 60_000);
+  statsTimer.unref?.();
 
   const isOnline = () => connection?.state?.status === VoiceConnectionStatus.Ready;
 
@@ -113,17 +124,27 @@ export function startRadioBot(env = process.env) {
     const member = channel?.guild?.members?.cache?.get(userId);
     const name = member?.displayName || member?.user?.username || 'Unit';
     relay.discordSpeaking(userId, name, true);
-    const stream = connection.receiver.subscribe(userId, {
+    const { receiver } = connection;
+    // A stream that just ended can linger for a tick; never reuse it or the voice is lost.
+    const stale = receiver.subscriptions.get(userId);
+    if (stale && (stale.readableEnded || stale.destroyed)) receiver.subscriptions.delete(userId);
+    const stream = receiver.subscribe(userId, {
       end: { behavior: EndBehaviorType.AfterSilence, duration: 400 },
     });
     const done = () => {
       if (!receiving.delete(userId)) return;
       relay.discordSpeaking(userId, name, false);
     };
-    stream.on('data', (packet) => relay.relayDiscordAudio(userId, packet));
+    stream.on('data', (packet) => {
+      stats.packets += 1;
+      relay.relayDiscordAudio(userId, packet);
+    });
     stream.once('end', done);
     stream.once('close', done);
-    stream.on('error', done);
+    stream.on('error', (error) => {
+      logger.warn(`Radio could not receive ${name}: ${error?.message || error}`);
+      done();
+    });
   }
 
   async function join() {
@@ -139,6 +160,7 @@ export function startRadioBot(env = process.env) {
         group: VOICE_GROUP,
         selfDeaf: false,
         selfMute: false,
+        debug: true, // only used to count voice decrypt failures for the stats line
       });
       if (next !== connection) {
         connection = next;
@@ -162,6 +184,9 @@ export function startRadioBot(env = process.env) {
           scheduleRejoin();
         });
         next.on('error', (error) => logger.warn(`Radio voice error: ${error?.message || error}`));
+        next.on('debug', (message) => {
+          if (/failed to decrypt/i.test(String(message))) stats.decryptFailures += 1;
+        });
       }
       await entersState(next, VoiceConnectionStatus.Ready, 30_000);
       logger.info(`Radio bot connected to #${channel.name}.`);
@@ -223,6 +248,7 @@ export function startRadioBot(env = process.env) {
   return () => {
     stopped = true;
     clearTimeout(rejoinTimer);
+    clearInterval(statsTimer);
     if (activeRelay === relay) activeRelay = null;
     relay.close();
     try { standalone?.close(); } catch { /* ignore */ }

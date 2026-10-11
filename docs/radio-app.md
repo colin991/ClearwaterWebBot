@@ -19,7 +19,7 @@ Members sign in with Discord from the radio (center button, or MENU â†’ SETUP â†
 - **PTT**: hold the bound key or mouse button (works while a game is focused), or hold the PTT strip on the left edge.
 - **VOL** knob: drag up/down or scroll. On the home screen the d-pad also changes volume.
 - **Red headset button**: deafen yourself (stops incoming audio).
-- **Gray left button**: MENU with `VOL`, `MIC`, `LISTEN` (speakers or headset you hear the radio on), `PTT`, `CHANNEL`, `FX` (radio effect LIGHT/OFF) and `SETUP` (`TEST` to hear your own radio voice, `ACCOUNT` to sign in or out with Discord, `UPDATE`). D-pad up/down picks a row, left/right changes VOL and FX, and the center button selects (or opens the menu from the home screen). From any menu or setup page the gray left button goes straight back to the radio screen. Device names show in full.
+- **Gray left button**: MENU with `VOL` (listening volume), `TX VOL` (how loud you are on the radio), `MIC`, `LISTEN` (speakers or headset you hear the radio on), `PTT`, `CHANNEL`, `FX` (listening effect OFF/RADIO/POLICE; off by default and never applied to what you send) and `SETUP` (`TEST` to hear your own radio voice, `ACCOUNT` to sign in or out with Discord, `UPDATE`). D-pad up/down picks a row, left/right changes VOL and FX, and the center button selects (or opens the menu from the home screen). From any menu or setup page the gray left button goes straight back to the radio screen. Device names show in full.
 - `#` selects, `*` goes back. **QUIT** shuts the app off (installing a downloaded update first). The app checks for updates on launch, when reopened, and every 10 minutes; `%APPDATA%\Clearwater Radio\update.log` records any update error.
 
 ## Host setup
