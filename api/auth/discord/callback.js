@@ -129,8 +129,9 @@ export default async function handler(request, response) {
     const hasPcsoAccess = guildIds.has(PINELLAS_GUILD_ID) || Boolean(pinellasMember);
     // The web radio is for every Clearwater member, not only website testers. They get a radio-only
     // cookie instead of a site session, so it opens nothing else on the site.
-    if (!hasClearwaterAccess && !hasPcsoAccess && next === '/radio' && guildMember) {
-      return redirect(response, '/radio', [
+    // The radio staff page works the same way; the bot checks Administrator itself.
+    if (!hasClearwaterAccess && !hasPcsoAccess && (next === '/radio' || next === '/radio-staff') && guildMember) {
+      return redirect(response, next, [
         clearCookie(STATE_COOKIE),
         clearCookie(NEXT_COOKIE),
         makeCookie(RADIO_COOKIE, createSessionToken({ id: user.id, username: user.username, global_name: user.global_name }, radioCookieSecret(sessionSecret)), 60 * 60 * 24 * 7),

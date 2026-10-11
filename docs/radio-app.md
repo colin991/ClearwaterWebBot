@@ -57,7 +57,7 @@ The radio looks like a handheld: volume and channel knobs on top, a color screen
 
 These post in the radio voice channel's chat with the talk log (or `RADIO_LOG_CHANNEL_ID` if set):
 
-- **Radio staff panel**: `/radio-staff`. Only members with **Administrator** can open it. It lists who is on the radio and who is force-muted; pick a member to **Force mute** (they can listen but not talk, and it survives restarts, saved in `data/radio-admin.json`), **Unmute**, or **Kick off radio** (closes their radio; they can't sign back in for 5 minutes). Each action is noted in the channel.
+- **Radio staff panel**: [cwpcso.com/radio-staff](https://www.cwpcso.com/radio-staff) (sign in with Discord), or `/radio-staff` in Discord, which also links to the page. Only members with **Administrator** can open it. It lists who is on the radio and who is force-muted; pick a member to **Force mute** (they can listen but not talk, and it survives restarts, saved in `data/radio-admin.json`), **Unmute**, or **Kick off radio** (closes their radio; they can't sign back in for 5 minutes). Each action is noted in the channel. On the website, admins can also find a member by name or Discord ID to mute them before they sign in. The bot checks Administrator live on every request (`/api/radio/staff` on the bot API, reached through `/api/bot/radio-staff` on the site).
 - **Panic history**: every panic (radio PANIC button or in game) with who, unit, where, postal and when.
 - **Weekly radio stats**: every Monday 00:00 UTC, time on the radio, transmissions and talk time per member for the past week (`data/radio-stats.json`).
 

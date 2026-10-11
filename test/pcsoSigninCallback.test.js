@@ -98,6 +98,11 @@ test('Clearwater members without site access get a radio-only cookie when signin
   assert.equal(readSessionToken(token, radioCookieSecret(secret))?.id, '1128547120304095272');
   assert.equal(readSessionToken(token, secret), null, 'a radio cookie never passes as a site session');
 
+  // The radio staff page signs in the same way; the bot checks Administrator.
+  const staff = await runCallback({ routes, next: '/radio-staff' });
+  assert.equal(staff.headers.Location, '/radio-staff');
+  assert.equal(sessionFrom(staff), null);
+
   // Any other page still turns them away.
   const denied = await runCallback({ routes, next: '/careers' });
   assert.match(denied.headers.Location, /error=not-member/);

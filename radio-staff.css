@@ -1,0 +1,132 @@
+/* cwpcso.com/radio-staff: the radio staff panel, in the web radio's Clearwater colours. */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: radial-gradient(120% 60% at 50% 0%, #0b3348 0%, transparent 70%), #04121c;
+  color: #e8f4f8;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding: calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 24px);
+}
+[hidden] { display: none !important; }
+h2 { margin: 0; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+
+.rs-top, .rs-main { width: min(100%, 720px); margin: 0 auto; }
+.rs-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.rs-top img { width: 40px; height: 40px; flex: none; }
+.rs-top div { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.rs-top strong { font-size: 18px; }
+.rs-top span { font-size: 13px; color: #8fb3c4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rs-link { color: #2fc4c8; font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; }
+
+.rs-main { display: flex; flex-direction: column; gap: 14px; }
+.rs-card {
+  background: #0a2130;
+  border: 1px solid #1b4258;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rs-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rs-count { background: #12364a; color: #8fd8ea; border-radius: 999px; padding: 1px 9px; font-size: 13px; }
+.rs-fine { margin: 0; color: #8fb3c4; font-size: 13px; line-height: 1.45; }
+.rs-center { text-align: center; }
+
+.rs-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rs-empty { color: #6f93a4; font-size: 14px; }
+.rs-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: #071a26;
+  border: 1px solid #143448;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.rs-row.muted { border-color: #6b3a1c; }
+.rs-who { display: flex; flex-direction: column; min-width: 0; flex: 1 1 180px; }
+.rs-who b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rs-who span { font-size: 12px; color: #8fb3c4; }
+.rs-tag { font-size: 11px; font-weight: 700; letter-spacing: .06em; padding: 2px 8px; border-radius: 6px; background: #4a2a12; color: #ffb37a; }
+.rs-actions { display: flex; gap: 8px; }
+
+.rs-btn {
+  border: 0;
+  border-radius: 10px;
+  min-height: 38px;
+  padding: 0 14px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  background: #1c5aa6;
+  color: #fff;
+}
+.rs-btn:disabled { opacity: .55; cursor: default; }
+.rs-btn.rs-ghost { background: transparent; color: #2fc4c8; border: 1px solid #1f5a6e; }
+.rs-btn.rs-mute { background: #3a4a56; }
+.rs-btn.rs-unmute { background: #1e7a4a; }
+.rs-btn.rs-kick { background: #b3261e; }
+
+.rs-search { display: flex; gap: 8px; }
+.rs-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid #1f4a60;
+  background: #04121c;
+  color: #e8f4f8;
+  padding: 0 12px;
+  font: inherit;
+}
+
+.rs-gate {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(4, 18, 28, .94);
+}
+.rs-gate-card { width: min(100%, 400px); padding: 22px 18px; }
+.rs-gate-card h1 { margin: 0; font-size: 22px; }
+.rs-gate-card p { margin: 0; color: #8fb3c4; line-height: 1.45; }
+.rs-discord, .rs-power {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 16px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.rs-discord { background: #5865f2; color: #fff; }
+.rs-discord svg { width: 22px; height: 22px; }
+.rs-power { background: #2fc4c8; color: #032027; }
+.rs-gate-card a:not(.rs-discord) { color: #2fc4c8; }
+
+.rs-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 18px);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 32px);
+  background: #12364a;
+  border: 1px solid #2a6a84;
+  color: #e8f4f8;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+.rs-toast.bad { background: #4a1612; border-color: #8a2c22; }

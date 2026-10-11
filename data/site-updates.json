@@ -3443,6 +3443,13 @@
       "updatedBy": "colin991"
     },
     {
+      "id": "radio-staff-website-2026-10-11",
+      "title": "Radio staff panel on the website",
+      "summary": "Admins can now open the radio staff panel at cwpcso.com/radio-staff after signing in with Discord. It shows who is on the radio and who is muted, with buttons to force-mute, unmute or kick (5 minutes), and a search to mute someone before they sign in. Only members with Administrator in the Clearwater server can use it. /radio-staff in Discord still works and links to the page.",
+      "createdAt": "2026-10-11T23:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-11-faster-ingame-commands",
       "title": "Faster in-game ; commands",
       "summary": "In-game commands like ;ss, ;scene, ;fc and ;team now react much sooner. The bot checks for new commands every second instead of every five, skips slow Discord lookups for people who are not in voice, and moves nearby players all at once instead of one by one.",

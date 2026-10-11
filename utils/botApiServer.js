@@ -21,6 +21,8 @@ import { memberHasSiteAccess } from '../lib/site-access.js';
 import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess } from './staffRanks.js';
 import { config } from '../config.js';
 import { handleRadioUpgrade, radioWebSession } from './radioBot.js';
+import { radioStaffSnapshot, runRadioStaffAction } from './radioStaff.js';
+import { PermissionFlagsBits } from 'discord.js';
 
 const UNKNOWN_MEMBER = 10007;
 const ACCESS_CACHE_MS = 30_000;
@@ -63,6 +65,32 @@ async function fetchWebsiteAccess(client, discordId) {
     staffRank: getHighestStaffRank(member)?.name || null,
     badges: getInternetBadges(member),
   };
+}
+
+/**
+ * Website radio staff panel (cwpcso.com/radio-staff): only members with Administrator in the
+ * Clearwater server, checked live each time so a removed admin loses it straight away.
+ */
+export async function radioStaffGuild(client, discordId) {
+  if (!/^\d{15,22}$/.test(discordId)) return { status: 400, error: 'Invalid discordId' };
+  const guild = client?.guilds?.cache?.get(CLEARWATER_GUILD_ID);
+  if (!guild) return { status: 503, error: 'The bot cannot see the Clearwater server right now.' };
+  let member;
+  try {
+    member = await guild.members.fetch({ user: discordId, force: true });
+  } catch (error) {
+    if (error?.code === UNKNOWN_MEMBER) return { status: 403, error: 'You are not in the Clearwater server.' };
+    throw error;
+  }
+  if (!member.permissions?.has(PermissionFlagsBits.Administrator)) {
+    return { status: 403, error: 'Only Clearwater admins can use the radio staff panel.' };
+  }
+  return { guild, member };
+}
+
+function radioStaffView(guild, member) {
+  const nameOf = (id) => guild.members.cache.get(id)?.displayName || '';
+  return { admin: { id: member.id, name: member.displayName }, ...radioStaffSnapshot(nameOf) };
 }
 
 function sendJson(response, status, body) {
@@ -161,6 +189,44 @@ export function startBotApiServer(client, {
         if (!/^\d{15,22}$/.test(discordId)) return sendJson(response, 400, { error: 'Invalid discordId' });
         const session = radioWebSession(discordId);
         return sendJson(response, session.error ? 503 : 200, session);
+      }
+
+      if (url.pathname === '/api/radio/staff') {
+        if (request.method !== 'GET' && request.method !== 'POST') return sendJson(response, 405, { error: 'Method not allowed' });
+        let payload = {};
+        if (request.method === 'POST') {
+          try {
+            payload = JSON.parse((await readBinaryBody(request, 4_000)).toString('utf8') || '{}');
+          } catch {
+            return sendJson(response, 400, { error: 'Invalid JSON.' });
+          }
+        }
+        const discordId = String(request.method === 'POST' ? payload.discordId || '' : url.searchParams.get('discordId') || '');
+        const access = await radioStaffGuild(client, discordId);
+        if (access.error) return sendJson(response, access.status, { error: access.error });
+
+        if (request.method === 'GET') {
+          const query = String(url.searchParams.get('q') || '').trim().slice(0, 32);
+          if (!query) return sendJson(response, 200, radioStaffView(access.guild, access.member));
+          // Find a member who is not on a radio, to mute them before they sign in.
+          const found = /^\d{15,22}$/.test(query)
+            ? await access.guild.members.fetch(query).then((member) => [member]).catch(() => [])
+            : [...(await access.guild.members.search({ query, limit: 8 }).catch(() => new Map())).values()];
+          return sendJson(response, 200, {
+            members: found.filter((member) => !member.user?.bot).map((member) => ({
+              userId: member.id,
+              name: member.displayName,
+              username: member.user?.username || '',
+            })),
+          });
+        }
+
+        try {
+          const result = await runRadioStaffAction(String(payload.action || ''), String(payload.userId || ''), discordId, { from: 'website' });
+          return sendJson(response, 200, { ...result, ...radioStaffView(access.guild, access.member) });
+        } catch (error) {
+          return sendJson(response, error?.status || 500, { error: error?.status ? error.message : 'That did not work. Try again.' });
+        }
       }
 
       if (request.method === 'GET' && url.pathname === '/api/status') {
