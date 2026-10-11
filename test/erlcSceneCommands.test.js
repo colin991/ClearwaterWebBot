@@ -27,6 +27,7 @@ import {
   teamVoiceChannelId,
   TEAM_VOICE_CHANNEL_IDS,
   findTeamVoiceChannel,
+  findVoicedDiscordMember,
 } from '../utils/erlcSceneCommands.js';
 import { PINELLAS_GUILD_ID } from '../utils/pinellasServer.js';
 import { CLEARWATER_GUILD_ID } from '../utils/staffRanks.js';
@@ -946,4 +947,24 @@ test('a webhook "refresh" with only a Roblox id refreshes that player by usernam
   const offline = await handleErlcSceneEvent({ ...payload, origin: '1' }, { client, now: 200_000, snapshot, executeCommand });
   assert.equal(offline.reason, 'missing_player');
   assert.equal(sent.length, 1);
+});
+
+test('findVoicedDiscordMember skips REST lookups in guilds where the user is not in voice', async () => {
+  const fetched = [];
+  const voiced = { id: 'discord1', voice: { channelId: 'vc1' } };
+  const guildFor = (id, inVoice) => ({
+    id,
+    voiceStates: { cache: new Map(inVoice ? [['discord1', { channelId: 'vc1' }]] : []) },
+    members: {
+      cache: new Map(),
+      fetch: async (memberId) => { fetched.push(id); return memberId === 'discord1' ? voiced : null; },
+    },
+  });
+  const quiet = guildFor('quiet', false);
+  const loud = guildFor('loud', true);
+  const guilds = new Map([['quiet', quiet], ['loud', loud]]);
+  const client = { guilds: { cache: guilds, fetch: async (id) => guilds.get(id) || null } };
+  const result = await findVoicedDiscordMember(client, 'discord1', { guildId: 'quiet' });
+  assert.equal(result.guild, loud);
+  assert.deepEqual(fetched, ['loud']);
 });

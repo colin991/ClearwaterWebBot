@@ -53,6 +53,7 @@ export const SCENE_NEARBY_STUDS = 50;
 
 const DEDUP_MS = 4_000;
 const recentCommands = new Map();
+const inflightSceneCommands = new Set();
 
 function asObject(value) {
   if (value && typeof value === 'object' && !Array.isArray(value)) return value;
@@ -510,8 +511,13 @@ export async function findVoicedDiscordMember(client, discordId, config = {}) {
   const id = String(discordId || '').trim();
   if (!id || !client?.guilds) return null;
   for (const guild of await guildsToSearch(client, config)) {
-    const voiceId = guild.voiceStates?.cache?.get?.(id)?.channelId;
-    const member = guild.members.cache.get(id)
+    const voiceStates = guild.voiceStates?.cache;
+    const voiceId = voiceStates?.get?.(id)?.channelId;
+    const cached = guild.members.cache.get(id);
+    // The gateway voice-state cache is authoritative, so skip a REST member
+    // lookup in guilds where this user is not in a voice channel.
+    if (!voiceId && !cached?.voice?.channelId && typeof voiceStates?.get === 'function') continue;
+    const member = cached
       || await guild.members.fetch(id).catch(() => null);
     if (voiceId || member?.voice?.channelId) {
       if (!member) continue;
@@ -527,17 +533,14 @@ async function resolveVoicedSceneMember(client, config, player, identityMap) {
     const voiced = await findVoicedDiscordMember(client, linkedId, config);
     if (voiced) return voiced;
   }
+  let fallback = null;
   for (const guild of await guildsToSearch(client, config)) {
     const resolved = await resolveZoneDiscordMember(guild, player, identityMap);
-    if (resolved.member && voiceChannelIdOf(resolved.member, guild)) {
-      return { guild, member: resolved.member };
-    }
+    if (!resolved.member) continue;
+    if (voiceChannelIdOf(resolved.member, guild)) return { guild, member: resolved.member };
+    fallback ||= { guild, member: resolved.member };
   }
-  for (const guild of await guildsToSearch(client, config)) {
-    const resolved = await resolveZoneDiscordMember(guild, player, identityMap);
-    if (resolved.member) return { guild, member: resolved.member };
-  }
-  return null;
+  return fallback;
 }
 
 function wasRecentCommand(key, now) {
@@ -879,12 +882,30 @@ async function executeErlcSceneCommand(payload, parsed, {
     return { handled: false, reason: 'missing_player', player: webhookPlayer };
   }
 
-  if (wasRecentCommand(commandKey(webhookPlayer, command.name), now)
+  const inflightKey = commandKey(webhookPlayer, command.name);
+  if (wasRecentCommand(inflightKey, now)
+    || inflightSceneCommands.has(inflightKey)
     || (voiceOverride?.id && wasRecentCommand(commandKey({ discordId: voiceOverride.id }, command.name), now))) {
     return { handled: false, reason: 'duplicate', player: webhookPlayer };
   }
 
   if (!client?.guilds) return { handled: false, reason: 'missing_guild', player: webhookPlayer };
+
+  // The webhook and the command-log scan can both deliver the same command;
+  // hold the key while it runs so the second copy doesn't move people twice.
+  inflightSceneCommands.add(inflightKey);
+  try {
+    return await moveForSceneCommand(payload, command, webhookPlayer, {
+      client, config, eventId, now, snapshot, identities, voiceOverride,
+    });
+  } finally {
+    inflightSceneCommands.delete(inflightKey);
+  }
+}
+
+async function moveForSceneCommand(payload, command, webhookPlayer, {
+  client, config, eventId, now, snapshot, identities, voiceOverride,
+}) {
 
   let rosterPlayer = null;
   let rosterPlayers = [];
@@ -949,15 +970,20 @@ async function executeErlcSceneCommand(payload, parsed, {
   // ;team is personal: only move the player who issued it. Scene commands keep
   // their existing nearby-player behavior.
   if (rosterPlayer && command.kind !== 'team') {
-    for (const nearby of playersWithinStuds(rosterPlayer, rosterPlayers)) {
+    // Resolve nearby players concurrently; order is kept so dedupe stays stable.
+    const resolvedNearby = await Promise.all(playersWithinStuds(rosterPlayer, rosterPlayers).map(async (nearby) => {
       try {
         const nearbyVoiced = await resolveVoicedSceneMember(client, config, nearby, identityMap);
-        if (nearbyVoiced) rememberNearby({ ...nearbyVoiced, player: nearby });
+        return nearbyVoiced ? { ...nearbyVoiced, player: nearby } : null;
       } catch (error) {
         logger.warn(
           `ER:LC ;${command.name}: could not resolve nearby ${nearby.username || nearby.robloxId}: ${error?.message || error}`,
         );
+        return null;
       }
+    }));
+    for (const entry of resolvedNearby) {
+      if (entry) rememberNearby(entry);
     }
   }
 
@@ -1016,7 +1042,9 @@ async function executeErlcSceneCommand(payload, parsed, {
     return { handled: false, reason: 'move_failed', error: error?.message || String(error), player };
   }
 
-  let nearbyMoved = 0;
+  // Pick destinations in order (cross-guild picks share channel state), then
+  // issue the Discord moves together instead of one REST call at a time.
+  const nearbyMoves = [];
   for (const entry of nearbyEntries) {
     try {
       let dest = destination;
@@ -1031,19 +1059,30 @@ async function executeErlcSceneCommand(payload, parsed, {
       if (!dest || voiceChannelIdOf(entry.member, otherGuild) === dest.id) continue;
       const otherMe = otherGuild.members?.me || await otherGuild.members?.fetchMe?.().catch(() => null);
       if (otherMe && !otherMe.permissions?.has(PermissionFlagsBits.MoveMembers)) continue;
-      await moveMember(
-        entry.member,
-        dest,
-        `In-game ;${command.name} nearby ${player.username || player.robloxId}`,
-        { skipGreetingMark },
-      );
-      nearbyMoved += 1;
+      nearbyMoves.push({ entry, dest });
     } catch (error) {
       logger.warn(
         `ER:LC ;${command.name}: could not move nearby ${entry.member.user?.tag || entry.member.id}: ${error?.message || error}`,
       );
     }
   }
+  const moveResults = await Promise.all(nearbyMoves.map(async ({ entry, dest }) => {
+    try {
+      await moveMember(
+        entry.member,
+        dest,
+        `In-game ;${command.name} nearby ${player.username || player.robloxId}`,
+        { skipGreetingMark },
+      );
+      return true;
+    } catch (error) {
+      logger.warn(
+        `ER:LC ;${command.name}: could not move nearby ${entry.member.user?.tag || entry.member.id}: ${error?.message || error}`,
+      );
+      return false;
+    }
+  }));
+  const nearbyMoved = moveResults.filter(Boolean).length;
 
   markRecentCommand(commandKey(player, command.name), now);
   if (member?.id) markRecentCommand(commandKey({ discordId: member.id }, command.name), now);
@@ -1119,6 +1158,7 @@ export async function runDiscordSceneCommand({
   );
 }
 
+const SCENE_LOG_SCAN_INTERVAL_MS = 1_000;
 const sceneLogSeen = new Set();
 let sceneLogsPrimed = false;
 
@@ -1148,26 +1188,41 @@ export async function scanSceneCommandLogs(client, { snapshot, identities, execu
     sceneLogsPrimed = true;
     return { scanned: logs.length, primed: true };
   }
-  let handled = 0;
+  const fresh = [];
   for (const entry of logs) {
     if (isStealCommandText(entry.command)) continue;
     if (!parseCustomCommand(entry.command) && !isRefreshCommandText(entry.command)) continue;
     const id = `${entry.at || 0}:${entry.username || ''}:${entry.command || ''}`;
     if (sceneLogSeen.has(id)) continue;
     sceneLogSeen.add(id);
-    try {
-      const result = await handleErlcSceneEvent(commandLogToScenePayload(entry), {
-        client,
-        config: client?.config || {},
-        snapshot: async () => server,
-        identities,
-        executeCommand,
-      });
-      if (result?.handled) handled += 1;
-    } catch (error) {
-      logger.warn(`ER:LC ; command from logs failed: ${error?.message || error}`);
-    }
+    fresh.push(entry);
   }
+  // Different players' commands run side by side so one slow move (or a
+  // ;refresh waiting on the ER:LC command gap) doesn't hold up the rest.
+  // One player's commands still run in the order they were typed.
+  const byPlayer = new Map();
+  for (const entry of fresh) {
+    const key = String(entry.robloxId || entry.username || '').toLowerCase();
+    if (!byPlayer.has(key)) byPlayer.set(key, []);
+    byPlayer.get(key).push(entry);
+  }
+  let handled = 0;
+  await Promise.all([...byPlayer.values()].map(async (entries) => {
+    for (const entry of entries) {
+      try {
+        const result = await handleErlcSceneEvent(commandLogToScenePayload(entry), {
+          client,
+          config: client?.config || {},
+          snapshot: async () => server,
+          identities,
+          executeCommand,
+        });
+        if (result?.handled) handled += 1;
+      } catch (error) {
+        logger.warn(`ER:LC ; command from logs failed: ${error?.message || error}`);
+      }
+    }
+  }));
   if (sceneLogSeen.size > 400) {
     const keep = [...sceneLogSeen].slice(-200);
     sceneLogSeen.clear();
@@ -1205,15 +1260,18 @@ export function startErlcSceneCommands(client) {
     });
   };
   client.on('erlcEvent', listener);
-  const timer = setInterval(() => {
+  // Scans read the shared ER:LC snapshot cache (refreshed in the background),
+  // so a short interval picks up new command logs as soon as they land without
+  // extra API calls. Overlapping scans are safe: each log line is claimed in
+  // sceneLogSeen before it is handled.
+  const scan = () => {
     void scanSceneCommandLogs(client).catch((error) => {
       logger.warn(`ER:LC scene command log scan failed: ${error?.message || error}`);
     });
-  }, 5_000);
+  };
+  const timer = setInterval(scan, SCENE_LOG_SCAN_INTERVAL_MS);
   timer.unref?.();
-  void scanSceneCommandLogs(client).catch((error) => {
-    logger.warn(`ER:LC scene command log scan failed: ${error?.message || error}`);
-  });
+  scan();
   logger.info('ER:LC in-game scene commands armed (;ss ;ts ;scene ;fc ;civ ;team ;refresh).');
   return () => {
     client.off('erlcEvent', listener);
