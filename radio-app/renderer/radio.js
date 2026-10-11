@@ -63,6 +63,8 @@ const SIZE_ITEMS = [...SIZES].reverse().map((size) => ({ id: String(size), label
 const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', size: 'menu', test: 'setup', users: 'home' };
 // PANIC asks first; a second press (or OK) within this long sends it.
 const PANIC_CONFIRM_MS = 5000;
+// The relay allows one PANIC per member every 2 minutes.
+const PANIC_GAP_MS = 2 * 60 * 1000;
 // Nobody touching the radio (no PTT, clicks or keys) for this long closes it; a warning shows for the last minute.
 const IDLE_CLOSE_MS = 20 * 60 * 1000;
 const IDLE_WARN_MS = 60 * 1000;
@@ -97,6 +99,7 @@ const state = {
   mustBind: false, // first launch: the radio stays on the PTT screen until a talk key is picked
   firstSetup: false, // first launch: the size screen follows the talk key
   panicAsk: 0, // when PANIC was pressed and is waiting for ARE YOU SURE
+  pttTimeoutUntil: 0, // the relay timed this member out of talking for spamming PTT
   micLevel: 0,
 };
 
@@ -897,6 +900,11 @@ function onMessage(message) {
     case 'tx':
       onTxReply(message);
       break;
+    case 'panic-wait':
+      // Another radio of yours (or a reconnect) already used the 2 minutes.
+      lastPanicAt = Date.now() - PANIC_GAP_MS + message.seconds * 1000;
+      panicCooldown(message.seconds);
+      break;
     case 'panic':
       showPanic(message);
       break;
@@ -1037,17 +1045,28 @@ function showPanic(message) {
   render();
 }
 
-// PANIC button: every radio flashes with your name and in-game location (the relay allows one press per 15 s).
+// PANIC button: every radio flashes with your name and in-game location (the relay allows one press per 2 minutes).
 let lastPanicAt = 0;
 let panicAskTimer = null;
 
 // First press asks ARE YOU SURE; PANIC again or OK sends, anything else (or 5 s) cancels.
+function waitText(ms) {
+  const seconds = Math.max(1, Math.ceil(ms / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function panicCooldown(seconds) {
+  flash(`PANIC WAIT ${waitText(seconds * 1000)}`, 1500);
+}
+
 function askPanic() {
   if (state.panicAsk) return sendPanic();
   if (state.conn !== 'online') {
     flash('NO SIGNAL', 1000);
     return;
   }
+  const wait = lastPanicAt + PANIC_GAP_MS - Date.now();
+  if (wait > 0) return panicCooldown(wait / 1000);
   state.panicAsk = Date.now();
   playTone('busy');
   clearTimeout(panicAskTimer);
@@ -1069,10 +1088,8 @@ function sendPanic() {
     flash('NO SIGNAL', 1000);
     return;
   }
-  if (Date.now() - lastPanicAt < 15_000) {
-    flash('PANIC SENT', 900);
-    return;
-  }
+  const wait = lastPanicAt + PANIC_GAP_MS - Date.now();
+  if (wait > 0) return panicCooldown(wait / 1000);
   lastPanicAt = Date.now();
   sendJson({ type: 'panic' });
   flash('PANIC SENT', 1200);
@@ -1094,6 +1111,11 @@ function pttPress() {
   if (state.inVoice) {
     playTone('busy');
     flash('IN DISCORD VC');
+    return;
+  }
+  if (state.pttTimeoutUntil > Date.now()) {
+    playTone('busy');
+    flash(`TIMED OUT ${waitText(state.pttTimeoutUntil - Date.now())}`);
     return;
   }
   if (!audio.micStream || !audio.encoder) {
@@ -1119,7 +1141,10 @@ function onTxReply(message) {
   if (!message.ok) {
     state.tx = 'idle';
     playTone('busy');
-    if (message.reason === 'busy') flash(`BUSY ${String(message.name || '').toUpperCase()}`.trim());
+    if (message.reason === 'timeout') {
+      state.pttTimeoutUntil = Date.now() + (Number(message.seconds) || 60) * 1000;
+      flash('PTT SPAM · TIMED OUT', 1500);
+    } else if (message.reason === 'busy') flash(`BUSY ${String(message.name || '').toUpperCase()}`.trim());
     else flash(message.reason === 'invoice' ? 'IN DISCORD VC' : 'BOT OFFLINE');
     return;
   }
@@ -1288,6 +1313,8 @@ function homeBody() {
     line = `RX ${[...state.rx.values()].map((entry) => entry.name).join(', ')}`;
   } else if (!state.botOnline) {
     line = 'BOT OFFLINE · WAITING';
+  } else if (state.pttTimeoutUntil > Date.now()) {
+    line = `PTT TIMED OUT FOR SPAM · ${waitText(state.pttTimeoutUntil - Date.now())}`;
   } else if (state.inVoice) {
     line = 'MUTED + NO TALK · IN DISCORD VC';
   } else {
@@ -1641,6 +1668,11 @@ function markActive() {
 
 // Nobody has keyed up or touched the radio for 20 minutes: warn for the last minute, then shut it off.
 function checkIdle() {
+  // Count the PTT timeout down on the radio screen.
+  if (state.pttTimeoutUntil) {
+    if (state.pttTimeoutUntil <= Date.now()) state.pttTimeoutUntil = 0;
+    if (state.screen === 'home' && !state.toast) render();
+  }
   if (state.pttHeld || state.tx === 'on') return markActive();
   const idle = Date.now() - lastActiveAt;
   if (idle >= IDLE_CLOSE_MS) {

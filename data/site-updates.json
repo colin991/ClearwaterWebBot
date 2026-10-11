@@ -3392,6 +3392,13 @@
       "summary": "PANIC now asks ARE YOU SURE before sending. First-time setup lets you pick the radio size after the talk key. The CH knob turns like VOL. A new FX LVL setting picks how strong the radio effect is. Quick PTT taps no longer pop in the Discord channel.",
       "createdAt": "2026-10-11T20:30:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-ptt-spam-panic-cooldown",
+      "title": "Radio: PTT spam timeout and 2 minute panic cooldown",
+      "summary": "Pressing PTT 6 times within 10 seconds now times you out of talking on the radio for 1 minute, with a countdown on the radio screen. PANIC can be sent once every 2 minutes per person; pressing it sooner shows how long is left.",
+      "createdAt": "2026-10-11T20:35:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

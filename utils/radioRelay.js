@@ -24,8 +24,12 @@ const APP_CHANNELS = [
   { id: RADIO_SRT_CHANNEL, name: 'Special Response Team' },
   { id: RADIO_FREQ_CHANNEL, name: 'Frequency Change' },
 ];
-/** One EMER press per radio in this window. */
-export const RADIO_PANIC_GAP_MS = 15_000;
+/** One PANIC press per member in this window. */
+export const RADIO_PANIC_GAP_MS = 2 * 60 * 1000;
+/** PTT spam: this many presses inside the window times the member out of talking on the radio. */
+export const RADIO_SPAM_PRESSES = 6;
+export const RADIO_SPAM_WINDOW_MS = 10_000;
+export const RADIO_SPAM_TIMEOUT_MS = 60_000;
 
 /** Binary frame sent to apps: [0x01][speaker Discord ID as uint64 BE][Opus packet]. */
 export function encodeAudioFrame(speakerId, packet) {
@@ -88,6 +92,11 @@ export function createRadioRelay({
   // One talker per channel: channel id -> { socket, userId, name, sink, startedAt, lastPacketAt }
   const talkers = new Map();
   const discordTalkers = new Map(); // userId -> name, members talking in the Discord channel
+  // Per member, so reconnecting does not reset them: last PANIC, recent PTT presses, PTT timeout.
+  const lastPanicAt = new Map();
+  const pttPresses = new Map();
+  const pttTimeoutUntil = new Map();
+  const secondsLeft = (until) => Math.max(1, Math.ceil((until - now()) / 1000));
   const channelList = () => [{ id: RADIO_MAIN_CHANNEL, name: status().channel || 'Radio' }, ...APP_CHANNELS];
   const channelName = (id) => channelList().find((channel) => channel.id === id)?.name || 'Radio';
   const isChannel = (id) => id === RADIO_MAIN_CHANNEL || APP_CHANNELS.some((channel) => channel.id === id);
@@ -193,10 +202,29 @@ export function createRadioRelay({
     } catch { /* logging never breaks the radio */ }
   }
 
+  // Counts a PTT press; too many in a short time times the member out of talking for a minute.
+  function pttSpamTimeout(userId) {
+    const at = now();
+    const until = pttTimeoutUntil.get(userId) || 0;
+    if (until > at) return until;
+    const recent = (pttPresses.get(userId) || []).filter((time) => at - time < RADIO_SPAM_WINDOW_MS);
+    recent.push(at);
+    if (recent.length < RADIO_SPAM_PRESSES) {
+      pttPresses.set(userId, recent);
+      return 0;
+    }
+    pttPresses.delete(userId);
+    pttTimeoutUntil.set(userId, at + RADIO_SPAM_TIMEOUT_MS);
+    logger.info(`Radio: ${userId} timed out of PTT for spamming`);
+    return at + RADIO_SPAM_TIMEOUT_MS;
+  }
+
   function startTransmit(socket) {
     const { userId, name, channel } = socket.radio;
     const talker = talkers.get(channel);
     if (talker?.socket === socket) return send(socket, { type: 'tx', ok: true });
+    const timeoutUntil = pttSpamTimeout(userId);
+    if (timeoutUntil) return send(socket, { type: 'tx', ok: false, reason: 'timeout', seconds: secondsLeft(timeoutUntil) });
     if (talker) return send(socket, { type: 'tx', ok: false, reason: 'busy', name: talker.name });
     let sink = null;
     if (channel === RADIO_MAIN_CHANNEL) {
@@ -250,8 +278,12 @@ export function createRadioRelay({
   async function onPanicPress(socket) {
     const { userId, name } = socket.radio;
     const at = now();
-    if (at - (socket.radio.lastPanicAt || 0) < RADIO_PANIC_GAP_MS) return;
-    socket.radio.lastPanicAt = at;
+    const last = lastPanicAt.get(userId) || 0;
+    if (at - last < RADIO_PANIC_GAP_MS) {
+      send(socket, { type: 'panic-wait', seconds: secondsLeft(last + RADIO_PANIC_GAP_MS) });
+      return;
+    }
+    lastPanicAt.set(userId, at);
     let found = null;
     try {
       found = await locatePanic(userId, name);
