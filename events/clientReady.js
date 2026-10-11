@@ -25,6 +25,7 @@ import { clearFloridaServerProfile } from '../utils/floridaServer.js';
 import { ensureGeorgiaServerProfile } from '../utils/georgiaServer.js';
 import { startBotApiServer } from '../utils/botApiServer.js';
 import { startRadioDownloadPanel } from '../utils/radioDownloadPanel.js';
+import { ensureRadioStaffLauncher } from '../utils/radioStaff.js';
 import { startErlcSceneCommands } from '../utils/erlcSceneCommands.js';
 import { startErlcCallRadio } from '../utils/erlcCallRadio.js';
 import { fetchErlcServer } from '../utils/erlc.js';
@@ -47,6 +48,8 @@ export default {
     startRideAlongScheduler(client);
     if (!client.stopUpdateCountdown) client.stopUpdateCountdown = startUpdateCountdown(client);
     if (!client.stopRadioDownloadPanel) client.stopRadioDownloadPanel = startRadioDownloadPanel(client);
+    // Admins open the radio staff panel from its button in RADIO_STAFF_CHANNEL_ID.
+    void ensureRadioStaffLauncher(client).catch((error) => logger.warn(`Radio staff panel failed: ${error?.message || error}`));
 
     setTimeout(() => {
       void ensurePinellasServerProfile(client).catch((error) => {

@@ -3413,6 +3413,13 @@
       "summary": "While you are deafened on the Clearwater Radio (app or web), PTT no longer transmits. You hear the busy tone and the screen shows DEAFENED · NO TALK.",
       "createdAt": "2026-10-11T20:45:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-dispatch-priority-staff-scan",
+      "title": "Radio: dispatch priority, staff panel, scan, weekly stats",
+      "summary": "Dispatchers (!C) can now talk over anyone on the radio. The radio screen shows who was last heard, scan mode lets you hear up to two more channels, and first-time setup ends with a mic check. Admins get a radio staff panel to force-mute or kick someone off the radio, and the staff channel gets every panic and a weekly radio stats post.",
+      "createdAt": "2026-10-11T21:00:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

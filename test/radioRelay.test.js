@@ -532,3 +532,103 @@ test('a deafened radio cannot talk, and deafening mid-transmission ends it', asy
     await harness.close();
   }
 });
+
+async function signIn(harness, userId, extra = {}) {
+  const radio = client(harness.url);
+  await once(radio.ws, 'open');
+  radio.send({ type: 'auth', key: createRadioKey(userId, env), ...extra });
+  await radio.until(() => radio.messages.find((m) => m.type === 'ready' || m.type === 'error'));
+  return radio;
+}
+
+test('a !C dispatcher cuts in over anyone, and the radios remember who was last heard', async () => {
+  const harness = await startRelay({
+    authorize: async (userId) => ({ ok: true, name: userId === ALICE ? 'Alice' : 'Bob !C' }),
+  });
+  try {
+    const alice = await signIn(harness, ALICE);
+    const bob = await signIn(harness, BOB);
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
+    bob.send({ type: 'tx', active: true });
+    const cut = await alice.until(() => alice.messages.find((m) => m.type === 'cut'));
+    assert.equal(cut.name, 'Bob !C');
+    const granted = await bob.until(() => bob.messages.find((m) => m.type === 'tx'));
+    assert.equal(granted.ok, true, 'dispatch gets the channel');
+    alice.send({ type: 'tx', active: true });
+    const busy = await alice.until(() => alice.messages.filter((m) => m.type === 'tx')[1]);
+    assert.equal(busy.reason, 'busy', 'nobody cuts in over dispatch');
+    bob.send({ type: 'tx', active: false });
+    const ended = await alice.until(() => alice.messages.find((m) => m.type === 'talk' && !m.active && m.name === 'Bob !C'));
+    assert.equal(ended.channel, 'main');
+
+    alice.send({ type: 'channel', id: 'srt' });
+    alice.send({ type: 'channel', id: 'main' });
+    const back = await alice.until(() => alice.messages.filter((m) => m.type === 'channel')[1]);
+    assert.equal(back.lastHeard.name, 'Bob !C');
+    alice.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('staff can force-mute and kick a radio, and a kicked member stays off until the time is up', async () => {
+  let clock = 5_000_000;
+  const harness = await startRelay({ now: () => clock });
+  try {
+    const alice = await signIn(harness, ALICE);
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
+    harness.relay.setMuted(ALICE, true);
+    await alice.until(() => harness.ended === 1);
+    const status = await alice.until(() => alice.messages.find((m) => m.type === 'status' && m.muted));
+    assert.equal(status.muted, true);
+    alice.send({ type: 'tx', active: true });
+    const refused = await alice.until(() => alice.messages.filter((m) => m.type === 'tx')[1]);
+    assert.deepEqual(refused, { type: 'tx', ok: false, reason: 'muted' });
+    assert.deepEqual(harness.relay.users().map((u) => [u.userId, u.muted]), [[ALICE, true]]);
+    harness.relay.setMuted(ALICE, false);
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.filter((m) => m.type === 'tx')[2]);
+    assert.equal(alice.messages.filter((m) => m.type === 'tx')[2].ok, true);
+
+    assert.equal(harness.relay.kick(ALICE, 5 * 60_000), 1);
+    const removed = await alice.until(() => alice.messages.find((m) => m.type === 'error'));
+    assert.equal(removed.code, 'removed');
+    assert.match(removed.message, /5 minutes/);
+    const again = await signIn(harness, ALICE);
+    assert.equal(again.messages.find((m) => m.type === 'error')?.code, 'removed', 'kicked members cannot sign straight back in');
+    clock += 5 * 60_000 + 1;
+    const later = await signIn(harness, ALICE);
+    assert.ok(later.messages.find((m) => m.type === 'ready'), 'they can come back after the block');
+    later.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('scan mode hears other channels but talks on its own', async () => {
+  const harness = await startRelay();
+  try {
+    const alice = await signIn(harness, ALICE, { channel: 'main', scan: ['srt', 'main', 'nope'] });
+    assert.deepEqual(alice.messages.find((m) => m.type === 'ready').scan, ['srt']);
+    const bob = await signIn(harness, BOB, { channel: 'srt' });
+    bob.send({ type: 'tx', active: true });
+    await bob.until(() => bob.messages.find((m) => m.type === 'tx' && m.ok));
+    const talk = await alice.until(() => alice.messages.find((m) => m.type === 'talk' && m.active));
+    assert.equal(talk.channel, 'srt');
+    bob.ws.send(Buffer.from([7]));
+    await alice.until(() => alice.binary.length > 0);
+    alice.send({ type: 'scan', ids: [] });
+    await alice.until(() => alice.messages.find((m) => m.type === 'status' && Array.isArray(m.scan) && m.scan.length === 0));
+    const before = alice.binary.length;
+    bob.ws.send(Buffer.from([8]));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(alice.binary.length, before, 'scan off: nothing from SRT');
+    alice.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});

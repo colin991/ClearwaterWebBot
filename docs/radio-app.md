@@ -33,9 +33,21 @@ The radio looks like a handheld: volume and channel knobs on top, a color screen
 - **Mouse**: every button on the radio clicks, and so does the screen: click a settings row to open or change it, the ◀ ▶ arrows on the highlighted row to turn VOL, TX VOL, CHANNEL, FX, POWER or SIZE, a device to pick it, and the SETTINGS / UNITS / HOME labels along the bottom of the screen.
 - **POWER** (SETTINGS row after FX): `AUTO` (default) runs in low power on PCs with 4 or fewer CPU cores or 4 GB or less memory, `LOW` always, `FULL` never. Low power uses a lighter Opus encoder and no listening-effect oversampling, and updates the mic lamp less often. In every mode the listening effect and its static only run while they can be heard.
 - **Dispatch status**: the channel card on the radio screen shows `DISPATCH ACTIVE` (green) or `DISPATCH OFFLINE` (red). Active means someone with `!C` in their name is in the Discord radio voice channel or signed in on a radio. That's the same rule as the voice channel's "Dispatch Online" status. It updates within 15 seconds.
+- **Dispatch priority**: someone with `!C` in their name can talk over anyone who isn't dispatch. Their PTT cuts the current talker off (that radio shows `DISPATCH PRIORITY`); nobody can cut in over dispatch.
+- **Last heard**: the channel card shows `LAST HEARD <name> · <time>` for the last transmission on your channel (radio or Discord).
+- **SCAN** (SETTINGS row after CHANNEL): pick up to two other channels to hear as well as your own. You always talk on your own channel; voices from a scanned channel show as `RX NAME (CH 2)`.
+- **Mic check**: first launch goes talk key, then size, then a mic check with the level meter (`SETUP → TEST` shows the same meter any time).
 - **Talk log**: every radio transmission (desktop or web, any channel) posts a line in the radio voice channel's chat: `@member talked from 14:35:34-14:35:57`, with ` on Special Response Team` or ` on Frequency Change` for the radio-only channels. Times are Discord timestamps, so each reader sees their own time zone. The mention never pings. Lines are batched for a couple of seconds. The main bot posts them, with the radio bot as fallback; `RADIO_LOG_CHANNEL_ID` moves them to another channel. Talking in Discord itself is not logged.
 - **Auto-close**: if nobody presses PTT or touches the radio for 20 minutes, it shows `CLOSING IN 60s` and then shuts off; any key keeps it on.
 - `#` and OK select, `*` and the back key go back. **QUIT** shuts the app off (installing a downloaded update first). The app checks for updates on launch, when reopened, and every 10 minutes; `%APPDATA%\Clearwater Radio\update.log` records any update error.
+
+## Staff tools
+
+Set `RADIO_STAFF_CHANNEL_ID` in the bot host `.env` to a staff-only text channel. The main bot then posts there:
+
+- **Radio staff panel** button (also `/radio-staff`). Only members with **Administrator** can open it. It lists who is on the radio and who is force-muted; pick a member to **Force mute** (they can listen but not talk, and it survives restarts, saved in `data/radio-admin.json`), **Unmute**, or **Kick off radio** (closes their radio; they can't sign back in for 5 minutes). Each action is noted in the channel.
+- **Panic history**: every panic (radio PANIC button or in game) with who, unit, where, postal and when.
+- **Weekly radio stats**: every Monday 00:00 UTC, time on the radio, transmissions and talk time per member for the past week (`data/radio-stats.json`).
 
 ## Web radio (phones)
 

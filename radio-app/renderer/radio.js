@@ -36,6 +36,7 @@ const MENU = [
   { label: 'LISTEN', value: () => deviceLabel('audiooutput', state.settings.outputId), open: 'headset' },
   { label: 'PTT', value: () => state.settings.ptt?.label || 'NONE', open: 'ptt' },
   { label: 'CHANNEL', value: () => String(state.channel || 'RADIO'), adjust: (step) => changeChannel(step), action: () => changeChannel(1) },
+  { label: 'SCAN', value: () => scanText(), open: 'scan' },
   { label: 'WHO', value: () => `${state.channels.reduce((total, channel) => total + (channel.members?.length || 0), 0)} ON`, open: 'users' },
   { label: 'FX', value: () => FX_LABELS[state.settings.listenFx] || 'OFF', adjust: (step) => cycleFx(step), action: () => cycleFx(1) },
   { label: 'FX LVL', value: () => `${fxLevel()}%`, adjust: (step) => changeFxLevel(step), action: () => changeFxLevel(1, true) },
@@ -60,7 +61,7 @@ const SIZES = [50, 60, 70, 80, 90, 100];
 // FX LVL: how strong the radio effect is (100% is the normal sound).
 const FX_LEVELS = [25, 50, 75, 100, 125, 150];
 const SIZE_ITEMS = [...SIZES].reverse().map((size) => ({ id: String(size), label: `${size}%` }));
-const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', size: 'menu', test: 'setup', users: 'home' };
+const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', size: 'menu', scan: 'menu', test: 'setup', users: 'home' };
 // PANIC asks first; a second press (or OK) within this long sends it.
 const PANIC_CONFIRM_MS = 5000;
 // The relay allows one PANIC per member every 2 minutes.
@@ -70,7 +71,7 @@ const IDLE_CLOSE_MS = 20 * 60 * 1000;
 const IDLE_WARN_MS = 60 * 1000;
 
 const state = {
-  settings: { volume: 70, txVolume: 60, listenFx: 'radio', power: 'auto', size: 100, fxLevel: 100, deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false, channel: 'main' },
+  settings: { volume: 70, txVolume: 60, listenFx: 'radio', power: 'auto', size: 100, fxLevel: 100, scan: [], deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false, channel: 'main' },
   version: '',
   screen: 'home',
   menuIndex: 0,
@@ -100,6 +101,8 @@ const state = {
   firstSetup: false, // first launch: the size screen follows the talk key
   panicAsk: 0, // when PANIC was pressed and is waiting for ARE YOU SURE
   pttTimeoutUntil: 0, // the relay timed this member out of talking for spamming PTT
+  muted: false, // force-muted by staff: can listen, can't talk
+  lastHeard: null, // { name, at } of the last transmission heard on this channel
   micLevel: 0,
 };
 
@@ -752,7 +755,7 @@ async function onLoginInfo(message) {
   }
   // The relay link can drop while the member approves in the browser: hand the code over on a fresh one.
   if (net.ws?.readyState === WebSocket.OPEN) {
-    sendJson({ type: 'auth', code: result.code, version: state.version, channel: state.settings.channel });
+    sendJson({ type: 'auth', code: result.code, version: state.version, channel: state.settings.channel, scan: scanIds() });
   } else {
     connect({ signIn: true, code: result.code });
   }
@@ -802,8 +805,8 @@ function connect(options = {}) {
   ws.binaryType = 'arraybuffer';
   net.ws = ws;
   const hello = options.code
-    ? { type: 'auth', code: options.code, version: state.version, channel: state.settings.channel }
-    : signingIn ? { type: 'hello', version: state.version } : { type: 'auth', key, version: state.version, channel: state.settings.channel };
+    ? { type: 'auth', code: options.code, version: state.version, channel: state.settings.channel, scan: scanIds() }
+    : signingIn ? { type: 'hello', version: state.version } : { type: 'auth', key, version: state.version, channel: state.settings.channel, scan: scanIds() };
   ws.onopen = () => ws.send(JSON.stringify(hello));
   ws.onmessage = (event) => {
     if (typeof event.data !== 'string') {
@@ -889,16 +892,24 @@ function onMessage(message) {
       break;
     case 'talk':
       if (message.active) {
-        state.rx.set(message.id, { name: message.name || 'UNIT', source: message.source });
+        state.rx.set(message.id, { name: message.name || 'UNIT', source: message.source, channel: message.channel || state.channelId });
       } else if (state.rx.delete(message.id)) {
         squelchTail();
       }
+      if (!message.active && (message.channel || state.channelId) === state.channelId) state.lastHeard = { name: message.name || 'UNIT', at: Date.now() };
       audio.listenFx?.setStatic(state.rx.size > 0);
       updateLamps();
       render();
       break;
     case 'tx':
       onTxReply(message);
+      break;
+    case 'cut':
+      // A !C dispatcher took the channel.
+      forceTxOff();
+      playTone('busy');
+      flash('DISPATCH PRIORITY', 1500);
+      render();
       break;
     case 'panic-wait':
       // Another radio of yours (or a reconnect) already used the 2 minutes.
@@ -929,6 +940,9 @@ function applyChannelStatus(message) {
   state.botOnline = Boolean(message.online);
   state.listeners = message.listeners || 0;
   if ('dispatch' in message) state.dispatch = Boolean(message.dispatch);
+  if ('muted' in message) state.muted = Boolean(message.muted);
+  if ('lastHeard' in message) state.lastHeard = message.lastHeard;
+  if (state.muted && state.tx === 'on') void stopTx();
   if ('inVoice' in message) {
     state.inVoice = Boolean(message.inVoice);
     applyDeaf();
@@ -959,8 +973,31 @@ function changeChannel(step) {
   sendJson({ type: 'channel', id: next.id });
 }
 
-function channelNumber() {
-  return Math.max(0, state.channels.findIndex((channel) => channel.id === state.channelId)) + 1;
+function channelNumber(id = state.channelId) {
+  return Math.max(0, state.channels.findIndex((channel) => channel.id === id)) + 1;
+}
+
+// Scan mode: hear up to two other channels as well as your own; you always talk on your own.
+function scanIds() {
+  return (Array.isArray(state.settings.scan) ? state.settings.scan : []).filter((id) => id !== state.channelId).slice(0, 2);
+}
+
+function scanText() {
+  const ids = scanIds();
+  return ids.length ? ids.map((id) => `CH ${channelNumber(id)}`).join('+') : 'OFF';
+}
+
+function scanItems() {
+  return state.channels.filter((channel) => channel.id !== state.channelId)
+    .map((channel) => ({ id: channel.id, label: `CH ${channelNumber(channel.id)} · ${channel.name}` }));
+}
+
+async function toggleScan(id) {
+  const current = scanIds();
+  const scan = current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id].slice(-2);
+  await saveNow({ scan });
+  sendJson({ type: 'scan', ids: scan });
+  render();
 }
 
 function clockText(at = Date.now()) {
@@ -1128,6 +1165,11 @@ function pttPress() {
     flash('DEAFENED · NO TALK');
     return;
   }
+  if (state.muted) {
+    playTone('busy');
+    flash('MUTED BY STAFF');
+    return;
+  }
   if (state.pttTimeoutUntil > Date.now()) {
     playTone('busy');
     flash(`TIMED OUT ${waitText(state.pttTimeoutUntil - Date.now())}`);
@@ -1156,7 +1198,10 @@ function onTxReply(message) {
   if (!message.ok) {
     state.tx = 'idle';
     playTone('busy');
-    if (message.reason === 'deaf') {
+    if (message.reason === 'muted') {
+      state.muted = true;
+      flash('MUTED BY STAFF');
+    } else if (message.reason === 'deaf') {
       flash('DEAFENED · NO TALK');
     } else if (message.reason === 'timeout') {
       state.pttTimeoutUntil = Date.now() + (Number(message.seconds) || 60) * 1000;
@@ -1327,9 +1372,13 @@ function homeBody() {
     line = 'TRANSMITTING';
   } else if (state.rx.size) {
     kind = 'rx';
-    line = `RX ${[...state.rx.values()].map((entry) => entry.name).join(', ')}`;
+    // Scanned channels show which channel the voice is on.
+    line = `RX ${[...state.rx.values()].map((entry) => (entry.channel && entry.channel !== state.channelId
+      ? `${entry.name} (CH ${channelNumber(entry.channel)})` : entry.name)).join(', ')}`;
   } else if (!state.botOnline) {
     line = 'BOT OFFLINE · WAITING';
+  } else if (state.muted) {
+    line = 'MUTED BY STAFF · NO TALK';
   } else if (state.settings.deaf) {
     line = 'DEAFENED · NO TALK';
   } else if (state.pttTimeoutUntil > Date.now()) {
@@ -1344,7 +1393,12 @@ function homeBody() {
     : '';
   let html = `<div class="card ${kind}"><div class="zone">Zone 1 · CH ${channelNumber()}${dispatch}</div>`
     + `<div class="chan">${escapeHtml(state.channel || 'Radio')}</div>`
-    + `<div class="state">${escapeHtml(line.toUpperCase())}</div></div>`;
+    + `<div class="state">${escapeHtml(line.toUpperCase())}</div>`
+    + (state.lastHeard?.name
+      ? `<div class="last">LAST HEARD ${escapeHtml(String(state.lastHeard.name).toUpperCase())} · ${clockText(state.lastHeard.at)}</div>`
+      : '')
+    + (scanIds().length ? `<div class="last">SCAN ${escapeHtml(scanText())}</div>` : '')
+    + '</div>';
   const members = state.channels.find((channel) => channel.id === state.channelId)?.members || [];
   html += `<div class="card units"><div class="zone">UNITS ON CH ${channelNumber()} (${members.length})</div>`
     + (members.length
@@ -1407,13 +1461,24 @@ function render() {
         ? listHtml(state.devices, state.listIndex, screen === 'mic' ? state.settings.micId : state.settings.outputId)
         : '<div class="small">LOADING</div>';
       break;
+    case 'scan': {
+      left = 'SCAN';
+      const items = scanItems();
+      const on = new Set(scanIds());
+      body = items.length
+        ? `<div class="small">OK TURNS A CHANNEL ON OR OFF · YOU TALK ON CH ${channelNumber()}</div><ul class="list">${items.map((item, index) => `<li class="${index === state.listIndex ? 'sel' : ''}" data-row="${index}">${on.has(item.id) ? '[X]' : '[ ]'} ${escapeHtml(item.label.toUpperCase())}</li>`).join('')}</ul>`
+        : '<div class="small">NOT CONNECTED</div>';
+      break;
+    }
     case 'size':
       left = state.firstSetup ? 'SET SIZE' : 'SIZE';
       body = (state.firstSetup ? '<div class="small">PICK THE RADIO SIZE · OK WHEN DONE</div>' : '')
         + listHtml(SIZE_ITEMS, state.listIndex, String(radioSize()));
       break;
     case 'test':
-      body = '<div class="mid">SPEAK NOW</div><div class="meter"><b id="meterFill"></b></div><div class="small">YOU HEAR WHAT OTHERS HEAR</div>';
+      if (state.firstSetup) left = 'MIC CHECK';
+      body = '<div class="mid">SPEAK NOW</div><div class="meter"><b id="meterFill"></b></div><div class="small">YOU HEAR WHAT OTHERS HEAR</div>'
+        + (state.firstSetup ? '<div class="small">BAR MOVES = MIC WORKS · OK WHEN DONE</div>' : '');
       break;
     case 'ptt': {
       left = 'PTT KEY';
@@ -1499,13 +1564,18 @@ async function choose() {
     void refreshDeviceCache();
     setScreen(PARENT[screen]);
     flash('SAVED', 800);
+  } else if (screen === 'scan') {
+    const item = scanItems()[state.listIndex];
+    if (item) await toggleScan(item.id);
   } else if (screen === 'size') {
-    if (state.firstSetup) return finishSetup();
+    // First launch: size, then a mic check.
+    if (state.firstSetup) return setScreen('test');
     setScreen(PARENT.size);
   } else if (screen === 'users') {
     const line = usersLines()[state.listIndex];
     if (line?.header) joinChannel(line.channelId);
   } else if (screen === 'test') {
+    if (state.firstSetup) return finishSetup();
     setScreen('setup');
   } else if (screen === 'ptt') {
     state.capturing = true;
@@ -1631,6 +1701,9 @@ function move(delta) {
   } else if ((screen === 'mic' || screen === 'headset') && state.devices.length) {
     state.listIndex = (state.listIndex + delta + state.devices.length) % state.devices.length;
     render();
+  } else if (screen === 'scan' && scanItems().length) {
+    state.listIndex = (state.listIndex + delta + scanItems().length) % scanItems().length;
+    render();
   } else if (screen === 'size') {
     state.listIndex = (state.listIndex + delta + SIZE_ITEMS.length) % SIZE_ITEMS.length;
     void setSize(Number(SIZE_ITEMS[state.listIndex].id));
@@ -1722,6 +1795,11 @@ function clickLcd(event) {
     if (step && row.adjust) return void row.adjust(step);
     if (row.open || row.action) return void choose();
     return render();
+  }
+  if (screen === 'scan' && index >= 0) {
+    playTone('key');
+    state.listIndex = index;
+    return void choose();
   }
   if (screen === 'size' && index >= 0) {
     playTone('key');
