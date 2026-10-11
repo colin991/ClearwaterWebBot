@@ -875,6 +875,22 @@ function showPanic(message) {
   render();
 }
 
+// EMER: every radio flashes with your name and in-game location (the relay allows one press per 15 s).
+let lastPanicAt = 0;
+function sendPanic() {
+  if (state.conn !== 'online') {
+    flash('NO SIGNAL', 1000);
+    return;
+  }
+  if (Date.now() - lastPanicAt < 15_000) {
+    flash('EMER SENT', 900);
+    return;
+  }
+  lastPanicAt = Date.now();
+  sendJson({ type: 'panic' });
+  flash('EMER SENT', 1200);
+}
+
 /* ---------- push to talk ---------- */
 
 function pttPress() {
@@ -1350,7 +1366,7 @@ function bindControls() {
   });
 
   $('quit').addEventListener('click', () => { void quitApp(); });
-  $('emer').addEventListener('click', () => flash('EMER N/A', 900));
+  $('emer').addEventListener('click', sendPanic);
   el.ch.addEventListener('click', () => changeChannel(1));
 
   // Side PTT bar: hold with the mouse.

@@ -41,6 +41,7 @@ async function startRelay() {
   const voice = new Set();
   const relay = createRadioRelay({
     inVoice: (userId) => voice.has(userId),
+    locatePanic: async (userId, name) => ({ name, location: userId === ALICE ? '120 Main St' : '' }),
     verifyKey: (key) => verifyRadioKey(key, env),
     exchangeCode: async (code) => {
       if (code === 'alice-code') return ALICE;
@@ -223,7 +224,7 @@ test('the periodic check closes radios of members who left the server', async ()
   }
 });
 
-test('one voice at a time with Discord, and members in the Discord channel are muted in the app', async () => {
+test('Discord talkers never block the app, and members in the Discord channel are muted in the app', async () => {
   const harness = await startRelay();
   try {
     const alice = client(harness.url);
@@ -236,14 +237,10 @@ test('one voice at a time with Discord, and members in the Discord channel are m
     const bobReady = await bob.until(() => bob.messages.find((m) => m.type === 'ready'));
     assert.equal(bobReady.inVoice, true);
 
-    // Someone talking in Discord blocks app transmit until they stop.
+    // Talking in Discord does not stop an app from keying up.
     harness.relay.discordSpeaking('333333333333333333', 'Carl', true);
-    alice.send({ type: 'tx', active: true });
-    const busy = await alice.until(() => alice.messages.find((m) => m.type === 'tx' && !m.ok));
-    assert.equal(busy.name, 'Carl');
     harness.relay.relayDiscordAudio('333333333333333333', Buffer.from([1]));
     await alice.until(() => alice.binary.length > 0);
-    harness.relay.discordSpeaking('333333333333333333', 'Carl', false);
     alice.send({ type: 'tx', active: true });
     await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
     alice.ws.send(Buffer.from([2]));
@@ -275,7 +272,7 @@ test('Special Response Team stays off Discord, and messages reach only the same 
     const ready = await alice.until(() => alice.messages.find((m) => m.type === 'ready'));
     assert.equal(ready.channelId, 'srt');
     assert.equal(ready.channel, 'Special Response Team');
-    assert.deepEqual(ready.channels.map((c) => c.id), ['main', 'srt']);
+    assert.deepEqual(ready.channels.map((c) => c.id), ['main', 'srt', 'freq']);
     await bob.until(() => bob.messages.find((m) => m.type === 'ready'));
 
     // Different channels: no shared audio, talk or messages.
@@ -305,6 +302,40 @@ test('Special Response Team stays off Discord, and messages reach only the same 
     assert.equal(text.text, '10-4 copy');
     assert.equal(text.from, 'Alice');
     await alice.until(() => alice.messages.find((m) => m.type === 'text'));
+
+    alice.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('Frequency Change is app-only, and EMER alerts every radio once per 15 seconds', async () => {
+  const harness = await startRelay();
+  try {
+    const alice = client(harness.url);
+    const bob = client(harness.url);
+    await Promise.all([once(alice.ws, 'open'), once(bob.ws, 'open')]);
+    alice.send({ type: 'auth', key: createRadioKey(ALICE, env), channel: 'freq' });
+    bob.send({ type: 'auth', key: createRadioKey(BOB, env), channel: 'freq' });
+    const ready = await alice.until(() => alice.messages.find((m) => m.type === 'ready'));
+    assert.equal(ready.channel, 'Frequency Change');
+    await bob.until(() => bob.messages.find((m) => m.type === 'ready'));
+    harness.setOnline(false);
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
+    alice.ws.send(Buffer.from([9]));
+    await bob.until(() => bob.binary.length > 0);
+    assert.equal(harness.played.length, 0, 'Frequency Change audio is not played into Discord');
+
+    alice.send({ type: 'panic' });
+    const panic = await bob.until(() => bob.messages.find((m) => m.type === 'panic'));
+    assert.equal(panic.name, 'Alice');
+    assert.equal(panic.location, '120 Main St');
+    await alice.until(() => alice.messages.find((m) => m.type === 'panic'));
+    alice.send({ type: 'panic' });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(bob.messages.filter((m) => m.type === 'panic').length, 1, 'a second press right away is ignored');
 
     alice.ws.close();
     bob.ws.close();

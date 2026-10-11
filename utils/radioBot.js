@@ -15,7 +15,9 @@ import { logger } from './logger.js';
 import { createRadioRelay } from './radioRelay.js';
 import { createRadioKey, verifyRadioKey } from './radioKeys.js';
 import { exchangeRadioCode, radioOAuthConfig } from './radioOAuth.js';
-import { createRadioPanicWatch } from './radioPanic.js';
+import { createRadioPanicWatch, findPanicPlayer, playerLocationLabel } from './radioPanic.js';
+import { erlcPlayersFromServer, fetchErlcServer, parseErlcPlayer } from './erlc.js';
+import { getIdentityCache } from './identityStore.js';
 
 const UNKNOWN_MEMBER = 10007;
 
@@ -26,6 +28,30 @@ const VOICE_GROUP = 'clearwater-radio';
 const REJOIN_DELAY_MS = 10_000;
 
 let activeRelay = null;
+
+/** The in-game player behind a panic, looked up in the live ER:LC player list (null when unavailable). */
+async function findPanicPlayerInGame(env, { robloxId = '', names = [] }) {
+  const key = env.ERLC_SERVER_KEY?.trim();
+  if (!key) return null;
+  try {
+    const server = await fetchErlcServer(key, { timeoutMs: 4_000 });
+    return findPanicPlayer(erlcPlayersFromServer(server).map(parseErlcPlayer), { robloxId, names });
+  } catch (error) {
+    logger.warn(`Radio panic: could not read the ER:LC player list (${error?.message || error})`);
+    return null;
+  }
+}
+
+/** EMER on a radio: the member's linked Roblox player, so the alert shows where they are in game. */
+async function locateRadioPanic(env, userId, name) {
+  const identity = (await getIdentityCache().catch(() => ({ byDiscord: {} }))).byDiscord?.[userId] || {};
+  const nick = String(name || '').replace(/^(\s*[[(][^\])]*[\])]\s*)+/, '').trim();
+  const player = await findPanicPlayerInGame(env, {
+    robloxId: identity.robloxId,
+    names: [identity.robloxUsername, name, nick, nick.split(/\s*[|/-]\s*/)[0]],
+  });
+  return { name, location: player ? playerLocationLabel(player) : '' };
+}
 
 /** Hook for the bot API HTTP server so the radio can share its port. */
 export function handleRadioUpgrade(request, socket, head) {
@@ -80,6 +106,10 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
       return config ? { clientId: config.clientId, redirectUri: config.redirectUri } : null;
     },
     status: () => ({ online: isOnline(), channel: channel?.name || 'Radio' }),
+    locatePanic: (userId, name) => locateRadioPanic(env, userId, name),
+    onPanic: (message) => {
+      logger.info(`Radio: EMER from ${message.name} at ${message.location || 'unknown location'} sent to ${relay.listeners} radio(s).`);
+    },
     inVoice: (userId) => (channel?.guild?.voiceStates?.cache?.get(userId)?.channelId || null) === RADIO_CHANNEL_ID,
     // `removed` closes the member's radio app; anything else (Discord or bot trouble) is retried.
     async authorize(userId) {
@@ -251,9 +281,19 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     logger.error('Radio bot login failed (check RADIO_BOT_TOKEN).', error);
   });
 
-  const onPanic = createRadioPanicWatch((message) => {
-    relay.alert(message);
-    logger.info(`Radio: panic from ${message.name || 'unknown'} at ${message.location || 'unknown location'} sent to ${relay.listeners} radio(s).`);
+  // `;panic` gives a Roblox ID and maybe a typed location: fill in the name and in-game location from ER:LC.
+  const onPanic = createRadioPanicWatch((panic) => {
+    void (async () => {
+      const player = await findPanicPlayerInGame(env, { robloxId: panic.robloxId, names: [panic.name] });
+      const message = {
+        type: 'panic',
+        name: player?.username || panic.name || 'Unknown',
+        location: panic.location || playerLocationLabel(player),
+        at: panic.at,
+      };
+      relay.alert(message);
+      logger.info(`Radio: panic from ${message.name} at ${message.location || 'unknown location'} sent to ${relay.listeners} radio(s).`);
+    })().catch((error) => logger.warn(`Radio panic failed: ${error?.message || error}`));
   });
   const onErlcEvent = (payload) => {
     try { onPanic(payload); } catch (error) { logger.warn(`Radio panic failed: ${error?.message || error}`); }

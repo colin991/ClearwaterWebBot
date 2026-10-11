@@ -10,9 +10,16 @@ export const RADIO_MAX_PACKETS_PER_SECOND = 75;
 /** How often signed-in radios are re-checked against the Discord server (anti-raid). */
 export const RADIO_RECHECK_MS = 5 * 60 * 1000;
 const AUDIO_FRAME = 0x01;
-/** Radio channels. MAIN is bridged to the Discord voice channel; SRT is app-to-app only. */
+/** Radio channels. MAIN is bridged to the Discord voice channel; the others are app-to-app only. */
 export const RADIO_MAIN_CHANNEL = 'main';
 export const RADIO_SRT_CHANNEL = 'srt';
+export const RADIO_FREQ_CHANNEL = 'freq';
+const APP_CHANNELS = [
+  { id: RADIO_SRT_CHANNEL, name: 'Special Response Team' },
+  { id: RADIO_FREQ_CHANNEL, name: 'Frequency Change' },
+];
+/** One EMER press per radio in this window. */
+export const RADIO_PANIC_GAP_MS = 15_000;
 export const RADIO_MESSAGE_MAX = 140;
 const RADIO_MESSAGE_GAP_MS = 1_000;
 
@@ -48,6 +55,8 @@ function send(socket, message) {
  *   `removed: true` means the member is not in the server or lost radio access; their app is closed.
  * @param {(userId: string) => ({ push(packet: Buffer): void, end(): void }|null)} options.openTransmit
  * @param {() => { online: boolean, channel: string }} options.status
+ * @param {(userId: string, name: string) => Promise<{ name?: string, location?: string }|null>} [options.locatePanic]
+ *   who and where a radio's EMER press came from, for the panic alert.
  */
 export function createRadioRelay({
   verifyKey,
@@ -58,6 +67,8 @@ export function createRadioRelay({
   openTransmit,
   status,
   inVoice = () => false,
+  locatePanic = async () => null,
+  onPanic = () => {},
   now = () => Date.now(),
   recheckMs = RADIO_RECHECK_MS,
 }) {
@@ -67,12 +78,9 @@ export function createRadioRelay({
   // One talker per channel: channel id -> { socket, userId, name, sink, startedAt, lastPacketAt }
   const talkers = new Map();
   const discordTalkers = new Map(); // userId -> name, members talking in the Discord channel
-  const channelList = () => [
-    { id: RADIO_MAIN_CHANNEL, name: status().channel || 'Radio', discord: true },
-    { id: RADIO_SRT_CHANNEL, name: 'Special Response Team', discord: false },
-  ];
+  const channelList = () => [{ id: RADIO_MAIN_CHANNEL, name: status().channel || 'Radio' }, ...APP_CHANNELS];
   const channelName = (id) => channelList().find((channel) => channel.id === id)?.name || 'Radio';
-  const isChannel = (id) => id === RADIO_MAIN_CHANNEL || id === RADIO_SRT_CHANNEL;
+  const isChannel = (id) => id === RADIO_MAIN_CHANNEL || APP_CHANNELS.some((channel) => channel.id === id);
   // Members sitting in the Discord channel already hear MAIN there, so their app stays quiet on it.
   const hears = (socket, speakerId, channel) => {
     const radio = socket.radio;
@@ -136,9 +144,6 @@ export function createRadioRelay({
     if (talker) return send(socket, { type: 'tx', ok: false, reason: 'busy', name: talker.name });
     let sink = null;
     if (channel === RADIO_MAIN_CHANNEL) {
-      // One voice at a time: wait while someone is talking in the Discord channel.
-      const discordTalker = [...discordTalkers].find(([id]) => id !== userId);
-      if (discordTalker) return send(socket, { type: 'tx', ok: false, reason: 'busy', name: discordTalker[1] });
       if (!status().online) return send(socket, { type: 'tx', ok: false, reason: 'offline' });
       sink = openTransmit(userId);
       if (!sink) return send(socket, { type: 'tx', ok: false, reason: 'offline' });
@@ -195,6 +200,23 @@ export function createRadioRelay({
       type: 'text', id: socket.radio.userId, from: socket.radio.name, text: clean,
       channel: channelName(channel), channelId: channel, at,
     }, null, channel);
+  }
+
+  // EMER on a radio: alert every radio with who pressed it and, when the game knows, where they are.
+  async function onPanicPress(socket) {
+    const { userId, name } = socket.radio;
+    const at = now();
+    if (at - (socket.radio.lastPanicAt || 0) < RADIO_PANIC_GAP_MS) return;
+    socket.radio.lastPanicAt = at;
+    let found = null;
+    try {
+      found = await locatePanic(userId, name);
+    } catch (error) {
+      logger.warn(`Radio panic lookup failed: ${error?.message || error}`);
+    }
+    const alert = { type: 'panic', name: found?.name || name, location: found?.location || '', at, source: 'radio' };
+    broadcast(alert);
+    onPanic(alert);
   }
 
   function removeSocket(socket, reason) {
@@ -291,6 +313,8 @@ export function createRadioRelay({
         switchChannel(socket, message.id);
       } else if (message.type === 'text') {
         onText(socket, message.text);
+      } else if (message.type === 'panic') {
+        void onPanicPress(socket);
       } else if (message.type === 'deaf') {
         socket.radio.deaf = Boolean(message.active);
       } else if (message.type === 'ping') {

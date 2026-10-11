@@ -3280,6 +3280,13 @@
       "summary": "The Clearwater Radio app now looks like a handheld police radio with a color screen showing zone, channel, time and the latest message. P2 opens radio-to-radio text messages, and the CH knob switches to the new Special Response Team channel, which is app-only and never goes to Discord.",
       "createdAt": "2026-10-11T14:47:15.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-emer-panic-frequency-change",
+      "title": "Radio EMER button, working ;panic and Frequency Change",
+      "summary": "The blue EMER button on the radio now sends your panic to every radio with your in-game location, and ;panic typed in game now reaches the radios. Talking in the Discord radio channel no longer blocks the app, and a new app-only Frequency Change channel was added.",
+      "createdAt": "2026-10-11T15:05:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
