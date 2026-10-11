@@ -5,6 +5,7 @@ import {
   listStaffRanks,
   RANK_FLOOR,
   requireBotPerms,
+  requireCanModerate,
   requireMinRank,
   resolveMember,
   resolveUser,
@@ -200,6 +201,7 @@ export const nick = {
     if (member) {
       const next = args.slice(1).join(' ').trim();
       if (!member.manageable) return message.reply('I cannot change that nickname.');
+      if (member.id !== message.author.id) requireCanModerate(message, member);
       await member.setNickname(next || null, `Nickname changed by ${message.author.tag}`);
       return message.reply(next ? `Set nickname for **${member.user.tag}** to **${next}**.` : `Cleared nickname for **${member.user.tag}**.`);
     }

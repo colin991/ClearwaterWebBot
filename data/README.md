@@ -20,6 +20,7 @@ This folder holds bot runtime files on the **bot host**.
 - `clearwater-internet.json` — Clearwater Internet users, posts, wallets, messages
 - `clearwater-internet.json.bak` / `.bak.1` — rotating backups before each save
 - `identity-cache.json` — Melonly identity cache (may be encrypted)
+- `manual-identities.local.json` — Discord ↔ Roblox links added with `/ml` (merged over the committed list)
 - `circle-moderation.json` — moderation store
 - `ban-appeal-dms.json` — who already received a main-server ban appeal DM
 - other `data/*.json` created by the live bot

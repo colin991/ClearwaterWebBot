@@ -3161,6 +3161,13 @@
       "summary": "The in-game ;team command now moves only the person who ran it to their team voice channel. Nearby players are no longer detected or dragged by this command.",
       "createdAt": "2026-10-10T14:00:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-security-review-fixes",
+      "title": "Security and reliability fixes from code review",
+      "summary": "Website developer access now uses Discord IDs only and live role checks. -ecoadmin, -eco and Roblox -funds only work in Clearwater. Staff Internet bans survive rejoining. Roblox name matching needs the whole name (callsign nicknames still work). Moderation, promote and edit-infraction respect rank. Training reports need a supervisor. Pinellas data files are saved safely. Scene commands have a cooldown and only pull people from VCs the caller can see. LEO briefing End works every time. /ml links survive restarts. Internet replies have a short cooldown and no longer copy large avatars.",
+      "createdAt": "2026-10-11T03:45:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

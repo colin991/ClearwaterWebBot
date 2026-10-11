@@ -36,7 +36,7 @@ export function enforcementLogBody({ action, player, reason = '', message = '' }
 
 async function fetchLogChannel(client, channelId) {
   const id = String(channelId || '').trim();
-  if (!id || !client) return null;
+  if (!id || typeof client?.channels?.fetch !== 'function') return null;
   if (typeof client.isReady === 'function' && client.isReady() === false && !client.user) return null;
   const channel = await client.channels.fetch(id).catch((error) => {
     logger.error(`VC action log channel fetch failed (${id})`, error);
