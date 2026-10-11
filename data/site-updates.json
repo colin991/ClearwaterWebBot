@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-11-radio-relay-port-and-update-progress",
+      "title": "Radio relay always listens and shows update progress",
+      "summary": "The radio relay now listens on SERVER_PORT even when BOT_API_KEY is not set, so the app can always reach it. The radio screen shows update download progress and reminds you to set a PTT key when none is set.",
+      "createdAt": "2026-10-11T05:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-11-radio-blue-theme",
       "title": "Blue theme for the radio app",
       "summary": "The radio app's screen, EMER button, highlights, and icon changed from orange to blue (#267bd7), and the download post uses the same blue.",

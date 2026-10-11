@@ -724,6 +724,7 @@ function rowsHtml(rows, selected) {
 
 function homeBody() {
   if (state.update?.state === 'installing') return '<div class="mid">UPDATING</div><div class="small">RADIO WILL REOPEN</div>';
+  if (state.update?.state === 'downloading') return `<div class="mid">UPDATING</div><div class="small">DOWNLOADING ${state.update.percent || 0}%</div>`;
   if (state.toast) return `<div class="mid">${escapeHtml(state.toast.text)}</div>`;
   switch (state.conn) {
     case 'nokey':
@@ -743,7 +744,8 @@ function homeBody() {
     return `<div class="big">RX</div><div class="small">${escapeHtml(names)}</div>`;
   }
   if (!state.botOnline) return '<div class="mid">BOT OFFLINE</div><div class="small">WAITING FOR RADIO</div>';
-  return `<div class="big">READY</div><div class="small">${escapeHtml(String(state.me?.name || '').toUpperCase())}</div>`;
+  const hint = state.settings.ptt ? String(state.me?.name || '').toUpperCase() : 'SET PTT IN MENU';
+  return `<div class="big">READY</div><div class="small">${escapeHtml(hint)}</div>`;
 }
 
 function updateText() {
