@@ -92,6 +92,7 @@ const state = {
   txCancel: false,
   pttHeld: false,
   rx: new Map(),
+  talking: {}, // channel id -> ids of everyone talking there, for the units lists
   panic: null,
   inVoice: false, // in the Discord channel already, so the radio stays quiet
   toast: null,
@@ -901,6 +902,10 @@ function onMessage(message) {
       updateLamps();
       render();
       break;
+    case 'talking':
+      state.talking = message.channels || {};
+      render();
+      break;
     case 'tx':
       onTxReply(message);
       break;
@@ -936,7 +941,10 @@ function onMessage(message) {
 function applyChannelStatus(message) {
   state.channel = message.channel || state.channel;
   if (message.channelId) state.channelId = message.channelId;
-  if (Array.isArray(message.channels)) state.channels = message.channels;
+  if (Array.isArray(message.channels)) {
+    state.channels = message.channels;
+    state.talking = Object.fromEntries(message.channels.map((channel) => [channel.id, (channel.members || []).filter((member) => member.talking).map((member) => member.id)]));
+  }
   state.botOnline = Boolean(message.online);
   state.listeners = message.listeners || 0;
   if ('dispatch' in message) state.dispatch = Boolean(message.dispatch);
@@ -1308,15 +1316,23 @@ function listHtml(items, selected, current) {
 }
 
 // Lines of the WHO screen: a header per channel, then everyone on it (app radio, Discord VC, or both).
+// A channel's units with whoever is talking first.
+function channelMembers(channel) {
+  const talking = new Set(state.talking[channel?.id] || []);
+  return (channel?.members || [])
+    .map((member) => ({ ...member, talking: talking.has(member.id) }))
+    .sort((a, b) => Number(b.talking) - Number(a.talking));
+}
+
 function usersLines() {
   const lines = [];
   state.channels.forEach((channel, index) => {
-    const members = channel.members || [];
+    const members = channelMembers(channel);
     lines.push({ header: true, channelId: channel.id, text: `CH ${index + 1} · ${channel.name} (${members.length})`, current: channel.id === state.channelId });
     if (!members.length) lines.push({ text: 'NOBODY', dim: true });
     for (const member of members) {
       const where = member.app && member.discord ? 'APP + VC' : member.discord ? 'DISCORD VC' : 'APP';
-      lines.push({ text: member.name, where, me: member.id === state.me?.id });
+      lines.push({ text: member.name, where, me: member.id === state.me?.id, talking: member.talking });
     }
   });
   return lines;
@@ -1326,7 +1342,7 @@ function usersBody() {
   const lines = usersLines();
   if (!lines.length) return '<div class="small">NOT CONNECTED</div>';
   return `<ul class="list users">${lines.map((line, index) => {
-    const classes = [index === state.listIndex ? 'sel' : '', line.header ? 'hdr' : '', line.dim ? 'dim' : '', line.current ? 'cur' : ''].filter(Boolean).join(' ');
+    const classes = [index === state.listIndex ? 'sel' : '', line.header ? 'hdr' : '', line.dim ? 'dim' : '', line.current ? 'cur' : '', line.talking ? 'talking' : ''].filter(Boolean).join(' ');
     const where = line.where ? `<span class="where">${escapeHtml(line.where)}</span>` : '';
     return `<li class="${classes}" data-row="${index}">${escapeHtml(String(line.text).toUpperCase())}${line.me ? ' (YOU)' : ''}${where}</li>`;
   }).join('')}</ul>`;
@@ -1399,10 +1415,10 @@ function homeBody() {
       : '')
     + (scanIds().length ? `<div class="last">SCAN ${escapeHtml(scanText())}</div>` : '')
     + '</div>';
-  const members = state.channels.find((channel) => channel.id === state.channelId)?.members || [];
+  const members = channelMembers(state.channels.find((channel) => channel.id === state.channelId));
   html += `<div class="card units"><div class="zone">UNITS ON CH ${channelNumber()} (${members.length})</div>`
     + (members.length
-      ? members.map((member) => `<div class="unit"><span>${escapeHtml(member.name.toUpperCase())}${member.id === state.me?.id ? ' (YOU)' : ''}</span>`
+      ? members.map((member) => `<div class="unit${member.talking ? ' talking' : ''}"><span>${escapeHtml(member.name.toUpperCase())}${member.id === state.me?.id ? ' (YOU)' : ''}</span>`
         + `<span class="where">${member.app && member.discord ? 'APP+VC' : member.discord ? 'VC' : 'APP'}</span></div>`).join('')
       : '<div class="unit dim">NOBODY</div>')
     + '</div>';

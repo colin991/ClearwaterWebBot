@@ -454,10 +454,10 @@ test('each channel lists app radios and Discord members together', async () => {
       .find((m) => m.type === 'status' && m.channels[0].members.some((member) => member.id === BOB && member.app)));
     const [main, srt, freq] = status.channels;
     assert.deepEqual(main.members, [
-      { id: BOB, name: 'Bob', app: true, discord: true },
-      { id: '333333333333333333', name: 'Carl', app: false, discord: true },
+      { id: BOB, name: 'Bob', app: true, discord: true, talking: false },
+      { id: '333333333333333333', name: 'Carl', app: false, discord: true, talking: false },
     ]);
-    assert.deepEqual(srt.members, [{ id: ALICE, name: 'Alice', app: true, discord: false }]);
+    assert.deepEqual(srt.members, [{ id: ALICE, name: 'Alice', app: true, discord: false, talking: false }]);
     assert.deepEqual(freq.members, []);
     alice.ws.close();
     bob.ws.close();
@@ -626,6 +626,36 @@ test('scan mode hears other channels but talks on its own', async () => {
     bob.ws.send(Buffer.from([8]));
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.equal(alice.binary.length, before, 'scan off: nothing from SRT');
+    alice.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('whoever is talking is flagged and listed first, on the radio or in the Discord channel', async () => {
+  const discord = [{ id: '333333333333333333', name: 'Carl' }];
+  const harness = await startRelay({ voiceMembers: () => discord });
+  try {
+    const alice = await signIn(harness, ALICE);
+    const bob = await signIn(harness, BOB);
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', true);
+    const carl = await alice.until(() => alice.messages.find((m) => m.type === 'talking' && m.channels.main.length));
+    assert.deepEqual(carl.channels, { main: ['333333333333333333'], srt: [], freq: [] });
+    harness.relay.broadcastStatus();
+    const status = await alice.until(() => alice.messages
+      .find((m) => m.type === 'status' && m.channels[0].members[0]?.talking));
+    assert.deepEqual(status.channels[0].members.map((m) => [m.name, m.talking]), [['Carl', true], ['Alice', false], ['Bob', false]]);
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', false);
+
+    bob.send({ type: 'channel', id: 'srt' });
+    await bob.until(() => bob.messages.find((m) => m.type === 'channel'));
+    bob.send({ type: 'tx', active: true });
+    await bob.until(() => bob.messages.find((m) => m.type === 'tx' && m.ok));
+    const talking = await alice.until(() => alice.messages.find((m) => m.type === 'talking' && m.channels.srt.length));
+    assert.deepEqual(talking.channels.srt, [BOB], 'radios on other channels learn who is talking too');
+    bob.send({ type: 'tx', active: false });
+    await alice.until(() => alice.messages.filter((m) => m.type === 'talking').at(-1)?.channels.srt.length === 0 || null);
     alice.ws.close();
     bob.ws.close();
   } finally {
