@@ -3504,6 +3504,13 @@
       "summary": "The radio settings menu is shorter: TX VOL, FX LVL, POWER, NIGHT and AUTO GAIN are gone and now use their usual defaults (low power still turns on by itself on slower PCs). Radio transmissions are no longer recorded or kept for 24 hours, the Recordings section is gone from the staff page, and any saved recordings are deleted.",
       "createdAt": "2026-10-12T00:20:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-recordings-back-damage-ptt-tail-2026-10-12",
+      "title": "Radio: recordings are back, damage fix, PTT tail",
+      "summary": "Radio transmissions are recorded and kept for 24 hours for staff review again, with the Recordings section back on the staff page. The cracked damaged-radio screen now triggers more reliably when someone is downed in game. Letting go of PTT now keeps transmitting for one more second so the end of what you said isn't cut off.",
+      "createdAt": "2026-10-12T00:30:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

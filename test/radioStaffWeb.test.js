@@ -168,12 +168,13 @@ test('the website forwards staff tools to the bot with only the fields each one 
   assert.equal((await call(siteCookie(), { action: 'warn', userId: ALICE, text: '  ' })).status, 400);
   assert.deepEqual((await call(siteCookie(), { action: 'shout', text: 'Restart soon' })).asked[0].body, { discordId: ADMIN, action: 'shout', text: 'Restart soon' });
   assert.deepEqual((await call(siteCookie(), { action: 'event-open', name: 'Car Meet' })).asked[0].body, { discordId: ADMIN, action: 'event-open', name: 'Car Meet' });
-  assert.equal((await call(siteCookie(), { action: 'recordings' })).status, 400, 'recordings are gone');
-  const full = await call(siteCookie(), { action: 'event-open', name: 'Car Meet' }, { bot: { ok: false, status: 409, json: async () => ({ error: 'Busy' }) } });
-  assert.equal(full.status, 409);
+  assert.deepEqual((await call(siteCookie(), { action: 'recording', id: 'abc-123' })).asked[0].body, { discordId: ADMIN, action: 'recording', id: 'abc-123' });
+  assert.equal((await call(siteCookie(), { action: 'recording', id: '../etc' })).status, 400);
+  const gone = await call(siteCookie(), { action: 'recording', id: 'abc-123' }, { bot: { ok: false, status: 404, json: async () => ({ error: 'That recording is gone.' }) } });
+  assert.equal(gone.status, 404);
 });
 
-test('staff tools warn a unit, play a shout-out, and run the event channel', async () => {
+test('staff tools warn a unit, play a shout-out, run the event channel and play recordings', async () => {
   const posts = [];
   const sent = [];
   let event = null;
@@ -185,6 +186,8 @@ test('staff tools warn a unit, play a shout-out, and run the event channel', asy
     event: () => event,
     openEvent: (name) => { event = { name: name || 'Server Event' }; return event; },
     closeEvent: () => { event = null; return 2; },
+    recordings: async () => [{ id: 'r1', name: 'Alice' }],
+    recording: async (id) => (id === 'r1' ? { entry: { id: 'r1' }, audio: Buffer.from('OggS') } : null),
     postStaff: async (payload) => { posts.push(payload.content); },
   });
   await runRadioStaffTool('warn', { userId: ALICE, text: ' Stop\n spamming ' }, ADMIN);
@@ -196,7 +199,10 @@ test('staff tools warn a unit, play a shout-out, and run the event channel', asy
   assert.deepEqual((await runRadioStaffTool('event-open', { name: 'Car Meet' }, ADMIN)).event, { name: 'Car Meet' });
   assert.deepEqual(radioStaffSnapshot().event, { name: 'Car Meet' });
   assert.equal((await runRadioStaffTool('event-close', {}, ADMIN)).moved, 2);
-  await assert.rejects(runRadioStaffTool('recordings', {}, ADMIN), { status: 400 });
+  assert.equal((await runRadioStaffTool('recordings', {}, ADMIN)).recordings.length, 1);
+  const played = await runRadioStaffTool('recording', { id: 'r1' }, ADMIN);
+  assert.equal(Buffer.from(played.audio, 'base64').toString(), 'OggS');
+  await assert.rejects(runRadioStaffTool('recording', { id: 'r2' }, ADMIN), { status: 404 });
   await assert.rejects(runRadioStaffTool('ban', {}, ADMIN), { status: 400 });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(posts.length, 4, 'warn, shout, event open and close are noted in the radio chat');

@@ -12,8 +12,11 @@ const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const MILES_PER_STUD = 0.28 / 1609.34;
 /** How long a radio stays damaged (very weak) after its member is downed. */
 export const DOWNED_MS = 20_000;
-/** Kill log entries older than this are history, not a fresh down. */
-const KILL_FRESH_MS = 30_000;
+/**
+ * Kill log entries older than this are history, not a fresh down. Generous because ER:LC's kill
+ * log can show up a while after the death; each entry still only counts once.
+ */
+const KILL_FRESH_MS = 120_000;
 /** Moving less than this between updates counts as standing still (GPS-style jitter). */
 const STILL_STUDS = 6;
 
@@ -70,17 +73,22 @@ export function createDamageTracker({ now = Date.now } = {}) {
   const until = new Map();
   const seen = new Set();
   return {
-    /** kills: parsed kill log entries ({ username, robloxId, at }); located: userId -> { player }. */
-    update(kills, located) {
+    /**
+     * kills: parsed kill log entries ({ username, robloxId, at }); located: userId -> { player };
+     * known: userId -> { robloxId, names } from linked accounts, for members the player list missed.
+     */
+    update(kills, located, known = new Map()) {
       const at = now();
       const downed = [];
       const fresh = (kills || []).filter((kill) => kill && Number(kill.at) > at - KILL_FRESH_MS);
-      for (const [userId, spot] of located) {
-        const player = spot?.player;
-        if (!player) continue;
-        const name = String(player.username || '').toLowerCase();
-        const kill = fresh.find((entry) => (player.robloxId && String(entry.robloxId) === String(player.robloxId))
-          || (name && String(entry.username || '').toLowerCase() === name));
+      for (const userId of new Set([...located.keys(), ...known.keys()])) {
+        const player = located.get(userId)?.player || {};
+        const link = known.get(userId) || {};
+        const ids = new Set([player.robloxId, link.robloxId].filter(Boolean).map(String));
+        const names = new Set([player.username, ...(link.names || [])].filter(Boolean).map((name) => String(name).toLowerCase()));
+        if (!ids.size && !names.size) continue;
+        const kill = fresh.find((entry) => (entry.robloxId && ids.has(String(entry.robloxId)))
+          || (entry.username && names.has(String(entry.username).toLowerCase())));
         if (!kill) continue;
         const key = `${kill.robloxId || kill.username}:${kill.at}`;
         if (seen.has(key)) continue;

@@ -24,8 +24,8 @@ const PANEL_FOOTER = 'Clearwater Radio staff panel';
 /** The same panel on the website, for admins signed in with Discord. */
 export const RADIO_STAFF_URL = 'https://www.cwpcso.com/radio-staff';
 export const RADIO_STAFF_ACTIONS = Object.freeze(['mute', 'unmute', 'kick']);
-/** Website-only staff tools: warning pop-ups, shout-outs, the event channel and channel access. */
-export const RADIO_STAFF_TOOLS = Object.freeze(['warn', 'shout', 'event-open', 'event-close', 'ranks', 'access']);
+/** Website-only staff tools: warning pop-ups, shout-outs, the event channel and recordings. */
+export const RADIO_STAFF_TOOLS = Object.freeze(['warn', 'shout', 'event-open', 'event-close', 'recordings', 'recording', 'ranks', 'access']);
 export const RADIO_WARNING_MAX = 200;
 export const RADIO_SHOUT_MAX = 200;
 
@@ -204,7 +204,7 @@ const cleanText = (value, max) => String(value ?? '').replace(/[\u0000-\u001f]/g
 /**
  * The website's staff tools. Returns what the page needs; throws with a status when it can't.
  * warn: a pop-up on one unit's radio. shout: text read aloud on every radio. event-open / event-close:
- * the temporary event channel. ranks / access: rank-based channel access from Melonly.
+ * the temporary event channel. recordings / recording: the last 24 hours of transmissions.
  */
 export async function runRadioStaffTool(action, payload, by) {
   const fail = (message, status) => Object.assign(new Error(message), { status });
@@ -262,5 +262,13 @@ export async function runRadioStaffTool(action, payload, by) {
     note(`🔒 <@${by}> updated radio channel access (website): ${locked.length ? `${locked.length} channel${locked.length === 1 ? '' : 's'} limited by Melonly rank` : 'every channel open to everyone'}.`);
     return { ok: true, action, access: saved };
   }
-  throw fail('Unknown action.', 400);
+  if (action === 'recordings') {
+    const list = (await controls.recordings?.()) || [];
+    return { ok: true, action, recordings: list.slice(0, 300) };
+  }
+  // recording: one transmission's audio, as base64 Ogg Opus for the page to play.
+  const found = await controls.recording?.(String(payload?.id || ''));
+  if (!found?.audio) throw fail('That recording is gone (they are kept for 24 hours).', 404);
+  logger.info(`Radio staff: recording ${found.entry.id} played by ${by}`);
+  return { ok: true, action, recording: found.entry, audio: found.audio.toString('base64'), type: 'audio/ogg' };
 }

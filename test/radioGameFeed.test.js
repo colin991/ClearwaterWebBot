@@ -63,19 +63,21 @@ test('nearest units are the 3 closest other radio users in game, with postal and
 
 test('a member in the kill log gets a damaged radio for 20 seconds, once per kill', async () => {
   const { createDamageTracker, DOWNED_MS } = await import('../utils/radioGameFeed.js');
-  let clock = 100_000;
+  let clock = 300_000;
   const damage = createDamageTracker({ now: () => clock });
   const located = new Map([['u1', { player: { username: 'Alice', robloxId: '42' } }], ['u2', { player: { username: 'Bob', robloxId: '7' } }]]);
-  const kills = [{ username: 'Alice', robloxId: '42', at: 98_000 }, { username: 'bob', robloxId: '', at: 10_000 }];
-  assert.deepEqual(damage.update(kills, located), ['u1'], 'an old kill is history');
+  const kills = [{ username: 'Alice', robloxId: '42', at: 240_000 }, { username: 'bob', robloxId: '', at: 10_000 }];
+  assert.deepEqual(damage.update(kills, located), ['u1'], 'a kill the log showed late still counts; an old one is history');
   assert.equal(damage.isDamaged('u1'), true);
-  assert.equal(damage.nextEnd(), 100_000 + DOWNED_MS);
+  assert.equal(damage.nextEnd(), 300_000 + DOWNED_MS);
   clock += 5000;
   assert.deepEqual(damage.update(kills, located), [], 'the same kill again does nothing');
   clock += DOWNED_MS;
   assert.equal(damage.isDamaged('u1'), false);
   assert.equal(damage.nextEnd(), 0);
   assert.deepEqual(damage.update([{ username: 'BOB', at: clock - 1000 }], located), ['u2'], 'matched by name too');
+  const known = new Map([['u3', { robloxId: '99', names: ['Carl_RBX'] }]]);
+  assert.deepEqual(damage.update([{ username: 'Carl_RBX', robloxId: '99', at: clock - 2000 }], new Map(), known), ['u3'], 'a linked member the player list missed');
 });
 
 test('a Civilian-team player on the radio is flagged once, after two updates in a row', async () => {

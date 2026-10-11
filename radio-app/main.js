@@ -468,7 +468,7 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('settings:get', () => ({ ...settings, hook: Boolean(uIOhook), relayUrl: DEFAULT_RELAY_URL }));
     ipcMain.handle('settings:set', (_event, patch) => {
       const allowedKeys = ['key', 'micId', 'outputId', 'volume', 'listenFx', 'size', 'scan', 'channel', 'deaf', 'ptt',
-        'scanPtt', 'replayKey', 'chanKey', 'syncAt', 'tutorialDone', 'monitor'];
+        'scanPtt', 'replayKey', 'chanKey', 'syncAt', 'tutorialDone', 'recordNotice', 'monitor'];
       for (const key of allowedKeys) {
         if (patch && Object.prototype.hasOwnProperty.call(patch, key)) settings[key] = patch[key];
       }
