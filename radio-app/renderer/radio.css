@@ -303,13 +303,12 @@ button:focus { outline: none; }
 .lcd .card.tx .state { color: #c0261b; }
 .lcd .card.rx .state { color: #138a3a; }
 
-.lcd .card.msg { display: grid; grid-template-columns: 12px 1fr auto; column-gap: 4px; align-items: center; font-size: 9px; }
-.lcd .card.msg .ico { width: 11px; height: 8px; border-radius: 1px; background: var(--accent); position: relative; }
-.lcd .card.msg .ico::after { content: ""; position: absolute; left: 2px; bottom: -3px; border: 2px solid transparent; border-top-color: var(--accent); border-left-color: var(--accent); }
-.lcd .card.msg .from { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lcd .card.msg .when { color: var(--ink-dim); }
-.lcd .card.msg .text { grid-column: 2 / 4; overflow-wrap: anywhere; max-height: 24px; overflow: hidden; }
-.lcd .card.msg .badge { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 7px; line-height: 9px; text-align: center; }
+.lcd .card.units { font-size: 9px; max-height: 58px; overflow: hidden; }
+.lcd .card.units .zone { margin-bottom: 1px; }
+.lcd .card.units .unit { display: flex; justify-content: space-between; gap: 4px; font-weight: 700; line-height: 11px; }
+.lcd .card.units .unit span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lcd .card.units .unit .where { font-size: 8px; font-weight: 400; color: var(--ink-dim); }
+.lcd .card.units .unit.dim { color: var(--ink-dim); font-weight: 400; }
 
 .lcd .list {
   align-self: stretch;
@@ -356,21 +355,6 @@ button:focus { outline: none; }
   background: var(--accent);
 }
 
-.lcd .typed {
-  align-self: stretch;
-  min-height: 46px;
-  background: #fff;
-  border: 1px solid var(--accent);
-  border-radius: 3px;
-  padding: 3px 4px;
-  font-size: 10px;
-  text-align: left;
-  overflow-wrap: anywhere;
-}
-
-.lcd .typed::after { content: "_"; animation: blink 1s steps(1) infinite; color: var(--accent); }
-@keyframes blink { 50% { opacity: 0; } }
-
 /* Programmable keys around the navigation ring. */
 .nav {
   display: grid;
@@ -396,8 +380,8 @@ button:focus { outline: none; }
 #softR { grid-column: 3; grid-row: 1; }
 .okkey { grid-column: 1; grid-row: 2; }
 .backkey { grid-column: 3; grid-row: 2; display: grid; place-items: center; }
-.gearkey { display: grid; place-items: center; }
-.gearkey svg { width: 15px; height: 15px; fill: none; stroke: var(--key-text); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.gearkey, .homekey { display: grid; place-items: center; }
+.gearkey svg, .homekey svg { width: 15px; height: 15px; fill: none; stroke: var(--key-text); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .backkey svg { width: 14px; height: 14px; fill: none; stroke: var(--key-text); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 
 .dpad {

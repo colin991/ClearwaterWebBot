@@ -3336,6 +3336,13 @@
       "summary": "The P1 key on the Clearwater Radio is now a gear icon that opens the radio's settings.",
       "createdAt": "2026-10-11T15:32:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-home-key-units-idle",
+      "title": "Radio home key, units list and auto-close",
+      "summary": "The P2 key on the Clearwater Radio is now a home key, and the radio screen shows the units on your channel. Pressing home again lists every unit on every channel. Text messages were removed. The radio now closes itself after 20 minutes with no activity, with a one-minute warning.",
+      "createdAt": "2026-10-11T15:40:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
