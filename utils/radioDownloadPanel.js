@@ -14,7 +14,8 @@ export const RADIO_RELEASE_REPO = 'colin991/ClearwaterWebBot';
 export const RADIO_RELEASE_TAG_PREFIX = 'radio-v';
 export const RADIO_DOWNLOAD_URL = `https://github.com/${RADIO_RELEASE_REPO}/releases/latest/download/ClearwaterRadio-Setup.exe`;
 const PANEL_FOOTER = 'Clearwater Radio for Windows';
-const REFRESH_MS = 30 * 60 * 1000;
+// Unauthenticated GitHub API allows 60 calls/hour per IP; every 3 minutes stays well under it.
+const REFRESH_MS = 3 * 60 * 1000;
 
 /** Newest published Clearwater Radio release, or null when none exists yet. */
 export async function fetchLatestRadioRelease(fetchImpl = fetch) {
@@ -39,7 +40,7 @@ export function buildRadioDownloadPanel(release) {
     ? `**Latest version:** ${release.version}${published ? ` (released <t:${published}:R>)` : ''}`
     : '**Latest version:** the first build is being published. Check back soon.';
   const embed = new EmbedBuilder()
-    .setColor(0xf26b1d)
+    .setColor(0x267bd7)
     .setTitle('📻 Clearwater Radio')
     .setDescription([
       'A radio overlay that sits on top of your game and talks through the radio bot in <#1514128904783139018>.',
@@ -103,7 +104,7 @@ export function startRadioDownloadPanel(client) {
       logger.error('Clearwater Radio download panel failed', error);
     });
   };
-  const first = setTimeout(run, 5_000);
+  const first = setTimeout(run, 2_000);
   const timer = setInterval(run, REFRESH_MS);
   timer.unref?.();
   first.unref?.();

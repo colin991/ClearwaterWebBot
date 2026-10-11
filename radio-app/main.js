@@ -23,7 +23,7 @@ try {
 // Radio tones and incoming audio must play without a click first.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
-const UPDATE_CHECK_MS = 30 * 60 * 1000;
+const UPDATE_CHECK_MS = 10 * 60 * 1000;
 const WINDOW_WIDTH = 232;
 const WINDOW_HEIGHT = 620;
 const DEFAULT_SETTINGS = Object.freeze({
