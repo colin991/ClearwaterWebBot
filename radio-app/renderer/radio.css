@@ -400,3 +400,16 @@ button:focus { outline: none; }
 .lcd .rows { line-height: 12px; }
 .lcd .rows li { align-items: flex-start; padding-top: 1px; padding-bottom: 1px; }
 .lcd .rows .val { flex: 1; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+
+/* In-game panic: the LCD and body flash red for 10 seconds. */
+.radio.panic .lcd { animation: panic-lcd .5s steps(1) infinite; }
+.radio.panic .lcd .small, .radio.panic .lcd-foot { color: inherit; opacity: 1; }
+.radio.panic { animation: panic-body .5s steps(1) infinite; }
+@keyframes panic-lcd {
+  0% { background: #3a0604; color: #ff5a4f; text-shadow: 0 0 6px rgba(255, 60, 50, .8); }
+  50% { background: #b3261e; color: #fff; text-shadow: none; }
+}
+@keyframes panic-body {
+  0% { box-shadow: inset 0 0 0 2px #000, inset 0 2px 0 3px #3a3f46, 0 0 0 3px #b3261e, 0 0 16px #b3261e; }
+  50% { box-shadow: inset 0 0 0 2px #000, inset 0 2px 0 3px #3a3f46; }
+}

@@ -278,6 +278,10 @@ export function createRadioRelay({
         if (radio?.userId && !radio.deaf && radio.userId !== speakerId) send(socket, frame);
       }
     },
+    /** A message for every signed-in radio, such as an in-game panic. */
+    alert(message) {
+      broadcast(message);
+    },
     discordSpeaking(speakerId, name, active) {
       broadcast({ type: 'talk', id: speakerId, name, active, source: 'discord' });
     },
