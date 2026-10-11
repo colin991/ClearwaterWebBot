@@ -3273,6 +3273,13 @@
       "summary": "Clearwater Radio users can no longer talk over someone speaking in the Discord radio channel. If you are already in that Discord voice channel, the app mutes itself so you don't hear it twice, and turns back on when you leave.",
       "createdAt": "2026-10-11T14:35:30.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-handheld-redesign",
+      "title": "New handheld radio look, messages and SRT channel",
+      "summary": "The Clearwater Radio app now looks like a handheld police radio with a color screen showing zone, channel, time and the latest message. P2 opens radio-to-radio text messages, and the CH knob switches to the new Special Response Team channel, which is app-only and never goes to Discord.",
+      "createdAt": "2026-10-11T14:47:15.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

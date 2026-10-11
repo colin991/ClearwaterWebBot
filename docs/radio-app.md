@@ -12,18 +12,22 @@ A push-to-talk radio overlay for Windows that talks through a second Discord bot
 
 ## Access
 
-Members sign in with Discord from the radio (center button, or MENU → SETUP → ACCOUNT). The app opens Discord in the browser and catches the redirect on `http://127.0.0.1:53682/callback`; the relay exchanges the code with the client secret, checks the member, and hands back a signed token the app keeps. Only members of the Clearwater server who can view and connect to the radio channel get in. Every 5 minutes the relay re-checks everyone on the radio; anyone who left the server or lost access is disconnected, signed out, and their app closes. Only one person can transmit at a time; others get a busy tone.
+Members sign in with Discord from the radio (center button, or MENU → SETUP → ACCOUNT). The app opens Discord in the browser and catches the redirect on `http://127.0.0.1:53682/callback`; the relay exchanges the code with the client secret, checks the member, and hands back a signed token the app keeps. Only members of the Clearwater server who can view and connect to the radio channel get in. Every 5 minutes the relay re-checks everyone on the radio; anyone who left the server or lost access is disconnected, signed out, and their app closes. Only one person can transmit at a time on each channel; others get a busy tone.
 
 ## Radio controls
 
-- **PTT**: hold the bound key or mouse button (works while a game is focused), or hold the PTT strip on the left edge.
-- **VOL** knob: drag up/down or scroll. On the home screen the d-pad also changes volume.
-- **Red headset button**: deafen yourself (stops incoming audio).
-- **Gray left button**: MENU with `VOL` (listening volume), `TX VOL` (how loud you are on the radio), `MIC`, `LISTEN` (speakers or headset you hear the radio on), `PTT`, `CHANNEL`, `FX` (listening effect RADIO/POLICE/OFF; RADIO by default and never applied to what you send) and `SETUP` (`TEST` to hear your own radio voice, `ACCOUNT` to sign in or out with Discord, `UPDATE`). D-pad up/down picks a row, left/right changes VOL and FX, and the center button selects (or opens the menu from the home screen). From any menu or setup page the gray left button goes straight back to the radio screen. Device names show in full.
+The radio looks like a handheld: volume and channel knobs on top, a color screen (zone, channel, date and time, latest message), P1/P2 keys, a navigation ring with OK and back, and a lettered keypad.
+
+- **PTT**: hold the bound key or mouse button (works while a game is focused), or hold the long PTT bar on the left edge.
+- **VOL** knob: drag up/down or scroll. On the home screen the navigation ring also changes volume.
+- **CH** knob: click to switch channel. CH 1 is the Discord radio channel; CH 2 is **Special Response Team**, which is radio-to-radio only and never reaches Discord (it works even when the bot is out of voice). The radio remembers your last channel.
+- **Red side button** (under PTT): deafen yourself (stops incoming audio).
+- **P1**: MENU with `VOL` (listening volume), `TX VOL` (how loud you are on the radio), `MIC`, `LISTEN` (speakers or headset you hear the radio on), `PTT`, `CHANNEL`, `MSGS`, `FX` (listening effect RADIO/POLICE/OFF; RADIO by default and never applied to what you send) and `SETUP` (`TEST` to hear your own radio voice, `ACCOUNT` to sign in or out with Discord, `UPDATE`). Up/down picks a row, left/right changes VOL, CHANNEL and FX, and OK selects (or opens the menu from the home screen). From any menu page P1 goes straight back to the radio screen. Device names show in full.
+- **P2**: MESSAGES. Text messages go to everyone on your current channel; the newest shows on the home screen for 2 minutes. `+ NEW MESSAGE` offers quick replies (10-4, COPY, EN ROUTE, ON SCENE, NEED BACKUP, CODE 4, STANDBY) or `TYPE A MESSAGE` to type on your keyboard (Enter sends, Esc cancels; on the keypad 0 is a space, `*` deletes and `#` sends). Messages are up to 140 characters and are not saved after the app closes.
 - **One voice at a time**: only one radio can transmit, and nobody can key up while someone is talking in the Discord radio channel (the radio shows `BUSY` and their name).
 - **In the Discord channel**: if you are already sitting in the Discord radio voice channel, your app mutes itself (`IN VC` on the screen) so you don't hear everything twice. It turns back on when you leave or switch channels. Nothing changes in Discord.
 - **Panic**: when the bot receives an ER:LC event marked as a panic (or someone types `;panic [location]` in game chat), every signed-in radio flashes red for 10 seconds with who pressed it and where. ER:LC's public API documents no panic-button event yet, so a real in-game panic shows only if the server's event webhook sends one; the bot logs `Radio: panic from …` each time it fires.
-- `#` selects, `*` goes back. **QUIT** shuts the app off (installing a downloaded update first). The app checks for updates on launch, when reopened, and every 10 minutes; `%APPDATA%\Clearwater Radio\update.log` records any update error.
+- `#` and OK select, `*` and the back key go back. **QUIT** shuts the app off (installing a downloaded update first). The app checks for updates on launch, when reopened, and every 10 minutes; `%APPDATA%\Clearwater Radio\update.log` records any update error.
 
 ## Host setup
 
