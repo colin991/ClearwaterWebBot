@@ -396,6 +396,8 @@ button:focus { outline: none; }
 #softR { grid-column: 3; grid-row: 1; }
 .okkey { grid-column: 1; grid-row: 2; }
 .backkey { grid-column: 3; grid-row: 2; display: grid; place-items: center; }
+.gearkey { display: grid; place-items: center; }
+.gearkey svg { width: 15px; height: 15px; fill: none; stroke: var(--key-text); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .backkey svg { width: 14px; height: 14px; fill: none; stroke: var(--key-text); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 
 .dpad {

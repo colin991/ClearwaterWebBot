@@ -1168,7 +1168,7 @@ function homeBody() {
   } else if (state.inVoice) {
     line = 'MUTED · YOU ARE IN THE DISCORD VC';
   } else {
-    line = state.settings.ptt ? 'READY' : 'READY · SET PTT IN MENU';
+    line = state.settings.ptt ? 'READY' : 'READY · SET PTT IN SETTINGS';
   }
   let html = `<div class="card ${kind}"><div class="zone">Zone 1 · CH ${channelNumber()}</div>`
     + `<div class="chan">${escapeHtml(state.channel || 'Radio')}</div>`
@@ -1215,7 +1215,7 @@ function updateText() {
 function render() {
   const { screen } = state;
   meterFill = null;
-  el.softLeftLabel.textContent = screen === 'home' ? 'MENU' : 'RADIO';
+  el.softLeftLabel.textContent = screen === 'home' ? 'SETTINGS' : 'RADIO';
   el.softRightLabel.textContent = 'HOME';
   // Status bar: signal bars, then DEAF / IN VC / who is on the channel.
   el.lcdSig.className = `sig${state.conn === 'online' ? (state.botOnline ? ' on' : ' weak') : ''}`;
