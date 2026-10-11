@@ -44,9 +44,9 @@ The radio looks like a handheld: volume and channel knobs on top, a color screen
 
 ## Staff tools
 
-Set `RADIO_STAFF_CHANNEL_ID` in the bot host `.env` to a staff-only text channel. The main bot then posts there:
+These post in the radio voice channel's chat with the talk log (or `RADIO_LOG_CHANNEL_ID` if set):
 
-- **Radio staff panel** button (also `/radio-staff`). Only members with **Administrator** can open it. It lists who is on the radio and who is force-muted; pick a member to **Force mute** (they can listen but not talk, and it survives restarts, saved in `data/radio-admin.json`), **Unmute**, or **Kick off radio** (closes their radio; they can't sign back in for 5 minutes). Each action is noted in the channel.
+- **Radio staff panel**: `/radio-staff`. Only members with **Administrator** can open it. It lists who is on the radio and who is force-muted; pick a member to **Force mute** (they can listen but not talk, and it survives restarts, saved in `data/radio-admin.json`), **Unmute**, or **Kick off radio** (closes their radio; they can't sign back in for 5 minutes). Each action is noted in the channel.
 - **Panic history**: every panic (radio PANIC button or in game) with who, unit, where, postal and when.
 - **Weekly radio stats**: every Monday 00:00 UTC, time on the radio, transmissions and talk time per member for the past week (`data/radio-stats.json`).
 

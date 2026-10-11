@@ -2,7 +2,7 @@ import { EmbedBuilder } from 'discord.js';
 
 /**
  * Weekly Clearwater Radio stats: time each member spent signed in on a radio and how many
- * transmissions they made. Posted to the staff channel once a week, then started over.
+ * transmissions they made. Posted in the radio voice channel's chat once a week, then started over.
  */
 export const RADIO_STATS_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
