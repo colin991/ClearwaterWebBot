@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-11-radio-update-fixes",
+      "title": "Radio updates apply on restart",
+      "summary": "QUIT now fully closes the radio app, so reopening it checks for a new version, and reopening a running radio checks too. The app writes update.log in its settings folder if an update fails. The download embed now shows the newest version instead of an older one.",
+      "createdAt": "2026-10-11T05:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-11-radio-gray-button-home",
       "title": "Gray left button returns to the radio",
       "summary": "On the radio app, the gray left button now takes you straight back to the radio screen from the menu or any setup page. From the radio screen it still opens the menu.",

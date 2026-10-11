@@ -40,6 +40,7 @@ const DEFAULT_SETTINGS = Object.freeze({
 let win = null;
 let settings = { ...DEFAULT_SETTINGS };
 let capturingPtt = false;
+let updateReady = false;
 let pttDown = false;
 
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
@@ -188,8 +189,29 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 
+function updateLog(level, args) {
+  try {
+    const line = `${new Date().toISOString()} ${level} ${args.map((part) => (part instanceof Error ? part.stack || part.message : String(part))).join(' ')}\n`;
+    fs.appendFileSync(path.join(app.getPath('userData'), 'update.log'), line);
+  } catch {
+    // Logging must never break updates.
+  }
+}
+
+function checkForUpdates() {
+  if (!autoUpdater || !app.isPackaged) return Promise.resolve();
+  return autoUpdater.checkForUpdates().catch((error) => updateLog('error', [error]));
+}
+
 function setupUpdates() {
   if (!autoUpdater || !app.isPackaged) return;
+  // %APPDATA%\Clearwater Radio\update.log explains any update that does not apply.
+  autoUpdater.logger = {
+    info: (...args) => updateLog('info', args),
+    warn: (...args) => updateLog('warn', args),
+    error: (...args) => updateLog('error', args),
+    debug: () => {},
+  };
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   // Installer names never change between versions, so a blockmap diff would compare against itself.
@@ -200,13 +222,13 @@ function setupUpdates() {
   autoUpdater.on('download-progress', (progress) => send('update', { state: 'downloading', percent: Math.round(progress?.percent || 0) }));
   autoUpdater.on('error', (error) => send('update', { state: 'error', message: String(error?.message || error).slice(0, 120) }));
   autoUpdater.on('update-downloaded', (info) => {
+    updateReady = true;
     send('update', { state: 'installing', version: info?.version });
     // Outdated radios update themselves: install silently and reopen.
     setTimeout(() => autoUpdater.quitAndInstall(true, true), 4000);
   });
-  const check = () => autoUpdater.checkForUpdates().catch(() => {});
-  setTimeout(check, 3000);
-  setInterval(check, UPDATE_CHECK_MS);
+  setTimeout(checkForUpdates, 3000);
+  setInterval(checkForUpdates, UPDATE_CHECK_MS);
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -217,6 +239,8 @@ if (!app.requestSingleInstanceLock()) {
     if (win.isMinimized()) win.restore();
     win.show();
     keepOnTop();
+    // Opening the radio again also looks for a new version.
+    void checkForUpdates();
   });
 
   app.whenReady().then(() => {
@@ -241,18 +265,23 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('app:version', () => app.getVersion());
     ipcMain.handle('update:check', async () => {
       if (!autoUpdater || !app.isPackaged) return { state: 'dev' };
-      await autoUpdater.checkForUpdates().catch(() => {});
+      void checkForUpdates();
       return { state: 'checking' };
     });
-    ipcMain.on('app:quit', () => app.quit());
+    // QUIT always ends the process (so the next launch checks for updates), installing a waiting update first.
+    ipcMain.on('app:quit', () => {
+      if (updateReady) {
+        autoUpdater.quitAndInstall(true, true);
+        return;
+      }
+      app.exit(0);
+    });
 
     createWindow();
     startHook();
     setupUpdates();
   });
 
-  app.on('will-quit', () => {
-    try { uIOhook?.stop(); } catch { /* ignore */ }
-  });
+  // The global key hook is released when the process exits; stopping it on quit can hang on Windows.
   app.on('window-all-closed', () => app.quit());
 }

@@ -888,8 +888,12 @@ async function toggleFilter() {
 async function checkUpdates() {
   state.update = { state: 'checking' };
   render();
-  state.update = await api.checkForUpdates();
-  render();
+  // Progress arrives through onUpdate; only the dev build answers here directly.
+  const result = await api.checkForUpdates();
+  if (result?.state === 'dev') {
+    state.update = result;
+    render();
+  }
 }
 
 function back() {
