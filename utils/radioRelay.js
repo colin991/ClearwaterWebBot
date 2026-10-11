@@ -55,7 +55,7 @@ function send(socket, message) {
  *   `removed: true` means the member is not in the server or lost radio access; their app is closed.
  * @param {(userId: string) => ({ push(packet: Buffer): void, end(): void }|null)} options.openTransmit
  * @param {() => { online: boolean, channel: string }} options.status
- * @param {(userId: string, name: string) => Promise<{ name?: string, location?: string }|null>} [options.locatePanic]
+ * @param {(userId: string, name: string) => Promise<{ name?: string, location?: string, unit?: string, postal?: string }|null>} [options.locatePanic]
  *   who and where a radio's EMER press came from, for the panic alert.
  */
 export function createRadioRelay({
@@ -214,7 +214,10 @@ export function createRadioRelay({
     } catch (error) {
       logger.warn(`Radio panic lookup failed: ${error?.message || error}`);
     }
-    const alert = { type: 'panic', name: found?.name || name, location: found?.location || '', at, source: 'radio' };
+    const alert = {
+      type: 'panic', name: found?.name || name, location: found?.location || '',
+      unit: found?.unit || '', postal: found?.postal || '', at, source: 'radio',
+    };
     broadcast(alert);
     onPanic(alert);
   }

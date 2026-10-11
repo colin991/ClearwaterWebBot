@@ -861,10 +861,43 @@ let panicTimer = null;
 
 let panicBuffer = null;
 
-// The panic sound, played twice back to back on the radio's speaker at the radio's volume.
-async function playPanicSound() {
+// Unit "1A-12" -> "1 A 12"; postal "204" -> "2 0 4", read like dispatch instead of "two hundred four".
+function spokenUnit(text) {
+  return String(text || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ')
+    .replace(/(\d)([A-Z])|([A-Z])(\d)/g, '$1$3 $2$4').replace(/\s+/g, ' ').trim();
+}
+
+function spokenDigits(text) {
+  return String(text || '').replace(/[^A-Za-z0-9]+/g, '').split('').join(' ');
+}
+
+function panicSpeech(message) {
+  const who = message.unit ? spokenUnit(message.unit) : String(message.name || 'Unknown unit');
+  if (message.postal) return `${who} panic at postal ${spokenDigits(message.postal)}`;
+  return message.location ? `${who} panic at ${message.location}` : `${who} panic`;
+}
+
+// Free on-device text to speech (Windows' built-in voices), only on this radio, never into Discord.
+function speakPanic(message) {
+  const synth = window.speechSynthesis;
+  if (!synth || typeof SpeechSynthesisUtterance !== 'function') return;
+  const utterance = new SpeechSynthesisUtterance(panicSpeech(message));
+  const voices = synth.getVoices().filter((voice) => voice.localService && /^en/i.test(voice.lang));
+  if (voices.length) utterance.voice = voices[0];
+  utterance.volume = Math.max(0.2, Math.min(1, (Number(state.settings.volume) || 70) / 100));
+  utterance.rate = 1.05;
+  synth.cancel();
+  synth.speak(utterance);
+}
+
+// The panic sound, played twice back to back on the radio's speaker at the radio's volume,
+// with the voice reading the unit and postal while the second one plays.
+async function playPanicSound(message = {}) {
   const ctx = audio.ctx;
-  if (!ctx) return;
+  if (!ctx) {
+    speakPanic(message);
+    return;
+  }
   if (ctx.state === 'suspended') await resumeAudio();
   try {
     if (!panicBuffer) {
@@ -873,8 +906,10 @@ async function playPanicSound() {
     }
   } catch {
     playTone('busy');
+    speakPanic(message);
     return;
   }
+  setTimeout(() => speakPanic(message), Math.round((panicBuffer.duration + 0.15) * 1000));
   let at = ctx.currentTime + 0.02;
   for (let i = 0; i < 2; i += 1) {
     const source = ctx.createBufferSource();
@@ -892,7 +927,7 @@ function showPanic(message) {
     location: String(message.location || 'UNKNOWN LOCATION').toUpperCase().slice(0, 60),
   };
   clearTimeout(panicTimer);
-  void playPanicSound();
+  void playPanicSound(message);
   el.radio.classList.add('panic');
   panicTimer = setTimeout(() => {
     state.panic = null;

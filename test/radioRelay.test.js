@@ -41,7 +41,7 @@ async function startRelay() {
   const voice = new Set();
   const relay = createRadioRelay({
     inVoice: (userId) => voice.has(userId),
-    locatePanic: async (userId, name) => ({ name, location: userId === ALICE ? '120 Main St' : '' }),
+    locatePanic: async (userId, name) => (userId === ALICE ? { name, location: '120 Main St', unit: '1A-12', postal: '204' } : { name }),
     verifyKey: (key) => verifyRadioKey(key, env),
     exchangeCode: async (code) => {
       if (code === 'alice-code') return ALICE;
@@ -332,6 +332,8 @@ test('Frequency Change is app-only, and EMER alerts every radio once per 15 seco
     const panic = await bob.until(() => bob.messages.find((m) => m.type === 'panic'));
     assert.equal(panic.name, 'Alice');
     assert.equal(panic.location, '120 Main St');
+    assert.equal(panic.unit, '1A-12');
+    assert.equal(panic.postal, '204');
     await alice.until(() => alice.messages.find((m) => m.type === 'panic'));
     alice.send({ type: 'panic' });
     await new Promise((resolve) => setTimeout(resolve, 100));
