@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   executeErlcCommand,
+  fetchErlcCommandLogs,
   erlcCooldownRemainingMs,
   expireErlcBundleCacheForTests,
   fetchErlcServer,
@@ -404,6 +405,49 @@ test('a successful snapshot does not start the 5s command gap', async () => {
     const status = getErlcRateLimitStatus();
     assert.equal(status.state, 'command_gap');
     assert.match(formatErlcRateLimitReport(status), /POST \/command/);
+  } finally {
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+  }
+});
+
+test('player-triggered commands jump ahead of queued background commands', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 0 });
+  const sent = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    sent.push(JSON.parse(options.body).command);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    return jsonResponse(200, { message: 'ok' });
+  };
+  try {
+    await Promise.all([
+      executeErlcCommand('key', ':pm A background'),
+      executeErlcCommand('key', ':pm B background'),
+      executeErlcCommand('key', ':pm C background'),
+      executeErlcCommand('key', ':refresh Player', { priority: true }),
+    ]);
+    assert.deepEqual(sent, [':pm A background', ':refresh Player', ':pm B background', ':pm C background']);
+  } finally {
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+  }
+});
+
+test('command-log polls ask only for CommandLogs and share one request', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 0 });
+  const urls = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    urls.push(new URL(String(url)));
+    return jsonResponse(200, { CommandLogs: [{ Player: 'Test:1', Command: ';ss', Timestamp: 1 }] });
+  };
+  try {
+    const [first, second] = await Promise.all([fetchErlcCommandLogs('key'), fetchErlcCommandLogs('key')]);
+    assert.equal(urls.length, 1);
+    assert.deepEqual([...urls[0].searchParams.keys()], ['CommandLogs']);
+    assert.equal(first[0].Command, ';ss');
+    assert.equal(second, first);
   } finally {
     globalThis.fetch = original;
     resetErlcNetworkForTests({ minIntervalMs: 5000 });

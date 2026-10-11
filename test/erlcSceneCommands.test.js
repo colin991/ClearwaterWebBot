@@ -29,6 +29,7 @@ import {
   TEAM_VOICE_CHANNEL_IDS,
   findTeamVoiceChannel,
   findVoicedDiscordMember,
+  sceneCommandTiming,
 } from '../utils/erlcSceneCommands.js';
 import { PINELLAS_GUILD_ID } from '../utils/pinellasServer.js';
 import { CLEARWATER_GUILD_ID } from '../utils/staffRanks.js';
@@ -982,4 +983,16 @@ test('command-log scan hands ;panic to the radio once', async () => {
   await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }) });
   await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }) });
   assert.deepEqual(emitted, [['erlcCommandLog', { Type: 'Command', Player: 'Colin:99', Command: ';panic gas station', Message: ';panic gas station' }]]);
+});
+
+test('scene command log lines show where the time went', () => {
+  assert.equal(
+    sceneCommandTiming({ source: 'logs', issuedAt: 1_000, startedAt: 4_000, doneAt: 4_400 }),
+    'via logs · 3.4s after typed · bot 0.4s',
+  );
+  assert.equal(sceneCommandTiming({ startedAt: 0, doneAt: 250 }), 'bot 0.3s');
+  assert.match(
+    sceneCommandLogBody({ handled: true, commandName: 'ss', reason: 'moved', channelName: 'Scene 1', timing: 'bot 0.1s' }),
+    /· ⏱ bot 0\.1s$/,
+  );
 });
