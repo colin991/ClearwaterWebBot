@@ -179,7 +179,15 @@ export function startRadioBot(env = process.env) {
   let standalone = null;
   const radioPort = Number(env.RADIO_PORT || 0);
   const apiPort = Number(env.SERVER_PORT || env.PORT || 0);
-  if (Number.isInteger(radioPort) && radioPort > 0 && radioPort !== apiPort) {
+  // The bot API server only runs with BOT_API_KEY; without it the relay listens on SERVER_PORT itself.
+  const apiServerRuns = Number.isInteger(apiPort) && apiPort > 0 && Boolean(env.BOT_API_KEY);
+  const relayPort = Number.isInteger(radioPort) && radioPort > 0 ? radioPort : (apiServerRuns ? 0 : apiPort);
+  if (!relayPort && !apiServerRuns) {
+    logger.warn('Radio relay has no port: set SERVER_PORT (or RADIO_PORT) so the radio app can connect.');
+  } else if (apiServerRuns && relayPort === 0) {
+    logger.info(`Radio relay shares the bot API server on :${apiPort}/radio.`);
+  }
+  if (Number.isInteger(relayPort) && relayPort > 0 && !(apiServerRuns && relayPort === apiPort)) {
     standalone = createServer((request, response) => {
       response.writeHead(426, { 'Content-Type': 'text/plain' });
       response.end('Clearwater Radio relay. Connect with the desktop app.');
@@ -188,7 +196,7 @@ export function startRadioBot(env = process.env) {
       if (!relay.handleUpgrade(request, socket, head)) socket.destroy();
     });
     standalone.on('error', (error) => logger.warn(`Radio relay server error: ${error?.message || error}`));
-    standalone.listen(radioPort, '0.0.0.0', () => logger.info(`Radio relay listening on :${radioPort}/radio.`));
+    standalone.listen(relayPort, '0.0.0.0', () => logger.info(`Radio relay listening on :${relayPort}/radio.`));
   }
 
   void client.login(token).catch((error) => {
