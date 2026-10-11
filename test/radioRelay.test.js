@@ -262,6 +262,36 @@ test('Discord talkers never block the app, and members in the Discord channel ar
   }
 });
 
+test('members in the Discord channel cannot talk through the radio until they leave', async () => {
+  const harness = await startRelay();
+  try {
+    const bob = client(harness.url);
+    await once(bob.ws, 'open');
+    harness.voice.add(BOB);
+    bob.send({ type: 'auth', key: createRadioKey(BOB, env) });
+    await bob.until(() => bob.messages.find((m) => m.type === 'ready'));
+    bob.send({ type: 'tx', active: true });
+    const refused = await bob.until(() => bob.messages.find((m) => m.type === 'tx'));
+    assert.deepEqual(refused, { type: 'tx', ok: false, reason: 'invoice' });
+
+    harness.voice.delete(BOB);
+    harness.relay.voiceChanged(BOB);
+    bob.send({ type: 'tx', active: true });
+    await bob.until(() => bob.messages.find((m) => m.type === 'tx' && m.ok));
+
+    // Joining the Discord channel mid-transmission ends it.
+    const endedBefore = harness.ended;
+    harness.voice.add(BOB);
+    harness.relay.voiceChanged(BOB);
+    await bob.until(() => bob.messages.find((m) => m.type === 'invoice' && m.active));
+    assert.equal(harness.ended, endedBefore + 1);
+
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
 test('Special Response Team stays off Discord', async () => {
   const harness = await startRelay();
   try {

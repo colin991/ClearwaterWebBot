@@ -3343,6 +3343,13 @@
       "summary": "The P2 key on the Clearwater Radio is now a home key, and the radio screen shows the units on your channel. Pressing home again lists every unit on every channel. Text messages were removed. The radio now closes itself after 20 minutes with no activity, with a one-minute warning.",
       "createdAt": "2026-10-11T15:40:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-no-talk-in-vc",
+      "title": "Radio can't talk while you're in the Discord VC",
+      "summary": "If you are in the Discord radio voice channel, the Clearwater Radio app now blocks push-to-talk as well as muting, so you talk in Discord instead. Talking comes back when you leave the voice channel or switch radio channels.",
+      "createdAt": "2026-10-11T15:50:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
