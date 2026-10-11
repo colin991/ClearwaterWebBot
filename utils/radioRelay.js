@@ -80,6 +80,7 @@ export function createRadioRelay({
   locatePanic = async () => null,
   onPanic = () => {},
   onTalked = () => {},
+  muted = [],
   dispatchCheckMs = RADIO_DISPATCH_CHECK_MS,
   now = () => Date.now(),
   recheckMs = RADIO_RECHECK_MS,
@@ -92,6 +93,11 @@ export function createRadioRelay({
   // One talker per channel: channel id -> { socket, userId, name, sink, startedAt, lastPacketAt }
   const talkers = new Map();
   const discordTalkers = new Map(); // userId -> name, members talking in the Discord channel
+  // Staff controls: force-muted members can listen but not talk; kicked members can't sign in until the time is up.
+  const mutedUsers = new Set([...muted].map(String));
+  const kickedUntil = new Map();
+  // Who was last heard on each channel: channel id -> { name, at }
+  const lastHeard = new Map();
   // Per member, so reconnecting does not reset them: last PANIC, recent PTT presses, PTT timeout.
   const lastPanicAt = new Map();
   const pttPresses = new Map();
@@ -101,9 +107,11 @@ export function createRadioRelay({
   const channelName = (id) => channelList().find((channel) => channel.id === id)?.name || 'Radio';
   const isChannel = (id) => id === RADIO_MAIN_CHANNEL || APP_CHANNELS.some((channel) => channel.id === id);
   // Members sitting in the Discord channel already hear MAIN there, so their app stays quiet on it.
+  // Scan mode: a radio also listens to up to two other channels while it talks on its own.
+  const listensTo = (radio, channel) => radio.channel === channel || Boolean(radio.scan?.has(channel));
   const hears = (socket, speakerId, channel) => {
     const radio = socket.radio;
-    if (!radio?.userId || radio.deaf || radio.userId === speakerId || radio.channel !== channel) return false;
+    if (!radio?.userId || radio.deaf || radio.userId === speakerId || !listensTo(radio, channel)) return false;
     return channel !== RADIO_MAIN_CHANNEL || !inVoice(radio.userId);
   };
   const watchdog = setInterval(() => {
@@ -133,10 +141,10 @@ export function createRadioRelay({
   const listenerCount = (channel = null) => [...clients]
     .filter((socket) => socket.radio?.userId && (!channel || socket.radio.channel === channel)).length;
 
-  /** Sends to every signed-in radio, or only those on `channel`. */
+  /** Sends to every signed-in radio, or only those on (or scanning) `channel`. */
   function broadcast(message, except = null, channel = null) {
     for (const socket of clients) {
-      if (socket !== except && socket.radio?.userId && (!channel || socket.radio.channel === channel)) send(socket, message);
+      if (socket !== except && socket.radio?.userId && (!channel || listensTo(socket.radio, channel))) send(socket, message);
     }
   }
 
@@ -172,6 +180,9 @@ export function createRadioRelay({
       listeners: listenerCount(channel),
       inVoice: channel === RADIO_MAIN_CHANNEL && Boolean(inVoice(socket.radio.userId)),
       dispatch: dispatchActive(),
+      muted: mutedUsers.has(socket.radio.userId),
+      lastHeard: lastHeard.get(channel) || null,
+      scan: [...(socket.radio.scan || [])],
     };
   }
 
@@ -188,7 +199,8 @@ export function createRadioRelay({
     if (!talker || talker.socket !== socket) return;
     talkers.delete(channel);
     try { talker.sink?.end(); } catch { /* ignore */ }
-    broadcast({ type: 'talk', id: talker.userId, name: talker.name, active: false, source: 'app' }, null, channel);
+    lastHeard.set(channel, { name: talker.name, at: now() });
+    broadcast({ type: 'talk', id: talker.userId, name: talker.name, active: false, source: 'app', channel }, null, channel);
     try {
       onTalked({
         userId: talker.userId,
@@ -223,9 +235,18 @@ export function createRadioRelay({
     const { userId, name, channel } = socket.radio;
     const talker = talkers.get(channel);
     if (talker?.socket === socket) return send(socket, { type: 'tx', ok: true });
+    // Deafened radios can't talk, like being muted in the Discord channel.
+    if (socket.radio.deaf) return send(socket, { type: 'tx', ok: false, reason: 'deaf' });
+    if (mutedUsers.has(userId)) return send(socket, { type: 'tx', ok: false, reason: 'muted' });
     const timeoutUntil = pttSpamTimeout(userId);
     if (timeoutUntil) return send(socket, { type: 'tx', ok: false, reason: 'timeout', seconds: secondsLeft(timeoutUntil) });
-    if (talker) return send(socket, { type: 'tx', ok: false, reason: 'busy', name: talker.name });
+    // Dispatch priority: someone tagged !C cuts in over anyone who isn't dispatch.
+    if (talker && isDispatcherName(name) && !isDispatcherName(talker.name)) {
+      send(talker.socket, { type: 'cut', name });
+      endTransmit(talker.socket);
+    } else if (talker) {
+      return send(socket, { type: 'tx', ok: false, reason: 'busy', name: talker.name });
+    }
     let sink = null;
     if (channel === RADIO_MAIN_CHANNEL) {
       // Members in the Discord channel talk there, not through the radio.
@@ -237,7 +258,7 @@ export function createRadioRelay({
     const at = now();
     talkers.set(channel, { socket, userId, name, sink, startedAt: at, lastPacketAt: at });
     send(socket, { type: 'tx', ok: true });
-    broadcast({ type: 'talk', id: userId, name, active: true, source: 'app' }, socket, channel);
+    broadcast({ type: 'talk', id: userId, name, active: true, source: 'app', channel }, socket, channel);
   }
 
   function onAudio(socket, packet) {
@@ -265,11 +286,13 @@ export function createRadioRelay({
     if (!isChannel(channel) || socket.radio.channel === channel) return;
     endTransmit(socket);
     socket.radio.channel = channel;
+    socket.radio.scan?.delete(channel);
     send(socket, { type: 'channel', ...statusFor(socket) });
-    const talker = talkers.get(channel);
-    if (talker) send(socket, { type: 'talk', id: talker.userId, name: talker.name, active: true, source: 'app' });
-    if (channel === RADIO_MAIN_CHANNEL) {
-      for (const [id, name] of discordTalkers) send(socket, { type: 'talk', id, name, active: true, source: 'discord' });
+    for (const [id, talker] of talkers) {
+      if (listensTo(socket.radio, id)) send(socket, { type: 'talk', id: talker.userId, name: talker.name, active: true, source: 'app', channel: id });
+    }
+    if (listensTo(socket.radio, RADIO_MAIN_CHANNEL)) {
+      for (const [id, name] of discordTalkers) send(socket, { type: 'talk', id, name, active: true, source: 'discord', channel: RADIO_MAIN_CHANNEL });
     }
     broadcastStatus();
   }
@@ -295,12 +318,17 @@ export function createRadioRelay({
       unit: found?.unit || '', postal: found?.postal || '', at, source: 'radio',
     };
     broadcast(alert);
-    onPanic(alert);
+    onPanic({ ...alert, userId });
   }
 
   function removeSocket(socket, reason) {
     send(socket, { type: 'error', code: 'removed', message: reason || 'You are no longer allowed on this radio.' });
     socket.close(4004, 'removed');
+  }
+
+  function setScan(socket, ids) {
+    const list = Array.isArray(ids) ? ids.map(String) : [];
+    socket.radio.scan = new Set(list.filter((id) => isChannel(id) && id !== socket.radio.channel).slice(0, 2));
   }
 
   async function onAuth(socket, message) {
@@ -338,6 +366,11 @@ export function createRadioRelay({
       send(socket, { type: 'error', code: 'denied', message: result?.reason || 'You do not have access to this radio channel.' });
       return socket.close(4003, 'denied');
     }
+    const kicked = kickedUntil.get(userId) || 0;
+    if (kicked > now()) {
+      const minutes = Math.max(1, Math.ceil((kicked - now()) / 60_000));
+      return removeSocket(socket, `Staff removed you from the radio. You can come back in ${minutes} minute${minutes === 1 ? '' : 's'}.`);
+    }
     // One live app per member: a newer login replaces the older one.
     for (const other of clients) {
       if (other !== socket && other.radio?.userId === userId) {
@@ -347,11 +380,13 @@ export function createRadioRelay({
     }
     clearTimeout(socket.radioAuthTimer);
     const channel = isChannel(message.channel) ? message.channel : RADIO_MAIN_CHANNEL;
-    socket.radio = { userId, name: result.name || 'Unit', deaf: false, channel, rateSecond: 0, rateCount: 0 };
+    socket.radio = { userId, name: result.name || 'Unit', deaf: false, channel, scan: new Set(), rateSecond: 0, rateCount: 0, since: now() };
+    setScan(socket, message.scan);
     if (session) send(socket, { type: 'session', key: session });
     send(socket, { type: 'ready', you: { id: userId, name: socket.radio.name }, ...statusFor(socket) });
-    const talker = talkers.get(channel);
-    if (talker) send(socket, { type: 'talk', id: talker.userId, name: talker.name, active: true, source: 'app' });
+    for (const [id, talker] of talkers) {
+      if (listensTo(socket.radio, id)) send(socket, { type: 'talk', id: talker.userId, name: talker.name, active: true, source: 'app', channel: id });
+    }
     broadcastStatus();
   }
 
@@ -395,10 +430,14 @@ export function createRadioRelay({
         else endTransmit(socket);
       } else if (message.type === 'channel') {
         switchChannel(socket, message.id);
+      } else if (message.type === 'scan') {
+        setScan(socket, message.ids);
+        send(socket, { type: 'status', ...statusFor(socket) });
       } else if (message.type === 'panic') {
         void onPanicPress(socket);
       } else if (message.type === 'deaf') {
         socket.radio.deaf = Boolean(message.active);
+        if (socket.radio.deaf) endTransmit(socket);
       } else if (message.type === 'ping') {
         send(socket, { type: 'pong', t: message.t });
       }
@@ -484,11 +523,55 @@ export function createRadioRelay({
     },
     discordSpeaking(speakerId, name, active) {
       if (active) discordTalkers.set(speakerId, name);
-      else discordTalkers.delete(speakerId);
-      broadcast({ type: 'talk', id: speakerId, name, active, source: 'discord' }, null, RADIO_MAIN_CHANNEL);
+      else {
+        discordTalkers.delete(speakerId);
+        lastHeard.set(RADIO_MAIN_CHANNEL, { name, at: now() });
+      }
+      broadcast({ type: 'talk', id: speakerId, name, active, source: 'discord', channel: RADIO_MAIN_CHANNEL }, null, RADIO_MAIN_CHANNEL);
     },
     broadcastStatus,
     recheckAll,
+    /** Everyone signed in on a radio right now, for the staff panel and the weekly stats. */
+    users() {
+      return [...clients].filter((socket) => socket.radio?.userId).map((socket) => ({
+        userId: socket.radio.userId,
+        name: socket.radio.name,
+        channel: socket.radio.channel,
+        channelName: channelName(socket.radio.channel),
+        muted: mutedUsers.has(socket.radio.userId),
+        since: socket.radio.since,
+      }));
+    },
+    /** Staff force-mute: the member still hears the radio but can't talk until unmuted. */
+    setMuted(userId, active) {
+      const id = String(userId);
+      if (active) mutedUsers.add(id);
+      else mutedUsers.delete(id);
+      for (const socket of clients) {
+        if (socket.radio?.userId !== id) continue;
+        if (active) endTransmit(socket);
+        send(socket, { type: 'status', ...statusFor(socket) });
+      }
+    },
+    get muted() {
+      return [...mutedUsers];
+    },
+    /** Staff kick: closes the member's radio and keeps them off for `blockMs`. Returns how many radios closed. */
+    kick(userId, blockMs = 0) {
+      const id = String(userId);
+      if (blockMs > 0) kickedUntil.set(id, now() + blockMs);
+      let closed = 0;
+      for (const socket of [...clients]) {
+        if (socket.radio?.userId !== id) continue;
+        endTransmit(socket);
+        const minutes = Math.ceil(blockMs / 60_000);
+        removeSocket(socket, minutes > 0
+          ? `Staff removed you from the radio. You can come back in ${minutes} minute${minutes === 1 ? '' : 's'}.`
+          : 'Staff removed you from the radio.');
+        closed += 1;
+      }
+      return closed;
+    },
     get listeners() {
       return listenerCount();
     },

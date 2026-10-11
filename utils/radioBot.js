@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import {
   EndBehaviorType,
@@ -20,6 +21,9 @@ import { erlcPlayersFromServer, fetchErlcServer, parseErlcPlayer } from './erlc.
 import { getIdentityCache } from './identityStore.js';
 import { startRadioTunnel } from './radioTunnel.js';
 import { createRadioTalkLog } from './radioTalkLog.js';
+import { readJsonFile, writeJsonFile } from './jsonStore.js';
+import { createRadioStats, buildRadioStatsEmbed } from './radioStats.js';
+import { buildRadioPanicEmbed, radioStaffChannelId, RADIO_KICK_BLOCK_MS, setRadioStaffControls } from './radioStaff.js';
 
 const UNKNOWN_MEMBER = 10007;
 
@@ -28,6 +32,8 @@ export const RADIO_CHANNEL_ID = process.env.RADIO_CHANNEL_ID?.trim() || '1514128
 /** Separate @discordjs/voice group so the radio bot never replaces the main bot's connection. */
 const VOICE_GROUP = 'clearwater-radio';
 const REJOIN_DELAY_MS = 10_000;
+const STATS_TICK_MS = 60_000;
+const radioDataPath = (name) => join(process.cwd(), 'data', name);
 // 80 ms: shorter transmissions are PTT taps with nothing said.
 const RADIO_MIN_TX_PACKETS = 4;
 
@@ -164,6 +170,43 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     onError: (error) => logger.warn(`Radio talk log failed: ${error?.message || error}`),
   });
 
+  // Staff channel: panic history, weekly stats and staff actions. The main bot posts; the radio bot is the fallback.
+  const staffChannelId = radioStaffChannelId(env);
+  async function postStaff(payload) {
+    if (!staffChannelId) return null;
+    for (const poster of [erlcEvents, client]) {
+      const target = await poster?.channels?.fetch?.(staffChannelId).catch(() => null);
+      if (!target?.isTextBased?.()) continue;
+      try {
+        return await target.send({ allowedMentions: { parse: [] }, ...payload });
+      } catch {
+        // No Send Messages for this bot: try the next one.
+      }
+    }
+    logger.warn(`Radio: could not post in the staff channel ${staffChannelId}.`);
+    return null;
+  }
+  const postPanic = (alert) => { void postStaff({ embeds: [buildRadioPanicEmbed(alert)] }); };
+
+  // Weekly stats: radio time is counted every minute for everyone signed in; transmissions as they end.
+  let weekly = createRadioStats(null);
+  let statsLoaded = false;
+  void readJsonFile(radioDataPath('radio-stats.json'), null).then((saved) => {
+    if (saved) weekly = createRadioStats(saved);
+    statsLoaded = true;
+  });
+  const weeklyStatsTimer = setInterval(() => {
+    if (!statsLoaded) return;
+    weekly.tick(relay.users(), STATS_TICK_MS);
+    if (weekly.due()) {
+      const report = weekly.report();
+      weekly.reset();
+      void postStaff({ embeds: [buildRadioStatsEmbed(report)] });
+    }
+    void writeJsonFile(radioDataPath('radio-stats.json'), weekly.data).catch((error) => logger.warn(`Radio stats save failed: ${error?.message || error}`));
+  }, STATS_TICK_MS);
+  weeklyStatsTimer.unref?.();
+
   const relay = createRadioRelay({
     verifyKey: (key) => verifyRadioKey(key, env),
     exchangeCode: (code) => exchangeRadioCode(code, env),
@@ -174,9 +217,13 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     },
     status: () => ({ online: isOnline(), channel: channel?.name || 'Radio' }),
     locatePanic: (userId, name) => locateRadioPanic(env, userId, name),
-    onTalked: (entry) => talkLog.add(entry),
+    onTalked: (entry) => {
+      talkLog.add(entry);
+      weekly.addTalk(entry);
+    },
     onPanic: (message) => {
       logger.info(`Radio: EMER from ${message.name} at ${message.location || 'unknown location'} sent to ${relay.listeners} radio(s).`);
+      postPanic(message);
     },
     // The main bot's cache has live nicknames (it gets member updates), so it is read first.
     voiceMembers: () => [...((erlcEvents?.channels?.cache?.get?.(RADIO_CHANNEL_ID) || channel)?.members?.values?.() || [])]
@@ -208,6 +255,28 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     },
   });
   activeRelay = relay;
+
+  // Staff force-mutes survive restarts.
+  const adminPath = radioDataPath('radio-admin.json');
+  let admin = { muted: {} };
+  void readJsonFile(adminPath, { muted: {} }).then((saved) => {
+    admin = { muted: { ...(saved?.muted || {}) } };
+    for (const id of Object.keys(admin.muted)) relay.setMuted(id, true);
+  });
+  setRadioStaffControls({
+    users: () => relay.users(),
+    get muted() {
+      return relay.muted;
+    },
+    async setMuted(userId, active, by) {
+      relay.setMuted(userId, active);
+      if (active) admin.muted[userId] = { by, at: new Date().toISOString() };
+      else delete admin.muted[userId];
+      await writeJsonFile(adminPath, admin).catch((error) => logger.warn(`Radio admin save failed: ${error?.message || error}`));
+    },
+    kick: (userId) => relay.kick(userId, RADIO_KICK_BLOCK_MS),
+    postStaff,
+  });
 
   function scheduleRejoin() {
     if (stopped || rejoinTimer) return;
@@ -367,6 +436,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
         at: panic.at,
       };
       relay.alert(message);
+      postPanic({ ...message, source: 'game' });
       logger.info(`Radio: panic from ${message.name} at ${message.location || 'unknown location'} sent to ${relay.listeners} radio(s).`);
     })().catch((error) => logger.warn(`Radio panic failed: ${error?.message || error}`));
   });
@@ -382,6 +452,8 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     erlcEvents?.off('erlcCommandLog', onErlcEvent);
     clearTimeout(rejoinTimer);
     clearInterval(statsTimer);
+    clearInterval(weeklyStatsTimer);
+    setRadioStaffControls(null);
     if (activeRelay === relay) activeRelay = null;
     stopTunnel();
     talkLog.stop();
