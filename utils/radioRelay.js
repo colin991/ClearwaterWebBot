@@ -71,6 +71,7 @@ export function createRadioRelay({
   voiceMembers = () => [],
   locatePanic = async () => null,
   onPanic = () => {},
+  onTalked = () => {},
   now = () => Date.now(),
   recheckMs = RADIO_RECHECK_MS,
   authTimeoutMs = RADIO_AUTH_TIMEOUT_MS,
@@ -158,6 +159,17 @@ export function createRadioRelay({
     talkers.delete(channel);
     try { talker.sink?.end(); } catch { /* ignore */ }
     broadcast({ type: 'talk', id: talker.userId, name: talker.name, active: false, source: 'app' }, null, channel);
+    try {
+      onTalked({
+        userId: talker.userId,
+        name: talker.name,
+        channel,
+        channelName: channelName(channel),
+        onDiscordChannel: channel === RADIO_MAIN_CHANNEL,
+        startedAt: talker.startedAt,
+        endedAt: now(),
+      });
+    } catch { /* logging never breaks the radio */ }
   }
 
   function startTransmit(socket) {
