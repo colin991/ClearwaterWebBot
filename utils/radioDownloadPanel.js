@@ -14,36 +14,28 @@ export const RADIO_RELEASE_REPO = 'colin991/ClearwaterWebBot';
 export const RADIO_RELEASE_TAG_PREFIX = 'radio-v';
 export const RADIO_DOWNLOAD_URL = `https://github.com/${RADIO_RELEASE_REPO}/releases/latest/download/ClearwaterRadio-Setup.exe`;
 const PANEL_FOOTER = 'Clearwater Radio for Windows';
-// Unauthenticated GitHub API allows 60 calls/hour per IP; every 3 minutes stays well under it.
-const REFRESH_MS = 3 * 60 * 1000;
+const REFRESH_MS = 2 * 60 * 1000;
 
-export function compareVersions(a, b) {
-  const left = String(a).split('.').map((part) => Number.parseInt(part, 10) || 0);
-  const right = String(b).split('.').map((part) => Number.parseInt(part, 10) || 0);
-  for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
-    const diff = (left[i] || 0) - (right[i] || 0);
-    if (diff) return diff;
-  }
-  return 0;
-}
+/** The update feed installed radios read; using it keeps the embed and the apps on the same version. */
+export const RADIO_UPDATE_FEED_URL = `https://github.com/${RADIO_RELEASE_REPO}/releases/latest/download/latest.yml`;
 
-/** Newest published Clearwater Radio release, or null when none exists yet. */
+/**
+ * Newest published Clearwater Radio release, or null when none exists yet.
+ * Reads latest.yml (not the GitHub API) so it is never rate-limited on shared hosts.
+ */
 export async function fetchLatestRadioRelease(fetchImpl = fetch) {
-  const response = await fetchImpl(`https://api.github.com/repos/${RADIO_RELEASE_REPO}/releases?per_page=20`, {
-    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'clearwater-bot' },
+  const response = await fetchImpl(`${RADIO_UPDATE_FEED_URL}?t=${Date.now()}`, {
+    headers: { 'User-Agent': 'clearwater-bot', 'Cache-Control': 'no-cache' },
+    redirect: 'follow',
     signal: AbortSignal.timeout(15_000),
   });
-  if (!response.ok) throw new Error(`GitHub releases returned ${response.status}`);
-  const releases = await response.json();
-  // GitHub does not list releases newest-first reliably, so pick the highest version.
-  const release = (Array.isArray(releases) ? releases : [])
-    .filter((entry) => !entry.draft && !entry.prerelease && String(entry.tag_name || '').startsWith(RADIO_RELEASE_TAG_PREFIX))
-    .sort((a, b) => compareVersions(b.tag_name.slice(RADIO_RELEASE_TAG_PREFIX.length), a.tag_name.slice(RADIO_RELEASE_TAG_PREFIX.length)))[0];
-  if (!release) return null;
-  return {
-    version: String(release.tag_name).slice(RADIO_RELEASE_TAG_PREFIX.length),
-    publishedAt: release.published_at || null,
-  };
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Radio update feed returned ${response.status}`);
+  const text = await response.text();
+  const version = text.match(/^version:\s*['"]?([0-9][\w.-]*)['"]?\s*$/m)?.[1];
+  if (!version) return null;
+  const releaseDate = text.match(/^releaseDate:\s*['"]?([^'"\n]+)['"]?\s*$/m)?.[1] || null;
+  return { version, publishedAt: releaseDate };
 }
 
 export function buildRadioDownloadPanel(release) {
