@@ -3,7 +3,10 @@ import { join } from 'node:path';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 
 const cachePath = join(process.cwd(), 'data', 'identity-cache.json');
+// Committed links ship with the repo and are reset on every boot (git reset --hard).
 const manualPath = join(process.cwd(), 'data', 'manual-identities.json');
+// `/ml` writes here instead (gitignored), so admin-added links survive restarts.
+const localManualPath = join(process.cwd(), 'data', 'manual-identities.local.json');
 const emptyCache = { byDiscord: {} };
 
 function identityKey() {
@@ -54,9 +57,19 @@ export function upsertManualIdentityList(entries = [], identity = {}) {
   ];
 }
 
+function manualEntriesFrom(raw) {
+  return Array.isArray(raw) ? raw : (Array.isArray(raw?.identities) ? raw.identities : []);
+}
+
 async function loadManualIdentities() {
-  const raw = await readJsonFile(manualPath, []);
-  const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.identities) ? raw.identities : []);
+  const committed = manualEntriesFrom(await readJsonFile(manualPath, []));
+  const local = manualEntriesFrom(await readJsonFile(localManualPath, []));
+  // Host-side `/ml` links win over committed ones for the same Discord or Roblox ID.
+  let list = committed.map(normalizeManualEntry).filter(Boolean);
+  for (const entry of local) {
+    if (!normalizeManualEntry(entry)) continue;
+    list = upsertManualIdentityList(list, entry);
+  }
   const byDiscord = {};
   for (const entry of list) {
     const normalized = normalizeManualEntry(entry);
@@ -125,10 +138,9 @@ export async function rememberIdentity(identity) {
 
 /** Persistent administrator override used before all automatic identity sources. */
 export async function rememberManualIdentity(identity) {
-  const raw = await readJsonFile(manualPath, []);
-  const entries = Array.isArray(raw) ? raw : (Array.isArray(raw?.identities) ? raw.identities : []);
+  const entries = manualEntriesFrom(await readJsonFile(localManualPath, []));
   const next = upsertManualIdentityList(entries, identity);
-  await writeJsonFile(manualPath, next, { backup: true });
+  await writeJsonFile(localManualPath, next, { backup: true });
   return next.find((entry) => entry.discordId === String(identity.discordId));
 }
 

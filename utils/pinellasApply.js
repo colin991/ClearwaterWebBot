@@ -14,7 +14,7 @@ import {
   TextDisplayBuilder,
 } from 'discord.js';
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -23,6 +23,7 @@ import {
 } from './pinellasServer.js';
 import { logger } from './logger.js';
 import { publicSiteUrl } from './pcsoSiteForms.js';
+import { writeJsonFile } from './jsonStore.js';
 
 export const PINELLAS_APPLY_CHANNEL_ID = '1514443793607295058';
 export const PINELLAS_APPLY_REVIEW_CHANNEL_ID = '1546250122713767966';
@@ -123,14 +124,17 @@ async function readStore() {
       sessions: store.sessions && typeof store.sessions === 'object' ? store.sessions : {},
       securityEvents: Array.isArray(store.securityEvents) ? store.securityEvents : [],
     };
-  } catch {
+  } catch (error) {
+    // Only a missing file starts fresh. A corrupt file must not be silently replaced
+    // with an empty store (that would wipe every record on the next write).
+    if (error?.code !== 'ENOENT') throw error;
     return { applications: [], denials: {}, sessions: {}, securityEvents: [] };
   }
 }
 
 async function writeStore(store) {
-  await mkdir(path.dirname(STORE_PATH), { recursive: true });
-  await writeFile(STORE_PATH, `${JSON.stringify(store, null, 2)}\n`, 'utf8');
+  // Temp file + rename, so a crash mid-write cannot leave a truncated store behind.
+  await writeJsonFile(STORE_PATH, store, { backup: true });
 }
 
 async function persistSession(userId, session) {

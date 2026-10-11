@@ -216,6 +216,16 @@ export function sanitizeAvatarUrl(value) {
   return sanitizeHttpsUrl(raw, 500);
 }
 
+/**
+ * Avatar to freeze onto a post. Inline data URLs can be megabytes, and views already
+ * resolve the live avatar from store.users, so only short https/asset URLs are copied.
+ */
+function postAvatarSnapshot(value) {
+  const url = String(value || '');
+  if (!url || url.startsWith('data:') || url.length > 500) return null;
+  return url;
+}
+
 export const MAX_INTERNET_ACCOUNTS = 5;
 export const INTERNET_ALT_ID_RE = /^ia_[a-z0-9-]{8,80}$/i;
 
@@ -299,7 +309,12 @@ function normalizeInternetStore(data) {
   return {
     ...source,
     users: source.users && typeof source.users === 'object' ? source.users : {},
-    posts: Array.isArray(source.posts) ? source.posts : [],
+    // Older posts froze multi-MB data-URL avatars inline; drop them (views use the live avatar).
+    posts: Array.isArray(source.posts)
+      ? source.posts.map((post) => (post && String(post.avatarUrl || '').startsWith('data:')
+        ? { ...post, avatarUrl: null }
+        : post))
+      : [],
     reports,
     logs: Array.isArray(source.logs) ? source.logs : [],
     ipBans: Array.isArray(source.ipBans) ? source.ipBans : [],
@@ -2239,6 +2254,12 @@ export function createInternetPost(store, user, content, media = {}) {
       }),
     },
   });
+  if (parentId) {
+    // Replies are cheaper than posts but still rate-limited so one account cannot flood a thread.
+    const replyCooldownMs = 5_000;
+    const replyRemaining = replyCooldownMs - (Date.now() - new Date(user.lastReplyAt || 0).getTime());
+    if (replyRemaining > 0) throw new Error(`Please wait ${Math.ceil(replyRemaining / 1000)} seconds before replying again`);
+  }
   if (!parentId) {
     // Keep the Internet feed responsive while still preventing rapid spam.
     const postCooldownMs = 20_000;
@@ -2261,7 +2282,7 @@ export function createInternetPost(store, user, content, media = {}) {
     authorId: user.id,
     displayName: user.displayName,
     username: user.username,
-    avatarUrl: user.avatarUrl,
+    avatarUrl: postAvatarSnapshot(user.avatarUrl),
     staffRank: user.staffRank,
     verified: user.verified === true,
     badges: withSiteBadges(user.badges, user),
@@ -2307,6 +2328,7 @@ export function createInternetPost(store, user, content, media = {}) {
     }
   }
   if (!parentId) user.lastPostAt = post.createdAt;
+  else user.lastReplyAt = post.createdAt;
   recordChatActivity(user);
   return post;
 }
@@ -2388,7 +2410,7 @@ export function interactInternetPost(store, { actor, postId, type, content = '',
         authorId: user.id,
         displayName: user.displayName,
         username: user.username,
-        avatarUrl: user.avatarUrl,
+        avatarUrl: postAvatarSnapshot(user.avatarUrl),
         staffRank: user.staffRank,
         verified: user.verified === true,
         badges: withSiteBadges(user.badges, user),
@@ -2749,7 +2771,7 @@ function releaseHeldInternetPost(store, report) {
     authorId: author.id,
     displayName: author.displayName,
     username: author.username,
-    avatarUrl: author.avatarUrl,
+    avatarUrl: postAvatarSnapshot(author.avatarUrl),
     staffRank: author.staffRank,
     verified: author.verified === true,
     badges: withSiteBadges(author.badges, author),

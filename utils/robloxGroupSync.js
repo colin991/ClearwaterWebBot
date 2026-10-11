@@ -1,3 +1,4 @@
+import { robloxNameMatchesText } from './robloxDiscordMatch.js';
 import { discordIdsByRobloxId, getIdentityCache } from './identityStore.js';
 import { logger } from './logger.js';
 import { joinRequestGroupIds, resolveFundsGroupId } from './robloxGroups.js';
@@ -487,9 +488,13 @@ async function resolveEligibleDiscordId(robloxId, eligible, guild, allowedRoleId
   if (linked) return { discordId: linked, matchSource: 'Melonly Verify' };
 
   const username = await robloxUsername(robloxId).catch(() => null);
-  const nicknameMatch = username && eligible.nicknameFallbacks.find((entry) => entry.nickname.includes(username.toLowerCase()));
-  if (nicknameMatch) {
-    return { discordId: nicknameMatch.discordId, matchSource: 'Discord server nickname' };
+  // Whole-word nickname match only, and only when exactly one eligible member matches,
+  // so a look-alike Roblox name cannot borrow someone else's eligibility.
+  const nicknameMatches = username
+    ? eligible.nicknameFallbacks.filter((entry) => robloxNameMatchesText(entry.nickname, username))
+    : [];
+  if (nicknameMatches.length === 1) {
+    return { discordId: nicknameMatches[0].discordId, matchSource: 'Discord server nickname' };
   }
 
   const identities = await discordIdsByRobloxId();

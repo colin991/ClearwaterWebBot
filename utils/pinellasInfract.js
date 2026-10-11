@@ -20,7 +20,7 @@ import {
   LabelBuilder,
 } from 'discord.js';
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const PINELLAS_APPLY_APPROVED_ROLE_ID = '1514362658227490989';
@@ -37,6 +37,7 @@ import {
   requirePinellasInfractionAccess,
 } from './pinellasServer.js';
 import { logger } from './logger.js';
+import { writeJsonFile } from './jsonStore.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const STORE_PATH = path.join(ROOT, 'data', 'pinellas-infractions.json');
@@ -119,14 +120,17 @@ async function readStore() {
     return {
       infractions: Array.isArray(store.infractions) ? store.infractions : [],
     };
-  } catch {
+  } catch (error) {
+    // Only a missing file starts fresh. A corrupt file must not be silently replaced
+    // with an empty store (that would wipe every record on the next write).
+    if (error?.code !== 'ENOENT') throw error;
     return { infractions: [] };
   }
 }
 
 async function writeStore(store) {
-  await mkdir(path.dirname(STORE_PATH), { recursive: true });
-  await writeFile(STORE_PATH, `${JSON.stringify(store, null, 2)}\n`, 'utf8');
+  // Temp file + rename, so a crash mid-write cannot leave a truncated store behind.
+  await writeJsonFile(STORE_PATH, store, { backup: true });
 }
 
 function getSession(userId) {
@@ -547,6 +551,26 @@ function assertCanInfract(issuerMember, targetMember, { demoteRank = null } = {}
   }
 }
 
+/** Same rank rules as issuing: no editing your own record or one held by a peer or superior. */
+async function assertCanEditInfraction(issuerMember, entry) {
+  if (String(entry.userId) === String(issuerMember.id)) {
+    throw new Error('You cannot edit your own infraction.');
+  }
+  const issuerRank = getHighestPinellasRank(issuerMember);
+  if (!issuerRank) return;
+  const issuerIdx = PINELLAS_RANKS.findIndex((rank) => rank.roleId === issuerRank.roleId);
+  for (const otherId of [entry.userId, entry.issuerId]) {
+    if (!otherId || String(otherId) === String(issuerMember.id)) continue;
+    const other = await issuerMember.guild.members.fetch(String(otherId)).catch(() => null);
+    const otherRank = other ? getHighestPinellasRank(other) : null;
+    if (!otherRank) continue;
+    const otherIdx = PINELLAS_RANKS.findIndex((rank) => rank.roleId === otherRank.roleId);
+    if (issuerIdx >= otherIdx) {
+      throw new Error('You can only edit infractions for, and issued by, members below your own PCSO rank.');
+    }
+  }
+}
+
 async function removableDepartmentRoleIds(member, me) {
   const ids = new Set([
     ...getMemberPinellasRanks(member).map((rank) => rank.roleId),
@@ -765,6 +789,7 @@ export async function editPinellasInfraction({
   const store = await readStore();
   const entry = (store.infractions || []).find((item) => item.id === String(id));
   if (!entry) throw new Error(`No infraction found with ID \`${id}\`.`);
+  await assertCanEditInfraction(issuerMember, entry);
 
   applyInfractionVoidChange(entry, voidInfraction, { voidedBy: issuerMember.id });
 
