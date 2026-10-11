@@ -147,6 +147,25 @@
     mutedIds = new Set([...muted.map((member) => member.userId), ...users.filter((user) => user.muted).map((user) => user.userId)]);
     if (lastFound.length) renderFound(lastFound);
     coverageMap.update(data.coverage, data.positions);
+    renderFlags(Array.isArray(data.flags) ? data.flags : []);
+  }
+
+  const FLAG_LABELS = { 'off-team': 'OFF TEAM' };
+  function renderFlags(flags) {
+    $('flagCount').textContent = String(flags.length);
+    const list = $('flagList');
+    if (!flags.length) return empty(list, 'Nothing flagged.');
+    list.replaceChildren(...flags.map((flag) => {
+      const when = new Date(flag.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const item = row({ name: flag.name, userId: flag.userId }, `${when} · ${flag.detail || ''}`, []);
+      item.classList.add('flag');
+      const tag = document.createElement('span');
+      tag.className = 'rs-tag warn';
+      tag.textContent = FLAG_LABELS[flag.kind] || 'FLAG';
+      item.insertBefore(tag, item.lastChild);
+      return item;
+    }));
+    return undefined;
   }
 
   function renderFound(members) {

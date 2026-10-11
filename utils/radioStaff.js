@@ -93,7 +93,7 @@ export function buildRadioStaffPanel(selectedId = '') {
  * muted members who are not on a radio.
  */
 export function radioStaffSnapshot(nameOf = () => '') {
-  if (!controls) return { running: false, users: [], muted: [], coverage: normalizeCoverage({}), positions: [] };
+  if (!controls) return { running: false, users: [], muted: [], coverage: normalizeCoverage({}), positions: [], flags: [] };
   const users = controls.users();
   const onRadio = new Set(users.map((user) => user.userId));
   return {
@@ -109,6 +109,8 @@ export function radioStaffSnapshot(nameOf = () => '') {
     muted: [...(controls.muted || [])].filter((id) => !onRadio.has(id)).map((id) => ({ userId: id, name: nameOf(id) || '' })),
     coverage: controls.coverage?.() || normalizeCoverage({}),
     positions: controls.positions?.() || [],
+    // Flags for staff to look at, like a Civilian-team player on the police radio.
+    flags: (controls.flags?.() || []).map((flag) => ({ ...flag, name: flag.name || nameOf(flag.userId) || 'Unknown' })),
   };
 }
 
@@ -144,9 +146,13 @@ export async function saveRadioCoverage(raw, by) {
   if (!controls?.setCoverage) throw Object.assign(new Error('The radio is not running on the bot host right now.'), { status: 503 });
   const saved = await controls.setCoverage(normalizeCoverage(raw), by);
   const towers = saved.towers.length;
-  const zones = saved.zones.length;
-  logger.info(`Radio staff: coverage saved by ${by} (${towers} towers, ${zones} weak areas)`);
-  const note = `📡 <@${by}> updated radio coverage (website): ${towers} cell tower${towers === 1 ? '' : 's'}, ${zones} weak-signal area${zones === 1 ? '' : 's'}.`;
+  const zones = saved.zones.filter((zone) => zone.kind !== 'building').length;
+  const buildings = saved.zones.length - zones;
+  logger.info(`Radio staff: coverage saved by ${by} (${towers} towers, ${zones} weak areas, ${buildings} tunnels/garages, building interference ${saved.buildings ? 'on' : 'off'})`);
+  const tunnels = buildings || saved.buildings
+    ? `, ${buildings} tunnel${buildings === 1 ? '' : 's'}/garage${buildings === 1 ? '' : 's'} (building interference ${saved.buildings ? 'on' : 'off'})`
+    : '';
+  const note = `📡 <@${by}> updated radio coverage (website): ${towers} cell tower${towers === 1 ? '' : 's'}, ${zones} weak-signal area${zones === 1 ? '' : 's'}${tunnels}.`;
   void Promise.resolve(controls.postStaff?.({ content: note, allowedMentions: { parse: [] } })).catch(() => {});
   return saved;
 }

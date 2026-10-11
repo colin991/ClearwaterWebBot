@@ -41,6 +41,7 @@ const MENU = [
   { label: 'CH KEY', value: () => bindLabel('chanKey'), bind: 'chanKey' },
   { label: 'REPLAY', value: () => (audio.replay ? 'STOP' : 'LAST 30s'), action: () => replay() },
   { label: 'WHERE AM I', value: () => (state.game?.postal ? `PST ${state.game.postal}` : 'SAY'), action: () => whereAmI() },
+  { label: 'NEAREST', value: () => `${state.game?.nearest?.length || 0} UNITS`, open: 'nearest' },
   { label: 'PRACTICE', value: () => (state.practice ? 'ON' : 'OFF'), adjust: () => togglePractice(), action: () => togglePractice() },
   { label: 'REPLAY KEY', value: () => bindLabel('replayKey'), bind: 'replayKey' },
   { label: 'WHO', value: () => `${state.channels.reduce((total, channel) => total + (channel.members?.length || 0), 0)} ON`, open: 'users' },
@@ -89,7 +90,7 @@ const SIZE_MAX = 130;
 const SIZE_STEP = 5;
 // FX LVL: how strong the radio effect is (100% is the normal sound).
 const FX_LEVELS = [25, 50, 75, 100, 125, 150];
-const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', size: 'menu', scan: 'menu', test: 'setup', users: 'home', unit: 'users', tutorial: 'home' };
+const PARENT = { nearest: 'menu', menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', size: 'menu', scan: 'menu', test: 'setup', users: 'home', unit: 'users', tutorial: 'home' };
 // PANIC asks first; a second press (or OK) within this long sends it.
 const PANIC_CONFIRM_MS = 5000;
 // The relay allows one PANIC per member every 2 minutes.
@@ -135,7 +136,8 @@ const state = {
   pttTimeoutUntil: 0, // the relay timed this member out of talking for spamming PTT
   muted: false, // force-muted by staff: can listen, can't talk
   signal: null, // this radio's signal from the staff coverage map (0.1-1); null = clear
-  game: null, // { postal, street, speed, heading } from the game, null when not in game
+  game: null, // { postal, street, speed, heading, nearest } from the game, null when not in game
+  damagedUntil: 0, // downed in game: the radio is cracked and very weak until then
   weather: '', // server weather: clear, rain, fog, thunderstorm
   practice: false, // PRACTICE: PTT records and plays you back, nothing goes out
   practiceTx: false,
@@ -501,6 +503,8 @@ function heardSignal() {
   for (const voice of state.rx.values()) {
     if (Number.isFinite(voice.signal) && (weakest === null || voice.signal < weakest)) weakest = voice.signal;
   }
+  // A damaged radio (downed in game) hears everything weak too.
+  if (state.rx.size && state.damagedUntil > Date.now()) weakest = Math.min(weakest ?? 1, 0.15);
   return weakest;
 }
 
@@ -1148,7 +1152,7 @@ function onMessage(message) {
       break;
     case 'game':
       state.game = message.game || null;
-      if (state.screen === 'home' || state.screen === 'menu') render();
+      if (state.screen === 'home' || state.screen === 'menu' || state.screen === 'nearest') render();
       break;
     case 'channel':
       // Switched channel: voices from the old one no longer apply.
@@ -1181,6 +1185,20 @@ function onMessage(message) {
       talkPopup();
       updateLamps();
       render();
+      break;
+    case 'damage':
+      // Downed in game: the radio is cracked and very weak for a while.
+      state.damagedUntil = Date.now() + (Number(message.seconds) || 20) * 1000;
+      applyDamage();
+      playTone('busy');
+      render();
+      break;
+    case 'notice':
+      if (message.kind === 'off-team') {
+        playTone('busy');
+        flash('OFF TEAM · STAFF HAVE BEEN TOLD', 5000);
+        speak('You are on the civilian team on the police radio. Staff have been told.');
+      }
       break;
     case 'moved':
       saveSettings({ channel: message.channel });
@@ -1709,6 +1727,28 @@ function gameLine() {
   return `<div class="last game">${escapeHtml(parts.filter(Boolean).join(' · ').toUpperCase())}</div>`;
 }
 
+// Cracked screen while the radio is damaged (downed in game); clears itself when it recovers.
+let damageTimer = null;
+function applyDamage() {
+  const damaged = state.damagedUntil > Date.now();
+  document.getElementById('crack')?.toggleAttribute('hidden', !damaged);
+  document.body.classList.toggle('damaged', damaged);
+  clearTimeout(damageTimer);
+  if (damaged) damageTimer = setTimeout(() => { applyDamage(); render(); }, state.damagedUntil - Date.now() + 50);
+  else state.damagedUntil = 0;
+  updateLamps();
+}
+
+// NEAREST: the 3 closest units on a radio in game, with their postal and distance.
+function nearestBody() {
+  if (!state.game) return '<div class="mid">NOT IN GAME</div><div class="small">JOIN THE SERVER TO SEE NEARBY UNITS</div>';
+  const units = state.game.nearest || [];
+  if (!units.length) return '<div class="mid">NO UNITS NEARBY</div><div class="small">NO OTHER RADIO USERS IN GAME</div>';
+  return `<ul class="list users">${units.map((unit) => `<li>${escapeHtml(String(unit.name).toUpperCase())}`
+    + `<span class="where">${unit.postal ? `PST ${escapeHtml(unit.postal)} · ` : ''}${Number(unit.miles).toFixed(1)} MI</span></li>`).join('')}</ul>`
+    + '<div class="small dim">UPDATES EVERY 5s</div>';
+}
+
 // Rain or a storm in game: an alert on the radio screen when it starts.
 function applyWeather(next) {
   const weather = String(next || '');
@@ -1835,6 +1875,9 @@ function homeBody() {
     else line = `${state.txChannel && state.txChannel !== state.channelId ? `TRANSMITTING ON CH ${channelNumber(state.txChannel)}` : 'TRANSMITTING'} · ${talkTime()}`;
   } else if (state.practice) {
     line = 'PRACTICE MODE · PTT TO TEST · NOT LIVE';
+  } else if (state.damagedUntil > Date.now()) {
+    kind = 'tx';
+    line = `RADIO DAMAGED · ${Math.ceil((state.damagedUntil - Date.now()) / 1000)}s`;
   } else if (state.rx.size) {
     kind = 'rx';
     // Scanned channels show which channel the voice is on; whispers say so.
@@ -2021,6 +2064,10 @@ function render() {
     case 'users':
       left = "WHO'S ON";
       body = usersBody();
+      break;
+    case 'nearest':
+      left = 'NEAREST UNITS';
+      body = nearestBody();
       break;
     case 'unit': {
       left = 'UNIT';
@@ -2489,7 +2536,7 @@ function checkIdle() {
   // The 911 waiting times count up on the radio screen.
   if (state.calls.length && state.screen === 'home' && !state.toast && Date.now() % 5000 < 1000) render();
   // Talk timer and the RADIO UPDATING countdown tick every second.
-  if (state.screen === 'home' && !state.toast && (state.tx === 'on' || state.practiceTx || state.conn === 'updating')) render();
+  if (state.screen === 'home' && !state.toast && (state.tx === 'on' || state.practiceTx || state.conn === 'updating' || state.damagedUntil)) render();
   if (state.pttHeld || state.tx === 'on') return markActive();
   const idle = Date.now() - lastActiveAt;
   if (idle >= IDLE_CLOSE_MS) {
