@@ -549,3 +549,18 @@ body.night .keypad button, body.night .pkey { filter: brightness(.7); }
 
 /* Tutorial text. */
 .lcd .small.tour { font-size: 10px; line-height: 1.35; margin-top: 4px; color: var(--ink); }
+
+/* SIZE dial (60-130%): drag, click or scroll it, or use the arrows. */
+.lcd .size-dial { display: flex; align-items: center; justify-content: center; gap: 2px; width: 100%; }
+.lcd .size-dial .adj { padding: 6px 4px; font-size: 11px; cursor: pointer; user-select: none; }
+.lcd .dial { width: 132px; height: 101px; cursor: grab; touch-action: none; }
+.lcd .dial:active { cursor: grabbing; }
+.lcd .dial .track { fill: none; stroke: var(--ink-dim); stroke-opacity: .3; stroke-width: 7; stroke-linecap: round; }
+.lcd .dial .fill { fill: none; stroke: var(--ink); stroke-width: 7; stroke-linecap: round; }
+.lcd .dial .tick { stroke: var(--ink-dim); stroke-width: 1.5; }
+.lcd .dial .tick.full { stroke: var(--ink); stroke-width: 2.5; }
+.lcd .dial .needle { stroke: var(--ink); stroke-width: 2.5; stroke-linecap: round; }
+.lcd .dial .hub, .lcd .dial .knob-dot { fill: var(--ink); }
+.lcd .dial .knob-dot { stroke: var(--screen-top, #fff); stroke-width: 1.5; }
+.lcd .dial text { fill: var(--ink); font-size: 15px; font-weight: 800; font-family: inherit; }
+.lcd .dial text.end { fill: var(--ink-dim); font-size: 8px; font-weight: 700; }
