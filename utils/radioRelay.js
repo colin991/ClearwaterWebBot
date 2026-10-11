@@ -167,6 +167,8 @@ export function createRadioRelay({
     if (talker) return send(socket, { type: 'tx', ok: false, reason: 'busy', name: talker.name });
     let sink = null;
     if (channel === RADIO_MAIN_CHANNEL) {
+      // Members in the Discord channel talk there, not through the radio.
+      if (inVoice(userId)) return send(socket, { type: 'tx', ok: false, reason: 'invoice' });
       if (!status().online) return send(socket, { type: 'tx', ok: false, reason: 'offline' });
       sink = openTransmit(userId);
       if (!sink) return send(socket, { type: 'tx', ok: false, reason: 'offline' });
@@ -399,8 +401,10 @@ export function createRadioRelay({
         if (hears(socket, speakerId, RADIO_MAIN_CHANNEL)) send(socket, frame);
       }
     },
-    /** A member joined or left the Discord channel: their app mutes while they are in it. */
+    /** A member joined or left the Discord channel: their app mutes and stops talking while they are in it. */
     voiceChanged(userId) {
+      const talker = talkers.get(RADIO_MAIN_CHANNEL);
+      if (talker?.userId === userId && inVoice(userId)) endTransmit(talker.socket);
       for (const socket of clients) {
         if (socket.radio?.userId === userId) {
           send(socket, { type: 'invoice', active: socket.radio.channel === RADIO_MAIN_CHANNEL && Boolean(inVoice(userId)) });

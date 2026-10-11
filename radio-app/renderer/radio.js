@@ -784,6 +784,7 @@ function onMessage(message) {
     case 'invoice':
       state.inVoice = Boolean(message.active);
       applyDeaf();
+      if (state.inVoice && state.tx === 'on') void stopTx();
       flash(state.inVoice ? 'IN DISCORD VC' : 'RADIO ON', 1600);
       break;
     case 'error':
@@ -945,6 +946,11 @@ function pttPress() {
     flash(state.conn === 'signin' ? 'SIGN IN' : 'NO LINK');
     return;
   }
+  if (state.inVoice) {
+    playTone('busy');
+    flash('IN DISCORD VC');
+    return;
+  }
   if (!audio.micStream || !audio.encoder) {
     playTone('busy');
     flash(audio.micStream ? 'NO OPUS' : 'NO MIC');
@@ -968,7 +974,8 @@ function onTxReply(message) {
   if (!message.ok) {
     state.tx = 'idle';
     playTone('busy');
-    flash(message.reason === 'busy' ? `BUSY ${String(message.name || '').toUpperCase()}`.trim() : 'BOT OFFLINE');
+    if (message.reason === 'busy') flash(`BUSY ${String(message.name || '').toUpperCase()}`.trim());
+    else flash(message.reason === 'invoice' ? 'IN DISCORD VC' : 'BOT OFFLINE');
     return;
   }
   state.tx = 'on';
@@ -1130,7 +1137,7 @@ function homeBody() {
   } else if (!state.botOnline) {
     line = 'BOT OFFLINE · WAITING';
   } else if (state.inVoice) {
-    line = 'MUTED · YOU ARE IN THE DISCORD VC';
+    line = 'MUTED + NO TALK · IN DISCORD VC';
   } else {
     line = state.settings.ptt ? 'READY' : 'READY · SET PTT IN SETTINGS';
   }
