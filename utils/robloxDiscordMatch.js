@@ -9,13 +9,11 @@ export function robloxNameMatchesText(text, username) {
     .normalize('NFKC')
     .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200d\u2060\ufeff]/g, '');
   if (!hay) return false;
-  if (hay.toLowerCase().includes(user.toLowerCase())) return true;
   const needle = compactAlnum(user);
   if (needle.length < 3) return false;
-  const compactHay = compactAlnum(hay);
-  if (compactHay === needle) return true;
-  // "Rank | iTsAronJ" or "iTs Aron J" still counts as the Roblox user.
-  if (needle.length >= 4 && compactHay.includes(needle)) return true;
+  if (compactAlnum(hay) === needle) return true;
+  // "Rank | iTsAronJ" or "iTs Aron J" still counts as the Roblox user, but only as
+  // whole words: a substring like "ohnson1" must never match "Johnson | 1A".
   const tokens = hay.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
   if (tokens.some((token) => compactAlnum(token) === needle)) return true;
   for (let i = 0; i < tokens.length; i += 1) {

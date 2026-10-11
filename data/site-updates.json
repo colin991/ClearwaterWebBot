@@ -2,6 +2,62 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-11-bot-auto-update",
+      "title": "Bot and radio embed update on their own",
+      "summary": "The bot now checks main every 5 minutes and restarts itself onto new code when something is merged, so changes go live without pressing restart. The radio download embed reads the same version feed the app uses and refreshes every 2 minutes. The radio now says clearly when sign-in fails because the bot host is missing its Discord client secret.",
+      "createdAt": "2026-10-11T06:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-discord-sign-in",
+      "title": "Radio sign-in with Discord",
+      "summary": "The radio app now signs in with Discord instead of a pasted key, and only members of the Clearwater Discord server with access to the radio channel can use it. Every 5 minutes it re-checks; if you left the server or lost access, the radio signs you out and closes. Settings now always save, even when you quit right after changing them.",
+      "createdAt": "2026-10-11T06:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-update-fixes",
+      "title": "Radio updates apply on restart",
+      "summary": "QUIT now fully closes the radio app, so reopening it checks for a new version, and reopening a running radio checks too. The app writes update.log in its settings folder if an update fails. The download embed now shows the newest version instead of an older one.",
+      "createdAt": "2026-10-11T05:50:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-gray-button-home",
+      "title": "Gray left button returns to the radio",
+      "summary": "On the radio app, the gray left button now takes you straight back to the radio screen from the menu or any setup page. From the radio screen it still opens the menu.",
+      "createdAt": "2026-10-11T05:40:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-relay-port-and-update-progress",
+      "title": "Radio relay always listens and shows update progress",
+      "summary": "The radio relay now listens on SERVER_PORT even when BOT_API_KEY is not set, so the app can always reach it. The radio screen shows update download progress and reminds you to set a PTT key when none is set.",
+      "createdAt": "2026-10-11T05:30:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-blue-theme",
+      "title": "Blue theme for the radio app",
+      "summary": "The radio app's screen, EMER button, highlights, and icon changed from orange to blue (#267bd7), and the download post uses the same blue.",
+      "createdAt": "2026-10-11T05:25:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-dpad-select-full-device-names",
+      "title": "Radio d-pad select, LISTEN device, full device names",
+      "summary": "The center of the radio's d-pad is now a select button (it opens the menu from the home screen), the menu has a LISTEN row to pick speakers or a headset, and microphone and speaker names show in full instead of being cut off.",
+      "createdAt": "2026-10-11T05:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-clearwater-radio-app",
+      "title": "Add the Clearwater Radio app and radio bot",
+      "summary": "Added a Windows radio overlay app that stays on top of other windows, with push-to-talk, mic and headset picking, a mic test, volume knob, deafen button, and a light radio effect. It talks through a new second bot that always sits in the radio voice channel. The main bot posts a download embed with a personal radio key button, and the app updates itself when a new version is released.",
+      "createdAt": "2026-10-11T05:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-04-register-divisional-hub-commands",
       "title": "Register DOD commands in the Divisional Hub",
       "summary": "Fixed slash-command startup registration so the bot now publishes commands to every department guild declared by the command files, including the PCSO Divisional Hub server 1536695906768781362.",
@@ -3167,6 +3223,13 @@
       "title": "Stop false jail on team changes",
       "summary": "Civilian players are no longer jailed by voice checks, and switching to an emergency-services team now starts a fresh five-minute grace period instead of immediately jailing the player and resetting their roleplay name.",
       "createdAt": "2026-10-10T15:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-security-review-fixes",
+      "title": "Security and reliability fixes from code review",
+      "summary": "Website developer access now uses Discord IDs only and live role checks. -ecoadmin, -eco and Roblox -funds only work in Clearwater. Staff Internet bans survive rejoining. Roblox name matching needs the whole name (callsign nicknames still work). Moderation, promote and edit-infraction respect rank. Training reports need a supervisor. Pinellas data files are saved safely. Scene commands have a cooldown and only pull people from VCs the caller can see. LEO briefing End works every time. /ml links survive restarts. Internet replies have a short cooldown and no longer copy large avatars.",
+      "createdAt": "2026-10-11T03:45:00.000Z",
       "updatedBy": "colin991"
     },
     {

@@ -225,7 +225,13 @@ export function createLeoBriefingService({
         roadBlocksLoaded: false,
         endedAt: now(),
       };
-      await persist();
+      try {
+        await persist();
+      } finally {
+        // state.active is already false, so a second End is still refused; this only
+        // lets the next briefing's End button work again.
+        ending = false;
+      }
       const panel = briefingPanel(state);
       const game = (async () => {
         try {

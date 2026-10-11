@@ -11,11 +11,14 @@
  * → paste this whole file → Save → Start.
  */
 import { existsSync, rmSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
-import { join } from 'node:path';
+import { spawn, spawnSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const REPO = 'https://github.com/colin991/ClearwaterWebBot.git';
 const SKIP = process.env.CLEARWATER_SKIP_HOST_SYNC === '1';
+// bot.js exits with this code when main has new commits (utils/codeUpdateWatch.js).
+const UPDATE_RESTART_CODE = 75;
 
 function sh(cmd, args, timeout = 60_000) {
   return spawnSync(cmd, args, {
@@ -136,5 +139,39 @@ if (!SKIP) {
   console.log('[boot] CLEARWATER_SKIP_HOST_SYNC=1 — sync skipped');
 }
 
-console.log('[boot] starting bot...');
-await import('./bot.js');
+// Supervisor: the bot runs as a child so it can restart itself onto new code from main
+// without anyone pressing restart on the panel.
+const botEntry = join(dirname(fileURLToPath(import.meta.url)), 'bot.js');
+let bot = null;
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => {
+    if (bot) bot.kill(signal);
+    else process.exit(0);
+  });
+}
+
+function runBot() {
+  return new Promise((resolve) => {
+    console.log('[boot] starting bot...');
+    bot = spawn(process.execPath, [botEntry], {
+      cwd: process.cwd(),
+      env: { ...process.env, CLEARWATER_SUPERVISED: '1' },
+      stdio: 'inherit',
+    });
+    bot.once('exit', (code, signal) => {
+      bot = null;
+      resolve(code ?? (signal ? 0 : 1));
+    });
+  });
+}
+
+for (;;) {
+  const code = await runBot();
+  if (code !== UPDATE_RESTART_CODE) process.exit(code);
+  log('bot restarting for new code on main...');
+  try {
+    forceSyncFromMain();
+  } catch (error) {
+    log(`sync failed (${error?.message || error}) — restarting on current files`);
+  }
+}

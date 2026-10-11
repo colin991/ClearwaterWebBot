@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ChannelType } from 'discord.js';
 import {
+  clearSceneIssuerCooldowns,
   extractWebhookCommandText,
   extractWebhookPlayer,
   handleErlcSceneEvent,
@@ -44,6 +45,8 @@ function member(id, { bot = false, channelId = 'here', channel = null } = {}) {
     voice: { channelId, channel },
   };
 }
+
+test.beforeEach(() => clearSceneIssuerCooldowns());
 
 test('parses in-game scene commands and ignores other chat', () => {
   assert.equal(parseCustomCommand(';ss').baseName, 'Mod Scene');

@@ -28,6 +28,7 @@ export const SCENE_COMMAND_FAILURE_REASONS = Object.freeze({
   steal_rejected: 'steal command rejected',
   missing_player: 'webhook had no player',
   duplicate: 'duplicate of the same command from the last 4 seconds',
+  cooldown: 'scene command cooldown (30 seconds per player)',
   missing_guild: 'bot is missing DISCORD_GUILD_ID',
   guild_unavailable: 'Discord guild is unavailable',
   missing_move_members: 'bot is missing Move Members',
@@ -53,6 +54,13 @@ export const SCENE_NEARBY_STUDS = 50;
 
 const DEDUP_MS = 4_000;
 const recentCommands = new Map();
+const SCENE_ISSUER_COOLDOWN_MS = 30_000;
+const recentSceneIssuers = new Map();
+
+/** Test helper: forget per-issuer scene cooldowns. */
+export function clearSceneIssuerCooldowns() {
+  recentSceneIssuers.clear();
+}
 
 function asObject(value) {
   if (value && typeof value === 'object' && !Array.isArray(value)) return value;
@@ -937,11 +945,36 @@ async function executeErlcSceneCommand(payload, parsed, {
     return { handled: false, reason: 'missing_move_members', player };
   }
 
+  // Scene drags pull other people, so one issuer can only start one every SCENE_ISSUER_COOLDOWN_MS.
+  if (command.kind !== 'team') {
+    const issuerKey = String(member.id);
+    const lastScene = recentSceneIssuers.get(issuerKey);
+    if (lastScene && now >= lastScene && now - lastScene < SCENE_ISSUER_COOLDOWN_MS) {
+      return { handled: false, reason: 'cooldown', player };
+    }
+    recentSceneIssuers.set(issuerKey, now);
+    if (recentSceneIssuers.size > 500) {
+      for (const [key, at] of recentSceneIssuers) {
+        if (now - at > SCENE_ISSUER_COOLDOWN_MS) recentSceneIssuers.delete(key);
+      }
+    }
+  }
+
   const nearbyEntries = [];
   const seenNearby = new Set([String(member.id)]);
   const rememberNearby = (entry) => {
     const id = String(entry?.member?.id || '');
-    if (!id || seenNearby.has(id) || !voiceChannelIdOf(entry.member, entry.guild)) return;
+    if (!id || seenNearby.has(id)) return;
+    const nearbyChannelId = voiceChannelIdOf(entry.member, entry.guild);
+    if (!nearbyChannelId) return;
+    // Only pull people from this server, and only out of VCs the issuer can see themselves,
+    // so nobody can drag staff out of private channels by standing next to them in game.
+    if (String(entry.guild?.id || '') !== String(guild?.id || '')) return;
+    const nearbyChannel = guild.channels?.cache?.get?.(nearbyChannelId);
+    if (typeof nearbyChannel?.permissionsFor === 'function'
+      && !nearbyChannel.permissionsFor(member)?.has?.(PermissionFlagsBits.ViewChannel)) {
+      return;
+    }
     seenNearby.add(id);
     nearbyEntries.push(entry);
   };

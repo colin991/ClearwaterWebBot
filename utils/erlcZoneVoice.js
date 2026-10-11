@@ -1,3 +1,4 @@
+import { robloxNameMatchesText } from './robloxDiscordMatch.js';
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
 import { fetchErlcServer, libertyMapPoint, parseErlcPlayer, isEmergencyServiceTeam } from './erlc.js';
 import { discordIdsByRobloxId } from './identityStore.js';
@@ -54,10 +55,8 @@ export function normalizeNameToken(value) {
  * (nickname / display name patterns like "Rank | Username").
  */
 export function discordTextIncludesRobloxUsername(discordText, robloxUsername) {
-  const needle = normalizeNameToken(robloxUsername);
-  if (!needle || needle.length < 3) return false;
-  const haystack = normalizeNameToken(discordText);
-  return Boolean(haystack && haystack.includes(needle));
+  // Whole-word match only: "Sam" must not resolve to "Chief Sampson".
+  return robloxNameMatchesText(discordText, robloxUsername);
 }
 
 function memberSearchTexts(member) {

@@ -126,6 +126,18 @@ test('a second End click does not send another :m', async () => {
   assert.match(JSON.stringify(first.panel), /"disabled":true/);
 });
 
+test('End works again for the next briefing in the same process', async () => {
+  const f = briefingFixture();
+  await f.svc.start({ user: { id: 'admin' }, voiceChannelId: 'vc1' });
+  await f.svc.end();
+  await f.svc.start({ user: { id: 'admin' }, voiceChannelId: 'vc1' });
+  f.commands.length = 0;
+  const again = await f.svc.end();
+  assert.equal(again.alreadyEnded, undefined);
+  assert.equal(f.stored.active, false);
+  assert.equal(f.commands.filter((command) => command.startsWith(`:m ${BRIEFING_END_MESSAGE}`)).length, 1);
+});
+
 test('a second briefing is blocked until the first ends', async () => {
   const f = briefingFixture();
   await f.svc.start({ user: { id: 'admin' }, voiceChannelId: 'vc1' });

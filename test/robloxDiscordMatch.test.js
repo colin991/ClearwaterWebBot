@@ -14,6 +14,13 @@ test('roblox nicknames match with spaces instead of underscores', () => {
   assert.equal(robloxNameMatchesText('Different Person', 'Otw_YoueBoyJay'), false);
 });
 
+test('callsign nicknames match the full Roblox name but never a fragment of it', () => {
+  assert.equal(robloxNameMatchesText('2206 | collincrazyross1', 'collincrazyross1'), true);
+  assert.equal(robloxNameMatchesText('2206 | collincrazyross1', 'crazyross1'), false);
+  assert.equal(robloxNameMatchesText('2206 | collincrazyross1', 'collin'), false);
+  assert.equal(robloxNameMatchesText('[SGT] Johnson | 1A-23', 'ohnson1'), false);
+});
+
 test('matchingMembers finds a server nickname that contains the Roblox user', () => {
   const members = new Map([
     ['1', { id: '1', nickname: 'Officer | Otw YoueBoyJay', user: {} }],

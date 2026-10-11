@@ -12,7 +12,7 @@ import {
 } from '../utils/pcsoEmployee.js';
 import { safeNextPath } from '../lib/discord-auth.js';
 
-const instructor = { id: '100', username: 'inst', displayName: 'Instructor', pinellasRoles: [], guildRoles: [] };
+const instructor = { id: '100', username: 'inst', displayName: 'Instructor', pinellasRoles: ['1514851283817725962'], guildRoles: [] };
 const trainee = { id: '200', username: 'dep', displayName: 'Deputy', pinellasRoles: [], guildRoles: [] };
 
 test('employee panel is open to every signed-in user until role IDs are set', () => {
@@ -76,6 +76,15 @@ test('training sessions, quizzes, and PCSOERLCAPI report decisions', async () =>
   const report = listed.reports.find((row) => row.sessionId === created.session.id);
   assert.ok(report);
   assert.equal(report.status, 'pending');
+
+  await assert.rejects(
+    handleEmployeeAction('decide-report', { reportId: report.id, decision: 'approved' }, trainee),
+    /Only PCSO supervisors/,
+  );
+  await assert.rejects(
+    handleEmployeeAction('review-quiz', { sessionId: created.session.id }, trainee),
+    /Only the instructor/,
+  );
 
   const calls = [];
   const decided = await handleEmployeeAction('decide-report', {

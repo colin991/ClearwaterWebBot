@@ -75,6 +75,28 @@ export function requireOwnership(message) {
   }
 }
 
+/**
+ * Block moderating someone at or above your own top role (the server owner is exempt).
+ * The bot's own bannable/kickable checks only compare against the bot, not the actor.
+ */
+export function requireCanModerate(message, targetMember) {
+  if (!targetMember) return;
+  const actor = message.member;
+  if (!actor) throw new Error('Could not verify your roles for that action.');
+  if (String(message.guild?.ownerId || '') === String(actor.id)) return;
+  if (String(targetMember.id) === String(actor.id)) {
+    throw new Error('You cannot use that command on yourself.');
+  }
+  if (String(message.guild?.ownerId || '') === String(targetMember.id)) {
+    throw new Error('You cannot use that command on the server owner.');
+  }
+  const actorTop = actor.roles?.highest?.position ?? 0;
+  const targetTop = targetMember.roles?.highest?.position ?? 0;
+  if (targetTop >= actorTop) {
+    throw new Error('You cannot use that command on someone with an equal or higher role.');
+  }
+}
+
 export function requireAdministrator(message) {
   if (!message.member?.permissions?.has(PermissionFlagsBits.Administrator)) {
     throw new Error('You need the **Administrator** permission to use that command.');
