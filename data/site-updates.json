@@ -3441,6 +3441,13 @@
       "summary": "The radio shows your callsign, pending 911 calls (people waiting in the 911 voice channel and new in-game calls) and a mini map at the postal on a panic. You can whisper to one unit, dispatch can move a unit to another channel, and new hotkeys talk on your scan channel, replay the last 30 seconds and switch channels. A stuck mic is cut after 60 seconds. New NIGHT and AUTO GAIN settings, a pop-up showing who is talking while the radio is hidden, settings that sync between PC and phone, a first-launch tour, and animated signal and battery bars.",
       "createdAt": "2026-10-11T21:45:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-staff-website-2026-10-11",
+      "title": "Radio staff panel on the website",
+      "summary": "Admins can now open the radio staff panel at cwpcso.com/radio-staff after signing in with Discord. It shows who is on the radio and who is muted, with buttons to force-mute, unmute or kick (5 minutes), and a search to mute someone before they sign in. Only members with Administrator in the Clearwater server can use it. /radio-staff in Discord still works and links to the page.",
+      "createdAt": "2026-10-11T23:30:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

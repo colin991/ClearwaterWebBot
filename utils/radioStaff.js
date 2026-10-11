@@ -19,6 +19,9 @@ export const RADIO_STAFF_REFRESH_ID = `${RADIO_STAFF_PREFIX}refresh`;
 /** Kicked members can't sign back in to the radio for this long. */
 export const RADIO_KICK_BLOCK_MS = 5 * 60 * 1000;
 const PANEL_FOOTER = 'Clearwater Radio staff panel';
+/** The same panel on the website, for admins signed in with Discord. */
+export const RADIO_STAFF_URL = 'https://www.cwpcso.com/radio-staff';
+export const RADIO_STAFF_ACTIONS = Object.freeze(['mute', 'unmute', 'kick']);
 
 // radioBot.js registers the live relay controls here once the radio is running.
 let controls = null;
@@ -79,8 +82,57 @@ export function buildRadioStaffPanel(selectedId = '') {
     buttons.push(new ButtonBuilder().setCustomId(`${RADIO_STAFF_PREFIX}kick:${selectedId}`).setLabel('Kick off radio').setStyle(ButtonStyle.Danger));
   }
   buttons.push(new ButtonBuilder().setCustomId(selectedId ? `${RADIO_STAFF_REFRESH_ID}:${selectedId}` : RADIO_STAFF_REFRESH_ID).setLabel('Refresh').setStyle(ButtonStyle.Primary));
+  buttons.push(new ButtonBuilder().setURL(RADIO_STAFF_URL).setLabel('Open on cwpcso.com').setStyle(ButtonStyle.Link));
   rows.push(new ActionRowBuilder().addComponents(buttons));
   return { embeds: [embed], components: rows };
+}
+
+/**
+ * What the website panel shows: who is on the radio and who is muted. nameOf fills in names for
+ * muted members who are not on a radio.
+ */
+export function radioStaffSnapshot(nameOf = () => '') {
+  if (!controls) return { running: false, users: [], muted: [] };
+  const users = controls.users();
+  const onRadio = new Set(users.map((user) => user.userId));
+  return {
+    running: true,
+    users: users.map((user) => ({
+      userId: user.userId,
+      name: user.name || nameOf(user.userId) || 'Unknown',
+      channel: user.channelName,
+      muted: Boolean(user.muted),
+      since: user.since || null,
+    })),
+    muted: [...(controls.muted || [])].filter((id) => !onRadio.has(id)).map((id) => ({ userId: id, name: nameOf(id) || '' })),
+  };
+}
+
+/**
+ * Force-mute, unmute or kick a member, then post it in the radio channel chat. Used by the Discord
+ * panel and the website. Throws with a status when it can't be done.
+ */
+export async function runRadioStaffAction(action, userId, by, { from = '' } = {}) {
+  const fail = (message, status) => Object.assign(new Error(message), { status });
+  if (!RADIO_STAFF_ACTIONS.includes(action)) throw fail('Unknown action.', 400);
+  if (!/^\d{15,22}$/.test(String(userId))) throw fail('Pick a member first.', 400);
+  if (!controls) throw fail('The radio is not running on the bot host right now.', 503);
+  const suffix = from ? ` (${from})` : '';
+  let note;
+  let closed = 0;
+  if (action === 'kick') {
+    closed = controls.kick(userId, by);
+    note = `👢 <@${by}> kicked <@${userId}> off the radio for 5 minutes${closed ? '' : ' (they were not on a radio)'}${suffix}.`;
+  } else {
+    await controls.setMuted(userId, action === 'mute', by);
+    note = action === 'mute'
+      ? `🔇 <@${by}> force-muted <@${userId}> on the radio${suffix}.`
+      : `🔊 <@${by}> unmuted <@${userId}> on the radio${suffix}.`;
+  }
+  logger.info(`Radio staff: ${action} ${userId} by ${by}${suffix}`);
+  // Not awaited, so a slow Discord post never holds up the panel's reply.
+  void Promise.resolve(controls.postStaff?.({ content: note, allowedMentions: { parse: [] } })).catch(() => {});
+  return { ok: true, action, userId, closed };
 }
 
 /** Handles the panel's buttons and select; returns true when the interaction was the radio staff panel's. */
@@ -104,19 +156,8 @@ export async function handleRadioStaffInteraction(interaction) {
     await interaction.reply({ content: 'The radio is not running on the bot host right now.', flags: MessageFlags.Ephemeral });
     return true;
   }
-  const by = interaction.user.id;
-  let note = '';
-  if (action === 'mute' || action === 'unmute') {
-    await controls.setMuted(userId, action === 'mute', by);
-    note = action === 'mute' ? `🔇 <@${by}> force-muted <@${userId}> on the radio.` : `🔊 <@${by}> unmuted <@${userId}> on the radio.`;
-  } else if (action === 'kick') {
-    const closed = controls.kick(userId, by);
-    note = `👢 <@${by}> kicked <@${userId}> off the radio for 5 minutes${closed ? '' : ' (they were not on a radio)'}.`;
-  } else {
-    return false;
-  }
-  logger.info(`Radio staff: ${action} ${userId} by ${by}`);
+  if (!RADIO_STAFF_ACTIONS.includes(action)) return false;
+  await runRadioStaffAction(action, userId, interaction.user.id);
   await interaction.update(buildRadioStaffPanel(userId));
-  await controls.postStaff?.({ content: note, allowedMentions: { parse: [] } });
   return true;
 }

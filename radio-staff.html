@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#04121c">
+<meta name="robots" content="noindex,nofollow">
+<title>Radio Staff | Clearwater Radio</title>
+<link rel="icon" type="image/png" href="assets/clearwater-logo.png">
+<link rel="apple-touch-icon" href="assets/clearwater-logo.png">
+<link rel="stylesheet" href="radio-staff.css?v=20261011">
+</head>
+<body>
+<header class="rs-top">
+  <img src="assets/clearwater-logo.png" alt="" width="40" height="40">
+  <div><strong>Radio staff panel</strong><span id="who">Clearwater Radio</span></div>
+  <a class="rs-link" href="/radio">Open radio</a>
+</header>
+
+<main id="main" class="rs-main" hidden>
+  <section class="rs-card">
+    <div class="rs-head">
+      <h2>On the radio now <span id="onCount" class="rs-count">0</span></h2>
+      <button type="button" id="refresh" class="rs-btn rs-ghost">Refresh</button>
+    </div>
+    <ul id="onList" class="rs-list"></ul>
+  </section>
+
+  <section class="rs-card">
+    <h2>Muted, not on a radio <span id="mutedCount" class="rs-count">0</span></h2>
+    <ul id="mutedList" class="rs-list"></ul>
+  </section>
+
+  <section class="rs-card">
+    <h2>Mute someone else</h2>
+    <p class="rs-fine">Find a member by name or Discord ID to mute them before they sign in to the radio.</p>
+    <form id="searchForm" class="rs-search">
+      <input id="search" type="search" maxlength="32" placeholder="Name or Discord ID" autocomplete="off" aria-label="Name or Discord ID">
+      <button type="submit" class="rs-btn">Find</button>
+    </form>
+    <ul id="found" class="rs-list"></ul>
+  </section>
+
+  <p class="rs-fine rs-center">Force-muted members still hear the radio but can't talk. A kick keeps them off the radio for 5 minutes. Every action is posted in the radio channel chat.</p>
+</main>
+
+<section id="gate" class="rs-gate" hidden><div class="rs-card rs-gate-card"></div></section>
+<div id="toast" class="rs-toast" role="status" aria-live="polite" hidden></div>
+
+<script src="radio-staff.js?v=20261011"></script>
+</body>
+</html>
