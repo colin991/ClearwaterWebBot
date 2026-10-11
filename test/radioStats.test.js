@@ -48,7 +48,7 @@ test('panic history and the staff panel show who, where and what staff can do', 
   assert.match(text, /On the radio now \(1\)/);
   assert.match(text, /<@111111111111111111> · Radio · 🔇 muted/);
   assert.match(text, /Also muted \(not on a radio\)\*\*\n<@222222222222222222>/);
-  const buttons = panel.components[1].toJSON().components.map((button) => button.custom_id);
-  assert.deepEqual(buttons, [`radio-staff:unmute:${ALICE}`, `radio-staff:kick:${ALICE}`, `radio-staff:refresh:${ALICE}`]);
+  const buttons = panel.components[1].toJSON().components.map((button) => button.custom_id || button.url);
+  assert.deepEqual(buttons, [`radio-staff:unmute:${ALICE}`, `radio-staff:kick:${ALICE}`, `radio-staff:refresh:${ALICE}`, 'https://www.cwpcso.com/radio-staff']);
   setRadioStaffControls(null);
 });
