@@ -16,7 +16,8 @@ import { logger } from './logger.js';
 import { createRadioRelay } from './radioRelay.js';
 import { createRadioKey, verifyRadioKey } from './radioKeys.js';
 import { exchangeRadioCode, radioOAuthConfig } from './radioOAuth.js';
-import { createRadioPanicWatch, findPanicPlayer, panicUnitAndPostal, playerLocationLabel } from './radioPanic.js';
+import { callsignFromName, createRadioPanicWatch, findPanicPlayer, panicUnitAndPostal, playerLocationLabel } from './radioPanic.js';
+import { LIBERTY_POSTAL_POINTS } from './libertyMapCalibration.js';
 import { erlcPlayersFromServer, fetchErlcServer, parseErlcPlayer } from './erlc.js';
 import { getIdentityCache } from './identityStore.js';
 import { startRadioTunnel } from './radioTunnel.js';
@@ -33,6 +34,10 @@ export const RADIO_CHANNEL_ID = process.env.RADIO_CHANNEL_ID?.trim() || '1514128
 const VOICE_GROUP = 'clearwater-radio';
 const REJOIN_DELAY_MS = 10_000;
 const STATS_TICK_MS = 60_000;
+/** Discord voice channel callers wait in for 911; anyone in it shows as a pending call on every radio. */
+export const RADIO_911_CHANNEL_ID = process.env.RADIO_911_CHANNEL_ID?.trim() || '1532197874690035843';
+/** In-game 911 calls stay on the radios' pending list this long. */
+const GAME_CALL_MS = 10 * 60 * 1000;
 const radioDataPath = (name) => join(process.cwd(), 'data', name);
 // 80 ms: shorter transmissions are PTT taps with nothing said.
 const RADIO_MIN_TX_PACKETS = 4;
@@ -195,6 +200,27 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   }, STATS_TICK_MS);
   weeklyStatsTimer.unref?.();
 
+  // Pending 911: members waiting in the Discord 911 channel (since they joined) plus recent in-game calls.
+  const waitingSince = new Map();
+  const gameCalls = new Map();
+  function pendingCalls() {
+    const at = Date.now();
+    // The radio bot tracks voice states, so its cache knows who is in the channel.
+    const room = client.channels.cache.get(RADIO_911_CHANNEL_ID) || erlcEvents?.channels?.cache?.get?.(RADIO_911_CHANNEL_ID);
+    const waiting = [...(room?.members?.values?.() || [])].filter((member) => !member.user?.bot).map((member) => {
+      if (!waitingSince.has(member.id)) waitingSince.set(member.id, at);
+      return { id: member.id, name: member.displayName || member.user?.username || 'Caller', since: waitingSince.get(member.id), kind: 'discord' };
+    });
+    for (const [key, call] of gameCalls) if (at - call.since > GAME_CALL_MS) gameCalls.delete(key);
+    return [...waiting, ...gameCalls.values()].sort((a, b) => a.since - b.since);
+  }
+
+  // Synced radio settings (desktop and phone share them), kept per member.
+  const settingsPath = radioDataPath('radio-settings.json');
+  let syncedSettings = {};
+  let settingsSaveTimer = null;
+  void readJsonFile(settingsPath, {}).then((saved) => { syncedSettings = { ...(saved || {}), ...syncedSettings }; });
+
   const relay = createRadioRelay({
     verifyKey: (key) => verifyRadioKey(key, env),
     exchangeCode: (code) => exchangeRadioCode(code, env),
@@ -205,6 +231,21 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     },
     status: () => ({ online: isOnline(), channel: channel?.name || 'Radio' }),
     locatePanic: (userId, name) => locateRadioPanic(env, userId, name),
+    mapPoint: (postal) => {
+      const point = LIBERTY_POSTAL_POINTS[String(postal).match(/\d{3,5}/)?.[0] || ''];
+      return point ? { x: point.left, y: point.top } : null;
+    },
+    calls: pendingCalls,
+    loadSettings: (userId) => syncedSettings[userId] || null,
+    saveSettings: (userId, saved) => {
+      const current = syncedSettings[userId];
+      if (current && current.updatedAt > saved.updatedAt) return;
+      syncedSettings[userId] = saved;
+      clearTimeout(settingsSaveTimer);
+      settingsSaveTimer = setTimeout(() => {
+        void writeJsonFile(settingsPath, syncedSettings).catch((error) => logger.warn(`Radio settings save failed: ${error?.message || error}`));
+      }, 2_000);
+    },
     onTalked: (entry) => {
       talkLog.add(entry);
       weekly.addTalk(entry);
@@ -235,7 +276,8 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
       if (!permissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect])) {
         return { ok: false, removed: true, reason: `You do not have access to #${target.name}.` };
       }
-      return { ok: true, name: member.displayName || member.user.username };
+      const name = member.displayName || member.user.username;
+      return { ok: true, name, callsign: callsignFromName(name) };
     },
     openTransmit() {
       if (!isOnline()) return null;
@@ -370,6 +412,12 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
         relay.broadcastStatus();
         if (oldState.channelId !== newState.channelId) relay.voiceChanged(newState.id);
       }
+      // Someone joined or left the 911 waiting channel: the radios' pending calls change.
+      if ((oldState.channelId === RADIO_911_CHANNEL_ID) !== (newState.channelId === RADIO_911_CHANNEL_ID)) {
+        if (newState.channelId === RADIO_911_CHANNEL_ID) waitingSince.set(newState.id, Date.now());
+        else waitingSince.delete(newState.id);
+        relay.broadcastStatus();
+      }
       return;
     }
     if (newState.channelId && newState.channelId !== RADIO_CHANNEL_ID && connection) {
@@ -433,11 +481,23 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   };
   erlcEvents?.on('erlcEvent', onErlcEvent);
   erlcEvents?.on('erlcCommandLog', onErlcEvent);
+  // New in-game 911 calls show as pending on the radios for 10 minutes.
+  const onGameCall = (call) => {
+    const label = [call.label, call.location].filter(Boolean).join(' · ');
+    gameCalls.set(call.key, {
+      id: `game:${call.key}`, name: call.caller || 'In-game caller', since: call.at || Date.now(),
+      kind: String(call.team || 'game'), detail: label,
+    });
+    relay.broadcastStatus();
+  };
+  erlcEvents?.on('erlcRadioCall', onGameCall);
 
   return () => {
     stopped = true;
     erlcEvents?.off('erlcEvent', onErlcEvent);
     erlcEvents?.off('erlcCommandLog', onErlcEvent);
+    erlcEvents?.off('erlcRadioCall', onGameCall);
+    clearTimeout(settingsSaveTimer);
     clearTimeout(rejoinTimer);
     clearInterval(statsTimer);
     clearInterval(weeklyStatsTimer);

@@ -11,7 +11,8 @@ function listen(channel, callback) {
 contextBridge.exposeInMainWorld('radioApp', {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (patch) => ipcRenderer.invoke('settings:set', patch),
-  capturePtt: (active) => ipcRenderer.invoke('ptt:capture', active),
+  capturePtt: (active, which = 'ptt') => ipcRenderer.invoke('ptt:capture', active, which),
+  talkPopup: (text) => ipcRenderer.send('talk:popup', text),
   version: () => ipcRenderer.invoke('app:version'),
   checkForUpdates: () => ipcRenderer.invoke('update:check'),
   signIn: (info) => ipcRenderer.invoke('auth:signin', info),
@@ -19,5 +20,7 @@ contextBridge.exposeInMainWorld('radioApp', {
   quit: () => ipcRenderer.send('app:quit'),
   onPtt: (callback) => listen('ptt', callback),
   onPttBound: (callback) => listen('ptt:bound', callback),
+  onBind: (callback) => listen('bind', callback),
+  onBindBound: (callback) => listen('bind:bound', callback),
   onUpdate: (callback) => listen('update', callback),
 });

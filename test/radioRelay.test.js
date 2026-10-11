@@ -662,3 +662,110 @@ test('whoever is talking is flagged and listed first, on the radio or in the Dis
     await harness.close();
   }
 });
+
+test('the second PTT talks on a scanned channel, and a stuck mic is cut after a minute', async () => {
+  let clock = 1_000_000;
+  const harness = await startRelay({ now: () => clock });
+  try {
+    const alice = await signIn(harness, ALICE, { scan: ['srt'] });
+    const bob = await signIn(harness, BOB, { channel: 'srt' });
+    alice.send({ type: 'tx', active: true, channel: 'srt' });
+    const ok = await alice.until(() => alice.messages.find((m) => m.type === 'tx'));
+    assert.deepEqual([ok.ok, ok.channel], [true, 'srt']);
+    const talk = await bob.until(() => bob.messages.find((m) => m.type === 'talk' && m.active));
+    assert.equal(talk.channel, 'srt', 'radios on the scanned channel hear it');
+    alice.ws.send(Buffer.from([7, 7]));
+    await bob.until(() => bob.binary.length > 0);
+    assert.equal(harness.played.length, 0, 'nothing goes into Discord');
+
+    clock += 61_000;
+    const cut = await alice.until(() => alice.messages.find((m) => m.type === 'cut'));
+    assert.equal(cut.reason, 'stuck');
+    await bob.until(() => bob.messages.find((m) => m.type === 'talk' && !m.active));
+
+    // A channel you are not scanning falls back to your own channel.
+    alice.send({ type: 'tx', active: true, channel: 'freq' });
+    const own = await alice.until(() => alice.messages.filter((m) => m.type === 'tx')[1]);
+    assert.equal(own.channel, 'main');
+    alice.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('whispers reach one unit only, and only dispatch can move a unit to another channel', async () => {
+  const carl = '333333333333333333';
+  const harness = await startRelay({
+    authorize: async (userId) => ({ ok: true, name: { [ALICE]: 'Alice', [BOB]: 'Bob !C', [carl]: 'Carl' }[userId] }),
+  });
+  try {
+    const alice = await signIn(harness, ALICE);
+    const bob = await signIn(harness, BOB);
+    const carlRadio = await signIn(harness, carl);
+    alice.send({ type: 'tx', active: true, to: carl });
+    const ok = await alice.until(() => alice.messages.find((m) => m.type === 'tx'));
+    assert.deepEqual([ok.ok, ok.to], [true, carl]);
+    const heard = await carlRadio.until(() => carlRadio.messages.find((m) => m.type === 'whisper' && m.active));
+    assert.equal(heard.name, 'Alice');
+    alice.ws.send(Buffer.from([5, 5]));
+    await carlRadio.until(() => carlRadio.binary.length > 0);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(bob.binary.length, 0, 'nobody else hears a whisper');
+    assert.equal(harness.played.length, 0, 'whispers never reach Discord');
+    assert.ok(!bob.messages.some((m) => m.type === 'whisper'));
+    alice.send({ type: 'tx', active: false });
+    await carlRadio.until(() => carlRadio.messages.find((m) => m.type === 'whisper' && !m.active));
+
+    alice.send({ type: 'tx', active: true, to: '444444444444444444' });
+    const offline = await alice.until(() => alice.messages.filter((m) => m.type === 'tx')[1]);
+    assert.equal(offline.reason, 'whisper-offline');
+
+    alice.send({ type: 'move', userId: carl, channel: 'srt' });
+    const refused = await alice.until(() => alice.messages.find((m) => m.type === 'move'));
+    assert.equal(refused.reason, 'dispatch-only');
+    bob.send({ type: 'move', userId: carl, channel: 'srt' });
+    const moved = await carlRadio.until(() => carlRadio.messages.find((m) => m.type === 'moved'));
+    assert.deepEqual([moved.by, moved.channel], ['Bob !C', 'srt']);
+    const channel = carlRadio.messages.find((m) => m.type === 'channel');
+    assert.equal(channel.channelId, 'srt');
+    const done = await bob.until(() => bob.messages.find((m) => m.type === 'move'));
+    assert.deepEqual([done.ok, done.name], [true, 'Carl']);
+    for (const radio of [alice, bob, carlRadio]) radio.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('settings sync, pending 911 calls, callsigns and the panic map point', async () => {
+  const saved = {};
+  let clock = 2_000_000;
+  const harness = await startRelay({
+    now: () => clock,
+    authorize: async (userId) => ({ ok: true, name: userId === ALICE ? '1A-12 | Alice' : 'Bob', callsign: userId === ALICE ? '1A-12' : '' }),
+    loadSettings: (userId) => saved[userId] || null,
+    saveSettings: (userId, value) => { saved[userId] = value; },
+    calls: () => [{ id: 'c1', name: 'Civ Sam', since: clock - 90_000, kind: 'discord' }],
+    mapPoint: (postal) => (postal === '204' ? { x: 0.28, y: 0.78 } : null),
+  });
+  try {
+    const alice = await signIn(harness, ALICE);
+    const ready = alice.messages.find((m) => m.type === 'ready');
+    assert.equal(ready.you.callsign, '1A-12');
+    assert.equal(ready.synced, null);
+    assert.deepEqual(ready.calls, [{ id: 'c1', name: 'Civ Sam', kind: 'discord', detail: '', waited: 90 }]);
+    alice.send({ type: 'settings', data: { volume: 40, night: true, scan: ['srt', 'nope'], key: 'secret', listenFx: 'x'.repeat(40) }, updatedAt: clock });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.deepEqual(saved[ALICE], { data: { volume: 40, night: true, scan: ['srt'] }, updatedAt: clock });
+    alice.ws.close();
+    const phone = await signIn(harness, ALICE);
+    assert.deepEqual(phone.messages.find((m) => m.type === 'ready').synced.data.volume, 40, 'the other radio gets the saved settings');
+
+    phone.send({ type: 'panic' });
+    const panic = await phone.until(() => phone.messages.find((m) => m.type === 'panic'));
+    assert.deepEqual(panic.map, { x: 0.28, y: 0.78 });
+    phone.ws.close();
+  } finally {
+    await harness.close();
+  }
+});

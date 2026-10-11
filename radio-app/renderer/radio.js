@@ -34,21 +34,46 @@ const MENU = [
   { label: 'TX VOL', value: () => String(state.settings.txVolume), adjust: (step) => changeTxVolume(step * 5) },
   { label: 'MIC', value: () => deviceLabel('audioinput', state.settings.micId), open: 'mic' },
   { label: 'LISTEN', value: () => deviceLabel('audiooutput', state.settings.outputId), open: 'headset' },
-  { label: 'PTT', value: () => state.settings.ptt?.label || 'NONE', open: 'ptt' },
+  { label: 'PTT', value: () => bindLabel('ptt'), bind: 'ptt' },
   { label: 'CHANNEL', value: () => String(state.channel || 'RADIO'), adjust: (step) => changeChannel(step), action: () => changeChannel(1) },
   { label: 'SCAN', value: () => scanText(), open: 'scan' },
+  { label: 'SCAN PTT', value: () => bindLabel('scanPtt'), bind: 'scanPtt' },
+  { label: 'CH KEY', value: () => bindLabel('chanKey'), bind: 'chanKey' },
+  { label: 'REPLAY', value: () => (audio.replay ? 'STOP' : 'LAST 30s'), action: () => replay() },
+  { label: 'REPLAY KEY', value: () => bindLabel('replayKey'), bind: 'replayKey' },
   { label: 'WHO', value: () => `${state.channels.reduce((total, channel) => total + (channel.members?.length || 0), 0)} ON`, open: 'users' },
   { label: 'FX', value: () => FX_LABELS[state.settings.listenFx] || 'OFF', adjust: (step) => cycleFx(step), action: () => cycleFx(1) },
   { label: 'FX LVL', value: () => `${fxLevel()}%`, adjust: (step) => changeFxLevel(step), action: () => changeFxLevel(1, true) },
   { label: 'POWER', value: () => powerText(), adjust: (step) => cyclePower(step), action: () => cyclePower(1) },
   { label: 'SIZE', value: () => `${radioSize()}%`, adjust: (step) => changeSize(step), open: 'size' },
+  { label: 'NIGHT', value: () => (state.settings.night ? 'ON' : 'OFF'), adjust: () => toggleNight(), action: () => toggleNight() },
+  { label: 'AUTO GAIN', value: () => (state.settings.agc === false ? 'OFF' : 'ON'), adjust: () => toggleAgc(), action: () => toggleAgc() },
   { label: 'SETUP', value: () => 'RUN', open: 'setup' },
 ];
 const SETUP = [
   { label: 'TEST', value: () => 'MIC', open: 'test' },
   { label: 'ACCOUNT', value: () => accountText(), action: () => (decodeKey(state.settings.key) ? signOut() : signIn()) },
   { label: 'UPDATE', value: () => updateText(), action: () => void checkUpdates() },
+  { label: 'TUTORIAL', value: () => 'SHOW', action: () => startTutorial() },
 ];
+// Hotkeys: the talk key, a second talk key for your scan channel, replay, and next channel.
+const BIND_NAMES = { ptt: 'PTT KEY', scanPtt: 'SCAN PTT', replayKey: 'REPLAY KEY', chanKey: 'CH KEY' };
+const BIND_HELP = {
+  ptt: 'HOLD TO TALK',
+  scanPtt: 'HOLD TO TALK ON YOUR FIRST SCAN CHANNEL',
+  replayKey: 'PLAYS THE LAST 30 SECONDS OF RADIO',
+  chanKey: 'SWITCHES TO THE NEXT CHANNEL',
+};
+// First launch: talk key, then these (each can be skipped), then size, mic check and the tutorial.
+const SETUP_BINDS = ['replayKey', 'chanKey'];
+// Replay keeps this much of what the radio played.
+const REPLAY_MS = 30_000;
+// Stuck mic: the radio lets go of a transmission held this long (the relay cuts it too).
+const STUCK_MIC_MS = 60_000;
+// Whisper: a private call to one unit stays armed this long after its last use.
+const WHISPER_IDLE_MS = 60_000;
+// Settings shared between this member's desktop and phone radios.
+const SYNC_KEYS = ['volume', 'txVolume', 'listenFx', 'fxLevel', 'scan', 'night', 'agc'];
 const ROWS = { menu: MENU, setup: SETUP };
 // Radio effects only change what this radio hears; what you send stays clean.
 const FX_MODES = ['off', 'radio', 'police'];
@@ -61,7 +86,7 @@ const SIZES = [50, 60, 70, 80, 90, 100];
 // FX LVL: how strong the radio effect is (100% is the normal sound).
 const FX_LEVELS = [25, 50, 75, 100, 125, 150];
 const SIZE_ITEMS = [...SIZES].reverse().map((size) => ({ id: String(size), label: `${size}%` }));
-const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', size: 'menu', scan: 'menu', test: 'setup', users: 'home' };
+const PARENT = { menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', size: 'menu', scan: 'menu', test: 'setup', users: 'home', unit: 'users', tutorial: 'home' };
 // PANIC asks first; a second press (or OK) within this long sends it.
 const PANIC_CONFIRM_MS = 5000;
 // The relay allows one PANIC per member every 2 minutes.
@@ -71,7 +96,10 @@ const IDLE_CLOSE_MS = 20 * 60 * 1000;
 const IDLE_WARN_MS = 60 * 1000;
 
 const state = {
-  settings: { volume: 70, txVolume: 60, listenFx: 'radio', power: 'auto', size: 100, fxLevel: 100, scan: [], deaf: false, key: '', micId: 'default', outputId: 'default', ptt: null, hook: false, channel: 'main' },
+  settings: {
+    volume: 70, txVolume: 60, listenFx: 'radio', power: 'auto', size: 100, fxLevel: 100, scan: [], deaf: false, key: '', micId: 'default', outputId: 'default',
+    ptt: null, scanPtt: null, replayKey: null, chanKey: null, night: false, agc: true, syncAt: 0, tutorialDone: false, hook: false, channel: 'main',
+  },
   version: '',
   screen: 'home',
   menuIndex: 0,
@@ -105,6 +133,14 @@ const state = {
   muted: false, // force-muted by staff: can listen, can't talk
   lastHeard: null, // { name, at } of the last transmission heard on this channel
   micLevel: 0,
+  bindWhich: 'ptt', // which hotkey the PTT KEY screen is setting
+  txChannel: '', // channel this radio is transmitting on (its own, or a scan channel)
+  txStartedAt: 0,
+  whisper: null, // { id, name, until }: PTT talks privately to this unit
+  unit: null, // the unit picked on WHO'S ON: { id, name, app, channelId }
+  calls: [], // pending 911 calls: { id, name, kind, detail, waited }
+  callsAt: 0,
+  tutorialPage: 0,
 };
 
 const audio = {
@@ -128,6 +164,8 @@ const audio = {
   ts: 0,
   draining: false,
   speakers: new Map(),
+  history: [], // what the radio played, for REPLAY: { at, samples }
+  replay: null,
 };
 
 const net = { ws: null, retry: 0, timer: null, browser: false };
@@ -155,6 +193,7 @@ function saveSettings(patch) {
   Object.assign(pendingSave, patch);
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => { void flushSettings(); }, 250);
+  scheduleSync(patch);
 }
 
 function flushSettings() {
@@ -166,7 +205,45 @@ function flushSettings() {
 
 function saveNow(patch) {
   Object.assign(state.settings, patch);
+  scheduleSync(patch);
   return api.setSettings(patch);
+}
+
+// Settings sync: a change to a shared setting is sent to the bot, which hands it to this member's other radio.
+let syncTimer = null;
+let applyingSync = false;
+function scheduleSync(patch) {
+  if (applyingSync || !SYNC_KEYS.some((key) => patch && key in patch)) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(pushSync, 1000);
+}
+
+function pushSync() {
+  if (state.conn !== 'online') return;
+  const syncAt = Date.now();
+  state.settings.syncAt = syncAt;
+  void api.setSettings({ syncAt });
+  sendJson({ type: 'settings', data: Object.fromEntries(SYNC_KEYS.map((key) => [key, state.settings[key]])), updatedAt: syncAt });
+}
+
+// Signed in: newer settings saved from the other radio win; otherwise this radio's are shared.
+function applySync(synced) {
+  if (!synced?.data || !(Number(synced.updatedAt) > (Number(state.settings.syncAt) || 0))) {
+    if (!synced || (Number(state.settings.syncAt) || 0) > Number(synced.updatedAt || 0)) pushSync();
+    return;
+  }
+  const patch = {};
+  for (const key of SYNC_KEYS) if (key in synced.data) patch[key] = synced.data[key];
+  applyingSync = true;
+  void saveNow({ ...patch, syncAt: Number(synced.updatedAt) });
+  applyingSync = false;
+  applyVolume();
+  applyTxVolume();
+  applyFx();
+  applyNight();
+  applyAgc();
+  if ('scan' in patch) sendJson({ type: 'scan', ids: scanIds() });
+  flash('SETTINGS SYNCED', 1000);
 }
 
 async function quitApp() {
@@ -393,6 +470,7 @@ async function initAudio() {
   applyDeaf();
   applyFx();
   applyPower();
+  applyAgc();
   await applyOutput();
   await openMic();
   await initEncoder();
@@ -414,6 +492,28 @@ function applyVolume() {
 
 function applyTxVolume() {
   if (audio.txGain) audio.txGain.gain.value = txVolumeGain();
+}
+
+// AUTO GAIN: quiet mics are lifted toward a normal level before the limiter.
+function applyAgc() {
+  audio.capture?.port.postMessage({ agc: state.settings.agc !== false });
+}
+
+async function toggleAgc() {
+  await saveNow({ agc: state.settings.agc === false });
+  applyAgc();
+  render();
+}
+
+// NIGHT: dims the screen and keys for dark games.
+function applyNight() {
+  document.body.classList.toggle('night', Boolean(state.settings.night));
+}
+
+async function toggleNight() {
+  await saveNow({ night: !state.settings.night });
+  applyNight();
+  render();
 }
 
 const muted = () => Boolean(state.settings.deaf || state.inVoice);
@@ -629,6 +729,7 @@ function playDecoded(speaker, id, data) {
     const plane = new Float32Array(frames);
     data.copyTo(plane, { planeIndex: Math.min(c, channels - 1), format: 'f32-planar' });
     buffer.copyToChannel(plane, c);
+    if (c === 0) remember(plane);
   }
   data.close();
   const source = ctx.createBufferSource();
@@ -639,6 +740,53 @@ function playDecoded(speaker, id, data) {
   if (speaker.next < now + 0.01 || speaker.next > now + 0.3) speaker.next = now + 0.06;
   source.start(speaker.next);
   speaker.next += buffer.duration;
+}
+
+// REPLAY: keep the last 30 seconds of what the radio played.
+function remember(samples) {
+  const at = Date.now();
+  audio.history.push({ at, samples });
+  while (audio.history.length && at - audio.history[0].at > REPLAY_MS) audio.history.shift();
+}
+
+// Plays the last 30 seconds of radio again (gaps between transmissions shortened); again stops it.
+function replay() {
+  markActive();
+  const ctx = audio.ctx;
+  if (audio.replay) {
+    try { audio.replay.stop(); } catch { /* already over */ }
+    return undefined;
+  }
+  const since = Date.now() - REPLAY_MS;
+  const chunks = audio.history.filter((chunk) => chunk.at >= since);
+  if (!ctx || !chunks.length) return flash('NOTHING TO REPLAY', 1000);
+  const gap = Math.round(ctx.sampleRate * 0.3);
+  let length = 0;
+  chunks.forEach((chunk, index) => {
+    if (index && chunk.at - chunks[index - 1].at > 1000) length += gap;
+    length += chunk.samples.length;
+  });
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const out = buffer.getChannelData(0);
+  let offset = 0;
+  chunks.forEach((chunk, index) => {
+    if (index && chunk.at - chunks[index - 1].at > 1000) offset += gap;
+    out.set(chunk.samples, offset);
+    offset += chunk.samples.length;
+  });
+  void resumeAudio();
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(audio.rxIn);
+  source.onended = () => {
+    if (audio.replay !== source) return;
+    audio.replay = null;
+    render();
+  };
+  audio.replay = source;
+  source.start();
+  flash(`REPLAY ${waitText(buffer.duration * 1000)}`, 1200);
+  return undefined;
 }
 
 setInterval(() => {
@@ -652,6 +800,7 @@ setInterval(() => {
 }, 5000);
 
 const TONES = {
+  call: [[980, 0.09], [0, 0.05], [980, 0.09]],
   permit: [[1250, 0.07]],
   end: [[900, 0.05], [1250, 0.05]],
   busy: [[420, 0.12], [0, 0.06], [420, 0.12], [0, 0.06], [420, 0.12]],
@@ -875,8 +1024,11 @@ function onMessage(message) {
       state.error = '';
       state.me = message.you;
       state.conn = 'online';
+      state.calls = [];
+      state.callsAt = 0;
       applyChannelStatus(message);
       if (state.settings.deaf) sendJson({ type: 'deaf', active: true });
+      applySync(message.synced);
       render();
       break;
     case 'status':
@@ -899,8 +1051,29 @@ function onMessage(message) {
       }
       if (!message.active && (message.channel || state.channelId) === state.channelId) state.lastHeard = { name: message.name || 'UNIT', at: Date.now() };
       audio.listenFx?.setStatic(state.rx.size > 0);
+      talkPopup();
       updateLamps();
       render();
+      break;
+    case 'whisper':
+      // A private call to this radio only.
+      if (message.active) {
+        state.rx.set(message.id, { name: message.name || 'UNIT', whisper: true, channel: state.channelId });
+        flash(`WHISPER FROM ${String(message.name || 'UNIT').toUpperCase()}`.slice(0, 28), 1200);
+      } else if (state.rx.delete(message.id)) {
+        squelchTail();
+      }
+      talkPopup();
+      updateLamps();
+      render();
+      break;
+    case 'moved':
+      saveSettings({ channel: message.channel });
+      flash(`DISPATCH MOVED YOU · CH ${channelNumber(message.channel)}`, 1800);
+      break;
+    case 'move':
+      if (message.ok) flash(`MOVED ${String(message.name || 'UNIT').toUpperCase()} · CH ${channelNumber(message.channel)}`.slice(0, 32), 1400);
+      else flash(message.reason === 'dispatch-only' ? 'DISPATCH (!C) ONLY' : 'UNIT NOT ON A RADIO', 1400);
       break;
     case 'talking':
       state.talking = message.channels || {};
@@ -910,10 +1083,10 @@ function onMessage(message) {
       onTxReply(message);
       break;
     case 'cut':
-      // A !C dispatcher took the channel.
+      // A !C dispatcher took the channel, or the mic was stuck open for a minute.
       forceTxOff();
       playTone('busy');
-      flash('DISPATCH PRIORITY', 1500);
+      flash(message.reason === 'stuck' ? 'STUCK MIC · CUT' : 'DISPATCH PRIORITY', 1500);
       render();
       break;
     case 'panic-wait':
@@ -950,6 +1123,17 @@ function applyChannelStatus(message) {
   if ('dispatch' in message) state.dispatch = Boolean(message.dispatch);
   if ('muted' in message) state.muted = Boolean(message.muted);
   if ('lastHeard' in message) state.lastHeard = message.lastHeard;
+  if (Array.isArray(message.calls)) {
+    // A new 911 call waiting: a short tone and a flash.
+    const known = new Set(state.calls.map((call) => call.id));
+    const fresh = message.calls.filter((call) => !known.has(call.id));
+    if (state.callsAt && fresh.length) {
+      playTone('call');
+      flash(`911 · ${String(fresh[0].name).toUpperCase()} WAITING`.slice(0, 30), 1600);
+    }
+    state.calls = message.calls;
+    state.callsAt = Date.now();
+  }
   if (state.muted && state.tx === 'on') void stopTx();
   if ('inVoice' in message) {
     state.inVoice = Boolean(message.inVoice);
@@ -1085,9 +1269,12 @@ async function playPanicSound(message = {}) {
 
 // An in-game panic: flash the radio red and show who and where for 10 seconds.
 function showPanic(message) {
+  const map = message.map && Number.isFinite(message.map.x) && Number.isFinite(message.map.y) ? message.map : null;
   state.panic = {
     name: String(message.name || 'UNKNOWN UNIT').toUpperCase().slice(0, 40),
     location: String(message.location || 'UNKNOWN LOCATION').toUpperCase().slice(0, 60),
+    postal: String(message.postal || '').toUpperCase().slice(0, 8),
+    map,
   };
   clearTimeout(panicTimer);
   void playPanicSound(message);
@@ -1152,10 +1339,11 @@ function sendPanic() {
 
 /* ---------- push to talk ---------- */
 
-function pttPress() {
+/** @param {'main'|'scan'} kind the talk key, or the second key that talks on your scan channel */
+function pttPress(kind = 'main') {
   markActive();
   if (state.pttHeld) return;
-  state.pttHeld = true;
+  state.pttHeld = kind;
   el.pttSide.classList.add('active');
   if (state.screen === 'test') return;
   if (state.conn !== 'online') {
@@ -1188,13 +1376,27 @@ function pttPress() {
     flash(audio.micStream ? 'NO OPUS' : 'NO MIC');
     return;
   }
+  const request = { type: 'tx', active: true };
+  if (kind === 'scan') {
+    const scan = scanIds()[0];
+    if (!scan) {
+      playTone('busy');
+      flash('NO SCAN CHANNEL');
+      return;
+    }
+    request.channel = scan;
+  } else if (state.whisper) {
+    // Whisper armed: the talk key talks to that one unit.
+    request.to = state.whisper.id;
+    state.whisper.until = Date.now() + WHISPER_IDLE_MS;
+  }
   state.tx = 'requesting';
   state.txCancel = false;
-  sendJson({ type: 'tx', active: true });
+  sendJson(request);
 }
 
-function pttRelease() {
-  if (!state.pttHeld) return;
+function pttRelease(kind = 'main') {
+  if (!state.pttHeld || state.pttHeld !== kind) return;
   state.pttHeld = false;
   el.pttSide.classList.remove('active');
   if (state.tx === 'on') void stopTx();
@@ -1215,10 +1417,15 @@ function onTxReply(message) {
       state.pttTimeoutUntil = Date.now() + (Number(message.seconds) || 60) * 1000;
       flash('PTT SPAM · TIMED OUT', 1500);
     } else if (message.reason === 'busy') flash(`BUSY ${String(message.name || '').toUpperCase()}`.trim());
-    else flash(message.reason === 'invoice' ? 'IN DISCORD VC' : 'BOT OFFLINE');
+    else if (message.reason === 'whisper-offline') {
+      state.whisper = null;
+      flash('UNIT NOT ON A RADIO');
+    } else flash(message.reason === 'invoice' ? 'IN DISCORD VC' : 'BOT OFFLINE');
     return;
   }
   state.tx = 'on';
+  state.txChannel = message.to ? '' : (message.channel || state.channelId);
+  state.txStartedAt = Date.now();
   audio.pendingLen = 0;
   audio.held = null;
   audio.fadeIn = 0;
@@ -1256,12 +1463,24 @@ function forceTxOff() {
 
 /* ---------- screens ---------- */
 
+function bindLabel(which) {
+  return state.settings[which]?.label || 'NONE';
+}
+
+// Opens the hotkey screen for one of the keys.
+function openBind(which) {
+  setScreen('ptt');
+  state.bindWhich = which;
+  render();
+}
+
 function setScreen(screen) {
   if (state.screen === 'test' && screen !== 'test' && audio.testGain) audio.testGain.gain.value = 0;
   if (state.capturing) {
     state.capturing = false;
-    void api.capturePtt(false);
+    void api.capturePtt(false, state.bindWhich);
   }
+  if (screen !== 'ptt') state.bindWhich = 'ptt';
   state.screen = screen;
   state.listIndex = 0;
   if (screen === 'menu' || screen === 'setup') void refreshDeviceCache();
@@ -1332,7 +1551,7 @@ function usersLines() {
     if (!members.length) lines.push({ text: 'NOBODY', dim: true });
     for (const member of members) {
       const where = member.app && member.discord ? 'APP + VC' : member.discord ? 'DISCORD VC' : 'APP';
-      lines.push({ text: member.name, where, me: member.id === state.me?.id, talking: member.talking });
+      lines.push({ text: member.name, where, me: member.id === state.me?.id, talking: member.talking, id: member.id, app: member.app, channelId: channel.id });
     }
   });
   return lines;
@@ -1385,12 +1604,19 @@ function homeBody() {
   let line;
   if (state.tx === 'on') {
     kind = 'tx';
-    line = 'TRANSMITTING';
+    if (!state.txChannel && state.whisper) line = `WHISPERING ${state.whisper.name}`;
+    else line = state.txChannel && state.txChannel !== state.channelId ? `TRANSMITTING ON CH ${channelNumber(state.txChannel)}` : 'TRANSMITTING';
   } else if (state.rx.size) {
     kind = 'rx';
-    // Scanned channels show which channel the voice is on.
-    line = `RX ${[...state.rx.values()].map((entry) => (entry.channel && entry.channel !== state.channelId
-      ? `${entry.name} (CH ${channelNumber(entry.channel)})` : entry.name)).join(', ')}`;
+    // Scanned channels show which channel the voice is on; whispers say so.
+    line = `RX ${[...state.rx.values()].map((entry) => {
+      if (entry.whisper) return `WHISPER ${entry.name}`;
+      return entry.channel && entry.channel !== state.channelId ? `${entry.name} (CH ${channelNumber(entry.channel)})` : entry.name;
+    }).join(', ')}`;
+  } else if (audio.replay) {
+    line = 'REPLAYING LAST 30s';
+  } else if (state.whisper) {
+    line = `WHISPER ${state.whisper.name} · PTT IS PRIVATE · BACK ENDS`;
   } else if (!state.botOnline) {
     line = 'BOT OFFLINE · WAITING';
   } else if (state.muted) {
@@ -1415,6 +1641,7 @@ function homeBody() {
       : '')
     + (scanIds().length ? `<div class="last">SCAN ${escapeHtml(scanText())}</div>` : '')
     + '</div>';
+  html += callsCard();
   const members = channelMembers(state.channels.find((channel) => channel.id === state.channelId));
   html += `<div class="card units"><div class="zone">UNITS ON CH ${channelNumber()} (${members.length})</div>`
     + (members.length
@@ -1423,6 +1650,99 @@ function homeBody() {
       : '<div class="unit dim">NOBODY</div>')
     + '</div>';
   return html;
+}
+
+// 911 calls waiting: callers in the Discord 911 channel and recent in-game calls, with how long they've waited.
+function callsCard() {
+  if (!state.calls.length) return '';
+  const extra = Math.round((Date.now() - state.callsAt) / 1000);
+  const shown = state.calls.slice(0, 2);
+  const more = state.calls.length - shown.length;
+  return `<div class="card calls"><div class="zone">911 PENDING (${state.calls.length})</div>${shown.map((call) => {
+    const where = call.kind === 'discord' ? 'IN 911 VC' : call.detail || 'IN GAME';
+    return `<div class="unit"><span>${escapeHtml(String(call.name).toUpperCase())} · ${escapeHtml(String(where).toUpperCase())}</span>`
+      + `<span class="where">${escapeHtml(waitText((call.waited + extra) * 1000))}</span></div>`;
+  }).join('')}${more > 0 ? `<div class="call-detail">+${more} MORE</div>` : ''}</div>`;
+}
+
+// WHO'S ON → a unit: whisper to them, or (dispatch only) move them to another channel.
+const isDispatcher = () => String(state.me?.name || '').includes('!C');
+
+function unitItems() {
+  const unit = state.unit;
+  if (!unit) return [];
+  const items = [];
+  if (unit.app && unit.id !== state.me?.id) items.push({ id: 'whisper', label: 'WHISPER (PRIVATE CALL)' });
+  if (unit.app && unit.id !== state.me?.id && isDispatcher()) {
+    for (const channel of state.channels) {
+      if (channel.id !== unit.channelId) items.push({ id: `move:${channel.id}`, label: `MOVE TO CH ${channelNumber(channel.id)} · ${channel.name}` });
+    }
+  }
+  return items;
+}
+
+function chooseUnit(item) {
+  const unit = state.unit;
+  if (!item || !unit) return;
+  if (item.id === 'whisper') {
+    state.whisper = { id: unit.id, name: String(unit.name).toUpperCase(), until: Date.now() + WHISPER_IDLE_MS };
+    setScreen('home');
+    flash(`WHISPER ${state.whisper.name}`.slice(0, 28), 1200);
+  } else if (item.id.startsWith('move:')) {
+    sendJson({ type: 'move', userId: unit.id, channel: item.id.slice(5) });
+    setScreen('users');
+  }
+}
+
+function endWhisper(text = 'WHISPER OFF') {
+  if (!state.whisper) return;
+  state.whisper = null;
+  if (state.tx === 'on' && !state.txChannel) void stopTx();
+  flash(text, 900);
+}
+
+// Who is talking, for the pop-up shown while the radio is minimized (desktop) or in the background (web).
+function talkPopup() {
+  const names = [...state.rx.values()].map((entry) => (entry.whisper ? `${entry.name} (WHISPER)` : entry.name));
+  api.talkPopup?.(names.length ? `${names.join(', ')} talking` : '');
+}
+
+/* ---------- tutorial ---------- */
+
+function tutorialPages() {
+  const key = (which, fallback) => (state.settings[which]?.label ? `PRESS ${state.settings[which].label}` : fallback);
+  const talk = state.settings.web ? 'HOLD THE TALK BAR' : `HOLD ${state.settings.ptt?.label || 'YOUR PTT KEY'}`;
+  return [
+    { title: 'WELCOME', text: 'CLEARWATER RADIO QUICK TOUR · OK NEXT · BACK GOES BACK' },
+    { title: 'TALK', text: `${talk} TO TALK, LET GO TO LISTEN · DISPATCH (!C) CAN CUT IN` },
+    { title: 'CHANNELS', text: `TURN THE CH KNOB OR ${key('chanKey', 'SET A CH KEY')} · SCAN HEARS 2 MORE CHANNELS` },
+    { title: 'UNITS', text: 'HOME KEY SHOWS WHO IS ON · OK ON A UNIT TO WHISPER TO THEM' },
+    { title: 'REPLAY', text: `${key('replayKey', 'MENU → REPLAY')} TO HEAR THE LAST 30 SECONDS AGAIN` },
+    { title: 'PANIC', text: 'PRESS PANIC TWICE TO SEND · EVERY RADIO SEES YOU AND YOUR POSTAL' },
+    { title: 'SETTINGS', text: 'GEAR KEY: VOLUME, NIGHT MODE, AUTO GAIN, HOTKEYS · OK TO FINISH' },
+  ];
+}
+
+function startTutorial() {
+  setScreen('tutorial');
+  state.tutorialPage = 0;
+  render();
+}
+
+function tutorialStep(step) {
+  const pages = tutorialPages();
+  const page = state.tutorialPage + step;
+  if (page < 0) return render();
+  if (page >= pages.length) return finishTutorial();
+  state.tutorialPage = page;
+  return render();
+}
+
+function finishTutorial() {
+  void saveNow({ tutorialDone: true });
+  if (state.firstSetup) return finishSetup();
+  setScreen('home');
+  return undefined;
 }
 
 function updateText() {
@@ -1445,7 +1765,10 @@ function render() {
   el.softLeftLabel.textContent = screen === 'home' ? 'SETTINGS' : 'RADIO';
   el.softRightLabel.textContent = 'HOME';
   // Status bar: signal bars, then DEAF / IN VC / who is on the channel.
-  el.lcdSig.className = `sig${state.conn === 'online' ? (state.botOnline ? ' on' : ' weak') : ''}`;
+  // Signal bars sweep while looking for the relay and bounce while a voice comes in (just for looks).
+  const searching = ['connecting', 'lost', 'signing'].includes(state.conn);
+  el.lcdSig.className = `sig${state.conn === 'online' ? (state.botOnline ? ' on' : ' weak') : ''}${searching ? ' scan' : ''}`
+    + `${state.rx.size ? ' rx' : ''}${state.tx === 'on' ? ' tx' : ''}`;
   if (state.settings.deaf) el.lcdRight.textContent = 'DEAF';
   else if (state.inVoice) el.lcdRight.textContent = 'IN VC';
   else if (state.conn === 'online') el.lcdRight.textContent = `${state.listeners} ON`;
@@ -1456,7 +1779,8 @@ function render() {
 
   switch (screen) {
     case 'home':
-      left = `Z1 · ${String(state.me?.name || 'RADIO')}`.toUpperCase();
+      // Callsign from the Discord nickname ("1A-12 | Name"), else the name.
+      left = `Z1 · ${String(state.me?.callsign || state.me?.name || 'RADIO')}`.toUpperCase();
       el.softRightLabel.textContent = 'UNITS';
       body = homeBody();
       break;
@@ -1464,6 +1788,20 @@ function render() {
       left = "WHO'S ON";
       body = usersBody();
       break;
+    case 'unit': {
+      left = 'UNIT';
+      const items = unitItems();
+      body = `<div class="small">${escapeHtml(String(state.unit?.name || '').toUpperCase())}</div>`
+        + (items.length ? listHtml(items, state.listIndex) : '<div class="small dim">ONLY UNITS ON A RADIO APP CAN BE CALLED</div>');
+      break;
+    }
+    case 'tutorial': {
+      const pages = tutorialPages();
+      const page = pages[Math.min(state.tutorialPage, pages.length - 1)];
+      left = `TOUR ${state.tutorialPage + 1}/${pages.length}`;
+      body = `<div class="mid">${escapeHtml(page.title)}</div><div class="small tour">${escapeHtml(page.text)}</div>`;
+      break;
+    }
     case 'menu':
       body = rowsHtml(MENU, state.menuIndex);
       break;
@@ -1497,17 +1835,24 @@ function render() {
         + (state.firstSetup ? '<div class="small">BAR MOVES = MIC WORKS · OK WHEN DONE</div>' : '');
       break;
     case 'ptt': {
-      left = 'PTT KEY';
+      const which = state.bindWhich;
+      left = BIND_NAMES[which];
       if (state.mustBind) {
         left = 'SET PTT KEY';
         body = '<div class="mid">PICK A TALK KEY</div><div class="small">PRESS THE KEY OR MOUSE 4/5 YOU WANT TO HOLD TO TALK</div>'
           + (state.settings.hook ? '' : '<div class="small dim">CLICK THE RADIO FIRST</div>');
         break;
       }
-      const label = state.settings.ptt?.label || 'NONE';
+      if (state.firstSetup) {
+        left = `SET ${BIND_NAMES[which]}`;
+        body = `<div class="mid">PRESS A KEY</div><div class="small">${BIND_HELP[which]} · OR MOUSE 4/5</div><div class="small dim">OK OR BACK SKIPS</div>`;
+        break;
+      }
+      const label = bindLabel(which);
+      const clear = which === 'ptt' ? '' : ' · BKSP CLEARS';
       body = state.capturing
-        ? '<div class="mid">PRESS KEY</div><div class="small">OR MOUSE 4/5 · ESC CANCEL</div>'
-        : `<div class="mid">${escapeHtml(label)}</div><div class="small">${state.settings.hook ? '# TO CHANGE' : '# TO CHANGE · ONLY WHEN FOCUSED'}</div>`;
+        ? `<div class="mid">PRESS KEY</div><div class="small">OR MOUSE 4/5 · ESC CANCEL${clear}</div>`
+        : `<div class="mid">${escapeHtml(label)}</div><div class="small">${BIND_HELP[which]}</div><div class="small">${state.settings.hook ? '# TO CHANGE' : '# TO CHANGE · ONLY WHEN FOCUSED'}</div>`;
       break;
     }
     default:
@@ -1515,7 +1860,12 @@ function render() {
   }
   if (state.panic) {
     left = 'PANIC';
-    body = `<div class="big">PANIC</div><div class="mid">${escapeHtml(state.panic.name)}</div><div class="small">${escapeHtml(state.panic.location)}</div>`;
+    // Mini map with a marker at the postal, and the postal big underneath.
+    const postal = state.panic.postal ? `<div class="postal">POSTAL ${escapeHtml(state.panic.postal)}</div>` : '';
+    body = `<div class="mid">${escapeHtml(state.panic.name)}</div>`
+      + (state.panic.map ? '<div class="pmap" id="pmap"><i></i></div>' : '<div class="big">PANIC</div>')
+      + postal
+      + `<div class="small">${escapeHtml(state.panic.location)}</div>`;
   }
   if (state.panicAsk) {
     left = 'PANIC';
@@ -1535,7 +1885,21 @@ function render() {
   el.lcdBody.innerHTML = body;
   el.lcdBody.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
   if (screen === 'test') meterFill = $('meterFill');
+  placeMap();
   updateLamps();
+}
+
+// The map is scaled up and shifted so the postal sits in the middle of the window.
+function placeMap() {
+  const box = $('pmap');
+  const point = state.panic?.map;
+  if (!box || !point || !window.RADIO_MAP) return;
+  const size = 520;
+  const width = box.clientWidth || 180;
+  const height = box.clientHeight || 72;
+  box.style.backgroundImage = `url("${window.RADIO_MAP}")`;
+  box.style.backgroundSize = `${size}px ${size}px`;
+  box.style.backgroundPosition = `${Math.round(width / 2 - point.x * size)}px ${Math.round(height / 2 - point.y * size)}px`;
 }
 
 function updateLamps() {
@@ -1565,7 +1929,8 @@ async function choose() {
   const { screen } = state;
   if (ROWS[screen]) {
     const row = ROWS[screen][screen === 'menu' ? state.menuIndex : state.setupIndex];
-    if (row.open) setScreen(row.open);
+    if (row.bind) openBind(row.bind);
+    else if (row.open) setScreen(row.open);
     else if (row.action) row.action();
   } else if (screen === 'mic' || screen === 'headset') {
     const device = state.devices[state.listIndex];
@@ -1590,13 +1955,24 @@ async function choose() {
   } else if (screen === 'users') {
     const line = usersLines()[state.listIndex];
     if (line?.header) joinChannel(line.channelId);
+    else if (line?.id) {
+      state.unit = { id: line.id, name: line.text, app: line.app, channelId: line.channelId };
+      setScreen('unit');
+    }
+  } else if (screen === 'unit') {
+    chooseUnit(unitItems()[state.listIndex]);
+  } else if (screen === 'tutorial') {
+    tutorialStep(1);
   } else if (screen === 'test') {
-    if (state.firstSetup) return finishSetup();
+    if (state.firstSetup) return startTutorial();
     setScreen('setup');
+  } else if (screen === 'ptt' && state.firstSetup) {
+    // First launch: OK skips an optional hotkey.
+    back();
   } else if (screen === 'ptt') {
     state.capturing = true;
     render();
-    if (state.settings.hook) await api.capturePtt(true);
+    if (state.settings.hook) await api.capturePtt(true, state.bindWhich);
   }
 }
 
@@ -1662,16 +2038,32 @@ function startBind() {
   if (state.settings.hook) void api.capturePtt(true);
 }
 
-// Talk key picked: then the size, then sign in.
+// Talk key picked: then the optional hotkeys, the size, a mic check and the tour, then sign in.
 function bindDone() {
   state.mustBind = false;
   state.capturing = false;
   state.firstSetup = true;
-  setScreen('size');
+  setupBind(SETUP_BINDS[0]);
+}
+
+function setupBind(which) {
+  if (!which) return setScreen('size');
+  setScreen('ptt');
+  state.bindWhich = which;
+  state.capturing = true;
+  render();
+  if (state.settings.hook) void api.capturePtt(true, which);
+  return undefined;
+}
+
+// A setup hotkey was set or skipped: on to the next one.
+function nextSetupBind(which) {
+  setupBind(SETUP_BINDS[SETUP_BINDS.indexOf(which) + 1]);
 }
 
 function finishSetup() {
   state.firstSetup = false;
+  void saveNow({ tutorialDone: true });
   setScreen('home');
   flash(`PTT ${state.settings.ptt?.label || 'SET'}`, 1200);
   connect({ autoSignIn: true });
@@ -1695,12 +2087,21 @@ function back() {
     signInFailed('SIGN-IN CANCELLED');
     return;
   }
+  if (screen === 'home' && state.whisper) return endWhisper();
+  if (screen === 'ptt' && state.firstSetup) {
+    // Skip this hotkey.
+    const which = state.bindWhich;
+    if (state.capturing) void api.capturePtt(false, which);
+    state.capturing = false;
+    return nextSetupBind(which);
+  }
   if (screen === 'ptt' && state.capturing) {
     state.capturing = false;
-    void api.capturePtt(false);
+    void api.capturePtt(false, state.bindWhich);
     render();
     return;
   }
+  if (screen === 'tutorial') return void tutorialStep(-1);
   if (state.firstSetup) return void finishSetup();
   setScreen(PARENT[screen] || 'home');
 }
@@ -1727,6 +2128,11 @@ function move(delta) {
     const length = Math.max(1, usersLines().length);
     state.listIndex = (state.listIndex + delta + length) % length;
     render();
+  } else if (screen === 'unit' && unitItems().length) {
+    state.listIndex = (state.listIndex + delta + unitItems().length) % unitItems().length;
+    render();
+  } else if (screen === 'tutorial') {
+    tutorialStep(delta);
   }
 }
 
@@ -1784,6 +2190,14 @@ function checkIdle() {
     if (state.pttTimeoutUntil <= Date.now()) state.pttTimeoutUntil = 0;
     if (state.screen === 'home' && !state.toast) render();
   }
+  // Stuck mic: let go of a transmission held for a minute.
+  if (state.tx === 'on' && Date.now() - state.txStartedAt > STUCK_MIC_MS) {
+    void stopTx();
+    flash('STUCK MIC · CUT', 1500);
+  }
+  if (state.whisper && state.whisper.until < Date.now() && state.tx !== 'on') endWhisper('WHISPER ENDED');
+  // The 911 waiting times count up on the radio screen.
+  if (state.calls.length && state.screen === 'home' && !state.toast && Date.now() % 5000 < 1000) render();
   if (state.pttHeld || state.tx === 'on') return markActive();
   const idle = Date.now() - lastActiveAt;
   if (idle >= IDLE_CLOSE_MS) {
@@ -1829,14 +2243,37 @@ function clickLcd(event) {
     return void choose();
   }
   if (screen === 'users' && index >= 0) {
-    // Second click on the same channel header joins it.
+    // Second click on the same channel header joins it; on a unit it opens whisper / move.
     const again = state.listIndex === index;
     state.listIndex = index;
-    if (again && usersLines()[index]?.header) return void choose();
+    const line = usersLines()[index];
+    if (again && (line?.header || line?.id)) return void choose();
     return render();
   }
+  if (screen === 'unit' && index >= 0) {
+    playTone('key');
+    state.listIndex = index;
+    return void choose();
+  }
+  if (screen === 'tutorial') return void tutorialStep(1);
   if ((screen === 'ptt' && !state.capturing) || screen === 'test') return press('ok');
   if (screen === 'home' && (state.conn === 'signin' || state.conn === 'signing')) return press(state.conn === 'signin' ? 'ok' : '*');
+  return undefined;
+}
+
+// Which hotkey (when the radio has no global key hook) a key belongs to.
+function domBind(code) {
+  return ['ptt', 'scanPtt', 'replayKey', 'chanKey'].find((which) => state.settings[which]?.kind === 'dom' && state.settings[which].code === code) || '';
+}
+
+// A hotkey went down or up: talk, talk on the scan channel, replay, or next channel.
+function onBind({ which, down }) {
+  if (which === 'ptt') return down ? pttPress() : pttRelease();
+  if (which === 'scanPtt') return down ? pttPress('scan') : pttRelease('scan');
+  if (!down) return undefined;
+  markActive();
+  if (which === 'replayKey') return replay();
+  if (which === 'chanKey') return changeChannel(1);
   return undefined;
 }
 
@@ -1923,21 +2360,32 @@ function bindControls() {
   window.addEventListener('keydown', (event) => {
     if (state.screen === 'ptt' && state.capturing && !state.settings.hook) {
       event.preventDefault();
+      const which = state.bindWhich;
       if (event.code === 'Escape') {
         if (state.mustBind) return;
         state.capturing = false;
+        if (state.firstSetup) return void nextSetupBind(which);
         render();
         return;
       }
-      const ptt = { kind: 'dom', code: event.code, label: event.code.replace(/^Key|^Digit/, '').toUpperCase() };
+      const binding = event.code === 'Backspace' && which !== 'ptt'
+        ? null
+        : { kind: 'dom', code: event.code, label: event.code.replace(/^Key|^Digit/, '').toUpperCase() };
       state.capturing = false;
-      void saveNow({ ptt }).then(() => (state.mustBind ? bindDone() : render()));
+      void saveNow({ [which]: binding }).then(() => {
+        if (state.mustBind) return bindDone();
+        if (state.firstSetup) return nextSetupBind(which);
+        return render();
+      });
       return;
     }
-    if (!state.settings.hook && state.settings.ptt?.kind === 'dom' && event.code === state.settings.ptt.code) {
-      event.preventDefault();
-      pttPress();
-      return;
+    if (!state.settings.hook && !event.repeat) {
+      const which = domBind(event.code);
+      if (which) {
+        event.preventDefault();
+        onBind({ which, down: true });
+        return;
+      }
     }
     const map = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Enter: '#', Escape: '*', Backspace: '*' };
     const key = map[event.key] || (/^[0-9*#]$/.test(event.key) ? event.key : null);
@@ -1947,10 +2395,14 @@ function bindControls() {
     }
   });
   window.addEventListener('keyup', (event) => {
-    if (!state.settings.hook && state.settings.ptt?.kind === 'dom' && event.code === state.settings.ptt.code) pttRelease();
+    if (state.settings.hook) return;
+    const which = domBind(event.code);
+    if (which) onBind({ which, down: false });
   });
   window.addEventListener('blur', () => {
-    if (!state.settings.hook) pttRelease();
+    if (state.settings.hook) return;
+    pttRelease();
+    pttRelease('scan');
   });
 
   api.onPtt((down) => (down ? pttPress() : pttRelease()));
@@ -1961,6 +2413,14 @@ function bindControls() {
     if (state.mustBind) return void (ptt ? bindDone() : startBind());
     render();
   });
+  api.onBind?.(onBind);
+  api.onBindBound?.(({ which, binding }) => {
+    state.capturing = false;
+    state.settings[which] = binding || null;
+    if (state.firstSetup && state.screen === 'ptt') return void nextSetupBind(which);
+    render();
+  });
+  document.addEventListener('visibilitychange', talkPopup);
   api.onUpdate((update) => {
     state.update = update;
     render();
@@ -1976,6 +2436,7 @@ async function init() {
   state.version = await api.version();
   bindControls();
   applyDeaf();
+  applyNight();
   render();
   // Keep the clock current and let the message card expire.
   setInterval(() => (state.screen === 'home' && !state.toast ? render() : updateClock()), 15_000);
@@ -1986,8 +2447,11 @@ async function init() {
   }
   void refreshDeviceCache();
   // A talk key comes first; the web radio has its own hold-to-talk bar instead.
-  if (!state.settings.ptt && !state.settings.web) startBind();
-  else connect({ autoSignIn: true });
+  if (!state.settings.ptt && !state.settings.web) return startBind();
+  connect({ autoSignIn: true });
+  // Radios set up before the tour (and the web radio's first visit) see it once.
+  if (!state.settings.tutorialDone) startTutorial();
+  return undefined;
 }
 
 void init();

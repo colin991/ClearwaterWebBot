@@ -329,6 +329,12 @@ export async function handleErlcCallEvent(payload, {
   }
   rememberCall(key, now);
   liveCallKeys.add(key);
+  // The Clearwater Radio lists new in-game calls as pending on its screen.
+  try {
+    client?.emit?.('erlcRadioCall', {
+      key, team: classified.team, label: classified.label, location: call.location || '', caller: call.callerName || '', at: now,
+    });
+  } catch { /* listeners never break the call radio */ }
   try {
     const result = await enqueueRadio(() => announce(client, call, classified));
     logger.info(`Call radio: ${classified.kind} on ${classified.team} (${call.description || 'call'})`);

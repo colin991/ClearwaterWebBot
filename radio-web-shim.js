@@ -121,6 +121,8 @@
         gate.querySelector('button').onclick = () => {
           gate.hidden = true;
           void navigator.wakeLock?.request('screen').catch(() => {});
+          // Lets the radio show who is talking while the page is in the background.
+          try { void window.Notification?.requestPermission?.()?.catch?.(() => {}); } catch { /* not supported */ }
           resolve({ ...load(), hook: false, web: true, key: result.key, webRelay: result.url });
         };
       };
@@ -149,7 +151,26 @@
     if (document.visibilityState === 'visible' && session) void navigator.wakeLock?.request('screen').catch(() => {});
   });
 
+  // Who is talking while the page is hidden: the tab title, plus a notification when allowed.
+  const baseTitle = document.title;
+  let notice = null;
+  function talkPopup(text) {
+    if (!text || document.visibilityState === 'visible') {
+      document.title = baseTitle;
+      try { notice?.close(); } catch { /* ignore */ }
+      notice = null;
+      return;
+    }
+    document.title = `\u25CF ${text}`;
+    try {
+      if (window.Notification?.permission === 'granted') {
+        notice = new Notification('Clearwater Radio', { body: text, tag: 'radio-talk', silent: true });
+      }
+    } catch { /* phones need a service worker for notifications: the title still shows it */ }
+  }
+
   window.radioApp = {
+    talkPopup,
     getSettings: waitForGate,
     setSettings: async (patch) => {
       store(patch || {});
