@@ -766,7 +766,7 @@ function render() {
   const { screen } = state;
   meterFill = null;
   el.keyInput.hidden = screen !== 'key';
-  el.softLeftLabel.textContent = 'MENU';
+  el.softLeftLabel.textContent = screen === 'home' ? 'MENU' : 'RADIO';
   el.softRightLabel.textContent = 'HOME';
   el.lcdRight.textContent = state.version || '';
   let left = screen.toUpperCase();
@@ -782,7 +782,6 @@ function render() {
       break;
     case 'menu':
       body = rowsHtml(MENU, state.menuIndex);
-      el.softLeftLabel.textContent = 'CLOSE';
       break;
     case 'setup':
       body = rowsHtml(SETUP, state.setupIndex);
@@ -925,7 +924,8 @@ function move(delta) {
 
 function press(key) {
   playTone('key');
-  if (key === 'softL') return setScreen(state.screen === 'menu' ? 'home' : 'menu');
+  // Gray left button: open the menu from the radio screen, otherwise go straight back to the radio.
+  if (key === 'softL') return setScreen(state.screen === 'home' ? 'menu' : 'home');
   if (key === 'softR') {
     if (state.screen === 'mic' || state.screen === 'headset' || state.screen === 'test') return void choose();
     return setScreen('home');
