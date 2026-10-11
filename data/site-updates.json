@@ -2,6 +2,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "2026-10-11-bot-auto-update",
+      "title": "Bot and radio embed update on their own",
+      "summary": "The bot now checks main every 5 minutes and restarts itself onto new code when something is merged, so changes go live without pressing restart. The radio download embed reads the same version feed the app uses and refreshes every 2 minutes.",
+      "createdAt": "2026-10-11T06:10:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "2026-10-11-radio-discord-sign-in",
       "title": "Radio sign-in with Discord",
       "summary": "The radio app now signs in with Discord instead of a pasted key, and only members of the Clearwater Discord server with access to the radio channel can use it. Every 5 minutes it re-checks; if you left the server or lost access, the radio signs you out and closes. Settings now always save, even when you quit right after changing them.",
