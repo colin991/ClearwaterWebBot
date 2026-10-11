@@ -31,7 +31,6 @@ const TX_FADE_OUT = 720; // 15 ms
 // Rows on the MENU (left soft key) and SETUP screens: name on the left, current value on the right.
 const MENU = [
   { label: 'VOL', value: () => String(state.settings.volume), adjust: (step) => changeVolume(step * 5) },
-  { label: 'TX VOL', value: () => String(state.settings.txVolume), adjust: (step) => changeTxVolume(step * 5) },
   { label: 'MIC', value: () => deviceLabel('audioinput', state.settings.micId), open: 'mic' },
   { label: 'LISTEN', value: () => deviceLabel('audiooutput', state.settings.outputId), open: 'headset' },
   { label: 'PTT', value: () => bindLabel('ptt'), bind: 'ptt' },
@@ -48,11 +47,7 @@ const MENU = [
   { label: 'REPLAY KEY', value: () => bindLabel('replayKey'), bind: 'replayKey' },
   { label: 'WHO', value: () => `${state.channels.reduce((total, channel) => total + (channel.members?.length || 0), 0)} ON`, open: 'users' },
   { label: 'FX', value: () => FX_LABELS[state.settings.listenFx] || 'OFF', adjust: (step) => cycleFx(step), action: () => cycleFx(1) },
-  { label: 'FX LVL', value: () => `${fxLevel()}%`, adjust: (step) => changeFxLevel(step), action: () => changeFxLevel(1, true) },
-  { label: 'POWER', value: () => powerText(), adjust: (step) => cyclePower(step), action: () => cyclePower(1) },
   { label: 'SIZE', value: () => `${radioSize()}%`, adjust: (step) => changeSize(step), open: 'size' },
-  { label: 'NIGHT', value: () => (state.settings.night ? 'ON' : 'OFF'), adjust: () => toggleNight(), action: () => toggleNight() },
-  { label: 'AUTO GAIN', value: () => (state.settings.agc === false ? 'OFF' : 'ON'), adjust: () => toggleAgc(), action: () => toggleAgc() },
   { label: 'SETUP', value: () => 'RUN', open: 'setup' },
 ];
 const SETUP = [
@@ -78,7 +73,7 @@ const STUCK_MIC_MS = 60_000;
 // Whisper: a private call to one unit stays armed this long after its last use.
 const WHISPER_IDLE_MS = 60_000;
 // Settings shared between this member's desktop and phone radios.
-const SYNC_KEYS = ['volume', 'txVolume', 'listenFx', 'fxLevel', 'scan', 'night', 'agc'];
+const SYNC_KEYS = ['volume', 'listenFx', 'scan'];
 // Staff rows (MONITOR) only show for admins, dispatch rows (SCENES) only for !C names.
 const ROWS = {
   get menu() {
@@ -89,15 +84,12 @@ const ROWS = {
 // Radio effects only change what this radio hears; what you send stays clean.
 const FX_MODES = ['off', 'radio', 'police'];
 const FX_LABELS = { off: 'OFF', radio: 'RADIO', police: 'POLICE' };
-// LOW trims audio work for slower PCs; AUTO picks LOW on machines with few cores or little memory.
-const POWER_MODES = ['auto', 'low', 'full'];
+// Slower PCs (few cores or little memory) get lighter audio work automatically.
 const LOW_END = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
 // SIZE: a dial from 60% to 130% of full size, in 5% steps.
 const SIZE_MIN = 60;
 const SIZE_MAX = 130;
 const SIZE_STEP = 5;
-// FX LVL: how strong the radio effect is (100% is the normal sound).
-const FX_LEVELS = [25, 50, 75, 100, 125, 150];
 const PARENT = { scenes: 'menu', nearest: 'menu', menu: 'home', setup: 'menu', mic: 'menu', ptt: 'menu', headset: 'menu', size: 'menu', scan: 'menu', test: 'setup', users: 'home', unit: 'users', tutorial: 'home' };
 // PANIC asks first; a second press (or OK) within this long sends it.
 const PANIC_CONFIRM_MS = 5000;
@@ -109,8 +101,8 @@ const IDLE_WARN_MS = 60 * 1000;
 
 const state = {
   settings: {
-    volume: 70, txVolume: 60, listenFx: 'radio', power: 'auto', size: 100, fxLevel: 100, scan: [], deaf: false, key: '', micId: 'default', outputId: 'default',
-    ptt: null, scanPtt: null, replayKey: null, chanKey: null, night: false, agc: true, syncAt: 0, tutorialDone: false, hook: false, channel: 'main',
+    volume: 70, listenFx: 'radio', size: 100, scan: [], deaf: false, key: '', micId: 'default', outputId: 'default',
+    ptt: null, scanPtt: null, replayKey: null, chanKey: null, syncAt: 0, tutorialDone: false, hook: false, channel: 'main',
   },
   version: '',
   screen: 'home',
@@ -209,10 +201,8 @@ function volumeGain() {
   return Math.pow(state.settings.volume / 100, 1.5) * 1.4;
 }
 
-/** Talk level: 70 sends the mic as-is, lower is quieter. */
-function txVolumeGain() {
-  return Math.pow(state.settings.txVolume / 70, 1.5);
-}
+/** Talk level: a little under the mic's own level, so loud mics don't clip. */
+const TX_GAIN = Math.pow(60 / 70, 1.5);
 
 // Quick changes (volume drags) are batched; every changed field is kept until it is written.
 let saveTimer = null;
@@ -267,10 +257,7 @@ function applySync(synced) {
   void saveNow({ ...patch, syncAt: Number(synced.updatedAt) });
   applyingSync = false;
   applyVolume();
-  applyTxVolume();
   applyFx();
-  applyNight();
-  applyAgc();
   if ('scan' in patch) sendJson({ type: 'scan', ids: scanIds() });
   flash('SETTINGS SYNCED', 1000);
 }
@@ -561,6 +548,7 @@ async function initAudio() {
   txHighpass.frequency.value = 90;
   audio.txIn = txHighpass;
   audio.txGain = ctx.createGain();
+  audio.txGain.gain.value = TX_GAIN;
   txHighpass.connect(audio.txGain);
   audio.capture = new AudioWorkletNode(ctx, 'radio-capture', {
     numberOfInputs: 1,
@@ -582,11 +570,9 @@ async function initAudio() {
   };
 
   applyVolume();
-  applyTxVolume();
   applyDeaf();
   applyFx();
   applyPower();
-  applyAgc();
   await applyOutput();
   await openMic();
   await initEncoder();
@@ -606,32 +592,6 @@ function applyVolume() {
   if (state.screen === 'test') audio.testGain.gain.value = gain;
 }
 
-function applyTxVolume() {
-  if (audio.txGain) audio.txGain.gain.value = txVolumeGain();
-}
-
-// AUTO GAIN: quiet mics are lifted toward a normal level before the limiter.
-function applyAgc() {
-  audio.capture?.port.postMessage({ agc: state.settings.agc !== false });
-}
-
-async function toggleAgc() {
-  await saveNow({ agc: state.settings.agc === false });
-  applyAgc();
-  render();
-}
-
-// NIGHT: dims the screen and keys for dark games.
-function applyNight() {
-  document.body.classList.toggle('night', Boolean(state.settings.night));
-}
-
-async function toggleNight() {
-  await saveNow({ night: !state.settings.night });
-  applyNight();
-  render();
-}
-
 const muted = () => Boolean(state.settings.deaf || state.inVoice);
 
 function applyDeaf() {
@@ -639,25 +599,14 @@ function applyDeaf() {
   el.deaf.classList.toggle('on', Boolean(state.settings.deaf));
 }
 
-function fxLevel() {
-  const level = Number(state.settings.fxLevel);
-  return FX_LEVELS.includes(level) ? level : 100;
-}
-
 function applyFx() {
-  audio.listenFx?.setMode(state.settings.listenFx, fxLevel());
+  audio.listenFx?.setMode(state.settings.listenFx, 100);
   audio.listenFx?.setStatic(state.rx.size > 0);
 }
 
-const lowPower = () => state.settings.power === 'low' || (state.settings.power !== 'full' && LOW_END);
+const lowPower = () => LOW_END;
 
-function powerText() {
-  if (state.settings.power === 'low') return 'LOW';
-  if (state.settings.power === 'full') return 'FULL';
-  return LOW_END ? 'AUTO LOW' : 'AUTO';
-}
-
-// LOW: a lighter Opus encoder, no effect oversampling, and fewer mic-level updates.
+// Slower PCs: a lighter Opus encoder, no effect oversampling, and fewer mic-level updates.
 function applyPower() {
   const low = lowPower();
   audio.listenFx?.setLowPower(low);
@@ -1161,9 +1110,6 @@ function onMessage(message) {
       // A web radio opened from the staff panel's Listen live, or a desktop radio that had it on.
       if (state.me?.staff && state.settings.monitor) sendJson({ type: 'monitor', active: true });
       sendPendingCrashes();
-      if (!state.settings.recordNotice) {
-        showModal({ title: 'RECORDED', text: 'RADIO TRANSMISSIONS ARE RECORDED AND KEPT FOR 24 HOURS SO STAFF CAN REVIEW REPORTS.', kind: 'notice' });
-      }
       render();
       break;
     case 'status':
@@ -1804,14 +1750,13 @@ function applyDamage() {
   updateLamps();
 }
 
-// A pop-up over the screen (staff warning, recorded-transmissions notice) until OK or BACK.
+// A pop-up over the screen (staff warning) until OK or BACK.
 function showModal(modal) {
   state.modal = modal;
   render();
 }
 
 function closeModal() {
-  if (state.modal?.kind === 'notice') saveSettings({ recordNotice: true });
   state.modal = null;
   render();
 }
@@ -2128,7 +2073,7 @@ function tutorialPages() {
     { title: 'UNITS', text: 'HOME KEY SHOWS WHO IS ON · OK ON A UNIT TO WHISPER TO THEM' },
     { title: 'REPLAY', text: `${key('replayKey', 'MENU → REPLAY')} TO HEAR THE LAST 30 SECONDS AGAIN` },
     { title: 'PANIC', text: 'PRESS PANIC TWICE TO SEND · EVERY RADIO SEES YOU AND YOUR POSTAL' },
-    { title: 'SETTINGS', text: 'GEAR KEY: VOLUME, NIGHT MODE, AUTO GAIN, HOTKEYS · OK TO FINISH' },
+    { title: 'SETTINGS', text: 'GEAR KEY: VOLUME, MIC, HOTKEYS · OK TO FINISH' },
   ];
 }
 
@@ -2402,24 +2347,6 @@ async function choose() {
   }
 }
 
-function changeTxVolume(delta) {
-  const txVolume = clampVolume(state.settings.txVolume + delta);
-  if (txVolume === state.settings.txVolume) return;
-  saveSettings({ txVolume });
-  applyTxVolume();
-  render();
-}
-
-async function cyclePower(step) {
-  const before = lowPower();
-  const index = Math.max(0, POWER_MODES.indexOf(state.settings.power));
-  const power = POWER_MODES[(index + (step < 0 ? POWER_MODES.length - 1 : 1)) % POWER_MODES.length];
-  await saveNow({ power });
-  applyPower();
-  if (before !== lowPower() && state.tx === 'idle') await initEncoder();
-  render();
-}
-
 async function cycleFx(step) {
   const index = Math.max(0, FX_MODES.indexOf(state.settings.listenFx));
   const listenFx = FX_MODES[(index + (step < 0 ? FX_MODES.length - 1 : 1)) % FX_MODES.length];
@@ -2497,16 +2424,6 @@ function sizeFromPointer(event) {
   // The gap at the bottom snaps to whichever end is closer.
   const gap = angle > DIAL.start + DIAL.sweep ? (x < 0 ? 0 : 1) : fraction;
   return Math.round((SIZE_MIN + gap * (SIZE_MAX - SIZE_MIN)) / SIZE_STEP) * SIZE_STEP;
-}
-
-async function changeFxLevel(step, wrap = false) {
-  let next = FX_LEVELS.indexOf(fxLevel()) + (step < 0 ? -1 : 1);
-  if (wrap) next = (next + FX_LEVELS.length) % FX_LEVELS.length;
-  const level = FX_LEVELS[Math.max(0, Math.min(FX_LEVELS.length - 1, next))];
-  if (level === fxLevel()) return;
-  await saveNow({ fxLevel: level });
-  applyFx();
-  render();
 }
 
 // First launch (or no talk key saved): wait on the PTT screen until one is picked.
@@ -2960,7 +2877,6 @@ async function init() {
   bootAnimation();
   bindControls();
   applyDeaf();
-  applyNight();
   render();
   // Keep the clock current and let the message card expire.
   setInterval(() => (state.screen === 'home' && !state.toast ? render() : updateClock()), 15_000);

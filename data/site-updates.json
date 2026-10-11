@@ -3497,6 +3497,13 @@
       "summary": "The radio now shows each member's Melonly department and rank next to their callsign (for example PCSO SGT). On the radio staff page, staff can pick which Melonly ranks may use CH 2, CH 3 and the event channel. Members without one of those ranks see the channel as locked, and anyone who loses access is moved back to CH 1. CH 1 stays open to everyone.",
       "createdAt": "2026-10-12T00:10:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-trim-settings-no-recordings-2026-10-12",
+      "title": "Radio: fewer settings, no more recordings",
+      "summary": "The radio settings menu is shorter: TX VOL, FX LVL, POWER, NIGHT and AUTO GAIN are gone and now use their usual defaults (low power still turns on by itself on slower PCs). Radio transmissions are no longer recorded or kept for 24 hours, the Recordings section is gone from the staff page, and any saved recordings are deleted.",
+      "createdAt": "2026-10-12T00:20:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

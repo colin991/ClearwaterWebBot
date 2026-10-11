@@ -756,7 +756,7 @@ test('settings sync, pending 911 calls, callsigns and the panic map point', asyn
     assert.deepEqual(ready.calls, [{ id: 'c1', name: 'Civ Sam', kind: 'discord', detail: '', waited: 90 }]);
     alice.send({ type: 'settings', data: { volume: 40, night: true, scan: ['srt', 'nope'], key: 'secret', listenFx: 'x'.repeat(40) }, updatedAt: clock });
     await new Promise((resolve) => setTimeout(resolve, 50));
-    assert.deepEqual(saved[ALICE], { data: { volume: 40, night: true, scan: ['srt'] }, updatedAt: clock });
+    assert.deepEqual(saved[ALICE], { data: { volume: 40, scan: ['srt'] }, updatedAt: clock });
     alice.ws.close();
     const phone = await signIn(harness, ALICE);
     assert.deepEqual(phone.messages.find((m) => m.type === 'ready').synced.data.volume, 40, 'the other radio gets the saved settings');
@@ -876,38 +876,6 @@ test('talking over dispatch is reported, on a radio or in the Discord channel', 
     assert.equal(talkOvers.length, 3);
     alice.ws.close();
     bob.ws.close();
-  } finally {
-    await harness.close();
-  }
-});
-
-test('every transmission is handed to the recorder, and Discord speech too', async () => {
-  const recordings = [];
-  const harness = await startRelay({
-    record: (meta) => {
-      const entry = { meta, packets: 0, ended: false };
-      recordings.push(entry);
-      return { push: () => { entry.packets += 1; }, end: () => { entry.ended = true; } };
-    },
-  });
-  try {
-    const alice = await signIn(harness, ALICE);
-    alice.send({ type: 'tx', active: true });
-    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
-    alice.ws.send(Buffer.from([1, 2, 3]));
-    alice.ws.send(Buffer.from([4, 5, 6]));
-    alice.send({ type: 'tx', active: false });
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    assert.equal(recordings[0].meta.name, 'Alice');
-    assert.equal(recordings[0].meta.channelName, 'Radio');
-    assert.equal(recordings[0].packets, 2);
-    assert.equal(recordings[0].ended, true);
-
-    harness.relay.discordSpeaking('333333333333333333', 'Carl', true);
-    harness.relay.relayDiscordAudio('333333333333333333', Buffer.from([9]));
-    harness.relay.discordSpeaking('333333333333333333', 'Carl', false);
-    assert.deepEqual([recordings[1].meta.source, recordings[1].packets, recordings[1].ended], ['discord', 1, true]);
-    alice.ws.close();
   } finally {
     await harness.close();
   }

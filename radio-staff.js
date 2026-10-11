@@ -218,48 +218,6 @@
     return undefined;
   }
 
-  /* ---------- recordings ---------- */
-
-  let recordings = [];
-  function renderRecordings() {
-    const list = $('recList');
-    const query = $('recSearch').value.trim().toLowerCase();
-    const shown = recordings.filter((rec) => !query || `${rec.name} ${rec.channel}`.toLowerCase().includes(query)).slice(0, 150);
-    if (!shown.length) return empty(list, recordings.length ? 'No recordings match.' : 'No recordings in the last 24 hours.');
-    list.replaceChildren(...shown.map((rec) => {
-      const when = new Date(rec.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const item = row({ name: rec.name, userId: rec.userId }, `${when} · ${rec.channel} · ${rec.seconds}s${rec.source === 'discord' ? ' · Discord' : ''}`, [
-        button('Play', 'ghost', async (event) => {
-          const target = event.currentTarget;
-          target.disabled = true;
-          const { status, data } = await call({ action: 'recording', id: rec.id });
-          target.disabled = false;
-          if (status !== 200 || !data.audio) return toast(data.error || 'Could not load that recording.', true);
-          const bytes = Uint8Array.from(atob(data.audio), (char) => char.charCodeAt(0));
-          const audio = document.createElement('audio');
-          audio.controls = true;
-          audio.src = URL.createObjectURL(new Blob([bytes], { type: data.type || 'audio/ogg' }));
-          item.querySelector('audio')?.remove();
-          item.append(audio);
-          void audio.play().catch(() => {});
-          return undefined;
-        }),
-      ]);
-      return item;
-    }));
-    return undefined;
-  }
-  $('recLoad').addEventListener('click', async () => {
-    const data = await tool({ action: 'recordings' });
-    if (!data) return;
-    recordings = Array.isArray(data.recordings) ? data.recordings : [];
-    $('recFilter').hidden = false;
-    $('recLoad').textContent = 'Reload';
-    renderRecordings();
-  });
-  $('recSearch').addEventListener('input', () => renderRecordings());
-  $('recFilter').addEventListener('submit', (event) => event.preventDefault());
-
   function render(data) {
     gate.hidden = true;
     main.hidden = false;
