@@ -39,11 +39,9 @@ WEBSITE_PATHS=(
   signin.js
   coming-soon.js
   site-gate.js
-  radio.html
   radio-web.css
-  radio-web.js
-  radio-app/renderer/capture-worklet.js
-  radio-app/renderer/panic-sound.js
+  radio-web-shim.js
+  radio-app/renderer
   events.html
   news.html
   admin.html

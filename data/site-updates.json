@@ -3357,6 +3357,13 @@
       "summary": "The Clearwater Radio now works in a phone or computer browser at cwpcso.com/radio: sign in with Discord, pick a channel and hold the big button to talk. The desktop radio also has a POWER setting that uses less CPU on slower PCs, and it turns on by itself on low-end machines.",
       "createdAt": "2026-10-11T16:10:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-web-radio-full",
+      "title": "Web radio now matches the app, and connects",
+      "summary": "The radio at cwpcso.com/radio now looks and works exactly like the desktop radio, with the same screen, settings, channels, units list and panic alerts, plus a big hold-to-talk bar for phones. It also fixes the web radio getting stuck on CONNECTING.",
+      "createdAt": "2026-10-11T16:40:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
