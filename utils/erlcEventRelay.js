@@ -6,6 +6,13 @@ import { logger } from './logger.js';
 /** Public Melonly URL 307s here. POSTing the alias with redirect:error never delivered. */
 export const MELONLY_EVENTS_WEBHOOK_URL = 'https://erlc-wh.melon.ly/';
 
+/** X-Signature-Timestamp (seconds or ms) as epoch ms, or 0. */
+export function signedAtMs(timestamp) {
+  const value = Number(timestamp);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return value >= 1e12 ? value : value * 1000;
+}
+
 export function createErlcEventRelay({
   path = resolve('data', 'erlc-events.json'),
   load = () => readJsonFile(path, [], { corruptFallback: false }),
@@ -30,7 +37,7 @@ export function createErlcEventRelay({
     });
     // The persisted inbox remains available even if a consumer throws or the bot restarts.
     if (!result.duplicate) {
-      try { await onEvent(event.payload, event.id); } catch { /* Inspect/replay from the authenticated inbox. */ }
+      try { await onEvent(event.payload, event.id, { signedAt: signedAtMs(event.timestamp) }); } catch { /* Inspect/replay from the authenticated inbox. */ }
     }
     return result;
   }

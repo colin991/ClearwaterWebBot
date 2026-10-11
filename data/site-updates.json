@@ -3513,6 +3513,13 @@
       "updatedBy": "colin991"
     },
     {
+      "id": "2026-10-11-ingame-commands-priority",
+      "title": "In-game commands: faster pickup and timing in logs",
+      "summary": "The bot now checks ER:LC's command log every 2 seconds with a small, quick request instead of waiting for the full server snapshot. ;refresh skips ahead of background in-game commands. Every SceneCmd log line now shows how long the command took and whether it came through the webhook or the command log.",
+      "createdAt": "2026-10-11T23:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "radio-whisper-units-scenes-2026-10-12",
       "title": "Radio: easier whispering, steady units list, automatic scene channels",
       "summary": "Clicking a unit on WHO'S ON now opens whisper straight away, and the radio screen has an END WHISPER button while you're whispering. The units list no longer jumps back to the top while people talk or join. Scene timers now pick up every Discord voice channel with Scene or Traffic Stop in its name, with no setup needed.",

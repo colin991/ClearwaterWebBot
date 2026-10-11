@@ -142,9 +142,9 @@ export function startBotApiServer(client, {
   }
 
   const eventRelay = createErlcEventRelay({
-    onEvent: (event, id) => {
+    onEvent: (event, id, meta = {}) => {
       logger.info(`ER:LC event received ${String(id || '').slice(0, 12)} keys=${Object.keys(event || {}).slice(0, 12).join(',')}`);
-      client.emit('erlcEvent', event, id);
+      client.emit('erlcEvent', event, id, meta);
       void logIncomingErlcWebhook(client, event, id).catch((error) => {
         logger.warn(`ER:LC command webhook log failed: ${error?.message || error}`);
       });
