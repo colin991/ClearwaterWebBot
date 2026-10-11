@@ -829,3 +829,21 @@ test('game data reaches only that member, and the server weather rides on the ch
     await harness.close();
   }
 });
+
+test('a one-off message reaches every radio a member has open, and nobody else', async () => {
+  const harness = await startRelay();
+  try {
+    const alice = await signIn(harness, ALICE);
+    const bob = await signIn(harness, BOB);
+    assert.equal(harness.relay.sendTo(ALICE, { type: 'damage', seconds: 20 }), 1);
+    const damage = await alice.until(() => alice.messages.find((m) => m.type === 'damage'));
+    assert.equal(damage.seconds, 20);
+    assert.equal(harness.relay.sendTo('999999999999999999', { type: 'notice' }), 0);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(bob.messages.some((m) => m.type === 'damage'), false);
+    alice.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});

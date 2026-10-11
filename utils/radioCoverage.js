@@ -3,6 +3,8 @@
  * (cwpcso.com/radio-staff). Points are fractions of the official map image (0-1, like map pins).
  * A unit's signal comes from where they are in game: close to a tower is clear, far from every
  * tower or inside a weak area is static-y and muffled, but always still comes through.
+ * Tunnels and parking garages are areas of their own kind that only count while staff have
+ * building interference turned on (off by default).
  */
 
 export const COVERAGE_LIMITS = Object.freeze({
@@ -17,6 +19,9 @@ export const COVERAGE_LIMITS = Object.freeze({
 });
 export const DEFAULT_TOWER_RANGE = 0.2;
 export const DEFAULT_ZONE_STRENGTH = 0.35;
+export const DEFAULT_BUILDING_STRENGTH = 0.25;
+/** Area kinds: a weak-signal area, or a tunnel / parking garage (building interference). */
+export const ZONE_KINDS = Object.freeze(['weak', 'building']);
 /** The weakest a signal ever gets: transmissions still come through. */
 export const MIN_SIGNAL = 0.1;
 
@@ -49,11 +54,15 @@ export function normalizeCoverage(raw = {}) {
       .filter((point) => point.left !== null && point.top !== null);
     if (points.length < 3) return [];
     const strength = Number(zone?.strength);
+    const kind = ZONE_KINDS.includes(zone?.kind) ? zone.kind : 'weak';
     return [{
       id: cleanId(zone?.id, 'area', index),
-      name: cleanName(zone?.name, `Weak area ${index + 1}`),
+      kind,
+      name: cleanName(zone?.name, kind === 'building' ? `Tunnel / garage ${index + 1}` : `Weak area ${index + 1}`),
       points,
-      strength: Number.isFinite(strength) ? Math.round(clamp(strength, COVERAGE_LIMITS.minStrength, COVERAGE_LIMITS.maxStrength) * 100) / 100 : DEFAULT_ZONE_STRENGTH,
+      strength: Number.isFinite(strength)
+        ? Math.round(clamp(strength, COVERAGE_LIMITS.minStrength, COVERAGE_LIMITS.maxStrength) * 100) / 100
+        : (kind === 'building' ? DEFAULT_BUILDING_STRENGTH : DEFAULT_ZONE_STRENGTH),
     }];
   });
   // Ids must be unique so the website can pick one.
@@ -62,11 +71,16 @@ export function normalizeCoverage(raw = {}) {
     if (seen.has(item.id)) item.id = `${item.id}-${index + 1}`;
     seen.add(item.id);
   }
-  return { towers, zones };
+  return { towers, zones, buildings: raw?.buildings === true };
+}
+
+/** The areas that change the signal: weak areas always, tunnels and garages only with building interference on. */
+export function activeZones(coverage) {
+  return (coverage?.zones || []).filter((zone) => zone.kind !== 'building' || coverage.buildings === true);
 }
 
 export function hasCoverage(coverage) {
-  return Boolean(coverage?.towers?.length || coverage?.zones?.length);
+  return Boolean(coverage?.towers?.length || activeZones(coverage).length);
 }
 
 /** Ray casting: true when the point is inside the polygon. */
@@ -102,7 +116,7 @@ export function signalAt(point, coverage) {
   if (coverage.towers.length) {
     signal = Math.max(...coverage.towers.map((tower) => towerSignal(Math.hypot(point.left - tower.left, point.top - tower.top), tower.range)));
   }
-  for (const zone of coverage.zones) {
+  for (const zone of activeZones(coverage)) {
     if (pointInArea(point, zone.points)) signal *= zone.strength;
   }
   return Math.round(Math.max(MIN_SIGNAL, Math.min(1, signal)) * 100) / 100;
@@ -121,16 +135,25 @@ export function signalBars(signal) {
 /**
  * Keeps every radio's signal up to date. update(points) takes where each member on a radio is
  * (userId -> { left, top } on the map) and hands their signals to the relay; recompute()
- * re-applies a just-saved coverage map to the last known positions.
+ * re-applies a just-saved coverage map to the last known positions. limit(userId) can cap one
+ * member's signal (a radio damaged when they were downed), with or without a coverage map.
  */
-export function createCoverageTracker({ users, setSignals, getCoverage }) {
+export function createCoverageTracker({ users, setSignals, getCoverage, limit = () => null }) {
   let points = new Map();
+
+  function signalFor(userId, coverage) {
+    const signal = hasCoverage(coverage) ? signalAt(points.get(userId), coverage) : null;
+    const cap = limit(userId);
+    if (!Number.isFinite(cap)) return signal;
+    return Math.round(Math.max(MIN_SIGNAL, Math.min(signal ?? 1, cap)) * 100) / 100;
+  }
 
   function apply() {
     const coverage = getCoverage();
     const signals = new Map();
-    if (hasCoverage(coverage)) {
-      for (const user of users()) signals.set(user.userId, signalAt(points.get(user.userId), coverage));
+    for (const user of users()) {
+      const signal = signalFor(user.userId, coverage);
+      if (signal !== null) signals.set(user.userId, signal);
     }
     setSignals(signals);
   }
@@ -143,14 +166,14 @@ export function createCoverageTracker({ users, setSignals, getCoverage }) {
     recompute: apply,
     clear() {
       points = new Map();
-      setSignals(new Map());
+      apply();
     },
     /** Where each located member is and their signal, for the staff map. */
     positions() {
       const coverage = getCoverage();
       return users().filter((user) => points.has(user.userId)).map((user) => {
         const point = points.get(user.userId);
-        return { userId: user.userId, name: user.name, left: point.left, top: point.top, signal: signalAt(point, coverage) };
+        return { userId: user.userId, name: user.name, left: point.left, top: point.top, signal: signalFor(user.userId, coverage) };
       });
     },
   };

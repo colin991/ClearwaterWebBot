@@ -95,7 +95,7 @@ test('the bot only lets members with Administrator use the website panel', async
 
 test('staff actions from the website mute, unmute and kick through the radio controls', async () => {
   setRadioStaffControls(null);
-  assert.deepEqual(radioStaffSnapshot(), { running: false, users: [], muted: [], coverage: { towers: [], zones: [] }, positions: [] });
+  assert.deepEqual(radioStaffSnapshot(), { running: false, users: [], muted: [], coverage: { towers: [], zones: [], buildings: false }, positions: [], flags: [] });
   await assert.rejects(runRadioStaffAction('mute', ALICE, ADMIN), { status: 503 });
 
   const muted = new Set([BOB]);
@@ -148,5 +148,16 @@ test('staff save the coverage map through the radio controls and it is noted in 
   assert.deepEqual(radioStaffSnapshot().coverage, saved);
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(posts, [`📡 <@${ADMIN}> updated radio coverage (website): 1 cell tower, 0 weak-signal areas.`]);
+  setRadioStaffControls(null);
+});
+
+test('flags for staff (an off-team player on the radio) show on the website panel with a name', () => {
+  setRadioStaffControls({
+    users: () => [],
+    muted: [],
+    flags: () => [{ kind: 'off-team', userId: ALICE, name: '', detail: 'On the Civilian team in game.', at: 1 }],
+  });
+  const { flags } = radioStaffSnapshot((id) => (id === ALICE ? 'Alice' : ''));
+  assert.deepEqual(flags, [{ kind: 'off-team', userId: ALICE, name: 'Alice', detail: 'On the Civilian team in game.', at: 1 }]);
   setRadioStaffControls(null);
 });

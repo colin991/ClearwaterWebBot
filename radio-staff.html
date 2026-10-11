@@ -8,7 +8,7 @@
 <title>Radio Staff | Clearwater Radio</title>
 <link rel="icon" type="image/png" href="assets/clearwater-logo.png">
 <link rel="apple-touch-icon" href="assets/clearwater-logo.png">
-<link rel="stylesheet" href="radio-staff.css?v=20261011b">
+<link rel="stylesheet" href="radio-staff.css?v=20261011c">
 </head>
 <body>
 <header class="rs-top">
@@ -24,6 +24,12 @@
       <button type="button" id="refresh" class="rs-btn rs-ghost">Refresh</button>
     </div>
     <ul id="onList" class="rs-list"></ul>
+  </section>
+
+  <section class="rs-card">
+    <h2>Flags <span id="flagCount" class="rs-count">0</span></h2>
+    <p class="rs-fine">Things the radio noticed for staff to check, like a Civilian-team player on the police radio. Kept for 24 hours.</p>
+    <ul id="flagList" class="rs-list"></ul>
   </section>
 
   <section class="rs-card">
@@ -51,8 +57,10 @@
       <button type="button" class="rs-tool" data-mode="select">Move</button>
       <button type="button" class="rs-tool" data-mode="tower">+ Cell tower</button>
       <button type="button" class="rs-tool" data-mode="area">+ Weak area</button>
+      <button type="button" class="rs-tool" data-mode="building">+ Tunnel / garage</button>
       <span class="rs-zoom"><button type="button" id="zoomOut" aria-label="Zoom out">&minus;</button><b id="zoomLevel">1x</b><button type="button" id="zoomIn" aria-label="Zoom in">+</button></span>
     </div>
+    <label class="rs-switch"><input type="checkbox" id="covBuildings"><span>Building interference: weaker signal inside tunnels and parking garages (the purple areas). Off by default.</span></label>
     <div id="drawBar" class="rs-drawbar" hidden>
       <span>Tap the map to add corners.</span>
       <button type="button" id="drawDone" class="rs-btn">Finish area</button>
@@ -67,6 +75,7 @@
     <div class="rs-legend">
       <span><i class="lg-tower"></i>Cell tower (inner ring clear, outer ring fading)</span>
       <span><i class="lg-zone"></i>Weak area</span>
+      <span><i class="lg-zone lg-building"></i>Tunnel / garage</span>
       <span><i class="lg-dot" data-c="good"></i>Unit, clear</span>
       <span><i class="lg-dot" data-c="bad"></i>Unit, weak</span>
     </div>
@@ -83,7 +92,7 @@
 <section id="gate" class="rs-gate" hidden><div class="rs-card rs-gate-card"></div></section>
 <div id="toast" class="rs-toast" role="status" aria-live="polite" hidden></div>
 
-<script src="radio-staff-map.js?v=20261011b"></script>
-<script src="radio-staff.js?v=20261011b"></script>
+<script src="radio-staff-map.js?v=20261011c"></script>
+<script src="radio-staff.js?v=20261011c"></script>
 </body>
 </html>

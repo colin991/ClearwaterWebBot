@@ -18,9 +18,9 @@ import { createRadioKey, verifyRadioKey } from './radioKeys.js';
 import { exchangeRadioCode, radioOAuthConfig } from './radioOAuth.js';
 import { callsignFromName, createRadioPanicWatch, findPanicPlayer, panicUnitAndPostal, playerLocationLabel } from './radioPanic.js';
 import { LIBERTY_POSTAL_POINTS } from './libertyMapCalibration.js';
-import { erlcPlayersFromServer, fetchErlcServer, libertyPlayerMapPoint, parseErlcPlayer } from './erlc.js';
+import { erlcPlayersFromServer, fetchErlcServer, isCivilianTeam, libertyPlayerMapPoint, parseErlcKill, parseErlcPlayer } from './erlc.js';
 import { createCoverageTracker, normalizeCoverage } from './radioCoverage.js';
-import { createGameFeed, GAME_TICK_MS } from './radioGameFeed.js';
+import { createDamageTracker, createGameFeed, createTeamWatch, DOWNED_MS, GAME_TICK_MS } from './radioGameFeed.js';
 import { getIdentityCache } from './identityStore.js';
 import { startRadioTunnel } from './radioTunnel.js';
 import { createRadioTalkLog } from './radioTalkLog.js';
@@ -38,8 +38,11 @@ const REJOIN_DELAY_MS = 10_000;
 const STATS_TICK_MS = 60_000;
 /** Discord voice channel callers wait in for 911; anyone in it shows as a pending call on every radio. */
 export const RADIO_911_CHANNEL_ID = process.env.RADIO_911_CHANNEL_ID?.trim() || '1532197874690035843';
-/** In-game 911 calls stay on the radios' pending list this long. */
-const GAME_CALL_MS = 10 * 60 * 1000;
+/** Staff-page flags (off-team members on the radio) are kept this long, newest first. */
+const FLAG_KEEP_MS = 24 * 60 * 60 * 1000;
+const FLAG_LIMIT = 100;
+/** A damaged radio (member downed in game) gets this signal: very weak, but still comes through. */
+const DAMAGED_SIGNAL = 0.1;
 const radioDataPath = (name) => join(process.cwd(), 'data', name);
 // 80 ms: shorter transmissions are PTT taps with nothing said.
 const RADIO_MIN_TX_PACKETS = 4;
@@ -236,9 +239,8 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   }, STATS_TICK_MS);
   weeklyStatsTimer.unref?.();
 
-  // Pending 911: members waiting in the Discord 911 channel (since they joined) plus recent in-game calls.
+  // Pending 911: members waiting in the Discord 911 voice channel, since they joined.
   const waitingSince = new Map();
-  const gameCalls = new Map();
   function pendingCalls() {
     const at = Date.now();
     // The radio bot tracks voice states, so its cache knows who is in the channel.
@@ -247,8 +249,8 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
       if (!waitingSince.has(member.id)) waitingSince.set(member.id, at);
       return { id: member.id, name: member.displayName || member.user?.username || 'Caller', since: waitingSince.get(member.id), kind: 'discord' };
     });
-    for (const [key, call] of gameCalls) if (at - call.since > GAME_CALL_MS) gameCalls.delete(key);
-    return [...waiting, ...gameCalls.values()].sort((a, b) => a.since - b.since);
+    for (const id of [...waitingSince.keys()]) if (!waiting.some((call) => call.id === id)) waitingSince.delete(id);
+    return waiting.sort((a, b) => a.since - b.since);
   }
 
   // Synced radio settings (desktop and phone share them), kept per member.
@@ -332,11 +334,22 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   // Coverage map (cell towers and weak areas) from the website staff panel; survives restarts.
   const coveragePath = radioDataPath('radio-coverage.json');
   let coverage = normalizeCoverage({});
+  // A member downed in game (kill log) has a damaged, very weak radio for 20 seconds.
+  const damage = createDamageTracker();
+  let damageTimer = null;
   const coverageTracker = createCoverageTracker({
     users: () => relay.users(),
     setSignals: (signals) => relay.setSignals(signals),
     getCoverage: () => coverage,
+    limit: (userId) => (damage.isDamaged(userId) ? DAMAGED_SIGNAL : null),
   });
+  // Flags for the staff page: a Civilian-team player on the police radio.
+  let staffFlags = [];
+  const teamWatch = createTeamWatch({ isOffTeam: isCivilianTeam });
+  function addFlag(flag) {
+    const at = Date.now();
+    staffFlags = [{ ...flag, at }, ...staffFlags.filter((entry) => at - entry.at < FLAG_KEEP_MS)].slice(0, FLAG_LIMIT);
+  }
   const gameFeed = createGameFeed({ send: (userId, info) => relay.setGame(userId, info) });
   void readJsonFile(coveragePath, null).then((saved) => {
     if (saved) coverage = normalizeCoverage(saved);
@@ -353,8 +366,35 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     if (gameBusy) return;
     gameBusy = true;
     try {
-      const { located } = await locateRadioUsers(env, users);
+      const { located, server } = await locateRadioUsers(env, users);
       gameFeed.update(users, located);
+      const kills = (server?.KillLogs || server?.killLogs || []).map((entry) => (entry?.at ? entry : parseErlcKill(entry)));
+      for (const userId of damage.update(kills, located)) {
+        relay.sendTo(userId, { type: 'damage', seconds: DOWNED_MS / 1000 });
+        logger.info(`Radio: ${userId} was downed in game; radio damaged for ${DOWNED_MS / 1000}s.`);
+      }
+      // Recompute when the next damaged radio recovers, not just on the next tick.
+      clearTimeout(damageTimer);
+      const nextEnd = damage.nextEnd();
+      if (nextEnd) {
+        damageTimer = setTimeout(() => coverageTracker.recompute(), Math.max(0, nextEnd - Date.now()) + 50);
+        damageTimer.unref?.();
+      }
+      for (const flag of teamWatch.update(users, located)) {
+        const user = users.find((entry) => entry.userId === flag.userId);
+        addFlag({
+          kind: 'off-team',
+          userId: flag.userId,
+          name: user?.name || '',
+          detail: `On the ${flag.team || 'Civilian'} team in game${flag.player?.username ? ` as ${flag.player.username}` : ''}, on ${user?.channelName || 'the radio'}.`,
+        });
+        relay.sendTo(flag.userId, { type: 'notice', kind: 'off-team' });
+        void postStaff({
+          content: `⚠️ <@${flag.userId}> is on the police radio while on the ${flag.team || 'Civilian'} team in game${flag.player?.username ? ` (${flag.player.username})` : ''}. Their radio told them staff have been notified.`,
+          allowedMentions: { parse: [] },
+        });
+        logger.info(`Radio: off-team flag for ${flag.userId} (${flag.team}).`);
+      }
       coverageTracker.update(new Map([...located]
         .filter(([, spot]) => Number.isFinite(spot.left) && Number.isFinite(spot.top))
         .map(([id, spot]) => [id, { left: spot.left, top: spot.top }])));
@@ -371,6 +411,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     users: () => relay.users(),
     coverage: () => coverage,
     positions: () => coverageTracker.positions(),
+    flags: () => staffFlags.filter((flag) => Date.now() - flag.at < FLAG_KEEP_MS),
     async setCoverage(next, by) {
       coverage = normalizeCoverage(next);
       await writeJsonFile(coveragePath, { ...coverage, updatedBy: by, updatedAt: new Date().toISOString() });
@@ -563,27 +604,17 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   };
   erlcEvents?.on('erlcEvent', onErlcEvent);
   erlcEvents?.on('erlcCommandLog', onErlcEvent);
-  // New in-game 911 calls show as pending on the radios for 10 minutes.
-  const onGameCall = (call) => {
-    const label = [call.label, call.location].filter(Boolean).join(' · ');
-    gameCalls.set(call.key, {
-      id: `game:${call.key}`, name: call.caller || 'In-game caller', since: call.at || Date.now(),
-      kind: String(call.team || 'game'), detail: label,
-    });
-    relay.broadcastStatus();
-  };
-  erlcEvents?.on('erlcRadioCall', onGameCall);
 
   return () => {
     stopped = true;
     erlcEvents?.off('erlcEvent', onErlcEvent);
     erlcEvents?.off('erlcCommandLog', onErlcEvent);
-    erlcEvents?.off('erlcRadioCall', onGameCall);
     clearTimeout(settingsSaveTimer);
     clearTimeout(rejoinTimer);
     clearInterval(statsTimer);
     clearInterval(weeklyStatsTimer);
     clearInterval(coverageTimer);
+    clearTimeout(damageTimer);
     setRadioStaffControls(null);
     if (activeRelay === relay) activeRelay = null;
     stopTunnel();

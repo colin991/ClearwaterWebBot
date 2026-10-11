@@ -15,8 +15,8 @@ window.createCoverageMap = (options) => {
   const NS = 'http://www.w3.org/2000/svg';
   const LIMITS = { towers: 60, zones: 40, zonePoints: 40, minRange: 0.03, maxRange: 0.6, minStrength: 0.1, maxStrength: 0.9 };
 
-  let saved = { towers: [], zones: [] };
-  let draft = { towers: [], zones: [] };
+  let saved = { towers: [], zones: [], buildings: false };
+  let draft = { towers: [], zones: [], buildings: false };
   let positions = [];
   let mode = 'select';
   let selected = null; // { kind: 'tower' | 'zone', id }
@@ -31,6 +31,8 @@ window.createCoverageMap = (options) => {
   const round = (value) => Math.round(value * 100000) / 100000;
   const clamp01 = (value) => Math.max(0, Math.min(1, value));
   const v = (fraction) => (fraction * 1000).toFixed(1);
+  const isBuilding = (zone) => zone.kind === 'building';
+  const drawingMode = () => mode === 'area' || mode === 'building';
 
   function el(tag, attrs = {}, parent = svg) {
     const node = document.createElementNS(NS, tag);
@@ -64,12 +66,12 @@ window.createCoverageMap = (options) => {
       const isSelected = selected?.kind === 'zone' && selected.id === zone.id;
       const polygon = el('polygon', {
         points: zone.points.map((point) => `${v(point.left)},${v(point.top)}`).join(' '),
-        class: `zone${isSelected ? ' sel' : ''}`,
+        class: `zone${isBuilding(zone) ? ` building${draft.buildings ? '' : ' off'}` : ''}${isSelected ? ' sel' : ''}`,
         'fill-opacity': (0.15 + 0.4 * (1 - zone.strength)).toFixed(2),
         'vector-effect': 'non-scaling-stroke',
         'data-zone': zone.id,
       });
-      el('title', {}, polygon).textContent = `${zone.name} · ${Math.round(zone.strength * 100)}% signal inside`;
+      el('title', {}, polygon).textContent = `${zone.name} · ${Math.round(zone.strength * 100)}% signal inside${isBuilding(zone) && !draft.buildings ? ' (building interference is off)' : ''}`;
       if (isSelected) {
         zone.points.forEach((point, index) => {
           el('circle', { cx: v(point.left), cy: v(point.top), r: 7 / zoom, class: 'corner', 'data-zone': zone.id, 'data-corner': index });
@@ -97,13 +99,18 @@ window.createCoverageMap = (options) => {
       el('polyline', { points: drawing.map((point) => `${v(point.left)},${v(point.top)}`).join(' '), class: 'drawing', 'vector-effect': 'non-scaling-stroke' });
       for (const point of drawing) el('circle', { cx: v(point.left), cy: v(point.top), r: 5 / zoom, class: 'corner' });
     }
-    drawBar.hidden = mode !== 'area';
+    drawBar.hidden = !drawingMode();
+    drawBar.querySelector('span').textContent = mode === 'building' ? 'Tap the map to add the tunnel or garage corners.' : 'Tap the map to add corners.';
+    $('covBuildings').checked = Boolean(draft.buildings);
     $('drawDone').disabled = drawing.length < 3;
     for (const button of document.querySelectorAll('[data-mode]')) button.classList.toggle('on', button.dataset.mode === mode);
     const changed = dirty();
     saveButton.disabled = !changed || saving;
     resetButton.disabled = !changed || saving;
-    $('covState').textContent = changed ? 'Not saved yet' : `${draft.towers.length} tower${draft.towers.length === 1 ? '' : 's'} · ${draft.zones.length} weak area${draft.zones.length === 1 ? '' : 's'}`;
+    const buildings = draft.zones.filter(isBuilding).length;
+    const weak = draft.zones.length - buildings;
+    $('covState').textContent = changed ? 'Not saved yet'
+      : `${draft.towers.length} tower${draft.towers.length === 1 ? '' : 's'} · ${weak} weak area${weak === 1 ? '' : 's'} · ${buildings} tunnel${buildings === 1 ? '' : 's'}/garage${buildings === 1 ? '' : 's'}`;
     $('covState').classList.toggle('warn', changed);
     drawEditor();
   }
@@ -153,7 +160,7 @@ window.createCoverageMap = (options) => {
     $('edLabel').textContent = tower ? `Range: ${sliderValue}% of the map` : `Signal inside: ${sliderValue}%`;
     $('edHint').textContent = tower
       ? 'Clear inside the inner ring, fading out past the outer ring. Drag the tower to move it.'
-      : 'Lower is weaker. Drag the area or its corners to move them.';
+      : `Lower is weaker. Drag the area or its corners to move them.${isBuilding(item) && !draft.buildings ? ' Only counts while building interference is on.' : ''}`;
   }
 
   /* ---------- editing ---------- */
@@ -175,7 +182,7 @@ window.createCoverageMap = (options) => {
       mode = 'select';
       return draw();
     }
-    if (mode === 'area') {
+    if (drawingMode()) {
       if (drawing.length >= LIMITS.zonePoints) return toast(`Up to ${LIMITS.zonePoints} corners per area.`, true);
       drawing.push(point);
       return draw();
@@ -228,8 +235,12 @@ window.createCoverageMap = (options) => {
   }
   $('drawDone').addEventListener('click', () => {
     if (drawing.length < 3) return;
-    if (draft.zones.length >= LIMITS.zones) return toast(`Up to ${LIMITS.zones} weak areas.`, true);
-    const zone = { id: newId('area'), name: `Weak area ${draft.zones.length + 1}`, points: drawing, strength: 0.35 };
+    if (draft.zones.length >= LIMITS.zones) return toast(`Up to ${LIMITS.zones} areas in all.`, true);
+    const building = mode === 'building';
+    const count = draft.zones.filter((entry) => isBuilding(entry) === building).length + 1;
+    const zone = building
+      ? { id: newId('area'), kind: 'building', name: `Tunnel / garage ${count}`, points: drawing, strength: 0.25 }
+      : { id: newId('area'), kind: 'weak', name: `Weak area ${count}`, points: drawing, strength: 0.35 };
     draft.zones.push(zone);
     drawing = [];
     mode = 'select';
@@ -237,6 +248,10 @@ window.createCoverageMap = (options) => {
     draw();
   });
   $('drawCancel').addEventListener('click', () => setMode('select'));
+  $('covBuildings').addEventListener('change', (event) => {
+    draft.buildings = event.target.checked;
+    draw();
+  });
 
   function setZoom(next) {
     const before = { x: wrap.scrollLeft + wrap.clientWidth / 2, y: wrap.scrollTop + wrap.clientHeight / 2, width: map.offsetWidth };
@@ -276,7 +291,7 @@ window.createCoverageMap = (options) => {
   return {
     /** New data from the bot: the saved map (kept out of an unsaved draft) and where units are. */
     update(coverage, units) {
-      const fresh = { towers: coverage?.towers || [], zones: coverage?.zones || [] };
+      const fresh = { towers: coverage?.towers || [], zones: coverage?.zones || [], buildings: coverage?.buildings === true };
       const wasDirty = dirty();
       saved = copy(fresh);
       if (!wasDirty) draft = copy(fresh);

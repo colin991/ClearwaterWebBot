@@ -731,6 +731,17 @@ export function createRadioRelay({
         if (socket.radio?.userId === id) send(socket, { type: 'game', game: info || null });
       }
     },
+    /** A one-off message to every radio one member has open (radio damage, staff notices). */
+    sendTo(userId, message) {
+      const id = String(userId);
+      let sent = 0;
+      for (const socket of clients) {
+        if (socket.radio?.userId !== id) continue;
+        send(socket, message);
+        sent += 1;
+      }
+      return sent;
+    },
     /** Server weather (clear, rain, fog, thunderstorm); radios show an alert when it turns wet. */
     setWeather(next) {
       const value = String(next || '');

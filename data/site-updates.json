@@ -3476,6 +3476,13 @@
       "summary": "The radio now shows the Clearwater logo when it turns on, a RECONNECTING screen when the link drops, and RADIO UPDATING, PLEASE WAIT (trying again every 10 seconds, settings kept) when the bot is down. While you talk it shows a talk timer. The channel card shows your nearest postal, street, speed and heading from the game, and a weather alert when it rains in game. SETTINGS has WHERE AM I, which reads your postal aloud, and PRACTICE, which lets new users test PTT and hear themselves without going live.",
       "createdAt": "2026-10-11T23:00:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-game-data-2026-10-11",
+      "title": "Radio: damage when downed, tunnels, nearest units, off-team flag",
+      "summary": "When you're downed in game, your radio cracks and goes very weak for 20 seconds, with a countdown on screen. Staff can draw tunnels and parking garages on the coverage map and turn on building interference (off by default) for a weaker signal inside them. NEAREST in the radio settings shows the 3 closest units in game with their postal and distance. A Civilian-team player on the police radio is flagged on the radio staff page and told on their radio that staff have been notified. The 911 list on the radio now only shows people waiting in the 911 voice channel.",
+      "createdAt": "2026-10-11T23:30:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
