@@ -54,6 +54,7 @@ function buildWebRadio() {
     'radio.js': 'radio-app.js',
     'panic-sound.js': 'radio-panic-sound.js',
     'map-image.js': 'radio-map-image.js',
+    'logo-image.js': 'radio-logo-image.js',
     'capture-worklet.js': 'capture-worklet.js',
   };
   for (const [from, to] of Object.entries(copies)) cpSync(join(renderer, from), join(output, to));
@@ -74,8 +75,9 @@ function buildWebRadio() {
     .replace('<script src="panic-sound.js"></script>',
       `<script src="${v('radio-web-shim.js')}"></script>\n  <script src="${v('radio-panic-sound.js')}"></script>`)
     .replace('<script src="map-image.js"></script>', `<script src="${v('radio-map-image.js')}"></script>`)
+    .replace('<script src="logo-image.js"></script>', `<script src="${v('radio-logo-image.js')}"></script>`)
     .replace('<script src="radio.js"></script>', `<script src="${v('radio-app.js')}"></script>`);
-  for (const needed of ['radio-web-shim.js', 'radio-app.js', 'radio-web.css', 'radio-map-image.js']) {
+  for (const needed of ['radio-web-shim.js', 'radio-app.js', 'radio-web.css', 'radio-map-image.js', 'radio-logo-image.js']) {
     if (!html.includes(needed)) throw new Error(`Web radio build: could not place ${needed} in radio.html`);
   }
   writeFileSync(join(output, 'radio.html'), html);

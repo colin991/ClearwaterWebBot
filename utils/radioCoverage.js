@@ -119,41 +119,32 @@ export function signalBars(signal) {
 }
 
 /**
- * Keeps every radio's signal up to date: looks up where each member on a radio is in game (players
- * resolves user list -> Map of userId -> map point), works out their signal, and hands it to the
- * relay. A failed lookup keeps the last signals. recompute() re-applies a just-saved coverage map.
+ * Keeps every radio's signal up to date. update(points) takes where each member on a radio is
+ * (userId -> { left, top } on the map) and hands their signals to the relay; recompute()
+ * re-applies a just-saved coverage map to the last known positions.
  */
-export function createCoverageTracker({ users, players, setSignals, getCoverage }) {
+export function createCoverageTracker({ users, setSignals, getCoverage }) {
   let points = new Map();
-  let running = false;
 
   function apply() {
     const coverage = getCoverage();
     const signals = new Map();
-    for (const user of users()) signals.set(user.userId, signalAt(points.get(user.userId), coverage));
+    if (hasCoverage(coverage)) {
+      for (const user of users()) signals.set(user.userId, signalAt(points.get(user.userId), coverage));
+    }
     setSignals(signals);
   }
 
   return {
-    async tick() {
-      if (running) return;
-      const list = users();
-      if (!list.length || !hasCoverage(getCoverage())) {
-        points = new Map();
-        setSignals(new Map());
-        return;
-      }
-      running = true;
-      try {
-        points = new Map(await players(list));
-      } catch {
-        return;
-      } finally {
-        running = false;
-      }
+    update(next) {
+      points = new Map(next);
       apply();
     },
     recompute: apply,
+    clear() {
+      points = new Map();
+      setSignals(new Map());
+    },
     /** Where each located member is and their signal, for the staff map. */
     positions() {
       const coverage = getCoverage();

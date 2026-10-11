@@ -110,6 +110,9 @@ export function createRadioRelay({
   // Signal (0.1-1) per member from where they are in game and the staff's coverage map; none = clear.
   const signals = new Map();
   const signalOf = (userId) => signals.get(String(userId));
+  // Game data per member (postal, street, speed, heading) and the server weather, for the radio screen.
+  const games = new Map();
+  let weather = '';
   // Who was last heard on each channel: channel id -> { name, at }
   const lastHeard = new Map();
   // Per member, so reconnecting does not reset them: last PANIC, recent PTT presses, PTT timeout.
@@ -234,6 +237,7 @@ export function createRadioRelay({
       dispatch: dispatchActive(),
       muted: mutedUsers.has(socket.radio.userId),
       signal: signalOf(socket.radio.userId) ?? null,
+      weather,
       lastHeard: lastHeard.get(channel) || null,
       scan: [...(socket.radio.scan || [])],
       calls: pendingCalls(),
@@ -537,6 +541,7 @@ export function createRadioRelay({
       type: 'ready',
       you: { id: userId, name: socket.radio.name, callsign: String(result.callsign || '') },
       synced,
+      game: games.get(userId) || null,
       ...statusFor(socket),
     });
     for (const [id, talker] of talkers) {
@@ -716,6 +721,23 @@ export function createRadioRelay({
         broadcast({ type: 'talk', id: talker.userId, name: talker.name, active: true, source: 'app', channel, signal: signalOf(talker.userId) }, talker.socket, channel);
       }
       return changed.size;
+    },
+    /** Game data for one member's radios: { postal, street, speed, heading }, or null when not in game. */
+    setGame(userId, info) {
+      const id = String(userId);
+      if (info) games.set(id, info);
+      else games.delete(id);
+      for (const socket of clients) {
+        if (socket.radio?.userId === id) send(socket, { type: 'game', game: info || null });
+      }
+    },
+    /** Server weather (clear, rain, fog, thunderstorm); radios show an alert when it turns wet. */
+    setWeather(next) {
+      const value = String(next || '');
+      if (value === weather) return false;
+      weather = value;
+      broadcastStatus();
+      return true;
     },
     /** Everyone signed in on a radio right now, for the staff panel and the weekly stats. */
     users() {

@@ -800,3 +800,32 @@ test('signal from the coverage map reaches the radio bars and rides along with a
     await harness.close();
   }
 });
+
+test('game data reaches only that member, and the server weather rides on the channel status', async () => {
+  const harness = await startRelay();
+  try {
+    const alice = await signIn(harness, ALICE);
+    const bob = await signIn(harness, BOB);
+    assert.equal(alice.messages.find((m) => m.type === 'ready').game, null);
+
+    harness.relay.setGame(ALICE, { postal: '204', street: 'Main St', speed: 35, heading: 'NE' });
+    const game = await alice.until(() => alice.messages.find((m) => m.type === 'game'));
+    assert.deepEqual(game.game, { postal: '204', street: 'Main St', speed: 35, heading: 'NE' });
+    assert.equal(bob.messages.some((m) => m.type === 'game'), false, 'only the member sees their own postal');
+
+    // A radio signing in again gets the last game data straight away.
+    const again = await signIn(harness, ALICE);
+    assert.equal(again.messages.find((m) => m.type === 'ready').game.postal, '204');
+    harness.relay.setGame(ALICE, null);
+    await again.until(() => again.messages.find((m) => m.type === 'game' && m.game === null));
+
+    assert.equal(harness.relay.setWeather('rain'), true);
+    await bob.until(() => bob.messages.find((m) => m.type === 'status' && m.weather === 'rain'));
+    assert.equal(harness.relay.setWeather('rain'), false, 'no change, nothing sent');
+    alice.ws.close();
+    again.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
