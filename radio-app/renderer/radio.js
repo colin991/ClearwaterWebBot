@@ -854,6 +854,7 @@ function applyChannelStatus(message) {
   if (Array.isArray(message.channels)) state.channels = message.channels;
   state.botOnline = Boolean(message.online);
   state.listeners = message.listeners || 0;
+  if ('dispatch' in message) state.dispatch = Boolean(message.dispatch);
   if ('inVoice' in message) {
     state.inVoice = Boolean(message.inVoice);
     applyDeaf();
@@ -1194,7 +1195,10 @@ function homeBody() {
   } else {
     line = state.settings.ptt ? 'READY' : 'READY · SET PTT IN SETTINGS';
   }
-  let html = `<div class="card ${kind}"><div class="zone">Zone 1 · CH ${channelNumber()}</div>`
+  const dispatch = typeof state.dispatch === 'boolean'
+    ? `<span class="dispatch ${state.dispatch ? 'on' : 'off'}">DISPATCH ${state.dispatch ? 'ACTIVE' : 'OFFLINE'}</span>`
+    : '';
+  let html = `<div class="card ${kind}"><div class="zone">Zone 1 · CH ${channelNumber()}${dispatch}</div>`
     + `<div class="chan">${escapeHtml(state.channel || 'Radio')}</div>`
     + `<div class="state">${escapeHtml(line.toUpperCase())}</div></div>`;
   const members = state.channels.find((channel) => channel.id === state.channelId)?.members || [];

@@ -5,6 +5,10 @@ export const RADIO_WS_PATH = '/radio';
 export const RADIO_AUTH_TIMEOUT_MS = 8_000;
 /** A radio waiting on Discord sign-in in the browser: as long as the app's own sign-in window. */
 export const RADIO_SIGNIN_TIMEOUT_MS = 5 * 60 * 1000;
+/** How often the relay re-checks whether a dispatcher (a name tagged !C) is on. */
+export const RADIO_DISPATCH_CHECK_MS = 15_000;
+const DISPATCH_TAG = '!C';
+export const isDispatcherName = (name) => String(name || '').includes(DISPATCH_TAG);
 export const RADIO_TX_IDLE_MS = 1_500;
 export const RADIO_TX_MAX_MS = 120_000;
 export const RADIO_MAX_PACKET_BYTES = 1_500;
@@ -72,6 +76,7 @@ export function createRadioRelay({
   locatePanic = async () => null,
   onPanic = () => {},
   onTalked = () => {},
+  dispatchCheckMs = RADIO_DISPATCH_CHECK_MS,
   now = () => Date.now(),
   recheckMs = RADIO_RECHECK_MS,
   authTimeoutMs = RADIO_AUTH_TIMEOUT_MS,
@@ -101,6 +106,20 @@ export function createRadioRelay({
     }
   }, 250);
   watchdog.unref?.();
+
+  // Dispatch is active while anyone tagged !C (the same rule as the voice channel's "Dispatch Online"
+  // status) is in the Discord radio channel or on a radio.
+  const dispatchActive = () => {
+    let members = [];
+    try { members = voiceMembers() || []; } catch { /* Discord cache hiccup */ }
+    return members.some((member) => isDispatcherName(member.name))
+      || [...clients].some((socket) => isDispatcherName(socket.radio?.name));
+  };
+  let lastDispatch = false;
+  const dispatchWatch = setInterval(() => {
+    if (dispatchActive() !== lastDispatch) broadcastStatus();
+  }, dispatchCheckMs);
+  dispatchWatch.unref?.();
 
   const listenerCount = (channel = null) => [...clients]
     .filter((socket) => socket.radio?.userId && (!channel || socket.radio.channel === channel)).length;
@@ -143,10 +162,12 @@ export function createRadioRelay({
       channels: channelList().map(({ id, name }) => ({ id, name, members: rosterFor(id) })),
       listeners: listenerCount(channel),
       inVoice: channel === RADIO_MAIN_CHANNEL && Boolean(inVoice(socket.radio.userId)),
+      dispatch: dispatchActive(),
     };
   }
 
   function broadcastStatus() {
+    lastDispatch = dispatchActive();
     for (const socket of clients) {
       if (socket.radio?.userId) send(socket, { type: 'status', ...statusFor(socket) });
     }
@@ -422,6 +443,8 @@ export function createRadioRelay({
           send(socket, { type: 'invoice', active: socket.radio.channel === RADIO_MAIN_CHANNEL && Boolean(inVoice(userId)) });
         }
       }
+      // The units lists and dispatch status include the Discord channel.
+      broadcastStatus();
     },
     /** A message for every signed-in radio, such as an in-game panic. */
     alert(message) {
@@ -444,6 +467,7 @@ export function createRadioRelay({
     },
     close() {
       clearInterval(watchdog);
+      clearInterval(dispatchWatch);
       clearInterval(heartbeat);
       clearInterval(recheck);
       for (const talker of [...talkers.values()]) endTransmit(talker.socket);

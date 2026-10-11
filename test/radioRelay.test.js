@@ -320,6 +320,27 @@ test('each finished transmission is reported for the talk log', async () => {
   }
 });
 
+test('radios show dispatch active while someone tagged !C is in the Discord channel', async () => {
+  const voice = [];
+  const harness = await startRelay({ voiceMembers: () => voice, dispatchCheckMs: 20 });
+  try {
+    const alice = client(harness.url);
+    await once(alice.ws, 'open');
+    alice.send({ type: 'auth', key: createRadioKey(ALICE, env) });
+    const ready = await alice.until(() => alice.messages.find((m) => m.type === 'ready'));
+    assert.equal(ready.dispatch, false);
+    voice.push({ id: '333333333333333333', name: 'Carl !C' });
+    const active = await alice.until(() => alice.messages.find((m) => m.type === 'status' && m.dispatch === true));
+    assert.ok(active.channels[0].members.some((member) => member.name === 'Carl !C'));
+    voice.length = 0;
+    harness.relay.voiceChanged('333333333333333333');
+    await alice.until(() => alice.messages.filter((m) => m.type === 'status').at(-1)?.dispatch === false);
+    alice.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
 test('Special Response Team stays off Discord', async () => {
   const harness = await startRelay();
   try {
