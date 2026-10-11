@@ -17,6 +17,16 @@ const PANEL_FOOTER = 'Clearwater Radio for Windows';
 // Unauthenticated GitHub API allows 60 calls/hour per IP; every 3 minutes stays well under it.
 const REFRESH_MS = 3 * 60 * 1000;
 
+export function compareVersions(a, b) {
+  const left = String(a).split('.').map((part) => Number.parseInt(part, 10) || 0);
+  const right = String(b).split('.').map((part) => Number.parseInt(part, 10) || 0);
+  for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
+    const diff = (left[i] || 0) - (right[i] || 0);
+    if (diff) return diff;
+  }
+  return 0;
+}
+
 /** Newest published Clearwater Radio release, or null when none exists yet. */
 export async function fetchLatestRadioRelease(fetchImpl = fetch) {
   const response = await fetchImpl(`https://api.github.com/repos/${RADIO_RELEASE_REPO}/releases?per_page=20`, {
@@ -25,8 +35,10 @@ export async function fetchLatestRadioRelease(fetchImpl = fetch) {
   });
   if (!response.ok) throw new Error(`GitHub releases returned ${response.status}`);
   const releases = await response.json();
+  // GitHub does not list releases newest-first reliably, so pick the highest version.
   const release = (Array.isArray(releases) ? releases : [])
-    .find((entry) => !entry.draft && !entry.prerelease && String(entry.tag_name || '').startsWith(RADIO_RELEASE_TAG_PREFIX));
+    .filter((entry) => !entry.draft && !entry.prerelease && String(entry.tag_name || '').startsWith(RADIO_RELEASE_TAG_PREFIX))
+    .sort((a, b) => compareVersions(b.tag_name.slice(RADIO_RELEASE_TAG_PREFIX.length), a.tag_name.slice(RADIO_RELEASE_TAG_PREFIX.length)))[0];
   if (!release) return null;
   return {
     version: String(release.tag_name).slice(RADIO_RELEASE_TAG_PREFIX.length),
