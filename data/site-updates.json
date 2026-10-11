@@ -3371,6 +3371,13 @@
       "summary": "Every time someone talks on the Clearwater Radio (app or web), the radio channel's chat gets a line like \"@member talked from 14:35:34-14:35:57\", shown in each reader's own time zone. Special Response Team and Frequency Change are named on their lines.",
       "createdAt": "2026-10-11T16:45:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-11-radio-dispatch-status",
+      "title": "Radio shows if dispatch is on",
+      "summary": "The Clearwater Radio screen (app and web) now shows DISPATCH ACTIVE or DISPATCH OFFLINE. Dispatch counts as active when someone with !C in their name is in the radio voice channel or on a radio.",
+      "createdAt": "2026-10-11T16:50:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
