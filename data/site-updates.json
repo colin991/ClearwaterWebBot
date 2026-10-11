@@ -3539,6 +3539,13 @@
       "summary": "Incoming voices on the radio no longer turn choppy or fall further and further behind when the connection hiccups. The radio now holds a little more audio back after a hiccup, catches up smoothly after a burst instead of overlapping or lagging, and shrinks the delay again once the connection is steady.",
       "createdAt": "2026-10-12T01:50:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-download-post-2026-10-12",
+      "title": "Radio: new download post",
+      "summary": "The radio download post moved to its new channel with a new look: a banner, how to install the radio, and Download Radio, Radio Website and Update Log buttons. Update Log shows the latest radio updates just to you. The old post in the previous channel is removed.",
+      "createdAt": "2026-10-12T02:00:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

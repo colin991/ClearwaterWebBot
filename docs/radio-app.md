@@ -8,7 +8,7 @@ A push-to-talk radio overlay for Windows that talks through a second Discord bot
 - `utils/radioBot.js`: the second bot. No commands. Logs in with `RADIO_BOT_TOKEN`, joins voice channel `1514128904783139018`, and rejoins if it is dropped or moved.
 - `utils/radioBridge.js`: the extra channel bots (Fire, DOT, Marine and Boating). Each one that has a token joins its own Discord voice channel and bridges it to that radio channel the same way.
 - `utils/radioRelay.js`: WebSocket relay at `/radio`. Apps send Opus audio while PTT is held (faded in and out, ending on a silent frame, so a quick tap does not pop); the bot plays it in the channel, and drops transmissions under 80 ms (`createTransmitSink` in `utils/radioBot.js`). Everyone talking in the channel (Discord users and other apps) is sent back to every app.
-- `utils/radioDownloadPanel.js`: the main bot keeps a download embed in channel `1514190592005902336` with a **Download for Windows** link.
+- `utils/radioDownloadPanel.js`: the main bot keeps the radio download post (banner, how to install, and **Download Radio**, **Radio Website** and **Update Log** buttons) in channel `1558963608929435723`, and removes its old copy from `1514190592005902336`. **Update Log** privately shows the latest radio entries from `data/site-updates.json`. The banner is sent as an attachment from `public/assets/clearwater-radio-banner.png`, else the copy kept in `data/` after the first download of `RADIO_PANEL_BANNER_URL`.
 - `.github/workflows/radio-app.yml`: builds the installer on Windows. Every push to `main` that changes `radio-app/` publishes release `radio-v1.0.<run>`; installed apps download it and restart on the new version by themselves.
 
 ## Access
