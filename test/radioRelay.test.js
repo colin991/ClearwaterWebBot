@@ -38,7 +38,9 @@ async function startRelay() {
   let ended = 0;
   let online = true;
   const members = new Set([ALICE, BOB]);
+  const voice = new Set();
   const relay = createRadioRelay({
+    inVoice: (userId) => voice.has(userId),
     verifyKey: (key) => verifyRadioKey(key, env),
     exchangeCode: async (code) => {
       if (code === 'alice-code') return ALICE;
@@ -65,6 +67,7 @@ async function startRelay() {
     relay,
     url,
     played,
+    voice,
     get ended() { return ended; },
     setOnline(value) { online = value; },
     removeMember(userId) { members.delete(userId); },
@@ -215,6 +218,47 @@ test('the periodic check closes radios of members who left the server', async ()
     assert.equal(code, 4004);
     assert.equal(alice.ws.readyState, WebSocket.OPEN, 'members who are still in the server stay on');
     alice.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('one voice at a time with Discord, and members in the Discord channel are muted in the app', async () => {
+  const harness = await startRelay();
+  try {
+    const alice = client(harness.url);
+    const bob = client(harness.url);
+    await Promise.all([once(alice.ws, 'open'), once(bob.ws, 'open')]);
+    harness.voice.add(BOB);
+    alice.send({ type: 'auth', key: createRadioKey(ALICE, env) });
+    bob.send({ type: 'auth', key: createRadioKey(BOB, env) });
+    await alice.until(() => alice.messages.find((m) => m.type === 'ready'));
+    const bobReady = await bob.until(() => bob.messages.find((m) => m.type === 'ready'));
+    assert.equal(bobReady.inVoice, true);
+
+    // Someone talking in Discord blocks app transmit until they stop.
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', true);
+    alice.send({ type: 'tx', active: true });
+    const busy = await alice.until(() => alice.messages.find((m) => m.type === 'tx' && !m.ok));
+    assert.equal(busy.name, 'Carl');
+    harness.relay.relayDiscordAudio('333333333333333333', Buffer.from([1]));
+    await alice.until(() => alice.binary.length > 0);
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', false);
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
+    alice.ws.send(Buffer.from([2]));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(bob.binary.length, 0, 'a member in the Discord channel gets no app audio');
+
+    harness.voice.delete(BOB);
+    harness.relay.voiceChanged(BOB);
+    const left = await bob.until(() => bob.messages.find((m) => m.type === 'invoice'));
+    assert.equal(left.active, false);
+    alice.ws.send(Buffer.from([3]));
+    await bob.until(() => bob.binary.length > 0);
+
+    alice.ws.close();
+    bob.ws.close();
   } finally {
     await harness.close();
   }
