@@ -15,7 +15,7 @@ import { logger } from './logger.js';
 import { createRadioRelay } from './radioRelay.js';
 import { createRadioKey, verifyRadioKey } from './radioKeys.js';
 import { exchangeRadioCode, radioOAuthConfig } from './radioOAuth.js';
-import { createRadioPanicWatch, findPanicPlayer, playerLocationLabel } from './radioPanic.js';
+import { createRadioPanicWatch, findPanicPlayer, panicUnitAndPostal, playerLocationLabel } from './radioPanic.js';
 import { erlcPlayersFromServer, fetchErlcServer, parseErlcPlayer } from './erlc.js';
 import { getIdentityCache } from './identityStore.js';
 
@@ -50,7 +50,7 @@ async function locateRadioPanic(env, userId, name) {
     robloxId: identity.robloxId,
     names: [identity.robloxUsername, name, nick, nick.split(/\s*[|/-]\s*/)[0]],
   });
-  return { name, location: player ? playerLocationLabel(player) : '' };
+  return { name, location: player ? playerLocationLabel(player) : '', ...panicUnitAndPostal(player, [name]) };
 }
 
 /** Hook for the bot API HTTP server so the radio can share its port. */
@@ -289,6 +289,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
         type: 'panic',
         name: player?.username || panic.name || 'Unknown',
         location: panic.location || playerLocationLabel(player),
+        ...panicUnitAndPostal(player),
         at: panic.at,
       };
       relay.alert(message);

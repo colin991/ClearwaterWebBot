@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRadioPanicWatch, findPanicPlayer, parseRadioPanic, playerLocationLabel } from '../utils/radioPanic.js';
+import {
+  callsignFromName, createRadioPanicWatch, findPanicPlayer, panicUnitAndPostal, parseRadioPanic, playerLocationLabel,
+} from '../utils/radioPanic.js';
 
 test('reads a panic event with caller and location', () => {
   assert.deepEqual(
@@ -83,4 +85,13 @@ test('sends each panic once', () => {
   watch(event);
   assert.equal(sent.length, 2);
   assert.deepEqual(sent[0], { type: 'panic', name: 'A', robloxId: '1', location: 'Here', at: 1000 });
+});
+
+test('unit number comes from the in-game callsign, then the Discord nickname', () => {
+  assert.deepEqual(panicUnitAndPostal({ callsign: '1A-12', location: { postal: '204' } }, ['99 | Isaac']), { unit: '1A-12', postal: '204' });
+  assert.deepEqual(panicUnitAndPostal(null, ['Isaac', '2-31 | Isaac']), { unit: '2-31', postal: '' });
+  assert.equal(callsignFromName('[1A-12] Isaac'), '1A-12');
+  assert.equal(callsignFromName('104 - Isaac'), '104');
+  assert.equal(callsignFromName('Isaac'), '');
+  assert.equal(callsignFromName('Isaac 12'), '');
 });

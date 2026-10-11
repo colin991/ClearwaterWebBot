@@ -102,3 +102,16 @@ export function findPanicPlayer(players, { robloxId = '', names = [] } = {}) {
     || players.find((player) => handles.has(String(player.username || '').toLowerCase()))
     || null;
 }
+
+/** A unit number at the start of a Discord nickname: "1A-12 | Isaac", "[2-31] Isaac" or "104 - Isaac". */
+export function callsignFromName(name) {
+  const match = /^\s*[[(]?\s*([A-Z]{0,3}\d[A-Z0-9]*(?:-[A-Z0-9]+)*)\s*[\])]?\s*(?:[|/-]\s*)?\S/i.exec(String(name || ''));
+  return match ? match[1].toUpperCase() : '';
+}
+
+/** Unit number and postal for the spoken alert, from the in-game player first, then the nickname. */
+export function panicUnitAndPostal(player, names = []) {
+  const unit = String(player?.callsign || '').trim()
+    || names.map(callsignFromName).find(Boolean) || '';
+  return { unit, postal: String(player?.location?.postal || '').trim() };
+}
