@@ -32,7 +32,7 @@ export const JAIL_MESSAGES = Object.freeze({
 
 export function hasJoinedTeam(player) {
   const team = String(player?.team || '').trim().toLowerCase();
-  return Boolean(team) && !['none', 'n/a', 'unknown', 'selecting'].includes(team);
+  return Boolean(team) && !['none', 'n/a', 'unknown', 'selecting', 'civilian', 'civilians'].includes(team);
 }
 
 // Inject I/O so tests cannot issue commands to the live game.
@@ -66,14 +66,20 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
       if (!/^[a-zA-Z0-9_]{3,20}$/.test(player.username)) continue;
       const id = player.robloxId || player.username;
       let state = states.get(id);
-      if (!state) { state = { jailed: false, mode: null, since: now(), lastPm: -Infinity, lastJail: 0, index: 0, needJailNotice: false }; states.set(id, state); }
+      if (!state) { state = { jailed: false, mode: null, team: null, since: now(), lastPm: -Infinity, lastJail: 0, index: 0, needJailNotice: false }; states.set(id, state); }
       try {
         const matches = membersForPlayer(player, members, identities);
         const inVc = playerIsInVoice(player, members, identities, inVoice, voiceStates);
-        const compliant = inVc;
+        const enforcedTeam = hasJoinedTeam(player);
+        const team = String(player?.team || '').trim().toLowerCase();
+        const compliant = inVc || !enforcedTeam;
         if (!enabled || compliant || isVcExempt(player, members, identities)) {
           if (state.jailed) {
-            const reason = !enabled ? 'checks disabled' : isVcExempt(player, members, identities) ? 'exempt' : 'joined voice';
+            const reason = !enabled
+              ? 'checks disabled'
+              : isVcExempt(player, members, identities)
+                ? 'exempt'
+                : !enforcedTeam ? 'civilian team' : 'joined voice';
             const released = await apply(':unjail ' + player.username, player, reason);
             if (released !== false) {
               state.jailed = false;
@@ -82,6 +88,7 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
           }
           if (!state.jailed) {
             state.mode = null;
+            state.team = team;
             state.since = now();
             state.lastPm = -Infinity;
             state.lastJail = 0;
@@ -92,11 +99,12 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
         }
         if (!membersReady && !matches.length) continue;
         const mode = matches.length ? 'voice' : 'comms';
-        if (state.mode !== mode) {
-          state.mode = mode; state.since = now(); state.lastPm = -Infinity; state.lastJail = 0; state.index = 0; state.needJailNotice = false;
+        if (state.mode !== mode || state.team !== team) {
+          state.mode = mode; state.team = team; state.since = now(); state.lastPm = -Infinity; state.lastJail = 0; state.index = 0; state.needJailNotice = false;
         }
         const stillNeeded = () => {
           if (!enabled || isVcExempt(player, members, identities)) return false;
+          if (!hasJoinedTeam(player)) return false;
           if (playerIsInVoice(player, members, identities, inVoice, voiceStates)) return false;
           const current = membersForPlayer(player, members, identities);
           return (current.length ? 'voice' : 'comms') === mode;
@@ -106,7 +114,7 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
           if (now() - state.lastPm >= 60_000 && stillNeeded()) {
             const result = await apply(':pm ' + player.username + ' ' + COMMS_MESSAGES[state.index % COMMS_MESSAGES.length], player, 'comms reminder', stillNeeded);
             if (result !== false) { state.lastPm = now(); state.index += 1; }
-            if (hasJoinedTeam(player) && stillNeeded()) {
+            if (now() - state.since >= 300000 && stillNeeded()) {
               const jailed = await apply(':jail ' + player.username, player, 'not in Discord after comms reminder', stillNeeded);
               if (jailed !== false) {
                 state.jailed = true;
@@ -115,8 +123,8 @@ export function createVcChecks({ snapshot, send, load = async () => [], save = a
               }
             }
           } else if (
-            hasJoinedTeam(player)
-            && stillNeeded()
+            stillNeeded()
+            && now() - state.since >= 300000
             && state.lastPm > -Infinity
             && (!state.lastJail || now() - state.lastJail >= 60_000)
           ) {

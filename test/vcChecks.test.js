@@ -9,7 +9,7 @@ function fixture() {
   const errors = [];
   const members = new Map();
   const voices = new Set();
-  const players = [{ username: 'Roblox_User', robloxId: '123', team: 'Civilian' }];
+  const players = [{ username: 'Roblox_User', robloxId: '123', team: 'Police' }];
   let fail = false;
   const service = createVcChecks({
     now: () => time,
@@ -59,13 +59,14 @@ test('five minute grace, then jail and PM, never kick or load', async () => {
   assert.equal(f.calls.filter(c => c === ':unjail Roblox_User').length, 1);
 });
 
-test('missing Discord is PMed then jailed, and jailed again after every later PM', async () => {
+test('missing Discord receives a five minute grace before jail and later reminders', async () => {
   const f = fixture(); await f.service.tick();
   assert.equal(f.calls[0], ':pm Roblox_User ' + COMMS_MESSAGES[0]);
-  assert.equal(f.calls[1], ':jail Roblox_User');
   f.advance(60000); await f.service.tick();
-  assert.equal(f.calls[2], ':pm Roblox_User ' + COMMS_MESSAGES[1]);
-  assert.equal(f.calls[3], ':jail Roblox_User');
+  assert.equal(f.calls[1], ':pm Roblox_User ' + COMMS_MESSAGES[1]);
+  f.advance(240000); await f.service.tick();
+  assert.equal(f.calls.at(-2), ':pm Roblox_User ' + COMMS_MESSAGES[2]);
+  assert.equal(f.calls.at(-1), ':jail Roblox_User');
   f.join(); await f.service.tick();
   assert.equal(f.calls.at(-1), ':pm Roblox_User ' + VC_MESSAGES[0]);
 });
@@ -74,11 +75,39 @@ test('missing Discord is not jailed until they join a team', async () => {
   const f = fixture();
   f.players[0] = { username: 'Roblox_User', robloxId: '123', team: '' };
   await f.service.tick();
-  assert.ok(f.calls.some(c => c.startsWith(':pm')));
-  assert.ok(!f.calls.some(c => c.startsWith(':jail')));
+  assert.deepEqual(f.calls, []);
   f.players[0] = { username: 'Roblox_User', robloxId: '123', team: 'DOT' };
   await f.service.tick();
+  assert.ok(!f.calls.includes(':jail Roblox_User'));
+  f.advance(300000); await f.service.tick();
   assert.ok(f.calls.includes(':jail Roblox_User'));
+});
+
+test('switching from Civilian starts a fresh grace period instead of immediately jailing', async () => {
+  const f = fixture();
+  f.players[0].team = 'Civilian';
+  await f.service.tick();
+  f.advance(600000);
+  f.players[0].team = 'Sheriff';
+  await f.service.tick();
+  assert.equal(f.calls.at(-1), ':pm Roblox_User ' + COMMS_MESSAGES[0]);
+  assert.ok(!f.calls.some((call) => call.startsWith(':jail')));
+});
+
+test('switching to Civilian releases a jail created by voice checks', async () => {
+  const calls = [];
+  const service = createVcChecks({
+    enabled: true,
+    load: async () => [['123', { jailed: true, mode: 'comms', team: 'police', since: 0 }]],
+    snapshot: async () => ({
+      players: [{ username: 'Roblox_User', robloxId: '123', team: 'Civilian' }],
+      members: new Map(),
+      inVoice: () => false,
+    }),
+    send: async (command) => calls.push(command),
+  });
+  await service.tick();
+  assert.deepEqual(calls, [':unjail Roblox_User']);
 });
 
 test('already compliant is untouched; leaving VC gets a fresh grace period', async () => {
@@ -108,7 +137,7 @@ test('incomplete Discord roster does not treat players as missing', async () => 
   const service = createVcChecks({
     enabled: true,
     snapshot: async () => ({
-      players: [{ username: 'Player', robloxId: '1' }],
+      players: [{ username: 'Player', robloxId: '1', team: 'Police' }],
       members: new Map(),
       membersReady: false,
       inVoice: () => false,
@@ -127,7 +156,7 @@ test('failed jail is retried, and never falsely tracked as successfully jailed',
     now: () => time,
     enabled: true,
     snapshot: async () => ({
-      players: [{ username: 'Player', robloxId: '1' }],
+      players: [{ username: 'Player', robloxId: '1', team: 'Police' }],
       members: new Map([['d', { id: 'd', nickname: 'Player', user: {} }]]),
       inVoice: () => false,
     }),
@@ -253,7 +282,7 @@ test('exact or contained Roblox nickname is in Discord and is not jailed as miss
   const service = createVcChecks({
     enabled: true,
     snapshot: async () => ({
-      players: [{ username: 'iTsAronJ', robloxId: '9' }],
+      players: [{ username: 'iTsAronJ', robloxId: '9', team: 'Police' }],
       members: new Map([
         ['d', { id: 'd', nickname: 'iTsAronJ', user: {} }],
       ]),

@@ -3161,6 +3161,13 @@
       "summary": "The in-game ;team command now moves only the person who ran it to their team voice channel. Nearby players are no longer detected or dragged by this command.",
       "createdAt": "2026-10-10T14:00:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-10-vc-team-switch-grace",
+      "title": "Stop false jail on team changes",
+      "summary": "Civilian players are no longer jailed by voice checks, and switching to an emergency-services team now starts a fresh five-minute grace period instead of immediately jailing the player and resetting their roleplay name.",
+      "createdAt": "2026-10-10T15:00:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
