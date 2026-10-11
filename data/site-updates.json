@@ -3511,6 +3511,13 @@
       "summary": "Radio transmissions are recorded and kept for 24 hours for staff review again, with the Recordings section back on the staff page. The cracked damaged-radio screen now triggers more reliably when someone is downed in game. Letting go of PTT now keeps transmitting for one more second so the end of what you said isn't cut off.",
       "createdAt": "2026-10-12T00:30:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-whisper-units-scenes-2026-10-12",
+      "title": "Radio: easier whispering, steady units list, automatic scene channels",
+      "summary": "Clicking a unit on WHO'S ON now opens whisper straight away, and the radio screen has an END WHISPER button while you're whispering. The units list no longer jumps back to the top while people talk or join. Scene timers now pick up every Discord voice channel with Scene or Traffic Stop in its name, with no setup needed.",
+      "createdAt": "2026-10-12T00:40:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

@@ -189,7 +189,7 @@
   function renderScenes() {
     $('sceneCount').textContent = String(scenes.length);
     const list = $('sceneList');
-    if (!scenes.length) return empty(list, 'Nobody is in a scene or traffic stop channel (or RADIO_SCENE_CHANNEL_IDS is not set on the bot).');
+    if (!scenes.length) return empty(list, 'Nobody is in a Scene or Traffic Stop voice channel.');
     const extra = (Date.now() - scenesAt) / 1000;
     list.replaceChildren(...scenes.map((scene) => row({ name: scene.name, userId: scene.id }, `${scene.channel} · ${durationText(scene.seconds + extra)}`, [])));
     return undefined;

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSceneClock, createTalkOverWatch, sceneChannelIds } from '../utils/radioModeration.js';
+import { createSceneClock, createTalkOverWatch, findSceneChannels, isSceneChannelName } from '../utils/radioModeration.js';
 
 test('talking over dispatch 3 times in 10 minutes is flagged, then the count starts again', () => {
   let clock = 0;
@@ -30,7 +30,13 @@ test('scene timers count from when each member joined a scene channel', () => {
   assert.equal(clock2.update(room([{ id: 'a', name: 'Alice' }]))[0].since, 9000, 'leaving resets the timer');
 });
 
-test('scene channel IDs come from a comma-separated env value', () => {
-  assert.deepEqual(sceneChannelIds('123456789012345678, 223456789012345678,bad'), ['123456789012345678', '223456789012345678']);
-  assert.deepEqual(sceneChannelIds(''), []);
+test('scene channels are any voice channel with Scene or Traffic Stop in the name', () => {
+  for (const name of ['Scene 1', '🚨 scene-2', 'TRAFFIC STOP 3', 'traffic-stop', 'Traffic_Stop', 'Active Scenes']) assert.equal(isSceneChannelName(name), true, name);
+  for (const name of ['Radio 1', 'Traffic', 'Stop', 'Patrol']) assert.equal(isSceneChannelName(name), false, name);
+  const voice = (id, name, guild = 'g1') => ({ id, name, guild: { id: guild }, isVoiceBased: () => true });
+  const found = findSceneChannels([
+    voice('1', 'Scene 1'), voice('2', 'Traffic Stop'), voice('3', 'Radio'), voice('4', 'Scene', 'g2'),
+    { id: '5', name: 'scene-chat', guild: { id: 'g1' }, isVoiceBased: () => false }, voice('1', 'Scene 1'),
+  ], 'g1');
+  assert.deepEqual(found.map((channel) => channel.id), ['1', '2']);
 });
