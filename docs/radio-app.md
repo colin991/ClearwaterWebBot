@@ -12,7 +12,7 @@ A push-to-talk radio overlay for Windows that talks through a second Discord bot
 
 ## Access
 
-Members sign in with Discord from the radio (center button, or MENU → SETUP → ACCOUNT). The app opens Discord in the browser and catches the redirect on `http://127.0.0.1:53682/callback`; the relay exchanges the code with the client secret, checks the member, and hands back a signed token the app keeps. Only members of the Clearwater server who can view and connect to the radio channel get in. Every 5 minutes the relay re-checks everyone on the radio; anyone who left the server or lost access is disconnected, signed out, and their app closes. Only one radio can transmit at a time on each channel; others get a busy tone.
+When the radio opens without a sign-in (first launch, or an expired or revoked one) it opens Discord sign-in in the browser by itself; if that window is closed, OK tries again (or MENU → SETUP → ACCOUNT). The app opens Discord in the browser and catches the redirect on `http://127.0.0.1:53682/callback`; the relay exchanges the code with the client secret, checks the member, and hands back a signed token the app keeps. Only members of the Clearwater server who can view and connect to the radio channel get in. Every 5 minutes the relay re-checks everyone on the radio; anyone who left the server or lost access is disconnected, signed out, and their app closes. Only one radio can transmit at a time on each channel; others get a busy tone.
 
 ## Radio controls
 

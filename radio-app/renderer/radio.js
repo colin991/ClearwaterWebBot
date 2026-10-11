@@ -662,6 +662,8 @@ function connect(options = {}) {
   const key = state.settings.key;
   const signingIn = Boolean(options.signIn);
   if (!signingIn && !decodeKey(key)) {
+    // Not signed in yet: open Discord sign-in straight away (OK retries if it is closed).
+    if (options.autoSignIn) return signIn();
     state.conn = 'signin';
     render();
     return;
@@ -710,10 +712,9 @@ function connect(options = {}) {
       return;
     }
     if (event.code === 4001) {
-      // Old or revoked sign-in: ask for Discord sign-in again.
+      // Old or revoked sign-in: open Discord sign-in again.
       void saveNow({ key: '' });
-      state.conn = 'signin';
-      render();
+      signIn();
       return;
     }
     if (event.code === 4002 || event.code === 4003) {
@@ -1101,7 +1102,7 @@ function homeBody() {
   if (state.toast) return `<div class="mid">${escapeHtml(state.toast.text)}</div>`;
   switch (state.conn) {
     case 'signin':
-      return `<div class="mid">SIGN IN</div><div class="small">${state.error ? `${escapeHtml(state.error.toUpperCase())} · ` : ''}PRESS CENTER FOR DISCORD</div>`;
+      return `<div class="mid">SIGN IN</div><div class="small">${state.error ? `${escapeHtml(state.error.toUpperCase())} · ` : ''}${state.error ? 'PRESS OK TO TRY AGAIN' : 'PRESS OK FOR DISCORD'}</div>`;
     case 'signing':
       return '<div class="mid">SIGNING IN</div><div class="small">FINISH IN YOUR BROWSER · * CANCEL</div>';
     case 'removed':
@@ -1531,7 +1532,7 @@ async function init() {
     flash('AUDIO ERR', 3000);
   }
   void refreshDeviceCache();
-  connect();
+  connect({ autoSignIn: true });
 }
 
 void init();
