@@ -683,6 +683,8 @@ const sceneDiagnostics = {
   lastScanAt: 0,
   lastScanLogs: null,
   primed: false,
+  lastWebhookAt: 0,
+  webhooks: 0,
   recent: [],
 };
 
@@ -694,8 +696,37 @@ export function sceneCommandDiagnostics() {
     lastScanAt: sceneDiagnostics.lastScanAt || null,
     lastScanLogs: sceneDiagnostics.lastScanLogs,
     primed: sceneDiagnostics.primed,
+    lastWebhookAt: sceneDiagnostics.lastWebhookAt || null,
+    webhooks: sceneDiagnostics.webhooks,
     recent: sceneDiagnostics.recent.slice(),
   };
+}
+
+function ago(at, now) {
+  if (!at) return 'never';
+  const seconds = Math.max(0, Math.round((now - at) / 1000));
+  return seconds < 120 ? `${seconds}s ago` : `${Math.round(seconds / 60)}m ago`;
+}
+
+/** Discord text for -ratelimit: is the bot actually picking up in-game commands? */
+export function formatSceneCommandReport(now = Date.now()) {
+  const d = sceneCommandDiagnostics();
+  const lines = [];
+  lines.push(`**In-game commands:** ${d.armed ? `armed ${ago(d.startedAt, now)}` : 'NOT armed (bot startup did not reach them)'}`);
+  lines.push(`**Webhook events:** ${d.webhooks} · last ${ago(d.lastWebhookAt, now)}`);
+  const scan = d.lastScanAt
+    ? `${ago(d.lastScanAt, now)} · ${d.lastScanLogs == null ? 'no ER:LC data' : `${d.lastScanLogs} log entries`}`
+    : 'never';
+  lines.push(`**Command-log check:** ${scan}${d.primed ? '' : ' · not primed yet'}`);
+  if (d.recent.length) {
+    lines.push('**Last results:**');
+    for (const item of d.recent.slice(0, 5)) {
+      lines.push(`- ;${String(item.command).replace(/^;/, '')} ${item.handled ? 'OK' : item.reason} (${ago(item.at, now)})`);
+    }
+  } else {
+    lines.push('**Last results:** none since the bot started');
+  }
+  return lines.join('\n');
 }
 
 function rememberSceneResult(details) {
@@ -1359,6 +1390,8 @@ export function resetSceneLogScannerForTests() {
 
 export function startErlcSceneCommands(client) {
   const listener = (payload, eventId, meta = {}) => {
+    sceneDiagnostics.lastWebhookAt = Date.now();
+    sceneDiagnostics.webhooks += 1;
     void (async () => {
       const items = erlcEventPayloads(payload);
       if (!items.length) {
