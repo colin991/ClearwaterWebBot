@@ -16,6 +16,14 @@
       "destination": "/radio.html"
     },
     {
+      "source": "/radio/update",
+      "destination": "/api/bot/radio-release"
+    },
+    {
+      "source": "/radio/update/:file",
+      "destination": "/api/bot/radio-release?file=:file"
+    },
+    {
       "source": "/radio/download",
       "destination": "/radio-download.html"
     },

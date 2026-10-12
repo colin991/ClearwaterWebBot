@@ -78,7 +78,7 @@
       <h1>Your radio, <span>on top of your game.</span></h1>
       <p class="lead">Push to talk from anywhere. Linked to the Clearwater Discord radio channels, so units on the radio and in voice hear each other.</p>
       <div class="actions">
-        <a class="download" href="https://github.com/colin991/ClearwaterWebBot/releases/latest/download/ClearwaterRadio-Setup.exe">
+        <a class="download" href="/radio/update/ClearwaterRadio-Setup.exe">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
           Download for Windows
         </a>
@@ -99,23 +99,6 @@
     <div class="tile wide"><span>SHA-256</span><strong class="hash" id="sha">…</strong></div>
   </section>
 </main>
-<script>
-(async () => {
-  const set = (id, text) => { document.getElementById(id).textContent = text; };
-  try {
-    const response = await fetch('https://api.github.com/repos/colin991/ClearwaterWebBot/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
-    if (!response.ok) throw new Error(String(response.status));
-    const release = await response.json();
-    const installer = (release.assets || []).find((asset) => asset.name === 'ClearwaterRadio-Setup.exe');
-    if (!installer) throw new Error('no installer');
-    set('version', String(release.tag_name || '').replace(/^radio-v/, '') || '—');
-    set('released', release.published_at ? new Date(release.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—');
-    set('size', `${(installer.size / 1024 / 1024).toFixed(1)} MB`);
-    set('sha', String(installer.digest || '').replace(/^sha256:/, '') || '—');
-  } catch {
-    for (const id of ['version', 'released', 'size', 'sha']) set(id, '—');
-  }
-})();
-</script>
+<script src="/radio-download.js" defer></script>
 </body>
 </html>

@@ -3660,5 +3660,12 @@
       "createdAt": "2026-10-12T04:15:00.000Z",
       "updatedBy": "colin991"
     }
-  ]
+,
+    {
+      "id": "radio-downloads-from-website-2026-10-12",
+      "title": "Radio downloads and updates from cwpcso.com",
+      "summary": "The radio installer and the desktop radio's automatic updates now come from cwpcso.com instead of GitHub, so they keep working while the code is private. The download page also shows the version, size and checksum again. The Discord Download Radio button can also point at a temporary public installer link.",
+      "createdAt": "2026-10-12T03:53:59Z",
+      "updatedBy": "colin991"
+    }  ]
 }

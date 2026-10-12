@@ -6,6 +6,7 @@ import {
   RADIO_UPDATE_LOG_BUTTON_ID,
   buildRadioDownloadPanel,
   panelSignature,
+  radioDownloadButtonUrl,
   radioUpdateLogText,
 } from '../utils/radioDownloadPanel.js';
 
@@ -43,4 +44,11 @@ test('update log never shows an entry as in the future', () => {
   const now = Date.parse('2026-10-12T00:00:00.000Z');
   const text = radioUpdateLogText([{ id: 'radio-x', title: 'Radio: x', summary: 'X.', createdAt: '2026-10-12T02:00:00.000Z' }], 5, now);
   assert.match(text, new RegExp(`<t:${now / 1000}:R>`));
+});
+
+test('the Download button can be pointed at a public installer link from .env', () => {
+  assert.equal(radioDownloadButtonUrl({}), 'https://www.cwpcso.com/radio/download');
+  const link = 'https://github.com/colin991/clearwater-radio-download/releases/latest/download/ClearwaterRadio-Setup.exe';
+  assert.equal(radioDownloadButtonUrl({ RADIO_DOWNLOAD_BUTTON_URL: ` ${link} ` }), link);
+  assert.equal(radioDownloadButtonUrl({ RADIO_DOWNLOAD_BUTTON_URL: 'javascript:alert(1)' }), 'https://www.cwpcso.com/radio/download');
 });
