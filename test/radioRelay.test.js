@@ -1175,3 +1175,39 @@ test('priority members never get BUSY and their radio is told to boost the mic',
     await harness.close();
   }
 });
+
+test('the ready message names the Discord app for Rich Presence', async () => {
+  const harness = await startRelay({ presence: () => ({ clientId: '1234567890123456789' }) });
+  try {
+    const alice = await signIn(harness, ALICE);
+    assert.deepEqual(alice.messages.find((m) => m.type === 'ready').presence, { clientId: '1234567890123456789' });
+    alice.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('on Fire, someone starting to talk in Discord never cuts off a radio already talking', async () => {
+  const fired = [];
+  const harness = await startRelay({
+    bridge: (channel) => (channel === 'fire' ? { online: true } : null),
+    openTransmit: () => ({ push: (packet) => fired.push(packet), end: () => {} }),
+  });
+  try {
+    const alice = await signIn(harness, ALICE, { channel: 'fire' });
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', true, 'fire');
+    alice.messages.length = 0;
+    // Still talking: PTT held (repeated) and audio keeps going out to Discord.
+    alice.send({ type: 'tx', active: true });
+    const again = await alice.until(() => alice.messages.find((m) => m.type === 'tx'));
+    assert.equal(again.ok, true);
+    alice.ws.send(Buffer.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]));
+    await alice.until(() => fired.length);
+    assert.ok(!alice.messages.some((m) => m.type === 'cut' || (m.type === 'tx' && m.ok === false)));
+    alice.ws.close();
+  } finally {
+    await harness.close();
+  }
+});

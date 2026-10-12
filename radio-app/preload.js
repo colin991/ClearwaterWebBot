@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('radioApp', {
   setSettings: (patch) => ipcRenderer.invoke('settings:set', patch),
   capturePtt: (active, which = 'ptt') => ipcRenderer.invoke('ptt:capture', active, which),
   talkPopup: (text) => ipcRenderer.send('talk:popup', text),
+  setPresence: (info) => ipcRenderer.send('presence:set', info),
   version: () => ipcRenderer.invoke('app:version'),
   checkForUpdates: () => ipcRenderer.invoke('update:check'),
   signIn: (info) => ipcRenderer.invoke('auth:signin', info),

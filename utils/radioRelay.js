@@ -85,6 +85,7 @@ function send(socket, message) {
  * @param {(code: string) => Promise<string>} [options.exchangeCode] Discord OAuth code → user ID
  * @param {(userId: string) => string|null} [options.createSession] token the app stores after sign-in
  * @param {() => ({ clientId: string, redirectUri: string }|null)} [options.loginInfo]
+ * @param {() => ({ clientId: string }|null)} [options.presence] Discord application shown as "Playing …" on members' profiles
  * @param {(userId: string) => Promise<{ ok: boolean, name?: string, reason?: string, removed?: boolean }>} options.authorize
  *   `removed: true` means the member is not in the server or lost radio access; their app is closed.
  * @param {(userId: string) => ({ push(packet: Buffer): void, end(): void }|null)} options.openTransmit
@@ -108,6 +109,7 @@ export function createRadioRelay({
   exchangeCode = async () => { throw new Error('Discord sign-in is not set up on the bot host.'); },
   createSession = () => null,
   loginInfo = () => null,
+  presence = () => null,
   authorize,
   openTransmit,
   status,
@@ -177,6 +179,12 @@ export function createRadioRelay({
     try { return bridge(id) || null; } catch { return null; }
   };
   const isBridged = (id) => Boolean(bridgeOf(id));
+  const presenceInfo = () => {
+    try {
+      const clientId = String(presence()?.clientId || '');
+      return /^\d{15,22}$/.test(clientId) ? { clientId } : null;
+    } catch { return null; }
+  };
   // Rank-based access: MAIN is open to everyone; other channels follow the staff page's rules.
   const allowedOn = (radio, id) => {
     if (id === RADIO_MAIN_CHANNEL) return true;
@@ -722,6 +730,7 @@ export function createRadioRelay({
       },
       synced,
       game: games.get(userId) || null,
+      presence: presenceInfo(),
       ...statusFor(socket),
     });
     for (const [id, talker] of talkers) {

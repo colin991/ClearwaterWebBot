@@ -1114,6 +1114,7 @@ function onMessage(message) {
       if (message.game !== undefined) state.game = message.game || null;
       state.error = '';
       state.me = message.you;
+      state.presenceId = String(message.presence?.clientId || '');
       applyMicBoost();
       state.conn = 'online';
       state.calls = [];
@@ -1263,6 +1264,27 @@ function onMessage(message) {
   }
 }
 
+// Discord profile: "Playing Clearwater Radio · Fire Radio" while signed in (desktop app only).
+const PRESENCE_IMAGE = 'https://www.cwpcso.com/assets/clearwater-radio-presence.png';
+const PRESENCE_DOWNLOAD = 'https://www.cwpcso.com/radio/download';
+let presenceShown = '';
+function updatePresence() {
+  if (!api.setPresence) return;
+  const clientId = state.conn === 'online' ? state.presenceId : '';
+  const details = clientId ? `${state.channel || 'Radio'} · CH ${channelNumber()}` : '';
+  const key = `${clientId}|${details}`;
+  if (key === presenceShown) return;
+  presenceShown = key;
+  api.setPresence(clientId ? {
+    clientId,
+    details,
+    state: 'Clearwater Roleplay',
+    image: PRESENCE_IMAGE,
+    imageText: 'Clearwater Radio',
+    buttons: [{ label: 'Get Clearwater Radio', url: PRESENCE_DOWNLOAD }],
+  } : null);
+}
+
 function applyChannelStatus(message) {
   state.channel = message.channel || state.channel;
   if (message.channelId) state.channelId = message.channelId;
@@ -1283,6 +1305,7 @@ function applyChannelStatus(message) {
     state.scenesAt = Date.now();
   }
   if ('lastHeard' in message) state.lastHeard = message.lastHeard;
+  updatePresence();
   if (Array.isArray(message.calls)) {
     // A new 911 call waiting: a short tone and a flash.
     const known = new Set(state.calls.map((call) => call.id));
