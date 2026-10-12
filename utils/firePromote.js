@@ -51,7 +51,8 @@ function trackRanks(track) {
   return FIRE_PROMOTION_RANKS.filter((rank) => rank.track === track);
 }
 
-function rankIndex(rank) {
+/** Position of a rank within its own track; 0 is the top. */
+export function rankIndex(rank) {
   return trackRanks(rank.track).findIndex((entry) => entry.roleId === rank.roleId);
 }
 
@@ -69,7 +70,7 @@ export function getHighestFireRank(member, track) {
   return getMemberFireRanks(member, track)[0] || null;
 }
 
-function isChiefOfficer(member) {
+export function isChiefOfficer(member) {
   return [...CHIEF_OFFICER_ROLE_IDS].some((roleId) => member?.roles?.cache?.has(roleId));
 }
 
