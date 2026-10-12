@@ -29,6 +29,12 @@ export const RADIO_FIRE_CHANNEL = 'fire';
  * on the radio can talk while someone speaks in the channel's Discord voice channel.
  */
 export const RADIO_TALK_OVER_PROTECTED = new Set([RADIO_FIRE_CHANNEL]);
+/**
+ * Priority members: they never get BUSY (they cut in over whoever is talking, on any channel, and talk
+ * over Fire's Discord channel), and their radio sends their voice a little louder (MIC BOOST).
+ */
+export const RADIO_PRIORITY_USERS = new Set(['1074411240757137589', '1044686997194805280']);
+export const RADIO_PRIORITY_MIC_BOOST = 1.25;
 export const RADIO_DOT_CHANNEL = 'dot';
 export const RADIO_MARINE_CHANNEL = 'marine';
 export const RADIO_SRT_CHANNEL = 'srt';
@@ -399,8 +405,13 @@ export function createRadioRelay({
     const refusal = talkRefusal(socket);
     if (refusal) return send(socket, { type: 'tx', ok: false, ...refusal });
     const guarded = RADIO_TALK_OVER_PROTECTED.has(channel);
-    // Dispatch priority: someone tagged !C cuts in over anyone who isn't dispatch (not on a protected channel).
-    if (talker && !guarded && isDispatcherName(name) && !isDispatcherName(talker.name)) {
+    const priority = RADIO_PRIORITY_USERS.has(String(userId));
+    // Priority members cut in over anyone else. Dispatch (!C) cuts in over anyone who isn't dispatch,
+    // except on a protected channel.
+    const cutsIn = priority
+      ? !RADIO_PRIORITY_USERS.has(String(talker?.userId))
+      : !guarded && isDispatcherName(name) && !isDispatcherName(talker?.name);
+    if (talker && cutsIn) {
       send(talker.socket, { type: 'cut', name });
       endTransmit(talker.socket);
     } else if (talker) {
@@ -409,7 +420,7 @@ export function createRadioRelay({
       return send(socket, { type: 'tx', ok: false, reason: 'busy', name: talker.name });
     }
     // Protected channel: nobody on the radio talks over someone speaking in its Discord voice channel.
-    if (guarded) {
+    if (guarded && !priority) {
       const speaking = [...discordTalkers(channel).values()][0];
       if (speaking) return send(socket, { type: 'tx', ok: false, reason: 'busy', name: speaking });
     }
@@ -705,7 +716,10 @@ export function createRadioRelay({
     try { synced = loadSettings(userId) || null; } catch { synced = null; }
     send(socket, {
       type: 'ready',
-      you: { id: userId, name: socket.radio.name, callsign: String(result.callsign || ''), staff: socket.radio.staff, label: socket.radio.label },
+      you: {
+        id: userId, name: socket.radio.name, callsign: String(result.callsign || ''), staff: socket.radio.staff, label: socket.radio.label,
+        ...(RADIO_PRIORITY_USERS.has(String(userId)) ? { boost: RADIO_PRIORITY_MIC_BOOST } : {}),
+      },
       synced,
       game: games.get(userId) || null,
       ...statusFor(socket),

@@ -3581,6 +3581,13 @@
       "summary": "Fire, DOT and Marine radio talk is now logged in each channel's own Discord voice chat, like Law Enforcement. On Fire Radio only, nobody on the radio can talk while someone is speaking in the Fire Discord channel, and only one radio can talk at a time (dispatch can't cut in there). The radio shows BUSY with who has the channel.",
       "createdAt": "2026-10-12T00:22:46.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-priority-members-2026-10-12",
+      "title": "Radio: priority members",
+      "summary": "Two members can now always talk on the radio: they never get BUSY, they cut in over anyone else talking, and they can talk over the Fire Discord channel. Their voice also goes out about 25% louder than everyone else's.",
+      "createdAt": "2026-10-12T00:37:29.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
