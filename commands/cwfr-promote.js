@@ -1,0 +1,76 @@
+import {
+  MessageFlags,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+} from 'discord.js';
+import {
+  FIRE_PROMOTION_RANKS,
+  promoteFireMember,
+} from '../utils/firePromote.js';
+import { FIRE_OPS_GUILD_ID } from '../utils/fireOpsServer.js';
+import { rejectWrongGuild } from '../utils/commandGuilds.js';
+
+const rankChoices = FIRE_PROMOTION_RANKS.map((rank) => ({
+  name: rank.name,
+  value: rank.name,
+}));
+
+export default {
+  data: new SlashCommandBuilder()
+    .setName('cwfr-promote')
+    .setDescription('Promote a Clearwater Fire & Rescue member to a new rank.')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+    .setDMPermission(false)
+    .addUserOption((option) => option
+      .setName('user')
+      .setDescription('The member to promote')
+      .setRequired(true))
+    .addStringOption((option) => option
+      .setName('reason')
+      .setDescription('Reason for the promotion')
+      .setRequired(true)
+      .setMinLength(2)
+      .setMaxLength(900))
+    .addStringOption((option) => option
+      .setName('rank')
+      .setDescription('Rank to promote them to')
+      .setRequired(true)
+      .addChoices(...rankChoices)),
+  guildIds: [FIRE_OPS_GUILD_ID],
+
+  async execute(interaction) {
+    if (String(interaction.guildId) !== FIRE_OPS_GUILD_ID) rejectWrongGuild();
+
+    const issuerMember = interaction.member
+      || await interaction.guild.members.fetch(interaction.user.id);
+    const targetUser = interaction.options.getUser('user', true);
+    const reason = interaction.options.getString('reason', true);
+    const rankName = interaction.options.getString('rank', true);
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
+    if (!targetMember) throw new Error('That user is not in this server.');
+
+    const result = await promoteFireMember({
+      guild: interaction.guild,
+      targetMember,
+      issuerMember,
+      rankName,
+      reason,
+    });
+
+    const previous = result.previousRanks.length
+      ? result.previousRanks.map((rank) => rank.name).join(', ')
+      : 'none';
+
+    await interaction.editReply({
+      content: [
+        `Promoted <@${targetMember.id}> to **${result.rank.name}**.`,
+        `Previous rank(s) in that track: ${previous}`,
+        `Announcement posted in <#${result.announcement.channel.id}>.`,
+      ].join('\n'),
+      allowedMentions: { parse: [] },
+    });
+  },
+};
