@@ -62,9 +62,12 @@ class RadioCapture extends AudioWorkletProcessor {
     this.peak = 0;
     this.blocks = 0;
     this.levelEvery = 8;
-    this.limiter = new Limiter(options?.processorOptions?.ceiling ?? 0.5);
+    this.ceiling = options?.processorOptions?.ceiling ?? 0.5;
+    this.limiter = new Limiter(this.ceiling);
     this.agc = new AutoGain();
     this.agcOn = true;
+    // MIC BOOST (set by the relay for some members): louder after the auto gain, with the ceiling raised to match.
+    this.boost = 1;
     this.port.onmessage = (event) => {
       const data = event.data || {};
       if ('active' in data) this.active = Boolean(data.active);
@@ -73,6 +76,10 @@ class RadioCapture extends AudioWorkletProcessor {
         this.agc.gain = 1;
       }
       if (data.levelEvery) this.levelEvery = data.levelEvery;
+      if ('boost' in data) {
+        this.boost = Math.min(1.5, Math.max(1, Number(data.boost) || 1));
+        this.limiter.ceiling = this.ceiling * this.boost;
+      }
     };
   }
 
@@ -80,8 +87,9 @@ class RadioCapture extends AudioWorkletProcessor {
     const channel = inputs[0] && inputs[0][0];
     const out = outputs[0] && outputs[0][0];
     if (channel && out) {
-      const input = this.agcOn ? channel.slice(0) : channel;
+      const input = this.agcOn || this.boost !== 1 ? channel.slice(0) : channel;
       if (this.agcOn) this.agc.run(input);
+      if (this.boost !== 1) for (let i = 0; i < input.length; i += 1) input[i] *= this.boost;
       for (let i = 0; i < input.length; i += 1) {
         const value = Math.abs(input[i]);
         if (value > this.peak) this.peak = value;

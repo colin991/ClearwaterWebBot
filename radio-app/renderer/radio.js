@@ -563,6 +563,7 @@ async function initAudio() {
     processorOptions: { ceiling: 0.5 },
   });
   audio.txGain.connect(audio.capture);
+  applyMicBoost();
   // TEST plays the limited talk signal; at gain 0 it still keeps the worklet running.
   audio.testGain = ctx.createGain();
   audio.testGain.gain.value = 0;
@@ -1137,6 +1138,7 @@ function onMessage(message) {
       if (message.game !== undefined) state.game = message.game || null;
       state.error = '';
       state.me = message.you;
+      applyMicBoost();
       state.conn = 'online';
       state.calls = [];
       state.callsAt = 0;
@@ -1333,6 +1335,11 @@ function joinChannel(id) {
   saveSettings({ channel: id });
   sendJson({ type: 'channel', id });
   return undefined;
+}
+
+// Some members' voices go out a little louder; the relay says how much when the radio signs in.
+function applyMicBoost() {
+  audio.capture?.port.postMessage({ boost: Number(state.me?.boost) || 1 });
 }
 
 function changeChannel(step) {

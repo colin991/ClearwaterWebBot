@@ -1141,3 +1141,37 @@ test('Fire is talk-over protected: no cut-in, and no talking while someone speak
     await harness.close();
   }
 });
+
+test('priority members never get BUSY and their radio is told to boost the mic', async () => {
+  const VIP = '1074411240757137589';
+  const harness = await startRelay({
+    authorize: async (userId) => ({ ok: true, name: userId === VIP ? 'Vip' : 'Alice' }),
+    bridge: (channel) => (channel === 'fire' ? { online: true } : null),
+    openTransmit: () => ({ push: () => {}, end: () => {} }),
+  });
+  try {
+    const alice = await signIn(harness, ALICE, { channel: 'fire' });
+    const vip = await signIn(harness, VIP, { channel: 'fire' });
+    const ready = vip.messages.find((m) => m.type === 'ready');
+    assert.equal(ready.you.boost, 1.25);
+    assert.equal(alice.messages.find((m) => m.type === 'ready').you.boost, undefined);
+
+    // Cuts in over another radio on Fire.
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
+    vip.send({ type: 'tx', active: true });
+    await vip.until(() => vip.messages.find((m) => m.type === 'tx' && m.ok));
+    await alice.until(() => alice.messages.find((m) => m.type === 'cut'));
+    vip.send({ type: 'tx', active: false });
+
+    // Talks while someone speaks in the Fire Discord channel.
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', true, 'fire');
+    vip.messages.length = 0;
+    vip.send({ type: 'tx', active: true });
+    await vip.until(() => vip.messages.find((m) => m.type === 'tx' && m.ok));
+    alice.ws.close();
+    vip.ws.close();
+  } finally {
+    await harness.close();
+  }
+});
