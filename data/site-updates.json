@@ -3695,6 +3695,13 @@
       "summary": "The Clearwater Fire & Rescue support channel now has a ticket panel the bot posts on startup and updates in place after restarts. Members pick Internal Affairs, Line Officer or Office of the Chief, describe what they need, and get a private ticket. Lieutenants and above handle Internal Affairs and Line Officer tickets; District Chiefs and above handle Office of the Chief tickets. Staff can claim, escalate to the Office of the Chief, or close.",
       "createdAt": "2026-10-12T17:15:00Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "web-radio-older-iphones-2026-10-12",
+      "title": "Web radio on older iPhones and in-app browsers",
+      "summary": "The web radio no longer says Browser not supported on iPhones before iOS 26 or in the browser that opens from Discord. It now brings its own voice codec when the browser lacks one, so you can listen and talk there too.",
+      "createdAt": "2026-10-12T17:54:20Z",
+      "updatedBy": "colin991"
     }
   ]
 }
