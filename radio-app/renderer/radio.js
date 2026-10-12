@@ -186,7 +186,6 @@ const audio = {
   ts: 0,
   draining: false,
   speakers: new Map(),
-  jitter: 0.08, // seconds of incoming audio held back to ride out network hiccups (JITTER_MIN..JITTER_MAX)
   history: [], // what the radio played, for REPLAY: { at, samples }
   replay: null,
 };
@@ -774,15 +773,18 @@ function onMicLevel(level) {
 function speakerFor(id) {
   let speaker = audio.speakers.get(id);
   if (speaker && speaker.decoder.state === 'closed') {
-    audio.speakers.delete(id);
+    dropSpeaker(id, speaker);
     speaker = null;
   }
   if (!speaker) {
-    speaker = { ts: 0, next: 0, last: 0, decoder: null };
+    // Each voice plays through its own player (capture-worklet.js), which buffers and smooths it.
+    const player = new AudioWorkletNode(audio.ctx, 'radio-player', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
+    player.connect(audio.rxIn);
+    speaker = { ts: 0, last: 0, decoder: null, player };
     const current = speaker;
     current.decoder = new AudioDecoder({
       output: (data) => playDecoded(current, id, data),
-      error: () => { audio.speakers.delete(id); },
+      error: () => { dropSpeaker(id, current); },
     });
     current.decoder.configure({ codec: 'opus', sampleRate: 48000, numberOfChannels: 2 });
     audio.speakers.set(id, current);
@@ -791,7 +793,7 @@ function speakerFor(id) {
 }
 
 function onAudioFrame(buffer) {
-  if (!audio.ctx || muted() || buffer.byteLength < 10) return;
+  if (!audio.ctx || !audio.rxIn || muted() || buffer.byteLength < 10) return;
   if (audio.ctx.state === 'suspended') void resumeAudio();
   const view = new DataView(buffer);
   if (view.getUint8(0) !== 1) return;
@@ -807,49 +809,26 @@ function onAudioFrame(buffer) {
   speaker.ts += 20000;
 }
 
-const JITTER_MIN = 0.08;
-const JITTER_MAX = 0.32;
-const JITTER_STEP = 0.04;
-const JITTER_DECAY = 0.0002; // per 20 ms frame: about 10 ms less each second the stream is smooth
-// Audio queued past the buffer plays 6% faster until it's caught up (a burst after a hiccup), and anything
-// beyond the hard limit is dropped.
-const CATCH_UP_AFTER = 0.04;
-const CATCH_UP_RATE = 1.06;
-const JITTER_SLACK = 0.25;
+function dropSpeaker(id, speaker) {
+  if (audio.speakers.get(id) === speaker) audio.speakers.delete(id);
+  try { speaker.decoder.close(); } catch { /* already closed */ }
+  try { speaker.player.disconnect(); } catch { /* ignore */ }
+}
 
 function playDecoded(speaker, id, data) {
-  const ctx = audio.ctx;
-  const now = ctx.currentTime;
-  // Jitter buffer: each voice starts a little behind so network hiccups don't cut it. A hiccup that runs it dry
-  // makes the buffer bigger for this connection; a smooth stream shrinks it again, and after a burst of late
-  // audio the radio catches up instead of playing everything late.
-  if (speaker.next < now + 0.005) {
-    if (speaker.next && now - speaker.next < 0.25) audio.jitter = Math.min(JITTER_MAX, audio.jitter + JITTER_STEP);
-    speaker.next = now + audio.jitter;
-  } else {
-    audio.jitter = Math.max(JITTER_MIN, audio.jitter - JITTER_DECAY);
-    if (speaker.next - now > audio.jitter + JITTER_SLACK) {
-      data.close();
-      return;
-    }
-  }
   const frames = data.numberOfFrames;
   const channels = Math.max(1, Math.min(2, data.numberOfChannels));
-  const buffer = ctx.createBuffer(2, frames, data.sampleRate);
-  for (let c = 0; c < 2; c += 1) {
-    const plane = new Float32Array(frames);
-    data.copyTo(plane, { planeIndex: Math.min(c, channels - 1), format: 'f32-planar' });
-    buffer.copyToChannel(plane, c);
-    if (c === 0) remember(plane);
+  const left = new Float32Array(frames);
+  data.copyTo(left, { planeIndex: 0, format: 'f32-planar' });
+  let right = left;
+  if (channels > 1) {
+    right = new Float32Array(frames);
+    data.copyTo(right, { planeIndex: 1, format: 'f32-planar' });
   }
   data.close();
-  const source = ctx.createBufferSource();
-  source.buffer = buffer;
-  const rate = speaker.next - now > audio.jitter + CATCH_UP_AFTER ? CATCH_UP_RATE : 1;
-  source.playbackRate.value = rate;
-  source.connect(audio.rxIn);
-  source.start(speaker.next);
-  speaker.next += buffer.duration / rate;
+  remember(left.slice());
+  const transfer = right === left ? [left.buffer] : [left.buffer, right.buffer];
+  speaker.player.port.postMessage({ left, right: right === left ? null : right }, transfer);
 }
 
 // REPLAY: keep the last 30 seconds of what the radio played.
@@ -902,10 +881,7 @@ function replay() {
 setInterval(() => {
   const now = performance.now();
   for (const [id, speaker] of audio.speakers) {
-    if (now - speaker.last > 15000) {
-      try { speaker.decoder.close(); } catch { /* ignore */ }
-      audio.speakers.delete(id);
-    }
+    if (now - speaker.last > 15000) dropSpeaker(id, speaker);
   }
 }, 5000);
 
