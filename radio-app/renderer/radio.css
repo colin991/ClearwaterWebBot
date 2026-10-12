@@ -9,12 +9,12 @@
   --screen-bottom: #c4d6ea;
   --ink: #0d2440;
   --ink-dim: #4a6584;
-  --accent: #1f62b3;
-  --accent-hi: #3d8be0;
-  --bar: #1c5aa6;
+  --accent: #4484c6;
+  --accent-hi: #5e98d3;
+  --bar: #4484c6;
   --red: #b3261e;
   --green: #36c25a;
-  --amber: #4a9be8;
+  --amber: #4484c6;
 }
 
 * { box-sizing: border-box; }
@@ -81,6 +81,8 @@ button:focus { outline: none; }
   letter-spacing: 1px;
   color: #aeb4bb;
 }
+
+.knob-wrap:has(#ch) span { cursor: pointer; -webkit-app-region: no-drag; }
 
 .knob {
   width: 36px;
@@ -332,7 +334,7 @@ button:focus { outline: none; }
   white-space: normal;
   overflow-wrap: anywhere;
   padding: 0 3px;
-  border-bottom: 1px solid rgba(31, 98, 179, .15);
+  border-bottom: 1px solid rgba(68, 132, 198, .15);
 }
 
 .lcd .list li.sel {
@@ -342,7 +344,7 @@ button:focus { outline: none; }
 
 .lcd .list li .meta { display: block; font-size: 8px; opacity: .75; }
 .lcd .list.users li { display: flex; justify-content: space-between; gap: 4px; }
-.lcd .list.users li.hdr { justify-content: flex-start; font-weight: 700; color: var(--accent); background: rgba(31, 98, 179, .1); margin-top: 2px; }
+.lcd .list.users li.hdr { justify-content: flex-start; font-weight: 700; color: var(--accent); background: rgba(68, 132, 198, .1); margin-top: 2px; }
 .lcd .list.users li.hdr.cur::before { content: '\25B8 '; }
 .lcd .list.users li.dim { opacity: .55; }
 .lcd .list.users li.talking { color: #12963a; font-weight: 700; }
@@ -512,7 +514,7 @@ button:focus { outline: none; }
 
 /* Clickable screen: rows, value arrows and the soft-key labels. */
 .lcd .list li[data-row] { cursor: pointer; }
-.lcd .list li[data-row]:not(.sel):hover { background: rgba(31, 98, 179, .12); }
+.lcd .list li[data-row]:not(.sel):hover { background: rgba(68, 132, 198, .12); }
 .lcd .rows .adj { display: inline-block; padding: 0 3px; font-size: 8px; cursor: pointer; }
 .lcd-foot span { cursor: pointer; }
 .lcd-foot span:hover { background: rgba(255, 255, 255, .15); }
@@ -617,4 +619,4 @@ body.damaged .lcd { animation: damage-flicker 2.4s steps(1) infinite; }
 .lcd .modal { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; border-radius: 4px; text-align: center; }
 .lcd .modal.warning { background: rgba(192, 38, 27, .12); border: 1px solid #c0261b; }
 .lcd .modal.warning .mid { color: #c0261b; }
-.lcd .modal.notice { background: rgba(38, 123, 215, .1); border: 1px solid #267bd7; }
+.lcd .modal.notice { background: rgba(68, 132, 198, .1); border: 1px solid #4484c6; }

@@ -2838,6 +2838,8 @@ function bindControls() {
     chDrag = null;
   });
   el.ch.addEventListener('pointercancel', () => { chDrag = null; });
+  // The CH label under the knob clicks to the next channel too.
+  el.ch.nextElementSibling?.addEventListener('click', () => changeChannel(1));
   el.ch.addEventListener('wheel', (event) => {
     event.preventDefault();
     changeChannel(event.deltaY < 0 ? 1 : -1);
