@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  callsignFromName, createRadioPanicWatch, findPanicPlayer, panicUnitAndPostal, parseRadioPanic, playerLocationLabel,
+  callsignFromName, createRadioPanicWatch, findPanicPlayer, gameInfoLabel, panicUnitAndPostal, parseRadioPanic, playerLocationLabel,
 } from '../utils/radioPanic.js';
 
 test('reads a panic event with caller and location', () => {
@@ -52,7 +52,7 @@ test('finds the panicking player in game and labels their location', () => {
   assert.equal(findPanicPlayer(players, { robloxId: '42' }).username, 'Cop');
   assert.equal(findPanicPlayer(players, { names: ['', 'cop'] }).robloxId, '42');
   assert.equal(findPanicPlayer(players, { names: ['nobody'] }), null);
-  assert.equal(playerLocationLabel(players[1]), '120 Main St');
+  assert.equal(playerLocationLabel(players[1]), '120 Main St, Postal 204');
   assert.equal(playerLocationLabel({ location: { postal: '9' } }), 'Postal 9');
   assert.equal(playerLocationLabel(null), '');
 });
@@ -94,4 +94,15 @@ test('unit number comes from the in-game callsign, then the Discord nickname', (
   assert.equal(callsignFromName('104 - Isaac'), '104');
   assert.equal(callsignFromName('Isaac'), '');
   assert.equal(callsignFromName('Isaac 12'), '');
+});
+
+test('a panic still gets a location when the game gives only a position, or the lookup misses', () => {
+  const atPosition = { location: { x: 100, z: 200 } };
+  assert.equal(playerLocationLabel(atPosition), '');
+  assert.equal(playerLocationLabel(atPosition, (location) => (location.x === 100 ? '512' : '')), 'Postal 512');
+  assert.equal(playerLocationLabel({ location: { street: 'Main St' } }, () => '7'), 'Main St, Postal 7');
+  assert.equal(playerLocationLabel(atPosition, () => { throw new Error('no map'); }), '');
+  assert.equal(gameInfoLabel({ street: 'Elm Ave', postal: '310' }), 'Elm Ave, Postal 310');
+  assert.equal(gameInfoLabel({ postal: '310' }), 'Postal 310');
+  assert.equal(gameInfoLabel(null), '');
 });

@@ -3667,5 +3667,13 @@
       "summary": "The radio installer and the desktop radio's automatic updates now come from cwpcso.com instead of GitHub, so they keep working while the code is private. The download page also shows the version, size and checksum again. The Discord Download Radio button can also point at a temporary public installer link.",
       "createdAt": "2026-10-12T03:53:59Z",
       "updatedBy": "colin991"
-    }  ]
+    },
+    {
+      "id": "radio-panic-location-download-details-2026-10-12",
+      "title": "Radio panic location and download page details",
+      "summary": "Radio panics now show a street and postal instead of unknown location: the postal is worked out from the player's map position when the game doesn't give one, and the radio's last known spot is used if the live lookup misses. The download page no longer shows SHA-256, and hides the version boxes instead of showing blanks when release details can't load.",
+      "createdAt": "2026-10-12T16:21:27Z",
+      "updatedBy": "colin991"
+    }
+  ]
 }
