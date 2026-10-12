@@ -19,6 +19,7 @@ import { handleRideAlongInteraction } from '../utils/pcsoRideAlong.js';
 import { commandAllowedInGuild } from '../utils/commandGuilds.js';
 import { shouldIgnoreGuildCommands } from '../utils/floridaServer.js';
 import { handleFireShiftPanelInteraction } from '../utils/fireShiftPanel.js';
+import { handleFireSupportInteraction } from '../utils/fireSupport.js';
 import { handleRadioDownloadInteraction } from '../utils/radioDownloadPanel.js';
 import { handleRadioStaffInteraction } from '../utils/radioStaff.js';
 
@@ -140,6 +141,15 @@ export default {
       if (await handleFireShiftPanelInteraction(interaction)) return;
     } catch (error) {
       logger.error('Fire shift panel interaction failed', error);
+    }
+
+    try {
+      if (await handleFireSupportInteraction(interaction)) return;
+    } catch (error) {
+      logger.error('CWFR support interaction failed', error);
+      const content = String(error?.message || 'That ticket action failed.').slice(0, 1800);
+      if (interaction.deferred) await interaction.editReply({ content }).catch(() => {});
+      else if (!interaction.replied) await interaction.reply({ content, flags: MessageFlags.Ephemeral }).catch(() => {});
     }
 
     try {
