@@ -3674,6 +3674,13 @@
       "summary": "Radio panics now show a street and postal instead of unknown location: the postal is worked out from the player's map position when the game doesn't give one, and the radio's last known spot is used if the live lookup misses. The download page no longer shows SHA-256, and hides the version boxes instead of showing blanks when release details can't load.",
       "createdAt": "2026-10-12T16:21:27Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "cwfr-promotions-2026-10-12",
+      "title": "CWFR promotions command",
+      "summary": "Clearwater Fire & Rescue now has /cwfr-promote. Pick a member, a reason and a rank (fire or EMS), and the bot swaps their rank role and posts a Personnel Promotion announcement in the promotions channel. You can only promote people below your own rank; chief officers can also promote EMS ranks.",
+      "createdAt": "2026-10-12T16:50:00Z",
+      "updatedBy": "colin991"
     }
   ]
 }
