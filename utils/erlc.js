@@ -289,23 +289,6 @@ async function getErlcServerJson(serverKey, sections, { timeoutMs = 8000 } = {})
   return json;
 }
 
-let commandLogsInflight = null;
-
-/**
- * Light GET of just the command logs, for in-game `;` commands. It skips the
- * heavy snapshot queue so a slow full snapshot never delays a command, and
- * returns null (skip this tick) while ER:LC asked us to back off.
- */
-export function fetchErlcCommandLogs(serverKey, { timeoutMs = 4000 } = {}) {
-  if (!serverKey) return Promise.reject(new Error('ERLC_SERVER_KEY is not configured'));
-  if (commandLogsInflight) return commandLogsInflight;
-  if ((erlcHaltError && Date.now() < erlcHaltUntil) || erlcAvailableAt > Date.now()) return Promise.resolve(null);
-  commandLogsInflight = getErlcServerJson(serverKey, ['CommandLogs'], { timeoutMs })
-    .then((json) => json?.CommandLogs || json?.commandLogs || [])
-    .finally(() => { commandLogsInflight = null; });
-  return commandLogsInflight;
-}
-
 async function fetchErlcBundle(serverKey) {
   const json = await getErlcServerJson(serverKey, ERLC_BUNDLE_SECTIONS);
   const fetchedAt = Date.now();
@@ -433,7 +416,6 @@ export function resetErlcNetworkForTests({ minIntervalMs = 0, idleRefresh = fals
   erlcSlotDepth = 0;
   queuedCommands = 0;
   bundleCache = { value: null, expiresAt: 0, fetchedAt: 0, inflight: null };
-  commandLogsInflight = null;
   erlcHaltUntil = 0;
   erlcHaltError = null;
 }

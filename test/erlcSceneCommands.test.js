@@ -996,3 +996,13 @@ test('scene command log lines show where the time went', () => {
     /· ⏱ bot 0\.1s$/,
   );
 });
+
+test('a scan with no ER:LC data does not prime, so old commands are not replayed', async () => {
+  resetSceneLogScannerForTests();
+  const client = { emit: () => {} };
+  const empty = await scanSceneCommandLogs(client, { snapshot: async () => null });
+  assert.equal(empty.primed, undefined);
+  const logs = [{ at: 1, username: 'Old', robloxId: '1', command: ';ss' }];
+  const first = await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }) });
+  assert.equal(first.primed, true);
+});
