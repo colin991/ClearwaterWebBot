@@ -3560,6 +3560,13 @@
       "summary": "The Update Log button no longer shows radio updates as happening \"in 2 hours\". Each update now shows when it actually went out.",
       "createdAt": "2026-10-12T00:05:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-download-page-redesign-2026-10-12",
+      "title": "Radio: new download page design",
+      "summary": "The radio download page has a new layout: a big Download for Windows button next to a picture of the radio, with the version, release date, file size and checksum underneath. The tips list is gone.",
+      "createdAt": "2026-10-12T00:10:26.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
