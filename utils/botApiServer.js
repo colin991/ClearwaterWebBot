@@ -24,6 +24,8 @@ import { config } from '../config.js';
 import { handleRadioUpgrade, radioWebSession } from './radioBot.js';
 import { RADIO_STAFF_TOOLS, radioStaffSnapshot, runRadioStaffAction, runRadioStaffTool, saveRadioCoverage } from './radioStaff.js';
 import { PermissionFlagsBits } from 'discord.js';
+import { hasAdminPanelAccess } from '../lib/admin-access.js';
+import { PINELLAS_GUILD_ID } from './pinellasServer.js';
 
 const UNKNOWN_MEMBER = 10007;
 const ACCESS_CACHE_MS = 30_000;
@@ -43,6 +45,55 @@ async function resolveWebsiteAccess(client, discordId) {
     }
   }
   return access;
+}
+
+/**
+ * A website user's roles and Administrator flag read live from Discord, in place of the ones
+ * saved in their sign-in cookie at login, so a demoted member loses admin tools straight away.
+ * Returns null when a server can't be checked right now.
+ */
+const liveRolesCache = new Map();
+
+export async function liveWebsiteRoles(client, discordId) {
+  const cached = liveRolesCache.get(discordId);
+  if (cached && Date.now() - cached.at < ACCESS_CACHE_MS) return cached.roles;
+  const roles = await fetchLiveWebsiteRoles(client, discordId);
+  if (roles) {
+    liveRolesCache.set(discordId, { at: Date.now(), roles });
+    if (liveRolesCache.size > 1000) {
+      for (const [key, entry] of liveRolesCache) {
+        if (Date.now() - entry.at >= ACCESS_CACHE_MS) liveRolesCache.delete(key);
+      }
+    }
+  }
+  return roles;
+}
+
+async function fetchLiveWebsiteRoles(client, discordId) {
+  const lookup = async (guildId) => {
+    const guild = client?.guilds?.cache?.get(guildId);
+    if (!guild) return undefined;
+    try {
+      return await guild.members.fetch({ user: discordId, force: true });
+    } catch (error) {
+      if (error?.code === UNKNOWN_MEMBER) return null;
+      throw error;
+    }
+  };
+  let clearwater;
+  let pinellas;
+  try {
+    [clearwater, pinellas] = await Promise.all([lookup(CLEARWATER_GUILD_ID), lookup(PINELLAS_GUILD_ID)]);
+  } catch {
+    return null;
+  }
+  if (clearwater === undefined || pinellas === undefined) return null;
+  const roleIds = (member) => (member ? [...member.roles.cache.keys()].filter((id) => id !== member.guild?.id).map(String) : []);
+  return {
+    guildRoles: roleIds(clearwater),
+    pinellasRoles: roleIds(pinellas),
+    discordAdmin: [clearwater, pinellas].some((member) => member?.permissions?.has(PermissionFlagsBits.Administrator) === true),
+  };
 }
 
 async function fetchWebsiteAccess(client, discordId) {
@@ -197,7 +248,10 @@ export function startBotApiServer(client, {
         if (!/^\d{15,22}$/.test(discordId)) return sendJson(response, 400, { error: 'Invalid discordId' });
         const access = await resolveWebsiteAccess(client, discordId);
         if (!access) return sendJson(response, 503, { error: 'Clearwater guild unavailable' });
-        return sendJson(response, 200, access);
+        // Admin panel (news, events, roster, chatbot) from live roles, not the login cookie's.
+        const live = await liveWebsiteRoles(client, discordId);
+        if (!live) return sendJson(response, 200, access);
+        return sendJson(response, 200, { ...access, adminPanel: hasAdminPanelAccess({ id: discordId, ...live }, access) });
       }
 
       if (request.method === 'GET' && url.pathname === '/api/radio/web-session') {
@@ -294,10 +348,16 @@ export function startBotApiServer(client, {
           return sendJson(response, 400, { error: 'Invalid JSON.' });
         }
         try {
+          // Approving reports goes by live Discord roles, never the ones the website sent from the cookie.
+          let user = payload.user;
+          if (user?.id && /^\d{15,22}$/.test(String(user.id))) {
+            const live = await liveWebsiteRoles(client, String(user.id));
+            user = live ? { ...user, ...live } : { ...user, guildRoles: [], pinellasRoles: [], discordAdmin: false };
+          }
           const result = await handleEmployeeAction(
             payload.action,
             payload.payload || {},
-            payload.user,
+            user,
             { postPcsoErlcApi },
           );
           return sendJson(response, 200, result);

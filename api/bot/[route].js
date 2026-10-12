@@ -2,6 +2,7 @@ import action from '../../lib/bot-api/action.js';
 import status from '../../lib/bot-api/status.js';
 import radio from '../../lib/bot-api/radio.js';
 import radioStaff from '../../lib/bot-api/radio-staff.js';
+import radioStaffPage from '../../lib/bot-api/radio-staff-page.js';
 import radioRelease from '../../lib/bot-api/radio-release.js';
 
 const ROUTES = {
@@ -9,6 +10,7 @@ const ROUTES = {
   status,
   radio,
   'radio-staff': radioStaff,
+  'radio-staff-page': radioStaffPage,
   'radio-release': radioRelease,
 };
 

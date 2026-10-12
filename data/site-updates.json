@@ -3638,6 +3638,27 @@
       "summary": "The bot's status page now reports whether in-game ; commands are armed, when the bot last read ER:LC's command log, whether ER:LC is rate-limiting the bot, and the last few command results (no player names). This makes it possible to see why commands like ;scene aren't working without digging through logs.",
       "createdAt": "2026-10-12T03:50:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-12-private-repo-startup",
+      "title": "Bot host updates from the private repo",
+      "summary": "The bot's startup now pulls code with the panel's Git Access Token (or GITHUB_TOKEN in .env), so it keeps updating itself now that the GitHub repo is private. It no longer swaps the git address back to the public one without a login.",
+      "createdAt": "2026-10-12T04:00:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-12-staff-page-lockdown",
+      "title": "Radio staff page locked to admins",
+      "summary": "The radio staff page at cwpcso.com/radio-staff now only loads for signed-in Clearwater admins. The server checks Discord live before sending the page, so it can't be opened by editing the page in the browser. Website admin tools and training report approvals now also follow your current Discord roles instead of the ones saved when you signed in, so a demoted admin loses access right away.",
+      "createdAt": "2026-10-12T04:20:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-12-ratelimit-command-pickup",
+      "title": "-ratelimit shows in-game command pickup",
+      "summary": "-ratelimit now also shows whether in-game ; commands are switched on, how many ER:LC webhook events the bot has received, when it last read the command log, and the last few command results.",
+      "createdAt": "2026-10-12T04:15:00.000Z",
+      "updatedBy": "colin991"
     }
 ,
     {

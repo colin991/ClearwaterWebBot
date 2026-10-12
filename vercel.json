@@ -5,6 +5,11 @@
   "outputDirectory": "public",
   "cleanUrls": false,
   "trailingSlash": false,
+  "functions": {
+    "api/bot/[route].js": {
+      "includeFiles": "radio-staff.html"
+    }
+  },
   "rewrites": [
     {
       "source": "/radio",
@@ -24,7 +29,11 @@
     },
     {
       "source": "/radio-staff",
-      "destination": "/radio-staff.html"
+      "destination": "/api/bot/radio-staff-page"
+    },
+    {
+      "source": "/radio-staff.html",
+      "destination": "/api/bot/radio-staff-page"
     },
     {
       "source": "/admin",

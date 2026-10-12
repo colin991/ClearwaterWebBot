@@ -30,6 +30,7 @@ import {
   findTeamVoiceChannel,
   findVoicedDiscordMember,
   sceneCommandTiming,
+  formatSceneCommandReport,
 } from '../utils/erlcSceneCommands.js';
 import { PINELLAS_GUILD_ID } from '../utils/pinellasServer.js';
 import { CLEARWATER_GUILD_ID } from '../utils/staffRanks.js';
@@ -1005,4 +1006,12 @@ test('a scan with no ER:LC data does not prime, so old commands are not replayed
   const logs = [{ at: 1, username: 'Old', robloxId: '1', command: ';ss' }];
   const first = await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }) });
   assert.equal(first.primed, true);
+});
+
+test('-ratelimit shows whether in-game commands are being picked up', async () => {
+  resetSceneLogScannerForTests();
+  await scanSceneCommandLogs({ emit: () => {} }, { snapshot: async () => ({ CommandLogs: [], Players: [] }) });
+  const report = formatSceneCommandReport();
+  assert.match(report, /\*\*Webhook events:\*\* \d+/);
+  assert.match(report, /\*\*Command-log check:\*\* \d+s ago · 0 log entries/);
 });
