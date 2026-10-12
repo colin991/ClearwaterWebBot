@@ -168,6 +168,8 @@ export function createRadioBridge({ channel: radioChannel, token, channelId, rel
 
   return {
     channel: radioChannel,
+    /** Its Discord client, to post in the voice channel's chat when the main bot can't. */
+    client,
     get online() {
       return isOnline();
     },

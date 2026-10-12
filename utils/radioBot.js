@@ -211,9 +211,9 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   // The radio voice channel's chat gets the talk log, panic history, weekly stats and staff actions.
   // The main bot posts (it can send messages there); the radio bot is the fallback. Mentions never ping.
   const talkLogChannelId = env.RADIO_LOG_CHANNEL_ID?.trim() || RADIO_CHANNEL_ID;
-  async function postRadioChat(payload) {
-    for (const poster of [erlcEvents, client]) {
-      const target = await poster?.channels?.fetch?.(talkLogChannelId).catch(() => null);
+  async function postRadioChat(payload, chatId = talkLogChannelId, posters = [erlcEvents, client]) {
+    for (const poster of posters) {
+      const target = await poster?.channels?.fetch?.(chatId).catch(() => null);
       if (!target?.isTextBased?.()) continue;
       try {
         return await target.send({ allowedMentions: { parse: [] }, ...payload });
@@ -221,7 +221,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
         // No Send Messages for this bot: try the next one.
       }
     }
-    throw new Error(`no bot can post in ${talkLogChannelId}`);
+    throw new Error(`no bot can post in ${chatId}`);
   }
   const talkLog = createRadioTalkLog({
     send: (content) => postRadioChat({ content }),
@@ -307,6 +307,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
 
   // Fire, DOT and Marine each get a bot of their own in their own Discord voice channel.
   const bridges = new Map();
+  const bridgeTalkLogs = new Map();
   const relay = createRadioRelay({
     bridge: (radioChannel) => {
       const bridge = bridges.get(radioChannel);
@@ -359,7 +360,8 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
       }, 2_000);
     },
     onTalked: (entry) => {
-      talkLog.add(entry);
+      // Fire, DOT and Marine talk goes in their own Discord voice channel's chat.
+      (bridgeTalkLogs.get(entry.channel) || talkLog).add(entry);
       weekly.addTalk(entry);
     },
     onPanic: (message) => {
@@ -421,6 +423,11 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
       relay: () => relay,
       label: (member) => profileLabel(knownProfiles.get(member.id)),
       createSink: (play) => createTransmitSink(play),
+    }));
+    // The main bot posts if it can; the channel's own bridge bot is the fallback.
+    bridgeTalkLogs.set(settings.channel, createRadioTalkLog({
+      send: (content) => postRadioChat({ content }, settings.channelId, [erlcEvents, bridges.get(settings.channel)?.client]),
+      onError: (error) => logger.warn(`Radio ${settings.channel} talk log failed: ${error?.message || error}`),
     }));
   }
 
@@ -757,6 +764,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     if (activeRelay === relay) activeRelay = null;
     stopTunnel();
     talkLog.stop();
+    for (const log of bridgeTalkLogs.values()) log.stop();
     webRelayUrl = '';
     relay.close();
     try { standalone?.close(); } catch { /* ignore */ }

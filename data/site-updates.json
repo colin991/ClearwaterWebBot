@@ -3574,6 +3574,13 @@
       "summary": "The radio, web radio, radio staff page and download page now use a lighter Clearwater blue (#4484C6). Clicking the CH knob, or now the CH label under it, steps to the next channel and wraps back to channel 1.",
       "createdAt": "2026-10-12T00:19:23.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-channel-talk-logs-fire-protect-2026-10-12",
+      "title": "Radio: talk logs in every Discord channel, Fire talk-over protection",
+      "summary": "Fire, DOT and Marine radio talk is now logged in each channel's own Discord voice chat, like Law Enforcement. On Fire Radio only, nobody on the radio can talk while someone is speaking in the Fire Discord channel, and only one radio can talk at a time (dispatch can't cut in there). The radio shows BUSY with who has the channel.",
+      "createdAt": "2026-10-12T00:22:46.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

@@ -1089,3 +1089,55 @@ test('an extra channel with its own bot is bridged to its Discord voice channel'
     await harness.close();
   }
 });
+
+test('Fire is talk-over protected: no cut-in, and no talking while someone speaks in its Discord channel', async () => {
+  const talked = [];
+  const harness = await startRelay({
+    authorize: async (userId) => ({ ok: true, name: userId === ALICE ? 'Alice' : 'Bob !C' }),
+    bridge: (channel) => (channel === 'fire' || channel === 'dot' ? { online: true } : null),
+    openTransmit: () => ({ push: () => {}, end: () => {} }),
+    onTalked: (entry) => talked.push(entry),
+  });
+  try {
+    const alice = await signIn(harness, ALICE, { channel: 'fire' });
+    const bob = await signIn(harness, BOB, { channel: 'fire' });
+
+    // One radio at a time on Fire: even dispatch waits.
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
+    bob.send({ type: 'tx', active: true });
+    const busy = await bob.until(() => bob.messages.find((m) => m.type === 'tx' && m.ok === false));
+    assert.deepEqual([busy.reason, busy.name], ['busy', 'Alice']);
+    assert.ok(!alice.messages.some((m) => m.type === 'cut'));
+    alice.send({ type: 'tx', active: false });
+    await alice.until(() => talked.length === 1);
+    assert.equal(talked[0].onDiscordChannel, true, 'Fire talk is logged in the Fire voice chat');
+
+    // Someone speaking in the Fire Discord channel blocks the radio until they stop.
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', true, 'fire');
+    alice.messages.length = 0;
+    alice.send({ type: 'tx', active: true });
+    const blocked = await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok === false));
+    assert.deepEqual([blocked.reason, blocked.name], ['busy', 'Carl']);
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', false, 'fire');
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
+    alice.send({ type: 'tx', active: false });
+
+    // Other channels keep dispatch cut-in and are not blocked by Discord speakers.
+    alice.send({ type: 'channel', id: 'dot' });
+    bob.send({ type: 'channel', id: 'dot' });
+    await bob.until(() => bob.messages.find((m) => m.type === 'status' && m.channelId === 'dot'));
+    await alice.until(() => alice.messages.find((m) => m.type === 'status' && m.channelId === 'dot'));
+    harness.relay.discordSpeaking('333333333333333333', 'Carl', true, 'dot');
+    alice.messages.length = 0;
+    alice.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'tx' && m.ok));
+    bob.send({ type: 'tx', active: true });
+    await alice.until(() => alice.messages.find((m) => m.type === 'cut'));
+    alice.ws.close();
+    bob.ws.close();
+  } finally {
+    await harness.close();
+  }
+});

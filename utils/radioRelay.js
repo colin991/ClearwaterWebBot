@@ -24,6 +24,11 @@ const AUDIO_FRAME = 0x01;
  */
 export const RADIO_MAIN_CHANNEL = 'main';
 export const RADIO_FIRE_CHANNEL = 'fire';
+/**
+ * Talk-over protection: on these channels one radio talks at a time (no dispatch cut-in), and nobody
+ * on the radio can talk while someone speaks in the channel's Discord voice channel.
+ */
+export const RADIO_TALK_OVER_PROTECTED = new Set([RADIO_FIRE_CHANNEL]);
 export const RADIO_DOT_CHANNEL = 'dot';
 export const RADIO_MARINE_CHANNEL = 'marine';
 export const RADIO_SRT_CHANNEL = 'srt';
@@ -345,7 +350,7 @@ export function createRadioRelay({
         name: talker.name,
         channel,
         channelName: channelName(channel),
-        onDiscordChannel: channel === RADIO_MAIN_CHANNEL,
+        onDiscordChannel: channel === RADIO_MAIN_CHANNEL || isBridged(channel),
         startedAt: talker.startedAt,
         endedAt: now(),
       });
@@ -393,14 +398,20 @@ export function createRadioRelay({
     if (talker?.socket === socket) return send(socket, { type: 'tx', ok: true, channel });
     const refusal = talkRefusal(socket);
     if (refusal) return send(socket, { type: 'tx', ok: false, ...refusal });
-    // Dispatch priority: someone tagged !C cuts in over anyone who isn't dispatch.
-    if (talker && isDispatcherName(name) && !isDispatcherName(talker.name)) {
+    const guarded = RADIO_TALK_OVER_PROTECTED.has(channel);
+    // Dispatch priority: someone tagged !C cuts in over anyone who isn't dispatch (not on a protected channel).
+    if (talker && !guarded && isDispatcherName(name) && !isDispatcherName(talker.name)) {
       send(talker.socket, { type: 'cut', name });
       endTransmit(talker.socket);
     } else if (talker) {
       // Pressing to talk while dispatch has the channel counts as talking over dispatch.
       if (isDispatcherName(talker.name) && !isDispatcherName(name)) reportTalkOver(socket.radio, channel, talker.name);
       return send(socket, { type: 'tx', ok: false, reason: 'busy', name: talker.name });
+    }
+    // Protected channel: nobody on the radio talks over someone speaking in its Discord voice channel.
+    if (guarded) {
+      const speaking = [...discordTalkers(channel).values()][0];
+      if (speaking) return send(socket, { type: 'tx', ok: false, reason: 'busy', name: speaking });
     }
     // Talking on MAIN while a dispatcher speaks in the Discord channel (Discord never blocks the radio).
     if (!isDispatcherName(name)) {
