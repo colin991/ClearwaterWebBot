@@ -3609,6 +3609,13 @@
       "summary": "The radio staff panel, web radio and download page no longer use the old teal. Links, buttons, badges, the coverage map and backgrounds now use the Clearwater blue (#4484C6).",
       "createdAt": "2026-10-12T00:58:39.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-12-ingame-commands-erlc-load",
+      "title": "In-game commands: stop the extra ER:LC polling",
+      "summary": "Removed the extra every-2-second ER:LC command-log request added in the last speedup, which could push the bot into ER:LC rate limits and stall every in-game command. Commands are read from the regular server snapshot again (checked every second). The bot also no longer replays old commands after a failed ER:LC check.",
+      "createdAt": "2026-10-12T01:35:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

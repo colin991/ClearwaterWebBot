@@ -1,6 +1,6 @@
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
 import {
-  executeErlcCommand, fetchErlcCommandLogs, fetchErlcServer, parseErlcPlayer, parseErlcCommandLog,
+  executeErlcCommand, fetchErlcServer, parseErlcPlayer, parseErlcCommandLog,
 } from './erlc.js';
 import { discordIdsByRobloxId } from './identityStore.js';
 import { resolveZoneDiscordMember } from './erlcZoneVoice.js';
@@ -1224,9 +1224,8 @@ export async function runDiscordSceneCommand({
   );
 }
 
-// Each scan is one light CommandLogs GET on ER:LC's global bucket; rate-limit
-// headers are honored, so a 429 or empty window pauses polling automatically.
-const SCENE_LOG_SCAN_INTERVAL_MS = 2_000;
+// Scans only read the snapshot cache, so a short interval costs no API calls.
+const SCENE_LOG_SCAN_INTERVAL_MS = 1_000;
 const sceneLogSeen = new Set();
 let sceneLogsPrimed = false;
 
@@ -1245,18 +1244,16 @@ export function commandLogToScenePayload(entry) {
 
 export async function scanSceneCommandLogs(client, { snapshot, identities, executeCommand } = {}) {
   if (!snapshot && !client?.config?.erlcServerKey) return { scanned: 0 };
-  let server = snapshot ? await snapshot() : null;
-  let rawLogs = server?.CommandLogs || server?.commandLogs;
-  if (!snapshot) {
-    // A light CommandLogs-only GET is fresher than the shared 5s snapshot;
-    // fall back to the snapshot cache while ER:LC asks us to back off.
-    rawLogs = await fetchErlcCommandLogs(client.config.erlcServerKey).catch(() => null);
-    if (!rawLogs) {
-      server = await fetchErlcServer(client.config.erlcServerKey, { timeoutMs: 4_000 }).catch(() => null);
-      rawLogs = server?.CommandLogs || server?.commandLogs;
-    }
-  }
-  const logs = (rawLogs || []).map((entry) => (
+  // Reads the shared snapshot cache, which refreshes in the background, so a
+  // scan never adds ER:LC API calls on top of that refresh.
+  const server = snapshot
+    ? await snapshot()
+    : await fetchErlcServer(client.config.erlcServerKey, { timeoutMs: 4_000 }).catch(() => null);
+  const rawLogs = server?.CommandLogs || server?.commandLogs;
+  // No data (ER:LC down or rate-limited): don't prime on an empty list, or the
+  // next good scan would replay the whole command history as new commands.
+  if (!Array.isArray(rawLogs)) return { scanned: 0 };
+  const logs = rawLogs.map((entry) => (
     entry?.command != null || entry?.username != null ? entry : parseErlcCommandLog(entry)
   ));
   if (!sceneLogsPrimed) {
@@ -1298,9 +1295,7 @@ export async function scanSceneCommandLogs(client, { snapshot, identities, execu
         const result = await handleErlcSceneEvent(commandLogToScenePayload(entry), {
           client,
           config: client?.config || {},
-          // Injected snapshots carry the roster; a logs-only poll does not, so
-          // the handler reads players from the shared snapshot cache instead.
-          ...(snapshot ? { snapshot: async () => server } : {}),
+          snapshot: async () => server,
           identities,
           executeCommand,
           source: 'logs',
@@ -1353,7 +1348,7 @@ export function startErlcSceneCommands(client) {
   client.on('erlcEvent', listener);
   // Command logs are the fallback when the ER:LC webhook doesn't reach the bot.
   // Overlapping scans are safe: each log line is claimed in sceneLogSeen
-  // before it is handled, and concurrent polls share one in-flight GET.
+  // before it is handled.
   const scan = () => {
     void scanSceneCommandLogs(client).catch((error) => {
       logger.warn(`ER:LC scene command log scan failed: ${error?.message || error}`);
