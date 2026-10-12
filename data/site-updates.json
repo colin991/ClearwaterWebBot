@@ -3588,6 +3588,13 @@
       "summary": "Two members can now always talk on the radio: they never get BUSY, they cut in over anyone else talking, and they can talk over the Fire Discord channel. Their voice also goes out about 25% louder than everyone else's.",
       "createdAt": "2026-10-12T00:37:29.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-smoother-receive-2026-10-12",
+      "title": "Radio: no more cutting out when listening",
+      "summary": "Incoming voices now play through a new smoothing player. Lost or late audio from Discord or other radios is covered instead of leaving a gap, and the radio gently speeds up or slows down to stay in time, so voices no longer cut out mid-sentence.",
+      "createdAt": "2026-10-12T00:52:41.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
