@@ -3617,5 +3617,12 @@
       "createdAt": "2026-10-12T01:35:00.000Z",
       "updatedBy": "colin991"
     }
-  ]
+,
+    {
+      "id": "radio-fire-dot-transmit-tone-2026-10-12",
+      "title": "Fire and DOT transmit tone",
+      "summary": "When someone talks from the radio app on Fire or DOT, Discord now hears a short tone right before their voice. Other channels are unchanged.",
+      "createdAt": "2026-10-12T01:59:02Z",
+      "updatedBy": "colin991"
+    }  ]
 }
