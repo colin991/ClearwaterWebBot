@@ -3652,6 +3652,13 @@
       "summary": "The radio staff page at cwpcso.com/radio-staff now only loads for signed-in Clearwater admins. The server checks Discord live before sending the page, so it can't be opened by editing the page in the browser. Website admin tools and training report approvals now also follow your current Discord roles instead of the ones saved when you signed in, so a demoted admin loses access right away.",
       "createdAt": "2026-10-12T04:20:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-12-ratelimit-command-pickup",
+      "title": "-ratelimit shows in-game command pickup",
+      "summary": "-ratelimit now also shows whether in-game ; commands are switched on, how many ER:LC webhook events the bot has received, when it last read the command log, and the last few command results.",
+      "createdAt": "2026-10-12T04:15:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
