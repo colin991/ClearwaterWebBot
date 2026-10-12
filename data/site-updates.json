@@ -5,21 +5,21 @@
       "id": "2026-10-11-pcso-signin-access",
       "title": "PCSO website sign-in no longer bounces to Coming Soon",
       "summary": "Signing in on cwpcso.com now checks PCSO Discord server membership from your server list, so a Discord rate limit can no longer turn a PCSO member away. If sign-in fails or you are not in the PCSO server, you stay on the PCSO sign-in page with a clear message instead of the Clearwater Coming Soon tester page.",
-      "createdAt": "2026-10-11T15:40:00.000Z",
+      "createdAt": "2026-10-11T15:23:12.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "2026-10-11-radio-audio-fixes",
       "title": "Radio audio: quieter bot, clean talk, optional effects",
       "summary": "Your voice now goes to the RTO channel clean and at a reasonable level: the old radio filter and automatic boost that made the bot too loud are gone, and a limiter caps peaks. New TX VOL setting controls how loud you are. Radio effects (RADIO or POLICE, with static) are now an optional listening setting, off by default, and only change what you hear in the app. Listening is protected from clipping and catches up after network hiccups, and the bot logs how many Discord voice packets it passes to radios each minute.",
-      "createdAt": "2026-10-11T13:50:00.000Z",
+      "createdAt": "2026-10-11T13:34:55.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "2026-10-11-bot-auto-update",
       "title": "Bot and radio embed update on their own",
       "summary": "The bot now checks main every 5 minutes and restarts itself onto new code when something is merged, so changes go live without pressing restart. The radio download embed reads the same version feed the app uses and refreshes every 2 minutes. The radio now says clearly when sign-in fails because the bot host is missing its Discord client secret.",
-      "createdAt": "2026-10-11T06:10:00.000Z",
+      "createdAt": "2026-10-11T05:57:07.000Z",
       "updatedBy": "colin991"
     },
     {
@@ -3292,7 +3292,7 @@
       "id": "2026-10-11-radio-emer-panic-frequency-change",
       "title": "Radio EMER button, working ;panic and Frequency Change",
       "summary": "The blue EMER button on the radio now sends your panic to every radio with your in-game location, and ;panic typed in game now reaches the radios. Talking in the Discord radio channel no longer blocks the app, and a new app-only Frequency Change channel was added.",
-      "createdAt": "2026-10-11T15:05:00.000Z",
+      "createdAt": "2026-10-11T14:54:47.000Z",
       "updatedBy": "colin991"
     },
     {
@@ -3320,7 +3320,7 @@
       "id": "2026-10-11-radio-signin-timeout-fix",
       "title": "Radio Discord sign-in fixed",
       "summary": "Signing in to the Clearwater Radio with Discord now works even when approving in the browser takes more than a few seconds. Before, the radio gave up after 8 seconds and showed NO SIGNAL.",
-      "createdAt": "2026-10-11T15:25:00.000Z",
+      "createdAt": "2026-10-11T15:13:46.000Z",
       "updatedBy": "colin991"
     },
     {
@@ -3362,7 +3362,7 @@
       "id": "2026-10-11-web-radio-full",
       "title": "Web radio now matches the app, and connects",
       "summary": "The radio at cwpcso.com/radio now looks and works exactly like the desktop radio, with the same screen, settings, channels, units list and panic alerts, plus a big hold-to-talk bar for phones. It also fixes the web radio getting stuck on CONNECTING.",
-      "createdAt": "2026-10-11T16:40:00.000Z",
+      "createdAt": "2026-10-11T16:28:48.000Z",
       "updatedBy": "colin991"
     },
     {
@@ -3390,63 +3390,63 @@
       "id": "2026-10-11-radio-panic-confirm-ch-dial-fx-level",
       "title": "Radio: panic check, CH dial, FX level, no PTT pops",
       "summary": "PANIC now asks ARE YOU SURE before sending. First-time setup lets you pick the radio size after the talk key. The CH knob turns like VOL. A new FX LVL setting picks how strong the radio effect is. Quick PTT taps no longer pop in the Discord channel.",
-      "createdAt": "2026-10-11T20:30:00.000Z",
+      "createdAt": "2026-10-11T20:14:42.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "2026-10-11-radio-ptt-spam-panic-cooldown",
       "title": "Radio: PTT spam timeout and 2 minute panic cooldown",
       "summary": "Pressing PTT 6 times within 10 seconds now times you out of talking on the radio for 1 minute, with a countdown on the radio screen. PANIC can be sent once every 2 minutes per person; pressing it sooner shows how long is left.",
-      "createdAt": "2026-10-11T20:35:00.000Z",
+      "createdAt": "2026-10-11T20:24:40.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "2026-10-11-radio-who-join-channel",
       "title": "Radio: join a channel from WHO'S ON",
       "summary": "On the radio's WHO'S ON screen, clicking a channel twice (or picking it and pressing OK) switches your radio to that channel.",
-      "createdAt": "2026-10-11T20:40:00.000Z",
+      "createdAt": "2026-10-11T20:29:25.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "2026-10-11-radio-deaf-no-talk",
       "title": "Radio: no talking while deafened",
       "summary": "While you are deafened on the Clearwater Radio (app or web), PTT no longer transmits. You hear the busy tone and the screen shows DEAFENED · NO TALK.",
-      "createdAt": "2026-10-11T20:45:00.000Z",
+      "createdAt": "2026-10-11T20:34:00.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "2026-10-11-radio-dispatch-priority-staff-scan",
       "title": "Radio: dispatch priority, staff panel, scan, weekly stats",
       "summary": "Dispatchers (!C) can now talk over anyone on the radio. The radio screen shows who was last heard, scan mode lets you hear up to two more channels, and first-time setup ends with a mic check. Admins get a radio staff panel to force-mute or kick someone off the radio, and the staff channel gets every panic and a weekly radio stats post.",
-      "createdAt": "2026-10-11T21:00:00.000Z",
+      "createdAt": "2026-10-11T20:47:12.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "2026-10-11-radio-talker-on-top",
       "title": "Radio: talker shown on top in green",
       "summary": "In the radio's units lists, whoever is talking now moves to the top of their channel and their name turns green, whether they talk on a radio or in the Discord channel.",
-      "createdAt": "2026-10-11T21:15:00.000Z",
+      "createdAt": "2026-10-11T20:51:13.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "2026-10-11-radio-no-staff-channel",
       "title": "Radio: no separate staff channel",
       "summary": "The radio no longer needs its own staff channel. Panic history, weekly radio stats and staff actions now post in the radio voice channel's chat with the talk log, and admins open the staff panel with /radio-staff.",
-      "createdAt": "2026-10-11T21:30:00.000Z",
+      "createdAt": "2026-10-11T20:53:53.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "2026-10-11-radio-whisper-911-map-hotkeys",
       "title": "Radio: whisper, 911 calls, panic map, hotkeys and more",
       "summary": "The radio shows your callsign, pending 911 calls (people waiting in the 911 voice channel and new in-game calls) and a mini map at the postal on a panic. You can whisper to one unit, dispatch can move a unit to another channel, and new hotkeys talk on your scan channel, replay the last 30 seconds and switch channels. A stuck mic is cut after 60 seconds. New NIGHT and AUTO GAIN settings, a pop-up showing who is talking while the radio is hidden, settings that sync between PC and phone, a first-launch tour, and animated signal and battery bars.",
-      "createdAt": "2026-10-11T21:45:00.000Z",
+      "createdAt": "2026-10-11T21:17:00.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "radio-staff-website-2026-10-11",
       "title": "Radio staff panel on the website",
       "summary": "Admins can now open the radio staff panel at cwpcso.com/radio-staff after signing in with Discord. It shows who is on the radio and who is muted, with buttons to force-mute, unmute or kick (5 minutes), and a search to mute someone before they sign in. Only members with Administrator in the Clearwater server can use it. /radio-staff in Discord still works and links to the page.",
-      "createdAt": "2026-10-11T23:30:00.000Z",
+      "createdAt": "2026-10-11T21:28:09.000Z",
       "updatedBy": "colin991"
     },
     {
@@ -3460,98 +3460,112 @@
       "id": "radio-size-dial-2026-10-11",
       "title": "Radio size dial",
       "summary": "SIZE on the radio is now a dial from 60% to 130% in 5% steps, so the radio can be made bigger as well as smaller. Turn it with the arrows, scroll, or drag or click the dial. The first-launch setup uses the same dial, and the size is still remembered.",
-      "createdAt": "2026-10-11T21:45:00.000Z",
+      "createdAt": "2026-10-11T21:34:42.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "radio-signal-coverage-2026-10-11",
       "title": "Radio signal coverage: cell towers and weak areas",
       "summary": "Admins can now place cell towers and draw weak-signal areas on a map in the radio staff panel at cwpcso.com/radio-staff. A unit's signal comes from where they are in game: near a tower is clear, while far from every tower or inside a weak area (like deep in the park or High Rock) sounds static-y and muffled on the radio, but still comes through. The radio's signal bars show your own signal. Discord voice is not affected.",
-      "createdAt": "2026-10-11T22:00:00.000Z",
+      "createdAt": "2026-10-11T21:44:35.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "radio-screen-extras-2026-10-11",
       "title": "Radio screen: startup, reconnecting, postal, speed, weather, practice",
       "summary": "The radio now shows the Clearwater logo when it turns on, a RECONNECTING screen when the link drops, and RADIO UPDATING, PLEASE WAIT (trying again every 10 seconds, settings kept) when the bot is down. While you talk it shows a talk timer. The channel card shows your nearest postal, street, speed and heading from the game, and a weather alert when it rains in game. SETTINGS has WHERE AM I, which reads your postal aloud, and PRACTICE, which lets new users test PTT and hear themselves without going live.",
-      "createdAt": "2026-10-11T23:00:00.000Z",
+      "createdAt": "2026-10-11T21:59:05.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "radio-game-data-2026-10-11",
       "title": "Radio: damage when downed, tunnels, nearest units, off-team flag",
       "summary": "When you're downed in game, your radio cracks and goes very weak for 20 seconds, with a countdown on screen. Staff can draw tunnels and parking garages on the coverage map and turn on building interference (off by default) for a weaker signal inside them. NEAREST in the radio settings shows the 3 closest units in game with their postal and distance. A Civilian-team player on the police radio is flagged on the radio staff page and told on their radio that staff have been notified. The 911 list on the radio now only shows people waiting in the 911 voice channel.",
-      "createdAt": "2026-10-11T23:30:00.000Z",
+      "createdAt": "2026-10-11T22:07:21.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "radio-staff-tools-2026-10-11",
       "title": "Radio staff tools: warnings, live listen, recordings, announcements, event channel",
       "summary": "The radio staff page at cwpcso.com/radio-staff can now send a warning that pops up on a unit's radio, listen live to every channel, play recordings of the last 24 hours of radio traffic, play a text-to-speech announcement on every radio, and open a temporary event channel (CH 4). It also shows scene timers, crash reports from radios, and flags anyone who keeps talking over dispatch. Radios show a one-time notice that transmissions are recorded, and dispatch can see scene timers under SCENES.",
-      "createdAt": "2026-10-11T23:59:00.000Z",
+      "createdAt": "2026-10-11T22:18:55.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "radio-melonly-ranks-2026-10-12",
       "title": "Radio: Melonly department and rank, rank-locked channels",
       "summary": "The radio now shows each member's Melonly department and rank next to their callsign (for example PCSO SGT). On the radio staff page, staff can pick which Melonly ranks may use CH 2, CH 3 and the event channel. Members without one of those ranks see the channel as locked, and anyone who loses access is moved back to CH 1. CH 1 stays open to everyone.",
-      "createdAt": "2026-10-12T00:10:00.000Z",
+      "createdAt": "2026-10-11T22:26:48.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "radio-trim-settings-no-recordings-2026-10-12",
       "title": "Radio: fewer settings, no more recordings",
       "summary": "The radio settings menu is shorter: TX VOL, FX LVL, POWER, NIGHT and AUTO GAIN are gone and now use their usual defaults (low power still turns on by itself on slower PCs). Radio transmissions are no longer recorded or kept for 24 hours, the Recordings section is gone from the staff page, and any saved recordings are deleted.",
-      "createdAt": "2026-10-12T00:20:00.000Z",
+      "createdAt": "2026-10-11T22:36:13.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "radio-recordings-back-damage-ptt-tail-2026-10-12",
       "title": "Radio: recordings are back, damage fix, PTT tail",
       "summary": "Radio transmissions are recorded and kept for 24 hours for staff review again, with the Recordings section back on the staff page. The cracked damaged-radio screen now triggers more reliably when someone is downed in game. Letting go of PTT now keeps transmitting for one more second so the end of what you said isn't cut off.",
-      "createdAt": "2026-10-12T00:30:00.000Z",
+      "createdAt": "2026-10-11T22:43:51.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "2026-10-11-ingame-commands-priority",
       "title": "In-game commands: faster pickup and timing in logs",
       "summary": "The bot now checks ER:LC's command log every 2 seconds with a small, quick request instead of waiting for the full server snapshot. ;refresh skips ahead of background in-game commands. Every SceneCmd log line now shows how long the command took and whether it came through the webhook or the command log.",
-      "createdAt": "2026-10-11T23:20:00.000Z",
+      "createdAt": "2026-10-11T22:57:34.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "radio-whisper-units-scenes-2026-10-12",
       "title": "Radio: easier whispering, steady units list, automatic scene channels",
       "summary": "Clicking a unit on WHO'S ON now opens whisper straight away, and the radio screen has an END WHISPER button while you're whispering. The units list and the settings page no longer jump back to the top while you scroll. A new BAR ANIM setting (on by default) makes the signal bars bob up and down. Scene timers now pick up every Discord voice channel with Scene or Traffic Stop in its name, with no setup needed.",
-      "createdAt": "2026-10-12T00:40:00.000Z",
+      "createdAt": "2026-10-11T22:57:31.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "radio-discord-channels-2026-10-12",
       "title": "Radio: Fire, DOT and Marine channels linked to Discord",
       "summary": "The radio channels are now CH 1 Law Enforcement, CH 2 Fire Radio, CH 3 DOT Radio, CH 4 Marine and Boating, CH 5 Frequency Change and CH 6 Special Response Team, with the event channel as CH 7. Fire, DOT and Marine are each linked to their own Discord voice channel by a bot of their own, so people in that voice channel and on the radios hear each other. Frequency Change and Special Response Team stay radio-to-radio only.",
-      "createdAt": "2026-10-12T01:30:00.000Z",
+      "createdAt": "2026-10-11T23:16:48.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "radio-smoother-listening-2026-10-12",
       "title": "Radio: smoother listening on shaky connections",
       "summary": "Incoming voices on the radio no longer turn choppy or fall further and further behind when the connection hiccups. The radio now holds a little more audio back after a hiccup, catches up smoothly after a burst instead of overlapping or lagging, and shrinks the delay again once the connection is steady.",
-      "createdAt": "2026-10-12T01:50:00.000Z",
+      "createdAt": "2026-10-11T23:28:50.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "radio-download-post-2026-10-12",
       "title": "Radio: new download post",
       "summary": "The radio download post moved to its new channel with a new look: a banner, how to install the radio, and Download Radio, Radio Website and Update Log buttons. Update Log shows the latest radio updates just to you. The old post in the previous channel is removed.",
-      "createdAt": "2026-10-12T02:00:00.000Z",
+      "createdAt": "2026-10-11T23:50:36.000Z",
       "updatedBy": "colin991"
     },
     {
       "id": "radio-download-page-2026-10-12",
       "title": "Radio: download page on the website",
-      "summary": "The Download Radio button now opens a download page at cwpcso.com/radio/download. It shows the latest version, release date, file size and SHA-256 checksum, a Download for Windows button, a link to the web radio for Mac and phones, and a few setup tips.",
-      "createdAt": "2026-10-12T02:10:00.000Z",
+      "summary": "The Download Radio button now opens a download page at cwpcso.com/radio/download. It shows the latest version, release date, file size and SHA-256 checksum, a Download for Windows button and a link to the web radio for Mac and phones, in the Clearwater radio colours.",
+      "createdAt": "2026-10-11T23:59:29.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-update-log-times-2026-10-12",
+      "title": "Radio: correct times in the update log",
+      "summary": "The Update Log button no longer shows radio updates as happening \"in 2 hours\". Each update now shows when it actually went out.",
+      "createdAt": "2026-10-12T00:05:00.000Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-download-page-redesign-2026-10-12",
+      "title": "Radio: new download page design",
+      "summary": "The radio download page has a new layout: a big Download for Windows button next to a picture of the radio, with the version, release date, file size and checksum underneath. The tips list is gone.",
+      "createdAt": "2026-10-12T00:10:26.000Z",
       "updatedBy": "colin991"
     }
   ]

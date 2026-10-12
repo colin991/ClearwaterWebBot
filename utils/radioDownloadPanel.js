@@ -172,7 +172,7 @@ export function startRadioDownloadPanel(client) {
 }
 
 /** The newest radio updates from the update catalog, for the Update Log button (fits one message). */
-export function radioUpdateLogText(updates, limit = 5) {
+export function radioUpdateLogText(updates, limit = 5, now = Date.now()) {
   const radio = (updates || [])
     .filter((entry) => /radio/i.test(`${entry.id} ${entry.title}`))
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
@@ -180,13 +180,14 @@ export function radioUpdateLogText(updates, limit = 5) {
   if (!radio.length) return 'No radio updates yet.';
   const lines = ['## Clearwater Radio updates'];
   for (const entry of radio) {
-    const at = Math.floor(Date.parse(entry.createdAt) / 1000);
+    // Never "in 2 hours": an entry dated ahead of the clock shows as just now.
+    const at = Math.floor(Math.min(Date.parse(entry.createdAt), now) / 1000);
     const short = String(entry.title).replace(/^Radio:\s*/i, '');
     const title = short.charAt(0).toUpperCase() + short.slice(1);
     lines.push('', `**${title}**${Number.isFinite(at) ? ` · <t:${at}:R>` : ''}`, entry.summary);
   }
   const text = lines.join('\n');
-  if (text.length > 3900 && limit > 1) return radioUpdateLogText(radio, limit - 1);
+  if (text.length > 3900 && limit > 1) return radioUpdateLogText(radio, limit - 1, now);
   return text.slice(0, 3900);
 }
 

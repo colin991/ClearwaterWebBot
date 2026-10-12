@@ -38,3 +38,9 @@ test('update log lists the newest radio updates only', () => {
   const long = Array.from({ length: 10 }, (_, i) => ({ id: `radio-${i}`, title: `Radio ${i}`, summary: 'x'.repeat(1500), createdAt: `2026-0${i % 9 + 1}-01T00:00:00.000Z` }));
   assert.ok(radioUpdateLogText(long).length <= 3900);
 });
+
+test('update log never shows an entry as in the future', () => {
+  const now = Date.parse('2026-10-12T00:00:00.000Z');
+  const text = radioUpdateLogText([{ id: 'radio-x', title: 'Radio: x', summary: 'X.', createdAt: '2026-10-12T02:00:00.000Z' }], 5, now);
+  assert.match(text, new RegExp(`<t:${now / 1000}:R>`));
+});
