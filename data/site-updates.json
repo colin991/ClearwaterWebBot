@@ -3602,6 +3602,13 @@
       "summary": "While the desktop radio is open, your Discord profile shows you playing Clearwater Radio with the Clearwater logo, the channel you're on, how long you've been on, and a Get Clearwater Radio button.",
       "createdAt": "2026-10-12T00:56:34.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-pages-all-blue-2026-10-12",
+      "title": "Radio: staff page and radio pages fully in the new blue",
+      "summary": "The radio staff panel, web radio and download page no longer use the old teal. Links, buttons, badges, the coverage map and backgrounds now use the Clearwater blue (#4484C6).",
+      "createdAt": "2026-10-12T00:58:39.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
