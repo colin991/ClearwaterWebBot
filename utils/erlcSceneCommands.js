@@ -678,7 +678,39 @@ function sceneCommandOutcome({
   return `FAIL — ${cmd} ${who} · ${why}${detail ? ` · ${detail}` : ''}`;
 }
 
+const sceneDiagnostics = {
+  startedAt: 0,
+  lastScanAt: 0,
+  lastScanLogs: null,
+  primed: false,
+  recent: [],
+};
+
+/** Anonymous health summary for /api/status: no player names or ids. */
+export function sceneCommandDiagnostics() {
+  return {
+    armed: sceneDiagnostics.startedAt > 0,
+    startedAt: sceneDiagnostics.startedAt || null,
+    lastScanAt: sceneDiagnostics.lastScanAt || null,
+    lastScanLogs: sceneDiagnostics.lastScanLogs,
+    primed: sceneDiagnostics.primed,
+    recent: sceneDiagnostics.recent.slice(),
+  };
+}
+
+function rememberSceneResult(details) {
+  sceneDiagnostics.recent.unshift({
+    at: Date.now(),
+    command: details.commandName || String(details.rawText || '').slice(0, 24),
+    handled: Boolean(details.handled),
+    reason: String(details.reason || ''),
+    timing: details.timing || '',
+  });
+  sceneDiagnostics.recent.length = Math.min(sceneDiagnostics.recent.length, 10);
+}
+
 export async function logSceneCommandResult(client, details = {}) {
+  rememberSceneResult(details);
   const body = sceneCommandLogBody(details);
   logger.info(`[SceneCmd] ${body}`);
   if (!client?.channels) return false;
@@ -1252,6 +1284,8 @@ export async function scanSceneCommandLogs(client, { snapshot, identities, execu
   const rawLogs = server?.CommandLogs || server?.commandLogs;
   // No data (ER:LC down or rate-limited): don't prime on an empty list, or the
   // next good scan would replay the whole command history as new commands.
+  sceneDiagnostics.lastScanAt = Date.now();
+  sceneDiagnostics.lastScanLogs = Array.isArray(rawLogs) ? rawLogs.length : null;
   if (!Array.isArray(rawLogs)) return { scanned: 0 };
   const logs = rawLogs.map((entry) => (
     entry?.command != null || entry?.username != null ? entry : parseErlcCommandLog(entry)
@@ -1259,6 +1293,7 @@ export async function scanSceneCommandLogs(client, { snapshot, identities, execu
   if (!sceneLogsPrimed) {
     for (const entry of logs) sceneLogSeen.add(`${entry.at || 0}:${entry.username || ''}:${entry.command || ''}`);
     sceneLogsPrimed = true;
+    sceneDiagnostics.primed = true;
     return { scanned: logs.length, primed: true };
   }
   const fresh = [];
@@ -1346,6 +1381,7 @@ export function startErlcSceneCommands(client) {
     });
   };
   client.on('erlcEvent', listener);
+  sceneDiagnostics.startedAt = Date.now();
   // Command logs are the fallback when the ER:LC webhook doesn't reach the bot.
   // Overlapping scans are safe: each log line is claimed in sceneLogSeen
   // before it is handled.

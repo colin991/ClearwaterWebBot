@@ -3631,6 +3631,13 @@
       "summary": "Radio recordings now get a written transcript that staff can read and search on the radio staff page. Transmissions with profanity or slurs are flagged for staff with a Play button, and a short note goes in the radio channel chat.",
       "createdAt": "2026-10-12T03:15:00Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-12-ingame-commands-health",
+      "title": "In-game command health check",
+      "summary": "The bot's status page now reports whether in-game ; commands are armed, when the bot last read ER:LC's command log, whether ER:LC is rate-limiting the bot, and the last few command results (no player names). This makes it possible to see why commands like ;scene aren't working without digging through logs.",
+      "createdAt": "2026-10-12T03:50:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { readEventBytes, verifyErlcEvent } from '../lib/erlc-webhook.js';
 import { createErlcEventRelay } from './erlcEventRelay.js';
-import { logIncomingErlcWebhook } from './erlcSceneCommands.js';
+import { logIncomingErlcWebhook, sceneCommandDiagnostics } from './erlcSceneCommands.js';
+import { getErlcRateLimitStatus } from './erlc.js';
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
@@ -91,6 +92,21 @@ export async function radioStaffGuild(client, discordId) {
 function radioStaffView(guild, member) {
   const nameOf = (id) => guild.members.cache.get(id)?.displayName || '';
   return { admin: { id: member.id, name: member.displayName }, ...radioStaffSnapshot(nameOf) };
+}
+
+/** Why in-game `;` commands might not run, without any player data. */
+function inGameCommandHealth() {
+  const limit = getErlcRateLimitStatus();
+  return {
+    erlcApi: {
+      state: limit.state,
+      limitedForMs: limit.limitedForMs,
+      queuedCommands: limit.queuedCommands,
+      hasRosterCache: limit.hasRosterCache,
+      cacheAgeMs: limit.cacheAgeMs,
+    },
+    ...sceneCommandDiagnostics(),
+  };
 }
 
 function sendJson(response, status, body) {
@@ -250,6 +266,8 @@ export function startBotApiServer(client, {
             latencyMs: Math.round(client?.ws?.ping || 0),
           },
           melonlyConfigured: Boolean(process.env.MELONLY_API_KEY?.trim()),
+          processStartedAt: new Date(Date.now() - process.uptime() * 1000).toISOString(),
+          inGameCommands: inGameCommandHealth(),
         });
       }
 
