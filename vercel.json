@@ -11,6 +11,10 @@
       "destination": "/radio.html"
     },
     {
+      "source": "/radio/download",
+      "destination": "/radio-download.html"
+    },
+    {
       "source": "/radio-staff",
       "destination": "/radio-staff.html"
     },
