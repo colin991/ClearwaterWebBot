@@ -28,6 +28,11 @@ export const RADIO_DOWNLOAD_URL = 'https://www.cwpcso.com/radio/update/Clearwate
 export const RADIO_WEBSITE_URL = 'https://www.cwpcso.com/radio';
 /** The website's download page (version, size, checksum, then the installer). */
 export const RADIO_DOWNLOAD_PAGE_URL = 'https://www.cwpcso.com/radio/download';
+/** Where the panel's Download button goes; RADIO_DOWNLOAD_BUTTON_URL overrides it (e.g. a public installer link while the website can't deploy). */
+export function radioDownloadButtonUrl(env = process.env) {
+  const url = env.RADIO_DOWNLOAD_BUTTON_URL?.trim();
+  return url && /^https:\/\//.test(url) ? url : RADIO_DOWNLOAD_PAGE_URL;
+}
 const REFRESH_MS = 2 * 60 * 1000;
 
 /**
@@ -72,7 +77,7 @@ export function buildRadioDownloadPanel({ banner = false } = {}) {
   container
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(PANEL_TEXT))
     .addActionRowComponents(new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Download Radio').setURL(RADIO_DOWNLOAD_PAGE_URL),
+      new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Download Radio').setURL(radioDownloadButtonUrl()),
       new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Radio Website').setURL(RADIO_WEBSITE_URL),
       new ButtonBuilder().setStyle(ButtonStyle.Success).setLabel('Update Log').setCustomId(RADIO_UPDATE_LOG_BUTTON_ID),
     ));
