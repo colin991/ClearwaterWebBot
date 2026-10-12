@@ -3550,7 +3550,7 @@
     {
       "id": "radio-download-page-2026-10-12",
       "title": "Radio: download page on the website",
-      "summary": "The Download Radio button now opens a download page at cwpcso.com/radio/download. It shows the latest version, release date, file size and SHA-256 checksum, a Download for Windows button, a link to the web radio for Mac and phones, and a few setup tips.",
+      "summary": "The Download Radio button now opens a download page at cwpcso.com/radio/download. It shows the latest version, release date, file size and SHA-256 checksum, a Download for Windows button and a link to the web radio for Mac and phones, in the same look as the rest of the website.",
       "createdAt": "2026-10-11T23:59:29.000Z",
       "updatedBy": "colin991"
     },

@@ -1,71 +1,50 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b0d12">
-<title>Download | Clearwater Radio</title>
-<meta name="description" content="Download Clearwater Radio, the push-to-talk radio overlay for Clearwater.">
-<link rel="icon" type="image/png" href="/assets/clearwater-logo.png">
-<link rel="apple-touch-icon" href="/assets/clearwater-logo.png">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="Download Clearwater Radio, the push-to-talk radio overlay for the Pinellas County Sheriff's Office roleplay." />
+<meta name="theme-color" content="#6b7078" />
+<title>Download Clearwater Radio | Pinellas County Sheriff's Office</title>
+<link rel="icon" type="image/png" href="/assets/pcso-sheriff-star.png" />
+<link rel="stylesheet" href="/styles.css?v=20261003-ride-waiver" />
+<script>document.documentElement.classList.add('js');</script>
 <style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px;
-    background: #0b0d12; color: #e6e9ef;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.45;
-  }
-  .card {
-    width: 100%; max-width: 520px; padding: 32px; border-radius: 14px;
-    background: #15181f; border: 1px solid #262b35;
-  }
-  .brand { display: flex; align-items: center; gap: 12px; }
-  .brand img { width: 40px; height: 40px; border-radius: 8px; }
-  h1 { margin: 0; font-size: 26px; font-weight: 800; }
-  .tagline { margin: 6px 0 24px; color: #aab2c0; font-size: 15px; }
-  .download {
-    display: block; text-align: center; padding: 14px 16px; border-radius: 8px;
-    background: #3b82f6; color: #fff; font-weight: 700; font-size: 16px; text-decoration: none;
-  }
-  .download:hover, .download:focus-visible { background: #2f6fdc; }
-  .alt { margin: 14px 0 24px; text-align: center; font-size: 14px; color: #aab2c0; }
-  a { color: #7fb0ff; }
-  dl { margin: 0 0 20px; display: grid; grid-template-columns: auto 1fr; gap: 10px 16px; font-size: 14px; }
-  dt { color: #aab2c0; }
-  dd { margin: 0; text-align: right; }
-  dd.hash { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
-  ul { margin: 0; padding-left: 18px; font-size: 14px; color: #cfd5df; }
-  li + li { margin-top: 8px; }
-  .help { margin: 18px 0 0; text-align: center; font-size: 14px; color: #aab2c0; }
+  .radio-download-card { max-width: 640px; }
+  .radio-download-card .pcso-button { width: 100%; font-size: 16px; }
+  .radio-download-alt { margin: 14px 0 22px; text-align: center; }
+  .radio-download-alt a { color: var(--pcso-red); font-weight: 700; }
+  .radio-download-facts { display: grid; grid-template-columns: auto 1fr; gap: 10px 18px; margin: 0; font-size: 15px; }
+  .radio-download-facts dt { color: #9aa1ab; }
+  .radio-download-facts dd { margin: 0; text-align: right; }
+  .radio-download-facts .hash { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
 </style>
 </head>
-<body>
-<main class="card">
-  <div class="brand">
-    <img src="/assets/clearwater-logo.png" alt="">
-    <h1>Clearwater Radio</h1>
-  </div>
-  <p class="tagline">Push-to-talk radio overlay for Clearwater, linked to our Discord radio channels.</p>
-
-  <a class="download" id="download" href="https://github.com/colin991/ClearwaterWebBot/releases/latest/download/ClearwaterRadio-Setup.exe">Download for Windows</a>
-  <p class="alt">On a Mac or your phone? Use the <a href="/radio">web radio</a>.</p>
-
-  <dl>
+<body class="pcso-home">
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="pcso-alert"><div class="pcso-wrap pcso-alert-inner"><span><strong>Alert:</strong> This is a roleplay community. Please call 911 for real emergencies.</span><button class="pcso-alert-close" type="button" aria-label="Close warning">×</button></div></div>
+<header class="pcso-header"><div class="pcso-wrap pcso-nav">
+<a class="pcso-brand" href="/"><img src="/assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a>
+<button class="pcso-menu" type="button" aria-expanded="false" aria-controls="pcso-navigation">Menu</button>
+<nav id="pcso-navigation" class="pcso-links" aria-label="Primary navigation"></nav>
+</div></header>
+<main id="main" class="pcso-page-main"><div class="pcso-wrap">
+<p class="pcso-eyebrow">Clearwater Radio</p>
+<h1>Download the Radio</h1>
+<p class="pcso-page-lead">The push-to-talk radio overlay for Clearwater, linked to our Discord radio channels.</p>
+<div class="pcso-page-card radio-download-card">
+  <a class="pcso-button pcso-button-red" href="https://github.com/colin991/ClearwaterWebBot/releases/latest/download/ClearwaterRadio-Setup.exe">Download for Windows</a>
+  <p class="radio-download-alt">On a Mac or your phone? Use the <a href="/radio">web radio</a>.</p>
+  <dl class="radio-download-facts">
     <dt>Version</dt><dd id="version">…</dd>
     <dt>Released</dt><dd id="released">…</dd>
     <dt>File size</dt><dd id="size">…</dd>
     <dt>SHA-256</dt><dd class="hash" id="sha">…</dd>
   </dl>
-
-  <ul>
-    <li>The radio stays on top of your game. If Roblox covers it, take Roblox out of fullscreen (F11) and play it maximized.</li>
-    <li>Sign in with Discord once on the radio screen. It uses your server nickname, and you must be in the Clearwater Discord.</li>
-    <li>The installer isn't signed, so Windows SmartScreen may warn you the first time. Choose <em>More info</em> and then <em>Run anyway</em>.</li>
-    <li>The radio updates itself when a new version comes out.</li>
-  </ul>
-  <p class="help">Something not working? Ask in the Clearwater Discord.</p>
-</main>
+</div>
+</div></main>
+<footer class="pcso-footer"><div class="pcso-wrap pcso-footer-grid"><a class="pcso-brand" href="/"><img src="/assets/pcso-sheriff-star.png" alt="" /><span><b>PINELLAS COUNTY</b><strong>SHERIFF'S OFFICE</strong></span></a><p>Professionalism · Integrity · Service<br /><small>© 2026 Pinellas County Sheriff's Office Roleplay</small></p><a href="https://discord.gg/839teFCwB" target="_blank" rel="noopener">Discord →</a></div></footer>
+<script src="/pcso-nav.js?v=20261003-ride-notices"></script>
 <script>
 (async () => {
   const set = (id, text) => { document.getElementById(id).textContent = text; };
