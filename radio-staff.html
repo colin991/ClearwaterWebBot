@@ -66,8 +66,9 @@
 
   <section class="rs-card">
     <h2>Flags <span id="flagCount" class="rs-count">0</span></h2>
-    <p class="rs-fine">Things the radio noticed for staff to check, like a Civilian-team player on the police radio. Kept for 24 hours.</p>
+    <p class="rs-fine">Things the radio noticed for staff to check, like a Civilian-team player on the police radio or profanity in a transmission. Kept for 24 hours.</p>
     <ul id="flagList" class="rs-list"></ul>
+    <div id="flagPlayer" class="rs-player"></div>
   </section>
 
   <section class="rs-card">
@@ -75,9 +76,10 @@
       <h2>Recordings</h2>
       <button type="button" id="recLoad" class="rs-btn rs-ghost">Load</button>
     </div>
-    <p class="rs-fine">Every radio transmission and everything said in the Discord radio channel from the last 24 hours, for reviewing reports. Older ones are deleted.</p>
+    <p class="rs-fine">Every radio transmission and everything said in the Discord radio channel from the last 24 hours, for reviewing reports, with a transcript of what was said. Older ones are deleted.</p>
     <form id="recFilter" class="rs-search" hidden>
-      <input id="recSearch" type="search" maxlength="40" placeholder="Filter by name or channel" autocomplete="off" aria-label="Filter recordings">
+      <input id="recSearch" type="search" maxlength="60" placeholder="Filter by name or channel" autocomplete="off" aria-label="Search recordings">
+      <label class="rs-check"><input type="checkbox" id="recFlagged"> Profanity only</label>
     </form>
     <ul id="recList" class="rs-list"></ul>
   </section>

@@ -3624,5 +3624,13 @@
       "summary": "When someone talks from the radio app on Fire or DOT, Discord now hears a short tone right before their voice. Other channels are unchanged.",
       "createdAt": "2026-10-12T01:59:02Z",
       "updatedBy": "colin991"
-    }  ]
+    },
+    {
+      "id": "radio-transcripts-profanity-2026-10-12",
+      "title": "Radio: transcripts and profanity flags",
+      "summary": "Radio recordings now get a written transcript that staff can read and search on the radio staff page. Transmissions with profanity or slurs are flagged for staff with a Play button, and a short note goes in the radio channel chat.",
+      "createdAt": "2026-10-12T03:15:00Z",
+      "updatedBy": "colin991"
+    }
+  ]
 }

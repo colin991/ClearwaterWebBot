@@ -67,3 +67,30 @@ test('the recorder keeps transmissions for 24 hours, skips PTT taps, and staff c
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('saved recordings are handed on for transcripts, and transcripts are kept with them', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'radio-rec-'));
+  try {
+    const saved = [];
+    const recorder = createRadioRecorder({ dir, onSaved: (entry, audio) => saved.push({ entry, audio }) });
+    const talk = recorder.start({ userId: '1', name: 'Alice', channelName: 'Radio' });
+    for (let i = 0; i < 50; i += 1) talk.push(packet());
+    talk.end();
+    await recorder.flush();
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0].audio.toString('ascii', 0, 4), 'OggS');
+    assert.deepEqual((await recorder.untranscribed()).map((entry) => entry.id), [saved[0].entry.id]);
+
+    await recorder.annotate(saved[0].entry.id, { transcript: 'oh shit', profanity: ['shit'] });
+    const [entry] = await recorder.list();
+    assert.equal(entry.transcript, 'oh shit');
+    assert.deepEqual(entry.profanity, ['shit']);
+    assert.deepEqual(await recorder.untranscribed(), []);
+
+    // Transcripts survive a restart.
+    const again = createRadioRecorder({ dir });
+    assert.equal((await again.list())[0].transcript, 'oh shit');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
