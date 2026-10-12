@@ -3688,6 +3688,13 @@
       "summary": "Clearwater Fire & Rescue now has /cwfr-infract. Pick a member, a type (warning, strike, suspension or termination), the policy broken and optionally when it expires, and the bot posts a Personnel Infraction record in the infractions channel. Lieutenants, EMS Lieutenants and above can infract people below them.",
       "createdAt": "2026-10-12T17:00:00Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "cwfr-support-tickets-2026-10-12",
+      "title": "CWFR support tickets",
+      "summary": "The Clearwater Fire & Rescue support channel now has a ticket panel the bot posts on startup and updates in place after restarts. Members pick Internal Affairs, Line Officer or Office of the Chief, describe what they need, and get a private ticket. Lieutenants and above handle Internal Affairs and Line Officer tickets; District Chiefs and above handle Office of the Chief tickets. Staff can claim, escalate to the Office of the Chief, or close.",
+      "createdAt": "2026-10-12T17:15:00Z",
+      "updatedBy": "colin991"
     }
   ]
 }
