@@ -2,12 +2,14 @@ import action from '../../lib/bot-api/action.js';
 import status from '../../lib/bot-api/status.js';
 import radio from '../../lib/bot-api/radio.js';
 import radioStaff from '../../lib/bot-api/radio-staff.js';
+import radioRelease from '../../lib/bot-api/radio-release.js';
 
 const ROUTES = {
   action,
   status,
   radio,
   'radio-staff': radioStaff,
+  'radio-release': radioRelease,
 };
 
 function routeName(request) {

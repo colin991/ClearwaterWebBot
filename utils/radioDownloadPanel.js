@@ -23,7 +23,8 @@ const OLD_PANEL_FOOTER = 'Clearwater Radio for Windows';
 export const RADIO_KEY_BUTTON_ID = 'radio-app:key';
 export const RADIO_UPDATE_LOG_BUTTON_ID = 'radio-app:updates';
 export const RADIO_RELEASE_REPO = 'colin991/ClearwaterWebBot';
-export const RADIO_DOWNLOAD_URL = `https://github.com/${RADIO_RELEASE_REPO}/releases/latest/download/ClearwaterRadio-Setup.exe`;
+/** Served by the website, which reads the (private) repository's latest release. */
+export const RADIO_DOWNLOAD_URL = 'https://www.cwpcso.com/radio/update/ClearwaterRadio-Setup.exe';
 export const RADIO_WEBSITE_URL = 'https://www.cwpcso.com/radio';
 /** The website's download page (version, size, checksum, then the installer). */
 export const RADIO_DOWNLOAD_PAGE_URL = 'https://www.cwpcso.com/radio/download';
