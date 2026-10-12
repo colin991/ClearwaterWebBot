@@ -18,7 +18,7 @@ const staticFiles = new Set([
   'jail.js', 'pcso-forms.js', 'inside-the-star.js', 'pcso-events.js', 'pcso-home.js', 'pcso-news-page.js', 'pcso-events-page.js', 'admin.js',
   'pcso-nav.js', 'pcso-portal.js', 'pcso-ride-along.js', 'pcso-careers.js', 'application-result.js', 'pcso-calls.js', 'pcso-employee.js',
   'pcso-resource-pages.js', 'pcso-dashboard.js',
-  'radio-web.css', 'radio-web-shim.js', 'radio-download.html', 'radio-download.js',
+  'radio-web.css', 'radio-web-shim.js', 'radio-opus-fallback.js', 'radio-opus.wasm', 'radio-download.html', 'radio-download.js',
   // radio-staff.html is not public: /api/bot/radio-staff-page sends it to admins only.
   'radio-staff.css', 'radio-staff.js', 'radio-staff-map.js',
 ]);
@@ -74,11 +74,11 @@ function buildWebRadio() {
     .replace('<link rel="stylesheet" href="radio.css">',
       `<link rel="stylesheet" href="${v('radio-app.css')}">\n  <link rel="stylesheet" href="${v('radio-web.css')}">`)
     .replace('<script src="panic-sound.js"></script>',
-      `<script src="${v('radio-web-shim.js')}"></script>\n  <script src="${v('radio-panic-sound.js')}"></script>`)
+      `<script src="${v('radio-opus-fallback.js')}"></script>\n  <script src="${v('radio-web-shim.js')}"></script>\n  <script src="${v('radio-panic-sound.js')}"></script>`)
     .replace('<script src="map-image.js"></script>', `<script src="${v('radio-map-image.js')}"></script>`)
     .replace('<script src="logo-image.js"></script>', `<script src="${v('radio-logo-image.js')}"></script>`)
     .replace('<script src="radio.js"></script>', `<script src="${v('radio-app.js')}"></script>`);
-  for (const needed of ['radio-web-shim.js', 'radio-app.js', 'radio-web.css', 'radio-map-image.js', 'radio-logo-image.js']) {
+  for (const needed of ['radio-opus-fallback.js', 'radio-web-shim.js', 'radio-app.js', 'radio-web.css', 'radio-map-image.js', 'radio-logo-image.js']) {
     if (!html.includes(needed)) throw new Error(`Web radio build: could not place ${needed} in radio.html`);
   }
   writeFileSync(join(output, 'radio.html'), html);

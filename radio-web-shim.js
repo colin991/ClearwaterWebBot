@@ -109,8 +109,10 @@
           gate.querySelector('button').onclick = () => { void attempt(); };
           return;
         }
-        if (typeof AudioEncoder !== 'function' || typeof AudioDecoder !== 'function') {
-          showGate('<h1>Browser not supported</h1><p>This browser cannot run the radio. Use a recent Chrome, Edge or Samsung Internet, or Safari on iOS 26 or newer.</p>');
+        // Opus comes from the browser (WebCodecs) or, on older Safari, radio-opus-fallback.js.
+        const opus = await (window.radioOpusReady || Promise.resolve(typeof AudioEncoder === 'function' && typeof AudioDecoder === 'function'));
+        if (!opus) {
+          showGate('<h1>Browser not supported</h1><p>This browser cannot run the radio. Open cwpcso.com/radio in Safari or Chrome instead. On iPhone, tap the share button and choose <b>Open in Safari</b>.</p>');
           return;
         }
         session = result;
