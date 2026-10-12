@@ -30,6 +30,7 @@ import { buildRadioPanicEmbed, RADIO_KICK_BLOCK_MS, setRadioStaffControls } from
 import { createRadioRecorder } from './radioRecorder.js';
 import { createSceneClock, createTalkOverWatch, findSceneChannels } from './radioModeration.js';
 import { createRadioBridge, radioBridgeSettings } from './radioBridge.js';
+import { loadOggOpusPackets, RADIO_TRANSMIT_TONE_CHANNELS } from './radioTone.js';
 import { canUseChannel, createMelonlyProfiles, normalizeAccess, profileLabel } from './radioMelonly.js';
 
 const UNKNOWN_MEMBER = 10007;
@@ -132,8 +133,9 @@ async function locateRadioPanic(env, userId, name) {
  * Audio from one radio transmission into Discord. Playback starts once a few packets have arrived,
  * so a PTT tap too short to say anything is dropped instead of popping in the voice channel.
  * @param {(stream: Readable) => void} play
+ * @param {Buffer[]} [lead] Opus packets played first (the Fire/DOT transmit tone)
  */
-export function createTransmitSink(play, minPackets = RADIO_MIN_TX_PACKETS) {
+export function createTransmitSink(play, minPackets = RADIO_MIN_TX_PACKETS, lead = []) {
   let stream = null;
   let queued = [];
   return {
@@ -145,6 +147,7 @@ export function createTransmitSink(play, minPackets = RADIO_MIN_TX_PACKETS) {
       queued.push(packet);
       if (queued.length < minPackets) return;
       stream = new Readable({ objectMode: true, read() {} });
+      for (const item of lead) stream.push(item);
       for (const item of queued) stream.push(item);
       queued = [];
       play(stream);
@@ -422,12 +425,17 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     },
   });
   activeRelay = relay;
+  let transmitTone = [];
+  loadOggOpusPackets()
+    .then((packets) => { transmitTone = packets; })
+    .catch((error) => logger.warn(`Radio transmit tone failed to load: ${error?.message || error}`));
   for (const settings of radioBridgeSettings(env)) {
+    const toned = RADIO_TRANSMIT_TONE_CHANNELS.has(settings.channel);
     bridges.set(settings.channel, createRadioBridge({
       ...settings,
       relay: () => relay,
       label: (member) => profileLabel(knownProfiles.get(member.id)),
-      createSink: (play) => createTransmitSink(play),
+      createSink: (play) => createTransmitSink(play, RADIO_MIN_TX_PACKETS, toned ? transmitTone : []),
     }));
     // The main bot posts if it can; the channel's own bridge bot is the fallback.
     bridgeTalkLogs.set(settings.channel, createRadioTalkLog({
