@@ -3567,6 +3567,13 @@
       "summary": "The radio download page has a new layout: a big Download for Windows button next to a picture of the radio, with the version, release date, file size and checksum underneath. The tips list is gone.",
       "createdAt": "2026-10-12T00:10:26.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "radio-new-blue-2026-10-12",
+      "title": "Radio: new blue and clickable CH label",
+      "summary": "The radio, web radio, radio staff page and download page now use a lighter Clearwater blue (#4484C6). Clicking the CH knob, or now the CH label under it, steps to the next channel and wraps back to channel 1.",
+      "createdAt": "2026-10-12T00:19:23.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }

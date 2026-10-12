@@ -62,7 +62,7 @@ h2 { margin: 0; font-size: 17px; display: flex; align-items: center; gap: 8px; }
   font-weight: 700;
   font-size: 14px;
   cursor: pointer;
-  background: #1c5aa6;
+  background: #4484c6;
   color: #fff;
 }
 .rs-btn:disabled { opacity: .55; cursor: default; }
@@ -145,7 +145,7 @@ h2 { margin: 0; font-size: 17px; display: flex; align-items: center; gap: 8px; }
   font-weight: 700;
   cursor: pointer;
 }
-.rs-tool.on { background: #1c5aa6; border-color: #1c5aa6; color: #fff; }
+.rs-tool.on { background: #4484c6; border-color: #4484c6; color: #fff; }
 .rs-zoom { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
 .rs-zoom button {
   width: 36px; height: 36px; border-radius: 10px; border: 1px solid #1f5a6e;
