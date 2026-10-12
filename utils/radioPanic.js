@@ -87,11 +87,24 @@ export function createRadioPanicWatch(send, now = Date.now) {
   };
 }
 
-/** "Building Street" or "Postal 123" for a parsed ER:LC player, or '' when the game has no location. */
-export function playerLocationLabel(player) {
+/**
+ * "Building Street, Postal 123" for a parsed ER:LC player, or '' when the game has no location.
+ * Without a postal from the game, the nearest postal to their map position is used.
+ * @param {(location: object) => string} [postalNear] nearest postal for a player's x/z
+ */
+export function playerLocationLabel(player, postalNear = () => '') {
   const location = player?.location || {};
-  return [location.building, location.street].filter(Boolean).join(' ')
-    || (location.postal ? `Postal ${location.postal}` : '');
+  const street = [location.building, location.street].filter(Boolean).join(' ');
+  let postal = String(location.postal || '').trim();
+  if (!postal) {
+    try { postal = String(postalNear(location) || ''); } catch { postal = ''; }
+  }
+  return [street, postal && `Postal ${postal}`].filter(Boolean).join(', ');
+}
+
+/** "Street, Postal 123" from a radio's last game data ({ postal, street }), or ''. */
+export function gameInfoLabel(info) {
+  return [String(info?.street || '').trim(), info?.postal ? `Postal ${info.postal}` : ''].filter(Boolean).join(', ');
 }
 
 /** The in-game player matching a Roblox ID or any of the given names. */

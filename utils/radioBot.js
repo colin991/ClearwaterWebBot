@@ -16,8 +16,8 @@ import { logger } from './logger.js';
 import { createRadioRelay } from './radioRelay.js';
 import { createRadioKey, verifyRadioKey } from './radioKeys.js';
 import { exchangeRadioCode, radioOAuthConfig } from './radioOAuth.js';
-import { callsignFromName, createRadioPanicWatch, findPanicPlayer, panicUnitAndPostal, playerLocationLabel } from './radioPanic.js';
-import { LIBERTY_POSTAL_POINTS } from './libertyMapCalibration.js';
+import { callsignFromName, createRadioPanicWatch, findPanicPlayer, gameInfoLabel, panicUnitAndPostal, playerLocationLabel } from './radioPanic.js';
+import { LIBERTY_POSTAL_POINTS, nearestLibertyPostal } from './libertyMapCalibration.js';
 import { erlcPlayersFromServer, fetchErlcServer, isCivilianTeam, libertyPlayerMapPoint, parseErlcKill, parseErlcPlayer } from './erlc.js';
 import { createCoverageTracker, normalizeCoverage } from './radioCoverage.js';
 import { createDamageTracker, createGameFeed, createTeamWatch, DOWNED_MS, GAME_TICK_MS } from './radioGameFeed.js';
@@ -61,13 +61,21 @@ let activeRelay = null;
 // Secure relay address for the web radio (cwpcso.com/radio); '' until the tunnel is up.
 let webRelayUrl = '';
 let radioEnv = process.env;
+const PANIC_SNAPSHOT_MAX_AGE_MS = 15_000;
+
+/** Nearest postal to a player's x/z, when the game gives a position but no postal. */
+function postalNear(location) {
+  const pin = libertyPlayerMapPoint(location);
+  return nearestLibertyPostal(pin || {})?.postal || '';
+}
 
 /** The in-game player behind a panic, looked up in the live ER:LC player list (null when unavailable). */
 async function findPanicPlayerInGame(env, { robloxId = '', names = [] }) {
   const key = env.ERLC_SERVER_KEY?.trim();
   if (!key) return null;
   try {
-    const server = await fetchErlcServer(key, { timeoutMs: 4_000 });
+    // A snapshot a few seconds old is fine, and saves an ER:LC request that may be rate limited.
+    const server = await fetchErlcServer(key, { timeoutMs: 4_000, maxAgeMs: PANIC_SNAPSHOT_MAX_AGE_MS });
     return findPanicPlayer(erlcPlayersFromServer(server).map(parseErlcPlayer), { robloxId, names });
   } catch (error) {
     logger.warn(`Radio panic: could not read the ER:LC player list (${error?.message || error})`);
@@ -115,14 +123,17 @@ async function locateRadioUsers(env, users) {
 }
 
 /** EMER on a radio: the member's linked Roblox player, so the alert shows where they are in game. */
-async function locateRadioPanic(env, userId, name) {
+async function locateRadioPanic(env, userId, name, lastGame = null) {
   const identity = (await getIdentityCache().catch(() => ({ byDiscord: {} }))).byDiscord?.[userId] || {};
   const nick = String(name || '').replace(/^(\s*[[(][^\])]*[\])]\s*)+/, '').trim();
   const player = await findPanicPlayerInGame(env, {
     robloxId: identity.robloxId,
     names: [identity.robloxUsername, name, nick, nick.split(/\s*[|/-]\s*/)[0]],
   });
-  return { name, location: player ? playerLocationLabel(player) : '', ...panicUnitAndPostal(player, [name]) };
+  const found = panicUnitAndPostal(player, [name]);
+  // The radio's own last game data covers a missed lookup (ER:LC busy or rate limited).
+  const location = playerLocationLabel(player, postalNear) || gameInfoLabel(lastGame);
+  return { name, location, ...found, postal: found.postal || String(lastGame?.postal || '') };
 }
 
 /**
@@ -385,7 +396,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
       return config ? { clientId: config.clientId, redirectUri: config.redirectUri } : null;
     },
     status: () => ({ online: isOnline(), channel: channel?.name || 'Radio' }),
-    locatePanic: (userId, name) => locateRadioPanic(env, userId, name),
+    locatePanic: (userId, name) => locateRadioPanic(env, userId, name, gameFeed.info(userId)),
     mapPoint: (postal) => {
       const point = LIBERTY_POSTAL_POINTS[String(postal).match(/\d{3,5}/)?.[0] || ''];
       return point ? { x: point.left, y: point.top } : null;
@@ -782,7 +793,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
       const message = {
         type: 'panic',
         name: player?.username || panic.name || 'Unknown',
-        location: panic.location || playerLocationLabel(player),
+        location: panic.location || playerLocationLabel(player, postalNear),
         ...panicUnitAndPostal(player),
         at: panic.at,
       };
