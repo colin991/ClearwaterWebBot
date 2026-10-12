@@ -222,7 +222,12 @@ h2 { margin: 0; font-size: 17px; display: flex; align-items: center; gap: 8px; }
 }
 .rs-btn.rs-warn { background: #8a6a12; }
 .rs-tag.live { background: #163357; color: #a9c8ea; }
-.rs-row audio { width: 100%; height: 36px; }
+.rs-row audio, .rs-player audio { width: 100%; height: 36px; }
+.rs-player:not(:empty) { margin-top: 10px; }
+.rs-transcript { width: 100%; margin: 0; font-size: 13px; line-height: 1.45; color: #cfe8f0; white-space: pre-wrap; word-break: break-word; }
+.rs-transcript.quiet { color: #8fb3c4; font-style: italic; }
+.rs-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #8fb3c4; white-space: nowrap; cursor: pointer; }
+.rs-search .rs-check input { flex: none; width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; border: 0; background: none; accent-color: #4484c6; }
 .rs-row.crash .rs-who span { white-space: pre-wrap; word-break: break-word; }
 .rs-row details { width: 100%; font-size: 12px; color: #8fb3c4; }
 .rs-row details pre { white-space: pre-wrap; word-break: break-word; margin: 6px 0 0; font-size: 11px; }

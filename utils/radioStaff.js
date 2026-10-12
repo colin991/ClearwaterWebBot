@@ -264,7 +264,8 @@ export async function runRadioStaffTool(action, payload, by) {
   }
   if (action === 'recordings') {
     const list = (await controls.recordings?.()) || [];
-    return { ok: true, action, recordings: list.slice(0, 300) };
+    // Transcripts make each entry bigger, but staff search them, so send a full day's worth.
+    return { ok: true, action, recordings: list.slice(0, 1000), transcripts: Boolean(controls.transcripts?.()) };
   }
   // recording: one transmission's audio, as base64 Ogg Opus for the page to play.
   const found = await controls.recording?.(String(payload?.id || ''));

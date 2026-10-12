@@ -100,9 +100,10 @@ export function encodeOggOpus(packets, { channels = 1, serial = 0x43575231 } = {
 
 /**
  * start(meta) begins a recording ({ userId, name, channel, channelName, source, to }) and returns
- * { push(packet), end() }. Finished recordings are written to `dir` with an index.
+ * { push(packet), end() }. Finished recordings are written to `dir` with an index, then
+ * onSaved(entry, audio) is called (the bot transcribes them from there).
  */
-export function createRadioRecorder({ dir, now = Date.now, keepMs = RECORDING_KEEP_MS }) {
+export function createRadioRecorder({ dir, now = Date.now, keepMs = RECORDING_KEEP_MS, onSaved = null }) {
   const indexPath = join(dir, 'index.json');
   let index = [];
   const ready = (async () => {
@@ -168,6 +169,7 @@ export function createRadioRecorder({ dir, now = Date.now, keepMs = RECORDING_KE
             await writeFile(join(dir, `${id}.ogg`), file);
             index.push(entry);
             await saveIndex();
+            try { onSaved?.(entry, file); } catch { /* transcripts never break recording */ }
           });
         },
       };
@@ -184,6 +186,23 @@ export function createRadioRecorder({ dir, now = Date.now, keepMs = RECORDING_KE
       const entry = index.find((item) => item.id === String(id || ''));
       if (!entry || entry.at < now() - keepMs) return null;
       return { entry, audio: await readFile(join(dir, `${entry.id}.ogg`)).catch(() => null) };
+    },
+    /** Adds a transcript ({ transcript, profanity }) to a recording that is still kept. */
+    annotate(id, { transcript = '', profanity = [] } = {}) {
+      return queue(async () => {
+        await ready;
+        const entry = index.find((item) => item.id === String(id || ''));
+        if (!entry) return;
+        entry.transcript = String(transcript || '').slice(0, 2000);
+        entry.profanity = profanity.map((word) => String(word).slice(0, 40)).slice(0, 20);
+        await saveIndex();
+      });
+    },
+    /** Kept recordings with no transcript yet (saved while transcripts were off, or before a restart). */
+    async untranscribed() {
+      await ready;
+      const cutoff = now() - keepMs;
+      return index.filter((entry) => entry.at >= cutoff && typeof entry.transcript !== 'string');
     },
     prune: () => queue(prune),
     flush: () => writing,

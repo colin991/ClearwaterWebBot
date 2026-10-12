@@ -28,6 +28,7 @@ import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { createRadioStats, buildRadioStatsEmbed } from './radioStats.js';
 import { buildRadioPanicEmbed, RADIO_KICK_BLOCK_MS, setRadioStaffControls } from './radioStaff.js';
 import { createRadioRecorder } from './radioRecorder.js';
+import { createRadioTranscriber, maskWord } from './radioTranscribe.js';
 import { createSceneClock, createTalkOverWatch, findSceneChannels } from './radioModeration.js';
 import { createRadioBridge, radioBridgeSettings } from './radioBridge.js';
 import { loadOggOpusPackets, RADIO_TRANSMIT_TONE_CHANNELS } from './radioTone.js';
@@ -276,7 +277,40 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
   void readJsonFile(settingsPath, {}).then((saved) => { syncedSettings = { ...(saved || {}), ...syncedSettings }; });
 
   // Every transmission (radio and the Discord radio channel) is recorded for staff review, kept 24 hours.
-  const recorder = createRadioRecorder({ dir: radioDataPath('radio-recordings') });
+  // With OPENAI_API_KEY set, each one is also transcribed (staff can search what was said) and
+  // checked for profanity; RADIO_TRANSCRIBE=off turns that off.
+  const transcriber = createRadioTranscriber({
+    apiKey: env.RADIO_TRANSCRIBE?.trim().toLowerCase() === 'off' ? '' : env.OPENAI_API_KEY,
+    model: env.RADIO_TRANSCRIBE_MODEL?.trim(),
+    extraWords: env.RADIO_PROFANITY_WORDS,
+    async onResult(entry, { transcript, profanity }) {
+      await recorder.annotate(entry.id, { transcript, profanity });
+      if (!profanity.length || !entry.userId) return;
+      const words = profanity.map(maskWord).join(', ');
+      addFlag({
+        kind: 'profanity',
+        userId: entry.userId,
+        name: entry.name,
+        detail: `Said ${words} on ${entry.channel}.`,
+        recordingId: entry.id,
+      });
+      void postStaff({ content: `⚠️ <@${entry.userId}> used profanity on ${entry.channel} (${words}). The transcript and recording are on the radio staff page.`, allowedMentions: { parse: [] } });
+      logger.info(`Radio: profanity flag for ${entry.userId} (recording ${entry.id})`);
+    },
+  });
+  const recorder = createRadioRecorder({
+    dir: radioDataPath('radio-recordings'),
+    onSaved: (entry, audio) => transcriber.add(entry, audio),
+  });
+  if (transcriber.configured) {
+    // Recordings saved before a restart (or before the key was added): the newest 100 still kept.
+    void recorder.untranscribed().then(async (entries) => {
+      for (const entry of entries.slice(-100)) {
+        const found = await recorder.read(entry.id).catch(() => null);
+        if (found?.audio) transcriber.add(found.entry, found.audio);
+      }
+    }).catch(() => {});
+  }
   void recorder.prune();
   const pruneTimer = setInterval(() => { void recorder.prune(); }, RECORDING_PRUNE_MS);
   pruneTimer.unref?.();
@@ -463,7 +497,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     getCoverage: () => coverage,
     limit: (userId) => (damage.isDamaged(userId) ? DAMAGED_SIGNAL : null),
   });
-  // Flags for the staff page: a Civilian-team player on the police radio.
+  // Flags for the staff page: a Civilian-team player on the police radio, talking over dispatch, profanity.
   let staffFlags = [];
   const teamWatch = createTeamWatch({ isOffTeam: isCivilianTeam });
   function addFlag(flag) {
@@ -564,6 +598,7 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     scenes: () => sceneList,
     recordings: () => recorder.list(),
     recording: (id) => recorder.read(id),
+    transcripts: () => transcriber.configured,
     event: () => relay.event,
     openEvent: (name, by) => relay.openEvent(name, by),
     closeEvent: () => relay.closeEvent(),

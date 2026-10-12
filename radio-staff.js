@@ -221,43 +221,80 @@
   /* ---------- recordings ---------- */
 
   let recordings = [];
+  let transcriptsOn = false;
+
+  // Loads one recording and plays it at the bottom of `box` (its row, or the player under Flags).
+  async function playRecording(box, id, target) {
+    target.disabled = true;
+    const { status, data } = await call({ action: 'recording', id });
+    target.disabled = false;
+    if (status !== 200 || !data.audio) return toast(data.error || 'Could not load that recording.', true);
+    const bytes = Uint8Array.from(atob(data.audio), (char) => char.charCodeAt(0));
+    const audio = document.createElement('audio');
+    audio.controls = true;
+    audio.src = URL.createObjectURL(new Blob([bytes], { type: data.type || 'audio/ogg' }));
+    box.querySelector('audio')?.remove();
+    box.append(audio);
+    void audio.play().catch(() => {});
+    return undefined;
+  }
+
+  function transcriptLine(rec) {
+    const line = document.createElement('p');
+    line.className = 'rs-transcript';
+    if (typeof rec.transcript === 'string') {
+      line.textContent = rec.transcript ? `“${rec.transcript}”` : 'Nothing clear was said.';
+      if (!rec.transcript) line.classList.add('quiet');
+    } else if (transcriptsOn && Date.now() - rec.at < 5 * 60 * 1000) {
+      line.textContent = 'Transcribing…';
+      line.classList.add('quiet');
+    } else return null;
+    return line;
+  }
+
   function renderRecordings() {
     const list = $('recList');
     const query = $('recSearch').value.trim().toLowerCase();
-    const shown = recordings.filter((rec) => !query || `${rec.name} ${rec.channel}`.toLowerCase().includes(query)).slice(0, 150);
-    if (!shown.length) return empty(list, recordings.length ? 'No recordings match.' : 'No recordings in the last 24 hours.');
+    const onlyFlagged = $('recFlagged').checked;
+    const shown = recordings
+      .filter((rec) => !onlyFlagged || rec.profanity?.length)
+      .filter((rec) => !query || `${rec.name} ${rec.channel} ${rec.transcript || ''}`.toLowerCase().includes(query))
+      .slice(0, 150);
+    if (!shown.length) {
+      const why = onlyFlagged ? 'No recordings with profanity in the last 24 hours.' : 'No recordings in the last 24 hours.';
+      return empty(list, recordings.length && (query || !onlyFlagged) ? 'No recordings match.' : why);
+    }
     list.replaceChildren(...shown.map((rec) => {
       const when = new Date(rec.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const item = row({ name: rec.name, userId: rec.userId }, `${when} · ${rec.channel} · ${rec.seconds}s${rec.source === 'discord' ? ' · Discord' : ''}`, [
-        button('Play', 'ghost', async (event) => {
-          const target = event.currentTarget;
-          target.disabled = true;
-          const { status, data } = await call({ action: 'recording', id: rec.id });
-          target.disabled = false;
-          if (status !== 200 || !data.audio) return toast(data.error || 'Could not load that recording.', true);
-          const bytes = Uint8Array.from(atob(data.audio), (char) => char.charCodeAt(0));
-          const audio = document.createElement('audio');
-          audio.controls = true;
-          audio.src = URL.createObjectURL(new Blob([bytes], { type: data.type || 'audio/ogg' }));
-          item.querySelector('audio')?.remove();
-          item.append(audio);
-          void audio.play().catch(() => {});
-          return undefined;
-        }),
+        button('Play', 'ghost', (event) => playRecording(item, rec.id, event.currentTarget)),
       ]);
+      if (rec.profanity?.length) {
+        item.classList.add('flag');
+        const tag = document.createElement('span');
+        tag.className = 'rs-tag warn';
+        tag.textContent = 'PROFANITY';
+        item.insertBefore(tag, item.lastChild);
+      }
+      const line = transcriptLine(rec);
+      if (line) item.append(line);
       return item;
     }));
     return undefined;
   }
-  $('recLoad').addEventListener('click', async () => {
+  async function loadRecordings() {
     const data = await tool({ action: 'recordings' });
     if (!data) return;
     recordings = Array.isArray(data.recordings) ? data.recordings : [];
+    transcriptsOn = Boolean(data.transcripts);
+    $('recSearch').placeholder = transcriptsOn ? 'Search names, channels or what was said' : 'Filter by name or channel';
     $('recFilter').hidden = false;
     $('recLoad').textContent = 'Reload';
     renderRecordings();
-  });
+  }
+  $('recLoad').addEventListener('click', () => { void loadRecordings(); });
   $('recSearch').addEventListener('input', () => renderRecordings());
+  $('recFlagged').addEventListener('change', () => renderRecordings());
   $('recFilter').addEventListener('submit', (event) => event.preventDefault());
 
   function render(data) {
@@ -405,14 +442,18 @@
     renderAccessEditor();
   });
 
-  const FLAG_LABELS = { 'off-team': 'OFF TEAM', 'talk-over': 'TALK-OVER' };
+  const FLAG_LABELS = { 'off-team': 'OFF TEAM', 'talk-over': 'TALK-OVER', profanity: 'PROFANITY' };
   function renderFlags(flags) {
     $('flagCount').textContent = String(flags.length);
     const list = $('flagList');
     if (!flags.length) return empty(list, 'Nothing flagged.');
     list.replaceChildren(...flags.map((flag) => {
       const when = new Date(flag.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const item = row({ name: flag.name, userId: flag.userId }, `${when} · ${flag.detail || ''}`, []);
+      const actions = flag.recordingId
+        // Flags re-render every few seconds, so the audio plays in the player under the list.
+        ? [button('Play', 'ghost', (event) => playRecording($('flagPlayer'), flag.recordingId, event.currentTarget))]
+        : [];
+      const item = row({ name: flag.name, userId: flag.userId }, `${when} · ${flag.detail || ''}`, actions);
       item.classList.add('flag');
       const tag = document.createElement('span');
       tag.className = 'rs-tag warn';
