@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
+const { createPresence } = require('./presence');
 
 let autoUpdater = null;
 try {
@@ -483,6 +484,10 @@ if (!app.requestSingleInstanceLock()) {
     });
     ipcMain.on('talk:popup', (_event, text) => showTalkPopup(typeof text === 'string' ? text : ''));
     ipcMain.handle('app:version', () => app.getVersion());
+    // Discord Rich Presence ("Playing Clearwater Radio" on the member's profile).
+    const presence = createPresence();
+    ipcMain.on('presence:set', (_event, info) => presence.set(info && typeof info === 'object' ? info : null));
+    app.on('before-quit', () => presence.stop());
     ipcMain.handle('crash:take', () => {
       const crashes = readCrashes();
       try { fs.rmSync(crashPath(), { force: true }); } catch { /* ignore */ }

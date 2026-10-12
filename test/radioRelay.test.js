@@ -1175,3 +1175,14 @@ test('priority members never get BUSY and their radio is told to boost the mic',
     await harness.close();
   }
 });
+
+test('the ready message names the Discord app for Rich Presence', async () => {
+  const harness = await startRelay({ presence: () => ({ clientId: '1234567890123456789' }) });
+  try {
+    const alice = await signIn(harness, ALICE);
+    assert.deepEqual(alice.messages.find((m) => m.type === 'ready').presence, { clientId: '1234567890123456789' });
+    alice.ws.close();
+  } finally {
+    await harness.close();
+  }
+});

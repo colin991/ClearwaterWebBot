@@ -338,6 +338,11 @@ export function startRadioBot(env = process.env, { erlcEvents = null } = {}) {
     verifyKey: (key) => verifyRadioKey(key, env),
     exchangeCode: (code) => exchangeRadioCode(code, env),
     createSession: (userId) => createRadioKey(userId, env),
+    // Rich Presence app: its name is what members' Discord profiles show as "Playing …".
+    presence: () => {
+      const clientId = env.RADIO_PRESENCE_CLIENT_ID?.trim() || radioOAuthConfig(env)?.clientId;
+      return clientId ? { clientId } : null;
+    },
     loginInfo: () => {
       const config = radioOAuthConfig(env);
       return config ? { clientId: config.clientId, redirectUri: config.redirectUri } : null;
