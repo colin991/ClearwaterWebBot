@@ -39,6 +39,13 @@ WEBSITE_PATHS=(
   signin.js
   coming-soon.js
   site-gate.js
+  radio-web.css
+  radio-web-shim.js
+  radio-opus-fallback.js
+  radio-opus.wasm
+  radio-download.js
+  radio-download.html
+  radio-app/renderer
   events.html
   news.html
   admin.html

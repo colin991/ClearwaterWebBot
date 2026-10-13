@@ -8,6 +8,8 @@ import { logger } from './utils/logger.js';
 import { startErlcRoleSync } from './utils/erlcRoleSync.js';
 import { startRobloxGroupSync } from './utils/robloxGroupSync.js';
 import { startDepartmentSalaryJob } from './utils/departmentSalary.js';
+import { startRadioBot } from './utils/radioBot.js';
+import { startCodeUpdateWatch } from './utils/codeUpdateWatch.js';
 import { registrationGuildIds, slashCommandsForGuild } from './utils/commandGuilds.js';
 
 // Keep boot loaders in the entry module so an incomplete host upload cannot
@@ -130,6 +132,7 @@ try {
 }
 
 const stopBotServices = startBotServices(client, config);
+const stopRadioBot = startRadioBot(process.env, { erlcEvents: client });
 let stopErlcSync = () => {};
 let stopRobloxGroupSync = () => {};
 let stopDepartmentSalary = () => {};
@@ -139,9 +142,14 @@ client.once(Events.ClientReady, () => {
   stopDepartmentSalary = startDepartmentSalaryJob(client);
 });
 
-const shutDown = async (signal) => {
+let shuttingDown = false;
+const shutDown = async (signal, exitCode = 0) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   logger.info(`${signal} received; shutting down.`);
+  stopCodeUpdateWatch();
   stopBotServices();
+  stopRadioBot();
   stopErlcSync();
   stopRobloxGroupSync();
   stopDepartmentSalary();
@@ -149,13 +157,14 @@ const shutDown = async (signal) => {
   client.stopErlcZoneVoice?.();
   client.stopDispatchChannelStatus?.();
   client.stopCorrectionsChannelStatus?.();
-  client.stopFrequencyChangeGreeting?.();
   client.stopSoundboardAccess?.();
   client.stopErlcSceneCommands?.();
   client.stopErlcCallRadio?.();
-  client.destroy();
-  process.exit(0);
+  await client.destroy();
+  process.exit(exitCode);
 };
+// Merged changes on main go live by themselves (see index.js supervisor).
+const stopCodeUpdateWatch = startCodeUpdateWatch((code) => void shutDown('update', code));
 
 process.once('SIGINT', () => void shutDown('SIGINT'));
 process.once('SIGTERM', () => void shutDown('SIGTERM'));

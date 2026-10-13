@@ -1,6 +1,7 @@
 import { readEventBytes, verifyErlcEvent } from '../lib/erlc-webhook.js';
 import { createErlcEventRelay } from './erlcEventRelay.js';
-import { logIncomingErlcWebhook } from './erlcSceneCommands.js';
+import { logIncomingErlcWebhook, sceneCommandDiagnostics } from './erlcSceneCommands.js';
+import { getErlcRateLimitStatus } from './erlc.js';
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { logger } from './logger.js';
@@ -17,6 +18,147 @@ import {
   getPcsoSiteContent,
 } from './pcsoSiteContent.js';
 import { getPcsoChatbot, matchPcsoChatbotReply, savePcsoChatbot } from './pcsoChatbot.js';
+import { memberHasSiteAccess } from '../lib/site-access.js';
+import { CLEARWATER_GUILD_ID, getHighestStaffRank, getInternetBadges, getStaffPanelAccess } from './staffRanks.js';
+import { config } from '../config.js';
+import { handleRadioUpgrade, radioWebSession } from './radioBot.js';
+import { RADIO_STAFF_TOOLS, radioStaffSnapshot, runRadioStaffAction, runRadioStaffTool, saveRadioCoverage } from './radioStaff.js';
+import { PermissionFlagsBits } from 'discord.js';
+import { hasAdminPanelAccess } from '../lib/admin-access.js';
+import { PINELLAS_GUILD_ID } from './pinellasServer.js';
+
+const UNKNOWN_MEMBER = 10007;
+const ACCESS_CACHE_MS = 30_000;
+const accessCache = new Map();
+
+/** Live Clearwater membership + roles for the website, so stale login roles are not trusted. */
+async function resolveWebsiteAccess(client, discordId) {
+  const cached = accessCache.get(discordId);
+  if (cached && Date.now() - cached.at < ACCESS_CACHE_MS) return cached.access;
+  const access = await fetchWebsiteAccess(client, discordId);
+  if (access) {
+    accessCache.set(discordId, { at: Date.now(), access });
+    if (accessCache.size > 1000) {
+      for (const [key, entry] of accessCache) {
+        if (Date.now() - entry.at >= ACCESS_CACHE_MS) accessCache.delete(key);
+      }
+    }
+  }
+  return access;
+}
+
+/**
+ * A website user's roles and Administrator flag read live from Discord, in place of the ones
+ * saved in their sign-in cookie at login, so a demoted member loses admin tools straight away.
+ * Returns null when a server can't be checked right now.
+ */
+const liveRolesCache = new Map();
+
+export async function liveWebsiteRoles(client, discordId) {
+  const cached = liveRolesCache.get(discordId);
+  if (cached && Date.now() - cached.at < ACCESS_CACHE_MS) return cached.roles;
+  const roles = await fetchLiveWebsiteRoles(client, discordId);
+  if (roles) {
+    liveRolesCache.set(discordId, { at: Date.now(), roles });
+    if (liveRolesCache.size > 1000) {
+      for (const [key, entry] of liveRolesCache) {
+        if (Date.now() - entry.at >= ACCESS_CACHE_MS) liveRolesCache.delete(key);
+      }
+    }
+  }
+  return roles;
+}
+
+async function fetchLiveWebsiteRoles(client, discordId) {
+  const lookup = async (guildId) => {
+    const guild = client?.guilds?.cache?.get(guildId);
+    if (!guild) return undefined;
+    try {
+      return await guild.members.fetch({ user: discordId, force: true });
+    } catch (error) {
+      if (error?.code === UNKNOWN_MEMBER) return null;
+      throw error;
+    }
+  };
+  let clearwater;
+  let pinellas;
+  try {
+    [clearwater, pinellas] = await Promise.all([lookup(CLEARWATER_GUILD_ID), lookup(PINELLAS_GUILD_ID)]);
+  } catch {
+    return null;
+  }
+  if (clearwater === undefined || pinellas === undefined) return null;
+  const roleIds = (member) => (member ? [...member.roles.cache.keys()].filter((id) => id !== member.guild?.id).map(String) : []);
+  return {
+    guildRoles: roleIds(clearwater),
+    pinellasRoles: roleIds(pinellas),
+    discordAdmin: [clearwater, pinellas].some((member) => member?.permissions?.has(PermissionFlagsBits.Administrator) === true),
+  };
+}
+
+async function fetchWebsiteAccess(client, discordId) {
+  const guild = client?.guilds?.cache?.get(CLEARWATER_GUILD_ID);
+  if (!guild) return null;
+  let member;
+  try {
+    member = await guild.members.fetch({ user: discordId, force: true });
+  } catch (error) {
+    if (error?.code === UNKNOWN_MEMBER) {
+      return { member: false, memberChecked: true, siteAccess: false, panelAccess: null, staffRank: null, badges: [] };
+    }
+    throw error;
+  }
+  const options = { ownerDiscordIds: config.ownerDiscordIds, ownerRoleIds: config.ownerRoleIds };
+  return {
+    member: true,
+    memberChecked: true,
+    siteAccess: memberHasSiteAccess(member, options),
+    panelAccess: getStaffPanelAccess(member, options),
+    staffRank: getHighestStaffRank(member)?.name || null,
+    badges: getInternetBadges(member),
+  };
+}
+
+/**
+ * Website radio staff panel (cwpcso.com/radio-staff): only members with Administrator in the
+ * Clearwater server, checked live each time so a removed admin loses it straight away.
+ */
+export async function radioStaffGuild(client, discordId) {
+  if (!/^\d{15,22}$/.test(discordId)) return { status: 400, error: 'Invalid discordId' };
+  const guild = client?.guilds?.cache?.get(CLEARWATER_GUILD_ID);
+  if (!guild) return { status: 503, error: 'The bot cannot see the Clearwater server right now.' };
+  let member;
+  try {
+    member = await guild.members.fetch({ user: discordId, force: true });
+  } catch (error) {
+    if (error?.code === UNKNOWN_MEMBER) return { status: 403, error: 'You are not in the Clearwater server.' };
+    throw error;
+  }
+  if (!member.permissions?.has(PermissionFlagsBits.Administrator)) {
+    return { status: 403, error: 'Only Clearwater admins can use the radio staff panel.' };
+  }
+  return { guild, member };
+}
+
+function radioStaffView(guild, member) {
+  const nameOf = (id) => guild.members.cache.get(id)?.displayName || '';
+  return { admin: { id: member.id, name: member.displayName }, ...radioStaffSnapshot(nameOf) };
+}
+
+/** Why in-game `;` commands might not run, without any player data. */
+function inGameCommandHealth() {
+  const limit = getErlcRateLimitStatus();
+  return {
+    erlcApi: {
+      state: limit.state,
+      limitedForMs: limit.limitedForMs,
+      queuedCommands: limit.queuedCommands,
+      hasRosterCache: limit.hasRosterCache,
+      cacheAgeMs: limit.cacheAgeMs,
+    },
+    ...sceneCommandDiagnostics(),
+  };
+}
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -67,9 +209,9 @@ export function startBotApiServer(client, {
   }
 
   const eventRelay = createErlcEventRelay({
-    onEvent: (event, id) => {
+    onEvent: (event, id, meta = {}) => {
       logger.info(`ER:LC event received ${String(id || '').slice(0, 12)} keys=${Object.keys(event || {}).slice(0, 12).join(',')}`);
-      client.emit('erlcEvent', event, id);
+      client.emit('erlcEvent', event, id, meta);
       void logIncomingErlcWebhook(client, event, id).catch((error) => {
         logger.warn(`ER:LC command webhook log failed: ${error?.message || error}`);
       });
@@ -101,6 +243,72 @@ export function startBotApiServer(client, {
         }
       }
 
+      if (request.method === 'GET' && url.pathname === '/api/access') {
+        const discordId = String(url.searchParams.get('discordId') || '');
+        if (!/^\d{15,22}$/.test(discordId)) return sendJson(response, 400, { error: 'Invalid discordId' });
+        const access = await resolveWebsiteAccess(client, discordId);
+        if (!access) return sendJson(response, 503, { error: 'Clearwater guild unavailable' });
+        // Admin panel (news, events, roster, chatbot) from live roles, not the login cookie's.
+        const live = await liveWebsiteRoles(client, discordId);
+        if (!live) return sendJson(response, 200, access);
+        return sendJson(response, 200, { ...access, adminPanel: hasAdminPanelAccess({ id: discordId, ...live }, access) });
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/radio/web-session') {
+        const discordId = String(url.searchParams.get('discordId') || '');
+        if (!/^\d{15,22}$/.test(discordId)) return sendJson(response, 400, { error: 'Invalid discordId' });
+        const session = radioWebSession(discordId);
+        return sendJson(response, session.error ? 503 : 200, session);
+      }
+
+      if (url.pathname === '/api/radio/staff') {
+        if (request.method !== 'GET' && request.method !== 'POST') return sendJson(response, 405, { error: 'Method not allowed' });
+        let payload = {};
+        if (request.method === 'POST') {
+          try {
+            payload = JSON.parse((await readBinaryBody(request, 64_000)).toString('utf8') || '{}');
+          } catch {
+            return sendJson(response, 400, { error: 'Invalid JSON.' });
+          }
+        }
+        const discordId = String(request.method === 'POST' ? payload.discordId || '' : url.searchParams.get('discordId') || '');
+        const access = await radioStaffGuild(client, discordId);
+        if (access.error) return sendJson(response, access.status, { error: access.error });
+
+        if (request.method === 'GET') {
+          const query = String(url.searchParams.get('q') || '').trim().slice(0, 32);
+          if (!query) return sendJson(response, 200, radioStaffView(access.guild, access.member));
+          // Find a member who is not on a radio, to mute them before they sign in.
+          const found = /^\d{15,22}$/.test(query)
+            ? await access.guild.members.fetch(query).then((member) => [member]).catch(() => [])
+            : [...(await access.guild.members.search({ query, limit: 8 }).catch(() => new Map())).values()];
+          return sendJson(response, 200, {
+            members: found.filter((member) => !member.user?.bot).map((member) => ({
+              userId: member.id,
+              name: member.displayName,
+              username: member.user?.username || '',
+            })),
+          });
+        }
+
+        try {
+          if (payload.action === 'coverage') {
+            await saveRadioCoverage(payload.coverage, discordId);
+            return sendJson(response, 200, { ok: true, action: 'coverage', ...radioStaffView(access.guild, access.member) });
+          }
+          if (RADIO_STAFF_TOOLS.includes(payload.action)) {
+            const result = await runRadioStaffTool(payload.action, payload, discordId);
+            // Recordings come back on their own; everything else refreshes the panel too.
+            if (['recordings', 'recording', 'ranks'].includes(payload.action)) return sendJson(response, 200, result);
+            return sendJson(response, 200, { ...result, ...radioStaffView(access.guild, access.member) });
+          }
+          const result = await runRadioStaffAction(String(payload.action || ''), String(payload.userId || ''), discordId, { from: 'website' });
+          return sendJson(response, 200, { ...result, ...radioStaffView(access.guild, access.member) });
+        } catch (error) {
+          return sendJson(response, error?.status || 500, { error: error?.status ? error.message : 'That did not work. Try again.' });
+        }
+      }
+
       if (request.method === 'GET' && url.pathname === '/api/status') {
         return sendJson(response, 200, {
           online: Boolean(client?.isReady?.()),
@@ -112,6 +320,8 @@ export function startBotApiServer(client, {
             latencyMs: Math.round(client?.ws?.ping || 0),
           },
           melonlyConfigured: Boolean(process.env.MELONLY_API_KEY?.trim()),
+          processStartedAt: new Date(Date.now() - process.uptime() * 1000).toISOString(),
+          inGameCommands: inGameCommandHealth(),
         });
       }
 
@@ -138,10 +348,16 @@ export function startBotApiServer(client, {
           return sendJson(response, 400, { error: 'Invalid JSON.' });
         }
         try {
+          // Approving reports goes by live Discord roles, never the ones the website sent from the cookie.
+          let user = payload.user;
+          if (user?.id && /^\d{15,22}$/.test(String(user.id))) {
+            const live = await liveWebsiteRoles(client, String(user.id));
+            user = live ? { ...user, ...live } : { ...user, guildRoles: [], pinellasRoles: [], discordAdmin: false };
+          }
           const result = await handleEmployeeAction(
             payload.action,
             payload.payload || {},
-            payload.user,
+            user,
             { postPcsoErlcApi },
           );
           return sendJson(response, 200, result);
@@ -223,6 +439,11 @@ export function startBotApiServer(client, {
       logger.error('Bot API server request failed', error);
       return sendJson(response, 500, { error: error?.message || 'Server error' });
     }
+  });
+
+  // Clearwater Radio desktop apps connect over WebSocket at /radio on this same port.
+  server.on('upgrade', (request, socket, head) => {
+    if (!handleRadioUpgrade(request, socket, head)) socket.destroy();
   });
 
   server.on('error', (error) => {

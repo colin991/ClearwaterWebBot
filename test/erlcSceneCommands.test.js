@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ChannelType } from 'discord.js';
 import {
+  clearSceneIssuerCooldowns,
   extractWebhookCommandText,
   extractWebhookPlayer,
   handleErlcSceneEvent,
@@ -27,6 +28,9 @@ import {
   teamVoiceChannelId,
   TEAM_VOICE_CHANNEL_IDS,
   findTeamVoiceChannel,
+  findVoicedDiscordMember,
+  sceneCommandTiming,
+  formatSceneCommandReport,
 } from '../utils/erlcSceneCommands.js';
 import { PINELLAS_GUILD_ID } from '../utils/pinellasServer.js';
 import { CLEARWATER_GUILD_ID } from '../utils/staffRanks.js';
@@ -44,6 +48,8 @@ function member(id, { bot = false, channelId = 'here', channel = null } = {}) {
     voice: { channelId, channel },
   };
 }
+
+test.beforeEach(() => clearSceneIssuerCooldowns());
 
 test('parses in-game scene commands and ignores other chat', () => {
   assert.equal(parseCustomCommand(';ss').baseName, 'Mod Scene');
@@ -946,4 +952,66 @@ test('a webhook "refresh" with only a Roblox id refreshes that player by usernam
   const offline = await handleErlcSceneEvent({ ...payload, origin: '1' }, { client, now: 200_000, snapshot, executeCommand });
   assert.equal(offline.reason, 'missing_player');
   assert.equal(sent.length, 1);
+});
+
+test('findVoicedDiscordMember skips REST lookups in guilds where the user is not in voice', async () => {
+  const fetched = [];
+  const voiced = { id: 'discord1', voice: { channelId: 'vc1' } };
+  const guildFor = (id, inVoice) => ({
+    id,
+    voiceStates: { cache: new Map(inVoice ? [['discord1', { channelId: 'vc1' }]] : []) },
+    members: {
+      cache: new Map(),
+      fetch: async (memberId) => { fetched.push(id); return memberId === 'discord1' ? voiced : null; },
+    },
+  });
+  const quiet = guildFor('quiet', false);
+  const loud = guildFor('loud', true);
+  const guilds = new Map([['quiet', quiet], ['loud', loud]]);
+  const client = { guilds: { cache: guilds, fetch: async (id) => guilds.get(id) || null } };
+  const result = await findVoicedDiscordMember(client, 'discord1', { guildId: 'quiet' });
+  assert.equal(result.guild, loud);
+  assert.deepEqual(fetched, ['loud']);
+});
+
+test('command-log scan hands ;panic to the radio once', async () => {
+  resetSceneLogScannerForTests();
+  const emitted = [];
+  const client = { emit: (name, payload) => emitted.push([name, payload]) };
+  const logs = [{ at: 1, username: 'Old', robloxId: '1', command: ';panic' }];
+  await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }) });
+  logs.push({ at: 2, username: 'Colin', robloxId: '99', command: ';panic gas station' });
+  await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }) });
+  await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }) });
+  assert.deepEqual(emitted, [['erlcCommandLog', { Type: 'Command', Player: 'Colin:99', Command: ';panic gas station', Message: ';panic gas station' }]]);
+});
+
+test('scene command log lines show where the time went', () => {
+  assert.equal(
+    sceneCommandTiming({ source: 'logs', issuedAt: 1_000, startedAt: 4_000, doneAt: 4_400 }),
+    'via logs · 3.4s after typed · bot 0.4s',
+  );
+  assert.equal(sceneCommandTiming({ startedAt: 0, doneAt: 250 }), 'bot 0.3s');
+  assert.match(
+    sceneCommandLogBody({ handled: true, commandName: 'ss', reason: 'moved', channelName: 'Scene 1', timing: 'bot 0.1s' }),
+    /· ⏱ bot 0\.1s$/,
+  );
+});
+
+test('a scan with no ER:LC data does not prime, so old commands are not replayed', async () => {
+  resetSceneLogScannerForTests();
+  const client = { emit: () => {} };
+  const empty = await scanSceneCommandLogs(client, { snapshot: async () => null });
+  assert.equal(empty.primed, undefined);
+  const logs = [{ at: 1, username: 'Old', robloxId: '1', command: ';ss' }];
+  const first = await scanSceneCommandLogs(client, { snapshot: async () => ({ CommandLogs: logs, Players: [] }) });
+  assert.equal(first.primed, true);
+});
+
+test('-ratelimit shows whether in-game commands are being picked up', async () => {
+  resetSceneLogScannerForTests();
+  await scanSceneCommandLogs({ emit: () => {} }, { snapshot: async () => ({ CommandLogs: [], Players: [] }) });
+  const report = formatSceneCommandReport();
+  assert.match(report, /\*\*Webhook events:\*\* \d+/);
+  assert.match(report, /\*\*Command-log check:\*\* \d+s ago · 0 log entries/);
 });

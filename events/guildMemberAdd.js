@@ -80,7 +80,8 @@ export default {
       badges: getInternetBadges(member),
     });
 
-    if (existingUser?.banned === true) {
+    // Only lift bans that were placed for missing membership; staff bans must survive a rejoin.
+    if (existingUser?.banned === true && existingUser.banSource === 'membership') {
       setInternetBan(user, { enabled: false });
       logger.info('Unbanned a Clearwater Internet account after they joined the Clearwater Discord server.');
     }

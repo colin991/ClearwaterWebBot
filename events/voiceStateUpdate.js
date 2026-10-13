@@ -3,7 +3,6 @@ import { handleStaffWaitingJoin } from '../utils/staffWaitingGreeting.js';
 import { handleHoldVoiceStateUpdate } from '../utils/holdVoiceChat.js';
 import { handleDispatchVoiceStateUpdate } from '../utils/dispatchChannelStatus.js';
 import { handleCorrectionsVoiceStateUpdate } from '../utils/correctionsChannelStatus.js';
-import { handleFrequencyChangeVoiceStateUpdate } from '../utils/frequencyChangeGreeting.js';
 import { handleSoundboardVoiceJoin } from '../utils/soundboardAccess.js';
 import { logger } from '../utils/logger.js';
 
@@ -27,12 +26,6 @@ export default {
       await handleCorrectionsVoiceStateUpdate(oldState, newState, client);
     } catch (error) {
       logger.warn(`Corrections VC status update failed: ${error?.message || error}`);
-    }
-
-    try {
-      await handleFrequencyChangeVoiceStateUpdate(oldState, newState);
-    } catch (error) {
-      logger.warn(`Frequency change greeting failed: ${error?.message || error}`);
     }
 
     try {

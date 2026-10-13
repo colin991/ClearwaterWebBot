@@ -1,5 +1,6 @@
 import { requireAdministrator } from '../utils/prefixHelpers.js';
 import { formatErlcRateLimitReport, getErlcRateLimitStatus } from '../utils/erlc.js';
+import { formatSceneCommandReport } from '../utils/erlcSceneCommands.js';
 import { v2Card } from '../utils/v2Message.js';
 
 export default {
@@ -11,7 +12,7 @@ export default {
     const status = getErlcRateLimitStatus();
     await message.reply(v2Card({
       title: 'ER:LC Rate Limit',
-      description: formatErlcRateLimitReport(status),
+      description: `${formatErlcRateLimitReport(status)}\n\n${formatSceneCommandReport()}`,
       footer: 'PRC limits this host by IP. POST /command is 1 per 5s. Other bots on another IP can still work.',
     }));
   },

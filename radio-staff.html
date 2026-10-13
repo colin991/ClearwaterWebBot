@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#04121c">
+<meta name="robots" content="noindex,nofollow">
+<title>Radio Staff | Clearwater Radio</title>
+<link rel="icon" type="image/png" href="assets/clearwater-logo.png">
+<link rel="apple-touch-icon" href="assets/clearwater-logo.png">
+<link rel="stylesheet" href="radio-staff.css?v=20261012b">
+</head>
+<body>
+<header class="rs-top">
+  <img src="assets/clearwater-logo.png" alt="" width="40" height="40">
+  <div><strong>Radio staff panel</strong><span id="who">Clearwater Radio</span></div>
+  <a class="rs-link" href="/radio">Open radio</a>
+</header>
+
+<main id="main" class="rs-main" hidden>
+  <section class="rs-card">
+    <div class="rs-head">
+      <h2>On the radio now <span id="onCount" class="rs-count">0</span></h2>
+      <button type="button" id="refresh" class="rs-btn rs-ghost">Refresh</button>
+    </div>
+    <ul id="onList" class="rs-list"></ul>
+  </section>
+
+  <section class="rs-card">
+    <h2>Staff tools</h2>
+    <div class="rs-tool-row">
+      <div><b>Listen live</b><p class="rs-fine">Opens the radio in monitor mode: you hear every channel and can't talk.</p></div>
+      <a class="rs-btn rs-linkbtn" href="/radio?monitor=1" target="_blank" rel="noopener">Listen live</a>
+    </div>
+    <form id="shoutForm" class="rs-stack">
+      <label class="rs-field"><span>Announcement on every radio (read aloud with text to speech, not in Discord)</span>
+        <textarea id="shoutText" maxlength="200" rows="2" placeholder="Server restart in 5 minutes."></textarea></label>
+      <div class="rs-save"><button type="submit" class="rs-btn">Play on all radios</button></div>
+    </form>
+    <form id="eventForm" class="rs-stack">
+      <label class="rs-field"><span id="eventState">Event channel: closed</span>
+        <input id="eventName" maxlength="32" placeholder="Event name, e.g. Car Meet" autocomplete="off"></label>
+      <div class="rs-save">
+        <button type="button" id="eventClose" class="rs-btn rs-kick" hidden>Close event channel</button>
+        <button type="submit" id="eventOpen" class="rs-btn">Open event channel</button>
+      </div>
+      <p class="rs-fine">The event channel shows on every radio as CH 7 while it's open. Closing it moves everyone on it back to CH 1.</p>
+    </form>
+  </section>
+
+  <section class="rs-card">
+    <div class="rs-head">
+      <h2>Channel access by rank</h2>
+      <button type="button" id="accessLoad" class="rs-btn rs-ghost">Edit</button>
+    </div>
+    <p class="rs-fine">Pick which Melonly department ranks can use each channel. A channel with nothing ticked is open to everyone. CH 1 is always open, and admins can use every channel. Department and rank also show next to callsigns on the radios.</p>
+    <p id="accessSummary" class="rs-fine"></p>
+    <div id="accessEditor" class="rs-stack" hidden></div>
+  </section>
+
+  <section class="rs-card">
+    <h2>Scene timers <span id="sceneCount" class="rs-count">0</span></h2>
+    <p class="rs-fine">How long each unit has been in a traffic stop or scene voice channel. Dispatch (!C) sees the same on their radio under SCENES.</p>
+    <ul id="sceneList" class="rs-list"></ul>
+  </section>
+
+  <section class="rs-card">
+    <h2>Flags <span id="flagCount" class="rs-count">0</span></h2>
+    <p class="rs-fine">Things the radio noticed for staff to check, like a Civilian-team player on the police radio or profanity in a transmission. Kept for 24 hours.</p>
+    <ul id="flagList" class="rs-list"></ul>
+    <div id="flagPlayer" class="rs-player"></div>
+  </section>
+
+  <section class="rs-card">
+    <div class="rs-head">
+      <h2>Recordings</h2>
+      <button type="button" id="recLoad" class="rs-btn rs-ghost">Load</button>
+    </div>
+    <p class="rs-fine">Every radio transmission and everything said in the Discord radio channel from the last 24 hours, for reviewing reports, with a transcript of what was said. Older ones are deleted.</p>
+    <form id="recFilter" class="rs-search" hidden>
+      <input id="recSearch" type="search" maxlength="60" placeholder="Filter by name or channel" autocomplete="off" aria-label="Search recordings">
+      <label class="rs-check"><input type="checkbox" id="recFlagged"> Profanity only</label>
+    </form>
+    <ul id="recList" class="rs-list"></ul>
+  </section>
+
+  <section class="rs-card">
+    <h2>Crash reports <span id="crashCount" class="rs-count">0</span></h2>
+    <p class="rs-fine">Errors sent in by radios (desktop and web) in the last 7 days.</p>
+    <ul id="crashList" class="rs-list"></ul>
+  </section>
+
+  <section class="rs-card">
+    <h2>Muted, not on a radio <span id="mutedCount" class="rs-count">0</span></h2>
+    <ul id="mutedList" class="rs-list"></ul>
+  </section>
+
+  <section class="rs-card">
+    <h2>Mute someone else</h2>
+    <p class="rs-fine">Find a member by name or Discord ID to mute them before they sign in to the radio.</p>
+    <form id="searchForm" class="rs-search">
+      <input id="search" type="search" maxlength="32" placeholder="Name or Discord ID" autocomplete="off" aria-label="Name or Discord ID">
+      <button type="submit" class="rs-btn">Find</button>
+    </form>
+    <ul id="found" class="rs-list"></ul>
+  </section>
+
+  <section class="rs-card">
+    <div class="rs-head">
+      <h2>Signal coverage</h2>
+      <span id="covState" class="rs-fine"></span>
+    </div>
+    <p class="rs-fine">Place cell towers and draw weak-signal areas, like deep in the park or High Rock. A unit's signal comes from where they are in game: near a tower is clear, far from every tower or inside a weak area sounds static-y and muffled on the radio, but still comes through. With no towers, only the weak areas change anything. Discord voice is not affected.</p>
+    <div class="rs-tools">
+      <button type="button" class="rs-tool" data-mode="select">Move</button>
+      <button type="button" class="rs-tool" data-mode="tower">+ Cell tower</button>
+      <button type="button" class="rs-tool" data-mode="area">+ Weak area</button>
+      <button type="button" class="rs-tool" data-mode="building">+ Tunnel / garage</button>
+      <span class="rs-zoom"><button type="button" id="zoomOut" aria-label="Zoom out">&minus;</button><b id="zoomLevel">1x</b><button type="button" id="zoomIn" aria-label="Zoom in">+</button></span>
+    </div>
+    <label class="rs-switch"><input type="checkbox" id="covBuildings"><span>Building interference: weaker signal inside tunnels and parking garages (the purple areas). Off by default.</span></label>
+    <div id="drawBar" class="rs-drawbar" hidden>
+      <span>Tap the map to add corners.</span>
+      <button type="button" id="drawDone" class="rs-btn">Finish area</button>
+      <button type="button" id="drawCancel" class="rs-btn rs-ghost">Cancel</button>
+    </div>
+    <div id="mapWrap" class="rs-mapwrap">
+      <div id="map" class="rs-map">
+        <img src="assets/liberty-county-map.jpg?v=20260928-erlc-maps" alt="Liberty County map" width="2048" height="2048" draggable="false">
+        <svg id="mapSvg" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-label="Coverage map"></svg>
+      </div>
+    </div>
+    <div class="rs-legend">
+      <span><i class="lg-tower"></i>Cell tower (inner ring clear, outer ring fading)</span>
+      <span><i class="lg-zone"></i>Weak area</span>
+      <span><i class="lg-zone lg-building"></i>Tunnel / garage</span>
+      <span><i class="lg-dot" data-c="good"></i>Unit, clear</span>
+      <span><i class="lg-dot" data-c="bad"></i>Unit, weak</span>
+    </div>
+    <div id="editor" class="rs-editor" hidden></div>
+    <div class="rs-save">
+      <button type="button" id="covReset" class="rs-btn rs-ghost" disabled>Undo changes</button>
+      <button type="button" id="covSave" class="rs-btn" disabled>Save coverage</button>
+    </div>
+  </section>
+
+  <p class="rs-fine rs-center">Warnings pop up on the member's radio until they press OK. Force-muted members still hear the radio but can't talk. A kick keeps them off the radio for 5 minutes. Every action is posted in the radio channel chat.</p>
+</main>
+
+<section id="gate" class="rs-gate" hidden><div class="rs-card rs-gate-card"></div></section>
+<div id="toast" class="rs-toast" role="status" aria-live="polite" hidden></div>
+
+<script src="radio-staff-map.js?v=20261011h"></script>
+<script src="radio-staff.js?v=20261011j"></script>
+</body>
+</html>

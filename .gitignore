@@ -15,3 +15,6 @@ Thumbs.db
 # Panel / egg junk that dirties the tree and breaks `git pull`
 /downloads/
 /tmp/
+# Radio desktop app build output
+/radio-app/node_modules/
+/radio-app/dist/

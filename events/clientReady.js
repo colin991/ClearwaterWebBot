@@ -15,7 +15,6 @@ import { ensureInternetAutomodQueue } from '../utils/discordInternetModeration.j
 import { startSecondaryServerGate } from '../utils/secondaryServerGate.js';
 import { startDispatchChannelStatus } from '../utils/dispatchChannelStatus.js';
 import { startCorrectionsChannelStatus } from '../utils/correctionsChannelStatus.js';
-import { startFrequencyChangeGreeting } from '../utils/frequencyChangeGreeting.js';
 import { startSoundboardAccess } from '../utils/soundboardAccess.js';
 import { ensurePinellasServerProfile } from '../utils/pinellasServer.js';
 import { ensureBelleairServerProfile } from '../utils/belleairServer.js';
@@ -24,6 +23,7 @@ import { ensureDodServerProfile } from '../utils/dodServer.js';
 import { clearFloridaServerProfile } from '../utils/floridaServer.js';
 import { ensureGeorgiaServerProfile } from '../utils/georgiaServer.js';
 import { startBotApiServer } from '../utils/botApiServer.js';
+import { startRadioDownloadPanel } from '../utils/radioDownloadPanel.js';
 import { startErlcSceneCommands } from '../utils/erlcSceneCommands.js';
 import { startErlcCallRadio } from '../utils/erlcCallRadio.js';
 import { fetchErlcServer } from '../utils/erlc.js';
@@ -45,6 +45,7 @@ export default {
     startOpenTicketPermissionSync(client);
     startRideAlongScheduler(client);
     if (!client.stopUpdateCountdown) client.stopUpdateCountdown = startUpdateCountdown(client);
+    if (!client.stopRadioDownloadPanel) client.stopRadioDownloadPanel = startRadioDownloadPanel(client);
 
     setTimeout(() => {
       void ensurePinellasServerProfile(client).catch((error) => {
@@ -119,10 +120,6 @@ export default {
 
     if (!client.stopCorrectionsChannelStatus) {
       client.stopCorrectionsChannelStatus = startCorrectionsChannelStatus(client);
-    }
-
-    if (!client.stopFrequencyChangeGreeting) {
-      client.stopFrequencyChangeGreeting = startFrequencyChangeGreeting(client);
     }
 
     if (!client.stopSoundboardAccess) {

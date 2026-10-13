@@ -409,3 +409,26 @@ test('a successful snapshot does not start the 5s command gap', async () => {
     resetErlcNetworkForTests({ minIntervalMs: 5000 });
   }
 });
+
+test('player-triggered commands jump ahead of queued background commands', async () => {
+  resetErlcNetworkForTests({ minIntervalMs: 0 });
+  const sent = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    sent.push(JSON.parse(options.body).command);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    return jsonResponse(200, { message: 'ok' });
+  };
+  try {
+    await Promise.all([
+      executeErlcCommand('key', ':pm A background'),
+      executeErlcCommand('key', ':pm B background'),
+      executeErlcCommand('key', ':pm C background'),
+      executeErlcCommand('key', ':refresh Player', { priority: true }),
+    ]);
+    assert.deepEqual(sent, [':pm A background', ':refresh Player', ':pm B background', ':pm C background']);
+  } finally {
+    globalThis.fetch = original;
+    resetErlcNetworkForTests({ minIntervalMs: 5000 });
+  }
+});

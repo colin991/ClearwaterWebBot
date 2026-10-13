@@ -1,3 +1,4 @@
+import { CLEARWATER_GUILD_ID } from '../utils/staffRanks.js';
 import { requireAdministrator, snowflakeFrom } from '../utils/prefixHelpers.js';
 import { v2Card } from '../utils/v2Message.js';
 import { departmentById, formatMoney, parseMoney } from '../utils/economyConfig.js';
@@ -30,6 +31,8 @@ function usage() {
 
 export default {
   name: 'ecoadmin',
+  // The economy is global, so only Clearwater administrators may manage it.
+  guildIds: [CLEARWATER_GUILD_ID],
   aliases: ['economyadmin', 'eco-admin'],
   description: 'Administrator economy tools.',
   async execute(message, args, client) {

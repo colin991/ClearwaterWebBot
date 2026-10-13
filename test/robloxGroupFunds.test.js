@@ -1,3 +1,4 @@
+import { CLEARWATER_GUILD_ID } from '../utils/staffRanks.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PermissionFlagsBits } from 'discord.js';
@@ -186,6 +187,7 @@ test('fetchRobloxGroupFunds explains a missing cookie or expired cookie', async 
 test('-funds requires Administrator and rejects cookies typed in Discord', async () => {
   await assert.rejects(
     () => fundsCommand.execute({
+      guild: { id: CLEARWATER_GUILD_ID },
       member: { permissions: { has: () => false } },
       client: { config: {} },
       content: '-funds',
@@ -194,6 +196,16 @@ test('-funds requires Administrator and rejects cookies typed in Discord', async
   );
   await assert.rejects(
     () => fundsCommand.execute({
+      guild: { id: '999999999999999999' },
+      member: { permissions: { has: (bit) => bit === PermissionFlagsBits.Administrator } },
+      client: { config: {} },
+      content: '-funds',
+    }, []),
+    /only be viewed in the Clearwater server/,
+  );
+  await assert.rejects(
+    () => fundsCommand.execute({
+      guild: { id: CLEARWATER_GUILD_ID },
       member: { permissions: { has: (bit) => bit === PermissionFlagsBits.Administrator } },
       client: { config: {} },
       content: '-funds .ROBLOSECURITY=do-not-share',

@@ -152,14 +152,6 @@ export const DEVELOPER_DISCORD_IDS = Object.freeze([
   '1044686997194805280',
   '848356730256883744',
 ]);
-export const DEVELOPER_USERNAMES = Object.freeze([
-  'colin',
-  'colinxyz',
-  'pixel',
-  'pixelnovaa',
-  'pixelxnovaa',
-  'plxelnovaa',
-]);
 
 const ROLE_BADGES = Object.freeze([
   { id: CLEARWATER_PREMIUM_ROLE_ID, badge: 'clearwater-role' },
@@ -176,10 +168,9 @@ export function isDeveloperAccount(user = {}) {
     const badges = Array.isArray(user.badges) ? user.badges : [];
     return badges.map(String).includes('developer');
   }
+  // Discord usernames can be re-registered or imitated, so only immutable IDs count.
   const id = String(user.id || '').trim();
-  if (id && DEVELOPER_DISCORD_IDS.includes(id)) return true;
-  const username = String(user.username || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-  return Boolean(username && DEVELOPER_USERNAMES.includes(username));
+  return Boolean(id && DEVELOPER_DISCORD_IDS.includes(id));
 }
 
 /** Developer badge accounts get full website permissions (owner-equivalent). */

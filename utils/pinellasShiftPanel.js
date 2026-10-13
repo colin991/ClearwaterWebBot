@@ -43,6 +43,7 @@ import {
   PINELLAS_EMPLOYEE_WELCOME_ROLE_ID,
   PINELLAS_GUILD_ID,
 } from './pinellasServer.js';
+import { writeJsonFile } from './jsonStore.js';
 
 export const PINELLAS_SHIFT_PANEL_CHANNEL_ID = '1546298062568165396';
 export const PINELLAS_ON_DUTY_ROLE_ID = '1514462780575715418';
@@ -319,14 +320,17 @@ async function readStore() {
         : {},
       snapshot: store.snapshot && Array.isArray(store.snapshot.deputies) ? store.snapshot : null,
     };
-  } catch {
+  } catch (error) {
+    // Only a missing file starts fresh. A corrupt file must not be silently replaced
+    // with an empty store (that would wipe every record on the next write).
+    if (error?.code !== 'ENOENT') throw error;
     return emptyShiftStore();
   }
 }
 
 async function writeStore(store) {
-  await mkdir(path.dirname(STORE_PATH), { recursive: true });
-  await writeFile(STORE_PATH, `${JSON.stringify(store, null, 2)}\n`, 'utf8');
+  // Temp file + rename, so a crash mid-write cannot leave a truncated store behind.
+  await writeJsonFile(STORE_PATH, store);
 }
 
 async function loadAttachment(filePath, name) {

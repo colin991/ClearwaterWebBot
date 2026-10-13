@@ -5,17 +5,21 @@
  *   git pull; npm install; node /home/container/index.js
  *
  * Panel git pull often fails (no upstream / dirty tree). This file force-syncs
- * to origin/main BEFORE starting the bot. Safe for a PUBLIC repo.
+ * to origin/main BEFORE starting the bot. The repo is private, so it pulls with
+ * the panel's Git Access Token (or GITHUB_TOKEN in .env).
  *
  * If Apollo console ignores shell commands: Stop → File Manager → edit index.js
  * → paste this whole file → Save → Start.
  */
-import { existsSync, rmSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
-import { join } from 'node:path';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const REPO = 'https://github.com/colin991/ClearwaterWebBot.git';
 const SKIP = process.env.CLEARWATER_SKIP_HOST_SYNC === '1';
+// bot.js exits with this code when main has new commits (utils/codeUpdateWatch.js).
+const UPDATE_RESTART_CODE = 75;
 
 function sh(cmd, args, timeout = 60_000) {
   return spawnSync(cmd, args, {
@@ -46,6 +50,36 @@ function err(r) {
   return String(r.stderr || r.stdout || '').trim();
 }
 
+function hasCredentials(url) {
+  return /^https:\/\/[^/@\s]+@/.test(String(url || ''));
+}
+
+/** GITHUB_TOKEN / CLEARWATER_GIT_REMOTE from .env, read by hand (dotenv loads later in bot.js). */
+function dotEnvValue(name) {
+  try {
+    const text = readFileSync(join(process.cwd(), '.env'), 'utf8');
+    const match = text.match(new RegExp(`^\\s*${name}\\s*=\\s*["']?([^"'\\r\\n]+)`, 'm'));
+    return match ? match[1].trim() : '';
+  } catch {
+    return '';
+  }
+}
+
+/** Remote URL for the private repo: explicit remote, then a token, then whatever origin already has. */
+function originUrl(current) {
+  const env = process.env;
+  const explicit = (env.CLEARWATER_GIT_REMOTE || dotEnvValue('CLEARWATER_GIT_REMOTE')).trim();
+  if (explicit) return explicit;
+  // ACCESS_TOKEN / USERNAME are the Pterodactyl Node.js egg's Git Access Token / Git Username.
+  const token = (env.ACCESS_TOKEN || env.GIT_ACCESS_TOKEN || env.GITHUB_TOKEN || dotEnvValue('GITHUB_TOKEN')).trim();
+  if (token) {
+    const user = (env.USERNAME || env.GIT_USERNAME || 'x-access-token').trim();
+    return `https://${encodeURIComponent(user)}:${encodeURIComponent(token)}@github.com/colin991/ClearwaterWebBot.git`;
+  }
+  if (hasCredentials(current)) return current;
+  return REPO;
+}
+
 function log(msg) {
   console.log(`[host-sync] ${msg}`);
 }
@@ -67,14 +101,17 @@ function forceSyncFromMain() {
     }
   }
 
-  // Always use the public HTTPS remote (no PAT needed while repo is public).
+  // The repo is private: use the panel's Git Access Token when it's set, and
+  // never replace an origin that already carries credentials.
   const remote = sh('git', ['remote', 'get-url', 'origin']);
-  if (ok(remote) && out(remote)) {
-    sh('git', ['remote', 'set-url', 'origin', REPO]);
+  const current = ok(remote) ? out(remote) : '';
+  const url = originUrl(current);
+  if (current) {
+    if (url !== current) sh('git', ['remote', 'set-url', 'origin', url]);
   } else {
-    sh('git', ['remote', 'add', 'origin', REPO]);
+    sh('git', ['remote', 'add', 'origin', url]);
   }
-  log(`origin → ${REPO}`);
+  log(`origin → ${REPO}${hasCredentials(url) ? ' (with token)' : ' (no token: set the panel Git Access Token)'}`);
 
   const before = sh('git', ['rev-parse', 'HEAD']);
   const beforeSha = ok(before) ? out(before).split('\n')[0] : null;
@@ -136,5 +173,39 @@ if (!SKIP) {
   console.log('[boot] CLEARWATER_SKIP_HOST_SYNC=1 — sync skipped');
 }
 
-console.log('[boot] starting bot...');
-await import('./bot.js');
+// Supervisor: the bot runs as a child so it can restart itself onto new code from main
+// without anyone pressing restart on the panel.
+const botEntry = join(dirname(fileURLToPath(import.meta.url)), 'bot.js');
+let bot = null;
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => {
+    if (bot) bot.kill(signal);
+    else process.exit(0);
+  });
+}
+
+function runBot() {
+  return new Promise((resolve) => {
+    console.log('[boot] starting bot...');
+    bot = spawn(process.execPath, [botEntry], {
+      cwd: process.cwd(),
+      env: { ...process.env, CLEARWATER_SUPERVISED: '1' },
+      stdio: 'inherit',
+    });
+    bot.once('exit', (code, signal) => {
+      bot = null;
+      resolve(code ?? (signal ? 0 : 1));
+    });
+  });
+}
+
+for (;;) {
+  const code = await runBot();
+  if (code !== UPDATE_RESTART_CODE) process.exit(code);
+  log('bot restarting for new code on main...');
+  try {
+    forceSyncFromMain();
+  } catch (error) {
+    log(`sync failed (${error?.message || error}) — restarting on current files`);
+  }
+}

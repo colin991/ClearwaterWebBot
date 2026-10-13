@@ -1,4 +1,5 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { basename, join } from 'node:path';
 import { PCSO_STATIC_PAGES, pcsoSectionHtml } from './pcso-static-pages.js';
 
@@ -17,6 +18,9 @@ const staticFiles = new Set([
   'jail.js', 'pcso-forms.js', 'inside-the-star.js', 'pcso-events.js', 'pcso-home.js', 'pcso-news-page.js', 'pcso-events-page.js', 'admin.js',
   'pcso-nav.js', 'pcso-portal.js', 'pcso-ride-along.js', 'pcso-careers.js', 'application-result.js', 'pcso-calls.js', 'pcso-employee.js',
   'pcso-resource-pages.js', 'pcso-dashboard.js',
+  'radio-web.css', 'radio-web-shim.js', 'radio-opus-fallback.js', 'radio-opus.wasm', 'radio-download.html', 'radio-download.js',
+  // radio-staff.html is not public: /api/bot/radio-staff-page sends it to admins only.
+  'radio-staff.css', 'radio-staff.js', 'radio-staff-map.js',
 ]);
 
 rmSync(output, { recursive: true, force: true });
@@ -31,8 +35,51 @@ for (const page of PCSO_STATIC_PAGES) {
   writeFileSync(join(output, `${page.slug}.html`), pcsoSectionHtml(page));
 }
 
+buildWebRadio();
+
 if (existsSync(join(root, 'assets'))) {
   cpSync(join(root, 'assets'), join(output, 'assets'), { recursive: true });
 }
 
 console.log(`Built ${basename(output)} static site output.`);
+
+/**
+ * The web radio (/radio) is the desktop radio's own screen and code, with radio-web-shim.js standing in
+ * for the Electron bridge, so both always show the same thing.
+ */
+function buildWebRadio() {
+  const renderer = join(root, 'radio-app', 'renderer');
+  const version = (file) => createHash('sha256').update(readFileSync(file)).digest('hex').slice(0, 10);
+  const copies = {
+    'radio.css': 'radio-app.css',
+    'radio.js': 'radio-app.js',
+    'panic-sound.js': 'radio-panic-sound.js',
+    'map-image.js': 'radio-map-image.js',
+    'logo-image.js': 'radio-logo-image.js',
+    'capture-worklet.js': 'capture-worklet.js',
+  };
+  for (const [from, to] of Object.entries(copies)) cpSync(join(renderer, from), join(output, to));
+  const v = (name) => `${name}?v=${version(join(output, name))}`;
+  let html = readFileSync(join(renderer, 'index.html'), 'utf8');
+  html = html
+    .replace(/\s*<meta http-equiv="Content-Security-Policy"[^>]*>/, '')
+    .replace('<title>Clearwater Radio</title>', [
+      '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">',
+      '<meta name="theme-color" content="#04121c">',
+      '<meta name="apple-mobile-web-app-capable" content="yes">',
+      '<title>Clearwater Radio</title>',
+      '<link rel="icon" type="image/png" href="assets/clearwater-logo.png">',
+      '<link rel="apple-touch-icon" href="assets/clearwater-logo.png">',
+    ].join('\n  '))
+    .replace('<link rel="stylesheet" href="radio.css">',
+      `<link rel="stylesheet" href="${v('radio-app.css')}">\n  <link rel="stylesheet" href="${v('radio-web.css')}">`)
+    .replace('<script src="panic-sound.js"></script>',
+      `<script src="${v('radio-opus-fallback.js')}"></script>\n  <script src="${v('radio-web-shim.js')}"></script>\n  <script src="${v('radio-panic-sound.js')}"></script>`)
+    .replace('<script src="map-image.js"></script>', `<script src="${v('radio-map-image.js')}"></script>`)
+    .replace('<script src="logo-image.js"></script>', `<script src="${v('radio-logo-image.js')}"></script>`)
+    .replace('<script src="radio.js"></script>', `<script src="${v('radio-app.js')}"></script>`);
+  for (const needed of ['radio-opus-fallback.js', 'radio-web-shim.js', 'radio-app.js', 'radio-web.css', 'radio-map-image.js', 'radio-logo-image.js']) {
+    if (!html.includes(needed)) throw new Error(`Web radio build: could not place ${needed} in radio.html`);
+  }
+  writeFileSync(join(output, 'radio.html'), html);
+}
