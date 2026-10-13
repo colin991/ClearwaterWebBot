@@ -14,11 +14,13 @@ import {
   callRadioChannelId,
   radioCallKey,
   radioCallSpeech,
+  untaggedSpeech,
   radioCallTonePath,
   radioTeam,
   withCallerName,
 } from '../utils/erlcCallRadio.js';
 import { PRIORITY_BEEP_PATH } from '../utils/priorityRequest.js';
+import { DISPATCH_VOICE_CHANNEL_ID, isDispatchOnline } from '../utils/dispatchChannelStatus.js';
 
 test('classifies LEO, Fire, and DOT in-game calls and skips other teams', () => {
   assert.equal(radioTeam('Police'), 'leo');
@@ -39,17 +41,14 @@ test('classifies LEO, Fire, and DOT in-game calls and skips other teams', () => 
   assert.equal(classifyRadioCall({ team: 'Civilian', description: 'help' }), null);
 });
 
-test('builds the spoken scripts without saying beep or fd tone', () => {
+test('builds short spoken scripts without saying beep or fd tone', () => {
   const cash = radioCallSpeech({
     team: 'Police',
     description: 'Cash Register Robbery',
     callerName: 'Colin',
     location: '2083 Park Street',
   });
-  assert.equal(
-    cash,
-    'Cash register robbery reported by Colin at 2083 Park Street nearby units please attach.',
-  );
+  assert.equal(cash, 'Cash register robbery, 2083 Park Street.');
   assert.doesNotMatch(cash, /\[BEEP\]/i);
 
   const nine = radioCallSpeech({
@@ -57,34 +56,75 @@ test('builds the spoken scripts without saying beep or fd tone', () => {
     description: 'man with a gun',
     location: 'Postal 304',
   });
-  assert.equal(nine, 'man with a gun reported at Postal 304 any nearby units please attach.');
+  assert.equal(nine, 'A person needs assistance in 911, Postal 304.');
 
   const structure = radioCallSpeech({
     team: 'Fire',
     description: 'Structure Fire',
     location: 'Main Street',
   });
-  assert.equal(
-    structure,
-    'Attention station 48. Attention station 48. Structure Fire reported Main Street, Engine 48, ladder 48. Medic 48, and all command please respond.',
-  );
+  assert.equal(structure, 'Station 48, Structure Fire, Main Street. All units respond.');
 
   const fire911 = radioCallSpeech({
     team: 'Fire',
     description: 'smoke in the kitchen',
     location: 'Oak Ave',
   });
-  assert.equal(
-    fire911,
-    'Attention station 48. Attention station 48. smoke in the kitchen reported Oak Ave, Engine 48, ladder 48. Medic 48, and all command please respond.',
-  );
+  assert.equal(fire911, 'Station 48, smoke in the kitchen, Oak Ave. All units respond.');
 
   const dot = radioCallSpeech({
     team: 'DOT',
     description: 'stalled truck',
     location: 'I-76',
   });
-  assert.equal(dot, 'stalled truck reported at I-76 nearby trucks please respond.');
+  assert.equal(dot, 'stalled truck, I-76. Trucks respond.');
+  assert.equal(radioCallSpeech({ team: 'Police', description: 'help' }), 'A person needs assistance in 911.');
+});
+
+test('never reads Roblox-filtered #### text aloud', () => {
+  assert.equal(untaggedSpeech('#### at the ####### bank'), 'at the bank');
+  assert.equal(untaggedSpeech('########'), '');
+  const police = radioCallSpeech({ team: 'Police', description: '##########', location: 'Postal 210' });
+  assert.equal(police, 'A person needs assistance in 911, Postal 210.');
+  const fire = radioCallSpeech({ team: 'Fire', description: 'car ##### on fire', location: '#### Oak Ave' });
+  assert.equal(fire, 'Station 48, car on fire, Oak Ave. All units respond.');
+  assert.equal(
+    radioCallSpeech({ team: 'Fire', description: '#######' }),
+    'Station 48, Fire call. All units respond.',
+  );
+  for (const text of [police, fire]) assert.doesNotMatch(text, /#/);
+});
+
+test('LEO calls are not announced while dispatch is online; fire still is', async () => {
+  const announced = [];
+  const deps = {
+    now: 900_000,
+    snapshot: async () => ({}),
+    dispatchOnline: () => true,
+    announce: async (_client, call, classified) => {
+      announced.push(classified.team);
+      return { played: true };
+    },
+  };
+  const leo = await handleErlcCallEvent({
+    Type: 'EmergencyCall', team: 'Police', description: 'shots fired', position_descriptor: 'Postal 1', call_number: 901,
+  }, deps);
+  const fire = await handleErlcCallEvent({
+    Type: 'EmergencyCall', team: 'Fire', description: 'car fire', position_descriptor: 'Postal 2', call_number: 902,
+  }, deps);
+  assert.equal(leo.reason, 'dispatch_online');
+  assert.equal(fire.handled, true);
+  assert.deepEqual(announced, ['fire']);
+});
+
+test('isDispatchOnline reads the !C dispatcher in the LEO channel', () => {
+  const channelWith = (names) => ({
+    members: new Map(names.map((name, index) => [String(index), { nickname: name, user: { bot: false } }])),
+  });
+  const client = (channel) => ({ channels: { cache: new Map([[DISPATCH_VOICE_CHANNEL_ID, channel]]) } });
+  assert.equal(isDispatchOnline(client(channelWith(['Deputy 1', '!C Dispatch']))), true);
+  assert.equal(isDispatchOnline(client(channelWith(['Deputy 1']))), false);
+  assert.equal(isDispatchOnline({ channels: { cache: new Map() }, _dispatchChannelStatus: 'Dispatch Online' }), true);
 });
 
 test('uses the priority beep for LEO, the FD tone for Fire, and no tone for DOT', () => {
@@ -157,7 +197,7 @@ test('handleErlcCallEvent announces a cash register on LEO radio and skips a dup
   assert.equal(first.handled, true);
   assert.equal(first.classified.kind, 'leo_server');
   assert.equal(announced[0].call.callerName, 'Colin');
-  assert.match(announced[0].text, /Cash register robbery reported by Colin at Park Street/);
+  assert.equal(announced[0].text, 'Cash register robbery, Park Street.');
   assert.equal(second.reason, 'duplicate');
   assert.equal(announced.length, 1);
 });

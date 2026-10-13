@@ -15,7 +15,6 @@ import { ensureInternetAutomodQueue } from '../utils/discordInternetModeration.j
 import { startSecondaryServerGate } from '../utils/secondaryServerGate.js';
 import { startDispatchChannelStatus } from '../utils/dispatchChannelStatus.js';
 import { startCorrectionsChannelStatus } from '../utils/correctionsChannelStatus.js';
-import { startFrequencyChangeGreeting } from '../utils/frequencyChangeGreeting.js';
 import { startSoundboardAccess } from '../utils/soundboardAccess.js';
 import { ensurePinellasServerProfile } from '../utils/pinellasServer.js';
 import { ensureBelleairServerProfile } from '../utils/belleairServer.js';
@@ -121,10 +120,6 @@ export default {
 
     if (!client.stopCorrectionsChannelStatus) {
       client.stopCorrectionsChannelStatus = startCorrectionsChannelStatus(client);
-    }
-
-    if (!client.stopFrequencyChangeGreeting) {
-      client.stopFrequencyChangeGreeting = startFrequencyChangeGreeting(client);
     }
 
     if (!client.stopSoundboardAccess) {

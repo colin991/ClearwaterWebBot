@@ -26,13 +26,11 @@ import { discordIdsByRobloxId, getIdentityCache } from './identityStore.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
 import { memberIsStaff } from './prefixHelpers.js';
-import { enqueueGuildVoice, ensureGuildVoiceConnection, playMp3QueueInVoiceChannel, SAY_VOICE, synthesizeSpeechMp3 } from './vcSpeak.js';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 export const PRIORITY_REQUEST_CHANNEL = '1514341436139770017';
 export const PRIORITY_REQUEST_STAFF_ROLE = '1515107822432419971';
-export const PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID = '1514128904783139018';
 export const PRIORITY_BEEP_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'priority-beep.mp3');
 export const PRIORITY_REQUEST_SECONDS = 1800;
 export const PRIORITY_PEACE_SECONDS = 600;
@@ -735,23 +733,6 @@ function buildPriorityFormModal({ id, players, vehicles }) {
 }
 
 export const PRIORITY_START_HINT = ':h The priority timer is active, please refrain from triggering any priorities at this time.';
-export const PRIORITY_VOICE = SAY_VOICE;
-export const PRIORITY_VOICE_RATE = 1.15;
-
-export function priorityStartVehicleSpeech(request) {
-  const list = (Array.isArray(request?.vehicles) ? request.vehicles : [])
-    .map((name) => String(name || '').replace(/\s+/g, ' ').trim())
-    .filter((name) => name && name !== '—')
-    .map((name) => name.slice(0, 80));
-  return list.length ? list.join(', ') : 'no vehicle';
-}
-
-export function priorityStartSpeech(request) {
-  const username = String(request?.requesterUsername || 'unknown').replace(/\s+/g, ' ').trim().slice(0, 40) || 'unknown';
-  const vehicles = priorityStartVehicleSpeech(request);
-  const type = String(request?.details || 'unknown').replace(/\s+/g, ' ').trim().slice(0, PRIORITY_TYPE_MAX) || 'unknown';
-  return `A new priority has been started by ${username}, vehicle description and priority is as follows: ${vehicles}, and ${type}.`;
-}
 
 export function priorityStartMessageCommand(_request) {
   return PRIORITY_START_HINT;
@@ -785,60 +766,6 @@ export function formatActivePriorityStatus(request, nowMs = Date.now()) {
   };
 }
 
-export async function playPriorityStartAnnouncement(channel, request, {
-  join = ensureGuildVoiceConnection,
-  synthesize = synthesizeSpeechMp3,
-  playQueue = playMp3QueueInVoiceChannel,
-  beepPath = PRIORITY_BEEP_PATH,
-} = {}) {
-  const text = priorityStartSpeech(request);
-  return enqueueGuildVoice(channel.guild?.id, async () => {
-    const speechPromise = synthesize(text, PRIORITY_VOICE, { rate: PRIORITY_VOICE_RATE });
-    logger.info(`Priority announce: joining voice channel ${channel.id}`);
-    await join(channel, channel.guild.voiceAdapterCreator);
-    logger.info(`Priority announce: playing beep in ${channel.id}`);
-    try {
-      await playQueue(channel, channel.guild.voiceAdapterCreator, [beepPath], {
-        leaveAfter: false,
-        speakDelayMs: 400,
-        volume: 0.7,
-        idleTimeoutMs: 5_000,
-        minPlayMs: 2_000,
-      });
-    } catch (error) {
-      logger.warn('Priority announce beep failed; continuing with speech', error);
-    }
-    let speech;
-    try {
-      speech = await speechPromise;
-    } catch (error) {
-      logger.warn('Priority announce first TTS failed; retrying a fallback voice', error);
-      speech = await synthesize(text, PRIORITY_VOICE, { rate: PRIORITY_VOICE_RATE });
-    }
-    logger.info(`Priority announce: playing speech in ${channel.id}`);
-    await playQueue(channel, channel.guild.voiceAdapterCreator, [speech], {
-      leaveAfter: true,
-      speakDelayMs: 350,
-      volume: 1,
-    });
-  });
-}
-
-export async function announcePriorityStart(client, request) {
-  const channel = await client.channels.fetch(PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID).catch(() => null);
-  if (!channel?.isVoiceBased?.()) {
-    throw new Error(`Priority announce voice channel ${PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID} is unavailable.`);
-  }
-  const me = channel.guild.members.me || await channel.guild.members.fetchMe().catch(() => null);
-  if (me) {
-    const perms = channel.permissionsFor(me);
-    if (perms && !perms.has(['Connect', 'Speak'])) {
-      throw new Error('The bot needs Connect and Speak in the priority announce voice channel.');
-    }
-  }
-  return playPriorityStartAnnouncement(channel, request);
-}
-
 export function createPriorityRequestService({
   snapshot,
   send,
@@ -847,7 +774,6 @@ export function createPriorityRequestService({
   postStaff,
   editStaff,
   dmUser,
-  announceStart,
   resolveDiscordIds = discordIdsByRobloxId,
   now = Date.now,
   onError = error => logger.error('Priority request failed', error),
@@ -1137,9 +1063,6 @@ export function createPriorityRequestService({
         } catch (error) { onError(error); }
       }
       const mail = dmUser(request.requesterId, startedDmPayload(request)).catch(onError);
-      const voice = announceStart
-        ? Promise.resolve().then(() => announceStart(request)).catch(onError)
-        : Promise.resolve();
       const game = (async () => {
         await send(`:prty ${PRIORITY_REQUEST_SECONDS}`);
         try {
@@ -1149,7 +1072,7 @@ export function createPriorityRequestService({
         }
       })().catch(onError);
       if (waitForInGame) {
-        await Promise.all([game, voice, mail]);
+        await Promise.all([game, mail]);
       }
       return request;
     },
@@ -1259,11 +1182,8 @@ export function createPriorityRequestService({
       request.staffCardStatus = posted?.id ? 'active' : null;
       current.request = request;
       await persist();
-      const voice = announceStart
-        ? Promise.resolve().then(() => announceStart(request)).catch(onError)
-        : Promise.resolve();
       const game = send(`:prty ${sec}`).catch(onError);
-      await Promise.all([game, voice]);
+      await game;
       return request;
     },
 
@@ -1500,7 +1420,6 @@ export function startPriorityRequest(client) {
       const user = await client.users.fetch(userId);
       await user.send(payload);
     },
-    announceStart: (request) => announcePriorityStart(client, request),
   });
   client.priorityRequest = service;
   const timer = setInterval(() => { void service.tick(); }, 10000);

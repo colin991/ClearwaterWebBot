@@ -157,7 +157,6 @@ const shutDown = async (signal, exitCode = 0) => {
   client.stopErlcZoneVoice?.();
   client.stopDispatchChannelStatus?.();
   client.stopCorrectionsChannelStatus?.();
-  client.stopFrequencyChangeGreeting?.();
   client.stopSoundboardAccess?.();
   client.stopErlcSceneCommands?.();
   client.stopErlcCallRadio?.();
