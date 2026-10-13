@@ -2,7 +2,7 @@ import { logger } from './logger.js';
 import { createHash } from 'node:crypto';
 
 /** Melonly API — token is server/department-scoped (create it on the Pinellas Melonly). */
-export const MELONLY_API_BASE = 'https://api.melonly.xyz/api/v1';
+export const MELONLY_API_BASE = 'https://api.melonly.com/api/v1';
 
 /** Soft client-side cache so 30s panel refreshes do not spam Melonly. */
 const responseCache = new Map();

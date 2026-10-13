@@ -3161,6 +3161,13 @@
       "summary": "The in-game ;team command now moves only the person who ran it to their team voice channel. Nearby players are no longer detected or dragged by this command.",
       "createdAt": "2026-10-10T14:00:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-13-melonly-com-domain",
+      "title": "Move Melonly links and API to melonly.com",
+      "summary": "Melonly is retiring melonly.xyz, so the bot now calls the Melonly API at api.melonly.com and the ban appeal and moderation-log buttons link to melonly.com. In-game event forwarding already used Melonly’s erlc-wh.melon.ly receiver and is unchanged.",
+      "createdAt": "2026-10-13T22:00:00.000Z",
+      "updatedBy": "colin991"
     }
   ]
 }
