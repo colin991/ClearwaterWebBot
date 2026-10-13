@@ -34,12 +34,12 @@ function buildInGamePunishmentReply() {
         .setLabel('In-game Ban Appeal')
         .setEmoji({ id: '1518377512839675944', name: 'MP_Shield' })
         .setStyle(ButtonStyle.Link)
-        .setURL('https://melonly.xyz/forms/7470967607080783872'),
+        .setURL('https://melonly.com/forms/7470967607080783872'),
       new ButtonBuilder()
         .setLabel('View Your Moderations')
         .setEmoji({ id: '1514355480128913550', name: 'melonlym' })
         .setStyle(ButtonStyle.Link)
-        .setURL('https://melonly.xyz/my/logs/7470308722904928256'),
+        .setURL('https://melonly.com/my/logs/7470308722904928256'),
     ))
     .addSeparatorComponents(new SeparatorBuilder().setDivider(false))
     .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(
