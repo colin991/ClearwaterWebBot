@@ -28,6 +28,16 @@ function voiceChannelHasDispatcher(channel) {
   return false;
 }
 
+/**
+ * True while a `!C` dispatcher is in the dispatch VC (the channel shows "Dispatch Online").
+ * Reads the cached members, falling back to the last status the bot set.
+ */
+export function isDispatchOnline(client) {
+  const channel = client?.channels?.cache?.get?.(DISPATCH_VOICE_CHANNEL_ID);
+  if (channel?.members) return voiceChannelHasDispatcher(channel);
+  return client?._dispatchChannelStatus === DISPATCH_STATUS_ONLINE;
+}
+
 async function resolveDispatchChannel(client) {
   const channel = client.channels.cache.get(DISPATCH_VOICE_CHANNEL_ID)
     || await client.channels.fetch(DISPATCH_VOICE_CHANNEL_ID).catch((error) => {

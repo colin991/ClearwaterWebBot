@@ -3702,6 +3702,13 @@
       "summary": "The web radio no longer says Browser not supported on iPhones before iOS 26 or in the browser that opens from Discord. It now brings its own voice codec when the browser lacks one, so you can listen and talk there too.",
       "createdAt": "2026-10-12T17:54:20Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "quieter-radio-announcements-2026-10-13",
+      "title": "Quieter bot announcements on the radio",
+      "summary": "The bot no longer reads Roblox-filtered #### text aloud, no longer announces new priorities or greets the Frequency Change channels, and stays out of the LEO channel for in-game calls while Dispatch Online is showing. The calls it still reads are much shorter, such as \"A person needs assistance in 911, Postal 304.\"",
+      "createdAt": "2026-10-13T20:42:38Z",
+      "updatedBy": "colin991"
     }
   ]
 }

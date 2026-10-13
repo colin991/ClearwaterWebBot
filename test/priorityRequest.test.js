@@ -16,11 +16,7 @@ import {
   PRIORITY_FORM_BUDGET_MS,
   PRIORITY_OPEN_FORM_ID,
   hasBlockingPriority,
-  PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID,
   PRIORITY_BEEP_PATH,
-  PRIORITY_VOICE,
-  PRIORITY_VOICE_RATE,
-  playPriorityStartAnnouncement,
   PRIORITY_PENDING_MS,
   PRIORITY_PEACE_SECONDS,
   PRIORITY_REQUEST_SECONDS,
@@ -32,7 +28,6 @@ import {
   PRIORITY_CIVILIAN_KILL_PM,
   civilianKillersOutsidePriority,
   priorityStartMessageCommand,
-  priorityStartSpeech,
   mergePriorityParticipants,
   isPrioritySelectablePlayer,
   prioritySelectablePlayers,
@@ -342,31 +337,16 @@ function serviceFixture(request, extras = {}) {
       staffEdits.push({ channelId, messageId, payload });
     },
     dmUser: async (id, payload) => { dms.push({ id, payload }); },
-    announceStart: extras.announceStart,
     resolveDiscordIds: extras.resolveDiscordIds || (async () => extras.discordIds || new Map()),
     onError: extras.onError || (error => { throw error; }),
   });
   return { svc, commands, dms, staffEdits, stored, setTime: value => { time = value; } };
 }
 
-test('start speech uses requester, vehicles, and priority type at a normal pace', () => {
-  const request = {
-    requesterUsername: 'HostUser',
-    details: 'bank robbery downtown',
-    vehicles: ['Really black Navara [GOV-884]'],
-  };
+test('priority start sends only the in-game hint, no voice announcement', () => {
   assert.equal(
-    priorityStartSpeech(request),
-    'A new priority has been started by HostUser, vehicle description and priority is as follows: Really black Navara [GOV-884], and bank robbery downtown.',
-  );
-  assert.equal(
-    priorityStartMessageCommand(request),
+    priorityStartMessageCommand({ requesterUsername: 'HostUser', details: 'bank robbery downtown' }),
     ':h The priority timer is active, please refrain from triggering any priorities at this time.',
-  );
-  const long = { requesterUsername: 'HostUser', details: 'abcdefghijklmnopqrstuvwxyz', vehicles: [] };
-  assert.equal(
-    priorityStartSpeech(long),
-    'A new priority has been started by HostUser, vehicle description and priority is as follows: no vehicle, and abcdefghijklmnopqrstuvwxy.',
   );
 });
 
@@ -418,95 +398,9 @@ test('approve starts a 30 minute in-game timer and DMs the requester', async () 
   assert.match(f.dms[0].payload.components[0].components[2].content, /Priority Started/);
 });
 
-test('priority voice uses Edge Brian at 1.15x and the radio beep mp3', () => {
-  assert.equal(PRIORITY_VOICE, 'en-US-BrianNeural');
-  assert.equal(PRIORITY_VOICE_RATE, 1.15);
+test('the radio beep mp3 is still shipped for call radio', () => {
   assert.match(PRIORITY_BEEP_PATH, /priority-beep\.mp3$/);
   assert.equal(existsSync(PRIORITY_BEEP_PATH), true);
-});
-
-test('voice talk starts even if the in-game command queue is slow', async () => {
-  let releaseSend;
-  const sendGate = new Promise((resolve) => { releaseSend = resolve; });
-  let voiceStarted = false;
-  const f = serviceFixture({
-    id: 'p1',
-    status: 'pending',
-    requesterId: 'u1',
-    requesterUsername: 'HostUser',
-    details: 'bank robbery downtown',
-    pendingExpiresAt: 9e12,
-    staffMessageId: 'm',
-  }, {
-    send: async (command) => {
-      await sendGate;
-      f.commands.push(command);
-    },
-    announceStart: async () => { voiceStarted = true; },
-  });
-  const done = f.svc.approve('p1', { id: 'anyone' });
-  await new Promise((resolve) => setImmediate(resolve));
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(voiceStarted, true);
-  releaseSend();
-  await done;
-  assert.equal(f.commands[0], `:prty ${PRIORITY_REQUEST_SECONDS}`);
-  assert.equal(f.commands[1], ':h The priority timer is active, please refrain from triggering any priorities at this time.');
-});
-
-test('priority voice joins the LEO channel before waiting on TTS', async () => {
-  const order = [];
-  const channel = { id: PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID, guild: { voiceAdapterCreator: {} } };
-  await playPriorityStartAnnouncement(channel, {
-    requesterUsername: 'HostUser',
-    details: 'bank',
-    vehicles: ['car'],
-  }, {
-    join: async () => { order.push('join'); },
-    synthesize: async () => {
-      order.push('tts-start');
-      await new Promise((resolve) => setTimeout(resolve, 40));
-      order.push('tts-done');
-      return Buffer.from('mp3');
-    },
-    playQueue: async (_ch, _adapter, clips, options) => {
-      order.push(options.leaveAfter ? 'speech' : 'beep');
-      const clip = await clips[0];
-      if (options.leaveAfter) assert.equal(Buffer.isBuffer(clip), true);
-      else assert.equal(typeof clip, 'string');
-    },
-    beepPath: '/beep.mp3',
-  });
-  assert.equal(PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID, '1514128904783139018');
-  assert.equal(order[0], 'tts-start');
-  assert.ok(order.indexOf('join') > order.indexOf('tts-start'));
-  assert.ok(order.indexOf('beep') > order.indexOf('join'));
-  assert.ok(order.indexOf('beep') < order.indexOf('tts-done'));
-  assert.ok(order.indexOf('speech') > order.indexOf('tts-done'));
-});
-
-test('priority voice stays after the beep if the first TTS attempt fails', async () => {
-  const order = [];
-  let attempts = 0;
-  const channel = { id: PRIORITY_ANNOUNCE_VOICE_CHANNEL_ID, guild: { voiceAdapterCreator: {} } };
-  await playPriorityStartAnnouncement(channel, {
-    requesterUsername: 'HostUser',
-    details: 'bank',
-    vehicles: ['car'],
-  }, {
-    join: async () => { order.push('join'); },
-    synthesize: async () => {
-      attempts += 1;
-      order.push(`tts-${attempts}`);
-      if (attempts === 1) throw new Error('onyx failed');
-      return Buffer.from('mp3');
-    },
-    playQueue: async (_ch, _adapter, _clips, options) => {
-      order.push(options.leaveAfter ? 'speech' : 'beep');
-    },
-    beepPath: '/beep.mp3',
-  });
-  assert.deepEqual(order, ['tts-1', 'join', 'beep', 'tts-2', 'speech']);
 });
 
 test('extra time approve extends the in-game timer', async () => {

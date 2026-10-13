@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ChannelType } from 'discord.js';
+import { isDispatchOnline } from './dispatchChannelStatus.js';
 import { fetchErlcServer, parseErlcPlayer } from './erlc.js';
 import { logger } from './logger.js';
 import { PRIORITY_BEEP_PATH } from './priorityRequest.js';
@@ -68,9 +69,18 @@ function firstNumber(objects, keys) {
   return 0;
 }
 
+/**
+ * Roblox's chat filter swaps blocked words for runs of '#', which TTS read out as
+ * "hashtag hashtag hashtag". Drop them, and drop text left with nothing to say.
+ */
+export function untaggedSpeech(value) {
+  const text = String(value || '').replace(/#+/g, ' ').replace(/\s+/g, ' ').trim()
+    .replace(/^[\s,.;:!?-]+|[\s,;:-]+$/g, '');
+  return /[a-z0-9]/i.test(text) ? text : '';
+}
+
 function cleanSpeech(value, fallback = '') {
-  const text = String(value || '').replace(/\s+/g, ' ').trim();
-  return text || fallback;
+  return untaggedSpeech(value) || fallback;
 }
 
 export function radioTeam(team) {
@@ -144,40 +154,34 @@ export function classifyRadioCall(call = {}) {
     if (/\bstructure\s*fire\b|\bbuilding\s*fire\b/.test(lower) || /^structure\s*fire$/i.test(description)) {
       return { team, kind: 'fire_structure', label: description || 'Structure fire' };
     }
-    if (!description) return null;
-    return { team, kind: 'fire_911', label: description };
+    if (!String(call.description || '').trim()) return null;
+    return { team, kind: 'fire_911', label: description || 'Fire call' };
   }
   if (/\bcash\s*register\b/.test(lower)) return { team, kind: 'leo_server', label: 'Cash register robbery' };
   if (/\b(house|home|residential)\b/.test(lower) && /rob/.test(lower)) {
     return { team, kind: 'leo_server', label: 'House robbery' };
   }
   if (/\batm\b/.test(lower) && /rob/.test(lower)) return { team, kind: 'leo_server', label: 'ATM robbery' };
-  if (!description) return null;
-  return { team, kind: 'leo_911', label: description };
+  // Spoken without its text, so a call the filter fully tagged is still a call.
+  if (!String(call.description || '').trim()) return null;
+  return { team, kind: 'leo_911', label: description || '911 call' };
 }
 
 export function callRadioChannelId(team) {
   return CALL_RADIO_CHANNELS[team] || null;
 }
 
-function speechLocation(call) {
-  return cleanSpeech(call.location, 'an unknown location');
-}
-
+/** Short, so a call never talks over people trying to transmit. */
 export function radioCallSpeech(call, classified = classifyRadioCall(call)) {
   if (!classified) return '';
-  const location = speechLocation(call);
-  const user = cleanSpeech(call.callerName, 'an unknown user');
-  if (classified.kind === 'leo_server') {
-    return `${classified.label} reported by ${user} at ${location} nearby units please attach.`;
-  }
-  if (classified.kind === 'leo_911') {
-    return `${classified.label} reported at ${location} any nearby units please attach.`;
-  }
+  const location = cleanSpeech(call.location);
+  const at = location ? `, ${location}` : '';
+  if (classified.kind === 'leo_server') return `${classified.label}${at}.`;
+  if (classified.kind === 'leo_911') return `A person needs assistance in 911${at}.`;
   if (classified.kind === 'fire_structure' || classified.kind === 'fire_911') {
-    return `Attention station 48. Attention station 48. ${classified.label} reported ${location}, Engine 48, ladder 48. Medic 48, and all command please respond.`;
+    return `Station 48, ${classified.label}${at}. All units respond.`;
   }
-  return `${classified.label} reported at ${location} nearby trucks please respond.`;
+  return `${classified.label}${at}. Trucks respond.`;
 }
 
 export function radioCallTonePath(classified, channelId = '') {
@@ -285,6 +289,7 @@ export async function handleErlcCallEvent(payload, {
   now = Date.now(),
   snapshot,
   announce = announceOnChannel,
+  dispatchOnline = isDispatchOnline,
 } = {}) {
   if (!isEmergencyCallEvent(payload)) return { handled: false, reason: 'not_emergency_call' };
   let call = parseErlcEmergencyCall(payload);
@@ -335,6 +340,11 @@ export async function handleErlcCallEvent(payload, {
       key, team: classified.team, label: classified.label, location: call.location || '', caller: call.callerName || '', at: now,
     });
   } catch { /* listeners never break the call radio */ }
+  // A dispatcher is on: they give out LEO calls, so the bot stays out of the channel.
+  if (classified.team === 'leo' && dispatchOnline(client)) {
+    logger.info(`Call radio: ${classified.kind} not announced, dispatch is online.`);
+    return { handled: false, reason: 'dispatch_online', classified };
+  }
   try {
     const result = await enqueueRadio(() => announce(client, call, classified));
     logger.info(`Call radio: ${classified.kind} on ${classified.team} (${call.description || 'call'})`);
