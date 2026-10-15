@@ -3716,6 +3716,13 @@
       "summary": "Melonly is retiring melonly.xyz, so the bot now calls the Melonly API at api.melonly.com and the ban appeal and moderation-log buttons link to melonly.com. In-game event forwarding already used Melonly’s erlc-wh.melon.ly receiver and is unchanged.",
       "createdAt": "2026-10-13T22:00:00.000Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "2026-10-15-fulton-county-role-sync",
+      "title": "Fulton County role sync",
+      "summary": "Division roles in the Fulton County Sheriff's Office server now carry over to the Fulton County Divisional Hub. When someone gains one of the linked roles in the main server they get the matching hub role, and when they lose it, or leave the main server, the hub role is removed right away. The bot also catches up everyone in the hub when it starts.",
+      "createdAt": "2026-10-15T23:58:00Z",
+      "updatedBy": "colin991"
     }
   ]
 }
