@@ -169,10 +169,29 @@ test('department weekly grants run once per week and payroll comes from treasury
   assert.equal(store.users.cop.cash, 100);
   const duplicate = payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 'other', elapsedMs: 30 * 60_000 });
   assert.equal(duplicate.paid, false);
-  store.departments.fhp.balance = 50;
-  const broke = payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 's1', elapsedMs: 40 * 60_000 });
-  assert.equal(broke.reason, 'insufficient');
-  assert.equal(store.users.cop.cash, 100);
+  store.departments.fhp.balance = -500_000;
+  const debt = payDepartmentShift(store, 'fhp', 'cop', { shiftKey: 's1', elapsedMs: 40 * 60_000 });
+  assert.equal(debt.paid, true);
+  assert.equal(store.departments.fhp.balance, -500_100);
+  assert.equal(store.users.cop.cash, 200);
+});
+
+test('department sends can go into debt down to the 500k limit', () => {
+  const store = emptyEconomyStore();
+  store.departments.fhp.balance = 1000;
+  spendDepartmentFunds(store, 'fhp', 400_000, { toServer: true, note: 'event' });
+  assert.equal(store.departments.fhp.balance, -399_000);
+  assert.throws(
+    () => spendDepartmentFunds(store, 'fhp', 101_001, { toServer: true, note: 'too much' }),
+    /at most \$101,000/,
+  );
+  spendDepartmentFunds(store, 'fhp', 101_000, { toServer: true, note: 'to the limit' });
+  assert.equal(store.departments.fhp.balance, -500_000);
+  assert.throws(
+    () => spendDepartmentFunds(store, 'fhp', 1, { toServer: true, note: 'blocked' }),
+    /reached the \$500,000 debt limit/,
+  );
+  assert.equal(store.departments.fhp.balance, -500_000);
 });
 
 test('department and player transaction lists keep payroll as one row', () => {

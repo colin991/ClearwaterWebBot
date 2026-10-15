@@ -771,7 +771,8 @@ export async function tickEconomy(client) {
         if (paid.reason === 'insufficient') {
           await postEconomyLog(client, 'Insufficient department funds', `${dept.short} cannot pay <@${discordId}> ${formatMoney(paid.needed)} (balance ${formatMoney(paid.balance)})`);
         } else if (paid.paid) {
-          await postEconomyLog(client, 'Department payroll', `${dept.short} → <@${discordId}> ${formatMoney(paid.amount)} · \`${paid.referenceId}\``);
+          const debt = paid.row.balance < 0 ? ` · ${dept.short} now ${formatMoney(paid.row.balance)} (in debt)` : '';
+          await postEconomyLog(client, 'Department payroll', `${dept.short} → <@${discordId}> ${formatMoney(paid.amount)} · \`${paid.referenceId}\`${debt}`);
         }
       }
     }

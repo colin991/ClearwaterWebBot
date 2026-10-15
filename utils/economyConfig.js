@@ -16,6 +16,8 @@ export const ECONOMY_TRANSFER_TAX_PERCENT = 5;
 export const ECONOMY_TX_RECENT = 12;
 export const ECONOMY_TX_KEEP = 4_000;
 export const ECONOMY_SCENE_RADIUS = 45;
+/** Departments may send funds down to -$500,000. Payroll still pays past this limit. */
+export const ECONOMY_DEPARTMENT_DEBT_LIMIT = 500_000;
 /** The public API exposes Civilian team status, but not the player's in-game civilian job. */
 export function isPaidCivilianJob(team) {
   return /^civilian(?:\s+team)?$/i.test(String(team || '').trim());
@@ -208,6 +210,22 @@ export function formatMoney(amount) {
   const value = Math.trunc(Number(amount) || 0);
   const sign = value < 0 ? '-' : '';
   return `${sign}$${Math.abs(value).toLocaleString('en-US')}`;
+}
+
+/** How much a department can still send before hitting the debt limit. */
+export function departmentSendRoom(balance) {
+  return Math.max(0, Math.trunc(Number(balance) || 0) + ECONOMY_DEPARTMENT_DEBT_LIMIT);
+}
+
+/** Extra balance lines shown when a department treasury is in debt. */
+export function departmentDebtNote(balance) {
+  const value = Math.trunc(Number(balance) || 0);
+  if (value >= 0) return '';
+  const room = departmentSendRoom(value);
+  if (room <= 0) {
+    return `**DEBT LIMIT REACHED** — ${formatMoney(-value)} in debt. Sending is blocked; payroll still pays and adds to the debt.`;
+  }
+  return `**IN DEBT** — ${formatMoney(-value)} owed. Can still send ${formatMoney(room)} before the ${formatMoney(ECONOMY_DEPARTMENT_DEBT_LIMIT)} debt limit.`;
 }
 
 export function transferTaxAmount(amount) {

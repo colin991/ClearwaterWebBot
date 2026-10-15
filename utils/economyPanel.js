@@ -29,6 +29,7 @@ import {
   ECONOMY_STEAL_SUCCESS_CHANCE,
   ECONOMY_TRANSFER_TAX_PERCENT,
   departmentById,
+  departmentDebtNote,
   formatMoney,
   formatRemain,
   parseMoney,
@@ -367,6 +368,7 @@ function departmentFundsText(dept, row) {
   return [
     `## ${dept.emoji} ${dept.name}`,
     `<:DownArrow:1518386518387851425> **Available Funds:** \`${formatMoney(row?.balance || 0)}\``,
+    ...(departmentDebtNote(row?.balance) ? [`<:DownArrow:1518386518387851425> ${departmentDebtNote(row?.balance)}`] : []),
     `<:DownArrow:1518386518387851425> **Weekly Funding:** \`${formatMoney(dept.weeklyGrant)}\``,
     `<:DownArrow:1518386518387851425> **Payroll This Week:** \`${formatMoney(payroll)}\``,
     `<:DownArrow:1518386518387851425> **Spent This Week:** \`${formatMoney(spent)}\`${fail}`,
@@ -582,6 +584,7 @@ function departmentDetailPanel(dept, view, { manager = false } = {}) {
     .addTextDisplayComponents(new TextDisplayBuilder().setContent([
       `## ${dept.emoji} ${dept.name}`,
       `**Current Balance:** ${formatMoney(row.balance || 0)}`,
+      ...(departmentDebtNote(row.balance) ? [departmentDebtNote(row.balance)] : []),
       `**Weekly Funding:** ${formatMoney(dept.weeklyGrant)}`,
       `**Payroll Rate:** ${formatMoney(dept.shiftPay)} / 10 minutes`,
       `**Payroll Spent This Week:** ${formatMoney(row.payrollThisWeek || 0)}`,
