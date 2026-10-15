@@ -3718,6 +3718,13 @@
       "updatedBy": "colin991"
     },
     {
+      "id": "2026-10-15-fulton-county-role-sync",
+      "title": "Fulton County role sync",
+      "summary": "Division roles in the Fulton County Sheriff's Office server now carry over to the Fulton County Divisional Hub. When someone gains one of the linked roles in the main server they get the matching hub role, and when they lose it, or leave the main server, the hub role is removed right away. The bot also catches up everyone in the hub when it starts.",
+      "createdAt": "2026-10-15T23:58:00Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "department-funds-debt-limit-2026-10-15",
       "title": "Department funds can go into debt",
       "summary": "Departments can keep sending money when their balance runs low, going as far as $500,000 in debt. A send that would go past that limit is refused. Payroll always pays on-shift employees, even past the limit, so it is the only thing that can push a department deeper into debt. Fund panels and -funds show how much is owed and how much can still be sent.",

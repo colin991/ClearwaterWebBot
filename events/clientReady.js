@@ -16,6 +16,7 @@ import { startSecondaryServerGate } from '../utils/secondaryServerGate.js';
 import { startDispatchChannelStatus } from '../utils/dispatchChannelStatus.js';
 import { startCorrectionsChannelStatus } from '../utils/correctionsChannelStatus.js';
 import { startSoundboardAccess } from '../utils/soundboardAccess.js';
+import { startFultonRoleSync } from '../utils/fultonRoleSync.js';
 import { ensurePinellasServerProfile } from '../utils/pinellasServer.js';
 import { ensureBelleairServerProfile } from '../utils/belleairServer.js';
 import { ensureFireOpsServerProfile } from '../utils/fireOpsServer.js';
@@ -124,6 +125,10 @@ export default {
 
     if (!client.stopSoundboardAccess) {
       client.stopSoundboardAccess = startSoundboardAccess(client);
+    }
+
+    if (!client.stopFultonRoleSync) {
+      client.stopFultonRoleSync = startFultonRoleSync(client);
     }
 
     if (!client.stopBotApiServer) {
