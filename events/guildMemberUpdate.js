@@ -6,11 +6,18 @@ import { handleDispatchMemberUpdate } from '../utils/dispatchChannelStatus.js';
 import { handleCorrectionsMemberUpdate } from '../utils/correctionsChannelStatus.js';
 import { handlePinellasEmployeeRoleWelcome } from '../utils/pinellasServer.js';
 import { handleSoundboardMemberUpdate } from '../utils/soundboardAccess.js';
+import { handleFultonMemberUpdate } from '../utils/fultonRoleSync.js';
 import { logger } from '../utils/logger.js';
 
 export default {
   name: Events.GuildMemberUpdate,
   async execute(previousMember, member, client) {
+    try {
+      await handleFultonMemberUpdate(previousMember, member, client || member.client);
+    } catch (error) {
+      logger.warn(`Fulton role sync member update failed: ${error?.message || error}`);
+    }
+
     try {
       await handleSecondaryGateMainRoleUpdate(previousMember, member, client || member.client);
     } catch (error) {

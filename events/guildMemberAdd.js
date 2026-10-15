@@ -7,6 +7,7 @@ import { sendBelleairWelcome } from '../utils/belleairServer.js';
 import { sendFireOpsWelcome } from '../utils/fireOpsServer.js';
 import { sendGeorgiaWelcome } from '../utils/georgiaServer.js';
 import { handleSoundboardMemberAdd } from '../utils/soundboardAccess.js';
+import { handleFultonMemberAdd } from '../utils/fultonRoleSync.js';
 import { logger } from '../utils/logger.js';
 import { ensureStarterAccount, postEconomyLog } from '../utils/economyService.js';
 import { formatMoney } from '../utils/economyConfig.js';
@@ -14,6 +15,12 @@ import { formatMoney } from '../utils/economyConfig.js';
 export default {
   name: Events.GuildMemberAdd,
   async execute(member, client) {
+    try {
+      await handleFultonMemberAdd(member, client || member.client);
+    } catch (error) {
+      logger.warn(`Fulton role sync join failed: ${error?.message || error}`);
+    }
+
     try {
       const gated = await handleSecondaryGateJoin(member, client || member.client);
       if (gated) return;
