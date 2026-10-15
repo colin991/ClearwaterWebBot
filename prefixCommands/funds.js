@@ -10,6 +10,7 @@ import { v2Card, v2Sections } from '../utils/v2Message.js';
 import {
   ECONOMY_PAY_INTERVAL_MS,
   departmentByGuildId,
+  departmentDebtNote,
   formatMoney,
   parseMoney,
 } from '../utils/economyConfig.js';
@@ -34,6 +35,7 @@ function fundsCard(dept, view) {
     title: dept.name.toUpperCase(),
     description: [
       `**Available Funds:** ${formatMoney(row.balance || 0)}`,
+      ...(departmentDebtNote(row.balance) ? [departmentDebtNote(row.balance)] : []),
       `**Weekly Funding:** ${formatMoney(dept.weeklyGrant)}`,
       `**Employee Payroll:** ${formatMoney(dept.shiftPay)} / ${Math.round(ECONOMY_PAY_INTERVAL_MS / 60000)} minutes`,
       fail,

@@ -1,6 +1,7 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import {
   ECONOMY_DEATH_FEE,
+  ECONOMY_DEPARTMENT_DEBT_LIMIT,
   ECONOMY_DEPARTMENTS,
   ECONOMY_JOB_PAY,
   ECONOMY_PAY_INTERVAL_MS,
@@ -17,7 +18,9 @@ import {
   ECONOMY_TX_KEEP,
   isPaidCivilianJob,
   departmentById,
+  departmentSendRoom,
   economyWeekKey,
+  formatMoney,
   robberyById,
   transferTaxAmount,
 } from './economyConfig.js';
@@ -678,15 +681,8 @@ export function payDepartmentShift(store, deptId, discordId, {
   if (due <= track.paidIntervals) return { paid: false, reason: 'waiting' };
   const intervals = 1;
   const amount = intervals * dept.shiftPay;
-  if (row.balance < amount) {
-    row.lastPayrollFail = {
-      at: now,
-      needed: amount,
-      discordId,
-      balance: row.balance,
-    };
-    return { paid: false, reason: 'insufficient', needed: amount, balance: row.balance, dept };
-  }
+  // Payroll always pays, even past the debt limit that blocks sends.
+  delete row.lastPayrollFail;
   track.paidIntervals += intervals;
   row.balance -= amount;
   row.payrollThisWeek += amount;
@@ -744,7 +740,12 @@ export function spendDepartmentFunds(store, deptId, amount, {
     throw new Error('Unknown department.');
   }
   const row = store.departments[dept.id];
-  if (row.balance < value) throw new Error('The department does not have enough funds.');
+  if (row.balance - value < -ECONOMY_DEPARTMENT_DEBT_LIMIT) {
+    const room = departmentSendRoom(row.balance);
+    throw new Error(room > 0
+      ? `That would take the department past the ${formatMoney(ECONOMY_DEPARTMENT_DEBT_LIMIT)} debt limit. It can send at most ${formatMoney(room)}.`
+      : `The department has reached the ${formatMoney(ECONOMY_DEPARTMENT_DEBT_LIMIT)} debt limit and cannot send money. Payroll still pays.`);
+  }
   const week = economyWeekKey(new Date(now));
   if (row.spendWeekKey !== week) {
     row.spendWeekKey = week;
