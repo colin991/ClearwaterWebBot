@@ -18,6 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FIRE_OPS_GUILD_ID } from './fireOpsServer.js';
 import { FIRE_RANKS } from './fireShiftPanel.js';
+import { archiveFireTicket } from './fireTranscripts.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
 
@@ -28,6 +29,8 @@ export const FIRE_SUPPORT_PREFIX = 'cfr:support:';
 export const FIRE_SUPPORT_CLOSE_ID = `${FIRE_SUPPORT_PREFIX}close`;
 export const FIRE_SUPPORT_CLAIM_ID = `${FIRE_SUPPORT_PREFIX}claim`;
 export const FIRE_SUPPORT_ESCALATE_ID = `${FIRE_SUPPORT_PREFIX}escalate`;
+export const FIRE_SUPPORT_CR_YES_ID = `${FIRE_SUPPORT_PREFIX}cr:yes`;
+export const FIRE_SUPPORT_CR_NO_ID = `${FIRE_SUPPORT_PREFIX}cr:no`;
 const OPEN_PREFIX = `${FIRE_SUPPORT_PREFIX}open:`;
 const INQUIRY_PREFIX = `${FIRE_SUPPORT_PREFIX}inquiry:`;
 const INQUIRY_FIELD_ID = 'ticket-inquiry';
@@ -256,6 +259,67 @@ export async function createFireSupportTicket(guild, member, type, inquiry) {
   return { channel, existing: false };
 }
 
+/** The `-cr` prompt: asks the opener to confirm closing their ticket, like PCSO's. */
+export function buildFireCloseRequestPayload(ownerId, { requestedById = null, reason = '' } = {}) {
+  const cleanReason = String(reason || '').replace(/\s+/g, ' ').trim().slice(0, 500);
+  return {
+    content: [
+      `<@${ownerId}> A close request was made${requestedById ? ` by <@${requestedById}>` : ''}. Click **Yes** to close this ticket.`,
+      cleanReason ? `**Reason:** ${cleanReason}` : '',
+    ].filter(Boolean).join('\n'),
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(FIRE_SUPPORT_CR_YES_ID).setStyle(ButtonStyle.Success).setLabel('Yes'),
+        new ButtonBuilder().setCustomId(FIRE_SUPPORT_CR_NO_ID).setStyle(ButtonStyle.Secondary).setLabel('No'),
+      ),
+    ],
+    allowedMentions: { parse: [], users: [String(ownerId)] },
+  };
+}
+
+/** `-cr [reason]` from ticket staff inside a CWFR ticket. Silent outside the CWFR server. */
+export async function requestFireTicketClose(message, args = []) {
+  if (String(message.guild?.id) !== FIRE_OPS_GUILD_ID) return false;
+  const channel = message.channel;
+  const ownerId = fireTicketOwnerId(channel);
+  const type = fireTicketType(channel);
+  if (!ownerId || !type) throw new Error('Use `-cr` in an open CWFR support ticket.');
+  if (!canStaffFireTicket(message.member, type)) {
+    throw new Error('Only staff for this ticket type can send a close request.');
+  }
+  await channel.send(buildFireCloseRequestPayload(ownerId, {
+    requestedById: message.author.id,
+    reason: args.join(' '),
+  }));
+  return true;
+}
+
+/** Save the transcript, announce the close, then delete the ticket channel. */
+async function closeFireTicket(channel, interaction, { closedVia = 'button', reason = '' } = {}) {
+  const user = interaction.user;
+  const type = fireTicketType(channel);
+  await channel.send({
+    content: `This ticket was closed by <@${user.id}>. The channel will be deleted shortly.`,
+    allowedMentions: { parse: [] },
+  }).catch(() => {});
+  await archiveFireTicket(channel, {
+    ownerId: fireTicketOwnerId(channel),
+    type,
+    typeTitle: supportType(type)?.title || 'Support',
+    claimedById: claimedBy(channel),
+    closedBy: { user, member: interaction.member },
+    closedVia,
+    reason,
+    isStaff: (member) => canStaffFireTicket(member, type),
+  });
+  setTimeout(() => { void channel.delete('CWFR support ticket closed').catch(() => {}); }, 3_000).unref?.();
+}
+
+/** The reason line `-cr` wrote into its prompt, if any. */
+export function closeRequestReason(content) {
+  return String(content || '').match(/\*\*Reason:\*\* (.+)$/m)?.[1]?.trim() || '';
+}
+
 async function escalateTicket(interaction, channel, ownerId, type) {
   const next = supportType(supportType(type).escalatesTo);
   await channel.setParent(next.categoryId, { lockPermissions: false });
@@ -319,11 +383,35 @@ export async function handleFireSupportInteraction(interaction) {
       return true;
     }
     await interaction.reply({ content: 'This ticket is closing.', flags: MessageFlags.Ephemeral });
-    await channel.send({
-      content: `This ticket was closed by <@${interaction.user.id}>. The channel will be deleted in 5 seconds.`,
+    await closeFireTicket(channel, interaction);
+    return true;
+  }
+
+  if (id === FIRE_SUPPORT_CR_YES_ID) {
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({ content: 'Only the ticket opener can confirm this close request.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    const reason = closeRequestReason(interaction.message?.content);
+    await interaction.update({
+      content: `Close request accepted by <@${interaction.user.id}>.`,
+      components: [],
       allowedMentions: { parse: [] },
-    }).catch(() => {});
-    setTimeout(() => { void channel.delete('CWFR support ticket closed').catch(() => {}); }, 5_000).unref?.();
+    }).catch(async () => {
+      await interaction.reply({ content: 'This ticket is closing.', flags: MessageFlags.Ephemeral });
+    });
+    await closeFireTicket(channel, interaction, { closedVia: 'close-request', reason });
+    return true;
+  }
+
+  if (id === FIRE_SUPPORT_CR_NO_ID) {
+    if (interaction.user.id !== ownerId && !isStaff) {
+      await interaction.reply({ content: 'Only the ticket opener or staff can dismiss this close request.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    await interaction.update({ content: 'Close request cancelled.', components: [], allowedMentions: { parse: [] } }).catch(async () => {
+      await interaction.reply({ content: 'Close request cancelled.', flags: MessageFlags.Ephemeral });
+    });
     return true;
   }
 

@@ -8,6 +8,7 @@ import {
   rejectWrongGuild,
   slashCommandsForGuild,
 } from '../utils/commandGuilds.js';
+import { FIRE_OPS_GUILD_ID } from '../utils/fireOpsServer.js';
 import { PINELLAS_GUILD_ID } from '../utils/pinellasServer.js';
 import { requestPinellasTicketClose } from '../utils/pinellasSupport.js';
 import cr from '../prefixCommands/cr.js';
@@ -19,8 +20,9 @@ import { DOD_GUILD_ID } from '../utils/dodReports.js';
 test('PCSO commands are scoped to the Pinellas Discord', () => {
   assert.equal(COMMAND_SCOPE.pcso, PINELLAS_GUILD_ID);
   assert.equal(COMMAND_SCOPE.bpd, BELLEAIR_GUILD_ID);
-  assert.deepEqual(cr.guildIds, [PINELLAS_GUILD_ID]);
+  assert.deepEqual(cr.guildIds, [PINELLAS_GUILD_ID, FIRE_OPS_GUILD_ID]);
   assert.equal(commandAllowedInGuild(cr, PINELLAS_GUILD_ID), true);
+  assert.equal(commandAllowedInGuild(cr, FIRE_OPS_GUILD_ID), true);
   assert.equal(commandAllowedInGuild(cr, BELLEAIR_GUILD_ID), false);
   assert.equal(commandAllowedInGuild(cr, '1514026810348671026'), false);
   assert.equal(commandAllowedInGuild(ping, BELLEAIR_GUILD_ID), true);

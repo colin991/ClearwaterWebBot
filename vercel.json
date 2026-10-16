@@ -28,6 +28,10 @@
       "destination": "/radio-download.html"
     },
     {
+      "source": "/transcripts/cwfr/:id",
+      "destination": "/api/bot/cwfr-transcript?id=:id"
+    },
+    {
       "source": "/radio-staff",
       "destination": "/api/bot/radio-staff-page"
     },

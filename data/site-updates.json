@@ -3732,6 +3732,20 @@
       "updatedBy": "colin991"
     },
     {
+      "id": "cwfr-close-request-2026-10-16",
+      "title": "Close requests in CWFR tickets",
+      "summary": "Fire department ticket staff can type -cr, optionally followed by a reason, in a CWFR support ticket to ask the person who opened it whether it can be closed. The opener clicks Yes to close the ticket or No to keep it open, and staff can also dismiss the request. The command only works in the Clearwater Fire & Rescue server and the PCSO server's existing -cr is unchanged; it stays silent everywhere else.",
+      "createdAt": "2026-10-16T00:20:00Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "cwfr-ticket-transcripts-2026-10-16",
+      "title": "CWFR ticket transcripts",
+      "summary": "When a Clearwater Fire & Rescue support ticket closes, the bot saves a transcript of the whole conversation and posts it in the CWFR transcript channel with a link. The link opens the transcript on cwpcso.com, styled with Clearwater Fire & Rescue branding and logo instead of PCSO, showing who opened, claimed and closed the ticket, the close reason, and every message.",
+      "createdAt": "2026-10-16T02:30:00Z",
+      "updatedBy": "colin991"
+    },
+    {
       "id": "fire-radio-district-channels-2026-10-16",
       "title": "Fire Radio split into City, Springfield and Fairview",
       "summary": "Fire Radio on the Clearwater Radio is now Fire Radio CH1 (City), and two new fire channels follow it: Fire Radio CH2 (Springfield) and Fire Radio CH2 (Fairview). They work like Fire Radio, with the same rank access, transmit tone and talk-over protection, and each links to its own Discord voice channel once it has a radio bot.",
