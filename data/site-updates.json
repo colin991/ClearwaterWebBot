@@ -3765,6 +3765,13 @@
       "summary": "A -cr close request in a CWFR ticket is now a Close Request card that pings the opener and lists the reason, who requested it and when, with green Confirm and red Cancel buttons.",
       "createdAt": "2026-10-16T21:41:42Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "gsp-server-profile-2026-10-16",
+      "title": "Bot profile for the Georgia State Patrol server",
+      "summary": "In the new Georgia State Patrol department server, the bot now shows as Georgia Operations with the GSP patch as its picture and the GSP SWAT truck as its banner.",
+      "createdAt": "2026-10-16T23:55:00Z",
+      "updatedBy": "colin991"
     }
   ]
 }
