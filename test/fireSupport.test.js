@@ -101,12 +101,27 @@ test('Opening a ticket creates a private channel in the category', async () => {
 });
 
 test('-cr asks the CWFR ticket opener to confirm, with an optional reason', async () => {
-  const { buildFireCloseRequestPayload, requestFireTicketClose, FIRE_SUPPORT_CR_YES_ID, FIRE_SUPPORT_CR_NO_ID } = await import('../utils/fireSupport.js');
-  const payload = buildFireCloseRequestPayload(OWNER_ID, { requestedById: '42', reason: '  Issue  resolved ' });
-  assert.match(payload.content, new RegExp(`^<@${OWNER_ID}> A close request was made by <@42>`));
-  assert.match(payload.content, /\*\*Reason:\*\* Issue resolved$/);
-  assert.deepEqual(payload.components[0].toJSON().components.map((b) => b.custom_id), [FIRE_SUPPORT_CR_YES_ID, FIRE_SUPPORT_CR_NO_ID]);
+  const {
+    buildFireCloseRequestPayload, closeRequestReason, requestFireTicketClose, FIRE_SUPPORT_CR_YES_ID, FIRE_SUPPORT_CR_NO_ID,
+  } = await import('../utils/fireSupport.js');
+  const { MessageFlags } = await import('discord.js');
+  const payload = buildFireCloseRequestPayload(OWNER_ID, { requestedById: '42', reason: '  Issue  resolved ', now: 1_760_000_000_000 });
+  assert.equal(payload.flags, MessageFlags.IsComponentsV2);
+  assert.equal(payload.content, undefined);
+  const card = payload.components[0].toJSON();
+  const texts = card.components.filter((c) => typeof c.content === 'string').map((c) => c.content);
+  assert.deepEqual(texts, [
+    '## Close Request',
+    `<@${OWNER_ID}>, a close request has been submitted for this ticket.`,
+    '**Reason:** Issue resolved\n**Requested By:** <@42>\n**Requested At:** <t:1760000000:F>',
+  ]);
+  const buttons = card.components.at(-1).components;
+  assert.deepEqual(buttons.map((b) => [b.custom_id, b.label]), [[FIRE_SUPPORT_CR_YES_ID, 'Confirm'], [FIRE_SUPPORT_CR_NO_ID, 'Cancel']]);
+  assert.doesNotMatch(JSON.stringify(card), /emoji/);
   assert.deepEqual(payload.allowedMentions, { parse: [], users: [OWNER_ID] });
+  // Confirm reads the reason back off the card for the transcript.
+  assert.equal(closeRequestReason({ components: payload.components }), 'Issue resolved');
+  assert.equal(closeRequestReason({ components: buildFireCloseRequestPayload(OWNER_ID).components }), '');
 
   const sent = [];
   let deleted = 0;

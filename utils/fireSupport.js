@@ -260,20 +260,36 @@ export async function createFireSupportTicket(guild, member, type, inquiry) {
 }
 
 /** The `-cr` prompt: asks the opener to confirm closing their ticket, like PCSO's. */
-export function buildFireCloseRequestPayload(ownerId, { requestedById = null, reason = '' } = {}) {
+export function buildFireCloseRequestPayload(ownerId, { requestedById = null, reason = '', now = Date.now() } = {}) {
   const cleanReason = String(reason || '').replace(/\s+/g, ' ').trim().slice(0, 500);
+  const at = Math.floor(Number(now) / 1000);
+  const details = [
+    `**Reason:** ${cleanReason || 'No reason given'}`,
+    requestedById ? `**Requested By:** <@${requestedById}>` : '',
+    `**Requested At:** <t:${at}:F>`,
+  ].filter(Boolean).join('\n');
+  const card = new ContainerBuilder()
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('## Close Request'))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`<@${ownerId}>, a close request has been submitted for this ticket.`))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(details))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addActionRowComponents(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(FIRE_SUPPORT_CR_YES_ID).setStyle(ButtonStyle.Success).setLabel('Confirm'),
+      new ButtonBuilder().setCustomId(FIRE_SUPPORT_CR_NO_ID).setStyle(ButtonStyle.Danger).setLabel('Cancel'),
+    ));
   return {
-    content: [
-      `<@${ownerId}> A close request was made${requestedById ? ` by <@${requestedById}>` : ''}. Click **Yes** to close this ticket.`,
-      cleanReason ? `**Reason:** ${cleanReason}` : '',
-    ].filter(Boolean).join('\n'),
-    components: [
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(FIRE_SUPPORT_CR_YES_ID).setStyle(ButtonStyle.Success).setLabel('Yes'),
-        new ButtonBuilder().setCustomId(FIRE_SUPPORT_CR_NO_ID).setStyle(ButtonStyle.Secondary).setLabel('No'),
-      ),
-    ],
+    flags: MessageFlags.IsComponentsV2,
+    components: [card],
     allowedMentions: { parse: [], users: [String(ownerId)] },
+  };
+}
+
+/** A plain one-line card that replaces the close request once it is answered. */
+function closeRequestOutcome(text) {
+  return {
+    flags: MessageFlags.IsComponentsV2,
+    components: [new ContainerBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(text))],
+    allowedMentions: { parse: [] },
   };
 }
 
@@ -317,9 +333,25 @@ async function closeFireTicket(channel, interaction, { closedVia = 'button', rea
   setTimeout(() => { void channel.delete('CWFR support ticket closed').catch(() => {}); }, 3_000).unref?.();
 }
 
-/** The reason line `-cr` wrote into its prompt, if any. */
-export function closeRequestReason(content) {
-  return String(content || '').match(/\*\*Reason:\*\* (.+)$/m)?.[1]?.trim() || '';
+/** Every bit of text on a message, including text inside its component cards. */
+function messageText(message) {
+  const parts = [message?.content || ''];
+  const walk = (list) => {
+    for (const item of list || []) {
+      const data = item?.data || item || {};
+      if (typeof (item?.content ?? data.content) === 'string') parts.push(item?.content ?? data.content);
+      walk(item?.components || data.components);
+    }
+  };
+  walk(message?.components);
+  return parts.join('\n');
+}
+
+/** The reason `-cr` wrote into its close request card (or older plain prompt), if any. */
+export function closeRequestReason(source) {
+  const text = typeof source === 'string' ? source : messageText(source);
+  const reason = text.match(/\*\*Reason:\*\* (.+)$/m)?.[1]?.trim() || '';
+  return reason === 'No reason given' ? '' : reason;
 }
 
 async function escalateTicket(interaction, channel, ownerId, type) {
@@ -394,12 +426,8 @@ export async function handleFireSupportInteraction(interaction) {
       await interaction.reply({ content: 'Only the ticket opener can confirm this close request.', flags: MessageFlags.Ephemeral });
       return true;
     }
-    const reason = closeRequestReason(interaction.message?.content);
-    await interaction.update({
-      content: `Close request accepted by <@${interaction.user.id}>.`,
-      components: [],
-      allowedMentions: { parse: [] },
-    }).catch(async () => {
+    const reason = closeRequestReason(interaction.message);
+    await interaction.update(closeRequestOutcome(`Close request confirmed by <@${interaction.user.id}>.`)).catch(async () => {
       await interaction.reply({ content: 'This ticket is closing.', flags: MessageFlags.Ephemeral });
     });
     await closeFireTicket(channel, interaction, { closedVia: 'close-request', reason });
@@ -411,7 +439,7 @@ export async function handleFireSupportInteraction(interaction) {
       await interaction.reply({ content: 'Only the ticket opener or staff can dismiss this close request.', flags: MessageFlags.Ephemeral });
       return true;
     }
-    await interaction.update({ content: 'Close request cancelled.', components: [], allowedMentions: { parse: [] } }).catch(async () => {
+    await interaction.update(closeRequestOutcome(`Close request cancelled by <@${interaction.user.id}>.`)).catch(async () => {
       await interaction.reply({ content: 'Close request cancelled.', flags: MessageFlags.Ephemeral });
     });
     return true;
