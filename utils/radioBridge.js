@@ -20,6 +20,18 @@ const REJOIN_DELAY_MS = 10_000;
  */
 export const RADIO_BRIDGE_CONFIG = Object.freeze([
   { channel: 'fire', tokenEnv: 'RADIO_FIRE_BOT_TOKEN', channelEnv: 'RADIO_FIRE_CHANNEL_ID', defaultChannelId: '1514128961951760515' },
+  {
+    channel: 'fire-springfield',
+    tokenEnv: 'RADIO_FIRE_SPRINGFIELD_BOT_TOKEN',
+    channelEnv: 'RADIO_FIRE_SPRINGFIELD_CHANNEL_ID',
+    defaultChannelId: '1560761079645208576',
+  },
+  {
+    channel: 'fire-fairview',
+    tokenEnv: 'RADIO_FIRE_FAIRVIEW_BOT_TOKEN',
+    channelEnv: 'RADIO_FIRE_FAIRVIEW_CHANNEL_ID',
+    defaultChannelId: '1560761113551962224',
+  },
   { channel: 'dot', tokenEnv: 'RADIO_DOT_BOT_TOKEN', channelEnv: 'RADIO_DOT_CHANNEL_ID', defaultChannelId: '1514130037052407932' },
   { channel: 'marine', tokenEnv: 'RADIO_MARINE_BOT_TOKEN', channelEnv: 'RADIO_MARINE_CHANNEL_ID', defaultChannelId: '1553601769819480084' },
 ]);

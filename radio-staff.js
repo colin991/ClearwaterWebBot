@@ -337,12 +337,14 @@
   /* ---------- channel access by Melonly rank ---------- */
 
   const ACCESS_CHANNELS = [
-    { id: 'fire', name: 'CH 2 · Fire Radio' },
-    { id: 'dot', name: 'CH 3 · DOT Radio' },
-    { id: 'marine', name: 'CH 4 · Marine and Boating' },
-    { id: 'freq', name: 'CH 5 · Frequency Change' },
-    { id: 'srt', name: 'CH 6 · Special Response Team' },
-    { id: 'event', name: 'CH 7 · Event channel' },
+    { id: 'fire', name: 'CH 2 · Fire Radio CH1 (City)' },
+    { id: 'fire-springfield', name: 'CH 3 · Fire Radio CH2 (Springfield)' },
+    { id: 'fire-fairview', name: 'CH 4 · Fire Radio CH2 (Fairview)' },
+    { id: 'dot', name: 'CH 5 · DOT Radio' },
+    { id: 'marine', name: 'CH 6 · Marine and Boating' },
+    { id: 'freq', name: 'CH 7 · Frequency Change' },
+    { id: 'srt', name: 'CH 8 · Special Response Team' },
+    { id: 'event', name: 'CH 9 · Event channel' },
   ];
   let access = {};
   let melonlyReady = false;

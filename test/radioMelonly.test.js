@@ -45,3 +45,13 @@ test('channel access: open by default, rank-limited when staff tick ranks, admin
   assert.equal(canUseChannel(access, 'srt', { profile: [], staff: true }), true);
   assert.equal(canUseChannel(access, 'freq', { profile: [] }), true);
 });
+
+test('Fire Springfield and Fairview use Fire Radio access until they get a rule of their own', () => {
+  const firefighter = [{ departmentId: 'cwfd', rankId: 'ff' }];
+  const deputy = [{ departmentId: 'pcso', rankId: 'dep' }];
+  const access = normalizeAccess({ fire: { ranks: ['cwfd:ff'] }, 'fire-fairview': { ranks: ['pcso:dep'] } });
+  assert.equal(canUseChannel(access, 'fire-springfield', { profile: firefighter }), true);
+  assert.equal(canUseChannel(access, 'fire-springfield', { profile: deputy }), false);
+  assert.equal(canUseChannel(access, 'fire-fairview', { profile: deputy }), true);
+  assert.equal(canUseChannel(access, 'fire-fairview', { profile: firefighter }), false);
+});

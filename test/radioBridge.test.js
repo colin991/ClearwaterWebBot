@@ -16,3 +16,13 @@ test('extra channel bridges need a bot token; Fire, DOT and Marine have default 
   ], 'Marine has no token; Frequency Change is never bridged');
   assert.deepEqual(radioBridgeSettings({ RADIO_MARINE_BOT_TOKEN: 'm' }), [{ channel: 'marine', token: 'm', channelId: '1553601769819480084' }]);
 });
+
+test('Fire Springfield and Fairview bridge to their own voice channels with their own bots', () => {
+  assert.deepEqual(radioBridgeSettings({
+    RADIO_FIRE_SPRINGFIELD_BOT_TOKEN: 'spring',
+    RADIO_FIRE_FAIRVIEW_BOT_TOKEN: 'fair',
+  }), [
+    { channel: 'fire-springfield', token: 'spring', channelId: '1560761079645208576' },
+    { channel: 'fire-fairview', token: 'fair', channelId: '1560761113551962224' },
+  ]);
+});
