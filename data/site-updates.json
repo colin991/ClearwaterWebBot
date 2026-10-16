@@ -1558,7 +1558,7 @@
     {
       "id": "2026-09-17-pcso-forms-vercel-readonly",
       "title": "Stop PCSO site forms from writing JSON on Vercel",
-      "summary": "Police reports, Crime Stoppers tips, complaints, and public records no longer try to save JSON on Vercel\u2019s read-only filesystem. The site forwards the form to the bot host, which stores it and posts it to Discord.",
+      "summary": "Police reports, Crime Stoppers tips, complaints, and public records no longer try to save JSON on Vercel’s read-only filesystem. The site forwards the form to the bot host, which stores it and posts it to Discord.",
       "createdAt": "2026-09-17T20:35:00.000Z",
       "updatedBy": "colin991"
     },
@@ -1870,7 +1870,7 @@
     {
       "id": "2026-09-07-pinellas-callsign-sheet-fix",
       "title": "PCSO callsigns update the live roster",
-      "summary": "The -callsign roster workflow now reads and writes the PCSO database\u00e2\u20ac\u2122s actual rank, callsign, roleplay name, Discord ID, activity, and punishment columns, using the shared operations database.",
+      "summary": "The -callsign roster workflow now reads and writes the PCSO databaseâ€™s actual rank, callsign, roleplay name, Discord ID, activity, and punishment columns, using the shared operations database.",
       "updatedBy": "colin991",
       "createdAt": "2026-09-07T17:00:00.000Z"
     },
@@ -2052,21 +2052,21 @@
     {
       "id": "2026-09-06-fix-private-repo-host-sync",
       "title": "Spark/Apollo host sync keeps git login",
-      "summary": "Host code sync no longer replaces Apollo\u2019s private-repo git remote with a public URL (which made fetch fail and kept old code). It preserves the panel token, force-syncs main, refreshes npm deps after updates, and leaves data/ + .env alone. Startup command can stay locked.",
+      "summary": "Host code sync no longer replaces Apollo’s private-repo git remote with a public URL (which made fetch fail and kept old code). It preserves the panel token, force-syncs main, refreshes npm deps after updates, and leaves data/ + .env alone. Startup command can stay locked.",
       "updatedBy": "colin991",
       "createdAt": "2026-09-06T18:25:00.000Z"
     },
     {
       "id": "2026-09-06-locked-startup-host-sync",
       "title": "Works with locked Apollopanel startup",
-      "summary": "You no longer need to change the panel startup command. index.js force-syncs code from main on boot while preserving data/ and .env, then restarts onto the new commit if needed. Do not wipe-and-reupload to update \u2014 just Restart (one-time console reset if still stuck on old code).",
+      "summary": "You no longer need to change the panel startup command. index.js force-syncs code from main on boot while preserving data/ and .env, then restarts onto the new commit if needed. Do not wipe-and-reupload to update — just Restart (one-time console reset if still stuck on old code).",
       "updatedBy": "colin991",
       "createdAt": "2026-09-06T18:22:00.000Z"
     },
     {
       "id": "2026-09-06-preserve-host-data-on-restart",
       "title": "Restart updates code without wiping data",
-      "summary": "start.sh now force-syncs bot code from main while preserving host-only data/ and .env. Do not delete-all and re-upload a zip to update \u2014 that wipes Clearwater Internet, salaries, and identity cache. Use Restart with bash start.sh.",
+      "summary": "start.sh now force-syncs bot code from main while preserving host-only data/ and .env. Do not delete-all and re-upload a zip to update — that wipes Clearwater Internet, salaries, and identity cache. Use Restart with bash start.sh.",
       "updatedBy": "colin991",
       "createdAt": "2026-09-06T18:16:00.000Z"
     },
@@ -2149,7 +2149,7 @@
     },
     {
       "id": "2026-09-04-bot-only-repo",
-      "title": "Website removed \u2014 Discord bot only",
+      "title": "Website removed — Discord bot only",
       "summary": "The repository is now Discord-bot only. Website, Vercel, Phone, and the old HTTP bridge were removed. Hold VC action logs always post to channel 1514547037537046688.",
       "updatedBy": "colin991",
       "createdAt": "2026-09-04T21:06:37.000Z"
@@ -2298,7 +2298,7 @@
     {
       "id": "2026-08-16-phone-first-customize",
       "title": "Phone first-launch customize",
-      "summary": "Opening Clearwater Phone for the first time now goes Sign in \u2192 pick Z Phone (Samsung) or X Phone (Apple) \u2192 choose a wallpaper color, then launches.",
+      "summary": "Opening Clearwater Phone for the first time now goes Sign in → pick Z Phone (Samsung) or X Phone (Apple) → choose a wallpaper color, then launches.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-16T15:20:00.000Z"
     },
@@ -2431,7 +2431,7 @@
     {
       "id": "2026-08-15-hide-government-nav",
       "title": "Government nav hidden without roles",
-      "summary": "The Government link stays completely hidden unless your Discord roles allow government tools \u2014 same behavior as Staff.",
+      "summary": "The Government link stays completely hidden unless your Discord roles allow government tools — same behavior as Staff.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T21:50:00.000Z"
     },
@@ -2445,7 +2445,7 @@
     {
       "id": "2026-08-15-phone-stay-signed-in",
       "title": "Phone stays signed in",
-      "summary": "Clearwater Phone no longer flashes \u201cSigned in\u201d then immediately signs you out. Discord login is kept until you tap Sign out.",
+      "summary": "Clearwater Phone no longer flashes “Signed in” then immediately signs you out. Discord login is kept until you tap Sign out.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T21:42:00.000Z"
     },
@@ -2606,7 +2606,7 @@
     {
       "id": "2026-08-15-help-footer",
       "title": "Moderation help cleanup",
-      "summary": "Removed the \u201cModeled after Circle-style staff tools\u201d footer from `-help` so the command embed stays clean.",
+      "summary": "Removed the “Modeled after Circle-style staff tools” footer from `-help` so the command embed stays clean.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T01:34:00.000Z",
       "commit": "e6c9826"
@@ -2622,7 +2622,7 @@
     {
       "id": "2026-08-15-update-log-author",
       "title": "Update log shows who updated",
-      "summary": "Discord update log embeds now include an \u201cUpdated by\u201d field naming who requested or owns each change.",
+      "summary": "Discord update log embeds now include an “Updated by” field naming who requested or owns each change.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T02:17:00.000Z",
       "commit": "28a2bb1"
@@ -2638,7 +2638,7 @@
     {
       "id": "2026-08-15-update-by-git-user",
       "title": "Update log uses git username",
-      "summary": "\u201cUpdated by\u201d in the Discord update log now uses the git/GitHub username (e.g. colin991) instead of a full name.",
+      "summary": "“Updated by” in the Discord update log now uses the git/GitHub username (e.g. colin991) instead of a full name.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T02:42:00.000Z",
       "commit": "5a32771"
@@ -2646,7 +2646,7 @@
     {
       "id": "2026-08-15-hold-vc",
       "title": "Hold VC command",
-      "summary": "Added Ownership-only `-holdvc` / `-unholdvc` (not part of the staff moderation command list): server-mutes everyone in a voice channel except Ownership, announces \u201cPlease Hold this voice chat\u201d, and plays a bundled voice announcement in the channel (no API key).",
+      "summary": "Added Ownership-only `-holdvc` / `-unholdvc` (not part of the staff moderation command list): server-mutes everyone in a voice channel except Ownership, announces “Please Hold this voice chat”, and plays a bundled voice announcement in the channel (no API key).",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T02:49:40.000Z",
       "commit": "cd24a6b"
@@ -2686,7 +2686,7 @@
     {
       "id": "2026-08-15-say-command",
       "title": "Say command for voice chat",
-      "summary": "Added Ownership-only `/say text:` \u2014 the bot joins a voice channel and speaks the given text for everyone (no API key).",
+      "summary": "Added Ownership-only `/say text:` — the bot joins a voice channel and speaks the given text for everyone (no API key).",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T03:07:48.000Z",
       "commit": "f8ea4f1"
@@ -2718,7 +2718,7 @@
     {
       "id": "2026-08-15-sidebar-ad-fit",
       "title": "Sidebar ad matches site chrome",
-      "summary": "Sponsored sidebar ads match the solid card surface of What\u2019s happening / Who to follow, and the right rail is a fixed-height independently scrollable column.",
+      "summary": "Sponsored sidebar ads match the solid card surface of What’s happening / Who to follow, and the right rail is a fixed-height independently scrollable column.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T04:40:00.000Z",
       "commit": "e812581"
@@ -2742,7 +2742,7 @@
     {
       "id": "2026-08-15-reels-photo-load",
       "title": "Reels photo load fix",
-      "summary": "Fixed intermittent Reel \u201cphoto could not be loaded\u201d errors: same-origin /api/media now proxies Vercel Blob bytes instead of 302ing into a CSP-blocked *.public.blob host, with retries and CSP allowlist updates for large media fallbacks.",
+      "summary": "Fixed intermittent Reel “photo could not be loaded” errors: same-origin /api/media now proxies Vercel Blob bytes instead of 302ing into a CSP-blocked *.public.blob host, with retries and CSP allowlist updates for large media fallbacks.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T05:20:00.000Z",
       "commit": "91cf3fe"
@@ -2750,7 +2750,7 @@
     {
       "id": "2026-08-15-business-profile-edit",
       "title": "Business profile editing",
-      "summary": "Handlers and managers can update an approved business account\u2019s logo, name, type, and about text from Settings \u2192 Account (or Edit business profile on the business page).",
+      "summary": "Handlers and managers can update an approved business account’s logo, name, type, and about text from Settings → Account (or Edit business profile on the business page).",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T05:30:00.000Z",
       "commit": "48ec77d"
@@ -2766,7 +2766,7 @@
     {
       "id": "2026-08-15-community-pauses",
       "title": "Community pauses contrast",
-      "summary": "Staff Controls community pause toggles no longer inherit the solid accent button fill, so labels like \u201cOpen to members\u201d stay readable on the charcoal panel.",
+      "summary": "Staff Controls community pause toggles no longer inherit the solid accent button fill, so labels like “Open to members” stay readable on the charcoal panel.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T05:55:00.000Z",
       "commit": "7253062"
@@ -2782,7 +2782,7 @@
     {
       "id": "2026-08-15-reels-video-range",
       "title": "Reel video playback fix",
-      "summary": "Reel videos now redirect to blob storage for streaming with HTTP Range support instead of being fully buffered by the media proxy, which had been causing black frames and \u201ccannot play here\u201d errors.",
+      "summary": "Reel videos now redirect to blob storage for streaming with HTTP Range support instead of being fully buffered by the media proxy, which had been causing black frames and “cannot play here” errors.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T17:25:00.000Z",
       "commit": "b7963a0"
@@ -2798,7 +2798,7 @@
     {
       "id": "2026-08-15-right-rail-scroll",
       "title": "Scrollable Internet right rail",
-      "summary": "The home-page right column (What\u2019s happening, ads, Who to follow) stays sticky and scrolls on its own when the widgets are taller than the viewport.",
+      "summary": "The home-page right column (What’s happening, ads, Who to follow) stays sticky and scrolls on its own when the widgets are taller than the viewport.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T17:35:00.000Z",
       "commit": "e9b5ac4"
@@ -2814,7 +2814,7 @@
     {
       "id": "2026-08-15-phone-download",
       "title": "Clearwater Phone download on Internet",
-      "summary": "Clearwater Phone is available from Internet \u2192 Phone (and the sidebar card). Download ClearwaterPhone.zip, extract, and run ClearwaterPhone-Launch.bat.",
+      "summary": "Clearwater Phone is available from Internet → Phone (and the sidebar card). Download ClearwaterPhone.zip, extract, and run ClearwaterPhone-Launch.bat.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T17:50:00.000Z",
       "commit": "dd7d031"
@@ -2830,7 +2830,7 @@
     {
       "id": "2026-08-15-phone-exe",
       "title": "Clearwater Phone Windows exe",
-      "summary": "Clearwater Phone download is now a single ClearwaterPhone.exe \u2014 double-click to open. First launch installs the runtime once automatically.",
+      "summary": "Clearwater Phone download is now a single ClearwaterPhone.exe — double-click to open. First launch installs the runtime once automatically.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:00:00.000Z",
       "commit": "b3c61b0"
@@ -2838,7 +2838,7 @@
     {
       "id": "2026-08-15-phone-portable",
       "title": "Clearwater Phone portable app",
-      "summary": "Replaced the console runtime-downloader with a real portable ClearwaterPhone.exe that opens the overlay directly (no black window, no separate download). Windows SmartScreen may still warn once because the app is unsigned \u2014 use More info \u2192 Run anyway.",
+      "summary": "Replaced the console runtime-downloader with a real portable ClearwaterPhone.exe that opens the overlay directly (no black window, no separate download). Windows SmartScreen may still warn once because the app is unsigned — use More info → Run anyway.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T18:05:00.000Z",
       "commit": "80c4001"
@@ -2962,7 +2962,7 @@
     {
       "id": "2026-08-15-phone-clearwater-logo",
       "title": "Phone home uses Clearwater logo",
-      "summary": "Clearwater Phone\u2019s home wallpaper now shows the Clearwater logo instead of the old anchor mark. Download Phone v1.3.11 to get it.",
+      "summary": "Clearwater Phone’s home wallpaper now shows the Clearwater logo instead of the old anchor mark. Download Phone v1.3.11 to get it.",
       "updatedBy": "colin991",
       "createdAt": "2026-08-15T23:15:00.000Z"
     },
@@ -3616,8 +3616,7 @@
       "summary": "Removed the extra every-2-second ER:LC command-log request added in the last speedup, which could push the bot into ER:LC rate limits and stall every in-game command. Commands are read from the regular server snapshot again (checked every second). The bot also no longer replays old commands after a failed ER:LC check.",
       "createdAt": "2026-10-12T01:35:00.000Z",
       "updatedBy": "colin991"
-    }
-,
+    },
     {
       "id": "radio-fire-dot-transmit-tone-2026-10-12",
       "title": "Fire and DOT transmit tone",
@@ -3659,8 +3658,7 @@
       "summary": "-ratelimit now also shows whether in-game ; commands are switched on, how many ER:LC webhook events the bot has received, when it last read the command log, and the last few command results.",
       "createdAt": "2026-10-12T04:15:00.000Z",
       "updatedBy": "colin991"
-    }
-,
+    },
     {
       "id": "radio-downloads-from-website-2026-10-12",
       "title": "Radio downloads and updates from cwpcso.com",
@@ -3764,6 +3762,13 @@
       "title": "New CWFR close request card",
       "summary": "A -cr close request in a CWFR ticket is now a Close Request card that pings the opener and lists the reason, who requested it and when, with green Confirm and red Cancel buttons.",
       "createdAt": "2026-10-16T21:41:42Z",
+      "updatedBy": "colin991"
+    },
+    {
+      "id": "gsp-server-profile-2026-10-16",
+      "title": "Bot profile for the Georgia State Patrol server",
+      "summary": "In the new Georgia State Patrol department server, the bot now shows as Georgia Operations with the GSP patch as its picture and the GSP SWAT truck as its banner.",
+      "createdAt": "2026-10-16T23:55:00Z",
       "updatedBy": "colin991"
     }
   ]

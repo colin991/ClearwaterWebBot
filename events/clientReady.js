@@ -23,6 +23,7 @@ import { ensureFireOpsServerProfile } from '../utils/fireOpsServer.js';
 import { ensureDodServerProfile } from '../utils/dodServer.js';
 import { clearFloridaServerProfile } from '../utils/floridaServer.js';
 import { ensureGeorgiaServerProfile } from '../utils/georgiaServer.js';
+import { ensureGspServerProfile } from '../utils/gspServer.js';
 import { startBotApiServer } from '../utils/botApiServer.js';
 import { startRadioDownloadPanel } from '../utils/radioDownloadPanel.js';
 import { startErlcSceneCommands } from '../utils/erlcSceneCommands.js';
@@ -77,6 +78,12 @@ export default {
         logger.error('Georgia Operations server profile setup failed', error);
       });
     }, 4200);
+
+    setTimeout(() => {
+      void ensureGspServerProfile(client).catch((error) => {
+        logger.error('GSP server profile setup failed', error);
+      });
+    }, 4800);
 
     setTimeout(() => {
       void clearFloridaServerProfile(client).catch((error) => {
