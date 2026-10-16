@@ -99,3 +99,42 @@ test('Opening a ticket creates a private channel in the category', async () => {
   const again = await createFireSupportTicket(guild, opener, 'chief', 'again');
   assert.equal(again.existing, true);
 });
+
+test('-cr asks the CWFR ticket opener to confirm, with an optional reason', async () => {
+  const { buildFireCloseRequestPayload, requestFireTicketClose, FIRE_SUPPORT_CR_YES_ID, FIRE_SUPPORT_CR_NO_ID } = await import('../utils/fireSupport.js');
+  const payload = buildFireCloseRequestPayload(OWNER_ID, { requestedById: '42', reason: '  Issue  resolved ' });
+  assert.match(payload.content, new RegExp(`^<@${OWNER_ID}> A close request was made by <@42>`));
+  assert.match(payload.content, /\*\*Reason:\*\* Issue resolved$/);
+  assert.deepEqual(payload.components[0].toJSON().components.map((b) => b.custom_id), [FIRE_SUPPORT_CR_YES_ID, FIRE_SUPPORT_CR_NO_ID]);
+  assert.deepEqual(payload.allowedMentions, { parse: [], users: [OWNER_ID] });
+
+  const sent = [];
+  const message = (guildId, rankNames) => ({
+    guild: { id: guildId },
+    author: { id: '42' },
+    member: member(rankNames),
+    channel: { topic: `cwfr-ticket-owner:${OWNER_ID} cwfr-ticket-type:line`, send: async (p) => sent.push(p) },
+  });
+  assert.equal(await requestFireTicketClose(message('1514100977920245760', ['Lieutenant']), []), false);
+  assert.equal(sent.length, 0);
+  await assert.rejects(requestFireTicketClose(message(FIRE_OPS_GUILD_ID, ['Engineer']), []), /Only staff/);
+  assert.equal(await requestFireTicketClose(message(FIRE_OPS_GUILD_ID, ['Lieutenant']), ['done']), true);
+  assert.equal(sent.length, 1);
+});
+
+test('Only the CWFR ticket opener can accept a close request', async () => {
+  const { handleFireSupportInteraction, FIRE_SUPPORT_CR_YES_ID } = await import('../utils/fireSupport.js');
+  let reply;
+  const handled = await handleFireSupportInteraction({
+    customId: FIRE_SUPPORT_CR_YES_ID,
+    guildId: FIRE_OPS_GUILD_ID,
+    isButton: () => true,
+    isModalSubmit: () => false,
+    user: { id: '99' },
+    member: member(['Lieutenant']),
+    channel: { topic: `cwfr-ticket-owner:${OWNER_ID} cwfr-ticket-type:line` },
+    reply: async (payload) => { reply = payload; },
+  });
+  assert.equal(handled, true);
+  assert.match(reply.content, /ticket opener/);
+});

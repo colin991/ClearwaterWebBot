@@ -3730,6 +3730,13 @@
       "summary": "Departments can keep sending money when their balance runs low, going as far as $500,000 in debt. A send that would go past that limit is refused. Payroll always pays on-shift employees, even past the limit, so it is the only thing that can push a department deeper into debt. Fund panels and -funds show how much is owed and how much can still be sent.",
       "createdAt": "2026-10-15T23:30:00Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "cwfr-close-request-2026-10-16",
+      "title": "Close requests in CWFR tickets",
+      "summary": "Fire department ticket staff can type -cr, optionally followed by a reason, in a CWFR support ticket to ask the person who opened it whether it can be closed. The opener clicks Yes to close the ticket or No to keep it open, and staff can also dismiss the request. The command only works in the Clearwater Fire & Rescue server and the PCSO server's existing -cr is unchanged; it stays silent everywhere else.",
+      "createdAt": "2026-10-16T00:20:00Z",
+      "updatedBy": "colin991"
     }
   ]
 }
