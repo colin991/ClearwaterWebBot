@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import prism from 'prism-media';
 
 /** Played into Discord ahead of an app transmission on these channels only. */
-export const RADIO_TRANSMIT_TONE_CHANNELS = new Set(['fire', 'dot']);
+export const RADIO_TRANSMIT_TONE_CHANNELS = new Set(['fire', 'fire-springfield', 'fire-fairview', 'dot']);
 export const RADIO_TRANSMIT_TONE_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'radio-transmit-tone.ogg');
 
 /**

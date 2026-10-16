@@ -3730,6 +3730,13 @@
       "summary": "Departments can keep sending money when their balance runs low, going as far as $500,000 in debt. A send that would go past that limit is refused. Payroll always pays on-shift employees, even past the limit, so it is the only thing that can push a department deeper into debt. Fund panels and -funds show how much is owed and how much can still be sent.",
       "createdAt": "2026-10-15T23:30:00Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "fire-radio-district-channels-2026-10-16",
+      "title": "Fire Radio split into City, Springfield and Fairview",
+      "summary": "Fire Radio on the Clearwater Radio is now Fire Radio CH1 (City), and two new fire channels follow it: Fire Radio CH2 (Springfield) and Fire Radio CH2 (Fairview). They work like Fire Radio, with the same rank access, transmit tone and talk-over protection, and each links to its own Discord voice channel once it has a radio bot.",
+      "createdAt": "2026-10-16T21:17:30Z",
+      "updatedBy": "colin991"
     }
   ]
 }

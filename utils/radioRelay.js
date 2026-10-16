@@ -24,11 +24,15 @@ const AUDIO_FRAME = 0x01;
  */
 export const RADIO_MAIN_CHANNEL = 'main';
 export const RADIO_FIRE_CHANNEL = 'fire';
+/** Fire's district channels, run like Fire Radio (same access, tone and talk-over protection). */
+export const RADIO_FIRE_SPRINGFIELD_CHANNEL = 'fire-springfield';
+export const RADIO_FIRE_FAIRVIEW_CHANNEL = 'fire-fairview';
+export const RADIO_FIRE_CHANNELS = Object.freeze([RADIO_FIRE_CHANNEL, RADIO_FIRE_SPRINGFIELD_CHANNEL, RADIO_FIRE_FAIRVIEW_CHANNEL]);
 /**
  * Talk-over protection: on these channels one radio talks at a time (no dispatch cut-in), and nobody
  * on the radio can talk while someone speaks in the channel's Discord voice channel.
  */
-export const RADIO_TALK_OVER_PROTECTED = new Set([RADIO_FIRE_CHANNEL]);
+export const RADIO_TALK_OVER_PROTECTED = new Set(RADIO_FIRE_CHANNELS);
 /**
  * Priority members: they never get BUSY (they cut in over whoever is talking, on any channel, and talk
  * over Fire's Discord channel), and their radio sends their voice a little louder (MIC BOOST).
@@ -42,7 +46,9 @@ export const RADIO_FREQ_CHANNEL = 'freq';
 /** A temporary channel staff open for a server event; it closes (moving everyone to MAIN) when they're done. */
 export const RADIO_EVENT_CHANNEL = 'event';
 export const RADIO_EXTRA_CHANNELS = Object.freeze([
-  { id: RADIO_FIRE_CHANNEL, name: 'Fire Radio' },
+  { id: RADIO_FIRE_CHANNEL, name: 'Fire Radio CH1 (City)' },
+  { id: RADIO_FIRE_SPRINGFIELD_CHANNEL, name: 'Fire Radio CH2 (Springfield)' },
+  { id: RADIO_FIRE_FAIRVIEW_CHANNEL, name: 'Fire Radio CH2 (Fairview)' },
   { id: RADIO_DOT_CHANNEL, name: 'DOT Radio' },
   { id: RADIO_MARINE_CHANNEL, name: 'Marine and Boating' },
   { id: RADIO_FREQ_CHANNEL, name: 'Frequency Change' },
