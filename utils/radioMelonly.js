@@ -99,7 +99,7 @@ export function profileLabel(profile) {
  * Channel access rules from the staff page: { [channelId]: { ranks: ["deptId:rankId", ...] } }.
  * A channel with no rule (or an empty list) is open to everyone.
  */
-export function normalizeAccess(raw = {}, channels = ['fire', 'dot', 'marine', 'freq', 'srt', 'event']) {
+export function normalizeAccess(raw = {}, channels = ['fire', 'fire-springfield', 'fire-fairview', 'dot', 'marine', 'freq', 'srt', 'event']) {
   const access = {};
   for (const channel of channels) {
     const ranks = Array.isArray(raw?.[channel]?.ranks) ? raw[channel].ranks : [];
@@ -109,9 +109,13 @@ export function normalizeAccess(raw = {}, channels = ['fire', 'dot', 'marine', '
   return access;
 }
 
+const ACCESS_FALLBACK = Object.freeze({ 'fire-springfield': 'fire', 'fire-fairview': 'fire' });
+
 /** Whether a member (their Melonly profile, and whether they're an admin) may use a channel. */
 export function canUseChannel(access, channel, { profile = [], staff = false } = {}) {
-  const rule = access?.[channel];
+  // Fire's district channels follow Fire Radio's rule until staff give them one of their own.
+  const own = access?.[channel];
+  const rule = own?.ranks?.length ? own : access?.[ACCESS_FALLBACK[channel]];
   if (!rule?.ranks?.length || staff) return true;
   const allowed = new Set(rule.ranks);
   return (profile || []).some((entry) => allowed.has(`${entry.departmentId}:${entry.rankId}`));

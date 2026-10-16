@@ -45,8 +45,8 @@ test('a transmit tone plays ahead of the voice, and not at all for a PTT tap', a
   assert.deepEqual(received, [8, 9, 1, 2, 3]);
 });
 
-test('only Fire and DOT get the transmit tone, and it loads as Opus packets', async () => {
-  assert.deepEqual([...RADIO_TRANSMIT_TONE_CHANNELS].sort(), ['dot', 'fire']);
+test('only the Fire channels and DOT get the transmit tone, and it loads as Opus packets', async () => {
+  assert.deepEqual([...RADIO_TRANSMIT_TONE_CHANNELS].sort(), ['dot', 'fire', 'fire-fairview', 'fire-springfield']);
   const packets = await loadOggOpusPackets();
   assert.equal(packets.length, 26);
   assert.ok(packets.every((p) => Buffer.isBuffer(p) && p.length > 0));
