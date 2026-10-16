@@ -26,6 +26,7 @@ import { RADIO_STAFF_TOOLS, radioStaffSnapshot, runRadioStaffAction, runRadioSta
 import { PermissionFlagsBits } from 'discord.js';
 import { hasAdminPanelAccess } from '../lib/admin-access.js';
 import { PINELLAS_GUILD_ID } from './pinellasServer.js';
+import { isFireTranscriptId, readFireTranscript } from './fireTranscripts.js';
 
 const UNKNOWN_MEMBER = 10007;
 const ACCESS_CACHE_MS = 30_000;
@@ -432,6 +433,14 @@ export function startBotApiServer(client, {
           return sendJson(response, 200, { ok: true, ...matchPcsoChatbotReply(message, config) });
         }
         return sendJson(response, 200, { ok: true, ...(await savePcsoChatbot(payload)) });
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/cwfr/transcript') {
+        const id = String(url.searchParams.get('id') || '');
+        if (!isFireTranscriptId(id)) return sendJson(response, 400, { error: 'Invalid transcript id' });
+        const record = await readFireTranscript(id);
+        if (!record) return sendJson(response, 404, { error: 'Transcript not found' });
+        return sendJson(response, 200, record);
       }
 
       return sendJson(response, 404, { error: 'Not found' });

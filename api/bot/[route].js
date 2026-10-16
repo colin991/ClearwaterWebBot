@@ -1,4 +1,5 @@
 import action from '../../lib/bot-api/action.js';
+import cwfrTranscript from '../../lib/bot-api/cwfr-transcript.js';
 import status from '../../lib/bot-api/status.js';
 import radio from '../../lib/bot-api/radio.js';
 import radioStaff from '../../lib/bot-api/radio-staff.js';
@@ -7,6 +8,7 @@ import radioRelease from '../../lib/bot-api/radio-release.js';
 
 const ROUTES = {
   action,
+  'cwfr-transcript': cwfrTranscript,
   status,
   radio,
   'radio-staff': radioStaff,
