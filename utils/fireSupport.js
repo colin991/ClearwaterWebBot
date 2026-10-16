@@ -291,6 +291,8 @@ export async function requestFireTicketClose(message, args = []) {
     requestedById: message.author.id,
     reason: args.join(' '),
   }));
+  // The prompt carries who asked and why, so the `-cr` command itself is removed.
+  await message.delete?.().catch(() => {});
   return true;
 }
 

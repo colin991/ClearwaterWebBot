@@ -3751,6 +3751,13 @@
       "summary": "Fire Radio on the Clearwater Radio is now Fire Radio CH1 (City), and two new fire channels follow it: Fire Radio CH2 (Springfield) and Fire Radio CH2 (Fairview). They work like Fire Radio, with the same rank access, transmit tone and talk-over protection, and each links to its own Discord voice channel once it has a radio bot.",
       "createdAt": "2026-10-16T21:17:30Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "cwfr-close-request-cleanup-2026-10-16",
+      "title": "CWFR -cr removes the command message",
+      "summary": "When staff type -cr in a CWFR support ticket, the bot now deletes that command message after posting the close request, so only the request with its Yes and No buttons stays in the ticket.",
+      "createdAt": "2026-10-16T21:37:58Z",
+      "updatedBy": "colin991"
     }
   ]
 }

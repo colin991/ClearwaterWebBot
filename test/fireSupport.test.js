@@ -109,9 +109,11 @@ test('-cr asks the CWFR ticket opener to confirm, with an optional reason', asyn
   assert.deepEqual(payload.allowedMentions, { parse: [], users: [OWNER_ID] });
 
   const sent = [];
+  let deleted = 0;
   const message = (guildId, rankNames) => ({
     guild: { id: guildId },
     author: { id: '42' },
+    delete: async () => { deleted += 1; },
     member: member(rankNames),
     channel: { topic: `cwfr-ticket-owner:${OWNER_ID} cwfr-ticket-type:line`, send: async (p) => sent.push(p) },
   });
@@ -120,6 +122,7 @@ test('-cr asks the CWFR ticket opener to confirm, with an optional reason', asyn
   await assert.rejects(requestFireTicketClose(message(FIRE_OPS_GUILD_ID, ['Engineer']), []), /Only staff/);
   assert.equal(await requestFireTicketClose(message(FIRE_OPS_GUILD_ID, ['Lieutenant']), ['done']), true);
   assert.equal(sent.length, 1);
+  assert.equal(deleted, 1, 'the -cr command message is deleted once the prompt is sent');
 });
 
 test('Only the CWFR ticket opener can accept a close request', async () => {
