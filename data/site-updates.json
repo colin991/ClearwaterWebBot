@@ -3772,6 +3772,13 @@
       "summary": "In the new Georgia State Patrol department server, the bot now shows as Georgia Operations with the GSP patch as its picture and the GSP SWAT truck as its banner.",
       "createdAt": "2026-10-16T23:55:00Z",
       "updatedBy": "colin991"
+    },
+    {
+      "id": "cwfr-close-request-icons-2026-10-17",
+      "title": "Icons on the CWFR close request card",
+      "summary": "The CWFR Close Request card now has small white icons: a warning sign by the title and a pin, ID card and clock by Reason, Requested By and Requested At. The bot adds them as its own emojis the first time it starts.",
+      "createdAt": "2026-10-17T01:01:57Z",
+      "updatedBy": "colin991"
     }
   ]
 }

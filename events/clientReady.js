@@ -20,6 +20,7 @@ import { startFultonRoleSync } from '../utils/fultonRoleSync.js';
 import { ensurePinellasServerProfile } from '../utils/pinellasServer.js';
 import { ensureBelleairServerProfile } from '../utils/belleairServer.js';
 import { ensureFireOpsServerProfile } from '../utils/fireOpsServer.js';
+import { loadCloseRequestIcons } from '../utils/closeRequestIcons.js';
 import { ensureDodServerProfile } from '../utils/dodServer.js';
 import { clearFloridaServerProfile } from '../utils/floridaServer.js';
 import { ensureGeorgiaServerProfile } from '../utils/georgiaServer.js';
@@ -64,6 +65,9 @@ export default {
     setTimeout(() => {
       void ensureFireOpsServerProfile(client).catch((error) => {
         logger.error('Fire Operations server profile setup failed', error);
+      });
+      void loadCloseRequestIcons(client).catch((error) => {
+        logger.warn(`Close request icons unavailable: ${error?.message || error}`);
       });
     }, 3000);
 
