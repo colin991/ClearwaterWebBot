@@ -18,6 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FIRE_OPS_GUILD_ID } from './fireOpsServer.js';
 import { FIRE_RANKS } from './fireShiftPanel.js';
+import { closeRequestIcon } from './closeRequestIcons.js';
 import { archiveFireTicket } from './fireTranscripts.js';
 import { readJsonFile, writeJsonFile } from './jsonStore.js';
 import { logger } from './logger.js';
@@ -264,12 +265,12 @@ export function buildFireCloseRequestPayload(ownerId, { requestedById = null, re
   const cleanReason = String(reason || '').replace(/\s+/g, ' ').trim().slice(0, 500);
   const at = Math.floor(Number(now) / 1000);
   const details = [
-    `**Reason:** ${cleanReason || 'No reason given'}`,
-    requestedById ? `**Requested By:** <@${requestedById}>` : '',
-    `**Requested At:** <t:${at}:F>`,
+    `${closeRequestIcon('reason')}**Reason:** ${cleanReason || 'No reason given'}`,
+    requestedById ? `${closeRequestIcon('requestedBy')}**Requested By:** <@${requestedById}>` : '',
+    `${closeRequestIcon('requestedAt')}**Requested At:** <t:${at}:F>`,
   ].filter(Boolean).join('\n');
   const card = new ContainerBuilder()
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent('## Close Request'))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${closeRequestIcon('warning')}Close Request`))
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(`<@${ownerId}>, a close request has been submitted for this ticket.`))
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(details))
     .addSeparatorComponents(new SeparatorBuilder())

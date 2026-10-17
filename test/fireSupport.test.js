@@ -156,3 +156,22 @@ test('Only the CWFR ticket opener can accept a close request', async () => {
   assert.equal(handled, true);
   assert.match(reply.content, /ticket opener/);
 });
+
+test('the close request card shows the white icons once the bot has loaded them', async () => {
+  const { buildFireCloseRequestPayload, closeRequestReason } = await import('../utils/fireSupport.js');
+  const { setCloseRequestIcons, CLOSE_REQUEST_ICONS } = await import('../utils/closeRequestIcons.js');
+  const { existsSync } = await import('node:fs');
+  for (const icon of Object.values(CLOSE_REQUEST_ICONS)) {
+    assert.equal(existsSync(new URL(`../assets/close-request/${icon.file}`, import.meta.url)), true);
+  }
+  setCloseRequestIcons({ warning: '<:cr_warning:1>', reason: '<:cr_pin:2>', requestedBy: '<:cr_id_card:3>', requestedAt: '<:cr_clock:4>' });
+  try {
+    const payload = buildFireCloseRequestPayload(OWNER_ID, { requestedById: '42', reason: 'Resolved', now: 1_760_000_000_000 });
+    const texts = payload.components[0].toJSON().components.filter((c) => typeof c.content === 'string').map((c) => c.content);
+    assert.equal(texts[0], '## <:cr_warning:1> Close Request');
+    assert.equal(texts[2], '<:cr_pin:2> **Reason:** Resolved\n<:cr_id_card:3> **Requested By:** <@42>\n<:cr_clock:4> **Requested At:** <t:1760000000:F>');
+    assert.equal(closeRequestReason({ components: payload.components }), 'Resolved');
+  } finally {
+    setCloseRequestIcons({});
+  }
+});
